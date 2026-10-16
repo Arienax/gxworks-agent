@@ -1,0 +1,1000 @@
+{
+  "schema_version": 1,
+  "vendor": "mitsubishi",
+  "entries": [
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "SFTL",
+        "SFTLP"
+      ],
+      "disjoint_bit_ranges": [
+        {
+          "source_operand_index": 0,
+          "destination_operand_index": 1,
+          "destination_length_operand_index": 2,
+          "source_length_operand_index": 3,
+          "same_device_prefix_only": true,
+          "error_code": "K6710"
+        }
+      ],
+      "verified_fields": [
+        "numeric_and_memory_boundaries"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r"
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "PLSY",
+        "DPLSY"
+      ],
+      "completion": {
+        "device": "M8029",
+        "placement": "same_rung_parallel_branch"
+      },
+      "pulse_output": {
+        "frequency_operand_indexes": [
+          0
+        ],
+        "pulse_output_operand_index": 2
+      },
+      "verified_fields": [
+        "completion_ownership",
+        "hardware_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_positioning_k"
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "PLSR",
+        "DPLSR"
+      ],
+      "completion": {
+        "device": "M8029",
+        "placement": "same_rung_parallel_branch"
+      },
+      "pulse_output": {
+        "frequency_operand_indexes": [
+          0
+        ],
+        "pulse_output_operand_index": 3
+      },
+      "verified_fields": [
+        "completion_ownership",
+        "hardware_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_positioning_k"
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "PLSV"
+      ],
+      "completion": {
+        "device": "M8029",
+        "placement": "same_rung_parallel_branch"
+      },
+      "pulse_output": {
+        "frequency_operand_indexes": [
+          0
+        ],
+        "pulse_output_operand_index": 1
+      },
+      "verified_fields": [
+        "completion_ownership",
+        "hardware_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_positioning_k"
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "DRVI",
+        "DDRVI"
+      ],
+      "completion": {
+        "device": "M8029",
+        "placement": "same_rung_parallel_branch"
+      },
+      "pulse_output": {
+        "frequency_operand_indexes": [
+          1
+        ],
+        "pulse_output_operand_index": 2,
+        "direction_output_operand_index": 3
+      },
+      "verified_fields": [
+        "completion_ownership",
+        "hardware_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_positioning_k"
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "DRVA",
+        "DDRVA"
+      ],
+      "completion": {
+        "device": "M8029",
+        "placement": "same_rung_parallel_branch"
+      },
+      "pulse_output": {
+        "frequency_operand_indexes": [
+          1
+        ],
+        "pulse_output_operand_index": 2,
+        "direction_output_operand_index": 3
+      },
+      "verified_fields": [
+        "completion_ownership",
+        "hardware_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_positioning_k"
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "DVIT"
+      ],
+      "completion": {
+        "device": "M8029",
+        "placement": "same_rung_parallel_branch"
+      },
+      "verified_fields": [
+        "completion_ownership"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_positioning_k"
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "ZRN"
+      ],
+      "completion": {
+        "device": "M8029",
+        "placement": "same_rung_parallel_branch"
+      },
+      "pulse_output": {
+        "frequency_operand_indexes": [
+          0
+        ],
+        "pulse_output_operand_index": 3
+      },
+      "numeric_operand_boundaries": [
+        {
+          "operand_index": 1,
+          "minimum": 10,
+          "maximum": 32767,
+          "absolute": true,
+          "unit": "Hz",
+          "label": "creep speed"
+        }
+      ],
+      "verified_fields": [
+        "completion_ownership",
+        "hardware_applicability",
+        "numeric_and_memory_boundaries"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_positioning_k"
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "DSZR"
+      ],
+      "completion": {
+        "device": "M8029",
+        "placement": "same_rung_parallel_branch"
+      },
+      "pulse_output": {
+        "frequency_operand_indexes": [],
+        "pulse_output_operand_index": 2,
+        "direction_output_operand_index": 3
+      },
+      "verified_fields": [
+        "completion_ownership",
+        "hardware_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_positioning_k"
+        }
+      ]
+    },
+    {
+      "cpu": "FX5U",
+      "forms": [
+        "ZRN"
+      ],
+      "unsupported_replacement": "DSZR",
+      "sources": [
+        {}
+      ]
+    },
+    {
+      "cpu": "FX5U",
+      "forms": [
+        "DRVTBL",
+        "DRVMUL"
+      ],
+      "completion": {
+        "device": "SM8029",
+        "placement": "same_rung_parallel_branch"
+      },
+      "sources": [
+        {}
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "HSCS"
+      ],
+      "unsupported_replacement": "DHSCS",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 352,
+          "section": "13.4 FNC 53 – HSCS / High-Speed Counter Set",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "HSCR"
+      ],
+      "unsupported_replacement": "DHSCR",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 358,
+          "section": "13.5 FNC 54 – HSCR / High-Speed Counter Reset",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "HSZ"
+      ],
+      "unsupported_replacement": "DHSZ",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 361,
+          "section": "13.6 FNC 55 – HSZ / High-Speed Counter Zone Compare",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "ECMP"
+      ],
+      "unsupported_replacement": "DECMP",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 489,
+          "section": "18.1 FNC110 – ECMP / Floating Point Compare",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "EZCP"
+      ],
+      "unsupported_replacement": "DEZCP",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 490,
+          "section": "18.2 FNC111 – EZCP / Floating Point Zone Compare",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "EMOV"
+      ],
+      "unsupported_replacement": "DEMOV",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 492,
+          "section": "18.3 FNC112 – EMOV / Floating Point Move",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "ESTR"
+      ],
+      "unsupported_replacement": "DESTR",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 493,
+          "section": "18.4 FNC116 – ESTR / Floating Point to Character String Conversion",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "EVAL"
+      ],
+      "unsupported_replacement": "DEVAL",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 499,
+          "section": "18.5 FNC117 – EVAL / Character String to Floating Point Conversion",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "EBCD"
+      ],
+      "unsupported_replacement": "DEBCD",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 504,
+          "section": "18.6 FNC118 – EBCD / Floating Point to Scientific Notation Conversion",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "EBIN"
+      ],
+      "unsupported_replacement": "DEBIN",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 505,
+          "section": "18.7 FNC119 – EBIN / Scientific Notation to Floating Point Conversion",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "EADD"
+      ],
+      "unsupported_replacement": "DEADD",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 507,
+          "section": "18.8 FNC120 – EADD / Floating Point Addition",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "ESUB"
+      ],
+      "unsupported_replacement": "DESUB",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 508,
+          "section": "18.9 FNC121 – ESUB / Floating Point Subtraction",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "EMUL"
+      ],
+      "unsupported_replacement": "DEMUL",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 509,
+          "section": "18.10 FNC122 – EMUL / Floating Point Multiplication",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "EDIV"
+      ],
+      "unsupported_replacement": "DEDIV",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 510,
+          "section": "18.11 FNC123 – EDIV / Floating Point Division",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "EXP"
+      ],
+      "unsupported_replacement": "DEXP",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 511,
+          "section": "18.12 FNC124 – EXP / Floating Point Exponent",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "LOGE"
+      ],
+      "unsupported_replacement": "DLOGE",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 513,
+          "section": "18.13 FNC125 – LOGE / Floating Point Natural Logarithm",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "LOG10"
+      ],
+      "unsupported_replacement": "DLOG10",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 515,
+          "section": "18.14 FNC126 – LOG10 / Floating Point Common Logarithm",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "ESQR"
+      ],
+      "unsupported_replacement": "DESQR",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 517,
+          "section": "18.15 FNC127 – ESQR / Floating Point Square Root",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "ENEG"
+      ],
+      "unsupported_replacement": "DENEG",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 518,
+          "section": "18.16 FNC128 – ENEG / Floating Point Negation",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "SIN"
+      ],
+      "unsupported_replacement": "DSIN",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 521,
+          "section": "18.18 FNC130 – SIN / Floating Point Sine",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "COS"
+      ],
+      "unsupported_replacement": "DCOS",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 522,
+          "section": "18.19 FNC131 – COS / Floating Point Cosine",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "TAN"
+      ],
+      "unsupported_replacement": "DTAN",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 523,
+          "section": "18.20 FNC132 – TAN / Floating Point Tangent",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "ASIN"
+      ],
+      "unsupported_replacement": "DASIN",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 524,
+          "section": "18.21 FNC133 – ASIN / Floating Point Arc Sine",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "ACOS"
+      ],
+      "unsupported_replacement": "DACOS",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 526,
+          "section": "18.22 FNC134 – ACOS / Floating Point Arc Cosine",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "ATAN"
+      ],
+      "unsupported_replacement": "DATAN",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 528,
+          "section": "18.23 FNC135 – ATAN / Floating Point Arc Tangent",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "RAD"
+      ],
+      "unsupported_replacement": "DRAD",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 530,
+          "section": "18.24 FNC136 – RAD / Floating Point Degrees to Radians Conversion",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "DEG"
+      ],
+      "unsupported_replacement": "DDEG",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 532,
+          "section": "18.25 FNC137 – DEG / Floating Point Radians to Degrees Conversion",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "SORT2"
+      ],
+      "unsupported_replacement": "DSORT2",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 545,
+          "section": "19.7 FNC149 – SORT2 / Sort Tabulated Data 2",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "TBL"
+      ],
+      "unsupported_replacement": "DTBL",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 554,
+          "section": "20.3 FNC152 – TBL / Batch Data Positioning Mode",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "ABS"
+      ],
+      "unsupported_replacement": "DABS",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 555,
+          "section": "20.4 FNC155 – ABS / Absolute Current Value Read",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "HCMOV"
+      ],
+      "unsupported_replacement": "DHCMOV",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 598,
+          "section": "24.5 FNC189 – HCMOV / High-Speed Counter Move",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    },
+    {
+      "cpu": "FX3U",
+      "forms": [
+        "HSCT"
+      ],
+      "unsupported_replacement": "DHSCT",
+      "verified_fields": [
+        "cpu_applicability"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 711,
+          "section": "32.1 FNC280 – HSCT / High-Speed Counter Compare With Data Table",
+          "review": {
+            "method": "local_official_instruction_format_column_review",
+            "scope": "literal_form_identity_only_FX3U; no effect_or_other_CPU_promotion"
+          }
+        }
+      ]
+    }
+  ]
+}

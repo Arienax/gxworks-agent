@@ -1,0 +1,4262 @@
+{
+  "schema_version": 1,
+  "vendor": "mitsubishi",
+  "instructions": [
+    {
+      "mnemonic": "LD",
+      "canonical_op": "CONTACT",
+      "category": "condition",
+      "semantic_kind": "contact",
+      "arity": {
+        "min": 1,
+        "max": 1
+      },
+      "operands": [
+        {
+          "name": "condition",
+          "role": "read",
+          "data_type": "bit"
+        }
+      ]
+    },
+    {
+      "mnemonic": "LDI",
+      "canonical_op": "CONTACT_NOT",
+      "category": "condition",
+      "semantic_kind": "contact",
+      "arity": {
+        "min": 1,
+        "max": 1
+      },
+      "operands": [
+        {
+          "name": "condition",
+          "role": "read",
+          "data_type": "bit"
+        }
+      ]
+    },
+    {
+      "mnemonic": "LDP",
+      "canonical_op": "RISING_EDGE_CONTACT",
+      "category": "condition",
+      "semantic_kind": "contact",
+      "arity": {
+        "min": 1,
+        "max": 1
+      },
+      "operands": [
+        {
+          "name": "condition",
+          "role": "read",
+          "data_type": "bit"
+        }
+      ]
+    },
+    {
+      "mnemonic": "LDF",
+      "canonical_op": "FALLING_EDGE_CONTACT",
+      "category": "condition",
+      "semantic_kind": "contact",
+      "arity": {
+        "min": 1,
+        "max": 1
+      },
+      "operands": [
+        {
+          "name": "condition",
+          "role": "read",
+          "data_type": "bit"
+        }
+      ]
+    },
+    {
+      "mnemonic": "LD=",
+      "canonical_op": "COMPARE_EQ",
+      "category": "condition",
+      "semantic_kind": "comparison",
+      "arity": {
+        "min": 2
+      },
+      "operands": [
+        {
+          "name": "left",
+          "role": "read"
+        },
+        {
+          "name": "right",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "LD<>",
+      "canonical_op": "COMPARE_NE",
+      "category": "condition",
+      "semantic_kind": "comparison",
+      "arity": {
+        "min": 2
+      },
+      "operands": [
+        {
+          "name": "left",
+          "role": "read"
+        },
+        {
+          "name": "right",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "LD>=",
+      "canonical_op": "COMPARE_GE",
+      "category": "condition",
+      "semantic_kind": "comparison",
+      "arity": {
+        "min": 2
+      },
+      "operands": [
+        {
+          "name": "left",
+          "role": "read"
+        },
+        {
+          "name": "right",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "LD<=",
+      "canonical_op": "COMPARE_LE",
+      "category": "condition",
+      "semantic_kind": "comparison",
+      "arity": {
+        "min": 2
+      },
+      "operands": [
+        {
+          "name": "left",
+          "role": "read"
+        },
+        {
+          "name": "right",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "LD>",
+      "canonical_op": "COMPARE_GT",
+      "category": "condition",
+      "semantic_kind": "comparison",
+      "arity": {
+        "min": 2
+      },
+      "operands": [
+        {
+          "name": "left",
+          "role": "read"
+        },
+        {
+          "name": "right",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "LD<",
+      "canonical_op": "COMPARE_LT",
+      "category": "condition",
+      "semantic_kind": "comparison",
+      "arity": {
+        "min": 2
+      },
+      "operands": [
+        {
+          "name": "left",
+          "role": "read"
+        },
+        {
+          "name": "right",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "AND",
+      "canonical_op": "AND_CONTACT",
+      "category": "condition",
+      "semantic_kind": "contact",
+      "arity": {
+        "min": 1,
+        "max": 1
+      },
+      "operands": [
+        {
+          "name": "condition",
+          "role": "read",
+          "data_type": "bit"
+        }
+      ]
+    },
+    {
+      "mnemonic": "ANI",
+      "canonical_op": "AND_NOT_CONTACT",
+      "category": "condition",
+      "semantic_kind": "contact",
+      "arity": {
+        "min": 1,
+        "max": 1
+      },
+      "operands": [
+        {
+          "name": "condition",
+          "role": "read",
+          "data_type": "bit"
+        }
+      ]
+    },
+    {
+      "mnemonic": "ANDP",
+      "canonical_op": "AND_RISING_EDGE",
+      "category": "condition",
+      "semantic_kind": "contact",
+      "arity": {
+        "min": 1,
+        "max": 1
+      },
+      "operands": [
+        {
+          "name": "condition",
+          "role": "read",
+          "data_type": "bit"
+        }
+      ]
+    },
+    {
+      "mnemonic": "ANDF",
+      "canonical_op": "AND_FALLING_EDGE",
+      "category": "condition",
+      "semantic_kind": "contact",
+      "arity": {
+        "min": 1,
+        "max": 1
+      },
+      "operands": [
+        {
+          "name": "condition",
+          "role": "read",
+          "data_type": "bit"
+        }
+      ]
+    },
+    {
+      "mnemonic": "AND=",
+      "canonical_op": "AND_COMPARE_EQ",
+      "category": "condition",
+      "semantic_kind": "comparison",
+      "arity": {
+        "min": 2
+      },
+      "operands": [
+        {
+          "name": "left",
+          "role": "read"
+        },
+        {
+          "name": "right",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "AND<>",
+      "canonical_op": "AND_COMPARE_NE",
+      "category": "condition",
+      "semantic_kind": "comparison",
+      "arity": {
+        "min": 2
+      },
+      "operands": [
+        {
+          "name": "left",
+          "role": "read"
+        },
+        {
+          "name": "right",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "AND>=",
+      "canonical_op": "AND_COMPARE_GE",
+      "category": "condition",
+      "semantic_kind": "comparison",
+      "arity": {
+        "min": 2
+      },
+      "operands": [
+        {
+          "name": "left",
+          "role": "read"
+        },
+        {
+          "name": "right",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "AND<=",
+      "canonical_op": "AND_COMPARE_LE",
+      "category": "condition",
+      "semantic_kind": "comparison",
+      "arity": {
+        "min": 2
+      },
+      "operands": [
+        {
+          "name": "left",
+          "role": "read"
+        },
+        {
+          "name": "right",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "AND>",
+      "canonical_op": "AND_COMPARE_GT",
+      "category": "condition",
+      "semantic_kind": "comparison",
+      "arity": {
+        "min": 2
+      },
+      "operands": [
+        {
+          "name": "left",
+          "role": "read"
+        },
+        {
+          "name": "right",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "AND<",
+      "canonical_op": "AND_COMPARE_LT",
+      "category": "condition",
+      "semantic_kind": "comparison",
+      "arity": {
+        "min": 2
+      },
+      "operands": [
+        {
+          "name": "left",
+          "role": "read"
+        },
+        {
+          "name": "right",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "OR",
+      "canonical_op": "OR_CONTACT",
+      "category": "condition",
+      "semantic_kind": "contact",
+      "arity": {
+        "min": 1,
+        "max": 1
+      },
+      "operands": [
+        {
+          "name": "condition",
+          "role": "read",
+          "data_type": "bit"
+        }
+      ]
+    },
+    {
+      "mnemonic": "ORI",
+      "canonical_op": "OR_NOT_CONTACT",
+      "category": "condition",
+      "semantic_kind": "contact",
+      "arity": {
+        "min": 1,
+        "max": 1
+      },
+      "operands": [
+        {
+          "name": "condition",
+          "role": "read",
+          "data_type": "bit"
+        }
+      ]
+    },
+    {
+      "mnemonic": "ORP",
+      "canonical_op": "OR_RISING_EDGE",
+      "category": "condition",
+      "semantic_kind": "contact",
+      "arity": {
+        "min": 1,
+        "max": 1
+      },
+      "operands": [
+        {
+          "name": "condition",
+          "role": "read",
+          "data_type": "bit"
+        }
+      ]
+    },
+    {
+      "mnemonic": "ORF",
+      "canonical_op": "OR_FALLING_EDGE",
+      "category": "condition",
+      "semantic_kind": "contact",
+      "arity": {
+        "min": 1,
+        "max": 1
+      },
+      "operands": [
+        {
+          "name": "condition",
+          "role": "read",
+          "data_type": "bit"
+        }
+      ]
+    },
+    {
+      "mnemonic": "OR=",
+      "canonical_op": "OR_COMPARE_EQ",
+      "category": "condition",
+      "semantic_kind": "comparison",
+      "arity": {
+        "min": 2
+      },
+      "operands": [
+        {
+          "name": "left",
+          "role": "read"
+        },
+        {
+          "name": "right",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "OR<>",
+      "canonical_op": "OR_COMPARE_NE",
+      "category": "condition",
+      "semantic_kind": "comparison",
+      "arity": {
+        "min": 2
+      },
+      "operands": [
+        {
+          "name": "left",
+          "role": "read"
+        },
+        {
+          "name": "right",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "OR>=",
+      "canonical_op": "OR_COMPARE_GE",
+      "category": "condition",
+      "semantic_kind": "comparison",
+      "arity": {
+        "min": 2
+      },
+      "operands": [
+        {
+          "name": "left",
+          "role": "read"
+        },
+        {
+          "name": "right",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "OR<=",
+      "canonical_op": "OR_COMPARE_LE",
+      "category": "condition",
+      "semantic_kind": "comparison",
+      "arity": {
+        "min": 2
+      },
+      "operands": [
+        {
+          "name": "left",
+          "role": "read"
+        },
+        {
+          "name": "right",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "OR>",
+      "canonical_op": "OR_COMPARE_GT",
+      "category": "condition",
+      "semantic_kind": "comparison",
+      "arity": {
+        "min": 2
+      },
+      "operands": [
+        {
+          "name": "left",
+          "role": "read"
+        },
+        {
+          "name": "right",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "OR<",
+      "canonical_op": "OR_COMPARE_LT",
+      "category": "condition",
+      "semantic_kind": "comparison",
+      "arity": {
+        "min": 2
+      },
+      "operands": [
+        {
+          "name": "left",
+          "role": "read"
+        },
+        {
+          "name": "right",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "ANB",
+      "canonical_op": "AND_BLOCK",
+      "category": "condition",
+      "semantic_kind": "control",
+      "arity": {
+        "min": 0,
+        "max": 0
+      }
+    },
+    {
+      "mnemonic": "ORB",
+      "canonical_op": "OR_BLOCK",
+      "category": "condition",
+      "semantic_kind": "control",
+      "arity": {
+        "min": 0,
+        "max": 0
+      }
+    },
+    {
+      "mnemonic": "MPS",
+      "canonical_op": "PUSH_LOGIC_RESULT",
+      "category": "branch_control",
+      "semantic_kind": "control",
+      "arity": {
+        "min": 0,
+        "max": 0
+      }
+    },
+    {
+      "mnemonic": "MRD",
+      "canonical_op": "READ_LOGIC_RESULT",
+      "category": "branch_control",
+      "semantic_kind": "control",
+      "arity": {
+        "min": 0,
+        "max": 0
+      }
+    },
+    {
+      "mnemonic": "MPP",
+      "canonical_op": "POP_LOGIC_RESULT",
+      "category": "branch_control",
+      "semantic_kind": "control",
+      "arity": {
+        "min": 0,
+        "max": 0
+      }
+    },
+    {
+      "mnemonic": "END",
+      "canonical_op": "PROGRAM_END",
+      "category": "program_control",
+      "semantic_kind": "control",
+      "arity": {
+        "min": 0,
+        "max": 0
+      }
+    },
+    {
+      "mnemonic": "NOP",
+      "canonical_op": "NO_OPERATION",
+      "category": "program_control",
+      "semantic_kind": "control"
+    },
+    {
+      "mnemonic": "INV",
+      "canonical_op": "INVERT_LOGIC_RESULT",
+      "category": "condition",
+      "semantic_kind": "control"
+    },
+    {
+      "mnemonic": "OUT",
+      "canonical_op": "COIL",
+      "category": "action",
+      "semantic_kind": "coil",
+      "operands": [
+        {
+          "name": "destination",
+          "role": "write"
+        },
+        {
+          "name": "preset",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "PLS",
+      "canonical_op": "PULSE_RISING",
+      "category": "action",
+      "semantic_kind": "coil",
+      "operands": [
+        {
+          "name": "destination",
+          "role": "write",
+          "data_type": "bit"
+        }
+      ]
+    },
+    {
+      "mnemonic": "PLF",
+      "canonical_op": "PULSE_FALLING",
+      "category": "action",
+      "semantic_kind": "coil",
+      "operands": [
+        {
+          "name": "destination",
+          "role": "write",
+          "data_type": "bit"
+        }
+      ]
+    },
+    {
+      "mnemonic": "SET",
+      "canonical_op": "SET",
+      "category": "action",
+      "semantic_kind": "function",
+      "arity": {
+        "min": 1,
+        "max": 1
+      },
+      "operands": [
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "RST",
+      "canonical_op": "RESET",
+      "category": "action",
+      "semantic_kind": "function",
+      "arity": {
+        "min": 1,
+        "max": 1
+      },
+      "operands": [
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "MOV",
+      "canonical_op": "MOVE",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read",
+          "data_type": "word"
+        },
+        {
+          "name": "destination",
+          "role": "write",
+          "data_type": "word"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DMOV",
+      "canonical_op": "MOVE",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read",
+          "data_type": "dword"
+        },
+        {
+          "name": "destination",
+          "role": "write",
+          "data_type": "dword"
+        }
+      ]
+    },
+    {
+      "mnemonic": "EMOV",
+      "canonical_op": "MOVE",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "BMOV",
+      "canonical_op": "BLOCK_MOVE",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        },
+        {
+          "name": "count",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "FMOV",
+      "canonical_op": "FILL_MOVE",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        },
+        {
+          "name": "count",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "ADD",
+      "canonical_op": "ADD",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read",
+          "data_type": "word"
+        },
+        {
+          "name": "b",
+          "role": "read",
+          "data_type": "word"
+        },
+        {
+          "name": "destination",
+          "role": "write",
+          "data_type": "word"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DADD",
+      "canonical_op": "ADD",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read",
+          "data_type": "dword"
+        },
+        {
+          "name": "b",
+          "role": "read",
+          "data_type": "dword"
+        },
+        {
+          "name": "destination",
+          "role": "write",
+          "data_type": "dword"
+        }
+      ]
+    },
+    {
+      "mnemonic": "EADD",
+      "canonical_op": "ADD",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DEADD",
+      "canonical_op": "ADD",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "SUB",
+      "canonical_op": "SUB",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DSUB",
+      "canonical_op": "SUB",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "ESUB",
+      "canonical_op": "SUB",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DESUB",
+      "canonical_op": "SUB",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "MUL",
+      "canonical_op": "MUL",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DMUL",
+      "canonical_op": "MUL",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "EMUL",
+      "canonical_op": "MUL",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DEMUL",
+      "canonical_op": "MUL",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DIV",
+      "canonical_op": "DIV",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DDIV",
+      "canonical_op": "DIV",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "EDIV",
+      "canonical_op": "DIV",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DEDIV",
+      "canonical_op": "DIV",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "WAND",
+      "canonical_op": "BIT_AND",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "WOR",
+      "canonical_op": "BIT_OR",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "WXOR",
+      "canonical_op": "BIT_XOR",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "CMP",
+      "canonical_op": "COMPARE",
+      "category": "action",
+      "semantic_kind": "comparison",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DCMP",
+      "canonical_op": "COMPARE",
+      "category": "action",
+      "semantic_kind": "comparison",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "ZCP",
+      "canonical_op": "ZONE_COMPARE",
+      "category": "action",
+      "semantic_kind": "comparison",
+      "operands": [
+        {
+          "name": "low",
+          "role": "read"
+        },
+        {
+          "name": "high",
+          "role": "read"
+        },
+        {
+          "name": "value",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DZCP",
+      "canonical_op": "ZONE_COMPARE",
+      "category": "action",
+      "semantic_kind": "comparison",
+      "operands": [
+        {
+          "name": "low",
+          "role": "read"
+        },
+        {
+          "name": "high",
+          "role": "read"
+        },
+        {
+          "name": "value",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "SFTL",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "read_write"
+        },
+        {
+          "name": "n",
+          "role": "read"
+        },
+        {
+          "name": "m",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "SFTLP",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "read_write"
+        },
+        {
+          "name": "n",
+          "role": "read"
+        },
+        {
+          "name": "m",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "SFTR",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "read_write"
+        },
+        {
+          "name": "n",
+          "role": "read"
+        },
+        {
+          "name": "m",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "SFTRP",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "read_write"
+        },
+        {
+          "name": "n",
+          "role": "read"
+        },
+        {
+          "name": "m",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "INC",
+      "canonical_op": "INCREMENT",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "target",
+          "role": "read_write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DINC",
+      "canonical_op": "INCREMENT",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "target",
+          "role": "read_write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DEC",
+      "canonical_op": "DECREMENT",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "target",
+          "role": "read_write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DDEC",
+      "canonical_op": "DECREMENT",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "target",
+          "role": "read_write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "NEG",
+      "canonical_op": "NEGATE",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "target",
+          "role": "read_write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DNEG",
+      "canonical_op": "NEGATE",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "target",
+          "role": "read_write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "FLT",
+      "canonical_op": "CONVERT_TO_FLOAT",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DFLT",
+      "canonical_op": "CONVERT_TO_FLOAT",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "INT",
+      "canonical_op": "CONVERT_TO_INT",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DINT",
+      "canonical_op": "CONVERT_TO_INT",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "FROM",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "operands": [
+        {
+          "name": "module",
+          "role": "read"
+        },
+        {
+          "name": "buffer",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        },
+        {
+          "name": "count",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DFROM",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "operands": [
+        {
+          "name": "module",
+          "role": "read"
+        },
+        {
+          "name": "buffer",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        },
+        {
+          "name": "count",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "TO",
+      "category": "action",
+      "semantic_kind": "vendor"
+    },
+    {
+      "mnemonic": "DTO",
+      "category": "action",
+      "semantic_kind": "vendor"
+    },
+    {
+      "mnemonic": "RD3A",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "arity": {
+        "min": 3,
+        "max": 3
+      },
+      "operands": [
+        {
+          "name": "m1",
+          "role": "read"
+        },
+        {
+          "name": "m2",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "RD3AP",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "arity": {
+        "min": 3,
+        "max": 3
+      },
+      "operands": [
+        {
+          "name": "m1",
+          "role": "read"
+        },
+        {
+          "name": "m2",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "WR3A",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "arity": {
+        "min": 3,
+        "max": 3
+      }
+    },
+    {
+      "mnemonic": "WR3AP",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "arity": {
+        "min": 3,
+        "max": 3
+      }
+    },
+    {
+      "mnemonic": "PID",
+      "category": "action",
+      "semantic_kind": "function_block",
+      "operands": [
+        {
+          "name": "pv",
+          "role": "read"
+        },
+        {
+          "name": "sv",
+          "role": "read"
+        },
+        {
+          "name": "parameter",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "HSCS",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "HSCR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "HSZ",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "c",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DHSZ",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "c",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "CML",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DCML",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "XCH",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read_write"
+        },
+        {
+          "name": "b",
+          "role": "read_write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DXCH",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read_write"
+        },
+        {
+          "name": "b",
+          "role": "read_write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "SWAP",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "target",
+          "role": "read_write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "BCD",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DBCD",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "BIN",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DBIN",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "GRY",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DGRY",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "GBIN",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DGBIN",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "ROR",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "target",
+          "role": "read_write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "ROL",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "target",
+          "role": "read_write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "RCR",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "target",
+          "role": "read_write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "RCL",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "target",
+          "role": "read_write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DROR",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "target",
+          "role": "read_write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DROL",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "target",
+          "role": "read_write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DRCR",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "target",
+          "role": "read_write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DRCL",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "target",
+          "role": "read_write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "WSFR",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "read_write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "WSFL",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "read_write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "SORT",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DSORT",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "SUM",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DSUM",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "MEAN",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DMEAN",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "RAMP",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DRAMP",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "ROTC",
+      "category": "action",
+      "semantic_kind": "function",
+      "operands": [
+        {
+          "name": "target",
+          "role": "read_write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "CJ",
+      "category": "program_control",
+      "semantic_kind": "control"
+    },
+    {
+      "mnemonic": "CALL",
+      "category": "program_control",
+      "semantic_kind": "control"
+    },
+    {
+      "mnemonic": "SRET",
+      "category": "program_control",
+      "semantic_kind": "control"
+    },
+    {
+      "mnemonic": "IRET",
+      "category": "program_control",
+      "semantic_kind": "control"
+    },
+    {
+      "mnemonic": "EI",
+      "category": "program_control",
+      "semantic_kind": "control"
+    },
+    {
+      "mnemonic": "DI",
+      "category": "program_control",
+      "semantic_kind": "control"
+    },
+    {
+      "mnemonic": "FEND",
+      "category": "program_control",
+      "semantic_kind": "control"
+    },
+    {
+      "mnemonic": "WDT",
+      "category": "program_control",
+      "semantic_kind": "control"
+    },
+    {
+      "mnemonic": "FOR",
+      "category": "program_control",
+      "semantic_kind": "control"
+    },
+    {
+      "mnemonic": "NEXT",
+      "category": "program_control",
+      "semantic_kind": "control"
+    },
+    {
+      "mnemonic": "MC",
+      "category": "program_control",
+      "semantic_kind": "control"
+    },
+    {
+      "mnemonic": "MCR",
+      "category": "program_control",
+      "semantic_kind": "control"
+    },
+    {
+      "mnemonic": "RS",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "RS2",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "MODRW",
+      "category": "action",
+      "semantic_kind": "vendor"
+    },
+    {
+      "mnemonic": "ADPRW",
+      "category": "action",
+      "semantic_kind": "vendor"
+    },
+    {
+      "mnemonic": "ECMP",
+      "category": "action",
+      "semantic_kind": "comparison",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DECMP",
+      "category": "action",
+      "semantic_kind": "comparison",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "EZCP",
+      "category": "action",
+      "semantic_kind": "comparison",
+      "operands": [
+        {
+          "name": "low",
+          "role": "read"
+        },
+        {
+          "name": "high",
+          "role": "read"
+        },
+        {
+          "name": "value",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DEZCP",
+      "category": "action",
+      "semantic_kind": "comparison",
+      "operands": [
+        {
+          "name": "low",
+          "role": "read"
+        },
+        {
+          "name": "high",
+          "role": "read"
+        },
+        {
+          "name": "value",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "SPD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "HSCT",
+      "category": "action",
+      "semantic_kind": "vendor"
+    },
+    {
+      "mnemonic": "PLSY",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "operands": [
+        {
+          "name": "frequency",
+          "role": "read"
+        },
+        {
+          "name": "pulse_count",
+          "role": "read"
+        },
+        {
+          "name": "pulse_output",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DPLSY",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "operands": [
+        {
+          "name": "frequency",
+          "role": "read"
+        },
+        {
+          "name": "pulse_count",
+          "role": "read"
+        },
+        {
+          "name": "pulse_output",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "PLSR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "operands": [
+        {
+          "name": "frequency",
+          "role": "read"
+        },
+        {
+          "name": "pulse_count",
+          "role": "read"
+        },
+        {
+          "name": "accel",
+          "role": "read"
+        },
+        {
+          "name": "pulse_output",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DPLSR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "operands": [
+        {
+          "name": "frequency",
+          "role": "read"
+        },
+        {
+          "name": "pulse_count",
+          "role": "read"
+        },
+        {
+          "name": "accel",
+          "role": "read"
+        },
+        {
+          "name": "pulse_output",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "PLSV",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "operands": [
+        {
+          "name": "frequency",
+          "role": "read"
+        },
+        {
+          "name": "pulse_output",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DRVI",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "operands": [
+        {
+          "name": "distance",
+          "role": "read"
+        },
+        {
+          "name": "speed",
+          "role": "read"
+        },
+        {
+          "name": "pulse_output",
+          "role": "write"
+        },
+        {
+          "name": "direction_output",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DDRVI",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "operands": [
+        {
+          "name": "distance",
+          "role": "read"
+        },
+        {
+          "name": "speed",
+          "role": "read"
+        },
+        {
+          "name": "pulse_output",
+          "role": "write"
+        },
+        {
+          "name": "direction_output",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DRVA",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "operands": [
+        {
+          "name": "position",
+          "role": "read"
+        },
+        {
+          "name": "speed",
+          "role": "read"
+        },
+        {
+          "name": "pulse_output",
+          "role": "write"
+        },
+        {
+          "name": "direction_output",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DDRVA",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "operands": [
+        {
+          "name": "position",
+          "role": "read"
+        },
+        {
+          "name": "speed",
+          "role": "read"
+        },
+        {
+          "name": "pulse_output",
+          "role": "write"
+        },
+        {
+          "name": "direction_output",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DVIT",
+      "category": "action",
+      "semantic_kind": "vendor"
+    },
+    {
+      "mnemonic": "DSZR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "operands": [
+        {
+          "name": "a",
+          "role": "read"
+        },
+        {
+          "name": "b",
+          "role": "read"
+        },
+        {
+          "name": "pulse_output",
+          "role": "write"
+        },
+        {
+          "name": "direction_output",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "PWM",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "operands": [
+        {
+          "name": "duty",
+          "role": "read"
+        },
+        {
+          "name": "period",
+          "role": "read"
+        },
+        {
+          "name": "pulse_output",
+          "role": "write"
+        }
+      ]
+    }
+  ],
+  "cpu_contracts": [
+    {
+      "method": "reviewed-manual-contract-v1",
+      "cpu": "FX1N",
+      "instruction": {
+        "mnemonic": "TWR",
+        "category": "action",
+        "semantic_kind": "vendor",
+        "cpu_support": [
+          "FX1N"
+        ],
+        "contract_level": "signature",
+        "arity": {
+          "min": 1,
+          "max": 1
+        },
+        "operands": [
+          {
+            "name": "clock_data_head",
+            "role": "read",
+            "data_type": "word",
+            "optional": false,
+            "word_count": 7
+          }
+        ]
+      },
+      "native_order": [
+        "S"
+      ],
+      "verified_fields": [
+        "arity",
+        "operand_order",
+        "operand_roles",
+        "operand_types",
+        "form_identity",
+        "cpu_applicability",
+        "execution_form",
+        "st_call"
+      ],
+      "sources": [
+        {
+          "target_model": "FX1N",
+          "manual_id": "jy992d88101e",
+          "manual": "JY992D88101",
+          "revision": "E",
+          "pdf_page": 300,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy992d88101/jy992d88101e.pdf"
+        },
+        {
+          "target_model": "FX1N",
+          "manual_id": "fxcpu_basic_applied_m",
+          "manual": "JY997D34701",
+          "revision": "M",
+          "pdf_page": 561,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d34701/jy997d34701m.pdf"
+        }
+      ],
+      "execution_form": "continuous",
+      "st_call": {
+        "name": "TWR",
+        "enable": true,
+        "returns": "bit"
+      },
+      "numeric_boundaries": []
+    },
+    {
+      "method": "reviewed-manual-contract-v1",
+      "cpu": "FX1N",
+      "instruction": {
+        "mnemonic": "TWRP",
+        "category": "action",
+        "semantic_kind": "vendor",
+        "cpu_support": [
+          "FX1N"
+        ],
+        "contract_level": "signature",
+        "arity": {
+          "min": 1,
+          "max": 1
+        },
+        "operands": [
+          {
+            "name": "clock_data_head",
+            "role": "read",
+            "data_type": "word",
+            "optional": false,
+            "word_count": 7
+          }
+        ]
+      },
+      "native_order": [
+        "S"
+      ],
+      "verified_fields": [
+        "arity",
+        "operand_order",
+        "operand_roles",
+        "operand_types",
+        "form_identity",
+        "cpu_applicability",
+        "execution_form",
+        "st_call"
+      ],
+      "sources": [
+        {
+          "target_model": "FX1N",
+          "manual_id": "jy992d88101e",
+          "manual": "JY992D88101",
+          "revision": "E",
+          "pdf_page": 300,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy992d88101/jy992d88101e.pdf"
+        },
+        {
+          "target_model": "FX1N",
+          "manual_id": "fxcpu_basic_applied_m",
+          "manual": "JY997D34701",
+          "revision": "M",
+          "pdf_page": 561,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d34701/jy997d34701m.pdf"
+        }
+      ],
+      "execution_form": "pulse",
+      "st_call": {
+        "name": "TWRP",
+        "enable": true,
+        "returns": "bit"
+      },
+      "numeric_boundaries": []
+    },
+    {
+      "method": "reviewed-manual-contract-v1",
+      "cpu": "Q00J",
+      "instruction": {
+        "mnemonic": "DUTY",
+        "category": "action",
+        "semantic_kind": "vendor",
+        "cpu_support": [
+          "Q00J"
+        ],
+        "contract_level": "signature",
+        "arity": {
+          "min": 3,
+          "max": 3
+        },
+        "operands": [
+          {
+            "name": "on_scans",
+            "role": "read",
+            "data_type": "word",
+            "optional": false
+          },
+          {
+            "name": "off_scans",
+            "role": "read",
+            "data_type": "word",
+            "optional": false
+          },
+          {
+            "name": "user_timing_clock",
+            "role": "write",
+            "data_type": "bit",
+            "device_prefixes": [
+              "SM"
+            ],
+            "allowed_devices": [
+              "SM420",
+              "SM421",
+              "SM422",
+              "SM423",
+              "SM424",
+              "SM430",
+              "SM431",
+              "SM432",
+              "SM433",
+              "SM434"
+            ],
+            "optional": false
+          }
+        ]
+      },
+      "native_order": [
+        "n1",
+        "n2",
+        "D"
+      ],
+      "verified_fields": [
+        "arity",
+        "operand_order",
+        "operand_roles",
+        "operand_types",
+        "form_identity",
+        "cpu_applicability",
+        "execution_form",
+        "st_call",
+        "numeric_and_memory_boundaries"
+      ],
+      "sources": [
+        {
+          "target_model": "Q00J",
+          "manual_id": "sh080809engx",
+          "manual": "SH080809ENG",
+          "revision": "X",
+          "pdf_page": 762,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080809eng/sh080809engx.pdf"
+        },
+        {
+          "target_model": "Q00J",
+          "manual_id": "sh080783engp",
+          "manual": "SH080783ENG",
+          "revision": "P",
+          "pdf_page": 720,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080783eng/sh080783engp.pdf"
+        }
+      ],
+      "execution_form": "continuous",
+      "st_call": {
+        "name": "DUTY",
+        "enable": true,
+        "returns": "bit"
+      },
+      "numeric_boundaries": [
+        {
+          "operand_index": 0,
+          "minimum": 0,
+          "maximum": 32767,
+          "unit": "scans",
+          "label": "ON scans"
+        },
+        {
+          "operand_index": 1,
+          "minimum": 0,
+          "maximum": 32767,
+          "unit": "scans",
+          "label": "OFF scans"
+        }
+      ]
+    },
+    {
+      "method": "reviewed-manual-contract-v1",
+      "cpu": "Q03UDV",
+      "instruction": {
+        "mnemonic": "S.SOCRCVS",
+        "category": "action",
+        "semantic_kind": "vendor",
+        "cpu_support": [
+          "Q03UDV"
+        ],
+        "contract_level": "signature",
+        "arity": {
+          "min": 3,
+          "max": 3
+        },
+        "operands": [
+          {
+            "name": "dummy_unit",
+            "role": "control",
+            "data_type": "string",
+            "optional": false
+          },
+          {
+            "name": "connection_number",
+            "role": "read",
+            "data_type": "word",
+            "optional": false
+          },
+          {
+            "name": "receive_buffer_head",
+            "role": "write",
+            "data_type": "word",
+            "optional": false
+          }
+        ]
+      },
+      "native_order": [
+        "U0",
+        "S",
+        "D"
+      ],
+      "verified_fields": [
+        "arity",
+        "operand_order",
+        "operand_roles",
+        "operand_types",
+        "form_identity",
+        "cpu_applicability",
+        "execution_form",
+        "st_call",
+        "numeric_and_memory_boundaries"
+      ],
+      "sources": [
+        {
+          "target_model": "Q03UDV",
+          "manual_id": "sh080811engy",
+          "manual": "SH080811ENG",
+          "revision": "Y",
+          "pdf_page": 121,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080811eng/sh080811engy.pdf"
+        },
+        {
+          "target_model": "Q03UDV",
+          "manual_id": "sh080785engm",
+          "manual": "SH080785ENG",
+          "revision": "M",
+          "pdf_page": 261,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080785eng/sh080785engm.pdf"
+        }
+      ],
+      "execution_form": "continuous",
+      "st_call": {
+        "name": "S_SOCRCVS",
+        "enable": true,
+        "returns": "bit"
+      },
+      "numeric_boundaries": [
+        {
+          "operand_index": 1,
+          "minimum": 1,
+          "maximum": 16,
+          "label": "connection number"
+        }
+      ]
+    },
+    {
+      "method": "reviewed-manual-contract-v1",
+      "cpu": "L02",
+      "instruction": {
+        "mnemonic": "ICCNTRD1",
+        "category": "action",
+        "semantic_kind": "vendor",
+        "cpu_support": [
+          "L02"
+        ],
+        "contract_level": "signature",
+        "arity": {
+          "min": 0,
+          "max": 0
+        },
+        "operands": []
+      },
+      "native_order": [],
+      "verified_fields": [
+        "arity",
+        "operand_order",
+        "operand_roles",
+        "operand_types",
+        "form_identity",
+        "cpu_applicability",
+        "execution_form",
+        "st_call"
+      ],
+      "sources": [
+        {
+          "target_model": "L02",
+          "manual_id": "sh080892engj",
+          "manual": "SH080892ENG",
+          "revision": "J",
+          "pdf_page": 244,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080892eng/sh080892engj.pdf"
+        },
+        {
+          "target_model": "L02",
+          "manual_id": "sh080785engm",
+          "manual": "SH080785ENG",
+          "revision": "M",
+          "pdf_page": 289,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080785eng/sh080785engm.pdf"
+        }
+      ],
+      "execution_form": "continuous",
+      "st_call": {
+        "name": "ICCNTRD1",
+        "enable": true,
+        "returns": "bit"
+      },
+      "numeric_boundaries": []
+    },
+    {
+      "method": "reviewed-manual-contract-v1",
+      "cpu": "L02",
+      "instruction": {
+        "mnemonic": "ICCNTRD1P",
+        "category": "action",
+        "semantic_kind": "vendor",
+        "cpu_support": [
+          "L02"
+        ],
+        "contract_level": "signature",
+        "arity": {
+          "min": 0,
+          "max": 0
+        },
+        "operands": []
+      },
+      "native_order": [],
+      "verified_fields": [
+        "arity",
+        "operand_order",
+        "operand_roles",
+        "operand_types",
+        "form_identity",
+        "cpu_applicability",
+        "execution_form",
+        "st_call"
+      ],
+      "sources": [
+        {
+          "target_model": "L02",
+          "manual_id": "sh080892engj",
+          "manual": "SH080892ENG",
+          "revision": "J",
+          "pdf_page": 244,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080892eng/sh080892engj.pdf"
+        },
+        {
+          "target_model": "L02",
+          "manual_id": "sh080785engm",
+          "manual": "SH080785ENG",
+          "revision": "M",
+          "pdf_page": 289,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080785eng/sh080785engm.pdf"
+        }
+      ],
+      "execution_form": "pulse",
+      "st_call": {
+        "name": "ICCNTRD1P",
+        "enable": true,
+        "returns": "bit"
+      },
+      "numeric_boundaries": []
+    },
+    {
+      "method": "reviewed-manual-contract-v1",
+      "cpu": "L02",
+      "instruction": {
+        "mnemonic": "ICCNTRD2",
+        "category": "action",
+        "semantic_kind": "vendor",
+        "cpu_support": [
+          "L02"
+        ],
+        "contract_level": "signature",
+        "arity": {
+          "min": 0,
+          "max": 0
+        },
+        "operands": []
+      },
+      "native_order": [],
+      "verified_fields": [
+        "arity",
+        "operand_order",
+        "operand_roles",
+        "operand_types",
+        "form_identity",
+        "cpu_applicability",
+        "execution_form",
+        "st_call"
+      ],
+      "sources": [
+        {
+          "target_model": "L02",
+          "manual_id": "sh080892engj",
+          "manual": "SH080892ENG",
+          "revision": "J",
+          "pdf_page": 244,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080892eng/sh080892engj.pdf"
+        },
+        {
+          "target_model": "L02",
+          "manual_id": "sh080785engm",
+          "manual": "SH080785ENG",
+          "revision": "M",
+          "pdf_page": 289,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080785eng/sh080785engm.pdf"
+        }
+      ],
+      "execution_form": "continuous",
+      "st_call": {
+        "name": "ICCNTRD2",
+        "enable": true,
+        "returns": "bit"
+      },
+      "numeric_boundaries": []
+    },
+    {
+      "method": "reviewed-manual-contract-v1",
+      "cpu": "L02",
+      "instruction": {
+        "mnemonic": "ICCNTRD2P",
+        "category": "action",
+        "semantic_kind": "vendor",
+        "cpu_support": [
+          "L02"
+        ],
+        "contract_level": "signature",
+        "arity": {
+          "min": 0,
+          "max": 0
+        },
+        "operands": []
+      },
+      "native_order": [],
+      "verified_fields": [
+        "arity",
+        "operand_order",
+        "operand_roles",
+        "operand_types",
+        "form_identity",
+        "cpu_applicability",
+        "execution_form",
+        "st_call"
+      ],
+      "sources": [
+        {
+          "target_model": "L02",
+          "manual_id": "sh080892engj",
+          "manual": "SH080892ENG",
+          "revision": "J",
+          "pdf_page": 244,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080892eng/sh080892engj.pdf"
+        },
+        {
+          "target_model": "L02",
+          "manual_id": "sh080785engm",
+          "manual": "SH080785ENG",
+          "revision": "M",
+          "pdf_page": 289,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080785eng/sh080785engm.pdf"
+        }
+      ],
+      "execution_form": "pulse",
+      "st_call": {
+        "name": "ICCNTRD2P",
+        "enable": true,
+        "returns": "bit"
+      },
+      "numeric_boundaries": []
+    },
+    {
+      "method": "reviewed-manual-contract-v1",
+      "cpu": "FX1N",
+      "instruction": {
+        "mnemonic": "MOV",
+        "category": "action",
+        "semantic_kind": "function",
+        "cpu_support": [
+          "FX1N"
+        ],
+        "contract_level": "signature",
+        "arity": {
+          "min": 2,
+          "max": 2
+        },
+        "operands": [
+          {
+            "name": "s",
+            "role": "read",
+            "data_type": "word",
+            "optional": false
+          },
+          {
+            "name": "d",
+            "role": "write",
+            "data_type": "word",
+            "optional": false
+          }
+        ]
+      },
+      "native_order": [
+        "s",
+        "d"
+      ],
+      "verified_fields": [
+        "arity",
+        "operand_order",
+        "operand_roles",
+        "operand_types",
+        "form_identity",
+        "cpu_applicability",
+        "execution_form",
+        "st_call"
+      ],
+      "sources": [
+        {
+          "target_model": "FX1N",
+          "manual_id": "fxcpu_basic_applied_m",
+          "manual": "JY997D34701",
+          "revision": "M",
+          "pdf_page": 141,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d34701/jy997d34701m.pdf"
+        }
+      ],
+      "execution_form": "continuous",
+      "st_call": {
+        "name": "MOV",
+        "enable": true,
+        "returns": "bit"
+      },
+      "numeric_boundaries": []
+    },
+    {
+      "method": "reviewed-manual-contract-v1",
+      "cpu": "FX1N",
+      "instruction": {
+        "mnemonic": "MOVP",
+        "category": "action",
+        "semantic_kind": "function",
+        "cpu_support": [
+          "FX1N"
+        ],
+        "contract_level": "signature",
+        "arity": {
+          "min": 2,
+          "max": 2
+        },
+        "operands": [
+          {
+            "name": "s",
+            "role": "read",
+            "data_type": "word",
+            "optional": false
+          },
+          {
+            "name": "d",
+            "role": "write",
+            "data_type": "word",
+            "optional": false
+          }
+        ]
+      },
+      "native_order": [
+        "s",
+        "d"
+      ],
+      "verified_fields": [
+        "arity",
+        "operand_order",
+        "operand_roles",
+        "operand_types",
+        "form_identity",
+        "cpu_applicability",
+        "execution_form",
+        "st_call"
+      ],
+      "sources": [
+        {
+          "target_model": "FX1N",
+          "manual_id": "fxcpu_basic_applied_m",
+          "manual": "JY997D34701",
+          "revision": "M",
+          "pdf_page": 141,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d34701/jy997d34701m.pdf"
+        }
+      ],
+      "execution_form": "pulse",
+      "st_call": {
+        "name": "MOVP",
+        "enable": true,
+        "returns": "bit"
+      },
+      "numeric_boundaries": []
+    },
+    {
+      "method": "reviewed-manual-contract-v1",
+      "cpu": "FX1N",
+      "instruction": {
+        "mnemonic": "DMOV",
+        "category": "action",
+        "semantic_kind": "function",
+        "cpu_support": [
+          "FX1N"
+        ],
+        "contract_level": "signature",
+        "arity": {
+          "min": 2,
+          "max": 2
+        },
+        "operands": [
+          {
+            "name": "s",
+            "role": "read",
+            "data_type": "dword",
+            "optional": false
+          },
+          {
+            "name": "d",
+            "role": "write",
+            "data_type": "dword",
+            "optional": false
+          }
+        ]
+      },
+      "native_order": [
+        "s",
+        "d"
+      ],
+      "verified_fields": [
+        "arity",
+        "operand_order",
+        "operand_roles",
+        "operand_types",
+        "form_identity",
+        "cpu_applicability",
+        "execution_form",
+        "st_call"
+      ],
+      "sources": [
+        {
+          "target_model": "FX1N",
+          "manual_id": "fxcpu_basic_applied_m",
+          "manual": "JY997D34701",
+          "revision": "M",
+          "pdf_page": 141,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d34701/jy997d34701m.pdf"
+        }
+      ],
+      "execution_form": "continuous",
+      "st_call": {
+        "name": "DMOV",
+        "enable": true,
+        "returns": "bit"
+      },
+      "numeric_boundaries": []
+    },
+    {
+      "method": "reviewed-manual-contract-v1",
+      "cpu": "FX1N",
+      "instruction": {
+        "mnemonic": "DMOVP",
+        "category": "action",
+        "semantic_kind": "function",
+        "cpu_support": [
+          "FX1N"
+        ],
+        "contract_level": "signature",
+        "arity": {
+          "min": 2,
+          "max": 2
+        },
+        "operands": [
+          {
+            "name": "s",
+            "role": "read",
+            "data_type": "dword",
+            "optional": false
+          },
+          {
+            "name": "d",
+            "role": "write",
+            "data_type": "dword",
+            "optional": false
+          }
+        ]
+      },
+      "native_order": [
+        "s",
+        "d"
+      ],
+      "verified_fields": [
+        "arity",
+        "operand_order",
+        "operand_roles",
+        "operand_types",
+        "form_identity",
+        "cpu_applicability",
+        "execution_form",
+        "st_call"
+      ],
+      "sources": [
+        {
+          "target_model": "FX1N",
+          "manual_id": "fxcpu_basic_applied_m",
+          "manual": "JY997D34701",
+          "revision": "M",
+          "pdf_page": 141,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d34701/jy997d34701m.pdf"
+        }
+      ],
+      "execution_form": "pulse",
+      "st_call": {
+        "name": "DMOVP",
+        "enable": true,
+        "returns": "bit"
+      },
+      "numeric_boundaries": []
+    },
+    {
+      "method": "reviewed-manual-contract-v1",
+      "cpu": "FX1N",
+      "instruction": {
+        "mnemonic": "LDP",
+        "category": "condition",
+        "semantic_kind": "contact",
+        "cpu_support": [
+          "FX1N"
+        ],
+        "contract_level": "signature",
+        "arity": {
+          "min": 1,
+          "max": 1
+        },
+        "operands": [
+          {
+            "name": "s",
+            "role": "read",
+            "data_type": "bit",
+            "optional": false
+          }
+        ]
+      },
+      "native_order": [
+        "s"
+      ],
+      "verified_fields": [
+        "arity",
+        "operand_order",
+        "operand_roles",
+        "operand_types",
+        "form_identity",
+        "cpu_applicability",
+        "execution_form",
+        "st_call"
+      ],
+      "sources": [
+        {
+          "target_model": "FX1N",
+          "manual_id": "fxcpu_basic_applied_m",
+          "manual": "JY997D34701",
+          "revision": "M",
+          "pdf_page": 59,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d34701/jy997d34701m.pdf"
+        }
+      ],
+      "execution_form": "continuous",
+      "st_call": {
+        "name": "LDP",
+        "enable": true,
+        "returns": "bit"
+      },
+      "numeric_boundaries": []
+    },
+    {
+      "method": "reviewed-manual-contract-v1",
+      "cpu": "FX1N",
+      "instruction": {
+        "mnemonic": "LDF",
+        "category": "condition",
+        "semantic_kind": "contact",
+        "cpu_support": [
+          "FX1N"
+        ],
+        "contract_level": "signature",
+        "arity": {
+          "min": 1,
+          "max": 1
+        },
+        "operands": [
+          {
+            "name": "s",
+            "role": "read",
+            "data_type": "bit",
+            "optional": false
+          }
+        ]
+      },
+      "native_order": [
+        "s"
+      ],
+      "verified_fields": [
+        "arity",
+        "operand_order",
+        "operand_roles",
+        "operand_types",
+        "form_identity",
+        "cpu_applicability",
+        "execution_form",
+        "st_call"
+      ],
+      "sources": [
+        {
+          "target_model": "FX1N",
+          "manual_id": "fxcpu_basic_applied_m",
+          "manual": "JY997D34701",
+          "revision": "M",
+          "pdf_page": 59,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d34701/jy997d34701m.pdf"
+        }
+      ],
+      "execution_form": "continuous",
+      "st_call": {
+        "name": "LDF",
+        "enable": true,
+        "returns": "bit"
+      },
+      "numeric_boundaries": []
+    },
+    {
+      "method": "reviewed-manual-contract-v1",
+      "cpu": "Q00J",
+      "instruction": {
+        "mnemonic": "MOV",
+        "category": "action",
+        "semantic_kind": "function",
+        "cpu_support": [
+          "Q00J"
+        ],
+        "contract_level": "signature",
+        "arity": {
+          "min": 2,
+          "max": 2
+        },
+        "operands": [
+          {
+            "name": "s",
+            "role": "read",
+            "data_type": "word",
+            "optional": false
+          },
+          {
+            "name": "d",
+            "role": "write",
+            "data_type": "word",
+            "optional": false
+          }
+        ]
+      },
+      "native_order": [
+        "s",
+        "d"
+      ],
+      "verified_fields": [
+        "arity",
+        "operand_order",
+        "operand_roles",
+        "operand_types",
+        "form_identity",
+        "cpu_applicability",
+        "execution_form",
+        "st_call"
+      ],
+      "sources": [
+        {
+          "target_model": "Q00J",
+          "manual_id": "sh080783engp",
+          "manual": "SH080783ENG",
+          "revision": "P",
+          "pdf_page": 245,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080783eng/sh080783engp.pdf"
+        }
+      ],
+      "execution_form": "continuous",
+      "st_call": {
+        "name": "MOV",
+        "enable": true,
+        "returns": "bit"
+      },
+      "numeric_boundaries": []
+    },
+    {
+      "method": "reviewed-manual-contract-v1",
+      "cpu": "Q00J",
+      "instruction": {
+        "mnemonic": "MOVP",
+        "category": "action",
+        "semantic_kind": "function",
+        "cpu_support": [
+          "Q00J"
+        ],
+        "contract_level": "signature",
+        "arity": {
+          "min": 2,
+          "max": 2
+        },
+        "operands": [
+          {
+            "name": "s",
+            "role": "read",
+            "data_type": "word",
+            "optional": false
+          },
+          {
+            "name": "d",
+            "role": "write",
+            "data_type": "word",
+            "optional": false
+          }
+        ]
+      },
+      "native_order": [
+        "s",
+        "d"
+      ],
+      "verified_fields": [
+        "arity",
+        "operand_order",
+        "operand_roles",
+        "operand_types",
+        "form_identity",
+        "cpu_applicability",
+        "execution_form",
+        "st_call"
+      ],
+      "sources": [
+        {
+          "target_model": "Q00J",
+          "manual_id": "sh080783engp",
+          "manual": "SH080783ENG",
+          "revision": "P",
+          "pdf_page": 245,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080783eng/sh080783engp.pdf"
+        }
+      ],
+      "execution_form": "pulse",
+      "st_call": {
+        "name": "MOVP",
+        "enable": true,
+        "returns": "bit"
+      },
+      "numeric_boundaries": []
+    },
+    {
+      "method": "reviewed-manual-contract-v1",
+      "cpu": "Q00J",
+      "instruction": {
+        "mnemonic": "DMOV",
+        "category": "action",
+        "semantic_kind": "function",
+        "cpu_support": [
+          "Q00J"
+        ],
+        "contract_level": "signature",
+        "arity": {
+          "min": 2,
+          "max": 2
+        },
+        "operands": [
+          {
+            "name": "s",
+            "role": "read",
+            "data_type": "dword",
+            "optional": false
+          },
+          {
+            "name": "d",
+            "role": "write",
+            "data_type": "dword",
+            "optional": false
+          }
+        ]
+      },
+      "native_order": [
+        "s",
+        "d"
+      ],
+      "verified_fields": [
+        "arity",
+        "operand_order",
+        "operand_roles",
+        "operand_types",
+        "form_identity",
+        "cpu_applicability",
+        "execution_form",
+        "st_call"
+      ],
+      "sources": [
+        {
+          "target_model": "Q00J",
+          "manual_id": "sh080783engp",
+          "manual": "SH080783ENG",
+          "revision": "P",
+          "pdf_page": 245,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080783eng/sh080783engp.pdf"
+        }
+      ],
+      "execution_form": "continuous",
+      "st_call": {
+        "name": "DMOV",
+        "enable": true,
+        "returns": "bit"
+      },
+      "numeric_boundaries": []
+    },
+    {
+      "method": "reviewed-manual-contract-v1",
+      "cpu": "Q00J",
+      "instruction": {
+        "mnemonic": "DMOVP",
+        "category": "action",
+        "semantic_kind": "function",
+        "cpu_support": [
+          "Q00J"
+        ],
+        "contract_level": "signature",
+        "arity": {
+          "min": 2,
+          "max": 2
+        },
+        "operands": [
+          {
+            "name": "s",
+            "role": "read",
+            "data_type": "dword",
+            "optional": false
+          },
+          {
+            "name": "d",
+            "role": "write",
+            "data_type": "dword",
+            "optional": false
+          }
+        ]
+      },
+      "native_order": [
+        "s",
+        "d"
+      ],
+      "verified_fields": [
+        "arity",
+        "operand_order",
+        "operand_roles",
+        "operand_types",
+        "form_identity",
+        "cpu_applicability",
+        "execution_form",
+        "st_call"
+      ],
+      "sources": [
+        {
+          "target_model": "Q00J",
+          "manual_id": "sh080783engp",
+          "manual": "SH080783ENG",
+          "revision": "P",
+          "pdf_page": 245,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080783eng/sh080783engp.pdf"
+        }
+      ],
+      "execution_form": "pulse",
+      "st_call": {
+        "name": "DMOVP",
+        "enable": true,
+        "returns": "bit"
+      },
+      "numeric_boundaries": []
+    },
+    {
+      "method": "reviewed-manual-contract-v1",
+      "cpu": "Q03UDV",
+      "instruction": {
+        "mnemonic": "MOV",
+        "category": "action",
+        "semantic_kind": "function",
+        "cpu_support": [
+          "Q03UDV"
+        ],
+        "contract_level": "signature",
+        "arity": {
+          "min": 2,
+          "max": 2
+        },
+        "operands": [
+          {
+            "name": "s",
+            "role": "read",
+            "data_type": "word",
+            "optional": false
+          },
+          {
+            "name": "d",
+            "role": "write",
+            "data_type": "word",
+            "optional": false
+          }
+        ]
+      },
+      "native_order": [
+        "s",
+        "d"
+      ],
+      "verified_fields": [
+        "arity",
+        "operand_order",
+        "operand_roles",
+        "operand_types",
+        "form_identity",
+        "cpu_applicability",
+        "execution_form",
+        "st_call"
+      ],
+      "sources": [
+        {
+          "target_model": "Q03UDV",
+          "manual_id": "sh080783engp",
+          "manual": "SH080783ENG",
+          "revision": "P",
+          "pdf_page": 245,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080783eng/sh080783engp.pdf"
+        }
+      ],
+      "execution_form": "continuous",
+      "st_call": {
+        "name": "MOV",
+        "enable": true,
+        "returns": "bit"
+      },
+      "numeric_boundaries": []
+    },
+    {
+      "method": "reviewed-manual-contract-v1",
+      "cpu": "Q03UDV",
+      "instruction": {
+        "mnemonic": "MOVP",
+        "category": "action",
+        "semantic_kind": "function",
+        "cpu_support": [
+          "Q03UDV"
+        ],
+        "contract_level": "signature",
+        "arity": {
+          "min": 2,
+          "max": 2
+        },
+        "operands": [
+          {
+            "name": "s",
+            "role": "read",
+            "data_type": "word",
+            "optional": false
+          },
+          {
+            "name": "d",
+            "role": "write",
+            "data_type": "word",
+            "optional": false
+          }
+        ]
+      },
+      "native_order": [
+        "s",
+        "d"
+      ],
+      "verified_fields": [
+        "arity",
+        "operand_order",
+        "operand_roles",
+        "operand_types",
+        "form_identity",
+        "cpu_applicability",
+        "execution_form",
+        "st_call"
+      ],
+      "sources": [
+        {
+          "target_model": "Q03UDV",
+          "manual_id": "sh080783engp",
+          "manual": "SH080783ENG",
+          "revision": "P",
+          "pdf_page": 245,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080783eng/sh080783engp.pdf"
+        }
+      ],
+      "execution_form": "pulse",
+      "st_call": {
+        "name": "MOVP",
+        "enable": true,
+        "returns": "bit"
+      },
+      "numeric_boundaries": []
+    },
+    {
+      "method": "reviewed-manual-contract-v1",
+      "cpu": "Q03UDV",
+      "instruction": {
+        "mnemonic": "DMOV",
+        "category": "action",
+        "semantic_kind": "function",
+        "cpu_support": [
+          "Q03UDV"
+        ],
+        "contract_level": "signature",
+        "arity": {
+          "min": 2,
+          "max": 2
+        },
+        "operands": [
+          {
+            "name": "s",
+            "role": "read",
+            "data_type": "dword",
+            "optional": false
+          },
+          {
+            "name": "d",
+            "role": "write",
+            "data_type": "dword",
+            "optional": false
+          }
+        ]
+      },
+      "native_order": [
+        "s",
+        "d"
+      ],
+      "verified_fields": [
+        "arity",
+        "operand_order",
+        "operand_roles",
+        "operand_types",
+        "form_identity",
+        "cpu_applicability",
+        "execution_form",
+        "st_call"
+      ],
+      "sources": [
+        {
+          "target_model": "Q03UDV",
+          "manual_id": "sh080783engp",
+          "manual": "SH080783ENG",
+          "revision": "P",
+          "pdf_page": 245,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080783eng/sh080783engp.pdf"
+        }
+      ],
+      "execution_form": "continuous",
+      "st_call": {
+        "name": "DMOV",
+        "enable": true,
+        "returns": "bit"
+      },
+      "numeric_boundaries": []
+    },
+    {
+      "method": "reviewed-manual-contract-v1",
+      "cpu": "Q03UDV",
+      "instruction": {
+        "mnemonic": "DMOVP",
+        "category": "action",
+        "semantic_kind": "function",
+        "cpu_support": [
+          "Q03UDV"
+        ],
+        "contract_level": "signature",
+        "arity": {
+          "min": 2,
+          "max": 2
+        },
+        "operands": [
+          {
+            "name": "s",
+            "role": "read",
+            "data_type": "dword",
+            "optional": false
+          },
+          {
+            "name": "d",
+            "role": "write",
+            "data_type": "dword",
+            "optional": false
+          }
+        ]
+      },
+      "native_order": [
+        "s",
+        "d"
+      ],
+      "verified_fields": [
+        "arity",
+        "operand_order",
+        "operand_roles",
+        "operand_types",
+        "form_identity",
+        "cpu_applicability",
+        "execution_form",
+        "st_call"
+      ],
+      "sources": [
+        {
+          "target_model": "Q03UDV",
+          "manual_id": "sh080783engp",
+          "manual": "SH080783ENG",
+          "revision": "P",
+          "pdf_page": 245,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080783eng/sh080783engp.pdf"
+        }
+      ],
+      "execution_form": "pulse",
+      "st_call": {
+        "name": "DMOVP",
+        "enable": true,
+        "returns": "bit"
+      },
+      "numeric_boundaries": []
+    },
+    {
+      "method": "reviewed-manual-contract-v1",
+      "cpu": "L02",
+      "instruction": {
+        "mnemonic": "MOV",
+        "category": "action",
+        "semantic_kind": "function",
+        "cpu_support": [
+          "L02"
+        ],
+        "contract_level": "signature",
+        "arity": {
+          "min": 2,
+          "max": 2
+        },
+        "operands": [
+          {
+            "name": "s",
+            "role": "read",
+            "data_type": "word",
+            "optional": false
+          },
+          {
+            "name": "d",
+            "role": "write",
+            "data_type": "word",
+            "optional": false
+          }
+        ]
+      },
+      "native_order": [
+        "s",
+        "d"
+      ],
+      "verified_fields": [
+        "arity",
+        "operand_order",
+        "operand_roles",
+        "operand_types",
+        "form_identity",
+        "cpu_applicability",
+        "execution_form",
+        "st_call"
+      ],
+      "sources": [
+        {
+          "target_model": "L02",
+          "manual_id": "sh080783engp",
+          "manual": "SH080783ENG",
+          "revision": "P",
+          "pdf_page": 245,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080783eng/sh080783engp.pdf"
+        }
+      ],
+      "execution_form": "continuous",
+      "st_call": {
+        "name": "MOV",
+        "enable": true,
+        "returns": "bit"
+      },
+      "numeric_boundaries": []
+    },
+    {
+      "method": "reviewed-manual-contract-v1",
+      "cpu": "L02",
+      "instruction": {
+        "mnemonic": "MOVP",
+        "category": "action",
+        "semantic_kind": "function",
+        "cpu_support": [
+          "L02"
+        ],
+        "contract_level": "signature",
+        "arity": {
+          "min": 2,
+          "max": 2
+        },
+        "operands": [
+          {
+            "name": "s",
+            "role": "read",
+            "data_type": "word",
+            "optional": false
+          },
+          {
+            "name": "d",
+            "role": "write",
+            "data_type": "word",
+            "optional": false
+          }
+        ]
+      },
+      "native_order": [
+        "s",
+        "d"
+      ],
+      "verified_fields": [
+        "arity",
+        "operand_order",
+        "operand_roles",
+        "operand_types",
+        "form_identity",
+        "cpu_applicability",
+        "execution_form",
+        "st_call"
+      ],
+      "sources": [
+        {
+          "target_model": "L02",
+          "manual_id": "sh080783engp",
+          "manual": "SH080783ENG",
+          "revision": "P",
+          "pdf_page": 245,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080783eng/sh080783engp.pdf"
+        }
+      ],
+      "execution_form": "pulse",
+      "st_call": {
+        "name": "MOVP",
+        "enable": true,
+        "returns": "bit"
+      },
+      "numeric_boundaries": []
+    },
+    {
+      "method": "reviewed-manual-contract-v1",
+      "cpu": "L02",
+      "instruction": {
+        "mnemonic": "DMOV",
+        "category": "action",
+        "semantic_kind": "function",
+        "cpu_support": [
+          "L02"
+        ],
+        "contract_level": "signature",
+        "arity": {
+          "min": 2,
+          "max": 2
+        },
+        "operands": [
+          {
+            "name": "s",
+            "role": "read",
+            "data_type": "dword",
+            "optional": false
+          },
+          {
+            "name": "d",
+            "role": "write",
+            "data_type": "dword",
+            "optional": false
+          }
+        ]
+      },
+      "native_order": [
+        "s",
+        "d"
+      ],
+      "verified_fields": [
+        "arity",
+        "operand_order",
+        "operand_roles",
+        "operand_types",
+        "form_identity",
+        "cpu_applicability",
+        "execution_form",
+        "st_call"
+      ],
+      "sources": [
+        {
+          "target_model": "L02",
+          "manual_id": "sh080783engp",
+          "manual": "SH080783ENG",
+          "revision": "P",
+          "pdf_page": 245,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080783eng/sh080783engp.pdf"
+        }
+      ],
+      "execution_form": "continuous",
+      "st_call": {
+        "name": "DMOV",
+        "enable": true,
+        "returns": "bit"
+      },
+      "numeric_boundaries": []
+    },
+    {
+      "method": "reviewed-manual-contract-v1",
+      "cpu": "L02",
+      "instruction": {
+        "mnemonic": "DMOVP",
+        "category": "action",
+        "semantic_kind": "function",
+        "cpu_support": [
+          "L02"
+        ],
+        "contract_level": "signature",
+        "arity": {
+          "min": 2,
+          "max": 2
+        },
+        "operands": [
+          {
+            "name": "s",
+            "role": "read",
+            "data_type": "dword",
+            "optional": false
+          },
+          {
+            "name": "d",
+            "role": "write",
+            "data_type": "dword",
+            "optional": false
+          }
+        ]
+      },
+      "native_order": [
+        "s",
+        "d"
+      ],
+      "verified_fields": [
+        "arity",
+        "operand_order",
+        "operand_roles",
+        "operand_types",
+        "form_identity",
+        "cpu_applicability",
+        "execution_form",
+        "st_call"
+      ],
+      "sources": [
+        {
+          "target_model": "L02",
+          "manual_id": "sh080783engp",
+          "manual": "SH080783ENG",
+          "revision": "P",
+          "pdf_page": 245,
+          "url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080783eng/sh080783engp.pdf"
+        }
+      ],
+      "execution_form": "pulse",
+      "st_call": {
+        "name": "DMOVP",
+        "enable": true,
+        "returns": "bit"
+      },
+      "numeric_boundaries": []
+    }
+  ]
+}

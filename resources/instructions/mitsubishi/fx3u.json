@@ -1,0 +1,166 @@
+{
+  "schema_version": 1,
+  "vendor": "mitsubishi",
+  "instructions": [
+    {
+      "mnemonic": "ZRN",
+      "arity": {
+        "min": 4,
+        "max": 4
+      },
+      "canonical_op": "HOME_RETURN",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "operands": [
+        {
+          "name": "return_speed",
+          "role": "read"
+        },
+        {
+          "name": "creep_speed",
+          "role": "read"
+        },
+        {
+          "name": "zero_signal",
+          "role": "read"
+        },
+        {
+          "name": "pulse_output",
+          "role": "write"
+        }
+      ]
+    },
+    {
+      "mnemonic": "ZRST",
+      "canonical_op": "ZONE_RESET",
+      "category": "action",
+      "semantic_kind": "function",
+      "cpu_support": [
+        "FX3U",
+        "FX5U"
+      ],
+      "arity": {
+        "min": 2,
+        "max": 2
+      },
+      "operands": [
+        {
+          "name": "start",
+          "role": "write",
+          "device_prefixes": [
+            "Y",
+            "M",
+            "S",
+            "T",
+            "C",
+            "D"
+          ]
+        },
+        {
+          "name": "end",
+          "role": "write",
+          "device_prefixes": [
+            "Y",
+            "M",
+            "S",
+            "T",
+            "C",
+            "D"
+          ]
+        }
+      ]
+    },
+    {
+      "mnemonic": "UNI",
+      "canonical_op": "NIBBLE_LINK",
+      "category": "action",
+      "semantic_kind": "function",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "arity": {
+        "min": 3,
+        "max": 3
+      },
+      "operands": [
+        {
+          "name": "source",
+          "role": "read",
+          "data_type": "word"
+        },
+        {
+          "name": "destination",
+          "role": "write",
+          "data_type": "word"
+        },
+        {
+          "name": "count",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "DIS",
+      "canonical_op": "NIBBLE_GROUP",
+      "category": "action",
+      "semantic_kind": "function",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "arity": {
+        "min": 3,
+        "max": 3
+      },
+      "operands": [
+        {
+          "name": "source",
+          "role": "read",
+          "data_type": "word"
+        },
+        {
+          "name": "destination",
+          "role": "write",
+          "data_type": "word"
+        },
+        {
+          "name": "count",
+          "role": "read"
+        }
+      ]
+    },
+    {
+      "mnemonic": "BK+",
+      "canonical_op": "BLOCK_ADD",
+      "category": "action",
+      "semantic_kind": "function",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "arity": {
+        "min": 4,
+        "max": 4
+      },
+      "operands": [
+        {
+          "name": "source_1",
+          "role": "read"
+        },
+        {
+          "name": "source_2",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        },
+        {
+          "name": "count",
+          "role": "read"
+        }
+      ]
+    }
+  ]
+}

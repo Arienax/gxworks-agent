@@ -5,6 +5,8 @@ import { usePanelVisible } from "../lifecycle/visibility";
 import { useResource } from "../lifecycle/useResource";
 import { Button } from "../components/ui";
 import "./simulation.css";
+import { SimulatorTimeline, SimulatorTimelineFeed } from "./SimulatorTimeline";
+import type { TraceState } from "./simulatorTimelineData";
 
 type Value = number | string | boolean | null;
 type Expectation = { address: string; operator: string; value: Value | Value[]; tolerance?: number };
@@ -20,13 +22,14 @@ type EditorMetadata = { empty_suite: Suite; default_expectation: Expectation; de
 type Workbench = { editor: EditorMetadata; version_id: string; ir_sha256: string; plc_model: string; devices: { address: string; label: string; writable: boolean }[]; plans: Plan[]; unavailable_plans: { plan_id: string; message: string }[]; unavailable_runs: string[]; requirements: Requirement[]; runs: { run_id: string; suite_name: string; status: string; created_at: string }[] };
 type Observation = { at_ms: number; event: string; values: Record<string, Value> };
 type ReplayCase = { name: string; status: string; backend_kind: string; observations: Observation[]; duration_ms: number; sample_ms: number; assertions: { passed?: boolean; at_ms?: number; step_id?: string; address?: string; actual?: Value; expected?: unknown; message?: string }[]; invariant_violations: unknown[]; requirement_ids: string[]; issue_ids: string[]; steps: Step[] };
-type Replay = { run_id: string; version_id: string; status: string; verification: { status: string; category?: string; program_repair_allowed?: boolean }; cases: ReplayCase[] };
+type Replay = { run_id: string; version_id: string; status: string; verification: { status: string; category?: string; program_repair_allowed?: boolean }; cases: ReplayCase[]; timeline?: TraceState };
 export type SimulationIssueContext = { id: string; title: string; addresses: string[] };
 type Props = { pid: string; vid: string; readOnly: boolean; t: (s: string) => string; onExecute: (planId: string) => Promise<void>; onDebug?: (runId: string) => Promise<void>; onSaved?: () => void; issueContext?: SimulationIssueContext; initialPlanId?: string; refreshKey?: string | number };
 
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
 const statusLabel = (status: string) => ({ passed: "通过", failed: "失败", error: "执行出错", unavailable: "环境不可用", blocked: "证据未获验收" }[status] || status);
 const encode = encodeURIComponent;
+const requestTrace = (path: string) => api<TraceState | null>(path);
 
 export function SimulationWorkbench({ pid, vid, readOnly, t, onExecute, onDebug, onSaved, issueContext, initialPlanId, refreshKey }: Props) {
   const path = `/projects/${encode(pid)}/versions/${encode(vid)}/simulation-workbench`;
@@ -110,7 +113,7 @@ export function SimulationWorkbench({ pid, vid, readOnly, t, onExecute, onDebug,
     if (disabled || draftPending.current) return;
     draftPending.current = true;
     setBusy(true); setError("");
-    try { await onExecute(source); } catch (e) { setError(message(e)); } finally { draftPending.current = false; setBusy(false); }
+    try { setTab("live"); await onExecute(source); } catch (e) { setError(message(e)); } finally { draftPending.current = false; setBusy(false); }
   }
   async function debug() {
     if (!onDebug || !runId || disabled || draftPending.current) return;
@@ -122,10 +125,11 @@ export function SimulationWorkbench({ pid, vid, readOnly, t, onExecute, onDebug,
   function newPlan() { setSource(""); setSuite({ ...structuredClone(data!.editor.empty_suite), name: t(data!.editor.empty_suite.name) }); setLinks({}); setIssues([]); setSavedDraft(""); setNotice(""); }
   return <section className="simulation-workbench" aria-label={t("仿真工作台")}>
     <div className="sim-toolbar"><div><strong>{t("仿真工作台")}</strong></div>
-      <div className="sim-tabs" role="tablist" aria-label={t("仿真工作台视图")}>{[["editor", "步骤编辑"], ["replay", "波形回放"], ["coverage", "需求覆盖"]].map(([key, name]) => <Button key={key} role="tab" aria-selected={tab === key} variant={tab === key ? "primary" : "ghost"} onClick={() => setTab(key)}>{t(name)}</Button>)}</div>
+      <div className="sim-tabs" role="tablist" aria-label={t("仿真工作台视图")}>{[["editor", "步骤编辑"], ["live", "实时总览"], ["replay", "波形回放"], ["coverage", "需求覆盖"]].map(([key, name]) => <Button key={key} role="tab" aria-selected={tab === key} variant={tab === key ? "primary" : "ghost"} onClick={() => setTab(key)}>{t(name)}</Button>)}</div>
     </div>
     {error && <p role="alert" className="sim-error">{error}</p>}{notice && <p role="status" className="sim-notice">{notice}</p>}
     {!data && !error && <p>{t("正在读取…")}</p>}
+    {tab === "live" && <SimulatorTimelineFeed endpoint={`${path}/live`} request={requestTrace} />}
     {data && tab === "editor" && <>
       {issueContext && <aside className="sim-context"><strong>{t("复现问题")}：{issueContext.title}</strong><p>{issueContext.addresses.join(" · ")}</p></aside>}
       <div className="sim-toolbar"><label>{t("已保存方案")}<select value={source} disabled={busy} onChange={e => { const p = data.plans.find(p => p.binding.plan_id === e.target.value); if (p) loadPlan(p); else newPlan(); }}><option value="">{t("新建方案")}</option>{data.plans.map(p => <option key={p.binding.plan_id} value={p.binding.plan_id}>{p.suite.name} · {p.binding.plan_id.slice(-8)}</option>)}</select></label>
@@ -154,7 +158,7 @@ export function SimulationWorkbench({ pid, vid, readOnly, t, onExecute, onDebug,
         <footer className="sim-toolbar"><p>{dirty && <strong>{t("有未保存修改")}</strong>}</p><div className="sim-actions"><Button variant="primary" disabled={disabled || !suite.tests.length} onClick={() => void save()}><Save size={14} />{t("保存为新方案")}</Button><Button disabled={disabled || !source || dirty} onClick={() => void execute()}><Play size={14} />{t("提交执行确认")}</Button></div></footer>
       </>}
     </>}
-    {data && tab === "replay" && <><label>{t("本版本运行记录")}<select value={runId} onChange={e => { setRunId(e.target.value); setRunTest(""); }}><option value="">{t("选择运行记录")}</option>{data.runs.map(r => <option key={r.run_id} value={r.run_id}>{r.suite_name} · {t(statusLabel(r.status))} · {r.created_at}</option>)}</select></label>{!data.runs.length && <p>{t("暂无运行记录")}</p>}{onDebug && runId && <Button disabled={disabled || replay?.verification.program_repair_allowed !== true} onClick={() => void debug()}>{t("准备调试方案")}</Button>}{replay && <WaveformReplay replay={replay} initialTestName={runTest} t={t} />}</>}
+    {data && tab === "replay" && <><label>{t("本版本运行记录")}<select value={runId} onChange={e => { setRunId(e.target.value); setRunTest(""); }}><option value="">{t("选择运行记录")}</option>{data.runs.map(r => <option key={r.run_id} value={r.run_id}>{r.suite_name} · {t(statusLabel(r.status))} · {r.created_at}</option>)}</select></label>{!data.runs.length && <p>{t("暂无运行记录")}</p>}{onDebug && runId && <Button disabled={disabled || replay?.verification.program_repair_allowed !== true} onClick={() => void debug()}>{t("准备调试方案")}</Button>}{replay?.timeline && <SimulatorTimeline state={replay.timeline} />}{replay && <details open={Boolean(runTest)}><summary>{t("按测试查看详细记录")}</summary><WaveformReplay replay={replay} initialTestName={runTest} t={t} /></details>}</>}
     {data && tab === "coverage" && <>
       {!!data.unavailable_runs?.length && <p className="sim-error" role="alert">{t("部分运行证据无法核验，以下仅显示可核验记录。")} {data.unavailable_runs.join(" · ")}</p>}
       <table><thead><tr><th>{t("需求")}</th><th>{t("已关联测试")}</th><th>{t("最近可核验运行")}</th></tr></thead><tbody>{data.requirements.map(r => <tr key={r.id}>

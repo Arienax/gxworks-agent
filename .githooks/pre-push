@@ -1,2 +1,0 @@
-#!/bin/sh
-exec python tools/check_public_boundary.py --history

@@ -676,6 +676,38 @@
         "title": "ExecutionProposal",
         "type": "object"
       },
+      "FBDDefinitionChanges": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "After",
+            "type": "object"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          }
+        },
+        "required": [
+          "before",
+          "after"
+        ],
+        "title": "FBDDefinitionChanges",
+        "type": "object"
+      },
       "FBDDiff": {
         "additionalProperties": false,
         "properties": {
@@ -706,9 +738,33 @@
             "title": "Before Wire Count",
             "type": "integer"
           },
+          "compilation_save": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compilation Save"
+          },
           "declarations_changed": {
             "title": "Declarations Changed",
             "type": "boolean"
+          },
+          "definition_changes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FBDDefinitionChanges"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "has_changes": {
             "title": "Has Changes",
@@ -718,6 +774,16 @@
             "const": "fbd",
             "title": "Kind",
             "type": "string"
+          },
+          "library_changes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FBDLibraryChanges"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "unified_diff": {
             "title": "Unified Diff",
@@ -789,6 +855,47 @@
           "project_id"
         ],
         "title": "FBDDraftEdit",
+        "type": "object"
+      },
+      "FBDLibraryChanges": {
+        "additionalProperties": false,
+        "properties": {
+          "added": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Added",
+            "type": "array"
+          },
+          "definitions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Definitions",
+            "type": "array"
+          },
+          "global_tables": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Global Tables",
+            "type": "array"
+          },
+          "structures": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Structures",
+            "type": "array"
+          }
+        },
+        "required": [
+          "added",
+          "definitions",
+          "structures",
+          "global_tables"
+        ],
+        "title": "FBDLibraryChanges",
         "type": "object"
       },
       "FBDPreview-Input": {
@@ -877,6 +984,53 @@
             ],
             "title": "Data Base64"
           },
+          "declarations": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "maxItems": 8192,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declarations"
+          },
+          "library_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Name"
+          },
+          "members": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                "maxItems": 8192,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Members"
+          },
           "model": {
             "anyOf": [
               {
@@ -907,10 +1061,32 @@
               "import",
               "convert",
               "create_fb",
-              "create_program"
+              "create_program",
+              "import_library",
+              "create_structure",
+              "create_st_fb",
+              "edit_st_fb",
+              "edit_global_labels",
+              "create_global_labels",
+              "edit_pou_labels",
+              "configure_project",
+              "remove_empty_program",
+              "compile"
             ],
             "title": "Operation",
             "type": "string"
+          },
+          "options": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Options"
           },
           "program": {
             "anyOf": [
@@ -975,6 +1151,18 @@
               }
             ],
             "title": "Source Name"
+          },
+          "st_text": {
+            "anyOf": [
+              {
+                "maxLength": 4194304,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "St Text"
           },
           "task": {
             "anyOf": [
@@ -1318,6 +1506,20 @@
                 "type": "null"
               }
             ]
+          },
+          "clarification_answers": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clarification Answers"
           },
           "clarification_job_id": {
             "anyOf": [
@@ -3638,6 +3840,47 @@
         "title": "ResponseViolation",
         "type": "object"
       },
+      "SFCBranchSymbol": {
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "maximum": 32767.0,
+            "minimum": 0.0,
+            "title": "End",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "parallel_branch",
+              "parallel_coupling",
+              "selective_branch",
+              "selective_coupling"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "start": {
+            "maximum": 32767.0,
+            "minimum": 0.0,
+            "title": "Start",
+            "type": "integer"
+          },
+          "y": {
+            "maximum": 32767.0,
+            "minimum": 0.0,
+            "title": "Y",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "start",
+          "end",
+          "y"
+        ],
+        "title": "SFCBranchSymbol",
+        "type": "object"
+      },
       "SFCChildEdit": {
         "additionalProperties": false,
         "properties": {
@@ -3714,6 +3957,35 @@
           "unified_diff"
         ],
         "title": "SFCDiff",
+        "type": "object"
+      },
+      "SFCEndSymbol": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "end",
+            "title": "Kind",
+            "type": "string"
+          },
+          "x": {
+            "maximum": 32767.0,
+            "minimum": 0.0,
+            "title": "X",
+            "type": "integer"
+          },
+          "y": {
+            "maximum": 32767.0,
+            "minimum": 0.0,
+            "title": "Y",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "x",
+          "y"
+        ],
+        "title": "SFCEndSymbol",
         "type": "object"
       },
       "SFCGraphEdit": {
@@ -3801,6 +4073,82 @@
         "title": "SFCJumpEdit",
         "type": "object"
       },
+      "SFCLineSymbol": {
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "maximum": 32767.0,
+            "minimum": 0.0,
+            "title": "End",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "line",
+            "title": "Kind",
+            "type": "string"
+          },
+          "start": {
+            "maximum": 32767.0,
+            "minimum": 0.0,
+            "title": "Start",
+            "type": "integer"
+          },
+          "x": {
+            "maximum": 32767.0,
+            "minimum": 0.0,
+            "title": "X",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "x",
+          "start",
+          "end"
+        ],
+        "title": "SFCLineSymbol",
+        "type": "object"
+      },
+      "SFCNodeSymbol": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "initial_step",
+              "step",
+              "transition"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "number": {
+            "maximum": 32767.0,
+            "minimum": 0.0,
+            "title": "Number",
+            "type": "integer"
+          },
+          "x": {
+            "maximum": 32767.0,
+            "minimum": 0.0,
+            "title": "X",
+            "type": "integer"
+          },
+          "y": {
+            "maximum": 32767.0,
+            "minimum": 0.0,
+            "title": "Y",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "x",
+          "y",
+          "number"
+        ],
+        "title": "SFCNodeSymbol",
+        "type": "object"
+      },
       "SFCPreview-Input": {
         "additionalProperties": false,
         "properties": {
@@ -3830,6 +4178,12 @@
                     },
                     {
                       "$ref": "#/components/schemas/SFCJumpEdit"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SFCRebuildEdit"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SFCStepSwap"
                     }
                   ]
                 },
@@ -3948,6 +4302,12 @@
                     },
                     {
                       "$ref": "#/components/schemas/SFCJumpEdit"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SFCRebuildEdit"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SFCStepSwap"
                     }
                   ]
                 },
@@ -4012,6 +4372,44 @@
         "title": "SFCProposal",
         "type": "object"
       },
+      "SFCRebuildEdit": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "rebuild",
+            "title": "Kind",
+            "type": "string"
+          },
+          "symbols": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/SFCNodeSymbol"
+                },
+                {
+                  "$ref": "#/components/schemas/SFCEndSymbol"
+                },
+                {
+                  "$ref": "#/components/schemas/SFCLineSymbol"
+                },
+                {
+                  "$ref": "#/components/schemas/SFCBranchSymbol"
+                }
+              ]
+            },
+            "maxItems": 8192,
+            "minItems": 1,
+            "title": "Symbols",
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "symbols"
+        ],
+        "title": "SFCRebuildEdit",
+        "type": "object"
+      },
       "SFCRequirement": {
         "additionalProperties": false,
         "properties": {
@@ -4058,6 +4456,35 @@
           "action"
         ],
         "title": "SFCStep",
+        "type": "object"
+      },
+      "SFCStepSwap": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "swap_steps",
+            "title": "Kind",
+            "type": "string"
+          },
+          "left_step_reference": {
+            "maximum": 32767.0,
+            "minimum": 0.0,
+            "title": "Left Step Reference",
+            "type": "integer"
+          },
+          "right_step_reference": {
+            "maximum": 32767.0,
+            "minimum": 0.0,
+            "title": "Right Step Reference",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "left_step_reference",
+          "right_step_reference"
+        ],
+        "title": "SFCStepSwap",
         "type": "object"
       },
       "STPreview": {

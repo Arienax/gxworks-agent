@@ -1,25 +1,22 @@
 # Contributing
 
-Contributions here concern the Web interface and its documented HTTP contract. Do not attach credentials, personal engineering projects or generated artifacts to issues, pull requests or workflow artifacts.
+Project-authored files are offered under [Apache-2.0](LICENSE), unless a file
+states another license. Contributors retain their copyright and must have the
+right to submit their changes under the target file's terms. Keep existing
+copyright and third-party notices. No copyright assignment is required.
 
-Use Node.js 22.14 or newer, Python 3.10 or newer, and Git. Enable `.githooks` as described in [repository checks](docs/publishing.md). Run `npm ci`, `npm test` and `npm run build` at the repository root. Run repository checks before pushing. New public files require an explicit allowlist change and review.
+Do not submit credentials, customer projects, Mitsubishi manuals or binaries,
+derived manual databases, local reverse-engineering evidence, or internal
+development records. Sanitize diagnostics before attaching them to issues.
 
-UI work must preserve backend-owned permissions, approval flows and PLC rules. A frontend change does not establish native GX Works2 or PLC execution support. Include the validation actually performed in your pull request.
+For a code change, run the checks relevant to the changed modules and report
+what was actually checked. Frontend changes: `npm --prefix web ci`,
+`npm --prefix web test`, and `npm --prefix web run build`. Python changes:
+install the relevant requirements and run focused tests. Native GX Works2
+acceptance and PLC behavior require separate evidence; a unit test does not
+establish either.
 
-Public interface contributions are governed by [MPL-2.0](LICENSE); see the
-[license scope](LICENSE-SCOPE.md). Public forks, modifications and compliant
-distribution of MPL-covered files are permitted. The proprietary Runtime has
-its own [free use agreement](LICENSE-RUNTIME.md).
-
-Contributors retain their copyright. By intentionally submitting a contribution
-to an MPL-covered file, you provide it under MPL-2.0, including its normal
-copyright and patent grants. No copyright assignment or additional blanket
-relicensing grant to the maintainer is required. Preserve existing copyright,
-license and third-party notices, and ensure you have the right to submit your
-work under the target file's license. State the applicable terms separately
-for contributions to differently licensed files; this guide does not relicense
-private or third-party material.
-
-贡献者保留自己的版权。MPL 文件的贡献遵循 MPL-2.0 正常授权机制，不要求转让
-版权或额外授予维护者任意再许可权。公开 Fork、修改和合规分发 MPL 部分均被
-允许；其他许可文件按其明确条款处理。
+Contributions to the public repository must also pass
+`python tools/check_public_boundary.py`. Update the explicit file manifest when
+adding a new public source file. Source data omitted for third-party rights or
+privacy must stay out of commits and build artifacts.

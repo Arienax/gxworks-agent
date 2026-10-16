@@ -1,0 +1,1469 @@
+{
+  "default": "FX3U",
+  "FX3U": {
+    "family": "FX",
+    "desc": "FX3U / FX3UC（依据《FX3G·FX3U·FX3UC系列编程手册 基本·应用指令说明书》）",
+    "addressing": "octal",
+    "manual_reference": {
+      "file": "FX3G.FX3U编程手册.pdf",
+      "manual_number": "JY997D19401",
+      "revision": "F",
+      "device_ranges": "手册第77-78页（PDF第79-80页）",
+      "special_m": "手册第789-802页（PDF第791-804页）"
+    },
+    "soft_limits": {
+      "X": "X000-X367（8进制，最多248点；实际范围随基本单元和扩展配置变化，X/Y合计最多256点）",
+      "Y": "Y000-Y367（8进制，最多248点；实际范围随基本单元和扩展配置变化，X/Y合计最多256点）",
+      "M": "M0-M499（一般用，可通过参数更改保持属性）, M500-M1023（保持用，可通过参数更改）, M1024-M7679（固定保持用）, M8000-M8511（特殊辅助继电器，未定义编号禁止使用）",
+      "D": "D0-D199（一般用，可通过参数更改保持属性）, D200-D511（保持用，可通过参数更改）, D512-D7999（固定保持用，可将D1000以后按500点单位设为文件寄存器）, D8000-D8511（特殊数据寄存器）",
+      "T": "T0-T191（100ms）, T192-T199（100ms，子程序/中断子程序用）, T200-T245（10ms）, T246-T249（1ms累计）, T250-T255（100ms累计）, T256-T511（1ms）",
+      "C": "C0-C99（16位一般用）, C100-C199（16位保持用）, C200-C219（32位双向一般用）, C220-C234（32位双向保持用）, C235-C255（32位高速计数器，最多使用8点）"
+    },
+    "special_m": {
+      "always_on": "M8000",
+      "always_off": "M8001",
+      "init_pulse_on": "M8002",
+      "init_pulse_off": "M8003",
+      "error_common": "M8004",
+      "battery_low": "M8005",
+      "battery_low_latch": "M8006",
+      "momentary_power_fail": "M8007",
+      "power_fail_detecting": "M8008",
+      "dc24v_power_fail": "M8009",
+      "clock_001s": "M8011",
+      "clock_01s": "M8012",
+      "clock_1s": "M8013",
+      "clock_1min": "M8014",
+      "clock_stop_set": "M8015",
+      "clock_display_stop": "M8016",
+      "clock_adjust_30s": "M8017",
+      "clock_installed": "M8018",
+      "clock_error": "M8019",
+      "zero_flag": "M8020",
+      "borrow_flag": "M8021",
+      "carry_flag": "M8022",
+      "instruction_complete": "M8029（应用指令执行结束标志；必须紧邻并结合具体指令使用，不是所有定位轴的统一完成位）",
+      "pulse_complete": "M8029（仅按具体指令说明和紧邻该指令的程序位置判断，禁止作为多个脉冲/定位指令共用完成位）",
+      "battery_led_disable": "M8030",
+      "clear_non_latch_memory": "M8031",
+      "clear_latch_memory": "M8032",
+      "memory_hold_stop": "M8033",
+      "all_output_disable": "M8034",
+      "forced_run_mode": "M8035",
+      "forced_run": "M8036",
+      "forced_stop": "M8037",
+      "communication_parameter_set": "M8038",
+      "constant_scan": "M8039",
+      "io_error": "M8060",
+      "plc_hardware_error": "M8061",
+      "serial_error": "M8063",
+      "parameter_error": "M8064",
+      "syntax_error": "M8065",
+      "ladder_error": "M8066",
+      "operation_error": "M8067",
+      "operation_error_latch": "M8068",
+      "rs_send_ready": "M8121",
+      "rs_send_req": "M8122",
+      "rs_recv_done": "M8123",
+      "rs_carrier_detect": "M8124",
+      "rs_8bit_mode": "M8161",
+      "y0_zero_signal": "无专用状态继电器；M8346只是Y0零点信号逻辑反转设置",
+      "y0_busy": "M8340",
+      "y0_positioning_driving": "M8348",
+      "y0_pulse_monitor": "M8340（ON=BUSY，OFF=READY）",
+      "y0_pulse_stop": "M8349"
+    },
+    "special_m_reference": {
+      "usage_notes": [
+        "方括号标记的系统状态继电器在手册中属于CPU控制对象，不应由用户程序驱动。",
+        "手册未定义或标注为“不可以使用”的M8000-M8511编号属于CPU占用区，禁止在顺控程序中使用。",
+        "M8029会被多种应用指令复用，应放在对应指令正下方使用，不能把多个指令的M8029集中后判断。",
+        "定位完成应结合对应轴的BUSY继电器、定位指令驱动中继电器和指令异常结束标志判断，不存在一个供所有轴共用的“原点回归完成M”。",
+        "带版本条件、扩展板或特殊适配器条件的继电器，使用前必须核对CPU版本和硬件配置。"
+      ],
+      "plc_status": {
+        "M8000": "RUN监控a触点；PLC处于RUN时ON，只读。",
+        "M8001": "RUN监控b触点；PLC处于RUN时OFF，只读。",
+        "M8002": "初始脉冲a触点；进入RUN后的第一个扫描周期ON，只读。",
+        "M8003": "初始脉冲b触点；进入RUN后的第一个扫描周期OFF，只读。",
+        "M8004": "错误发生；M8060、M8061、M8064-M8067任一ON时ON，只读。",
+        "M8005": "电池电压低检测，只读。",
+        "M8006": "电池电压低锁存；检测到低电压后置位，只读。",
+        "M8007": "瞬时停电检测；检测到瞬时停电时ON一个扫描，只读。",
+        "M8008": "停电检测中；瞬时停电时置位，超过D8008设定后PLC停止，只读。",
+        "M8009": "扩展单元或扩展电源单元DC24V掉电，只读。"
+      },
+      "clock": {
+        "M8011": "10ms周期时钟，ON 5ms/OFF 5ms，只读。",
+        "M8012": "100ms周期时钟，ON 50ms/OFF 50ms，只读。",
+        "M8013": "1s周期时钟，ON 500ms/OFF 500ms，只读。",
+        "M8014": "1min周期时钟，ON 30s/OFF 30s，只读。",
+        "M8015": "停止实时时钟计时并允许预置。",
+        "M8016": "实时时钟数据读出后停止显示更新。",
+        "M8017": "实时时钟正负30秒修正。",
+        "M8018": "实时时钟安装检测；FX3U中一直为ON，只读。",
+        "M8019": "实时时钟错误，只读。"
+      },
+      "arithmetic_and_instruction_flags": {
+        "M8020": "零标志；加减法运算结果为0时ON，只读。",
+        "M8021": "借位标志；减法结果超出最小负值时ON，只读。",
+        "M8022": "进位标志；加法进位或移位溢出时ON。",
+        "M8024": "BMOV方向指定。",
+        "M8025": "HSC模式指定；RUN转STOP时清除。",
+        "M8026": "RAMP模式指定；RUN转STOP时清除。",
+        "M8027": "PR模式指定；RUN转STOP时清除。",
+        "M8029": "应用指令执行结束标志；由具体指令复用，须在对应指令附近判断，只读。"
+      },
+      "plc_modes": {
+        "M8030": "禁止电池低电压LED点亮。",
+        "M8031": "执行END时清除非保持软元件存储区。",
+        "M8032": "执行END时清除保持软元件存储区。",
+        "M8033": "存储器保持停止；RUN转STOP时保持映像区和数据区。",
+        "M8034": "禁止所有外部输出；PLC继续RUN，但输出端子全部OFF。",
+        "M8035": "强制RUN模式。",
+        "M8036": "强制RUN指令。",
+        "M8037": "强制STOP指令。",
+        "M8038": "通信参数设定标志。",
+        "M8039": "恒定扫描模式；扫描周期由D8039指定。"
+      },
+      "stl_alarm_and_interrupt": {
+        "M8040": "禁止STL状态转移。",
+        "M8041": "自动运行转移开始，只读。",
+        "M8042": "启动输入对应的启动脉冲，只读。",
+        "M8043": "原点回归结束；用于IST/STL模式，由用户在原点回归结束状态中置位，不是定位指令自动完成位。",
+        "M8044": "原点条件；用于IST/STL模式，由用户在检测到机械原点时驱动。",
+        "M8045": "模式切换时禁止执行所有输出复位。",
+        "M8046": "STL状态动作监控；M8047有效时任一指定状态ON则ON，只读。",
+        "M8047": "STL监控有效，使D8040-D8047有效。",
+        "M8048": "信号报警器动作；M8049有效时S900-S999任一ON则ON，只读。",
+        "M8049": "信号报警器监控有效，使D8049有效。",
+        "M8050-M8055": "分别禁止输入中断I00□-I50□。",
+        "M8056-M8058": "分别禁止定时器中断I6□□-I8□□。",
+        "M8059": "禁止计数器中断I010-I060。"
+      },
+      "errors": {
+        "M8060": "I/O构成错误，只读；错误信息见D8060。",
+        "M8061": "PLC硬件错误，只读；错误代码见D8061。",
+        "M8063": "串行通信错误1（通道1），只读；错误代码见D8063。",
+        "M8064": "参数错误，只读；错误代码见D8064。",
+        "M8065": "语法错误，只读；错误代码和步号见D8065、D8069等。",
+        "M8066": "回路错误，只读；错误代码和步号见D8066、D8069等。",
+        "M8067": "运算错误，只读；错误代码和步号见D8067、D8069等。",
+        "M8068": "运算错误锁存。",
+        "M8069": "驱动后执行I/O总线检测。",
+        "M8109": "输出刷新错误，只读；错误输出编号见D8109。",
+        "M8316": "I/O非实际安装指定错误，只读。",
+        "M8318": "BFM初始化失败，只读；单元号和BFM号见D8318-D8319。",
+        "M8328": "指令不执行，只读。",
+        "M8329": "指令执行异常结束，只读。",
+        "M8438": "串行通信错误2（通道2），错误代码见D8438。",
+        "M8449": "特殊模块错误标志，Ver.2.20以上；错误代码见D8449。"
+      },
+      "parallel_and_trace": {
+        "M8070": "并联链接主站指定。",
+        "M8071": "并联链接子站指定。",
+        "M8072": "并联链接运行中，只读。",
+        "M8073": "并联链接主/子站设定错误，只读。",
+        "M8075-M8079": "FX3U采样跟踪系统区域，供编程工具使用，不作为普通用户继电器。",
+        "M8090": "BKCMP块比较信号，Ver.2.20以上。",
+        "M8091": "COMRD/BINDA输出字符数切换，Ver.2.20以上。",
+        "M8099": "驱动0.1ms、16位高速环形计数器D8099。",
+        "M8105": "存储器盒写入中，只读。",
+        "M8107": "软元件注释登录确认，只读。"
+      },
+      "serial_channel_1": {
+        "M8121": "RS指令发送待机标志，只读。",
+        "M8122": "RS指令发送请求。",
+        "M8123": "RS指令接收结束标志，只读。",
+        "M8124": "RS指令载波检测标志，只读。",
+        "M8126": "计算机链接通道1全局ON，只读。",
+        "M8127": "计算机链接通道1按需发送中，只读。",
+        "M8128": "计算机链接通道1按需发送错误。",
+        "M8129": "计算机链接通道1字/字节切换；RS指令超时判断。"
+      },
+      "high_speed_and_extended_functions": {
+        "M8130": "HSZ表格比较模式。",
+        "M8131": "HSZ表格比较执行结束，只读。",
+        "M8132": "HSZ/PLSY速度模式。",
+        "M8133": "HSZ/PLSY速度模式执行结束，只读。",
+        "M8138": "HSCT指令执行结束，只读。",
+        "M8139": "高速计数器比较指令执行中，只读。",
+        "M8160": "XCH指令SWAP功能。",
+        "M8161": "ASC、RS、ASCI、HEX、CCD、CRC等指令的8位处理模式。",
+        "M8162": "高速并联链接模式。",
+        "M8165": "SORT2降序排列，Ver.2.20以上。",
+        "M8167": "HKY按HEX数据处理。",
+        "M8168": "SMOV按HEX数据处理。",
+        "M8170-M8177": "分别捕捉输入X000-X007的脉冲；FX3U使用时需要EI指令。",
+        "M8178": "并联链接通道切换；OFF=通道1，ON=通道2。",
+        "M8179": "简易PC间链接通道切换。",
+        "M8198": "C251、C252、C254的1倍/4倍切换；OFF=1倍，ON=4倍。",
+        "M8199": "C253、C255、C253(OP)的1倍/4倍切换；OFF=1倍，ON=4倍。"
+      },
+      "inverter_and_simple_link": {
+        "M8151": "变频器通信中（通道1），只读。",
+        "M8152": "变频器通信错误（通道1），只读。",
+        "M8153": "变频器通信错误锁存（通道1），只读。",
+        "M8154": "IVBWR指令错误（通道1），只读。",
+        "M8156": "变频器通信中（通道2），只读。",
+        "M8157": "变频器通信错误（通道2），只读。",
+        "M8158": "变频器通信错误锁存（通道2），只读。",
+        "M8159": "IVBWR指令错误（通道2），只读。",
+        "M8183-M8190": "简易PC间链接主站及1-7号站的数据传送顺控错误，只读。",
+        "M8191": "简易PC间链接数据传送顺控执行中，只读。"
+      },
+      "counter_direction": {
+        "M8200-M8234": "分别对应C200-C234的计数方向；ON=减计数，OFF=增计数。",
+        "M8235-M8245": "分别对应C235-C245高速计数器的计数方向；ON=减计数，OFF=增计数。",
+        "M8246-M8255": "分别监控C246-C255的实际计数方向；ON=减计数，OFF=增计数，只读。"
+      },
+      "analog_adapters": {
+        "M8260-M8269": "第1台模拟量特殊适配器的模式/功能位，具体含义随适配器型号变化。",
+        "M8270-M8279": "第2台模拟量特殊适配器的模式/功能位，具体含义随适配器型号变化。",
+        "M8280-M8289": "第3台模拟量特殊适配器的模式/功能位，具体含义随适配器型号变化。",
+        "M8290-M8299": "第4台模拟量特殊适配器的模式/功能位，具体含义随适配器型号变化。"
+      },
+      "extended_arithmetic_flags": {
+        "M8304": "乘除运算结果为0时ON，Ver.2.30以上，只读。",
+        "M8306": "除法运算结果溢出时ON，Ver.2.30以上，只读。"
+      },
+      "positioning": {
+        "M8330-M8334": "DUTY指令定时时钟输出1-5，Ver.2.20以上，只读。",
+        "M8336": "DVIT中断输入指定功能有效；不是原点回归完成标志。",
+        "M8338": "PLSV加减速动作选择。",
+        "M8340": "Y0脉冲输出中监控；ON=BUSY，OFF=READY，只读。",
+        "M8341": "Y0清除信号输出功能有效。",
+        "M8342": "Y0原点回归方向指定。",
+        "M8343": "Y0正转限位。",
+        "M8344": "Y0反转限位。",
+        "M8345": "Y0近点DOG信号逻辑反转。",
+        "M8346": "Y0零点信号逻辑反转。",
+        "M8347": "Y0中断信号逻辑反转。",
+        "M8348": "Y0定位指令驱动中，只读。",
+        "M8349": "Y0脉冲输出停止指令。",
+        "M8350-M8359": "Y1定位状态和设置；个位含义与M8340-M8349对应。",
+        "M8360-M8369": "Y2定位状态和设置；个位含义与M8340-M8349对应。",
+        "M8370-M8379": "Y3定位状态和设置；仅FX3U连接两台FX3U-2HSY-ADP时可用，个位含义与M8340-M8349对应。",
+        "M8460-M8463": "DVIT的Y0-Y3用户中断输入指令；Y3需两台高速输出适配器。",
+        "M8464-M8467": "DSZR/ZRN的Y0-Y3清除信号软元件指定功能有效；对应软元件见D8464-D8467。"
+      },
+      "high_speed_counter_status": {
+        "M8380-M8387": "高速计数器输入组动作状态监控，具体对应关系见手册第801页。",
+        "M8388": "高速计数器功能变更用触点。",
+        "M8389": "外部复位输入逻辑切换。",
+        "M8390": "C244功能切换。",
+        "M8391": "C245功能切换。",
+        "M8392": "C248、C253功能切换。",
+        "M8393": "中断程序延迟时间设定触点。",
+        "M8394": "HCMOV中断程序驱动触点。",
+        "M8398": "驱动1ms、32位环形计数器[D8399,D8398]。"
+      },
+      "rs2_and_channel_2": {
+        "M8401": "RS2通道1发送待机标志，只读。",
+        "M8402": "RS2通道1发送请求。",
+        "M8403": "RS2通道1接收结束标志，只读。",
+        "M8404": "RS2通道1载波检测标志，只读。",
+        "M8405": "RS2通道1 DSR标志，Ver.2.30以上，只读。",
+        "M8409": "RS2通道1超时判断标志。",
+        "M8421": "RS2通道2发送待机标志，只读。",
+        "M8422": "RS2通道2发送请求。",
+        "M8423": "RS2通道2接收结束标志，只读。",
+        "M8424": "RS2通道2载波检测标志，只读。",
+        "M8425": "RS2通道2 DSR标志，Ver.2.30以上，只读。",
+        "M8426": "计算机链接通道2全局ON，只读。",
+        "M8427": "计算机链接通道2按需发送中，只读。",
+        "M8428": "计算机链接通道2按需发送错误。",
+        "M8429": "计算机链接通道2字/字节切换；RS2通道2超时判断。"
+      },
+      "reserved": [
+        "M8010",
+        "M8023",
+        "M8080-M8089（FX3U中采样跟踪相关区域，按普通用户软元件视为不可用）",
+        "M8100-M8103",
+        "M8112-M8120（FX3U中无对应普通功能）",
+        "M8140-M8149（表中定位功能仅适用于其他FX系列机型）",
+        "M8256-M8259",
+        "M8300-M8303",
+        "M8305",
+        "M8307-M8315",
+        "M8317",
+        "M8319-M8327",
+        "M8335",
+        "M8337",
+        "M8339",
+        "M8396-M8397",
+        "M8399",
+        "M8400",
+        "M8406-M8408",
+        "M8410-M8420",
+        "M8430-M8437",
+        "M8439-M8448",
+        "M8450-M8459",
+        "M8468-M8511"
+      ]
+    },
+    "special_d": {
+      "watchdog": "D8000",
+      "plc_type": "D8001",
+      "memory_capacity": "D8002",
+      "error_code": "D8004",
+      "battery_voltage": "D8005",
+      "current_scan_time": "D8010",
+      "min_scan_time": "D8011",
+      "max_scan_time": "D8012",
+      "clock_second": "D8013",
+      "clock_minute": "D8014",
+      "clock_hour": "D8015",
+      "clock_day": "D8016",
+      "clock_month": "D8017",
+      "clock_year": "D8018",
+      "clock_weekday": "D8019",
+      "constant_scan_time": "D8039",
+      "io_error_code": "D8060",
+      "plc_hardware_error_code": "D8061",
+      "serial_error_code": "D8063",
+      "syntax_error_code": "D8065",
+      "ladder_error_code": "D8066",
+      "operation_error_code": "D8067",
+      "operation_error_step": "D8069",
+      "y0_current_pos_lo": "D8340",
+      "y0_current_pos_hi": "D8341",
+      "y0_bias_speed": "D8342",
+      "y0_max_speed_lo": "D8343",
+      "y0_max_speed_hi": "D8344",
+      "y0_creep_speed": "D8345",
+      "y0_org_return_lo": "D8346",
+      "y0_org_return_hi": "D8347",
+      "y0_accel_time": "D8348",
+      "y0_decel_time": "D8349",
+      "y1_current_pos_lo": "D8350",
+      "y1_current_pos_hi": "D8351",
+      "y1_bias_speed": "D8352",
+      "y1_max_speed_lo": "D8353",
+      "y1_max_speed_hi": "D8354",
+      "y1_creep_speed": "D8355",
+      "y1_org_return_lo": "D8356",
+      "y1_org_return_hi": "D8357",
+      "y1_accel_time": "D8358",
+      "y1_decel_time": "D8359",
+      "y2_current_pos_lo": "D8360",
+      "y2_current_pos_hi": "D8361",
+      "y2_bias_speed": "D8362",
+      "y2_max_speed_lo": "D8363",
+      "y2_max_speed_hi": "D8364",
+      "y2_creep_speed": "D8365",
+      "y2_org_return_lo": "D8366",
+      "y2_org_return_hi": "D8367",
+      "y2_accel_time": "D8368",
+      "y2_decel_time": "D8369"
+    },
+    "register_rules": {
+      "position_dword_pairs": [
+        "D8340/D8341",
+        "D8350/D8351",
+        "D8360/D8361"
+      ],
+      "pair_order": "前者为低16位，后者为高16位，合起来是有符号32位值；不得把其中任意一个字当作完整数值。",
+      "integer_math": "需要整数计算时直接使用D前缀双字指令，例如DDIV D8350 D100 D200；源和结果均按连续两个D寄存器占用。",
+      "float_math": "需要小数或浮点计算时，先用DFLT D8350 D200把32位整数转换到浮点寄存器对D200/D201，再用DEADD/DESUB/DEMUL/DEDIV运算；后续不得再把D200或D201单独作为16位数使用。",
+      "forbidden_examples": [
+        "MOV D8350 D200",
+        "DIV D8350 K50 D200",
+        "COMPARE > D8350 K0"
+      ],
+      "valid_examples": [
+        "DFLT D8350 D200",
+        "DEDIV D200 D202 D204",
+        "DDIV D8350 D100 D200",
+        "DCMP D8350 D100 M100"
+      ]
+    },
+    "positioning": {
+      "axes": 3,
+      "max_freq": 100000,
+      "output_type_note": "晶体管输出型基本单元可使用内置高速脉冲输出；继电器/双向可控硅输出型需要已确认的FX3U-2HSY-ADP等高速输出适配器，只有明确填写继电器输出且未选适配器时才视为冲突",
+      "frequency_limit_scope": "内置输出的逐Y能力不同；用户未提供精确型号、输出形式、负载或扩展适配器信息时按所选系列能力生成并记录假设",
+      "axis_capabilities": {
+        "Y0": {
+          "max_freq_hz": 100000,
+          "role": "内置脉冲输出轴1",
+          "requires": "晶体管输出型基本单元"
+        },
+        "Y1": {
+          "max_freq_hz": 100000,
+          "role": "内置脉冲输出轴2",
+          "requires": "晶体管输出型基本单元"
+        },
+        "Y2": {
+          "max_freq_hz": 100000,
+          "role": "内置脉冲输出轴3",
+          "requires": "晶体管输出型基本单元"
+        }
+      },
+      "axis_pulse": [
+        "Y0",
+        "Y1",
+        "Y2"
+      ],
+      "direction_output_examples": [
+        "Y4",
+        "Y5",
+        "Y6"
+      ],
+      "direction_output_rule": "方向输出不是按脉冲轴固定配对；可选择任意已确认、合法且不与其他输出冲突的Y点，Y4/Y5/Y6仅为示例",
+      "external_positioning_options": {
+        "FX3U-2HSY-ADP": "高速输出适配器，独立2轴、最高200kHz；使用Y2/Y3需第二块适配器",
+        "FX3U-1PG": "单轴脉冲输出定位模块，使用模块专用参数/BFM，不可按基本单元内置Y轴规则臆造",
+        "FX2N-10PG": "单轴差分线驱动定位模块，最高1MHz，使用模块专用参数/BFM"
+      },
+      "instructions": [
+        "PLSY",
+        "PLSR",
+        "PLSV",
+        "DRVI",
+        "DRVA",
+        "ZRN",
+        "DSZR",
+        "DVIT",
+        "DDRVI",
+        "DDRVA"
+      ]
+    },
+    "analog_input": {
+      "selection_rule": "用户提供完整模块型号时按对应方式访问；模拟量特殊适配器地址由全部适配器的连接顺序和通道共同决定",
+      "modules": {
+        "FX3U-4AD-ADP": {
+          "kind": "special_adapter",
+          "access": "FX3U/FX3UC 中第1至第4台模拟量特殊适配器的通道1-4输入数据依次为 D8260-D8263、D8270-D8273、D8280-D8283、D8290-D8293",
+          "instruction_restriction": "不得使用 RD3A；RD3A 仅支持 FX0N-3A 或 FX2N-2AD",
+          "optional_context": ["适配器连接顺序", "通道", "输入量程", "CPU版本"]
+        }
+      }
+    },
+    "analog_output": {
+      "selection_rule": "用户提供完整模块型号时按对应方式访问；FX3U-4DA 与 FX3U-4DA-ADP 的访问方式不可互换，未提供时记录非阻断假设",
+      "modules": {
+        "FX3U-4DA": {
+          "kind": "special_function_block",
+          "access": "按模块手册使用缓冲存储器及 TO/FROM 等访问方式",
+          "optional_context": ["单元号", "通道", "输出量程", "模块手册版本"]
+        },
+        "FX3U-4DA-ADP": {
+          "kind": "special_adapter",
+          "access": "按 CPU/适配器手册使用分配的专用软元件；FX3U/FX3UC 中第1至第4台模拟量特殊适配器的通道1-4输出数据依次为 D8260-D8263、D8270-D8273、D8280-D8283、D8290-D8293",
+          "instruction_restriction": "不得使用 WR3A；WR3A 仅支持 FX0N-3A 或 FX2N-2DA",
+          "optional_context": ["适配器连接顺序", "通道", "输出量程", "CPU版本"]
+        }
+      },
+      "forbidden_assumptions": [
+        "禁止把 D8260 假设为 4DA 缓冲起始地址",
+        "禁止把缓冲存储器编号写成普通 D 软元件",
+        "禁止在模块型号和量程未确认时生成具体初始化值"
+      ]
+    },
+    "hsc": {
+      "single_phase": "C235-C245（固定输入X0-X7）",
+      "two_phase": "C246-C250",
+      "quadrature": "C251-C255",
+      "fixed_inputs": {
+        "C235": "X0",
+        "C236": "X1",
+        "C237": "X2",
+        "C238": "X3",
+        "C239": "X4",
+        "C240": "X5",
+        "C241": "X0",
+        "C244": "X0",
+        "C251": "X0"
+      }
+    },
+    "notes": "X/Y 为八进制编址（X0-X7, X10-X17...）。无浮点运算指令，需用 DE 前缀指令。"
+  },
+  "FX5U": {
+    "family": "iQ-F",
+    "desc": "FX5U / FX5UC（iQ-F 系列）",
+    "addressing": "decimal",
+    "soft_limits": {
+      "X": "X0-X1777（十进制设备编号；实际安装输入点数由 CPU 和扩展配置决定）",
+      "Y": "Y0-Y1777（十进制设备编号；实际安装输出点数由 CPU 和扩展配置决定）",
+      "M": "M0-M7679（通用/锁存靠参数设定）, SM0-SM2047（原生特殊）, SM8000-SM8999（FX兼容特殊；SM5000等间隔编号无效）",
+      "D": "D0-D7999（通用）, SD0-SD2047（原生特殊）, SD8000-SD8999（FX兼容特殊；SD5000等间隔编号无效）, 可扩展文件寄存器",
+      "T": "T0-T1023；普通T时基由指令形式确定：OUT 100ms、OUTH 10ms、OUTHS 1ms；累计使用ST，不按T地址划分时基（JY997D55801-AB，PDF第136-137页）",
+      "C": "C0-C199（16位）, C200-C1023（32位）"
+    },
+    "special_m": {
+      "always_on": "SM8000 / SM400",
+      "init_pulse_on": "SM8002 / SM402",
+      "clock_001s": "SM409",
+      "clock_01s": "SM410",
+      "clock_02s": "SM411",
+      "clock_1s": "SM412",
+      "clock_2s": "SM413",
+      "clock_1min": "SM414",
+      "pulse_complete": "SM8029（PLSY/PLSR/DRVI/DRVA/ZRN/DSZR/DVIT/PLSV/PWM全部脉冲指令通用）",
+      "y0_zero_signal": "SM8340",
+      "y0_positioning_driving": "SM8348",
+      "y0_pulse_monitor": "SM8349",
+      "rs_send_req": "SM8562",
+      "rs_recv_done": "SM8563",
+      "error_common": "SM0",
+      "self_diag_error": "SM1",
+      "error_clear_req": "SM50",
+      "battery_low": "SM51",
+      "ac_down": "SM53",
+      "operation_error": "SM56",
+      "y0_pulse_stop": "SM8349"
+    },
+    "special_d": {
+      "error_code": "SD0 / SD8004",
+      "watchdog": "SD8000",
+      "battery_voltage": "SD8005",
+      "clock_second": "SD210",
+      "clock_minute": "SD211",
+      "clock_hour": "SD212",
+      "clock_day": "SD213",
+      "clock_month": "SD214",
+      "clock_year": "SD215",
+      "clock_weekday": "SD216",
+      "y0_current_pos_lo": "SD8340",
+      "y0_current_pos_hi": "SD8341",
+      "y0_bias_speed": "SD8342",
+      "y0_max_speed_lo": "SD8343",
+      "y0_max_speed_hi": "SD8344",
+      "y0_creep_speed": "SD8345",
+      "y0_org_return_lo": "SD8346",
+      "y0_org_return_hi": "SD8347",
+      "y0_accel_time": "SD8348",
+      "y0_decel_time": "SD8349",
+      "y1_current_pos_lo": "SD8350",
+      "y1_current_pos_hi": "SD8351",
+      "y1_bias_speed": "SD8352",
+      "y1_max_speed_lo": "SD8353",
+      "y1_max_speed_hi": "SD8354",
+      "y1_creep_speed": "SD8355",
+      "y1_org_return_lo": "SD8356",
+      "y1_org_return_hi": "SD8357",
+      "y1_accel_time": "SD8358",
+      "y1_decel_time": "SD8359",
+      "y2_current_pos_lo": "SD8360",
+      "y2_current_pos_hi": "SD8361",
+      "y2_bias_speed": "SD8362",
+      "y2_max_speed_lo": "SD8363",
+      "y2_max_speed_hi": "SD8364",
+      "y2_creep_speed": "SD8365",
+      "y2_org_return_lo": "SD8366",
+      "y2_org_return_hi": "SD8367",
+      "y2_accel_time": "SD8368",
+      "y2_decel_time": "SD8369"
+    },
+    "positioning": {
+      "axes_native": 4,
+      "axes_max": 12,
+      "max_freq": 200000,
+      "output_type_note": "内置高速脉冲输出要求支持该功能的晶体管输出型 CPU；只有明确填写继电器输出型时才视为冲突",
+      "frequency_limit_scope": "200kHz 为型号资料中的能力上限；用户未提供精确 CPU 型号、输出形式、接线或负载时按所选系列能力生成并记录假设",
+      "axis_capabilities": {
+        "Y0": {
+          "max_freq_hz": 200000,
+          "role": "内置脉冲输出轴1",
+          "requires": "支持高速脉冲的晶体管输出型 CPU"
+        },
+        "Y1": {
+          "max_freq_hz": 200000,
+          "role": "内置脉冲输出轴2",
+          "requires": "支持高速脉冲的晶体管输出型 CPU"
+        },
+        "Y2": {
+          "max_freq_hz": 200000,
+          "role": "内置脉冲输出轴3",
+          "requires": "支持高速脉冲的晶体管输出型 CPU"
+        },
+        "Y3": {
+          "max_freq_hz": 200000,
+          "role": "内置脉冲输出轴4",
+          "requires": "支持高速脉冲的晶体管输出型 CPU"
+        }
+      },
+      "axis_pulse": [
+        "Y0",
+        "Y1",
+        "Y2",
+        "Y3"
+      ],
+      "axis_dir": [
+        "Y4",
+        "Y5",
+        "Y6",
+        "Y7"
+      ],
+      "instructions": [
+        "PLSY",
+        "PLSR",
+        "PLSV",
+        "DRVI",
+        "DRVA",
+        "DSZR",
+        "DVIT",
+        "DDRVI",
+        "DDRVA",
+        "DRVTBL",
+        "DRVMUL",
+        "MC_MoveAbsolute"
+      ],
+      "no_support": [
+        "ZRN"
+      ],
+      "notes": "FX5U取消ZRN，统一用DSZR。扩展轴（第5-12轴）需FX5-16ET/ES-H模块，仅支持FX5U专用格式（K5-K12）。DRVTBL=表格运行，DRVMUL=4轴同时启动。"
+    },
+    "analog_output": {
+      "selection_rule": "用户提供模块/适配器型号及工程配置时按其选择访问方式；未提供时记录非阻断假设，不得套用 FX3U-4DA 或 FX3U-4DA-ADP 地址",
+      "optional_context": ["CPU完整型号", "模块完整型号", "模块配置位置", "通道", "输出量程"],
+      "forbidden_assumptions": [
+        "禁止臆造 D8260 或其他模拟量输出地址",
+        "禁止把 FX3U 模块的 BFM/专用寄存器直接用于 FX5U"
+      ]
+    },
+    "hsc": {
+      "single_phase": "CH1-CH8（固定输入X0-X7）",
+      "notes": "FX5U 高速计数器用 CH 编号（CH1-CH8），与 FX3U 的 C235-C255 不同。输入口固定但编号体系变化。"
+    },
+    "notes": "SM/SD 为特殊继电器/寄存器前缀。SM8000系列（兼容FX3U）与 SM400系列（Q系列风格）功能完全相同、可互换。X/Y 为十进制编址。新增结构化指令（MC_Power等IEC标准）。支持CC-Link IE Field Basic。"
+  },
+  "FX1N": {
+    "family": "FX",
+    "desc": "Source-scoped instruction and device profile; native acceptance and execution remain unverified.",
+    "coverage": "source_subset",
+    "addressing": {
+      "radices": {
+        "X": 8,
+        "Y": 8
+      },
+      "default": 10
+    },
+    "soft_limits": {
+      "X": 127,
+      "Y": 127,
+      "M": 8255,
+      "D": 8255,
+      "T": 255,
+      "C": 255,
+      "S": 999,
+      "V": 7,
+      "Z": 7
+    },
+    "manual_reference": {
+      "manual_id": "jy992d88101e",
+      "manual": "JY992D88101",
+      "revision": "E",
+      "pdf_page": 394,
+      "target_model": "FX1N"
+    },
+    "special_m": {
+      "M8002": "CPU-owned initial pulse on STOP to RUN, read only.",
+      "M8011": "CPU-owned 10 ms clock pulse, read only.",
+      "M8012": "CPU-owned 100 ms clock pulse, read only.",
+      "M8013": "CPU-owned 1 s clock pulse, read only.",
+      "M8014": "CPU-owned 1 minute clock pulse, read only.",
+      "M8017": "Pulse ON to round the RTC to the nearest minute.",
+      "M8018": "CPU-owned RTC availability status, read only.",
+      "M8019": "CPU-owned RTC setting error status, read only."
+    },
+    "special_d": {
+      "D8018": "Year display; MOV K2000 on initial pulse selects four-digit years from the next scan without changing the current time."
+    },
+    "notes": "Device allocations are the cited default parameters, not physical I/O installation. Parameter changes, unlisted device classes, reserved specials and hardware conditions require their own evidence.",
+    "validation": {
+      "status": "source_subset",
+      "device_limits": {
+        "X": 127,
+        "Y": 127,
+        "M": 8255,
+        "D": 8255,
+        "T": 255,
+        "C": 255,
+        "S": 999,
+        "V": 7,
+        "Z": 7
+      },
+      "radices": {
+        "X": 8,
+        "Y": 8
+      },
+      "sources": [
+        {
+          "manual_id": "jy992d88101e",
+          "manual": "JY992D88101",
+          "revision": "E",
+          "pdf_page": 394,
+          "target_model": "FX1N"
+        }
+      ],
+      "special_access": {
+        "M8002": {
+          "access": "read",
+          "source": {
+            "manual_id": "jy992d88101e",
+            "revision": "E",
+            "pdf_page": 349
+          }
+        },
+        "M8011": {
+          "access": "read",
+          "source": {
+            "manual_id": "jy992d88101e",
+            "revision": "E",
+            "pdf_page": 352
+          }
+        },
+        "M8012": {
+          "access": "read",
+          "source": {
+            "manual_id": "jy992d88101e",
+            "revision": "E",
+            "pdf_page": 352
+          }
+        },
+        "M8013": {
+          "access": "read",
+          "source": {
+            "manual_id": "jy992d88101e",
+            "revision": "E",
+            "pdf_page": 352
+          }
+        },
+        "M8014": {
+          "access": "read",
+          "source": {
+            "manual_id": "jy992d88101e",
+            "revision": "E",
+            "pdf_page": 352
+          }
+        },
+        "M8017": {
+          "access": "read_write",
+          "source": {
+            "manual_id": "jy992d88101e",
+            "revision": "E",
+            "pdf_page": 352
+          }
+        },
+        "M8018": {
+          "access": "read",
+          "source": {
+            "manual_id": "jy992d88101e",
+            "revision": "E",
+            "pdf_page": 352
+          }
+        },
+        "M8019": {
+          "access": "read",
+          "source": {
+            "manual_id": "jy992d88101e",
+            "revision": "E",
+            "pdf_page": 352
+          }
+        },
+        "D8018": {
+          "access": "read_write",
+          "source": {
+            "manual_id": "jy992d88101e",
+            "revision": "E",
+            "pdf_page": 352
+          }
+        }
+      },
+      "bit_prefixes": [
+        "X",
+        "Y",
+        "M",
+        "L",
+        "F",
+        "S",
+        "B",
+        "SB",
+        "SM",
+        "T",
+        "C"
+      ],
+      "word_bit_prefixes": [],
+      "device_regions": {
+        "M": [
+          [
+            0,
+            1535
+          ],
+          [
+            8000,
+            8255
+          ]
+        ],
+        "D": [
+          [
+            0,
+            7999
+          ],
+          [
+            8000,
+            8255
+          ]
+        ]
+      },
+      "special_regions": {
+        "M": [
+          [
+            8000,
+            8255
+          ]
+        ],
+        "D": [
+          [
+            8000,
+            8255
+          ]
+        ]
+      }
+    }
+  },
+  "Q00J": {
+    "family": "Q",
+    "desc": "Source-scoped instruction and device profile; native acceptance and execution remain unverified.",
+    "coverage": "source_subset",
+    "addressing": {
+      "radices": {
+        "X": 16,
+        "Y": 16,
+        "B": 16,
+        "W": 16,
+        "SB": 16,
+        "SW": 16
+      },
+      "default": 10
+    },
+    "soft_limits": {
+      "X": 2047,
+      "Y": 2047,
+      "M": 8191,
+      "L": 2047,
+      "F": 1023,
+      "V": 1023,
+      "S": 127,
+      "B": 2047,
+      "SB": 1023,
+      "T": 511,
+      "C": 511,
+      "D": 11135,
+      "W": 2047,
+      "SW": 1023,
+      "SM": 1023,
+      "SD": 1023,
+      "Z": 9
+    },
+    "manual_reference": {
+      "manual_id": "sh080808engm",
+      "manual": "SH080808ENG",
+      "revision": "M",
+      "pdf_page": 378,
+      "target_model": "Q00J"
+    },
+    "special_m": {
+      "SM420": "User timing clock registered by DUTY; CPU END processing owns its state. Scan execution uses SM420-SM424, low-speed execution uses SM430-SM434.",
+      "SM421": "User timing clock registered by DUTY; CPU END processing owns its state. Scan execution uses SM420-SM424, low-speed execution uses SM430-SM434.",
+      "SM422": "User timing clock registered by DUTY; CPU END processing owns its state. Scan execution uses SM420-SM424, low-speed execution uses SM430-SM434.",
+      "SM423": "User timing clock registered by DUTY; CPU END processing owns its state. Scan execution uses SM420-SM424, low-speed execution uses SM430-SM434.",
+      "SM424": "User timing clock registered by DUTY; CPU END processing owns its state. Scan execution uses SM420-SM424, low-speed execution uses SM430-SM434.",
+      "SM430": "User timing clock registered by DUTY; CPU END processing owns its state. Scan execution uses SM420-SM424, low-speed execution uses SM430-SM434.",
+      "SM431": "User timing clock registered by DUTY; CPU END processing owns its state. Scan execution uses SM420-SM424, low-speed execution uses SM430-SM434.",
+      "SM432": "User timing clock registered by DUTY; CPU END processing owns its state. Scan execution uses SM420-SM424, low-speed execution uses SM430-SM434.",
+      "SM433": "User timing clock registered by DUTY; CPU END processing owns its state. Scan execution uses SM420-SM424, low-speed execution uses SM430-SM434.",
+      "SM434": "User timing clock registered by DUTY; CPU END processing owns its state. Scan execution uses SM420-SM424, low-speed execution uses SM430-SM434."
+    },
+    "special_d": {},
+    "notes": "Device allocations are the cited default parameters, not physical I/O installation. Parameter changes, unlisted device classes, reserved specials and hardware conditions require their own evidence.",
+    "validation": {
+      "status": "source_subset",
+      "device_limits": {
+        "X": 2047,
+        "Y": 2047,
+        "M": 8191,
+        "L": 2047,
+        "F": 1023,
+        "V": 1023,
+        "S": 127,
+        "B": 2047,
+        "SB": 1023,
+        "T": 511,
+        "C": 511,
+        "D": 11135,
+        "W": 2047,
+        "SW": 1023,
+        "SM": 1023,
+        "SD": 1023,
+        "Z": 9
+      },
+      "radices": {
+        "X": 16,
+        "Y": 16,
+        "B": 16,
+        "W": 16,
+        "SB": 16,
+        "SW": 16
+      },
+      "sources": [
+        {
+          "manual_id": "sh080808engm",
+          "manual": "SH080808ENG",
+          "revision": "M",
+          "pdf_page": 378,
+          "target_model": "Q00J"
+        }
+      ],
+      "special_access": {
+        "SM420": {
+          "access": "read",
+          "instruction_writers": [
+            "DUTY"
+          ],
+          "source": {
+            "manual_id": "sh080809engx",
+            "revision": "X",
+            "pdf_page": 762
+          }
+        },
+        "SM421": {
+          "access": "read",
+          "instruction_writers": [
+            "DUTY"
+          ],
+          "source": {
+            "manual_id": "sh080809engx",
+            "revision": "X",
+            "pdf_page": 762
+          }
+        },
+        "SM422": {
+          "access": "read",
+          "instruction_writers": [
+            "DUTY"
+          ],
+          "source": {
+            "manual_id": "sh080809engx",
+            "revision": "X",
+            "pdf_page": 762
+          }
+        },
+        "SM423": {
+          "access": "read",
+          "instruction_writers": [
+            "DUTY"
+          ],
+          "source": {
+            "manual_id": "sh080809engx",
+            "revision": "X",
+            "pdf_page": 762
+          }
+        },
+        "SM424": {
+          "access": "read",
+          "instruction_writers": [
+            "DUTY"
+          ],
+          "source": {
+            "manual_id": "sh080809engx",
+            "revision": "X",
+            "pdf_page": 762
+          }
+        },
+        "SM430": {
+          "access": "read",
+          "instruction_writers": [
+            "DUTY"
+          ],
+          "source": {
+            "manual_id": "sh080809engx",
+            "revision": "X",
+            "pdf_page": 762
+          }
+        },
+        "SM431": {
+          "access": "read",
+          "instruction_writers": [
+            "DUTY"
+          ],
+          "source": {
+            "manual_id": "sh080809engx",
+            "revision": "X",
+            "pdf_page": 762
+          }
+        },
+        "SM432": {
+          "access": "read",
+          "instruction_writers": [
+            "DUTY"
+          ],
+          "source": {
+            "manual_id": "sh080809engx",
+            "revision": "X",
+            "pdf_page": 762
+          }
+        },
+        "SM433": {
+          "access": "read",
+          "instruction_writers": [
+            "DUTY"
+          ],
+          "source": {
+            "manual_id": "sh080809engx",
+            "revision": "X",
+            "pdf_page": 762
+          }
+        },
+        "SM434": {
+          "access": "read",
+          "instruction_writers": [
+            "DUTY"
+          ],
+          "source": {
+            "manual_id": "sh080809engx",
+            "revision": "X",
+            "pdf_page": 762
+          }
+        }
+      },
+      "bit_prefixes": [
+        "X",
+        "Y",
+        "M",
+        "L",
+        "F",
+        "S",
+        "B",
+        "SB",
+        "SM",
+        "T",
+        "C"
+      ],
+      "word_bit_prefixes": [
+        "D",
+        "SD",
+        "W",
+        "SW"
+      ],
+      "special_regions": {
+        "SM": [
+          [
+            0,
+            1023
+          ]
+        ],
+        "SD": [
+          [
+            0,
+            1023
+          ]
+        ]
+      }
+    }
+  },
+  "Q03UDV": {
+    "family": "Q",
+    "desc": "Source-scoped instruction and device profile; native acceptance and execution remain unverified.",
+    "coverage": "source_subset",
+    "addressing": {
+      "radices": {
+        "X": 16,
+        "Y": 16,
+        "B": 16,
+        "W": 16,
+        "SB": 16,
+        "SW": 16
+      },
+      "default": 10
+    },
+    "soft_limits": {
+      "X": 8191,
+      "Y": 8191,
+      "M": 9215,
+      "L": 8191,
+      "F": 2047,
+      "V": 2047,
+      "S": 8191,
+      "B": 8191,
+      "SB": 2047,
+      "T": 2047,
+      "C": 1023,
+      "D": 13311,
+      "W": 8191,
+      "SW": 2047,
+      "SM": 2047,
+      "SD": 2047,
+      "Z": 19
+    },
+    "manual_reference": {
+      "manual_id": "sh080807engaf",
+      "manual": "SH080807ENG",
+      "revision": "AF",
+      "pdf_page": 348,
+      "target_model": "Q03UDV",
+      "related_pdf_pages": [
+        346,
+        347
+      ]
+    },
+    "special_m": {},
+    "special_d": {
+      "SD1282": "CPU-owned open completion bitmap. Connection 1 is SD1282.0; read only.",
+      "SD1286": "CPU-owned receive status bitmap. Connection 1 is SD1286.0; read only."
+    },
+    "notes": "Device allocations are the cited default parameters, not physical I/O installation. Parameter changes, unlisted device classes, reserved specials and hardware conditions require their own evidence.",
+    "validation": {
+      "status": "source_subset",
+      "device_limits": {
+        "X": 8191,
+        "Y": 8191,
+        "M": 9215,
+        "L": 8191,
+        "F": 2047,
+        "V": 2047,
+        "S": 8191,
+        "B": 8191,
+        "SB": 2047,
+        "T": 2047,
+        "C": 1023,
+        "D": 13311,
+        "W": 8191,
+        "SW": 2047,
+        "SM": 2047,
+        "SD": 2047,
+        "Z": 19
+      },
+      "radices": {
+        "X": 16,
+        "Y": 16,
+        "B": 16,
+        "W": 16,
+        "SB": 16,
+        "SW": 16
+      },
+      "sources": [
+        {
+          "manual_id": "sh080807engaf",
+          "manual": "SH080807ENG",
+          "revision": "AF",
+          "pdf_page": 348,
+          "target_model": "Q03UDV",
+          "related_pdf_pages": [
+            346,
+            347
+          ]
+        }
+      ],
+      "special_access": {
+        "SD1282": {
+          "access": "read",
+          "source": {
+            "manual_id": "sh080811engy",
+            "revision": "Y",
+            "pdf_page": 122
+          }
+        },
+        "SD1286": {
+          "access": "read",
+          "source": {
+            "manual_id": "sh080811engy",
+            "revision": "Y",
+            "pdf_page": 122
+          }
+        }
+      },
+      "bit_prefixes": [
+        "X",
+        "Y",
+        "M",
+        "L",
+        "F",
+        "S",
+        "B",
+        "SB",
+        "SM",
+        "T",
+        "C"
+      ],
+      "word_bit_prefixes": [
+        "D",
+        "SD",
+        "W",
+        "SW"
+      ],
+      "special_regions": {
+        "SM": [
+          [
+            0,
+            2047
+          ]
+        ],
+        "SD": [
+          [
+            0,
+            2047
+          ]
+        ]
+      }
+    }
+  },
+  "Q00UJ": {
+    "family": "Q",
+    "desc": "Q00UJ default-allocation device subset; native compilation and execution require separate evidence.",
+    "coverage": "source_subset",
+    "addressing": {"radices": {"B": 16, "W": 16}, "default": 10},
+    "soft_limits": {"M": 8191, "D": 12287, "B": 8191, "W": 8191, "SM": 2047, "SD": 2047},
+    "manual_reference": {
+      "title": "Q00UJCPU Performance specifications",
+      "target_model": "Q00UJ",
+      "official_url": "https://www.mitsubishielectric.com/fa/products/faspec/detail.page?formNm=QnUCPU_Q00UJCPU_3827&kisyu=%2Fplcq&lang=2&popup=1"
+    },
+    "notes": "M/D/B/W bounds describe the documented default allocation, also observed in the isolated Q00UJ project. Parameter changes need their own allocation evidence. Only these six device classes are covered; instruction support, physical I/O and execution are not established by this profile.",
+    "validation": {
+      "status": "source_subset",
+      "device_limits": {"M": 8191, "D": 12287, "B": 8191, "W": 8191, "SM": 2047, "SD": 2047},
+      "radices": {"B": 16, "W": 16},
+      "sources": [{
+        "title": "Q00UJCPU Performance specifications",
+        "target_model": "Q00UJ",
+        "official_url": "https://www.mitsubishielectric.com/fa/products/faspec/detail.page?formNm=QnUCPU_Q00UJCPU_3827&kisyu=%2Fplcq&lang=2&popup=1"
+      }],
+      "bit_prefixes": ["M", "B", "SM"],
+      "word_bit_prefixes": ["D", "W", "SD"],
+      "special_regions": {"SM": [[0, 2047]], "SD": [[0, 2047]]},
+      "native_read_prefixes": ["M", "D", "B", "W", "SM", "SD"],
+      "native_feedback_prefixes": ["B", "W"]
+    }
+  },
+  "Q00U": {
+    "family": "Q",
+    "desc": "Q00U default-allocation device subset; native compilation and execution require separate evidence.",
+    "coverage": "source_subset",
+    "addressing": {"radices": {"B": 16, "W": 16}, "default": 10},
+    "soft_limits": {"M": 8191, "D": 12287, "B": 8191, "W": 8191, "SM": 2047, "SD": 2047},
+    "manual_reference": {
+      "title": "Q00UCPU Performance specifications",
+      "target_model": "Q00U",
+      "official_url": "https://www.mitsubishielectric.com/fa/products/faspec/detail.page?category=ex&formNm=QnUCPU_Q00UCPU_3885&id=spec&kisyu=%2Fplcq&lang=2"
+    },
+    "notes": "M/D/B/W bounds describe this model's documented default allocation, independently observed in the isolated Q00U GUI baseline. Parameter changes need their own allocation evidence. Only these six device classes are covered; instruction support, physical I/O and execution are not established by this profile.",
+    "validation": {
+      "status": "source_subset",
+      "device_limits": {"M": 8191, "D": 12287, "B": 8191, "W": 8191, "SM": 2047, "SD": 2047},
+      "radices": {"B": 16, "W": 16},
+      "sources": [{
+        "title": "Q00UCPU Performance specifications",
+        "target_model": "Q00U",
+        "official_url": "https://www.mitsubishielectric.com/fa/products/faspec/detail.page?category=ex&formNm=QnUCPU_Q00UCPU_3885&id=spec&kisyu=%2Fplcq&lang=2"
+      }],
+      "bit_prefixes": ["M", "B", "SM"],
+      "word_bit_prefixes": ["D", "W", "SD"],
+      "special_regions": {"SM": [[0, 2047]], "SD": [[0, 2047]]},
+      "native_read_prefixes": ["M", "D", "B", "W", "SM", "SD"],
+      "native_feedback_prefixes": ["B", "W"]
+    }
+  },
+  "Q06UDV": {
+    "family": "Q",
+    "desc": "Q06UDV source-scoped device-address subset; instruction and execution support require separate evidence.",
+    "coverage": "source_subset",
+    "addressing": {
+      "radices": {"X": 16, "Y": 16, "B": 16, "W": 16},
+      "default": 10
+    },
+    "soft_limits": {
+      "X": 8191, "Y": 8191, "M": 15359, "D": 22527,
+      "B": 8191, "W": 8191, "SM": 2047, "SD": 2047
+    },
+    "manual_reference": {
+      "manual_id": "sh080807engaf", "manual": "SH080807ENG", "revision": "AF",
+      "pdf_page": 346, "related_pdf_pages": [348, 349], "target_model": "Q06UDV",
+      "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080807eng/sh080807engaf.pdf"
+    },
+    "notes": "Only listed device classes are covered. M/D ceilings use the Q06UDV-specific notes on PDF page 348. Actual PLC parameter allocation and physical I/O remain project-specific; this profile does not verify installed points or runtime behavior.",
+    "validation": {
+      "status": "source_subset",
+      "device_limits": {
+        "X": 8191, "Y": 8191, "M": 15359, "D": 22527,
+        "B": 8191, "W": 8191, "SM": 2047, "SD": 2047
+      },
+      "radices": {"X": 16, "Y": 16, "B": 16, "W": 16},
+      "sources": [{
+        "manual_id": "sh080807engaf", "manual": "SH080807ENG", "revision": "AF",
+        "pdf_page": 346, "related_pdf_pages": [348, 349], "target_model": "Q06UDV",
+        "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080807eng/sh080807engaf.pdf"
+      }],
+      "bit_prefixes": ["X", "Y", "M", "B", "SM"],
+      "word_bit_prefixes": ["D", "W", "SD"],
+      "special_regions": {"SM": [[0, 2047]], "SD": [[0, 2047]]},
+      "native_read_prefixes": ["X", "Y", "M", "D", "B", "W", "SM", "SD"],
+      "native_feedback_prefixes": ["B", "W"]
+    }
+  },
+  "L02": {
+    "family": "L",
+    "desc": "Source-scoped instruction and device profile; native acceptance and execution require project-specific evidence.",
+    "coverage": "source_subset",
+    "addressing": {
+      "radices": {
+        "X": 16,
+        "Y": 16,
+        "B": 16,
+        "W": 16,
+        "SB": 16,
+        "SW": 16
+      },
+      "default": 10
+    },
+    "soft_limits": {
+      "X": 8191,
+      "Y": 8191,
+      "M": 8191,
+      "L": 8191,
+      "F": 2047,
+      "V": 2047,
+      "S": 8191,
+      "B": 8191,
+      "SB": 2047,
+      "T": 2047,
+      "C": 1023,
+      "D": 12287,
+      "W": 8191,
+      "SW": 2047,
+      "SM": 2047,
+      "SD": 2047,
+      "Z": 19
+    },
+    "manual_reference": {
+      "manual_id": "sh080889engz",
+      "manual": "SH080889ENG",
+      "revision": "Z",
+      "pdf_page": 290,
+      "target_model": "L02"
+    },
+    "special_m": {},
+    "special_d": {
+      "SD1880": "CH1 refreshed counter low word; CPU-owned read only.",
+      "SD1881": "CH1 refreshed counter high word; CPU-owned read only.",
+      "SD1900": "CH2 refreshed counter low word; CPU-owned read only.",
+      "SD1901": "CH2 refreshed counter high word; CPU-owned read only."
+    },
+    "notes": "Device allocations are the cited default parameters, not physical I/O installation. Parameter changes, unlisted device classes, reserved specials and hardware conditions require their own evidence.",
+    "validation": {
+      "status": "source_subset",
+      "device_limits": {
+        "X": 8191,
+        "Y": 8191,
+        "M": 8191,
+        "L": 8191,
+        "F": 2047,
+        "V": 2047,
+        "S": 8191,
+        "B": 8191,
+        "SB": 2047,
+        "T": 2047,
+        "C": 1023,
+        "D": 12287,
+        "W": 8191,
+        "SW": 2047,
+        "SM": 2047,
+        "SD": 2047,
+        "Z": 19
+      },
+      "radices": {
+        "X": 16,
+        "Y": 16,
+        "B": 16,
+        "W": 16,
+        "SB": 16,
+        "SW": 16
+      },
+      "sources": [
+        {
+          "manual_id": "sh080889engz",
+          "manual": "SH080889ENG",
+          "revision": "Z",
+          "pdf_page": 290,
+          "target_model": "L02"
+        },
+        {
+          "title": "L02CPU Performance specifications",
+          "target_model": "L02",
+          "official_url": "https://www.mitsubishielectric.com/fa/products/faspec/detail.page?category=ex&formNm=LnCPU_L02CPU_7&id=spec&kisyu=%2Fplcl&lang=2"
+        }
+      ],
+      "special_access": {
+        "SD1880": {
+          "access": "read",
+          "source": {
+            "manual_id": "sh080892engj",
+            "revision": "J",
+            "pdf_page": 244
+          }
+        },
+        "SD1881": {
+          "access": "read",
+          "source": {
+            "manual_id": "sh080892engj",
+            "revision": "J",
+            "pdf_page": 244
+          }
+        },
+        "SD1900": {
+          "access": "read",
+          "source": {
+            "manual_id": "sh080892engj",
+            "revision": "J",
+            "pdf_page": 244
+          }
+        },
+        "SD1901": {
+          "access": "read",
+          "source": {
+            "manual_id": "sh080892engj",
+            "revision": "J",
+            "pdf_page": 244
+          }
+        }
+      },
+      "bit_prefixes": [
+        "X",
+        "Y",
+        "M",
+        "L",
+        "F",
+        "S",
+        "B",
+        "SB",
+        "SM",
+        "T",
+        "C"
+      ],
+      "word_bit_prefixes": [
+        "D",
+        "SD",
+        "W",
+        "SW"
+      ],
+      "native_read_prefixes": ["X", "Y", "M", "D", "S", "T", "C", "B", "W", "SM", "SD"],
+      "native_feedback_prefixes": ["B", "W"],
+      "special_regions": {
+        "SM": [
+          [
+            0,
+            2047
+          ]
+        ],
+        "SD": [
+          [
+            0,
+            2047
+          ]
+        ]
+      }
+    }
+  }
+}

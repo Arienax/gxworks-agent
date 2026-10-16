@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "id": "deepseek-flash-vision",
+  "extends": "deepseek-chat",
+  "match": {
+    "endpoints": [
+      "https://api.deepseek.com",
+      "https://api.deepseek.com/v1"
+    ],
+    "models": [
+      "deepseek-v4-flash-vision-exp"
+    ]
+  },
+  "capabilities": {
+    "vision": {
+      "status": "supported",
+      "source": "catalog"
+    }
+  },
+  "references": [
+    "compatibility-profile:deepseek-v4-flash-vision-exp"
+  ],
+  "reviewed_at": "2026-09-23"
+}

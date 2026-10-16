@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "id": "google-gemini25",
+  "extends": "generic-openai-compatible",
+  "match": {
+    "endpoints": [
+      "https://generativelanguage.googleapis.com/v1beta/openai"
+    ],
+    "models": [
+      "gemini-2.5-pro",
+      "gemini-2.5-flash",
+      "gemini-2.5-flash-lite"
+    ]
+  },
+  "parameters": {
+    "reasoning_effort": {
+      "type": "enum",
+      "status": "supported",
+      "source": "catalog",
+      "domain": {
+        "source": "catalog",
+        "enforcement": "hard",
+        "values": [
+          "minimal",
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "default_mode": "omit"
+    },
+    "thinking_budget": {
+      "type": "integer",
+      "status": "supported",
+      "source": "catalog",
+      "domain": {
+        "source": "catalog",
+        "enforcement": "hard",
+        "minimum": -1
+      },
+      "default_mode": "omit",
+      "conflicts_with": [
+        "reasoning_effort"
+      ],
+      "wire_location": "extra_body",
+      "wire_path": [
+        "extra_body",
+        "google",
+        "thinking_config",
+        "thinking_budget"
+      ]
+    }
+  },
+  "capabilities": {
+    "tools": {
+      "status": "supported",
+      "source": "catalog"
+    },
+    "vision": {
+      "status": "supported",
+      "source": "catalog"
+    },
+    "streaming": {
+      "status": "supported",
+      "source": "catalog"
+    },
+    "structured_output": {
+      "status": "supported",
+      "source": "catalog",
+      "modes": [
+        "json_object",
+        "json_schema"
+      ]
+    }
+  },
+  "references": [
+    "https://ai.google.dev/gemini-api/docs/openai"
+  ],
+  "reviewed_at": "2026-09-18"
+}

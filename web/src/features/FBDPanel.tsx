@@ -21,10 +21,15 @@ type NativeCheck = {
   mode: "native"; snapshot: { project_id: string; version_id: string; requested_program: string; cpu: string };
   native_version: string; cpu: string; adapter: { status: string; message: string };
   selection: { status: string; selected_sources: string[]; empty_task: boolean; tasks: { resource: string; task: string; programs: string[] }[] };
-  compilation: { completed: boolean; acceptance: string; source_context?: { status: string }; declaration_context?: { status: string; global_and_structure?: { status: string } }; source_diagnostics?: NativeDiagnostic[] };
+  compilation: { completed: boolean; acceptance: string; diagnostics_complete?: boolean; diagnostics?: { kind: number }[];
+    source_context?: { status: string }; declaration_context?: { status: string; global_and_structure?: { status: string } }; source_diagnostics?: NativeDiagnostic[] };
   publication: { completed: boolean }; owned_check_inputs: { correspondence: string }; published_resources: { correspondence: string };
   public_check: { status: string }; raw_backend_check: { status: string };
-  diagnostic_projection: { status: string; failures: { code?: number }[]; source_diagnostics: NativeDiagnostic[] };
+  public_diagnostic_conversion?: { status: string; completed: boolean; current_source: string;
+    origin?: string; converted_report_count?: number; original_report_count?: number };
+  diagnostic_recheck?: { trigger_code?: number };
+  diagnostic_projection: { status: string; failures: { code?: number }[]; source_diagnostics: NativeDiagnostic[];
+    empty_public_list_means_no_errors?: boolean };
   current_source_check: string; current_raw_source_check: string;
   native_source_locations: { status: string }; native_instance_locations: { status: string };
   save: { completed: boolean }; reopen: { status: string };
@@ -101,10 +106,14 @@ export function NativeValidationPanel({ pid, vid, program, disabled, t, onCell }
   const locked = disabled || busy || checking || !evidence;
   const statusText = (status: string) => t(({ accepted: "接受", rejected: "被拒绝", incomplete: "不完整", completed: "完成", failed: "失败",
     passed: "通过", "completed-accepted": "完成并接受", "completed-rejected": "完成并拒绝", current: "当前版本一致",
-    verified: "已核对", established: "已建立", not_established: "未建立", not_observed: "未采集", not_completed: "未完成",
+    verified: "已核对", identity_mismatch: "对象身份不一致", conversion_incomplete: "诊断转换不完整", established: "已建立", not_established: "未建立", not_observed: "未采集", not_completed: "未完成",
     not_requested: "未请求", partial_or_unresolved: "部分或未解析", unresolved: "未解析",
     "source-resolved": "已定位源码", "instance-resolved": "已定位实例" } as Record<string, string>)[status] || status);
   const outcomeText = (value: string) => t(value === "passed" ? "操作员报告通过" : value === "failed" ? "操作员报告失败" : "操作员报告待确认");
+  const projectionCodes = check ? [...new Set([
+    ...check.diagnostic_projection.failures.flatMap(item => item.code === undefined ? [] : [item.code]),
+    ...(check.diagnostic_recheck?.trigger_code === undefined ? [] : [check.diagnostic_recheck.trigger_code]),
+  ])] : [];
   return <div className="fbd-sheet fbd-native">
     <h3>{t("检查当前 GXW 版本")}</h3>
     <Button variant="primary" disabled={locked} onClick={() => void runNativeCheck()}>{t(checking ? "正在检查原生工程…" : "启动原生检查")}</Button>
@@ -121,8 +130,9 @@ export function NativeValidationPanel({ pid, vid, program, disabled, t, onCell }
         ["检查输入对应", statusText(check.owned_check_inputs.correspondence)],
         ["公开检查", statusText(check.public_check.status)],
         ["底层重检", statusText(check.raw_backend_check.status)],
-        ["公开诊断转换", `${statusText(check.diagnostic_projection.status)} ${check.diagnostic_projection.failures
-          .filter(item => item.code !== undefined).map(item => `0x${item.code!.toString(16)}`).join(" · ")}`],
+        ["原生公开诊断转换", `${statusText(check.diagnostic_projection.status)} ${projectionCodes.map(code => `0x${code.toString(16)}`).join(" · ")}`],
+        ["完整诊断转换", `${statusText(check.public_diagnostic_conversion?.status || "not_observed")}${check.public_diagnostic_conversion?.converted_report_count !== undefined
+          ? ` · ${check.public_diagnostic_conversion.converted_report_count}/${check.public_diagnostic_conversion.original_report_count}` : ""}`],
         ["当前源码公开检查", statusText(check.current_source_check)],
         ["当前源码底层检查", statusText(check.current_raw_source_check)],
         ["源码位置", statusText(check.native_source_locations.status)],
@@ -135,7 +145,10 @@ export function NativeValidationPanel({ pid, vid, program, disabled, t, onCell }
       <ul>{check.selection.tasks.map((task, index) => <li key={index}>{task.resource} / {task.task}：{task.programs.join(" · ") || t("无源码")}</li>)}</ul>
       <h4>{t("本次原生诊断")}</h4>
       {!check.compilation.source_diagnostics?.length && check.diagnostic_projection.source_diagnostics.length === 0 && <p>{t(check.compilation.acceptance === "rejected"
-        ? "编译已拒绝，原始报告未提供可定位的诊断。" : "暂无诊断信息")}</p>}
+        ? "编译已拒绝，原始报告未提供可定位的诊断。"
+        : check.compilation.diagnostics_complete === true && check.compilation.diagnostics?.length === 0
+          && check.diagnostic_projection.empty_public_list_means_no_errors === true && check.current_source_check === "established"
+          ? "当前源码检查完成，未报告错误或警告。" : "诊断尚不完整，不能确认当前源码没有错误。")}</p>}
       {([["编译诊断", check.compilation.source_diagnostics || []], ["检查诊断", check.diagnostic_projection.source_diagnostics]] as const)
         .filter(([, diagnostics]) => diagnostics.length > 0).map(([label, diagnostics]) => <div key={label}>
         <h5>{t(label)}</h5>{diagnostics.map((diagnostic, index) => <article key={index} className="fbd-native-record">

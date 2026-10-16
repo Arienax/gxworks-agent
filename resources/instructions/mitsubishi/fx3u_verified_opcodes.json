@@ -1,0 +1,1126 @@
+{
+  "schema_version": 1,
+  "vendor": "mitsubishi",
+  "instructions": [
+    {
+      "mnemonic": "ABS",
+      "canonical_op": "ABS",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "ABSD",
+      "canonical_op": "ABSD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "ACOS",
+      "canonical_op": "ACOS",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "ALT",
+      "canonical_op": "ALT",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "ANR",
+      "canonical_op": "ANR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "ANS",
+      "canonical_op": "ANS",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "ARWS",
+      "canonical_op": "ARWS",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "ASC",
+      "canonical_op": "ASC",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "ASCI",
+      "canonical_op": "ASCI",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "ASIN",
+      "canonical_op": "ASIN",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "ATAN",
+      "canonical_op": "ATAN",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "BAND",
+      "canonical_op": "BAND",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "BINDA",
+      "canonical_op": "BINDA",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "BON",
+      "canonical_op": "BON",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "BTOW",
+      "canonical_op": "BTOW",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "CCD",
+      "canonical_op": "CCD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "COMRD",
+      "canonical_op": "COMRD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "COS",
+      "canonical_op": "COS",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "CRC",
+      "canonical_op": "CRC",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "DABIN",
+      "canonical_op": "DABIN",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "DECO",
+      "canonical_op": "DECO",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "DEG",
+      "canonical_op": "DEG",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "DSW",
+      "canonical_op": "DSW",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "DUTY",
+      "canonical_op": "DUTY",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "EBCD",
+      "canonical_op": "EBCD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "EBIN",
+      "canonical_op": "EBIN",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "ENCO",
+      "canonical_op": "ENCO",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "ENEG",
+      "canonical_op": "ENEG",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "ESQR",
+      "canonical_op": "ESQR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "ESTR",
+      "canonical_op": "ESTR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "EVAL",
+      "canonical_op": "EVAL",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "EXP",
+      "canonical_op": "EXP",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "FDEL",
+      "canonical_op": "FDEL",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "FINS",
+      "canonical_op": "FINS",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "FLCMD",
+      "canonical_op": "FLCMD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "FLCRT",
+      "canonical_op": "FLCRT",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "FLRD",
+      "canonical_op": "FLRD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "FLSTRD",
+      "canonical_op": "FLSTRD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "FLWR",
+      "canonical_op": "FLWR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "HCMOV",
+      "canonical_op": "HCMOV",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "HEX",
+      "canonical_op": "HEX",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "HKY",
+      "canonical_op": "HKY",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "HOUR",
+      "canonical_op": "HOUR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "HTOS",
+      "canonical_op": "HTOS",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "INCD",
+      "canonical_op": "INCD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "INITER",
+      "canonical_op": "INITER",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "INITR",
+      "canonical_op": "INITR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "INSTR",
+      "canonical_op": "INSTR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "IST",
+      "canonical_op": "IST",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "IVBWR",
+      "canonical_op": "IVBWR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "IVCK",
+      "canonical_op": "IVCK",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "IVDR",
+      "canonical_op": "IVDR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "IVMC",
+      "canonical_op": "IVMC",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "IVRD",
+      "canonical_op": "IVRD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "IVWR",
+      "canonical_op": "IVWR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "LEFT",
+      "canonical_op": "LEFT",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "LEN",
+      "canonical_op": "LEN",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "LIMIT",
+      "canonical_op": "LIMIT",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "LOADR",
+      "canonical_op": "LOADR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "LOG10",
+      "canonical_op": "LOG10",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "LOGE",
+      "canonical_op": "LOGE",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "LOGR",
+      "canonical_op": "LOGR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "MIDR",
+      "canonical_op": "MIDR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "MIDW",
+      "canonical_op": "MIDW",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "MODBUS",
+      "canonical_op": "MODBUS",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "MTR",
+      "canonical_op": "MTR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "POP",
+      "canonical_op": "POP",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "PR",
+      "canonical_op": "PR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "PRUN",
+      "canonical_op": "PRUN",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "RAD",
+      "canonical_op": "RAD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "RBFM",
+      "canonical_op": "RBFM",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "REF",
+      "canonical_op": "REF",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "REFF",
+      "canonical_op": "REFF",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "RIGHT",
+      "canonical_op": "RIGHT",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "RND",
+      "canonical_op": "RND",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "RWER",
+      "canonical_op": "RWER",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "SAVER",
+      "canonical_op": "SAVER",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "SCL",
+      "canonical_op": "SCL",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "SCL2",
+      "canonical_op": "SCL2",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "SEGD",
+      "canonical_op": "SEGD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "SEGL",
+      "canonical_op": "SEGL",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "SER",
+      "canonical_op": "SER",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "SFL",
+      "canonical_op": "SFL",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "SFR",
+      "canonical_op": "SFR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "SFRD",
+      "canonical_op": "SFRD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "SFWR",
+      "canonical_op": "SFWR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "SIN",
+      "canonical_op": "SIN",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "SMOV",
+      "canonical_op": "SMOV",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "SORT2",
+      "canonical_op": "SORT2",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "SQR",
+      "canonical_op": "SQR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "STMR",
+      "canonical_op": "STMR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "STOH",
+      "canonical_op": "STOH",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "STR",
+      "canonical_op": "STR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "TADD",
+      "canonical_op": "TADD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "TAN",
+      "canonical_op": "TAN",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "TBL",
+      "canonical_op": "TBL",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "TCMP",
+      "canonical_op": "TCMP",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "TKY",
+      "canonical_op": "TKY",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "TRD",
+      "canonical_op": "TRD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "TSUB",
+      "canonical_op": "TSUB",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "TTMR",
+      "canonical_op": "TTMR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "TWR",
+      "canonical_op": "TWR",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "TZCP",
+      "canonical_op": "TZCP",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "VAL",
+      "canonical_op": "VAL",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "VRRD",
+      "canonical_op": "VRRD",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "VRSC",
+      "canonical_op": "VRSC",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "WBFM",
+      "canonical_op": "WBFM",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "WSUM",
+      "canonical_op": "WSUM",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "WTOB",
+      "canonical_op": "WTOB",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "ZONE",
+      "canonical_op": "ZONE",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "ZPOP",
+      "canonical_op": "ZPOP",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    },
+    {
+      "mnemonic": "ZPUSH",
+      "canonical_op": "ZPUSH",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX3U"
+      ],
+      "contract_level": "opcode_only"
+    }
+  ]
+}

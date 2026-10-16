@@ -1,0 +1,798 @@
+{
+  "version": 1,
+  "meta": {
+    "description": "FX3U PLC 模式库 — 用于动态 Prompt 组装",
+    "always_include_chars": 2800,
+    "max_assembled_chars": 6500
+  },
+  "always_include": {
+    "role": {
+      "content": "# Role\nYou are an expert Mitsubishi PLC ladder JSON generator. Analyze the user request and generate the project ladder JSON protocol.\n\nBefore generating, internally do: requirement split -> pattern match -> device planning -> consistency check. Do not output the analysis process."
+    },
+    "special_relays": {
+      "content": "---\n# FX3U 特殊软元件速查（必须正确使用）\n\n## 时钟脉冲\n| 继电器 | 周期 | 用途 |\n|--------|------|------|\n| M8011 | 10ms（ON 5ms/OFF 5ms） | 高频时钟 |\n| M8012 | 100ms（ON 50ms/OFF 50ms） | 一般时钟 |\n| M8013 | 1s（ON 500ms/OFF 500ms） | 秒时钟 |\n| M8014 | 1min（ON 30s/OFF 30s） | 分时钟 |\n\n## 运行状态\n| 软元件 | 功能 |\n|--------|------|\n| M8000 | RUN监控a触点，PLC RUN期间ON，只读 |\n| M8001 | RUN监控b触点，PLC RUN期间OFF，只读 |\n| M8002 | 初始脉冲a触点，进入RUN后仅首个扫描周期ON，只读 |\n| M8003 | 初始脉冲b触点，进入RUN后仅首个扫描周期OFF，只读 |\n| M8034 | 禁止所有外部输出，PLC仍保持RUN |\n\n## 应用指令和定位标志\n| 软元件 | 正确含义 | 注意 |\n|--------|----------|------|\n| M8029 | 应用指令执行结束标志 | 被多种指令复用，必须紧邻对应指令判断，禁止多个指令共用一个集中判断 |\n| M8329 | 指令执行异常结束 | 只读 |\n| M8336 | DVIT中断输入指定功能有效 | 不是ZRN/DSZR完成标志 |\n| M8340/M8350/M8360 | Y0/Y1/Y2脉冲输出BUSY | ON=BUSY，OFF=READY，只读 |\n| M8348/M8358/M8368 | Y0/Y1/Y2定位指令驱动中 | 只读 |\n| M8349/M8359/M8369 | Y0/Y1/Y2脉冲输出停止指令 | 用户驱动的停止命令，不是监控位 |\n| RS接收 | M8123 | 接收结束标志 |\n\n## Y0定位参数\n| 软元件 | 功能 |\n|--------|------|\n| D8340/D8341 | 当前地址（32位） |\n| D8342 | 偏置速度 |\n| D8343/D8344 | 最高速度（32位） |\n| D8345 | 爬行速度 |\n| D8346/D8347 | 原点回归速度（32位） |\n| D8348 | 加速时间 |\n| D8349 | 减速时间 |\n\n## 实时时钟\n| 软元件 | 内容 |\n|--------|------|\n| D8013 | 秒（0-59） |\n| D8014 | 分（0-59） |\n| D8015 | 时（0-23） |\n| D8016 | 日（1-31） |\n| D8017 | 月（1-12） |\n| D8018 | 年（00-99） |\n| D8019 | 星期（0=周日） |"
+    },
+    "iron_laws": {
+      "content": "---\n# Hard rules\n\n1. Self-lock: when the user explicitly asks for a maintained start output, use a parallel_block with the start contact and the output self contact. If the user explicitly provides a stop or run-permit condition, place it outside the self-lock block. Never auto-add stop or emergency-stop addresses.\n2. Duplicate coils: one Y/M address may appear in at most one COIL in the whole program. Merge conditions into one parallel_block or use centralized SET/RST when state holding is required.\n3. COMPARE expressions must not contain + - * /. Calculate first with APP_INSTR and compare the result register.\n4. Timer enables must stay true while timing. Pulse-started timers need a seal-in path. An ordinary T timer resets only after its enable turns OFF; M8000 alone is a power-on delay, never a periodic oscillator. Use M8011/M8012/M8013/M8014 for matching clock periods, otherwise build an explicit enable-off/reset path.\n5. TIMER uses T addresses only; COUNTER uses C addresses only. Never encode a C counter as TIMER.\n6. Do not emulate ALT with same-edge sibling branches NC Mx -> SET Mx and NO Mx -> RST Mx; the later branch can undo the SET in the same scan. Use two explicit timing/state phases.\n7. Latch sensor values before using them after the object leaves the sensor.\n8. Event-held physical outputs should use SET/RST directly, not an intermediate M relay driving a COIL.\n9. Keep M/D state minimal.\n10. FX3U 32-bit D values use low word + next high word; do not treat D8340/D8350/D8360 as 16-bit values.\n11. Use the user-declared NO/NC contact type exactly.\n12. FX3U SFTL/SFTLP source and destination bit ranges must not overlap."
+    },
+    "json_schema": {
+      "content": "---\n# 📐 JSON Schema 协议\n\n顶层结构：`{\"device_comments\": {...}, \"rungs\": [...]}`\n\n每个梯级(Rung)：\n- `rung_id`: 递增整数\n- `debug_note`: 可选字符串（自动补全原因/歧义说明）\n- `header_element`: 状态机比较块（如 `{\"type\":\"BLOCK_INPUT\",\"expression\":\"= D0 K1\"}`），非状态机模式为 `null`\n- `branches`: 并联分支列表\n\n每个分支(Branch)：\n- `branch_id`: 从1起\n- `y_offset_level`: 从0起，并联分支递增\n- `inputs`: 串联触点列表\n- `outputs`: 并联输出列表\n\n触点类型(inputs)：\n- 常开：`{\"type\":\"NO\",\"address\":\"X0\",\"label\":\"启动\"}`\n- 常闭：`{\"type\":\"NC\",\"address\":\"X1\",\"label\":\"停止\"}`\n- 上升沿：`{\"type\":\"P\",\"address\":\"X2\",\"label\":\"刚按下\"}`\n- 下降沿：`{\"type\":\"F\",\"address\":\"X3\",\"label\":\"刚松开\"}`\n- 比较：`{\"type\":\"COMPARE\",\"expression\":\"> D0 K100\",\"label\":\"值超标\"}`\n- 并联块：`{\"type\":\"parallel_block\",\"branches\":[[触点1],[触点2]]}`\n\n输出类型(outputs)：\n- 线圈：`{\"type\":\"COIL\",\"address\":\"Y0\",\"label\":\"电机\"}`\n- 上升沿脉冲：`{\"type\":\"PLS\",\"address\":\"M0\",\"label\":\"脉冲\"}`\n- 下降沿脉冲：`{\"type\":\"PLF\",\"address\":\"M1\",\"label\":\"脉冲\"}`\n- 定时器：`{\"type\":\"TIMER\",\"address\":\"T0\",\"value\":\"K50\",\"label\":\"延时5s\"}`\n- 计数器：`{\"type\":\"COUNTER\",\"address\":\"C0\",\"value\":\"K10\",\"label\":\"计10次\"}`\n- 应用指令：`{\"type\":\"APP_INSTR\",\"opcode\":\"MOV\",\"operands\":[\"K1\",\"D0\"],\"label\":\"初始化\"}`"
+    },
+    "output_constraints": {
+      "content": "---\n# 📤 输出约束\n1. JSON 最外层只能有 `device_comments` 和 `rungs` 两个 Key\n2. 严禁 ```json 包裹，直接输出以 `{` 开头 `}` 结尾的纯 JSON\n3. 多阶段顺序执行且未指定指令时，默认用状态机步进（MOV Kn D0 + BLOCK_INPUT = D0 Kn）\n4. 不要输出任何解释文字，只输出 JSON"
+    }
+  },
+  "auto_completion_rules": [
+    {
+      "id": "rule_interlock",
+      "priority": 20,
+      "chars": 160,
+      "header": "| 3 | 两个执行器方向相反（伸出/缩回、正转/反转） | 互锁逻辑 | 每方串联对方NC触点；正反转切换间插200ms延时(T200 K2) |",
+      "keywords_trigger": [
+        "正反转",
+        "互锁",
+        "正转",
+        "反转",
+        "伸出",
+        "缩回",
+        "升降",
+        "上升",
+        "下降",
+        "前进",
+        "后退"
+      ],
+      "scenario": "any",
+      "teaching_safe": true
+    },
+    {
+      "id": "rule_timer_selflock",
+      "priority": 21,
+      "chars": 150,
+      "header": "| 4 | 延时/闪烁/周期动作 | 定时器使能与复位 | 脉冲启动需保持；M8000单独驱动只能上电延时，不能振荡；匹配周期优先用M8011-M8014 |",
+      "keywords_trigger": [
+        "延时",
+        "延迟",
+        "定时",
+        "时间",
+        "秒后",
+        "分钟后",
+        "闪烁",
+        "振荡",
+        "时钟"
+      ],
+      "scenario": "any",
+      "teaching_safe": true
+    },
+    {
+      "id": "rule_step_init",
+      "priority": 22,
+      "chars": 130,
+      "header": "| 5 | 多阶段顺序动作但未提\"步进\" | 步进状态机 | 生成M8002 P→MOV K1 D0初始化梯级，后续用BLOCK_INPUT = D0 Kn区分 |",
+      "keywords_trigger": [
+        "先",
+        "然后",
+        "再",
+        "顺序",
+        "阶段",
+        "步骤",
+        "依次",
+        "之后",
+        "最后",
+        "接着"
+      ],
+      "scenario": "any",
+      "teaching_safe": true
+    },
+    {
+      "id": "rule_alarm",
+      "priority": 24,
+      "chars": 130,
+      "header": "| 6 | \"报警\"、\"故障\"但未指定处理方式 | 报警闪烁+确认 | M50报警+M51确认+Y报警灯M8013闪烁；确认后常亮；故障消除后熄灭 |",
+      "keywords_trigger": [
+        "报警",
+        "故障",
+        "蜂鸣",
+        "告警",
+        "警报",
+        "异常"
+      ],
+      "scenario": "any",
+      "teaching_safe": true
+    },
+    {
+      "id": "rule_analog",
+      "priority": 25,
+      "chars": 120,
+      "header": "| 7 | 模拟量（温度/压力/液位/流量） | 上下限比较 | COMPARE触点比较测量值与设定值，越限输出保护 |",
+      "keywords_trigger": [
+        "模拟量",
+        "温度",
+        "压力",
+        "流量",
+        "液位",
+        "传感器",
+        "测量"
+      ],
+      "scenario": "any",
+      "teaching_safe": true
+    },
+    {
+      "id": "rule_counter_reset",
+      "priority": 26,
+      "chars": 110,
+      "header": "| 8 | \"计数N次\" | 计数器复位 | 添加达到预设值后的独立RST梯级 |",
+      "keywords_trigger": [
+        "计数",
+        "次数",
+        "N次",
+        "计数器",
+        "计数到"
+      ],
+      "scenario": "any",
+      "teaching_safe": true
+    },
+    {
+      "id": "rule_reverse_delay",
+      "priority": 27,
+      "chars": 110,
+      "header": "| 9 | \"正反转\"、\"双速电机\" | 换向延时 | 方向切换间插入T200/T201延时(K2=20ms)，防相间短路 |",
+      "keywords_trigger": [
+        "正反转",
+        "双速",
+        "换向"
+      ],
+      "scenario": "any",
+      "teaching_safe": true
+    },
+    {
+      "id": "rule_level_control",
+      "priority": 28,
+      "chars": 110,
+      "header": "| 10 | 液位/水池/水箱 | 高低液位逻辑 | 低液位→启动泵、高液位→停泵、超高→报警 |",
+      "keywords_trigger": [
+        "液位",
+        "水池",
+        "水箱",
+        "水位",
+        "泵",
+        "抽水",
+        "排水"
+      ],
+      "scenario": "any",
+      "teaching_safe": true
+    },
+    {
+      "id": "rule_position_complete",
+      "priority": 30,
+      "chars": 160,
+      "header": "| 11 | 步进/伺服定位 | 状态判断 | M8029只能紧邻对应指令使用；各轴BUSY为M8340/M8350/M8360，定位驱动中为M8348/M8358/M8368；M8336不是回原点完成位。 |",
+      "keywords_trigger": [
+        "步进电机",
+        "步进驱动器",
+        "stepper",
+        "伺服",
+        "定位",
+        "脉冲",
+        "PLSY",
+        "DRVI",
+        "DRVA",
+        "ZRN",
+        "DSZR"
+      ],
+      "scenario": "any",
+      "teaching_safe": true
+    }
+  ],
+  "patterns": [
+    {
+      "id": "pattern_a",
+      "priority": 50,
+      "chars": 150,
+      "name": "模式 A：启停自锁",
+      "description": "parallel_block 并联启动按钮 NO + 输出线圈 NO → 串联停止 NC → 输出 COIL。适用于任何\"按一下开、按一下关\"或\"启动后保持运行\"的场景。",
+      "keywords": [
+        "自锁",
+        "启停",
+        "起保停",
+        "启动",
+        "停止",
+        "开关控制",
+        "电机",
+        "运行"
+      ]
+    },
+    {
+      "id": "pattern_b",
+      "priority": 51,
+      "chars": 220,
+      "name": "模式 B：双向互锁",
+      "description": "两个独立梯级，每方 inputs 中串联对方 NC 触点作为互锁。双方都用 parallel_block 自锁。正反转切换：串联 T200/T201(NC)做换向延时(K2=200ms)，防相间短路。",
+      "keywords": [
+        "正反转",
+        "正转",
+        "反转",
+        "互锁",
+        "伸出",
+        "缩回",
+        "升降",
+        "上升下降",
+        "前进后退"
+      ]
+    },
+    {
+      "id": "pattern_c",
+      "priority": 52,
+      "chars": 300,
+      "name": "模式 C：步进状态机",
+      "description": "多阶段顺序控制默认方案。\n1. 初始化梯级：M8002 P → MOV K1 D0\n2. 每步：header_element = BLOCK_INPUT \"= D0 Kn\"\n3. 动作分支：outputs 中用 SET/RST + TIMER\n4. 转移分支：到位检测 NO Xn + 延时 NO Tn → MOV K(n+1) D0\n5. 末步转移回 K1 形成循环",
+      "keywords": [
+        "步进状态机",
+        "顺序",
+        "阶段",
+        "步骤",
+        "状态机",
+        "多阶段",
+        "先然后再",
+        "依次"
+      ]
+    },
+    {
+      "id": "pattern_d",
+      "priority": 53,
+      "chars": 200,
+      "name": "模式 D：报警管理",
+      "description": "1. 故障检测：故障条件 P → SET M50（报警标志）\n2. 报警输出：M50 NO + M51 NC → 串联 M8013 → Y报警灯(闪烁)\n3. 确认后：M50 NO + M51 NO → Y报警灯(常亮)\n4. 消音按钮：X13 P → SET M51\n5. 故障消除 + 复位 → RST M50 + RST M51",
+      "keywords": [
+        "报警",
+        "故障",
+        "蜂鸣",
+        "告警",
+        "警报",
+        "消音",
+        "异常"
+      ]
+    },
+    {
+      "id": "pattern_e",
+      "priority": 54,
+      "chars": 180,
+      "name": "模式 E：高低液位泵控",
+      "description": "1. 低液位 X1 P → SET M10（启泵标志）\n2. 高液位 X2 P → RST M10（停泵）\n3. 超高液位 X3 NO → SET M52（超高报警）\n4. 泵输出：M10 NO + 过载保护 X4 NC → Y0 COIL",
+      "keywords": [
+        "液位",
+        "水池",
+        "水箱",
+        "水位",
+        "泵",
+        "抽水",
+        "排水",
+        "液面"
+      ]
+    },
+    {
+      "id": "pattern_pump_rotation",
+      "priority": 55,
+      "chars": 650,
+      "name": "模式 H：多泵轮换与故障自投",
+      "description": "轮换指针、实际主泵、级联备用必须分层。用D0保存1→2→3轮换指针，故障替补不得改写D0；对M0 AND X2整体请求取上升沿，明确首次从1号开始及停机是否清零。过载输入的NO/NC服从用户给出的常开/常闭类型；故障锁存应覆盖上电时已有故障，不能只用下降沿。实际主泵从D0开始找第一台健康泵，备用泵从实际主泵的下一台开始找第一台健康泵。级联为X3立即触发 OR 主泵运行满5秒后X2仍在。手动故障复位必须有独立复位软元件且故障输入已恢复。每台泵只保留一个COIL。FX3U禁止源目标重叠的SFTL/SFTLP循环令牌，否则K6710。",
+      "keywords": [
+        "轮换",
+        "交替",
+        "主泵",
+        "备用泵",
+        "故障自投",
+        "多泵",
+        "泵组",
+        "级联"
+      ]
+    },
+    {
+      "id": "pattern_f",
+      "priority": 55,
+      "chars": 140,
+      "name": "模式 F：模拟量比较控制",
+      "description": "COMPARE 触点比较测量值寄存器与设定值常数（如 `> D100 K500`），驱动输出线圈。注意：比较前用 MOV 锁存传感器值到 D 寄存器，不要直接用实时值比较。",
+      "keywords": [
+        "模拟量",
+        "比较",
+        "阈值",
+        "温度控制",
+        "压力控制",
+        "上下限"
+      ]
+    },
+    {
+      "id": "pattern_g",
+      "priority": 56,
+      "chars": 200,
+      "name": "模式 G：PID 闭环控制",
+      "description": "1. 初始化(M8002 P)：MOV 向 D500-D504 写入 Ts/方向/Kp/Ti/Td\n2. 常时执行(M8000 NO)：APP_INSTR PID [\"D202\",\"D101\",\"D500\",\"D102\"]\n3. 输出限幅：COMPARE 检测 D102 上下限，越限则 MOV 限幅值覆写\n⚠️ D500 为 PID 首地址时独占 D500-D524 共25个寄存器，严禁其他逻辑读写。Ti单位=100ms, Td单位=10ms。",
+      "keywords": [
+        "PID",
+        "闭环",
+        "PID调节",
+        "比例积分微分",
+        "温控",
+        "自动调节"
+      ]
+    },
+    {
+      "id": "pattern_vfd",
+      "priority": 58,
+      "chars": 850,
+      "name": "模式 V：变频器频率给定方式选择",
+      "description": "## 给定方式确认（变频器参数不属于 PLC 铭牌参数）\n- **数字多段速端子**：PLC 的普通 Y 点输出 ON/OFF 组合，接变频器 STF/RH/RM/RL 等端子；实际 20Hz、50Hz、60Hz 等频率保存在变频器参数中。固定少量频率时可把该方案列为推荐项，但用户未明确选择时仍需在 missing_info 中确认控制方式。\n- **模拟量给定**：需要确认模块型号、通道和量程。FX3U-4DA 与 FX3U-4DA-ADP 的访问方式不可混用；依赖这些信息时作为条件必填项提问。\n- **RS-485/Modbus**：需要与所选变频器匹配的协议、站号、波特率和寄存器；实现依赖这些信息时必须提问，不得静默臆造。\n- **高速脉冲/频率输出**：只有驱动明确支持时选择；用户明确填写继电器输出且与高速脉冲冲突时应报错。CPU 完整订货型号或输出形式未填写本身不阻止分析。\n\n## 决策规则\n1. 用户只给出固定 20/50/60Hz 等档位但没有明确给定方式时，在 missing_info 中询问 control_method，并推荐数字多段速方案。\n2. 用户要求连续无级调速时，在模拟量与通信方案之间提问确认。\n3. “变频器点动”是普通 Y 端子控制，不等于伺服 JOG/定位。\n4. 变频器型号、端子或通信映射在当前程序实现依赖它们时提问，可通过 required_when 表达条件必填；不得因为它们位于 PLC 外部而删除。",
+      "keywords": [
+        "变频器",
+        "VFD",
+        "inverter",
+        "多段速",
+        "段速",
+        "频率给定",
+        "调速",
+        "20Hz",
+        "50Hz",
+        "60Hz",
+        "STF",
+        "RH",
+        "RM",
+        "RL",
+        "0-10V",
+        "4-20mA"
+      ]
+    },
+    {
+      "id": "pattern_h",
+      "priority": 60,
+      "chars": 760,
+      "name": "模式 H：运动控制 / 定位",
+      "description": "以下 M8029/M834x/D834x 是 FX3U 示例；FX5U 必须使用当前型号上下文中的 SM/SD 和轴能力，不得照抄。\n\n## 指令与参数按需确认\n- **PLSY/DPLSY**：确认脉冲轴、频率、脉冲数或连续输出。\n- **DRVI/DRVA**：确认相对/绝对、目标脉冲数/位置、速度、脉冲轴和方向输出。\n- **ZRN**：仅在需要回原点时确认回零速度、爬行速度、DOG输入和脉冲轴。\n- **DSZR**：仅在需要DOG搜索回零时确认DOG输入、零相信号输入、脉冲轴和方向输出。\n- 外接 FX3U-2HSY-ADP、FX3U-1PG、FX2N-10PG 等方案只有在被选中时才条件询问完整型号；普通PLC扩展模块清单仍不是通用必填项。\n\n## 状态判断（关键）\n- M8029是应用指令复用的执行结束标志，必须紧邻对应指令判断，不能集中共用。\n- Y0/Y1/Y2脉冲输出BUSY → M8340/M8350/M8360（ON=BUSY，OFF=READY）。\n- Y0/Y1/Y2定位指令驱动中 → M8348/M8358/M8368。\n- M8329=指令执行异常结束；M8336是DVIT中断输入指定功能有效，不是ZRN或DSZR完成标志。\n- M8349/M8359/M8369是脉冲停止命令，不是脉冲监控。\n- M8029或BUSY结束表示PLC侧指令/脉冲状态；需要确认机械停止时使用驱动器定位完成输入。\n\n## Y0定位参数\n- 偏置速度：MOV Kxxx D8342。\n- 最高速度：DMOV Kxxx D8343（D8343/D8344）。\n- 爬行速度：MOV Kxxx D8345。\n- 原点回归速度：DMOV Kxxx D8346（D8346/D8347）。\n- 加速时间：MOV Kxxx D8348；减速时间：MOV Kxxx D8349。\n\n## 指令 JSON 格式\n- `{\"type\":\"APP_INSTR\",\"opcode\":\"PLSY\",\"operands\":[\"K1000\",\"K5000\",\"Y0\"],\"label\":\"脉冲输出\"}`\n- `{\"type\":\"APP_INSTR\",\"opcode\":\"DRVI\",\"operands\":[\"K5000\",\"K2000\",\"Y0\",\"Y4\"],\"label\":\"相对定位\"}`\n- `{\"type\":\"APP_INSTR\",\"opcode\":\"ZRN\",\"operands\":[\"K5000\",\"K500\",\"X3\",\"Y0\"],\"label\":\"原点回归\"}`\n- `{\"type\":\"APP_INSTR\",\"opcode\":\"DSZR\",\"operands\":[\"X3\",\"X4\",\"Y0\",\"Y7\"],\"label\":\"DOG搜索回零\"}`\n\n## 输出约束\n- FX3U内置脉冲轴通常为Y0/Y1/Y2；方向输出不是固定Y0→Y4、Y1→Y5、Y2→Y6映射，可使用任意已确认且不冲突的合法Y点。\n- DRVI/DRVA/DSZR的最后一个Y操作数是方向输出；ZRN没有方向输出操作数，需要反向以外的回零方向时按手册用独立方向输出配合。\n- 同一脉冲轴不能同时执行多个脉冲输出或定位指令。",
+      "keywords": [
+        "步进电机",
+        "步进驱动器",
+        "stepper",
+        "伺服",
+        "定位",
+        "脉冲",
+        "回原点",
+        "原点回归",
+        "绝对定位",
+        "相对定位",
+        "PLSY",
+        "DRVI",
+        "DRVA",
+        "ZRN",
+        "DSZR",
+        "DVIT",
+        "JOG",
+        "点动"
+      ]
+    },
+    {
+      "id": "pattern_i",
+      "priority": 61,
+      "chars": 250,
+      "name": "模式 I：高速计数器",
+      "description": "## 计数器编号与固定输入\n- C235(X0) C236(X1) C237(X2) C238(X3) C239(X4) C240(X5)\n- C241(X0起停/X1复位) C242(X2起停/X3复位)\n- C244(X0 A相/X1 B相) C251(X0 A相/X1 B相 双相双输入)\n\n## 指令\n- HSCS：`APP_INSTR \"HSCS\" [\"K100\",\"C235\",\"Y0\"]` — 计数值=S1时置位D\n- HSCR：`APP_INSTR \"HSCR\" [\"K200\",\"C235\",\"Y1\"]` — 计数值=S1时复位D\n- HSZ：`APP_INSTR \"HSZ\" [\"K100\",\"K200\",\"C251\",\"Y0\"]` — 区间比较(16位)\n- DHSZ：同上但32位\n- SPD：`APP_INSTR \"SPD\" [\"X0\",\"K1000\",\"D100\"]` — 测速(输入,时间ms,结果D)\n\n## 注意\n- 高速计数器输入口是硬件固定的，不能修改\n- M8235-M8245 控制 C235-C245 的计数方向（ON=减计数）\n- 必须用 RST 复位高速计数器",
+      "keywords": [
+        "高速计数",
+        "编码器",
+        "脉冲计数",
+        "转速",
+        "频率测量",
+        "HSCS",
+        "HSCR",
+        "HSZ",
+        "SPD"
+      ]
+    },
+    {
+      "id": "pattern_j",
+      "priority": 62,
+      "chars": 200,
+      "name": "模式 J：串行通讯",
+      "description": "## 指令格式\n- RS：`APP_INSTR \"RS\" [\"D100\",\"K8\",\"D200\",\"K8\"]` — (发送缓冲区,字数,接收缓冲区,字数)\n\n## 关键继电器\n- M8122=发送请求（置ON后自动开始发送，发送完自动复位）\n- M8123=接收完成（收到数据后ON，处理完数据后必须程序 RST M8123）\n- M8161=8位/16位模式（ON=8位，OFF=16位）\n- M8063=串行通讯错误\n\n## 通讯参数设置（D8120）\n- 需在程序中使用 MOV 设置波特率/数据位/停止位/校验位\n\n## 注意\n- RS 是半双工的——发送和接收不能同时进行\n- 发送数据需要先 MOV 到发送缓冲区，再 SET M8122",
+      "keywords": [
+        "通讯",
+        "RS485",
+        "232",
+        "串口",
+        "Modbus",
+        "变频器通讯",
+        "仪表通讯",
+        "RS"
+      ]
+    },
+    {
+      "id": "pattern_k",
+      "priority": 63,
+      "chars": 180,
+      "name": "模式 K：模拟量模块读写",
+      "description": "## 模拟量模块信息（非必填）\n- **FX3U-4DA** 是特殊功能模块，通过该模块手册规定的缓冲存储器和 TO/FROM 等方式配置/写入。\n- **FX3U-4DA-ADP** 是模拟量特殊适配器，使用 CPU/适配器手册规定的专用软元件，不能套用 FX3U-4DA 的 BFM。\n- `4DA` 与 `4DA-ADP` 不是简称关系，访问方式不可互换。用户未提供完整型号、槽位/连接顺序、通道或量程时，记录 assumptions 并继续，不得生成必填问题。\n\n## 通用 JSON 指令外形（地址仅在已有信息支持时填写）\n- FROM：`APP_INSTR \"FROM\" [\"单元号\",\"BFM号\",\"目标D\",\"字数\"]`\n- TO：`APP_INSTR \"TO\" [\"单元号\",\"BFM号\",\"源数据\",\"字数\"]`\n\n## 约束\n- CHANNEL、ADDRESS、NOTE、ANALOG_OUTPUT 不是 PLC I/O 类别或软元件地址。\n- 不把 D8260 或所谓“4DA缓冲起始地址”当作通用默认值；信息不足时保持模块专用地址抽象。",
+      "keywords": [
+        "模拟量",
+        "4AD",
+        "4DA",
+        "A/D",
+        "D/A",
+        "FROM",
+        "TO",
+        "BFM",
+        "FX3U-4AD",
+        "FX3U-4DA",
+        "FX3U-4DA-ADP",
+        "传感器输入"
+      ]
+    },
+    {
+      "id": "pattern_l",
+      "priority": 64,
+      "chars": 200,
+      "name": "模式 L：高级数据运算",
+      "description": "## 浮点运算（32位，D成对使用）\n- DEADD/DESUB/DEMUL/DEDIV：浮点+ - * /\n- DECMP：浮点比较（结果在 M8020/M8021/M8022）\n- DSIN/DCOS/DTAN：三角函数\n- DEBCD/DEBIN：浮点↔科学计数法互转\n\n## 移位与查找\n- SFTL/SFTR：位左移/右移\n- WSFL/WSFR：字左移/右移\n- SER：数据搜索\n- ROTC：旋转台控制\n- DECO/ENCO：解码/编码\n- SEGD：七段码译码\n\n## 注意\n- 浮点指令操作数必须使用 D 寄存器（32位占2个连续D）\n- 浮点常数用 E 寄存器（E0-E7）\n- 16位指令前加 D 表示32位（如 DADD=32位加法）",
+      "keywords": [
+        "浮点",
+        "三角函数",
+        "排序",
+        "移位",
+        "查找",
+        "编码",
+        "解码",
+        "七段码",
+        "DEADD",
+        "SIN",
+        "COS"
+      ]
+    },
+    {
+      "id": "pattern_m",
+      "priority": 65,
+      "chars": 150,
+      "name": "模式 M：程序控制",
+      "description": "## 子程序\n- CALL Pn：调用子程序 Pn\n- SRET：子程序返回\n- FEND：主程序结束\n- 子程序放在 FEND 之后\n\n## 跳转与循环\n- CJ Pn：条件跳转到 Pn\n- FOR Kn / NEXT：循环（最多嵌套5层）\n\n## 中断\n- EI / DI：中断允许/禁止\n- IRET：中断返回\n\n## 其他\n- WDT：看门狗复位\n- TRD/TWR：时钟读写（D8013-D8019）",
+      "keywords": [
+        "子程序",
+        "跳转",
+        "循环",
+        "中断",
+        "看门狗",
+        "时钟",
+        "CALL",
+        "FEND",
+        "FOR",
+        "NEXT",
+        "EI",
+        "DI"
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "id": "example_self_lock",
+      "priority": 100,
+      "always_when_core": true,
+      "chars": 650,
+      "header": "[Example A: self-lock with user-provided stop]",
+      "content": "{\n  \"device_comments\": {\n    \"X0\": \"start\",\n    \"X1\": \"stop\",\n    \"Y0\": \"motor\"\n  },\n  \"rungs\": [\n    {\n      \"rung_id\": 1,\n      \"debug_note\": \"stop input is explicitly provided by the user\",\n      \"header_element\": null,\n      \"branches\": [\n        {\n          \"branch_id\": 1,\n          \"y_offset_level\": 0,\n          \"inputs\": [\n            {\n              \"type\": \"parallel_block\",\n              \"branches\": [\n                [\n                  {\n                    \"type\": \"NO\",\n                    \"address\": \"X0\",\n                    \"label\": \"start\"\n                  }\n                ],\n                [\n                  {\n                    \"type\": \"NO\",\n                    \"address\": \"Y0\",\n                    \"label\": \"seal-in\"\n                  }\n                ]\n              ]\n            },\n            {\n              \"type\": \"NC\",\n              \"address\": \"X1\",\n              \"label\": \"stop\"\n            }\n          ],\n          \"outputs\": [\n            {\n              \"type\": \"COIL\",\n              \"address\": \"Y0\",\n              \"label\": \"motor\"\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}"
+    },
+    {
+      "id": "example_interlock",
+      "priority": 101,
+      "chars": 900,
+      "header": "【范例 B：正反转互锁 + 换向延时】",
+      "content": "{\n  \"device_comments\": {\n    \"X0\": \"forward\",\n    \"X1\": \"reverse\",\n    \"X2\": \"stop\",\n    \"Y0\": \"forward\",\n    \"Y1\": \"reverse\",\n    \"T200\": \"forward_to_reverse_delay\",\n    \"T201\": \"reverse_to_forward_delay\"\n  },\n  \"rungs\": [\n    {\n      \"rung_id\": 1,\n      \"debug_note\": \"stop input is explicitly provided by the user\",\n      \"header_element\": null,\n      \"branches\": [\n        {\n          \"branch_id\": 1,\n          \"y_offset_level\": 0,\n          \"inputs\": [\n            {\n              \"type\": \"parallel_block\",\n              \"branches\": [\n                [\n                  {\n                    \"type\": \"NO\",\n                    \"address\": \"X0\",\n                    \"label\": \"forward\"\n                  }\n                ],\n                [\n                  {\n                    \"type\": \"NO\",\n                    \"address\": \"Y0\",\n                    \"label\": \"seal-in\"\n                  }\n                ]\n              ]\n            },\n            {\n              \"type\": \"NC\",\n              \"address\": \"X2\",\n              \"label\": \"stop\"\n            },\n            {\n              \"type\": \"NC\",\n              \"address\": \"Y1\",\n              \"label\": \"reverse interlock\"\n            },\n            {\n              \"type\": \"NC\",\n              \"address\": \"T200\",\n              \"label\": \"direction delay\"\n            }\n          ],\n          \"outputs\": [\n            {\n              \"type\": \"COIL\",\n              \"address\": \"Y0\",\n              \"label\": \"forward\"\n            },\n            {\n              \"type\": \"TIMER\",\n              \"address\": \"T200\",\n              \"value\": \"K2\",\n              \"label\": \"20ms delay\"\n            }\n          ]\n        }\n      ]\n    },\n    {\n      \"rung_id\": 2,\n      \"debug_note\": \"stop input is explicitly provided by the user\",\n      \"header_element\": null,\n      \"branches\": [\n        {\n          \"branch_id\": 1,\n          \"y_offset_level\": 0,\n          \"inputs\": [\n            {\n              \"type\": \"parallel_block\",\n              \"branches\": [\n                [\n                  {\n                    \"type\": \"NO\",\n                    \"address\": \"X1\",\n                    \"label\": \"reverse\"\n                  }\n                ],\n                [\n                  {\n                    \"type\": \"NO\",\n                    \"address\": \"Y1\",\n                    \"label\": \"seal-in\"\n                  }\n                ]\n              ]\n            },\n            {\n              \"type\": \"NC\",\n              \"address\": \"X2\",\n              \"label\": \"stop\"\n            },\n            {\n              \"type\": \"NC\",\n              \"address\": \"Y0\",\n              \"label\": \"forward interlock\"\n            },\n            {\n              \"type\": \"NC\",\n              \"address\": \"T201\",\n              \"label\": \"direction delay\"\n            }\n          ],\n          \"outputs\": [\n            {\n              \"type\": \"COIL\",\n              \"address\": \"Y1\",\n              \"label\": \"reverse\"\n            },\n            {\n              \"type\": \"TIMER\",\n              \"address\": \"T201\",\n              \"value\": \"K2\",\n              \"label\": \"20ms delay\"\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}"
+    },
+    {
+      "id": "example_step_machine",
+      "priority": 102,
+      "chars": 1100,
+      "header": "【范例 C：三步顺序状态机（红绿灯）】",
+      "content": "{\n  \"device_comments\": {\"M8002\":\"开机初始化\",\"Y0\":\"绿灯\",\"Y1\":\"黄灯\",\"Y2\":\"红灯\",\"T0\":\"绿灯延时20s\",\"T1\":\"黄灯延时3s\",\"T2\":\"红灯延时5s\",\"D0\":\"步进号\"},\n  \"rungs\": [\n    {\"rung_id\":1,\"header_element\":null,\"branches\":[{\"branch_id\":1,\"y_offset_level\":0,\n      \"inputs\":[{\"type\":\"P\",\"address\":\"M8002\",\"label\":\"开机脉冲\"}],\n      \"outputs\":[{\"type\":\"APP_INSTR\",\"opcode\":\"MOV\",\"operands\":[\"K1\",\"D0\"],\"label\":\"初始化→步骤1\"}]\n    }]},\n    {\"rung_id\":2,\"header_element\":{\"type\":\"BLOCK_INPUT\",\"expression\":\"= D0 K1\"},\"branches\":[{\"branch_id\":1,\"y_offset_level\":0,\n      \"inputs\":[{\"type\":\"NO\",\"address\":\"M8000\",\"label\":\"常开\"}],\n      \"outputs\":[{\"type\":\"COIL\",\"address\":\"Y0\",\"label\":\"绿灯\"},{\"type\":\"TIMER\",\"address\":\"T0\",\"value\":\"K200\",\"label\":\"20秒\"}]\n    },{\"branch_id\":2,\"y_offset_level\":1,\n      \"inputs\":[{\"type\":\"NO\",\"address\":\"T0\",\"label\":\"延时到\"}],\n      \"outputs\":[{\"type\":\"APP_INSTR\",\"opcode\":\"MOV\",\"operands\":[\"K2\",\"D0\"],\"label\":\"→步骤2\"}]\n    }]},\n    {\"rung_id\":3,\"header_element\":{\"type\":\"BLOCK_INPUT\",\"expression\":\"= D0 K2\"},\"branches\":[{\"branch_id\":1,\"y_offset_level\":0,\n      \"inputs\":[{\"type\":\"NO\",\"address\":\"M8000\",\"label\":\"常开\"}],\n      \"outputs\":[{\"type\":\"COIL\",\"address\":\"Y1\",\"label\":\"黄灯\"},{\"type\":\"TIMER\",\"address\":\"T1\",\"value\":\"K30\",\"label\":\"3秒\"}]\n    },{\"branch_id\":2,\"y_offset_level\":1,\n      \"inputs\":[{\"type\":\"NO\",\"address\":\"T1\",\"label\":\"延时到\"}],\n      \"outputs\":[{\"type\":\"APP_INSTR\",\"opcode\":\"MOV\",\"operands\":[\"K3\",\"D0\"],\"label\":\"→步骤3\"}]\n    }]},\n    {\"rung_id\":4,\"header_element\":{\"type\":\"BLOCK_INPUT\",\"expression\":\"= D0 K3\"},\"branches\":[{\"branch_id\":1,\"y_offset_level\":0,\n      \"inputs\":[{\"type\":\"NO\",\"address\":\"M8000\",\"label\":\"常开\"}],\n      \"outputs\":[{\"type\":\"COIL\",\"address\":\"Y2\",\"label\":\"红灯\"},{\"type\":\"TIMER\",\"address\":\"T2\",\"value\":\"K50\",\"label\":\"5秒\"}]\n    },{\"branch_id\":2,\"y_offset_level\":1,\n      \"inputs\":[{\"type\":\"NO\",\"address\":\"T2\",\"label\":\"延时到\"}],\n      \"outputs\":[{\"type\":\"APP_INSTR\",\"opcode\":\"MOV\",\"operands\":[\"K1\",\"D0\"],\"label\":\"循环回步骤1\"}]\n    }]}\n  ]\n}"
+    },
+    {
+      "id": "example_counter",
+      "priority": 103,
+      "chars": 600,
+      "header": "【范例 D：计数器 + 复位】",
+      "content": "{\n  \"device_comments\": {\"X0\":\"计数输入\",\"C0\":\"计数器\",\"Y0\":\"到位输出\",\"X1\":\"手动复位\"},\n  \"rungs\": [\n    {\"rung_id\":1,\"header_element\":null,\"branches\":[{\"branch_id\":1,\"y_offset_level\":0,\n      \"inputs\":[{\"type\":\"P\",\"address\":\"X0\",\"label\":\"计数脉冲\"}],\n      \"outputs\":[{\"type\":\"COUNTER\",\"address\":\"C0\",\"value\":\"K5\",\"label\":\"计5次\"}]\n    }]},\n    {\"rung_id\":2,\"header_element\":null,\"branches\":[{\"branch_id\":1,\"y_offset_level\":0,\n      \"inputs\":[{\"type\":\"NO\",\"address\":\"C0\",\"label\":\"计数到\"}],\n      \"outputs\":[{\"type\":\"COIL\",\"address\":\"Y0\",\"label\":\"到位输出\"}]\n    }]},\n    {\"rung_id\":3,\"header_element\":null,\"branches\":[{\"branch_id\":1,\"y_offset_level\":0,\n      \"inputs\":[{\"type\":\"P\",\"address\":\"X1\",\"label\":\"复位\"}],\n      \"outputs\":[{\"type\":\"APP_INSTR\",\"opcode\":\"RST\",\"operands\":[\"C0\"],\"label\":\"复位计数器\"}]\n    }]}\n  ]\n}"
+    },
+    {
+      "id": "example_drvi",
+      "priority": 110,
+      "chars": 900,
+      "header": "【范例 H1：DRVI 相对定位 + M8029关联完成处理】",
+      "content": "{\"device_comments\":{\"X0\":\"start\",\"Y0\":\"pulse_axis\",\"Y4\":\"direction_example\",\"Y1\":\"done_lamp\",\"M0\":\"move_request\",\"M8029\":\"instruction_done\",\"D8342\":\"bias_speed\",\"D8343\":\"max_speed_low\",\"D8344\":\"max_speed_high\",\"D8348\":\"accel_time\",\"D8349\":\"decel_time\"},\"rungs\":[{\"rung_id\":1,\"debug_note\":\"initialize documented Y0 positioning parameters\",\"header_element\":null,\"branches\":[{\"branch_id\":1,\"y_offset_level\":0,\"inputs\":[{\"type\":\"P\",\"address\":\"M8002\",\"label\":\"initial pulse\"}],\"outputs\":[{\"type\":\"APP_INSTR\",\"opcode\":\"MOV\",\"operands\":[\"K500\",\"D8342\"],\"label\":\"bias speed\"},{\"type\":\"APP_INSTR\",\"opcode\":\"DMOV\",\"operands\":[\"K5000\",\"D8343\"],\"label\":\"maximum speed\"},{\"type\":\"APP_INSTR\",\"opcode\":\"MOV\",\"operands\":[\"K100\",\"D8348\"],\"label\":\"acceleration time\"},{\"type\":\"APP_INSTR\",\"opcode\":\"MOV\",\"operands\":[\"K100\",\"D8349\"],\"label\":\"deceleration time\"}]}]},{\"rung_id\":2,\"debug_note\":\"start edge sets move request\",\"header_element\":null,\"branches\":[{\"branch_id\":1,\"y_offset_level\":0,\"inputs\":[{\"type\":\"P\",\"address\":\"X0\",\"label\":\"start edge\"}],\"outputs\":[{\"type\":\"APP_INSTR\",\"opcode\":\"SET\",\"operands\":[\"M0\"],\"label\":\"move request\"}]}]},{\"rung_id\":3,\"debug_note\":\"Y4 is an example direction output, not a fixed Y0 mapping\",\"header_element\":null,\"shared_inputs\":[{\"type\":\"NO\",\"address\":\"M0\",\"label\":\"move request\"}],\"branches\":[{\"branch_id\":1,\"y_offset_level\":0,\"inputs\":[],\"outputs\":[{\"type\":\"APP_INSTR\",\"opcode\":\"DRVI\",\"operands\":[\"K5000\",\"K2000\",\"Y0\",\"Y4\"],\"label\":\"relative move\"}]},{\"branch_id\":2,\"y_offset_level\":1,\"inputs\":[{\"type\":\"NO\",\"address\":\"M8029\",\"label\":\"instruction done\"}],\"outputs\":[{\"type\":\"COIL\",\"address\":\"Y1\",\"label\":\"done lamp\"},{\"type\":\"APP_INSTR\",\"opcode\":\"RST\",\"operands\":[\"M0\"],\"label\":\"clear request\"}]}]}]}"
+    },
+    {
+      "id": "example_zrn",
+      "priority": 111,
+      "chars": 850,
+      "header": "【范例 H2：ZRN 原点回归 + M8029关联完成处理】",
+      "content": "{\"device_comments\":{\"X2\":\"home_start\",\"X3\":\"home_dog\",\"Y0\":\"pulse_axis\",\"Y2\":\"home_done_lamp\",\"M1\":\"home_request\",\"M8029\":\"zrn_instruction_done\"},\"rungs\":[{\"rung_id\":1,\"debug_note\":\"capture one homing request\",\"header_element\":null,\"branches\":[{\"branch_id\":1,\"y_offset_level\":0,\"inputs\":[{\"type\":\"P\",\"address\":\"X2\",\"label\":\"home start\"}],\"outputs\":[{\"type\":\"APP_INSTR\",\"opcode\":\"SET\",\"operands\":[\"M1\"],\"label\":\"home request\"}]}]},{\"rung_id\":2,\"debug_note\":\"ZRN: return speed, creep speed, DOG input, pulse output\",\"header_element\":null,\"shared_inputs\":[{\"type\":\"NO\",\"address\":\"M1\",\"label\":\"home request\"}],\"branches\":[{\"branch_id\":1,\"y_offset_level\":0,\"inputs\":[],\"outputs\":[{\"type\":\"APP_INSTR\",\"opcode\":\"ZRN\",\"operands\":[\"K5000\",\"K500\",\"X3\",\"Y0\"],\"label\":\"zero return\"}]},{\"branch_id\":2,\"y_offset_level\":1,\"inputs\":[{\"type\":\"NO\",\"address\":\"M8029\",\"label\":\"ZRN instruction done\"}],\"outputs\":[{\"type\":\"COIL\",\"address\":\"Y2\",\"label\":\"home done lamp\"},{\"type\":\"APP_INSTR\",\"opcode\":\"RST\",\"operands\":[\"M1\"],\"label\":\"clear request\"}]}]}]}"
+    },
+    {
+      "id": "example_plsy",
+      "priority": 112,
+      "chars": 900,
+      "header": "[Example H3: PLSY pulse output with M8029 same-rung completion]",
+      "content": "{\n  \"device_comments\": {\n    \"X0\": \"start\",\n    \"Y0\": \"pulse_output\",\n    \"Y1\": \"done_latch\",\n    \"M20\": \"pulse_request\",\n    \"M8029\": \"pulse_done\"\n  },\n  \"rungs\": [\n    {\n      \"rung_id\": 1,\n      \"header_element\": null,\n      \"branches\": [\n        {\n          \"branch_id\": 1,\n          \"y_offset_level\": 0,\n          \"inputs\": [\n            {\n              \"type\": \"P\",\n              \"address\": \"X0\",\n              \"label\": \"start edge\"\n            }\n          ],\n          \"outputs\": [\n            {\n              \"type\": \"APP_INSTR\",\n              \"opcode\": \"SET\",\n              \"operands\": [\n                \"M20\"\n              ],\n              \"label\": \"set request\"\n            }\n          ]\n        }\n      ]\n    },\n    {\n      \"rung_id\": 2,\n      \"debug_note\": \"PLSY and M8029 completion use sibling branches in one rung\",\n      \"header_element\": null,\n      \"shared_inputs\": [\n        {\n          \"type\": \"NO\",\n          \"address\": \"M20\",\n          \"label\": \"pulse request\"\n        }\n      ],\n      \"branches\": [\n        {\n          \"branch_id\": 1,\n          \"y_offset_level\": 0,\n          \"inputs\": [],\n          \"outputs\": [\n            {\n              \"type\": \"APP_INSTR\",\n              \"opcode\": \"PLSY\",\n              \"operands\": [\n                \"K1000\",\n                \"K5000\",\n                \"Y0\"\n              ],\n              \"label\": \"1000Hz 5000 pulses\"\n            }\n          ]\n        },\n        {\n          \"branch_id\": 2,\n          \"y_offset_level\": 1,\n          \"inputs\": [\n            {\n              \"type\": \"NO\",\n              \"address\": \"M8029\",\n              \"label\": \"pulse done\"\n            }\n          ],\n          \"outputs\": [\n            {\n              \"type\": \"APP_INSTR\",\n              \"opcode\": \"SET\",\n              \"operands\": [\n                \"Y1\"\n              ],\n              \"label\": \"done latch\"\n            },\n            {\n              \"type\": \"APP_INSTR\",\n              \"opcode\": \"RST\",\n              \"operands\": [\n                \"M20\"\n              ],\n              \"label\": \"clear request\"\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}"
+    },
+    {
+      "id": "example_pid",
+      "priority": 113,
+      "chars": 900,
+      "header": "【范例 G：PID 参数初始化 + PID 执行 + 输出限幅】",
+      "content": "{\n  \"device_comments\": {\"M8002\":\"开机\",\"M8000\":\"常开\",\"D500\":\"PID首地址\",\"D202\":\"目标值\",\"D101\":\"测量值\",\"D102\":\"输出量\"},\n  \"rungs\": [\n    {\"rung_id\":1,\"debug_note\":\"PID首地址D500,独占D500-D524\",\"header_element\":null,\"branches\":[{\"branch_id\":1,\"y_offset_level\":0,\n      \"inputs\":[{\"type\":\"P\",\"address\":\"M8002\",\"label\":\"开机初始化\"}],\n      \"outputs\":[\n        {\"type\":\"APP_INSTR\",\"opcode\":\"MOV\",\"operands\":[\"K100\",\"D500\"],\"label\":\"Ts=100(采样周期)\"},\n        {\"type\":\"APP_INSTR\",\"opcode\":\"MOV\",\"operands\":[\"K0\",\"D501\"],\"label\":\"方向0=正动作\"},\n        {\"type\":\"APP_INSTR\",\"opcode\":\"MOV\",\"operands\":[\"K100\",\"D503\"],\"label\":\"Kp\"},\n        {\"type\":\"APP_INSTR\",\"opcode\":\"MOV\",\"operands\":[\"K50\",\"D504\"],\"label\":\"Ti=5s(单位100ms)\"},\n        {\"type\":\"APP_INSTR\",\"opcode\":\"MOV\",\"operands\":[\"K0\",\"D505\"],\"label\":\"Td=0\"}\n      ]\n    }]},\n    {\"rung_id\":2,\"header_element\":null,\"branches\":[{\"branch_id\":1,\"y_offset_level\":0,\n      \"inputs\":[{\"type\":\"NO\",\"address\":\"M8000\",\"label\":\"常开\"}],\n      \"outputs\":[{\"type\":\"APP_INSTR\",\"opcode\":\"PID\",\"operands\":[\"D202\",\"D101\",\"D500\",\"D102\"],\"label\":\"PID运算\"}]\n    }]},\n    {\"rung_id\":3,\"header_element\":null,\"branches\":[{\"branch_id\":1,\"y_offset_level\":0,\n      \"inputs\":[{\"type\":\"NO\",\"address\":\"M8000\",\"label\":\"常开\"},{\"type\":\"COMPARE\",\"expression\":\"< D102 K0\",\"label\":\"防负溢出\"}],\n      \"outputs\":[{\"type\":\"APP_INSTR\",\"opcode\":\"MOV\",\"operands\":[\"K0\",\"D102\"],\"label\":\"归零限幅\"}]\n    }]}\n  ]\n}"
+    },
+    {
+      "id": "example_timer_clock",
+      "priority": 114,
+      "chars": 850,
+      "header": "【范例 T1：1Hz 时钟继电器 + 0.5Hz 双定时器交替】",
+      "keywords": [
+        "闪烁",
+        "振荡",
+        "时钟",
+        "1Hz",
+        "0.5Hz"
+      ],
+      "content": "{\n  \"device_comments\": {\"M8013\":\"1秒内部时钟\",\"M3\":\"1Hz闪烁位\",\"M4\":\"0.5Hz闪烁位\",\"T10\":\"OFF相1秒\",\"T11\":\"ON相1秒\"},\n  \"rungs\": [\n    {\"rung_id\":1,\"debug_note\":\"M8013完整周期1秒，直接得到约1Hz闪烁\",\"header_element\":null,\"branches\":[{\"branch_id\":1,\"y_offset_level\":0,\"inputs\":[{\"type\":\"NO\",\"address\":\"M8013\",\"label\":\"1秒时钟\"}],\"outputs\":[{\"type\":\"COIL\",\"address\":\"M3\",\"label\":\"1Hz闪烁\"}]}]},\n    {\"rung_id\":2,\"debug_note\":\"T10为FX3U 100ms基准，K10=1秒；M4置位后本使能自动断开\",\"header_element\":null,\"branches\":[{\"branch_id\":1,\"y_offset_level\":0,\"inputs\":[{\"type\":\"NC\",\"address\":\"M4\",\"label\":\"OFF相\"}],\"outputs\":[{\"type\":\"TIMER\",\"address\":\"T10\",\"value\":\"K10\",\"label\":\"OFF相1秒\"}]}]},\n    {\"rung_id\":3,\"header_element\":null,\"branches\":[{\"branch_id\":1,\"y_offset_level\":0,\"inputs\":[{\"type\":\"NO\",\"address\":\"T10\",\"label\":\"OFF相完成\"}],\"outputs\":[{\"type\":\"APP_INSTR\",\"opcode\":\"SET\",\"operands\":[\"M4\"],\"label\":\"进入ON相\"}]}]},\n    {\"rung_id\":4,\"debug_note\":\"M4复位后T11使能自动断开，形成1秒ON+1秒OFF\",\"header_element\":null,\"branches\":[{\"branch_id\":1,\"y_offset_level\":0,\"inputs\":[{\"type\":\"NO\",\"address\":\"M4\",\"label\":\"ON相\"}],\"outputs\":[{\"type\":\"TIMER\",\"address\":\"T11\",\"value\":\"K10\",\"label\":\"ON相1秒\"}]}]},\n    {\"rung_id\":5,\"header_element\":null,\"branches\":[{\"branch_id\":1,\"y_offset_level\":0,\"inputs\":[{\"type\":\"NO\",\"address\":\"T11\",\"label\":\"ON相完成\"}],\"outputs\":[{\"type\":\"APP_INSTR\",\"opcode\":\"RST\",\"operands\":[\"M4\"],\"label\":\"返回OFF相\"}]}]}\n  ]\n}"
+    },
+    {
+      "id": "example_alarm",
+      "priority": 115,
+      "chars": 700,
+      "header": "【范例 D1：报警闪烁 + 消音确认】",
+      "content": "{\n  \"device_comments\": {\"X3\":\"故障信号\",\"Y10\":\"报警灯\",\"Y11\":\"蜂鸣器\",\"M50\":\"报警标志\",\"M51\":\"已确认\",\"X13\":\"消音按钮\",\"X14\":\"复位按钮\",\"M8013\":\"1s时钟\"},\n  \"rungs\": [\n    {\"rung_id\":1,\"header_element\":null,\"branches\":[{\"branch_id\":1,\"y_offset_level\":0,\n      \"inputs\":[{\"type\":\"NO\",\"address\":\"X3\",\"label\":\"故障\"}],\n      \"outputs\":[{\"type\":\"APP_INSTR\",\"opcode\":\"SET\",\"operands\":[\"M50\"],\"label\":\"报警标志\"}]\n    }]},\n    {\"rung_id\":2,\"debug_note\":\"一个Y10线圈汇合未确认闪烁与已确认常亮条件\",\"header_element\":null,\"branches\":[{\"branch_id\":1,\"y_offset_level\":0,\n      \"inputs\":[{\"type\":\"parallel_block\",\"branches\":[[{\"type\":\"NO\",\"address\":\"M50\",\"label\":\"报警中\"},{\"type\":\"NC\",\"address\":\"M51\",\"label\":\"未确认\"},{\"type\":\"NO\",\"address\":\"M8013\",\"label\":\"1s时钟\"}],[{\"type\":\"NO\",\"address\":\"M50\",\"label\":\"报警中\"},{\"type\":\"NO\",\"address\":\"M51\",\"label\":\"已确认\"}]]}],\n      \"outputs\":[{\"type\":\"COIL\",\"address\":\"Y10\",\"label\":\"报警灯\"}]\n    }]},\n    {\"rung_id\":3,\"header_element\":null,\"branches\":[{\"branch_id\":1,\"y_offset_level\":0,\n      \"inputs\":[{\"type\":\"NO\",\"address\":\"M50\",\"label\":\"报警中\"},{\"type\":\"NC\",\"address\":\"M51\",\"label\":\"未确认\"},{\"type\":\"NO\",\"address\":\"M8013\",\"label\":\"1s时钟\"}],\n      \"outputs\":[{\"type\":\"COIL\",\"address\":\"Y11\",\"label\":\"蜂鸣器\"}]\n    }]},\n    {\"rung_id\":4,\"header_element\":null,\"branches\":[{\"branch_id\":1,\"y_offset_level\":0,\n      \"inputs\":[{\"type\":\"P\",\"address\":\"X13\",\"label\":\"消音\"}],\n      \"outputs\":[{\"type\":\"APP_INSTR\",\"opcode\":\"SET\",\"operands\":[\"M51\"],\"label\":\"确认\"}]\n    }]},\n    {\"rung_id\":5,\"header_element\":null,\"branches\":[{\"branch_id\":1,\"y_offset_level\":0,\n      \"inputs\":[{\"type\":\"NC\",\"address\":\"X3\",\"label\":\"故障消除\"},{\"type\":\"P\",\"address\":\"X14\",\"label\":\"复位\"}],\n      \"outputs\":[{\"type\":\"APP_INSTR\",\"opcode\":\"RST\",\"operands\":[\"M50\"],\"label\":\"\"},{\"type\":\"APP_INSTR\",\"opcode\":\"RST\",\"operands\":[\"M51\"],\"label\":\"\"}]\n    }]}\n  ]\n}"
+    }
+  ],
+  "checklist": [
+    {
+      "id": "check_auto",
+      "priority": 80,
+      "always_include": true,
+      "chars": 45,
+      "content": "| 1 | Completion boundary | Do not auto-add stop/emergency stop; label any other inferred logic |"
+    },
+    {
+      "id": "check_selflock",
+      "priority": 81,
+      "always_include": true,
+      "chars": 45,
+      "content": "| 2 | 自锁完备 | 所有\"启动后保持\"的输出均用 parallel_block |"
+    },
+    {
+      "id": "check_stop",
+      "priority": 82,
+      "always_include": true,
+      "chars": 45,
+      "content": "| 3 | Stop/E-stop | Use only when explicitly provided or confirmed; never auto-assign X10/X11 |"
+    },
+    {
+      "id": "check_interlock",
+      "priority": 83,
+      "always_include": false,
+      "chars": 40,
+      "content": "| 4 | 互锁完备 | 反向动作互串对方 NC 触点 |",
+      "keywords": [
+        "正反转",
+        "互锁",
+        "伸出",
+        "缩回"
+      ]
+    },
+    {
+      "id": "check_timer_lock",
+      "priority": 84,
+      "always_include": false,
+      "chars": 45,
+      "content": "| 5 | 定时器语义 | 脉冲启动已保持；M8000单独驱动未被误作振荡；T地址与时间基准已核对 |",
+      "keywords": [
+        "延时",
+        "定时",
+        "时间",
+        "闪烁",
+        "振荡",
+        "时钟"
+      ]
+    },
+    {
+      "id": "check_no_ops",
+      "priority": 85,
+      "always_include": false,
+      "chars": 40,
+      "content": "| 6 | 无触点运算 | COMPARE 中不含 + - * / |",
+      "keywords": [
+        "比较",
+        "COMPARE",
+        "计算"
+      ]
+    },
+    {
+      "id": "check_no_dual",
+      "priority": 86,
+      "always_include": true,
+      "chars": 40,
+      "content": "| 7 | 无双线圈 | 同 Y/M 不重复 COIL，多次驱动用 SET/RST |"
+    },
+    {
+      "id": "check_step",
+      "priority": 87,
+      "always_include": false,
+      "chars": 45,
+      "content": "| 8 | 步进闭环 | 有 M8002→MOV K1 D0 初始化，末步回 K1 |",
+      "keywords": [
+        "步进状态机",
+        "状态机",
+        "顺序"
+      ]
+    },
+    {
+      "id": "check_json",
+      "priority": 88,
+      "always_include": true,
+      "chars": 45,
+      "content": "| 9 | JSON结构 | 仅 device_comments + rungs，无 Markdown |"
+    },
+    {
+      "id": "check_position_flag",
+      "priority": 89,
+      "always_include": false,
+      "chars": 80,
+      "content": "| 10 | 定位状态 | M8029只紧邻对应指令；Y0/Y1/Y2 BUSY=M8340/M8350/M8360；禁止把M8336当回原点完成位 |",
+      "keywords": [
+        "步进电机",
+        "步进驱动器",
+        "stepper",
+        "伺服",
+        "定位",
+        "脉冲",
+        "PLSY",
+        "DRVI",
+        "ZRN",
+        "DSZR"
+      ]
+    },
+    {
+      "id": "check_sensor_latch",
+      "priority": 90,
+      "always_include": false,
+      "chars": 45,
+      "content": "| 11 | 传感器锁存 | 瞬时值已 MOV 锁存，不直接比较实时值 |",
+      "keywords": [
+        "传感器",
+        "检测",
+        "测量",
+        "分拣"
+      ]
+    },
+    {
+      "id": "check_pump_rotation",
+      "priority": 91,
+      "always_include": false,
+      "chars": 100,
+      "content": "| 12 | 多泵轮换 | 指针不受故障替补影响；X3立即级联；常闭输入语义正确；SFTL源目标不重叠 |",
+      "keywords": [
+        "轮换",
+        "交替",
+        "主泵",
+        "备用泵",
+        "故障自投",
+        "多泵",
+        "泵组",
+        "级联"
+      ]
+    },
+    {
+      "id": "check_label_len",
+      "priority": 92,
+      "always_include": true,
+      "chars": 35,
+      "content": "| 13 | label 长度 | device_comments 值及 label ≤ 64 字符 |"
+    }
+  ],
+  "instruction_mapping": {
+    "PLSY": {
+      "completion_flag": "M8029",
+      "example": "example_plsy",
+      "pattern": "pattern_h",
+      "note": "M8029仅在脉冲输出完毕时ON一个周期"
+    },
+    "PLSV": {
+      "completion_flag": "M8029",
+      "example": "example_plsy",
+      "pattern": "pattern_h",
+      "note": "可变脉冲输出，M8029=输出完毕"
+    },
+    "DRVI": {
+      "completion_flag": "M8029",
+      "example": "example_drvi",
+      "pattern": "pattern_h",
+      "note": "相对定位完成=ON；定位中=OFF"
+    },
+    "DRVA": {
+      "completion_flag": "M8029",
+      "example": "example_drvi",
+      "pattern": "pattern_h",
+      "note": "绝对定位完成=ON；定位中=OFF"
+    },
+    "DVIT": {
+      "completion_flag": "M8029",
+      "example": "example_drvi",
+      "pattern": "pattern_h",
+      "note": "中断定位完成"
+    },
+    "ZRN": {
+      "completion_flag": "对应轴BUSY由ON变OFF，M8029仅紧邻指令使用",
+      "example": "example_zrn",
+      "pattern": "pattern_h",
+      "note": "Y0 BUSY=M8340；M8336是DVIT中断输入指定功能有效，不是完成位"
+    },
+    "DSZR": {
+      "completion_flag": "对应轴BUSY由ON变OFF，M8029仅紧邻指令使用",
+      "example": "example_zrn",
+      "pattern": "pattern_h",
+      "note": "M8340是Y0 BUSY，不是零点信号；M8336不是完成位"
+    },
+    "HSCS": {
+      "completion_flag": "—",
+      "example": null,
+      "pattern": "pattern_i",
+      "note": "高速计数比较置位，无完成标志"
+    },
+    "HSCR": {
+      "completion_flag": "—",
+      "example": null,
+      "pattern": "pattern_i",
+      "note": "高速计数比较复位"
+    },
+    "SPD": {
+      "completion_flag": "—",
+      "example": null,
+      "pattern": "pattern_i",
+      "note": "速度检测结果在D寄存器中"
+    },
+    "RS": {
+      "completion_flag": "M8123",
+      "example": null,
+      "pattern": "pattern_j",
+      "note": "M8123=接收完成(须手动RST) M8122=发送请求"
+    },
+    "FROM": {
+      "completion_flag": "—",
+      "example": null,
+      "pattern": "pattern_k",
+      "note": "特殊模块BFM读取"
+    },
+    "TO": {
+      "completion_flag": "—",
+      "example": null,
+      "pattern": "pattern_k",
+      "note": "特殊模块BFM写入"
+    },
+    "PID": {
+      "completion_flag": "—",
+      "example": "example_pid",
+      "pattern": "pattern_g",
+      "note": "PID首地址独占25个寄存器"
+    },
+    "MOV": {
+      "completion_flag": "—",
+      "example": null,
+      "pattern": null,
+      "note": "通用传送指令"
+    },
+    "SET": {
+      "completion_flag": "—",
+      "example": null,
+      "pattern": null,
+      "note": "保持型输出用SET，不用COIL"
+    },
+    "RST": {
+      "completion_flag": "—",
+      "example": null,
+      "pattern": null,
+      "note": "复位软元件用RST"
+    }
+  }
+}

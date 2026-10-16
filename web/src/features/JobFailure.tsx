@@ -40,7 +40,7 @@ function repairableGenerationFailure(job: Job) {
   if (violation.reason === "field_too_long")
     return leaf === "label" || leaf === "debug_note" || leaf.startsWith("comment[");
   return violation.reason === "invalid_ladder_structure" &&
-    (leaf === "branch_id" || leaf === "y_offset_level");
+    (leaf === "branch_id" || leaf === "y_offset_level" || /^content\.r\.\d+\.h$/.test(violation.path));
 }
 
 function FailureMessage({ job, t }: { job: Job; t: (key: string) => string }) {
@@ -71,7 +71,7 @@ export function JobFailure({ job, busy, onRepair, t }: {
   t: (key: string) => string;
 }) {
   if (!job.error_code) return null;
-  const repairable = job.kind === "generation" && job.error_code === "generation_validation_failed" && repairableGenerationFailure(job) && !!onRepair;
+  const repairable = (job.kind === "generation" || job.kind === "direct_generation") && job.error_code === "generation_validation_failed" && repairableGenerationFailure(job) && !!onRepair;
   return <section>
     <FailureMessage job={job} t={t} />
     {repairable && <Button disabled={busy} onClick={onRepair}>{t("让 AI 修复")}</Button>}

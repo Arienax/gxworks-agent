@@ -1,0 +1,355 @@
+"""Model-free generation acceptance shared by the API and engineering tools.
+
+The API fast path is authoritative: representation checks are blocking;
+engineering findings belong to review and do not trigger model retries.
+"""
+from __future__ import annotations
+
+import copy
+import hashlib
+import json
+from pathlib import Path
+
+from plc.candidate_repair import check_candidate_containers, materialize_partial
+from plc.comments import normalize_generated_device_comments
+from plc.specification.repair import patch_device_addresses
+from shared.i18n import tr
+from plc.device_identity import canonical_ladder_devices
+from plc.ladder_repair import normalize_app_instr_out_outputs, normalize_legacy_counter_outputs
+from plc.ir import build_plc_ir, ir_to_ladder, validate_plc_ir
+from plc.validation import (
+    PLCJsonValidationError, validate_ladder_candidate_structure,
+    validate_ladder_partial_structure,
+)
+
+
+GENERATION_VALIDATION_PROFILE = "generation_structural"
+CONFIRMED_AGENT_ORIGIN = "compact_agent"
+
+
+def _normalize_legacy_blocks(ladder):
+    """Let legacy textual outputs reach the same typed instruction checks.
+
+    Without this conversion BLOCK_OUTPUT could bypass the instruction catalogue
+    and write-target checks simply by putting an opcode in ``expression``.
+    """
+    for rung in ladder.get("rungs", []):
+        for branch in rung.get("branches", []):
+            for output in branch.get("outputs", []):
+                if output.get("type") != "BLOCK_OUTPUT":
+                    continue
+                expression = output.get("expression")
+                if not isinstance(expression, str) or not expression.strip():
+                    raise PLCJsonValidationError("$.rungs: BLOCK_OUTPUT requires an instruction expression")
+                opcode, *operands = expression.strip().split()
+                replacement = {"type": "APP_INSTR", "opcode": opcode.upper(), "operands": operands}
+                if opcode.upper() in {"PLS", "PLF"} and len(operands) == 1:
+                    replacement = {"type": opcode.upper(), "address": operands[0]}
+                if "label" in output:
+                    replacement["label"] = output["label"]
+                output.clear()
+                output.update(replacement)
+
+
+def _has_invalid_shared_parallel(ladder):
+    """Return True only for the explicit structure-only fallback we recognize."""
+    if not isinstance(ladder, dict):
+        return False
+    for rung in ladder.get("rungs", []) or []:
+        if not isinstance(rung, dict):
+            continue
+        for element in rung.get("shared_inputs", []) or []:
+            if (
+                isinstance(element, dict)
+                and str(element.get("type") or "").casefold() == "parallel_block"
+            ):
+                return True
+    return False
+
+
+def _element_semantics(element):
+    if not isinstance(element, dict):
+        return None
+    if str(element.get("type") or "").casefold() == "parallel_block":
+        return {
+            "type": "parallel_block",
+            "branches": [
+                [_element_semantics(child) for child in branch]
+                for branch in (element.get("branches") or [])
+                if isinstance(branch, list)
+            ],
+        }
+    return {
+        key: copy.deepcopy(element[key])
+        for key in ("type", "address", "expression", "opcode", "operands", "value")
+        if key in element
+    }
+
+
+def _rung_behavior_signature(rung):
+    """Ignore storage location only; preserve condition/output associations."""
+    if not isinstance(rung, dict):
+        return None
+    shared = [
+        _element_semantics(element)
+        for element in (rung.get("shared_inputs") or [])
+        if isinstance(element, dict)
+    ]
+    branches = []
+    for branch in rung.get("branches", []) or []:
+        if not isinstance(branch, dict):
+            return None
+        branches.append({
+            "inputs": shared + [
+                _element_semantics(element)
+                for element in (branch.get("inputs") or [])
+                if isinstance(element, dict)
+            ],
+            "outputs": [
+                _element_semantics(element)
+                for element in (branch.get("outputs") or [])
+                if isinstance(element, dict)
+            ],
+        })
+    return {
+        "header_element": _element_semantics(rung.get("header_element")),
+        "branches": branches,
+    }
+
+
+def _enforce_structural_repair_semantics(previous_ladder, submitted_partial):
+    """Structure-only fallback may relocate storage, never change rung behavior.
+
+    Semantic generation-contract repair also uses task_type=contract_repair.
+    Therefore this guard activates from concrete invalid-shared-input evidence,
+    not from the task type name.
+    """
+    if not _has_invalid_shared_parallel(previous_ladder):
+        return
+    if not isinstance(previous_ladder, dict) or not isinstance(submitted_partial, dict):
+        return
+    baseline = {
+        rung.get("rung_id"): rung
+        for rung in previous_ladder.get("rungs", []) or []
+        if isinstance(rung, dict) and isinstance(rung.get("rung_id"), int)
+        and not isinstance(rung.get("rung_id"), bool)
+    }
+    for rung in submitted_partial.get("rungs", []) or []:
+        if not isinstance(rung, dict):
+            continue
+        rung_id = rung.get("rung_id")
+        original = baseline.get(rung_id)
+        if original is None:
+            continue
+        if _rung_behavior_signature(original) != _rung_behavior_signature(rung):
+            raise PLCJsonValidationError(
+                f"$.rungs: structural repair changed condition/output behavior in rung {rung_id}"
+            )
+
+
+def normalization_summary(report):
+    """A small user-facing summary, without copied program bodies or paths."""
+    operations = {
+        "remove_duplicate_condition": "已删除重复触点或比较条件",
+        "extract_common_prefix": "已提取分支公共条件",
+        "merge_adjacent_branches": "已提取相邻网络公共条件并保留分支执行顺序",
+        "merge_adjacent_coils": "已合并公共条件相同的相邻输出网络",
+        "factor_branch_subgroup": "已按公共条件重新划分连续分支，保留输出顺序",
+        "factor_parallel_condition": "已提取纯逻辑并联支路中的公共条件",
+    }
+    reasons = {
+        "annotation_capacity": "合并会超过既有注释长度限制，保留原说明",
+        "native_parallel_row_limit": "合并后的并联网络会超过GX Works2的24行限制，保留分组",
+        "annotated_absorption": "逻辑化简会移除带独立注释的条件，保留原说明位置",
+        "non_pure_condition": "含边沿或复杂条件，保留原求值位置",
+        "stateful_or_unknown_output": "含状态指令或无法确认的副作用，保留原结构",
+        "read_after_write": "条件可能在写入后变化，保留再次读取",
+        "duplicate_coil_target": "保留同一线圈多次写入的执行顺序",
+        "distinct_network_notes": "网络说明不同，保留独立网络",
+        "different_branch_conditions": "分支条件不同，保留独立网络",
+        "outside_scope": "位于本次修改范围之外，保持不变",
+        "scope_preserves_network_identity": "局部编辑保留网络编号与顺序，仅归并网络内部条件",
+        "unsupported_container": "保留现有兼容结构",
+        "edge_evaluation_site": "边沿条件保留原求值次数和位置",
+        "shared_evaluation_site": "已缓存的状态条件不可展开为重复求值",
+        "volatile_or_unverified_read": "条件读值的稳定性缺少适用事实，保留原求值位置",
+        "stateful_or_opaque_parallel": "并联块含边沿或未知条件，保留原结构",
+        "parallel_shared_form": "当前共享条件协议不容纳整个并联块，保留支路内表达式",
+        "unsupported_condition": "条件形式尚未覆盖，保留原表达式",
+        "unsupported_comparison": "比较形式尚未覆盖，保留原表达式",
+        "unsupported_output": "输出形式尚未覆盖，保留原执行位置",
+        "control_flow_or_logic_stack": "流程或逻辑栈指令保留原执行边界",
+        "implicit_or_external_effect": "含隐式状态或外部动作，保留原执行边界",
+        "instruction_fact_gap": "指令写入范围缺少适用事实，保留原执行边界",
+        "unresolved_operand_effect": "操作数存在尚未解析的写入范围，保留原执行边界",
+        "implicit_power_flow": "无显式条件的兼容分支保留原累加结果边界",
+        "invalid_scope": "修改范围无法解析，保留原程序",
+        "duplicate_rung_ids": "网络编号重复，交由现有校验报告",
+    }
+    result = {}
+    for key in ("changes", "skipped"):
+        items = []
+        for item in report.get(key, []):
+            code = item.get("operation" if key == "changes" else "reason", "")
+            value = {"message": (operations if key == "changes" else reasons).get(code, code),
+                     "network_ids": [f"N{identifier:04d}" for identifier in item.get("rung_ids", [])]}
+            if value not in items:
+                items.append(value)
+        result[key] = items
+    return result
+
+
+def prepare_ladder_candidate(
+    candidate, *, plc_model="FX3U", program_name="MAIN", revision=1,
+    confirmed_spec=None, previous_ladder=None, repair_mode=False,
+    allowed_rung_ids=None, allowed_addresses=None, task_type=None,
+    candidate_origin="external", on_progress=None,
+):
+    """Normalize one response, materialize its edit, and build a consistent IR.
+
+    Caller snapshots are never mutated. Only submitted/changed rungs are
+    eligible for condition factoring when a baseline exists. Explicit repair
+    envelopes retain the API's existing evidence and address scope checks.
+    """
+    parsed = copy.deepcopy(candidate)
+    check_candidate_containers(parsed)
+    if "device_comments" in parsed:
+        parsed["device_comments"] = normalize_generated_device_comments(
+            parsed["device_comments"], confirmed_spec,
+            include_confirmed=previous_ladder is None and not repair_mode,
+        )
+    submitted = copy.deepcopy(parsed)
+    progress = on_progress or (lambda _message: None)
+    messages = []
+    progress(tr('正在解析模型输出：规范化梯形图协议'))
+    if candidate_origin != CONFIRMED_AGENT_ORIGIN:
+        _normalize_legacy_blocks(parsed)
+        parsed, counters = normalize_legacy_counter_outputs(parsed)
+        if counters:
+            messages.append(tr('已将旧版 TIMER+C 计数器结构转换为 COUNTER：') + ", ".join(counters))
+        parsed, outs = normalize_app_instr_out_outputs(parsed)
+        if outs:
+            messages.append(tr('已将误放入 APP_INSTR 的 OUT 转换为标准输出结构：') + "；".join(outs))
+
+    allowed_ids = set(allowed_rung_ids or ())
+    allowed_devices = {str(item).strip().upper() for item in (allowed_addresses or ())}
+    structural_only = _has_invalid_shared_parallel(previous_ladder)
+    if repair_mode:
+        if parsed.get("mode") != "partial":
+            raise PLCJsonValidationError('$.mode: repair must return "partial"')
+        changed_ids = {int(rung["rung_id"]) for rung in parsed.get("rungs", []) if rung.get("rung_id") is not None}
+        changed_ids.update(int(item) for item in parsed.get("delete_rung_ids", []))
+        outside = changed_ids - allowed_ids
+        if outside:
+            raise PLCJsonValidationError("$.rungs: repair changed evidence-external rung ids " + ", ".join(map(str, sorted(outside))))
+        outside_comments = {str(item).strip().upper() for item in parsed.get("device_comments", {})} - allowed_devices
+        if outside_comments:
+            raise PLCJsonValidationError("$.device_comments: repair changed evidence-external addresses " + ", ".join(sorted(outside_comments)))
+        if task_type == "contract_repair":
+            if parsed.get("delete_rung_ids"):
+                raise PLCJsonValidationError("$.delete_rung_ids: contract repair may not delete existing rungs")
+            # For structure-only relocation, behavior equality below is stronger
+            # than the legacy address extractor, which does not inspect invalid
+            # shared_inputs containers. Keep the ordinary address scope for all
+            # semantic contract repairs.
+            if allowed_devices and not structural_only:
+                outside_devices = patch_device_addresses(parsed) - allowed_devices
+                if outside_devices:
+                    raise PLCJsonValidationError("$.rungs: contract repair introduced out-of-scope devices " + ", ".join(sorted(outside_devices)))
+            _enforce_structural_repair_semantics(previous_ladder, submitted)
+
+    normalization_scope = None
+    if parsed.get("mode") == "partial":
+        if previous_ladder is None:
+            raise PLCJsonValidationError('$.mode: received "partial" without a previous ladder')
+        validate_ladder_partial_structure(parsed, plc_model=plc_model)
+        normalization_scope = {rung["rung_id"] for rung in parsed.get("rungs", [])}
+        parsed = materialize_partial(previous_ladder, parsed)
+    elif previous_ladder is not None:
+        baseline = {rung["rung_id"]: rung for rung in previous_ladder.get("rungs", [])}
+        normalization_scope = {rung.get("rung_id") for rung in parsed.get("rungs", [])
+                               if baseline.get(rung.get("rung_id")) != rung}
+    if repair_mode:
+        normalization_scope = allowed_ids if normalization_scope is None else normalization_scope & allowed_ids
+
+    if not parsed.get("rungs"):
+        raise PLCJsonValidationError("$.rungs: generated program must not be empty")
+    # A fresh candidate owns the entire representation. Partial repairs retain
+    # the immutable baseline spelling outside their authorized scope.
+    if previous_ladder is None and not repair_mode:
+        parsed = canonical_ladder_devices(parsed)
+    progress(tr('正在解析模型输出：检查结构与地址'))
+    validate_ladder_candidate_structure(parsed, plc_model=plc_model, require_catalogued_instructions=True)
+    from plc.condition_normalizer import normalize_shared_conditions
+    parsed, normalization = normalize_shared_conditions(parsed, allowed_rung_ids=normalization_scope, plc_model=plc_model)
+    validate_ladder_candidate_structure(parsed, plc_model=plc_model, require_catalogued_instructions=True)
+
+    if candidate_origin == CONFIRMED_AGENT_ORIGIN:
+        from plc.specification.semantic_validation import validate_confirmed_semantics
+        semantic_validation = validate_confirmed_semantics(
+            parsed, confirmed_spec, plc_model=plc_model,
+        )
+    else:
+        semantic_validation = {
+            "version": "confirmed-semantics-v1",
+            "status": "not_applied",
+            "reason": "non_confirmed_agent_origin",
+            "checks": [],
+            "violations": [],
+        }
+
+    semantic_status = semantic_validation.get("status")
+    if semantic_status == "violated":
+        messages.append(tr('候选程序已保留；已确认语义检查发现不一致，未触发额外模型调用'))
+    elif semantic_status == "unresolved":
+        messages.append(tr('候选程序已保留；部分已确认语义无法由当前本地检查完整覆盖'))
+
+    semantics = []
+    if isinstance(confirmed_spec, dict) and isinstance(confirmed_spec.get("execution_semantics"), list):
+        from plc.semantics import normalize_semantic_requirements
+        semantics = normalize_semantic_requirements(confirmed_spec["execution_semantics"])
+    progress(tr('正在解析模型输出：构建 PLC IR'))
+    program = build_plc_ir(parsed, plc_model=plc_model, program_name=program_name,
+                           revision=revision, confirmed_spec=confirmed_spec,
+                           semantic_requirements=semantics,
+                           _canonicalize_devices=previous_ladder is None and not repair_mode)
+    validate_plc_ir(program, validate_ladder=False)
+    from simulator.bounded import check_confirmed_behavior
+    behavior_check = check_confirmed_behavior(program, confirmed_spec)
+    return {
+        "ladder": parsed,
+        "program_ir": program,
+        "validation_messages": messages,
+        "normalization": normalization_summary(normalization),
+        "validation_profile": GENERATION_VALIDATION_PROFILE,
+        "semantic_validation": semantic_validation,
+        "behavior_check": behavior_check,
+        "candidate_origin": candidate_origin,
+    }
+
+
+def render_generation_artifacts(program, output_dir):
+    """Render exactly the API's artifact set, without semantic revalidation."""
+    from rendering.ladder_svg import AdvancedSVGLadder
+    from gxworks2.csv_export import generate_gx_works2_csv
+    from plc.st_renderer import render_plc_ir_to_st, validate_st_traceability
+
+    validate_plc_ir(program, validate_ladder=False)
+    directory = Path(output_dir)
+    directory.mkdir(parents=True, exist_ok=True)
+    ladder_text = json.dumps(ir_to_ladder(program), ensure_ascii=False, indent=2)
+    (directory / "ladder.json").write_text(ladder_text, encoding="utf-8")
+    st_text = render_plc_ir_to_st(program)
+    validate_st_traceability(program, st_text)
+    (directory / "program_from_ir.st").write_text(st_text, encoding="utf-8")
+    (directory / "program.ir.json").write_text(json.dumps(program, ensure_ascii=False, indent=2), encoding="utf-8")
+    drawer = AdvancedSVGLadder()
+    (directory / "ladder.svg").write_text(drawer.generate_ladder(ladder_text), encoding="utf-8")
+    artifacts = {"json": "ladder.json", "ir": "program.ir.json", "svg": "ladder.svg", "st_from_ir": "program_from_ir.st"}
+    from plc.validation import SUPPORTED_PLC_MODELS
+    if str(program.get("plc", {}).get("cpu") or "FX3U").upper() in SUPPORTED_PLC_MODELS:
+        if not generate_gx_works2_csv(program, str(directory / "program.csv"), str(directory / "comments.csv")):
+            raise ValueError("GX Works2 CSV 渲染失败，未生成可交付的程序 CSV。")
+        artifacts.update(program_csv="program.csv", comment_csv="comments.csv")
+    return {"artifacts": artifacts, "width": int(drawer.width), "height": int(drawer.height),
+            "st_from_ir_sha256": hashlib.sha256(st_text.encode("utf-8")).hexdigest()}

@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { conversationRoute } from "../src/features/conversationRouting.ts";
+import { clarificationQuestions, clarificationSubmission } from "../src/features/clarificationAnswers.ts";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import ts from "typescript";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
 const initial = { task: "create", workflow: "direct", editAction: "edit", targetMode: "ladder",
   hasVersions: false, hasSpec: false, reviewRequested: false, continuingDirect: false };
@@ -65,4 +71,42 @@ test("questions remain questions across project stages and remembered workflow c
     assert.equal(question.generationAction, undefined);
     assert.equal(question.submitLabel, "提问");
   }
+});
+
+test("Direct answers bind to individual questions and never accept suggested defaults", () => {
+  const questions = clarificationQuestions([
+    { id: "start", question: "启动电平？", default: "1", options: ["1", "0"] },
+    { id: "stop", question: "停止电平？", required: true },
+    { id: "extra", question: "补充？", required: false },
+  ]);
+  assert.deepEqual(clarificationSubmission(questions, {}), { answers: {}, complete: false });
+  assert.equal(clarificationSubmission(questions, { start: "1", stop: "  " }).complete, false);
+  const draft = { start: "1", stop: " 0 ", extra: "", stale: "another job" };
+  assert.deepEqual(clarificationSubmission(questions, draft), { answers: { start: "1", stop: "0" }, complete: true });
+  assert.equal(draft.stop, " 0 ");
+  assert.equal(clarificationSubmission([], draft).complete, false);
+  assert.deepEqual(clarificationQuestions(null), []);
+});
+
+test("Direct renders a separate answer box for each question, with editable suggested choices", () => {
+  const path = new URL("../src/features/DirectClarification.tsx", import.meta.url);
+  const code = ts.transpileModule(readFileSync(path, "utf8"), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText;
+  const module = { exports: {} }, require = createRequire(path);
+  new Function("require", "module", "exports", code)(require, module, module.exports);
+  const questions = clarificationQuestions([
+    { id: "delay", question: "延时几秒？", options: ["1秒", "2秒"], default: "2秒" },
+    { id: "stop", question: "停止后如何处理？" },
+  ]);
+  const markup = renderToStaticMarkup(createElement(module.exports.DirectClarification, {
+    questions, answers: { delay: "1秒" }, disabled: false, onChange() {}, t: key => key,
+  }));
+  assert.equal((markup.match(/<fieldset/g) || []).length, 2);
+  assert.equal((markup.match(/<textarea/g) || []).length, 2);
+  assert.match(markup, /aria-label="延时几秒？"/);
+  assert.match(markup, /aria-label="停止后如何处理？"/);
+  assert.match(markup, /aria-pressed="true"[^>]*>1秒/);
+  assert.match(markup, /aria-pressed="false"[^>]*>2秒/);
+  assert.doesNotMatch(markup, /undefined/);
 });

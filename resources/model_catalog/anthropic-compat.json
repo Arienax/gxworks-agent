@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "id": "anthropic-compat",
+  "extends": "generic-openai-compatible",
+  "match": {
+    "endpoints": [
+      "https://api.anthropic.com/v1"
+    ],
+    "models": [
+      "claude-sonnet-4-6",
+      "claude-opus-4-6",
+      "claude-opus-5"
+    ]
+  },
+  "parameters": {
+    "temperature": {
+      "type": "number",
+      "status": "supported",
+      "source": "catalog",
+      "domain": {
+        "source": "catalog",
+        "enforcement": "hard",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "default_mode": "omit",
+      "ui_hint": {
+        "step": 0.01
+      }
+    },
+    "reasoning_effort": {
+      "type": "enum",
+      "status": "unsupported",
+      "source": "catalog",
+      "domain": {
+        "source": "catalog",
+        "enforcement": "hard"
+      },
+      "default_mode": "omit"
+    },
+    "max_completion_tokens": {
+      "type": "integer",
+      "status": "supported",
+      "source": "catalog",
+      "domain": {
+        "source": "catalog",
+        "enforcement": "hard",
+        "minimum": 1
+      },
+      "default_mode": "omit"
+    }
+  },
+  "capabilities": {
+    "tools": {
+      "status": "supported",
+      "source": "catalog"
+    },
+    "streaming": {
+      "status": "supported",
+      "source": "catalog"
+    },
+    "parallel_tool_calls": {
+      "status": "supported",
+      "source": "catalog"
+    },
+    "structured_output": {
+      "status": "unsupported",
+      "source": "catalog"
+    }
+  },
+  "references": [
+    "https://platform.claude.com/docs/en/cli-sdks-libraries/libraries/openai-sdk"
+  ],
+  "reviewed_at": "2026-09-18"
+}

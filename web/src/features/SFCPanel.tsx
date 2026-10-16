@@ -16,13 +16,15 @@ type Topology = { status: string; symbols: Symbol[];
 type Child = { kind: string; name: string; number: number | null;
   records: { kind: string; op?: string; args?: string[]; raw_hex: string }[] };
 export type SFCModel = { program: string; cpu: string; codepage: number;
-  graph: { position_resolution: string; width?: number; height?: number; cells?: Cell[]; topology?: Topology;
+  graph: { position_resolution: string; edit_profile?: string | null; width?: number; height?: number; cells?: Cell[]; topology?: Topology;
+    write_symbols?: { kind: string; number?: number; x?: number; y?: number; start?: number; end?: number }[] | null;
     records: { kind: string; references: number[] }[] };
   actions: { name: string; number: number; registrations: { zoom: string; qualifier: number }[] }[];
   children: Child[]; issues: (string | { message?: string; code?: string })[] };
 type ActionEdit = { step_reference: number; action_number: number };
 type JumpEdit = { kind: "jump"; x: number; y: number; before_step_reference: number; target_step_reference: number };
-type GraphEdit = ActionEdit | JumpEdit;
+type SwapEdit = { kind: "swap_steps"; left_step_reference: number; right_step_reference: number };
+type GraphEdit = ActionEdit | JumpEdit | SwapEdit;
 const isActionEdit = (edit: GraphEdit): edit is ActionEdit => !("kind" in edit);
 const isJumpEdit = (edit: GraphEdit): edit is JumpEdit => "kind" in edit && edit.kind === "jump";
 type Preview = { program: SFCModel; validation: { native_save: string }; diff: { has_changes: boolean } };
@@ -51,7 +53,9 @@ export function SFCPanel({ value, pid, vid, readOnly, preview, onProposal, t }: 
     : picked?.binding.child ? [picked.binding.child] : [];
   const children = (model?.children || []).filter(child => names.includes(child.name));
   const locked = readOnly || preview || busy;
-  const editable = model?.cpu === "FX3U/FX3UC";
+  const editable = model?.graph.edit_profile === "fx-references";
+  const swapSteps = (source?.graph.write_symbols || []).filter(symbol => symbol.kind === "step" && symbol.number != null);
+  const selectedStep = source?.graph.cells?.find(cell => cell.id === selected && cell.role === "step")?.binding.step_reference;
   async function loadGeometry() {
     if (!source || preview || busy) return;
     const current = ++epoch.current; setBusy(true); setError("");
@@ -98,7 +102,7 @@ export function SFCPanel({ value, pid, vid, readOnly, preview, onProposal, t }: 
   return <div className="sfc-panel">
     <header className="sfc-toolbar"><strong>{model.program} · {model.cpu}</strong>
       {!preview && model.graph.position_resolution !== "native-source-bound" && <Button disabled={busy} onClick={() => void loadGeometry()}>{t(busy ? "正在读取…" : "读取原生图形")}</Button>}
-      <Button disabled={locked || !editable || !edits.length} onClick={() => void prepare()}>{t("预览修改")}</Button>
+      <Button disabled={locked || !(editable || swapSteps.length > 1) || !edits.length} onClick={() => void prepare()}>{t("预览修改")}</Button>
       <Button variant="primary" disabled={locked || !candidate || !candidate.diff.has_changes} onClick={() => void save()}>{t("保存候选")}</Button>
       {vid && !preview && <a className="button" href={artifactUrl(pid, vid, "gxw")}>{t("下载 GXW")}</a>}
     </header>
@@ -131,7 +135,7 @@ export function SFCPanel({ value, pid, vid, readOnly, preview, onProposal, t }: 
               : terminal ? symbol.kind === "jump" ? `${t("跳转")} S${symbol.reference}` : t("结束") : t("原生连接符")}
             onClick={() => setSelected(cell.id)} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelected(cell.id); } }}>
             {cell.role === "step" ? <><rect x="-45" y="-21" width="90" height="42" rx="3"/>
-              {(cell.type === 10 || cell.type === 26) && <rect x="-40" y="-16" width="80" height="32" rx="2"/>}
+              {(cell.type === 6 || cell.type === 10 || cell.type === 26) && <rect x="-40" y="-16" width="80" height="32" rx="2"/>}
               <text textAnchor="middle" y="-2">S{cell.binding.step_reference}</text>
               <text className="sfc-action" textAnchor="middle" y="14">{t("动作")} {cell.binding.action_number}</text></>
               : cell.role === "transition" ? <><rect x="-22" y="-4" width="44" height="8"/><text x="29" y="5">T{cell.binding.transition_number}</text></>
@@ -150,13 +154,23 @@ export function SFCPanel({ value, pid, vid, readOnly, preview, onProposal, t }: 
       <aside className="sfc-details">
         <h3>{t("步骤与动作")}</h3>
         {(source?.graph.records || []).filter(row => row.kind === "step-action-reference").map(row => {
-          const [step, action] = row.references;
+          const [step] = row.references;
+          const action = source?.graph.cells?.find(cell => cell.binding.step_reference === step)?.binding.action_number ?? row.references[1];
           return <label key={step}>S{step}<select aria-label={`S${step} ${t("动作")}`} disabled={locked || !editable}
             value={edits.filter(isActionEdit).find(edit => edit.step_reference === step)?.action_number ?? action}
             onChange={e => change(step, Number(e.target.value), action)}>
             {source?.actions.map(item => <option key={item.name} value={item.number}>{t("动作")} {item.number}</option>)}
           </select></label>;
         })}
+        {selectedStep != null && swapSteps.some(symbol => symbol.number === selectedStep) && <label>{t("交换步骤")}
+          <select aria-label={t("交换步骤")} disabled={locked}
+            value={edits.find((edit): edit is SwapEdit => "kind" in edit && edit.kind === "swap_steps" && edit.left_step_reference === selectedStep)?.right_step_reference ?? ""}
+            onChange={e => { setCandidate(null); setError(""); setEdits(e.target.value === "" ? [] : [{ kind: "swap_steps",
+              left_step_reference: selectedStep, right_step_reference: Number(e.target.value) }]); }}>
+            <option value="">{t("选择步骤")}</option>
+            {swapSteps.filter(symbol => symbol.number !== selectedStep).map(symbol =>
+              <option key={symbol.number} value={symbol.number}>S{symbol.number}</option>)}
+          </select></label>}
         {sourceJump && sourceJumpCell && <label>{t("跳转目标")}<select aria-label={t("跳转目标")}
           disabled={locked || !editable}
           value={edits.filter(isJumpEdit).find(edit => edit.x === sourceJumpCell.x && edit.y === sourceJumpCell.y)?.target_step_reference ?? sourceJump.step_reference}

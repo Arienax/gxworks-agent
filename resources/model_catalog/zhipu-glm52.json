@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "id": "zhipu-glm52",
+  "extends": "zhipu-glm-common",
+  "match": {
+    "endpoints": [
+      "https://open.bigmodel.cn/api/paas/v4",
+      "https://open.bigmodel.cn/api/paas/v4/"
+    ],
+    "models": [
+      "glm-5.2"
+    ]
+  },
+  "parameters": {
+    "reasoning_effort": {
+      "type": "enum",
+      "status": "supported",
+      "source": "catalog",
+      "domain": {
+        "source": "catalog",
+        "enforcement": "hard",
+        "values": [
+          "none",
+          "minimal",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "default_mode": "omit"
+    },
+    "thinking_mode": {
+      "type": "enum",
+      "status": "supported",
+      "source": "catalog",
+      "domain": {
+        "source": "catalog",
+        "enforcement": "hard",
+        "values": [
+          "enabled",
+          "disabled"
+        ]
+      },
+      "default_mode": "omit",
+      "wire_location": "extra_body",
+      "wire_path": [
+        "thinking",
+        "type"
+      ]
+    }
+  },
+  "capabilities": {
+    "context_window": {
+      "status": "supported",
+      "source": "catalog",
+      "value": 1000000
+    }
+  },
+  "references": [
+    "https://huggingface.co/zai-org/GLM-5.2"
+  ],
+  "reviewed_at": "2026-09-23"
+}

@@ -56,6 +56,7 @@ import { conversationRoute } from "./features/conversationRouting";
 import type { CreationWorkflow, GenerationAction, TaskPurpose } from "./features/conversationRouting";
 import { JobFailure } from "./features/JobFailure";
 import { GenerationResult, useGenerationResult } from "./features/GenerationResult";
+import { clarificationSubmission } from "./features/clarificationAnswers";
 import { CapabilityReview } from "./features/CapabilityReview";
 import { JobProgress } from "./features/JobProgress";
 import { ModelSwitcher } from "./features/ModelUsage";
@@ -209,6 +210,7 @@ export default function App() {
   const failedPreviews = useRef(new Set<string>());
   const previewEpoch = useRef(0);
   const [diagnosticJobId, setDiagnosticJobId] = useState("");
+  const [directAnswers, setDirectAnswers] = useState<Record<string, Record<string, string>>>({});
   const [outputRetry, setOutputRetry] = useState(0);
   const [versionDrawing, setVersionDrawing] = useState<{ key: string; svg: string } | null>(null);
   const [refreshingDrawing, setRefreshingDrawing] = useState(false);
@@ -258,6 +260,7 @@ export default function App() {
     setJobId("");
     setEvents([]);
     setAnalysisOutput(null);
+    setDirectAnswers({});
     setProposals([]);
     setSpec(null);
     setSpecIssues([]);
@@ -279,6 +282,8 @@ export default function App() {
     targetMode: project?.target_mode || "ladder", hasVersions: !!hasSavedVersions,
     hasSpec: !!project?.confirmed_spec, reviewRequested, continuingDirect });
   const intent = composerRoute.kind;
+  const answeringDirect = intent === "direct_generation" && continuingDirect;
+  const directReply = clarificationSubmission(generationResult.questions, directAnswers[generationResult.id] || {});
   const resultKey = generationResult.id ? `${pid}:${generationResult.id}` : "";
   const generationSaved = !!generationResult.versionId || proposals.some((proposal) =>
     proposal.id === generationResult.proposalId && proposal.action === "accept_local" &&
@@ -300,7 +305,8 @@ export default function App() {
     !jobs.some(activeJob) && composerRoute.available &&
     (task !== "edit" || !!version) &&
     (intent !== "generation" || canGenerate) &&
-    (!composerRoute.requiresText || !!text.trim());
+    (answeringDirect ? directReply.complete && (!!Object.keys(directReply.answers).length || !!text.trim())
+      : !composerRoute.requiresText || !!text.trim());
   const operations = version?.capabilities?.operations || defaultOperations;
   const refreshAll = () => {
     setRefresh(n => n + 1);
@@ -712,6 +718,7 @@ export default function App() {
     extra: Record<string, unknown> = {},
   ) {
     if (!project || project.id !== pid) return;
+    if (kind === "direct_generation" && continuingDirect && !directReply.complete) return;
     const epoch = projectEpoch.current;
     const generationAction = kind === "generation"
       ? extra.generation_action ?? (kind === intent ? composerRoute.generationAction : undefined)
@@ -728,7 +735,7 @@ export default function App() {
       attachment_ids: kind === "agent" ? [] : attachments.map((a) => a.attachment_id),
       ...(generationAction ? { generation_action: generationAction } : {}),
       ...(kind === "direct_generation" && continuingDirect && currentJob
-        ? {clarification_job_id: currentJob.id} : {}),
+        ? {clarification_job_id: currentJob.id, clarification_answers: directReply.answers} : {}),
       ...((kind === "gx_read" || (kind === "generation" && generationAction === "edit")) && scopeEnabled ? {change_scope: {
         ...(scopeNetworks.trim() ? {network_ids: scopeNetworks.trim().split(/[\s,，]+/)} : {}),
         ...(scopeAddresses.trim() ? {addresses: scopeAddresses.trim().toUpperCase().split(/[\s,，]+/)} : {}),
@@ -754,8 +761,9 @@ export default function App() {
     if (kind === "generation" || kind === "direct_generation") setText("");
   }
   async function repairFailedGeneration(job: Job) {
-    const savedInvalid = job.kind === "generation" && job.status === "completed" && job.result?.status === "saved_invalid";
-    if ((job.kind !== "generation" || job.error_code !== "generation_validation_failed") && !savedInvalid) return;
+    const generation = job.kind === "generation" || job.kind === "direct_generation";
+    const savedInvalid = generation && job.status === "completed" && job.result?.status === "saved_invalid";
+    if (!generation || (job.error_code !== "generation_validation_failed" && !savedInvalid)) return;
     if (!window.confirm(t("只修复当前候选的局部格式/结构错误，不重新分析需求，也不重写完整程序。继续吗？"))) return;
     const repaired = await api<Job>(`/jobs/${encodeURIComponent(job.id)}/repair`, "POST", { request_id: key() });
     if (activeProjectRef.current !== pid) return;
@@ -1584,6 +1592,12 @@ export default function App() {
                     />
                   )}
                   <GenerationResult result={generationResult} busy={busy || loading}
+                    clarification={continuingDirect ? {
+                      answers: directAnswers[generationResult.id] || {},
+                      onChange: (id, value) => setDirectAnswers(before => ({...before,
+                        [generationResult.id]: {...before[generationResult.id], [id]: value}})),
+                      disabled: !canWrite || jobs.some(activeJob),
+                    } : undefined}
                     onOpen={() => void guarded(() => openGenerationResult())}
                     onRetry={() => { setOutputRetry((n) => n + 1); void reloadProjectSilently(pid).catch(e => { if (activeProjectRef.current === pid) setError(e.message); }); }}
                     onRepair={() => { if (currentJob) void guarded(() => repairFailedGeneration(currentJob)); }}
@@ -1671,8 +1685,8 @@ export default function App() {
                 confirmed={!!project?.confirmed_spec && !reviewRequested} onReview={()=>{setWorkflow("review");setReviewRequested(true);}}
                 disabled={!canWrite || jobs.some(activeJob)} locale={locale} t={t} />
               {composerRoute.requiresText && <textarea
-                aria-label={t(composerRoute.placeholder)}
-                placeholder={t(composerRoute.placeholder)}
+                aria-label={t(answeringDirect ? "补充说明（选填）" : composerRoute.placeholder)}
+                placeholder={t(answeringDirect ? "补充说明（选填）" : composerRoute.placeholder)}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
               />}

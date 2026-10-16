@@ -97,10 +97,16 @@ test('production chunks defer optional panels and respect the default size budge
   }
   const entries = chunks.filter(chunk => chunk.isEntry);
   assert.ok(entries.length, 'The real application entry must be present.');
-  entries.forEach(chunk => visit(chunk.fileName));
   const bytes = chunk => Buffer.byteLength(chunk.code, 'utf8');
-  const initialBytes = [...initial].reduce((sum, name) => sum + bytes(byName.get(name)), 0);
-  assert.ok(initialBytes <= 500_000, `Initial JS including static dependencies is ${initialBytes} bytes.`);
+  // Independent HTML entries are separate page loads. Each page must stay
+  // within the same budget, including all of its static dependencies.
+  const allInitial = new Set();
+  for (const entry of entries) {
+    initial.clear(); visit(entry.fileName);
+    const initialBytes = [...initial].reduce((sum, name) => sum + bytes(byName.get(name)), 0);
+    assert.ok(initialBytes <= 500_000, `${entry.fileName}: initial JS including static dependencies is ${initialBytes} bytes.`);
+    initial.forEach(name => allInitial.add(name));
+  }
   for (const chunk of chunks) {
     assert.ok(bytes(chunk) <= 500_000, `${chunk.fileName} exceeds Vite's default 500 kB warning budget.`);
   }
@@ -109,7 +115,7 @@ test('production chunks defer optional panels and respect the default size budge
     const owners = chunks.filter(chunk => Object.keys(chunk.modules).some(id =>
       id.replaceAll('\\', '/').endsWith(`/src/features/${feature}.tsx`)));
     assert.ok(owners.length, `${feature} must remain in the production build.`);
-    assert.ok(owners.every(chunk => !initial.has(chunk.fileName)), `${feature} leaked into the initial graph.`);
+    assert.ok(owners.every(chunk => !allInitial.has(chunk.fileName)), `${feature} leaked into the initial graph.`);
     assert.ok(owners.some(chunk => deferred.has(chunk.fileName)), `${feature} must have an on-demand entry.`);
   }
 });

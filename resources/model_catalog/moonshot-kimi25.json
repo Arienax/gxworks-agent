@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "id": "moonshot-kimi25",
+  "extends": "generic-openai-compatible",
+  "match": {
+    "endpoints": [
+      "https://api.moonshot.ai/v1",
+      "https://api.moonshot.cn/v1"
+    ],
+    "models": [
+      "kimi-k2.5"
+    ]
+  },
+  "parameters": {
+    "thinking_mode": {
+      "type": "enum",
+      "status": "supported",
+      "source": "catalog",
+      "domain": {
+        "source": "catalog",
+        "enforcement": "hard",
+        "values": [
+          "enabled",
+          "disabled"
+        ]
+      },
+      "default_mode": "omit",
+      "wire_location": "extra_body",
+      "wire_path": [
+        "thinking",
+        "type"
+      ]
+    },
+    "max_completion_tokens": {
+      "type": "integer",
+      "status": "supported",
+      "source": "catalog",
+      "domain": {
+        "source": "catalog",
+        "enforcement": "hard",
+        "minimum": 1
+      },
+      "default_mode": "omit",
+      "wire_location": "body",
+      "wire_path": [
+        "max_tokens"
+      ]
+    }
+  },
+  "capabilities": {
+    "tools": {
+      "status": "supported",
+      "source": "catalog"
+    },
+    "vision": {
+      "status": "supported",
+      "source": "catalog"
+    },
+    "streaming": {
+      "status": "supported",
+      "source": "catalog"
+    }
+  },
+  "references": [
+    "https://github.com/MoonshotAI/Kimi-K2.5/blob/master/README.md"
+  ],
+  "reviewed_at": "2026-09-18"
+}

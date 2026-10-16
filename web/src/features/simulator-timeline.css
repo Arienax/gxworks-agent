@@ -1,0 +1,68 @@
+.simulator-timeline { background: var(--bg); color: var(--text); display: flex; flex-direction: column; min-width: 0; gap: 0; }
+.simulator-timeline.standalone { min-height: 100vh; }
+.timeline-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 20px; background: var(--chrome); border-bottom: 1px solid var(--border); }
+.timeline-brand { display: flex; gap: 10px; align-items: center; color: var(--accent); font-weight: 600; }
+.timeline-brand small { display: block; font-weight: 400; color: var(--muted); font-size: 11px; }
+.timeline-actions { display: flex; align-items: center; gap: 8px; }
+.timeline-intro { display: flex; justify-content: space-between; gap: 16px; padding: 18px 20px; align-items: center; }
+.timeline-intro h2 { margin: 0 0 5px; font-size: 17px; }
+.timeline-intro p { margin: 0; color: var(--muted); font-size: 11px; }
+.timeline-metrics { display: flex; gap: 24px; flex-shrink: 0; }
+.timeline-metrics span { color: var(--muted); font-size: 11px; }
+.timeline-metrics strong { display: block; font-size: 17px; color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.timeline-controls { position: sticky; top: 0; z-index: 3; display: flex; gap: 8px; align-items: center; background: var(--panel); border-block: 1px solid var(--border); padding: 10px 20px; }
+.timeline-controls { flex-wrap: wrap; }
+.timeline-controls input[type=range] { flex: 1; min-width: 70px; padding: 0; border: 0; accent-color: var(--primary); }
+.timeline-controls output { white-space: nowrap; font-variant-numeric: tabular-nums; min-width: 100px; font-size: 12px; }
+.timeline-controls output span { color: var(--muted); }
+.timeline-controls .timeline-speed { width: 125px; min-height: 30px; padding: 5px; font-size: 11px; }
+.timeline-filter { display: flex; gap: 8px; padding: 10px 20px; align-items: center; }
+.timeline-filter input { max-width: 270px; }
+.timeline-filter select { max-width: 120px; }
+.timeline-filter span { margin-left: auto; font-size: 11px; color: var(--muted); }
+.timeline-scroll { overflow: auto; border-top: 1px solid var(--border); margin: 0 20px; }
+.timeline-table { min-width: 680px; border-inline: 1px solid var(--border); }
+.timeline-row { display: grid; grid-template-columns: minmax(150px, 210px) minmax(100px, 140px) minmax(100px, 130px) minmax(250px, 1fr); align-items: center; border-bottom: 1px solid var(--border); background: var(--panel); }
+.timeline-row > * { min-width: 0; padding: 8px 10px; }
+.timeline-columns { background: var(--soft); color: var(--muted); font-size: 11px; min-height: 32px; }
+.timeline-axis { position: relative; height: 32px; margin: 0 10px; }
+.timeline-axis span { position: absolute; top: 8px; transform: translateX(-50%); white-space: nowrap; }
+.timeline-axis span:first-child { transform: none; }
+.timeline-axis span:last-child { transform: translateX(-100%); }
+.timeline-signal-name strong { display: block; font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.timeline-row small { display: block; font-size: 10px; color: var(--muted); }
+.timeline-value { text-align: right; font-family: Consolas, monospace; font-size: 12px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.timeline-expected { color: var(--muted); text-align: right; font-family: Consolas, monospace; font-size: 12px; overflow-wrap: anywhere; }
+.timeline-value.is-on { color: var(--good); }
+.timeline-value.is-missing { color: var(--muted); }
+.timeline-plot { position: relative; height: 86px; padding: 0 10px; }
+.timeline-plot svg { width: 100%; height: 62px; display: block; cursor: crosshair; }
+.timeline-plot small { position: absolute; bottom: 1px; right: 12px; pointer-events: none; font-variant-numeric: tabular-nums; }
+.compact .timeline-plot { height: 53px; }
+.compact .timeline-plot svg { height: 42px; }
+.compact .timeline-row > * { padding-block: 4px; }
+.timeline-grid { stroke: var(--border); stroke-opacity: .45; vector-effect: non-scaling-stroke; }
+.timeline-path { fill: none; stroke: var(--accent); stroke-width: 1.7; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.timeline-path.input { stroke: var(--warn); }
+.timeline-path.output { stroke: var(--good); }
+.timeline-request-path { fill: none; stroke: var(--warn); stroke-width: 1.5; stroke-dasharray: 4 3; opacity: .75; vector-effect: non-scaling-stroke; }
+.timeline-cursor { stroke: var(--text); opacity: .6; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.timeline-event-band { font-size: 10px; color: var(--muted); }
+.timeline-events { position: relative; margin: 0 10px; height: 32px; padding: 0; }
+.timeline-events button, .timeline-events i { position: absolute; top: 6px; width: 3px; height: 20px; transform: translateX(-50%); padding: 0; background: var(--accent); }
+.timeline-events button.passed { background: var(--good); }
+.timeline-events button.failed { background: var(--bad); width: 5px; z-index: 1; }
+.timeline-events button.written { background: var(--warn); }
+.timeline-events i.planned { width: 0; border-left: 1px dashed var(--muted); background: none; opacity: .6; }
+.timeline-dot-pass { fill: var(--good); }
+.timeline-dot-fail { fill: var(--bad); }
+.timeline-value-dot { fill: var(--accent); }
+.timeline-bad { color: var(--bad) !important; }
+.timeline-signal.has-failure { background: var(--bad-bg); }
+.timeline-footer { padding: 14px 20px 20px; color: var(--muted); font-size: 11px; }
+.timeline-footer > div { display: flex; flex-wrap: wrap; gap: 6px; min-height: 26px; }
+.timeline-footer > small { display: block; margin-top: 5px; }
+.timeline-error, .timeline-notice { margin: 0 20px 12px; border: 1px solid var(--bad-border); background: var(--bad-bg); color: var(--bad); padding: 8px 12px; border-radius: 5px; font-size: 12px; }
+.timeline-notice { border-color: var(--warn-border); background: var(--warn-bg); color: var(--warn); }
+.sim-timeline-empty { padding: 20px; color: var(--muted); }
+@media (max-width: 950px) { .timeline-intro { flex-wrap: wrap; gap: 12px; } .timeline-metrics { gap: 22px; } .timeline-header, .timeline-intro, .timeline-controls, .timeline-filter, .timeline-footer { padding-inline: 14px; } .timeline-scroll { margin-inline: 14px; } .timeline-row { grid-template-columns: 180px 115px 110px minmax(250px,1fr); } .timeline-controls .button { padding-inline: 8px; } }

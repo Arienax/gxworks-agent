@@ -1455,6 +1455,17 @@ export interface components {
             /** Version Id */
             version_id: string;
         };
+        /** FBDDefinitionChanges */
+        FBDDefinitionChanges: {
+            /** After */
+            after: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /** Before */
+            before: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+        };
         /** FBDDiff */
         FBDDiff: {
             /** After Object Count */
@@ -1467,8 +1478,13 @@ export interface components {
             before_object_count: number;
             /** Before Wire Count */
             before_wire_count: number;
+            /** Compilation Save */
+            compilation_save?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
             /** Declarations Changed */
             declarations_changed: boolean;
+            definition_changes?: components["schemas"]["FBDDefinitionChanges"] | null;
             /** Has Changes */
             has_changes: boolean;
             /**
@@ -1476,6 +1492,7 @@ export interface components {
              * @constant
              */
             kind: "fbd";
+            library_changes?: components["schemas"]["FBDLibraryChanges"] | null;
             /** Unified Diff */
             unified_diff: string;
         };
@@ -1495,6 +1512,17 @@ export interface components {
             project_id: string;
             /** Version Id */
             version_id?: string | null;
+        };
+        /** FBDLibraryChanges */
+        FBDLibraryChanges: {
+            /** Added */
+            added: string[];
+            /** Definitions */
+            definitions: string[];
+            /** Global Tables */
+            global_tables: string[];
+            /** Structures */
+            structures: string[];
         };
         /** FBDPreview */
         "FBDPreview-Input": {
@@ -1530,6 +1558,16 @@ export interface components {
         FBDProposal: {
             /** Data Base64 */
             data_base64?: string | null;
+            /** Declarations */
+            declarations?: {
+                [key: string]: unknown;
+            }[] | null;
+            /** Library Name */
+            library_name?: string | null;
+            /** Members */
+            members?: {
+                [key: string]: string;
+            }[] | null;
             /** Model */
             model?: {
                 [key: string]: unknown;
@@ -1540,7 +1578,11 @@ export interface components {
              * Operation
              * @enum {string}
              */
-            operation: "generate" | "edit" | "import" | "convert" | "create_fb" | "create_program";
+            operation: "generate" | "edit" | "import" | "convert" | "create_fb" | "create_program" | "import_library" | "create_structure" | "create_st_fb" | "edit_st_fb" | "edit_global_labels" | "create_global_labels" | "edit_pou_labels" | "configure_project" | "remove_empty_program" | "compile";
+            /** Options */
+            options?: {
+                [key: string]: unknown;
+            } | null;
             /** Program */
             program?: string | null;
             /** Project Id */
@@ -1553,6 +1595,8 @@ export interface components {
             scope_mode?: ("existing_task" | "new_task" | "new_resource") | null;
             /** Source Name */
             source_name?: string | null;
+            /** St Text */
+            st_text?: string | null;
             /** Task */
             task?: string | null;
             /** Version Id */
@@ -1658,6 +1702,10 @@ export interface components {
             /** Attachment Ids */
             attachment_ids?: string[];
             change_scope?: components["schemas"]["ChangeScope"] | null;
+            /** Clarification Answers */
+            clarification_answers?: {
+                [key: string]: string;
+            } | null;
             /** Clarification Job Id */
             clarification_job_id?: string | null;
             /**
@@ -2350,6 +2398,20 @@ export interface components {
              */
             reason: "unsupported_script" | "non_english_script" | "japanese_script" | "latin_prose" | "ambiguous_han_only" | "invalid_prose_field" | "invalid_json_object" | "invalid_code_field" | "invalid_response" | "invalid_shared_input" | "invalid_ladder_structure" | "field_too_long" | "repair_base_invalid" | "repair_identity_invalid" | "repair_shape_invalid" | "repair_scope_violation" | "repair_no_progress";
         };
+        /** SFCBranchSymbol */
+        SFCBranchSymbol: {
+            /** End */
+            end: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "parallel_branch" | "parallel_coupling" | "selective_branch" | "selective_coupling";
+            /** Start */
+            start: number;
+            /** Y */
+            y: number;
+        };
         /** SFCChildEdit */
         SFCChildEdit: {
             /**
@@ -2380,6 +2442,18 @@ export interface components {
             /** Unified Diff */
             unified_diff: string;
         };
+        /** SFCEndSymbol */
+        SFCEndSymbol: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "end";
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+        };
         /** SFCGraphEdit */
         SFCGraphEdit: {
             /** Action Number */
@@ -2408,12 +2482,40 @@ export interface components {
             /** Y */
             y: number;
         };
+        /** SFCLineSymbol */
+        SFCLineSymbol: {
+            /** End */
+            end: number;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "line";
+            /** Start */
+            start: number;
+            /** X */
+            x: number;
+        };
+        /** SFCNodeSymbol */
+        SFCNodeSymbol: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "initial_step" | "step" | "transition";
+            /** Number */
+            number: number;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+        };
         /** SFCPreview */
         "SFCPreview-Input": {
             /** Child Edits */
             child_edits?: components["schemas"]["SFCChildEdit"][] | null;
             /** Graph Edits */
-            graph_edits?: (components["schemas"]["SFCGraphEdit"] | components["schemas"]["SFCJumpEdit"])[] | null;
+            graph_edits?: (components["schemas"]["SFCGraphEdit"] | components["schemas"]["SFCJumpEdit"] | components["schemas"]["SFCRebuildEdit"] | components["schemas"]["SFCStepSwap"])[] | null;
             /** Program */
             program?: string | null;
             /** Project Id */
@@ -2445,7 +2547,7 @@ export interface components {
             /** Data Base64 */
             data_base64?: string | null;
             /** Graph Edits */
-            graph_edits?: (components["schemas"]["SFCGraphEdit"] | components["schemas"]["SFCJumpEdit"])[] | null;
+            graph_edits?: (components["schemas"]["SFCGraphEdit"] | components["schemas"]["SFCJumpEdit"] | components["schemas"]["SFCRebuildEdit"] | components["schemas"]["SFCStepSwap"])[] | null;
             /**
              * Operation
              * @enum {string}
@@ -2459,6 +2561,16 @@ export interface components {
             request_id: string;
             /** Version Id */
             version_id?: string | null;
+        };
+        /** SFCRebuildEdit */
+        SFCRebuildEdit: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "rebuild";
+            /** Symbols */
+            symbols: (components["schemas"]["SFCNodeSymbol"] | components["schemas"]["SFCEndSymbol"] | components["schemas"]["SFCLineSymbol"] | components["schemas"]["SFCBranchSymbol"])[];
         };
         /** SFCRequirement */
         SFCRequirement: {
@@ -2481,6 +2593,18 @@ export interface components {
              * @default
              */
             transition: string;
+        };
+        /** SFCStepSwap */
+        SFCStepSwap: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "swap_steps";
+            /** Left Step Reference */
+            left_step_reference: number;
+            /** Right Step Reference */
+            right_step_reference: number;
         };
         /** STPreview */
         STPreview: {

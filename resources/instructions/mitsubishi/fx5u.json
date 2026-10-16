@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "vendor": "mitsubishi",
+  "instructions": [
+    {
+      "mnemonic": "DRVTBL",
+      "canonical_op": "DRIVE_TABLE",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX5U"
+      ]
+    },
+    {
+      "mnemonic": "DRVMUL",
+      "canonical_op": "DRIVE_MULTIPLE",
+      "category": "action",
+      "semantic_kind": "vendor",
+      "cpu_support": [
+        "FX5U"
+      ]
+    },
+    {
+      "mnemonic": "MC_MOVEABSOLUTE",
+      "canonical_op": "MC_MOVE_ABSOLUTE",
+      "category": "action",
+      "semantic_kind": "function_block",
+      "cpu_support": [
+        "FX5U"
+      ]
+    }
+  ]
+}

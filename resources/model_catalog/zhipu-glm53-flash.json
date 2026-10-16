@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "id": "zhipu-glm53-flash",
+  "extends": "zhipu-glm53",
+  "match": {
+    "endpoints": [
+      "https://open.bigmodel.cn/api/paas/v4",
+      "https://open.bigmodel.cn/api/paas/v4/"
+    ],
+    "models": [
+      "glm-5.3-flash"
+    ]
+  },
+  "capabilities": {
+    "vision": {
+      "status": "supported",
+      "source": "catalog"
+    }
+  },
+  "references": [
+    "https://huggingface.co/zai-org/GLM-5.3-Flash"
+  ],
+  "reviewed_at": "2026-09-23"
+}

@@ -1,0 +1,248 @@
+"""Stable settings paths and recoverable, copy-once legacy migration.
+
+Only file location changes here: no profile normalization or credential access.
+Sources are never removed. SQLite's backup API includes committed WAL data.
+FileLock serializes publication; a sealed journal resumes interrupted migration
+before config or observation readers are handed their active path.
+"""
+from __future__ import annotations
+
+from contextlib import closing
+from functools import lru_cache
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import sqlite3
+import sys
+import tempfile
+import time
+
+APP_DIR = "PLC-AI-Studio"
+OBSERVATIONS = "model-observations.sqlite"
+PENDING = ".settings-pending"
+RECEIPT = ".settings-migration.json"
+
+
+class SettingsMigrationError(OSError):
+    """Keep original and staged data; do not silently revert to defaults."""
+
+
+def _absolute_override(name):
+    value = os.environ.get(name, "").strip()
+    if not value:
+        return None
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        raise ValueError(name + " must be an absolute path")
+    return path
+
+
+def user_data_dir():
+    override = _absolute_override("PLC_AI_DATA_DIR")
+    if override is not None:
+        return override
+    if sys.platform == "win32":
+        value = os.environ.get("APPDATA", "").strip()
+        root = Path(value) if value and Path(value).is_absolute() else Path.home() / "AppData" / "Roaming"
+    elif sys.platform == "darwin":
+        root = Path.home() / "Library" / "Application Support"
+    else:
+        value = os.environ.get("XDG_CONFIG_HOME", "").strip()
+        root = Path(value) if value and Path(value).is_absolute() else Path.home() / ".config"
+    return root / APP_DIR
+
+
+def config_path():
+    return _absolute_override("PLC_AI_CONFIG_PATH") or user_data_dir() / "config.json"
+
+
+@lru_cache(maxsize=32)
+def _lock(path):
+    from filelock import FileLock
+    return FileLock(path, timeout=15, mode=0o600)
+
+
+def settings_lock(path):
+    directory = Path(path).absolute().parent
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    return _lock(str(directory / ".settings.lock"))
+
+
+def _fsync_directory(path):
+    if os.name != "nt":
+        descriptor = os.open(path, os.O_RDONLY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+
+def _write(path, payload):
+    with open(path, "xb") as stream:
+        if os.name != "nt":
+            os.fchmod(stream.fileno(), 0o600)
+        stream.write(payload)
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
+def _hash(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _copy_database(source, target):
+    started = time.monotonic()
+    def progress(status, remaining, total):
+        if time.monotonic() - started > 10:
+            raise SettingsMigrationError("Observation snapshot is busy; close the old application and retry")
+    with closing(sqlite3.connect(source.resolve().as_uri() + "?mode=ro", uri=True, timeout=0.2)) as reader:
+        with closing(sqlite3.connect(target)) as writer:
+            reader.backup(writer, pages=256, progress=progress, sleep=0.05)
+            if writer.execute("PRAGMA quick_check").fetchone() != ("ok",):
+                raise SettingsMigrationError("Observation snapshot integrity check failed")
+            if writer.execute("PRAGMA journal_mode=DELETE").fetchone()[0].lower() != "delete":
+                raise SettingsMigrationError("Observation snapshot is not standalone")
+    if os.name != "nt":
+        target.chmod(0o600)
+    # Windows FlushFileBuffers needs a writable handle.
+    with target.open("r+b") as stream:
+        os.fsync(stream.fileno())
+
+
+def _manifest(path, destination):
+    data = json.loads(path.read_text(encoding="utf-8"))
+    rows = data.get("files")
+    allowed = {destination.name, OBSERVATIONS}
+    if (data.get("version") != 1 or not isinstance(rows, dict)
+            or not set(rows) <= allowed or destination.name not in rows
+            or any(not isinstance(v, str) or len(v) != 64 for v in rows.values())):
+        raise SettingsMigrationError("Invalid settings migration journal; original files were retained")
+    return data
+
+
+def _resume(destination):
+    """Under settings_lock, validate a whole sealed transaction, config last."""
+    pending = destination.parent / PENDING
+    if not pending.exists():
+        return
+    manifest_path = pending / "manifest.json"
+    receipt = destination.parent / RECEIPT
+    if not manifest_path.exists() and receipt.is_file():
+        # Publication committed; the process died during journal cleanup.
+        data = _manifest(receipt, destination)
+        for name, expected in data["files"].items():
+            remaining = pending / name
+            if remaining.exists():
+                if _hash(remaining) != expected:
+                    raise SettingsMigrationError("Settings staging data changed")
+                remaining.unlink()
+        pending.rmdir()
+        _fsync_directory(destination.parent)
+        return
+    data = _manifest(manifest_path, destination)
+    rows = data["files"]
+    for name, expected in rows.items():
+        staged, target = pending / name, destination.parent / name
+        if target.exists():
+            if not target.is_file() or _hash(target) != expected:
+                raise SettingsMigrationError("Settings changed during migration; refusing to overwrite them")
+        elif not staged.is_file() or _hash(staged) != expected:
+            raise SettingsMigrationError("Incomplete settings migration journal; original files were retained")
+    for name in (OBSERVATIONS, destination.name):
+        if name in rows and not (destination.parent / name).exists():
+            os.replace(pending / name, destination.parent / name)
+            _fsync_directory(destination.parent)
+    os.replace(manifest_path, receipt)
+    _fsync_directory(destination.parent)
+    for name in rows:
+        (pending / name).unlink(missing_ok=True)
+    pending.rmdir()
+    _fsync_directory(destination.parent)
+
+
+def prepare(destination, candidates=(), *, template=None, create_default=False):
+    """Migrate from a local legacy location only when no active config exists.
+
+    Publish atomically per file and resume after interruption. This is not a
+    multi-file atomic filesystem rename. Existing settings/observations win;
+    conflicting clones are retained, not merged. Pure path and absent read-only
+    queries do not initialize defaults, read credentials or create directories.
+    """
+    destination = Path(destination)
+    if destination.name in {OBSERVATIONS, PENDING, RECEIPT, ".settings.lock", "manifest.json"}:
+        raise SettingsMigrationError("Config path conflicts with settings migration files")
+    pending = destination.parent / PENDING
+    if destination.is_file() and not pending.exists():
+        return destination
+    sources = ([] if (destination.parent / RECEIPT).is_file() else
+               [Path(p) for p in candidates if Path(p).is_file() and Path(p).resolve() != destination.resolve()])
+    if not pending.exists() and not sources and not create_default:
+        return destination
+    with settings_lock(destination):
+        _resume(destination)
+        if destination.is_file():
+            return destination
+        if destination.exists():
+            raise SettingsMigrationError("Config destination is not a regular file")
+        if (destination.parent / RECEIPT).is_file():
+            sources = []
+            if not create_default:
+                return destination
+        source = sources[0] if sources else Path(template) if template is not None else None
+        if source is None or not source.is_file():
+            raise SettingsMigrationError("No existing settings or safe default template")
+        payload = source.read_bytes()
+        try:
+            if not isinstance(json.loads(payload.decode("utf-8-sig")), dict):
+                raise ValueError("not an object")
+        except (ValueError, UnicodeError) as error:
+            raise SettingsMigrationError("Existing config is invalid; it was not replaced with defaults") from error
+        stage = Path(tempfile.mkdtemp(prefix=".settings-stage-", dir=destination.parent))
+        sealed = False
+        try:
+            _write(stage / destination.name, payload)
+            rows = {destination.name: _hash(stage / destination.name)}
+            database = source.parent / OBSERVATIONS
+            if sources and database.is_file() and not (destination.parent / OBSERVATIONS).exists():
+                _copy_database(database, stage / OBSERVATIONS)
+                rows[OBSERVATIONS] = _hash(stage / OBSERVATIONS)
+            if source.read_bytes() != payload:
+                raise SettingsMigrationError("Legacy config changed during migration; close the old application and retry")
+            data = {"version": 1, "source": str(source.resolve()), "source_preserved": True,
+                    "files": rows, "other_legacy_locations": [str(p.resolve()) for p in sources[1:]]}
+            _write(stage / "manifest.json", (json.dumps(data, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
+            _fsync_directory(stage)
+            os.replace(stage, pending)
+            sealed = True
+            _fsync_directory(destination.parent)
+            _resume(destination)
+        finally:
+            if not sealed and stage.exists():
+                shutil.rmtree(stage)
+    return destination
+
+
+def runtime_self_test():
+    """Exercise actual migration in a disposable synthetic directory only."""
+    try:
+        with tempfile.TemporaryDirectory(prefix="plc-settings-selftest-") as root:
+            root = Path(root)
+            source = root / "old" / "config.json"
+            source.parent.mkdir()
+            source.write_text('{"modelProfiles": []}', encoding="utf-8")
+            with closing(sqlite3.connect(source.parent / OBSERVATIONS)) as db:
+                db.execute("CREATE TABLE smoke (value INTEGER)")
+                db.execute("INSERT INTO smoke VALUES (1)")
+                db.commit()
+            target = root / "new" / "config.json"
+            prepare(target, [source])
+            if target.read_bytes() != source.read_bytes():
+                raise ValueError("config mismatch")
+            with closing(sqlite3.connect(target.parent / OBSERVATIONS)) as db:
+                if db.execute("SELECT value FROM smoke").fetchall() != [(1,)]:
+                    raise ValueError("database mismatch")
+        return {"status": "available", "migration": "verified_synthetic", "user_state_modified": False}
+    except Exception as error:
+        return {"status": "unavailable", "error_type": type(error).__name__, "user_state_modified": False}

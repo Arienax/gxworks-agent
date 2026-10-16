@@ -17,6 +17,7 @@ const labels: Record<string, string> = {
   not_available_in_registry_scope: "当前型号目录无可用形式",
   not_in_current_language_catalog: "当前语言工程目录无此调用",
   no_complete_fact_unit_within_budget: "预算内无完整事实单元",
+  no_complete_fact_unit: "未找到完整事实单元",
   discovery_unavailable: "本地能力发现暂不可用",
   selection_policy_budget_omitted: "选择要求因预算被省略",
   edge_evaluation_site: "边沿条件保留原求值位置",

@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "id": "generic-openai-compatible",
+  "parameters": {
+    "temperature": {
+      "type": "number",
+      "status": "unknown",
+      "source": "generic",
+      "domain": {
+        "source": "generic",
+        "enforcement": "hint"
+      },
+      "default_mode": "omit",
+      "ui_hint": {
+        "minimum": 0,
+        "maximum": 2,
+        "step": 0.01
+      }
+    },
+    "top_p": {
+      "type": "number",
+      "status": "unknown",
+      "source": "generic",
+      "domain": {
+        "source": "generic",
+        "enforcement": "hint"
+      },
+      "default_mode": "omit",
+      "ui_hint": {
+        "minimum": 0,
+        "maximum": 1,
+        "step": 0.01
+      }
+    },
+    "max_completion_tokens": {
+      "type": "integer",
+      "status": "unknown",
+      "source": "generic",
+      "domain": {
+        "source": "generic",
+        "enforcement": "hint"
+      },
+      "default_mode": "omit"
+    },
+    "reasoning_effort": {
+      "type": "enum",
+      "status": "unknown",
+      "source": "generic",
+      "domain": {
+        "source": "generic",
+        "enforcement": "hint"
+      },
+      "default_mode": "omit",
+      "ui_hint": {
+        "suggestions": [
+          "low",
+          "medium",
+          "high"
+        ],
+        "advanced": true
+      }
+    }
+  },
+  "capabilities": {
+    "chat": {
+      "source": "generic",
+      "status": "unknown"
+    },
+    "tools": {
+      "source": "generic",
+      "status": "unknown"
+    },
+    "structured_output": {
+      "source": "generic",
+      "status": "unknown"
+    },
+    "vision": {
+      "source": "generic",
+      "status": "unknown"
+    },
+    "streaming": {
+      "source": "generic",
+      "status": "unknown"
+    },
+    "parallel_tool_calls": {
+      "source": "generic",
+      "status": "unknown"
+    }
+  }
+}

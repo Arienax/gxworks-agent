@@ -1,137 +1,44 @@
-<h1 align="center">GXWorks Agent</h1>
+# GXWorks Agent
 
-<h3 align="center">三菱電機 PLC エンジニアリング向け MCP ツールと AI ワークベンチ。</h3>
+[简体中文](README.zh-CN.md) · [English](README.md)
 
-<p align="center"><strong>設計情報の取得から、プログラムの作成・レビュー、GX Works2 への受け渡しまで。</strong></p>
+GXWorks Agent は GX Works2 向けのローカルエンジニアリングワークベンチです。
+Web と MCP は同じ Python アプリケーションサービスを使用します。PLC プロジェクト
+の作成・確認、ラダー/ST/FBD 候補の作成とレビュー、承認後の GX Works2 への
+受け渡しに対応します。このソース公開には GXW 編集コードと空のプロジェクト
+テンプレートが含まれます。
 
-<p align="center">
-  <a href="https://github.com/Arienax/gxworks-agent/releases/latest"><img src="https://img.shields.io/github/v/release/Arienax/gxworks-agent?style=flat-square&amp;color=2563eb" alt="Latest release"></a>
-  <a href="docs/private-component.md"><img src="https://img.shields.io/badge/MCP-engineering_tools-7c3aed?style=flat-square" alt="MCP engineering tools"></a>
-  <a href="#quick-start"><img src="https://img.shields.io/badge/Windows-10%2F11_x64-0078d4?style=flat-square" alt="Windows 10/11 x64"></a>
-  <a href="LICENSE-SCOPE.md"><img src="https://img.shields.io/badge/Interface-MPL--2.0-f59e0b?style=flat-square" alt="Interface: MPL-2.0"></a>
-  <a href="LICENSE-RUNTIME.md"><img src="https://img.shields.io/badge/Runtime-free_internal_use-16a34a?style=flat-square" alt="Runtime: free internal use"></a>
-</p>
+## Windows でソースから起動
 
-<p align="center"><strong><a href="https://github.com/Arienax/gxworks-agent/releases/latest">ダウンロード</a> · <a href="docs/private-component.md">MCP と Web</a> · <a href="https://github.com/Arienax/gxworks-agent/issues">問題の報告</a></strong></p>
+Python 3.10 以降と Node.js 22.14 以降をインストールしてください。ネイティブ操作
+には、別途適法に取得した GX Works2 が必要です。
 
-<p align="center"><a href="#quick-start">クイックスタート</a> · <a href="#ladder">ラダー</a> · <a href="#st">ST</a> · <a href="#fbd">FBD</a> · <a href="#web">Web</a> · <a href="#diagnostics">診断・検証</a></p>
-
-<p align="center"><a href="README.zh-CN.md">简体中文</a> · <a href="README.md">English</a> · <strong>日本語</strong></p>
-
-GXWorks Agentは、ラダー、構造化テキスト（ST）、ネイティブFBDのワークフローに対応しています。MCP経由で外部エージェントにプロジェクト情報、CPUに対応する命令、マニュアルの根拠資料、エンジニアリングツールを提供します。外部クライアントのモデルを使い、ツールを呼び出して成果物をバージョン管理できます。標準のMCPランタイムは単独で動作し、Webワークベンチは必要に応じて利用できます。
-
-<a name="ladder"></a>
-
-## ラダー：設計情報の取得からプログラムの保存まで
-
-![ラダーのコンテキスト取得、命令の根拠資料、候補の作成と成果物の保存](resources/assets/ladder-rag-core-demo-ja.gif)
-
-FX3Uのコンベヤ制御の一部を例に、`WSFL`、`INC`、`T200`に関する情報を取得し、ラダーの候補を作成してMCP経由で保存します。構造化された命令情報とマニュアルの記述を根拠に候補を作成し、ラダーJSON、IR、SVG、IRから変換した構造化テキスト（ST）、GXインポート用CSVを保存します。
-
-GIFは実際のSDK/MCPの応答と生成物をもとに構成しています。返された情報を使ってアシスタントが候補を作成したもので、内蔵モデルの自律動作を録画したものではありません。
-
-<a name="st"></a>
-
-## ST：構造化テキストの生成とレビュー
-
-STにはWebワークベンチ内の専用生成フローがあります。要求を分析して仕様を確認し、対象CPUの命令情報とSTのシグネチャを使って`program.st`を生成します。候補のプレビュー、バージョン間のテキスト差分の確認、ST成果物の保存ができます。ラダープログラムからは、PLC IRに対応付けられたSTも出力できます。
-
-ローカルのST検査は対応範囲内の構文・意味を確認し、未対応の構文を明示します。対応範囲を限定したパーサーによる検査であり、GX Works2のコンパイラーではありません。ネイティブコンパイルとPLC動作は別途確認が必要です。MCPではSTのコンテキストと既存の診断を取得できますが、現在の`create_program_candidate`はラダー候補を受け付けます。
-
-## APIでできること
-
-- **プロジェクトに紐づく情報の取得。** プロジェクトを作成・選択し、CPUと現在のプログラム、使用可能な命令や呼び出しインターフェースを取得できます。保存済みバージョンから編集を続けられます。
-- **設計作業向けRAG。** CPUごとの構造化命令情報とマニュアルの抜粋を出典付きで返します。エンティティ検索、全文検索、dense/LSA検索を組み合わせ、検索順位を統合します。構造化情報で把握できる命令の詳細を渡し、追加検索で関連する根拠資料を補います。
-- **候補の編集と成果物の保存。** 共通のエンジニアリングツールでラダーやFBDの変更を送信できます。Coreは対応範囲内の構造とオペランドをチェックし、成果物とバージョンに紐づく結果を返します。ローカル保存、ネイティブコンパイル、動作検証の結果は個別に扱います。
-- **GX Works2へのインポート。** 操作員が設定した実行許可に従い、現在のラダーバージョンのMAINとデバイスコメントをインポートし、実際の処理結果を返します。Web接続モードではワークベンチでのレビューも利用できます。
-
-モデルと計画・実行ループはクライアントまたはハーネスが担当します。GXWorks Agentは設計情報、ツール、バージョン保存、操作結果を提供します。
-
-<a name="web"></a>
-
-## Web GUI：プログラムの確認とエクスポート
-
-![Webワークベンチで保存済みラダー、ネットワークとデバイスアドレス、エクスポートメニューを表示](resources/assets/web-gui-view-deliver-ja.gif)
-
-ワークベンチでモデルAPIを直接設定し、内蔵のDirect生成フローを利用できます。生成後はネットワークやデバイスアドレス、エクスポート可能な成果物を確認できます。Directは外部エージェントによる処理の取りまとめに伴う負荷を減らせますが、実際のトークン使用量はモデルとタスクに依存します。MCPと共通の設計コンテキスト処理を使い、ワークベンチの質問応答では複数回のツール呼び出しが発生する場合もあります。
-
-<a name="fbd"></a>
-
-## FBD：既存のGXWプロジェクトを編集
-
-![MCPで既存FBDプロジェクトの第1軸に異常保持、リセット、遅延イネーブルを追加](resources/assets/fbd-control-logic-demo-ja.gif)
-
-三菱電機のMotionControl JECサンプルの第1軸に、異常のラッチ保持、リセット、500 msのイネーブル遅延を追加します。既存のファンクションブロック（FB）の実装とAxisの`IN_OUT`接続を保持し、SR/TONロジックを追加して、動作許可信号を既存のパワー制御ブロックへ接続します。
-
-出典：[三菱電機 MotionControl JECサンプル](https://eu-assets.contentstack.com/v3/assets/blt5412ff9af9aef77f/blt9206f69c182f67c3/634ea5238602a36d8e991e63/MotionControl_JEC_a.zip)。
-
-FBDではデモの配線変更に加え、開始用プロジェクトやインポートしたGXWをもとに候補を生成・編集できます。オブジェクト、接続、宣言、複数ネットワークを追加・変更・削除し、プロジェクトやライブラリのFBインターフェースと`IN_OUT`パラメーターを利用できます。グラフィカルなプレビュー、バージョン差分、GXW成果物も確認できます。
-
-元のプロジェクトが対応する範囲で、FBとProgramを新規作成できます。Programは既存タスク、新規タスク、または新規リソースに登録できます。ネイティブ保存、コンパイル、コードチェックは個別に実行し、結果を対象のプロジェクトバージョンに紐づけます。
-
-<a name="diagnostics"></a>
-
-## プロジェクト管理・診断・検証
-
-| 機能 | できること |
-| --- | --- |
-| プロジェクトとバージョン | CPUとプログラム形式を指定した作成・選択、要求と確認済み仕様の管理、候補のレビュー、バージョン比較、成果物の確認・エクスポート。 |
-| ネイティブ診断 | 現在のバージョンに対応するGXWをコンパイル・コードチェックします。位置情報がある場合はSTの行、宣言、FBDのネットワーク、オブジェクト、呼び出しインスタンスに診断を対応付け、一意に特定できない場合は未解決として扱います。 |
-| 既存SFCの編集 | 既存SFCプロジェクトをインポートしてプログラムとグラフを読み取り、既存のアクション・トランジションのサブプログラム、対応範囲内のステップのアクション番号とジャンプ先を編集できます。候補と差分の確認に対応し、SFCプロジェクト全体をゼロから作る機能はありません。 |
-| ラダーのシミュレーション | テスト計画、デバイス入力、期待結果を設定し、対応バックエンドで実行します。結果の保存・振り返り、要求との対応付けができます。命令とCPUの対応範囲はバックエンドによって異なります。 |
-| PLCの読み取り専用モニター | 操作員の許可に基づき、設定済みのMX Component論理局から指定デバイスを読み取り、値と読み取り記録を確認します。権限はプロジェクトバージョン、アドレス範囲、有効期限に紐づき、取り消せます。この機能はPLCに書き込みません。 |
-
-<a name="quick-start"></a>
-
-## クイックスタート
-
-Windows 10/11 x64で、[リリースページ](https://github.com/Arienax/gxworks-agent/releases/latest)から必要なパッケージを選んでください。2つのパッケージは個別に導入でき、Pythonは不要です。
-
-| パッケージ | 用途 | 必要な環境 |
-| --- | --- | --- |
-| GXWorks-Agent-MCP-windows-x64.zip | CodexなどのMCPクライアントに接続し、そのモデルを使用 | WebとNode.jsは不要 |
-| GXWorks-Agent-Web-windows-x64.zip | ブラウザーでプログラムの生成・編集、プロジェクト管理 | Node.js 22.14以降。MCPは不要 |
-
-### 単独動作のMCP
-
-MCPパッケージをすべて展開し、クライアントにstdioサーバーを追加します。コマンドは展開先の`gxworks-agent-mcp.exe`、引数は`--local`です。接続を更新して`list_projects`を呼び出し、既存プロジェクトを選ぶか、実際のCPUとプログラム形式を指定して作成してください。
-
-依頼例：「FX3Uのラダープロジェクトを作成し、まず生成コンテキストと関連命令の根拠資料を取得してください。X0が押されるたびに1回カウントし、3回でY0をON、X1でリセットしてください。候補を保存し、成果物と未解決の診断を示してください。」
-
-外部クライアントは自身のモデルを使い、Webの起動は不要です。GXへのインポートは設定済みの実行許可に従います。Webのプロジェクトとレビューフローを共有する場合は、[コンポーネントと接続設定](docs/private-component.md)を参照してください。
-
-### Webワークベンチ
-
-Webパッケージをすべて展開し、そのディレクトリで実行します。
-
-```sh
-npm install
-npm run build
-npm start
+```powershell
+git clone https://github.com/Arienax/gxworks-agent.git
+cd gxworks-agent
+.\build-web.bat --no-pause
+.\start-web.cmd
 ```
 
-このリポジトリをクローンして同じコマンドを実行することもできます。初回起動時に対応するランタイムを自動ダウンロードし、ブラウザーを開きます。プロジェクトの標準保存先は`%LOCALAPPDATA%/GXWorks Agent/web-workspace`で、ワークスペースの選択は不要です。
+単独 MCP の入口は `gxworks-agent-mcp.cmd` です。Web 用の Python 環境を共有
+できます。MCP のみ使う場合は `.venv-mcp` に `requirements/mcp.txt` を
+インストールしてください。フロントエンドのみのビルドは
+`npm --prefix web ci` と `npm --prefix web run build` で実行できます。
 
-プロジェクトを作成し、**Settings → Model → Model API**でモデルAPIを設定するとプログラムを生成できます。既存プロジェクトの閲覧にはモデル呼び出しは不要です。更新版は新しいディレクトリに展開してください。既存プロジェクトと個人設定は保持されます。
+`src/gxw/templates/` には FX3U の基準プロジェクト、ノード・トークン定義、
+CPU 別の空の FBD プロジェクト 57 個が含まれます。アプリをコピーまたは
+パッケージ化する際はこれらを保持してください。テンプレートの存在は各 CPU の
+実機動作検証を意味しません。
 
-ネイティブ保存、コードチェック、GXへのインポート、シミュレーションには対応する三菱電機ソフトウェアが必要です。PLCの読み取り専用モニターにはMX Componentと論理局の設定が必要です。これらの三菱電機ソフトウェアは同梱していません。
+三菱電機のマニュアル、マニュアルから生成した知識データベースと完全な命令定義は
+再配布権を確認できていないため含めていません。アプリはそれらがなくても起動
+できますが、マニュアル根拠付き RAG と一部の詳細な命令情報には、利用権のある
+資料からローカルで索引を作成する必要があります。
 
-## 現在の対応範囲
+設備に適用する前に、CPU、配線、安全設計を確認し、対象の GX Works2 で
+コンパイル・チェックを行い、対象設備で動作を検証してください。
 
-- GX連携にはWindowsが必要です。デスクトップ経由のインポートには対話操作が可能なWindowsセッションが必要です。
-- ネイティブFBD連携はGX Works2 **1.635.0.1**に対応しています。ラダーとSTの生成・編集・エクスポートには、このバージョンの指定はありません。FBD編集は元のプロジェクトのCPUとインターフェースを使用します。内蔵の開始用テンプレートはFX3Uです。他のCPUでは対応するプロジェクトをインポートしてください。
-- CPUがメニューに表示されても、命令や検証の対応範囲が同一とは限りません。検証プロファイルがない場合は未検証の結果を返します。
-- FBDではオブジェクト、接続、宣言、複数ネットワーク、元のプロジェクトに基づくFB/Programの作成に対応しています。SFCは既存アクション・トランジションのサブプログラムをバックエンド/MCPから編集できますが、完全なグラフィカルSFC IDEではありません。
-- 保存やインポートの成功は、コンパイルの成功やPLC動作の正しさを保証しません。
-
-## 設備の試運転前に
-
-生成したロジックを、対象CPU、実配線、動作範囲、運転モードに照らして確認してください。インポート前に対象GXプロジェクトをバックアップし、使用するGX Works2環境でコンパイルと確認を行ってから設備の試運転に進んでください。GX Works2への送信は、**PLCへのプログラム書き込みではありません**。
-
-非常停止や防護などの安全機能は独立した安全システムで実現してください。生成されたアプリケーションロジックやソフトウェアのチェックで代替することはできません。診断情報を公開する前に機密情報を除去し、認証情報やローカルセッションのリンクを共有しないでください。
-
-## 資料とライセンス
-
-[コンポーネントと接続設定](docs/private-component.md) · [貢献ガイド](CONTRIBUTING.md) · [Issue](https://github.com/Arienax/gxworks-agent/issues) · [セキュリティ](SECURITY.md)
-
-公開 Web インターフェースと付属の公開ファイルは [MPL-2.0](LICENSE) で提供されます。対象は[ライセンス範囲](LICENSE-SCOPE.md)を参照してください。非公開 Core とネイティブアダプターには、組織内の商用利用も無料とする別の[ランタイム利用規約](LICENSE-RUNTIME.md)が適用されます。貢献者は自身の著作権を保持します。本ライセンスで配布する際は、適用ライセンス、[第三者の権利表記](THIRD_PARTY_NOTICES.md)、[MPL ソースの入手方法](SOURCE_CODE.md)を添付してください。過去のリリースはそれぞれの元のライセンスを保持します。
+[今回の変更](CHANGELOG.md)、[貢献ガイド](CONTRIBUTING.md)、
+[ライセンス範囲](LICENSE-SCOPE.md)、[第三者通知](THIRD_PARTY_NOTICES.md)を参照
+してください。プロジェクト作成者が権利を持つソースには
+[Apache License 2.0](LICENSE)を適用します。旧版のライセンスは維持されます。

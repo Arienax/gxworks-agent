@@ -1077,6 +1077,16 @@ pre {
 }
 .conversation-controls .analysis-mode-picker { margin: 0; }
 .conversation-controls .text-button { justify-self: start; font-size: 12px; }
+.direct-clarification { display: grid; gap: 12px; margin: 12px 0; }
+.direct-clarification > p { margin: 0; color: var(--muted); font-size: 12px; }
+.clarification-question { min-width: 0; padding: 10px; border: 1px solid var(--border); border-radius: 8px; }
+.clarification-question legend { padding: 0 4px; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.clarification-question legend .muted { font-size: 11px; }
+.clarification-question textarea { display: block; width: 100%; min-height: 64px; font-size: 13px; }
+.clarification-options { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.clarification-options button { padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; text-align: left; overflow-wrap: anywhere; }
+.clarification-options button[aria-pressed="true"] { border-color: var(--accent); background: var(--soft); }
+.clarification-question:disabled { opacity: 0.65; }
 .composer textarea {
   background: transparent;
   border: 0;

@@ -5,7 +5,9 @@ import tailwindcss from "@tailwindcss/vite";
 // Production is served by the Python loopback server. Development still enforces
 // one browser origin; API requests retain the backend's configured origin.
 export default defineConfig({
+  base: "./",
   plugins: [react(), tailwindcss()],
+  build: { rollupOptions: { input: { main: "index.html", simulator: "simulator.html" } } },
   server: {
     strictPort: true,
     proxy: {

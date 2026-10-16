@@ -1,206 +1,138 @@
-# SPDX-License-Identifier: MPL-2.0
-"""Audit the complete Git index or every locally reachable commit before upload.
-
-An explicit allowlist and text checks prevent common accidental disclosures.
-They do not replace review of changes inside an already allowed text file.
-"""
+"""Check the exact public source manifest and reject accidental private data."""
 from __future__ import annotations
 
 import argparse
+import io
 import json
-from pathlib import Path, PurePosixPath
+import lzma
+from pathlib import Path
 import re
 import subprocess
 import sys
+from zipfile import ZipFile
 
-POLICY = "publication/public-files.json"
-MAX_BYTES = 2 * 1024 * 1024
-README_ASSETS = {
-    "resources/assets/demo.gif",
-    "resources/assets/ladder-rag-core-demo.gif",
-    "resources/assets/ladder-rag-core-demo-en.gif",
-    "resources/assets/ladder-rag-core-demo-ja.gif",
-    "resources/assets/web-gui-view-deliver.gif",
-    "resources/assets/web-gui-view-deliver-en.gif",
-    "resources/assets/web-gui-view-deliver-ja.gif",
-    "resources/assets/fbd-control-logic-demo.gif",
-    "resources/assets/fbd-control-logic-demo-en.gif",
-    "resources/assets/fbd-control-logic-demo-ja.gif",
+
+ROOT = Path(__file__).resolve().parents[1]
+MANIFEST = ROOT / "publication/public-files.json"
+REQUIRED = {
+    "LICENSE", "LICENSE-SCOPE.md", "README.md", "README.zh-CN.md",
+    "README.ja.md", "src/gxw/project_templates.py",
+    "src/gxw/templates/blank-fbd-projects.zip.xz",
+    "src/gxw/templates/fx3u.gxw", "src/gxw/templates/nodes.json",
+    "src/gxw/templates/provenance.json",
+    "src/gxw/templates/q02-token-grammar.json",
+    "src/gxw/templates/q03udv-token-grammar.json",
+    "resources/instructions/mitsubishi/common.json",
+    "resources/instructions/mitsubishi/fx3u.json",
+    "resources/instructions/mitsubishi/fx5u.json",
+    "resources/instructions/mitsubishi/fx3u_step_widths.json",
+    "resources/instructions/mitsubishi/fx3u_verified_opcodes.json",
+    "resources/instructions/mitsubishi/modifier_rules.json",
+    "resources/instructions/mitsubishi/instruction_capabilities.json",
+    "checks/source_smoke.py",
 }
-ROOT_FILES = {
-    "package.json", "package-lock.json", "tools/web-runtime.mjs", "checks/web-runtime.test.mjs",
-    "README.md", "README.zh-CN.md", "README.ja.md", "LICENSE", "THIRD_PARTY_NOTICES.md",
-    "LICENSE-SCOPE.md", "LICENSE-RUNTIME.md", "SOURCE_CODE.md", "web/LICENSE.md", "tools/LICENSE.md",
-    "CONTRIBUTING.md", "SECURITY.md", ".gitignore", ".gitattributes",
-    ".githooks/pre-commit", ".githooks/pre-push",
-    ".github/workflows/public-boundary.yml", "docs/private-component.md",
-    "docs/publishing.md", POLICY, "tools/check_public_boundary.py",
-    "checks/test_public_boundary.py", "web/index.html", "web/package.json",
-    "web/package-lock.json", "web/openapi.json", "web/tsconfig.json", "web/vite.config.ts",
+BINARY = {
+    "resources/app.ico", "src/gxw/templates/blank-fbd-projects.zip.xz",
+    "src/gxw/templates/fx3u.gxw",
 }
-PATTERNS = (
-    ("private key", re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----")),
-    ("GitHub token", re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})\b")),
-    ("API token", re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{24,}\b")),
-    ("local user path", re.compile(r"(?i)[a-z]:[\\/]+Users[\\/]+(?!Public(?:[\\/]|$))[^\s\"<>]+")),
-    ("native interface implementation", re.compile(r"Marshal\.(?:ReadIntPtr|GetDelegateForFunctionPointer)|\bSlot<[^>]+>\s*\(")),
-)
+PATTERNS = {
+    "private key": re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+    "GitHub token": re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})\b"),
+    "API token": re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{24,}\b"),
+    "local user path": re.compile(r"(?i)[a-z]:[\\/]+Users[\\/]+[^\s\"<>]+"),
+    "private evidence path": re.compile(r"(?i)research[/\\]evidence[/\\]"),
+}
+MAX_SIZE = 2_000_000
 
 
-def git(repo: Path, *args: str) -> bytes:
-    return subprocess.run(["git", *args], cwd=repo, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout
+def names_in_index() -> set[str]:
+    result = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True,
+                            stdout=subprocess.PIPE).stdout
+    return {item.decode("utf-8") for item in result.split(b"\0") if item}
 
 
-def allowed_path(name: str) -> bool:
-    path = PurePosixPath(name)
-    if "\\" in name or ":" in name or path.is_absolute() or any(part in {"..", ".git", "node_modules", "dist"} for part in path.parts):
-        return False
-    if path.as_posix() != name:
-        return False
-    if name in ROOT_FILES or name in README_ASSETS:
-        return True
-    return ((name.startswith("web/src/") and path.suffix in {".ts", ".tsx", ".css"})
-            or (name.startswith("web/tests/") and name.endswith(".test.mjs")))
+def names_on_disk() -> set[str]:
+    ignored = {".git", ".venv", ".venv-mcp", "node_modules", "dist",
+               "__pycache__", ".pytest_cache", "build"}
+    return {path.relative_to(ROOT).as_posix() for path in ROOT.rglob("*")
+            if path.is_file() and path.suffix not in {".log", ".tsbuildinfo", ".pyc"}
+            and not any(part in ignored or part.startswith(".sfc-check-")
+                        for part in path.relative_to(ROOT).parts)}
 
 
-def load_allowlist(data: bytes) -> set[str]:
-    names = json.loads(data)["files"]
-    if not isinstance(names, list) or any(not isinstance(name, str) or not allowed_path(name) for name in names):
-        raise ValueError("Public allowlist contains an unsupported path")
-    if len(names) != len(set(names)) or not ROOT_FILES.issubset(names):
-        raise ValueError("Public allowlist is duplicated or missing required publication controls")
-    return set(names)
-
-
-def inspect_file(name: str, mode: str, data: bytes, allowed: set[str]) -> list[str]:
+def check_archive(data: bytes) -> list[str]:
     problems = []
-    if name not in allowed or not allowed_path(name):
-        problems.append(f"{name}: path is not approved for public distribution")
-    if mode not in {"100644", "100755"}:
-        problems.append(f"{name}: symbolic links and submodules are forbidden")
-    if len(data) > MAX_BYTES:
-        return problems + [f"{name}: exceeds the public text-file size limit"]
-    if name in README_ASSETS:
-        if not valid_demo_gif(data):
-            problems.append(f"{name}: invalid GIF or unsupported metadata")
-        return problems
-    if data.startswith((b"PK\x03\x04", b"MZ", b"\x7fELF", b"\x1f\x8b", b"version https://git-lfs.github.com/spec/v1")) or b"\x00" in data:
-        return problems + [f"{name}: binary, archive or LFS payload is forbidden"]
     try:
-        text = data.decode("utf-8")
-    except UnicodeDecodeError:
-        return problems + [f"{name}: only UTF-8 text may be published"]
-    for label, pattern in PATTERNS:
-        if pattern.search(text):
-            problems.append(f"{name}: possible {label}; inspect locally (matched value withheld)")
+        with ZipFile(io.BytesIO(lzma.decompress(data))) as archive:
+            names = archive.namelist()
+            projects = [name for name in names if name.startswith("projects/") and name.endswith(".gxw")]
+            if len(projects) != 57 or set(names) != set(projects) | {"manifest.json"}:
+                problems.append("blank template archive must contain 57 projects and one manifest")
+            if any(".." in Path(name).parts or name.startswith("/") for name in names):
+                problems.append("template archive contains an unsafe path")
+            manifest = json.loads(archive.read("manifest.json"))
+            listed = {row["file"] for row in manifest["models"]}
+            if listed != set(projects) or len(manifest["models"]) != 57:
+                problems.append("template manifest does not match archived projects")
+            for name in projects:
+                raw = archive.read(name)
+                if b"Arienax" in raw or b"research/evidence" in raw:
+                    problems.append(f"{name}: local or research marker")
+    except (OSError, ValueError, KeyError, lzma.LZMAError) as exc:
+        problems.append(f"template archive cannot be read: {type(exc).__name__}")
     return problems
 
 
-def valid_demo_gif(data: bytes) -> bool:
-    """Accept a complete GIF stream with frame controls and optional looping only."""
-    if len(data) < 14 or data[:6] not in {b"GIF87a", b"GIF89a"}:
-        return False
-    if not int.from_bytes(data[6:8], "little") or not int.from_bytes(data[8:10], "little"):
-        return False
-    position, frames = 13, 0
-    if data[10] & 0x80:
-        position += 3 * (2 ** ((data[10] & 7) + 1))
-    def blocks(start):
-        while start < len(data):
-            size = data[start]
-            start += 1
-            if size == 0:
-                return start
-            start += size
-        return len(data) + 1
-    while position < len(data):
-        marker = data[position]
-        position += 1
-        if marker == 0x3B:
-            return frames > 0 and position == len(data)
-        if marker == 0x2C:
-            if position + 9 >= len(data):
-                return False
-            flags = data[position + 8]
-            position += 9
-            if flags & 0x80:
-                position += 3 * (2 ** ((flags & 7) + 1))
-            if position >= len(data) or not 2 <= data[position] <= 8:
-                return False
-            position = blocks(position + 1)
-            frames += 1
-        elif marker == 0x21:
-            if data[position:position + 2] == b"\xF9\x04":
-                if data[position + 6:position + 7] != b"\x00":
-                    return False
-                position += 7
-            elif data[position:position + 13] == b"\xFF\x0BNETSCAPE2.0":
-                if data[position + 13:position + 15] != b"\x03\x01" or data[position + 17:position + 18] != b"\x00":
-                    return False
-                position += 18
-            else:
-                return False
-        else:
-            return False
-    return False
-
-
-def entries(repo: Path, revision: str | None):
-    if revision is None:
-        raw = git(repo, "ls-files", "--stage", "-z")
-    else:
-        raw = git(repo, "ls-tree", "-r", "-z", revision)
-    for item in raw.split(b"\0"):
-        if not item:
-            continue
-        meta, name = item.split(b"\t", 1)
-        mode, second, third = meta.decode().split()
-        if revision is None and third != "0":
-            raise ValueError("Resolve index conflicts before checking publication")
-        yield name.decode("utf-8"), mode, second if revision is None else third
-
-
-def check(repo: Path, *, history: bool = False) -> list[str]:
-    # The proposed policy comes from the index for pre-commit, HEAD for history.
-    policy_ref = "HEAD:" + POLICY if history else ":" + POLICY
-    allowed = load_allowlist(git(repo, "show", policy_ref))
-    revisions = git(repo, "rev-list", "--all").decode().splitlines() if history else [None]
-    if history and not revisions:
-        raise ValueError("No committed history to inspect")
-    seen, problems = set(), []
-    for revision in revisions:
-        for name, mode, oid in entries(repo, revision):
-            identity = (name, mode, oid)
-            if identity in seen:
-                continue
-            seen.add(identity)
-            if mode not in {"100644", "100755"}:
-                problems.append(f"{name}: non-regular Git entry is forbidden")
-                continue
-            size = int(git(repo, "cat-file", "-s", oid))
-            if size > MAX_BYTES:
-                problems.append(f"{name}: oversized Git object is forbidden")
-                continue
-            problems.extend(inspect_file(name, mode, git(repo, "cat-file", "blob", oid), allowed))
-    return sorted(set(problems))
-
-
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    mode = parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument("--index", action="store_true")
-    mode.add_argument("--history", action="store_true")
-    args = parser.parse_args()
-    repo = Path(git(Path.cwd(), "rev-parse", "--show-toplevel").decode().strip())
+def check_file(name: str) -> list[str]:
+    path = ROOT / name
+    if not path.is_file() or path.is_symlink():
+        return [f"{name}: missing, linked or not a file"]
+    data = path.read_bytes()
+    problems = []
+    if len(data) > MAX_SIZE:
+        problems.append(f"{name}: exceeds size limit")
+    if name == "src/gxw/templates/blank-fbd-projects.zip.xz":
+        problems.extend(check_archive(data))
+    if name in BINARY or name.startswith("resources/assets/"):
+        if b"Arienax" in data or b"research/evidence" in data:
+            problems.append(f"{name}: local or research marker")
+        return problems
+    if b"\0" in data or data.startswith(b"version https://git-lfs.github.com/spec/v1"):
+        return problems + [f"{name}: unexpected binary or LFS pointer"]
     try:
-        problems = check(repo, history=args.history)
-    except (OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
-        print(f"Public boundary check could not complete: {type(error).__name__}", file=sys.stderr)
-        return 2
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return problems + [f"{name}: not UTF-8"]
+    for label, pattern in PATTERNS.items():
+        matches = list(pattern.finditer(text))
+        if label == "API token":
+            matches = [match for match in matches
+                       if match.group() != "sk-offline-package-self-test"]
+        if matches:
+            problems.append(f"{name}: possible {label} (value withheld)")
+    return problems
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--disk", action="store_true", help="inspect snapshot before Git staging")
+    args = parser.parse_args()
+    data = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    expected = data.get("files")
+    if data.get("schema_version") != 2 or not isinstance(expected, list):
+        raise SystemExit("invalid public manifest")
+    expected_set = set(expected)
+    if len(expected) != len(expected_set) or not REQUIRED <= expected_set:
+        raise SystemExit("manifest is duplicated or missing required source/templates")
+    actual = names_on_disk() if args.disk else names_in_index()
+    problems = [f"unlisted: {name}" for name in sorted(actual - expected_set)]
+    problems += [f"missing: {name}" for name in sorted(expected_set - actual)]
+    for name in sorted(expected_set & actual):
+        problems.extend(check_file(name))
     if problems:
         print("\n".join(problems), file=sys.stderr)
         return 1
-    print("Public boundary passed: " + ("all reachable commit trees" if args.history else "complete staged tree"))
+    print(f"Public boundary OK: {len(expected)} files, including native templates")
     return 0
 
 

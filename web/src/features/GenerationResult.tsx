@@ -3,6 +3,8 @@ import type { Job, Json } from "../api/client";
 import { api, freshGxCsvUrl } from "../api/client";
 import { Button } from "../components/ui";
 import { CapabilityReview } from "./CapabilityReview";
+import { DirectClarification } from "./DirectClarification";
+import { clarificationQuestions } from "./clarificationAnswers";
 
 type Output = Record<string, Json>;
 
@@ -37,19 +39,21 @@ export function useGenerationResult(job: Job | undefined, retry: number) {
   const versionId = typeof value?.version_id === "string" ? value.version_id
     : typeof job?.result?.version_id === "string" ? job.result.version_id : "";
   const loading = !!id && !versionId && !proposalId && !blocked && (!result.error || result.id !== id) && !value;
-  return { id, projectId: job?.project_id || "", value, metadata, blocked, needsInput, invalidCandidate, unverifiedCandidate, proposalId, versionId, loading,
+  const questions = clarificationQuestions(value?.missing_info ?? metadata?.missing_info);
+  return { id, projectId: job?.project_id || "", value, metadata, questions, blocked, needsInput, invalidCandidate, unverifiedCandidate, proposalId, versionId, loading,
     error: result.id === id ? result.error : undefined };
 }
 
 export type GenerationResultState = ReturnType<typeof useGenerationResult>;
 
-export function GenerationResult({ result, busy, onOpen, onRetry, onRepair, onSpec, t }: {
+export function GenerationResult({ result, busy, onOpen, onRetry, onRepair, onSpec, clarification, t }: {
   result: GenerationResultState;
   busy: boolean;
   onOpen: () => void;
   onRetry: () => void;
   onRepair: () => void;
   onSpec: () => void;
+  clarification?: { answers: Record<string, string>; onChange: (id: string, value: string) => void; disabled: boolean };
   t: (key: string) => string;
 }) {
   if (!result.id) return null;
@@ -66,10 +70,10 @@ export function GenerationResult({ result, busy, onOpen, onRetry, onRepair, onSp
   ) : null;
   return <section className="generation-result" aria-label={t("生成结果")}>
     {result.needsInput ? <>
-      {Array.isArray(result.value?.missing_info) && result.value.missing_info.map((row, i) => {
-        const question = row && typeof row === "object" && !Array.isArray(row) ? row.question : "";
-        return <p key={i}>{String(question || "")}</p>;
-      })}
+      {result.error ? <p role="alert">{t("暂时无法读取结果，请重试。")}</p>
+        : !result.questions.length ? <p role="status">{t("正在读取生成结果")}</p>
+        : clarification ? <DirectClarification questions={result.questions} {...clarification} t={t} />
+        : result.questions.map(question => <p key={question.id}>{question.question}</p>)}
     </> : result.blocked ? <>
       <p className="error-text" role="status">{t("生成的程序与需求不一致，未保存。")}</p>
       {typeof detail?.message === "string" && <p>{detail.message}</p>}
