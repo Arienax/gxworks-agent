@@ -12,6 +12,6 @@ Distributors of binaries must collect and retain the notices required by the
 dependencies they include. The project's Apache-2.0 license does not replace
 those terms.
 
-Knowledge indexes generated from vendor manuals are not distributed with this
-source snapshot. Users need to supply their own authorized source materials
-before building a manual-backed index.
+Executable packages include project-authored fact representations and original
+examples. Vendor manuals and original manual-text indexes are excluded. Source
+references identify the basis of facts and do not grant a vendor license.

@@ -1,14 +1,10 @@
-param([string]$OutputDirectory = "", [switch]$NativeAot, [string]$DotNetPath = 'dotnet', [string]$NugetCache = '')
+param([string]$OutputDirectory = "")
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     $OutputDirectory = Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)) "PLC AI Studio\workspace-adapter"
-}
-if ($NativeAot) {
-    & (Join-Path $PSScriptRoot 'build_workspace_adapter_aot.ps1') -OutputDirectory $OutputDirectory -DotNetPath $DotNetPath -NugetCache $NugetCache
-    return
 }
 $resolvedOutput = [IO.Path]::GetFullPath($OutputDirectory)
 $repositoryPrefix = $repositoryRoot.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar

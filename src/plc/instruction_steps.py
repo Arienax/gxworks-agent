@@ -38,11 +38,6 @@ def _catalog_directories() -> Tuple[Path, ...]:
 
 
 def _read_resource(name: str) -> dict:
-    if not os.environ.get("GXW2_INSTRUCTION_CATALOG"):
-        from shared.embedded_resources import embedded_bytes
-        embedded = embedded_bytes("instructions/mitsubishi/" + name)
-        if embedded is not None:
-            return json.loads(embedded)
     for directory in _catalog_directories():
         path = directory / name
         if path.is_file():

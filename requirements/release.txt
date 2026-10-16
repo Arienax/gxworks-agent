@@ -1,0 +1,2 @@
+-r web.txt
+pyinstaller==6.21.0

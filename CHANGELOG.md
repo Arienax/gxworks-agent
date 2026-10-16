@@ -1,8 +1,9 @@
-# Release changes — 2026-10-16 source publication
+# Release changes — 2026-10-16
 
-This release publishes the project-authored Core, Web, MCP and native-adapter
-source under Apache-2.0. It includes the GXW engineering templates needed to
-create and edit native projects, including 57 CPU-specific blank FBD projects.
+Project-authored Core, Web, MCP and native-adapter source is published in the
+repository under Apache-2.0. Releases provide independent, ready-to-run MCP and
+Web executable ZIPs, with GXW engineering templates, the reviewed runtime fact
+corpus and original examples. This includes 57 CPU-specific blank FBD projects.
 Previously distributed copies retain their original license.
 
 Recent application changes in this source snapshot include:
@@ -17,7 +18,7 @@ Recent application changes in this source snapshot include:
   by the code.
 - Updated Web views and the shared MCP/Web service contracts for those flows.
 
-Manual PDFs, the generated knowledge index and instruction catalog, private
+Original manual PDFs and manual-text indexes, private
 reverse-engineering evidence and internal development documents are excluded.
 The source and frontend checks do not establish native import, compilation or
 PLC behavior for every supported model.

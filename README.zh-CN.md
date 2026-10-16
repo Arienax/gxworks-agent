@@ -11,7 +11,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache--2.0-f59e0b?style=flat-square" alt="License: Apache-2.0"></a>
 </p>
 
-<p align="center"><strong><a href="https://github.com/Arienax/gxworks-agent/releases/latest">源码发布</a> · <a href="#mcp">MCP 与 Web</a> · <a href="https://github.com/Arienax/gxworks-agent/issues">问题反馈</a></strong></p>
+<p align="center"><strong><a href="https://github.com/Arienax/gxworks-agent/releases/latest">下载</a> · <a href="#mcp">MCP 与 Web</a> · <a href="https://github.com/Arienax/gxworks-agent/issues">问题反馈</a></strong></p>
 
 <p align="center"><a href="#quick-start">快速上手</a> · <a href="#ladder">Ladder</a> · <a href="#st">ST</a> · <a href="#fbd">FBD</a> · <a href="#web">Web</a> · <a href="#diagnostics">诊断与验证</a></p>
 
@@ -86,7 +86,30 @@ FBD 不限于演示中的连线修改：可以基于起始工程或导入的 GXW
 
 ## 快速上手
 
-在 Windows 10/11 x64 上安装 Python 3.13（本次源码发布使用的版本）和 Node.js 22.14 或更新版本。从[发布页](https://github.com/Arienax/gxworks-agent/releases/latest)下载源码，或克隆仓库：
+在 Windows 10/11 x64 上，从[发布页](https://github.com/Arienax/gxworks-agent/releases/latest)下载需要的组件并完整解压。两个成品包独立使用，无需安装 Python 或 Node.js。
+
+| 发布包 | 使用方式 | 启动入口 |
+| --- | --- | --- |
+| `GXWorks-Agent-MCP-windows-x64.zip` | 接入 Codex 等 MCP 客户端，使用客户端的模型 | `gxworks-agent-mcp.exe --local` |
+| `GXWorks-Agent-Web-windows-x64.zip` | 通过浏览器生成、编辑和管理工程 | `start-web.cmd` |
+
+<a name="mcp"></a>
+
+### 独立 MCP
+
+在客户端添加 stdio 服务：命令为解压目录中 `gxworks-agent-mcp.exe` 的完整路径，参数为 `--local`。刷新客户端连接，先调用 `list_projects`，再选择已有工程，或明确实际 CPU 和程序类型创建工程。
+
+可以从这样的任务开始：“新建 FX3U Ladder 工程，先读取生成上下文和相关指令依据。实现 X0 每次按下计数一次，满 3 次点亮 Y0，X1 复位。保存候选，列出产物和待处理的诊断。”
+
+外部客户端使用自己的模型，无需启动 Web。GX 导入按已配置的执行许可进行；需要共用工程与审阅流程时，可选用 Web 工作台。
+
+### Web 工作台
+
+运行解压目录中的 `start-web.cmd`，按提示选择工程工作区。在工作台新建工程，在“设置 → 模型 → 模型 API”中配置模型服务后即可生成程序。查看已有工程无需调用模型。更新时将新包解压到新目录，保留独立保存的工程工作区和个人设置。
+
+### 从源码运行
+
+安装 Python 3.13 和 Node.js 22.14 或更新版本，然后运行：
 
 ```powershell
 git clone https://github.com/Arienax/gxworks-agent.git
@@ -95,41 +118,15 @@ cd gxworks-agent
 .\start-web.cmd
 ```
 
-构建入口会创建 Python 环境并编译 Web 前端。启动时选择工程工作区文件夹；建议将工程工作区放在源码目录之外，以便更新源码时保留工程。
-
-| 入口 | 使用方式 | 安装要求 |
-| --- | --- | --- |
-| `gxworks-agent-mcp.cmd --local` | 接入 Codex 等 MCP 客户端，使用客户端的模型 | Python 环境；只用 MCP 时不需要 Web 或 Node.js |
-| `start-web.cmd` | 通过浏览器工作台生成、编辑和管理工程 | 先完成上述源码构建 |
-
-<a name="mcp"></a>
-
-### 独立 MCP
-
-完成 Web 源码安装后，在客户端添加 stdio 服务：命令为 `gxworks-agent-mcp.cmd` 的完整路径，参数为 `--local`。只使用 MCP 时，可先创建 Python 环境并安装其依赖：
-
-```powershell
-py -3.13 -m venv .venv-mcp
-.\.venv-mcp\Scripts\python.exe -m pip install -r requirements\mcp.txt
-```
-
-刷新客户端连接，先调用 `list_projects`，再选择已有工程，或明确实际 CPU 和程序类型创建工程。
-
-可以从这样的任务开始：“新建 FX3U Ladder 工程，先读取生成上下文和相关指令依据。实现 X0 每次按下计数一次，满 3 次点亮 Y0，X1 复位。保存候选，列出产物和待处理的诊断。”
-
-外部客户端使用自己的模型，无需启动 Web。GX 导入按已配置的执行许可进行；需要共用工程与审阅流程时，可选用 Web 工作台。
-
-### Web 工作台
-
-完成源码构建后运行 `start-web.cmd`。在工作台新建工程，在“设置 → 模型 → 模型 API”中配置模型服务后即可生成程序。查看已有工程无需调用模型。更新源码后重新构建，工程工作区和个人设置独立保存。
+只用源码 MCP 时，创建 `.venv-mcp` 并安装 `requirements/mcp.txt`，使用 `gxworks-agent-mcp.cmd --local` 入口，无需 Node.js。
 
 ### 工程模板与知识资源
 
-源码中的 `src/gxw/templates/` 包含 FX3U 基线、节点与语法模板，以及 57 个按 CPU 区分的空白 FBD 工程。复制或打包程序时应保留该目录。模板可用不等于该型号已通过原生编译或 PLC 运行验证。
+成品包的 `gxw/templates/` 包含 FX3U 基线、节点与语法模板，以及 57 个按 CPU 区分的空白 FBD 工程；源码中的位置为 `src/gxw/templates/`。复制应用时应保留这些文件。模板可用不等于该型号已通过原生编译或 PLC 运行验证。
 
-本次源码发布不附带三菱手册、由手册生成的知识库和完整指令定义。基于手册的 RAG 和部分详细指令事实需要用户使用有权使用的资料在本地建立索引。上方 RAG 演示录制时使用了本地知识库。
+成品包包含经整理的运行事实库和项目原创案例，供 RAG 使用，不包含三菱原始手册和原文索引。生成的运行数据与源码仓库分开提供；源码用户可将成品包的 `knowledge/` 复制到 `resources/knowledge/`，并将包内 `resources/instructions/mitsubishi/` 复制到源码同名目录。
 
-原生保存、代码检查、GX 导入和仿真需要本机安装相应的三菱软件；PLC 只读监测需要 MX Component 及逻辑站配置。仓库不包含这些三菱软件。
+原生保存、代码检查、GX 导入和仿真需要本机安装相应的三菱软件；PLC 只读监测需要 MX Component 及逻辑站配置。发布包不包含这些三菱软件。
 
 ## 当前范围
 

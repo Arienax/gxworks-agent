@@ -11,7 +11,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache--2.0-f59e0b?style=flat-square" alt="License: Apache-2.0"></a>
 </p>
 
-<p align="center"><strong><a href="https://github.com/Arienax/gxworks-agent/releases/latest">ソース版</a> · <a href="#mcp">MCP と Web</a> · <a href="https://github.com/Arienax/gxworks-agent/issues">問題の報告</a></strong></p>
+<p align="center"><strong><a href="https://github.com/Arienax/gxworks-agent/releases/latest">ダウンロード</a> · <a href="#mcp">MCP と Web</a> · <a href="https://github.com/Arienax/gxworks-agent/issues">問題の報告</a></strong></p>
 
 <p align="center"><a href="#quick-start">クイックスタート</a> · <a href="#ladder">ラダー</a> · <a href="#st">ST</a> · <a href="#fbd">FBD</a> · <a href="#web">Web</a> · <a href="#diagnostics">診断・検証</a></p>
 
@@ -86,7 +86,30 @@ FBDではデモの配線変更に加え、開始用プロジェクトやイン�
 
 ## クイックスタート
 
-Windows 10/11 x64 に Python 3.13（今回のソース公開で使用したバージョン）と Node.js 22.14 以降をインストールしてください。[リリースページ](https://github.com/Arienax/gxworks-agent/releases/latest)からソースを取得するか、リポジトリをクローンします。
+Windows 10/11 x64 で[リリースページ](https://github.com/Arienax/gxworks-agent/releases/latest)から必要なコンポーネントを取得し、ZIP 全体を展開してください。MCP と Web は単独で動作し、Python と Node.js のインストールは不要です。
+
+| パッケージ | 用途 | 起動入口 |
+| --- | --- | --- |
+| `GXWorks-Agent-MCP-windows-x64.zip` | Codex などの MCP クライアントに接続し、そのモデルを使用 | `gxworks-agent-mcp.exe --local` |
+| `GXWorks-Agent-Web-windows-x64.zip` | ブラウザーでプログラムの生成・編集、プロジェクト管理 | `start-web.cmd` |
+
+<a name="mcp"></a>
+
+### 単独動作のMCP
+
+クライアントに stdio サーバーを追加します。コマンドには展開先の `gxworks-agent-mcp.exe`、引数には `--local` を指定してください。接続を更新して `list_projects` を呼び出し、既存プロジェクトを選ぶか、実際の CPU とプログラム形式を指定して作成します。
+
+依頼例：「FX3U のラダープロジェクトを作成し、まず生成コンテキストと関連命令の根拠資料を取得してください。X0 が押されるたびに 1 回カウントし、3 回で Y0 を ON、X1 でリセットしてください。候補を保存し、成果物と未解決の診断を示してください。」
+
+外部クライアントは自身のモデルを使い、Web の起動は不要です。GX へのインポートは設定済みの実行許可に従います。プロジェクトとレビューフローを共有する場合は Web ワークベンチも利用できます。
+
+### Webワークベンチ
+
+展開した Web ディレクトリの `start-web.cmd` を実行し、ワークスペースを選択してください。プロジェクトを作成し、**Settings → Model → Model API** でモデル API を設定するとプログラムを生成できます。既存プロジェクトの閲覧にはモデル呼び出しは不要です。更新版は新しいディレクトリに展開し、別に保存したワークスペースと個人設定を保持してください。
+
+### ソースから実行
+
+Python 3.13 と Node.js 22.14 以降をインストールし、次を実行します。
 
 ```powershell
 git clone https://github.com/Arienax/gxworks-agent.git
@@ -95,39 +118,13 @@ cd gxworks-agent
 .\start-web.cmd
 ```
 
-ビルド処理は Python 環境を作成して Web フロントエンドをビルドします。起動時にエンジニアリング用ワークスペースを選択してください。ソース更新時にプロジェクトを保持できるよう、ソースディレクトリの外に保存することを推奨します。
-
-| 入口 | 用途 | 必要な環境 |
-| --- | --- | --- |
-| `gxworks-agent-mcp.cmd --local` | Codex などの MCP クライアントに接続し、そのモデルを使用 | Python 環境。MCP のみの場合は Web と Node.js は不要 |
-| `start-web.cmd` | ブラウザーでプログラムの生成・編集、プロジェクト管理 | 上記のソースビルドを完了 |
-
-<a name="mcp"></a>
-
-### 単独動作のMCP
-
-Web 用のソースセットアップ後、クライアントに stdio サーバーを追加します。コマンドには `gxworks-agent-mcp.cmd` のフルパス、引数には `--local` を指定してください。MCP のみ使う場合は、先に Python 環境を作成して依存関係をインストールします。
-
-```powershell
-py -3.13 -m venv .venv-mcp
-.\.venv-mcp\Scripts\python.exe -m pip install -r requirements\mcp.txt
-```
-
-接続を更新して `list_projects` を呼び出し、既存プロジェクトを選ぶか、実際の CPU とプログラム形式を指定して作成してください。
-
-依頼例：「FX3U のラダープロジェクトを作成し、まず生成コンテキストと関連命令の根拠資料を取得してください。X0 が押されるたびに 1 回カウントし、3 回で Y0 を ON、X1 でリセットしてください。候補を保存し、成果物と未解決の診断を示してください。」
-
-外部クライアントは自身のモデルを使い、Web の起動は不要です。GX へのインポートは設定済みの実行許可に従います。プロジェクトとレビューフローを共有する場合は Web ワークベンチも利用できます。
-
-### Webワークベンチ
-
-ソースビルド後に `start-web.cmd` を実行します。プロジェクトを作成し、**Settings → Model → Model API** でモデル API を設定するとプログラムを生成できます。既存プロジェクトの閲覧にはモデル呼び出しは不要です。ソース更新後は再ビルドしてください。ワークスペースと個人設定は別に保存されます。
+MCP のみソースから使う場合は `.venv-mcp` を作成し、`requirements/mcp.txt` をインストールして `gxworks-agent-mcp.cmd --local` を使用します。Node.js は不要です。
 
 ### エンジニアリングテンプレートと知識リソース
 
-`src/gxw/templates/` には FX3U の基準プロジェクト、ノード・トークン定義、CPU 別の空の FBD プロジェクト 57 個が含まれます。アプリのコピーやパッケージ化ではこのディレクトリを保持してください。テンプレートの存在は各 CPU のネイティブコンパイルや実機動作の検証を意味しません。
+パッケージの `gxw/templates/` には FX3U の基準プロジェクト、ノード・トークン定義、CPU 別の空の FBD プロジェクト 57 個が含まれます。ソースの場所は `src/gxw/templates/` です。アプリをコピーする際はこれらを保持してください。テンプレートの存在は各 CPU のネイティブコンパイルや実機動作の検証を意味しません。
 
-今回のソース版には三菱電機のマニュアル、マニュアルから生成した知識データベースと完全な命令定義を同梱していません。マニュアル根拠付き RAG と一部の詳細な命令情報には、利用権のある資料からローカルで索引を作成する必要があります。上記の RAG デモではローカルの知識データベースを使用しています。
+実行パッケージには RAG 用に整理した事実コーパスとプロジェクト独自の例を含め、三菱電機の原本マニュアルや原文索引は含めません。生成したランタイムデータはソースリポジトリと別に提供します。ソースで利用する場合、パッケージの `knowledge/` を `resources/knowledge/` に、`resources/instructions/mitsubishi/` をソースの同名ディレクトリにコピーできます。
 
 ネイティブ保存、コードチェック、GX へのインポート、シミュレーションには対応する三菱電機ソフトウェアが必要です。PLC の読み取り専用モニターには MX Component と論理局の設定が必要です。これらの三菱電機ソフトウェアは同梱していません。
 

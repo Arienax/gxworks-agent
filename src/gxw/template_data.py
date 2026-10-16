@@ -1,4 +1,4 @@
-"""Template access for source builds; replaced with embedded data during compilation."""
+"""Access the same template files in source and executable distributions."""
 from pathlib import Path
 
 

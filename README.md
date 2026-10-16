@@ -11,7 +11,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache--2.0-f59e0b?style=flat-square" alt="License: Apache-2.0"></a>
 </p>
 
-<p align="center"><strong><a href="https://github.com/Arienax/gxworks-agent/releases/latest">Source releases</a> · <a href="#mcp">MCP &amp; Web</a> · <a href="https://github.com/Arienax/gxworks-agent/issues">Issues</a></strong></p>
+<p align="center"><strong><a href="https://github.com/Arienax/gxworks-agent/releases/latest">Downloads</a> · <a href="#mcp">MCP &amp; Web</a> · <a href="https://github.com/Arienax/gxworks-agent/issues">Issues</a></strong></p>
 
 <p align="center"><a href="#quick-start">Quick start</a> · <a href="#ladder">Ladder</a> · <a href="#st">ST</a> · <a href="#fbd">FBD</a> · <a href="#web">Web</a> · <a href="#diagnostics">Diagnostics</a></p>
 
@@ -86,7 +86,30 @@ Where the source project supports it, create FBs and Programs. A new Program can
 
 ## Quick start
 
-On Windows 10/11 x64, install Python 3.13 (the version used for this source release) and Node.js 22.14 or newer. Download the source from the [releases page](https://github.com/Arienax/gxworks-agent/releases/latest), or clone the repository:
+On Windows 10/11 x64, download the component you need from the [releases page](https://github.com/Arienax/gxworks-agent/releases/latest). Extract the entire ZIP. The executable packages work independently and require neither Python nor Node.js.
+
+| Package | Usage | Entry point |
+| --- | --- | --- |
+| `GXWorks-Agent-MCP-windows-x64.zip` | Connect an MCP client such as Codex and use its model | `gxworks-agent-mcp.exe --local` |
+| `GXWorks-Agent-Web-windows-x64.zip` | Generate, edit, and manage projects in a browser | `start-web.cmd` |
+
+<a name="mcp"></a>
+
+### Independent MCP
+
+Add a stdio server in your client: use the extracted `gxworks-agent-mcp.exe` as the command and `--local` as its argument. Refresh the connection, call `list_projects`, then select a project or create one with its actual CPU and program type.
+
+Try: “Create an FX3U Ladder project. Read the generation context and relevant instruction evidence. Count each press of X0, turn on Y0 after three counts, and reset with X1. Save the candidate and show its artifacts and remaining diagnostics.”
+
+External clients use their own models without running Web. GX import follows configured execution consent. Web is optional when you want to share a project and its review flow.
+
+### Web workbench
+
+Run `start-web.cmd` in the extracted Web directory and choose an engineering workspace folder. Create a project and configure a model API under **Settings → Model → Model API** to generate programs. Viewing existing projects requires no model call. Extract updates into a new directory and retain your separate workspace and personal settings.
+
+### Run from source
+
+Install Python 3.13 and Node.js 22.14 or newer, then run:
 
 ```powershell
 git clone https://github.com/Arienax/gxworks-agent.git
@@ -95,41 +118,15 @@ cd gxworks-agent
 .\start-web.cmd
 ```
 
-The build creates the Python environment and builds the Web frontend. At startup, choose an engineering workspace folder; keep it outside the source directory so source updates do not overwrite projects.
-
-| Entry point | Usage | Requirements |
-| --- | --- | --- |
-| `gxworks-agent-mcp.cmd --local` | Connect an MCP client such as Codex and use its model | Python environment; no Web or Node.js required for MCP-only use |
-| `start-web.cmd` | Generate, edit, and manage projects in a browser workbench | Complete the source build above |
-
-<a name="mcp"></a>
-
-### Independent MCP
-
-After the Web source setup, add a stdio server in your client: use the full path to `gxworks-agent-mcp.cmd` as the command and `--local` as its argument. For MCP-only use, first create a Python environment and install its dependencies:
-
-```powershell
-py -3.13 -m venv .venv-mcp
-.\.venv-mcp\Scripts\python.exe -m pip install -r requirements\mcp.txt
-```
-
-Refresh the client connection, call `list_projects`, then select a project or create one with its actual CPU and program type.
-
-Try: “Create an FX3U Ladder project. Read the generation context and relevant instruction evidence. Count each press of X0, turn on Y0 after three counts, and reset with X1. Save the candidate and show its artifacts and remaining diagnostics.”
-
-External clients use their own models without running Web. GX import follows configured execution consent. Web is optional when you want to share a project and its review flow.
-
-### Web workbench
-
-Run `start-web.cmd` after the source build. Create a project and configure a model API under **Settings → Model → Model API** to generate programs. Viewing existing projects requires no model call. Rebuild after updating the source; engineering workspaces and personal settings are stored separately.
+For MCP-only source use, create `.venv-mcp`, install `requirements/mcp.txt`, and use `gxworks-agent-mcp.cmd --local`. It does not need Node.js.
 
 ### Engineering templates and knowledge resources
 
-The source includes the FX3U baseline, node and token templates, and 57 CPU-specific blank FBD projects in `src/gxw/templates/`. Keep this directory when copying or packaging the application. Template availability does not establish native compilation or PLC runtime behavior for every CPU.
+Packages include the FX3U baseline, node and token templates, and 57 CPU-specific blank FBD projects under `gxw/templates/`; their source location is `src/gxw/templates/`. Keep these files when copying the application. Template availability does not establish native compilation or PLC behavior for every CPU.
 
-Vendor manuals, the manual-derived knowledge database and full instruction definitions are not bundled with this source release. Manual-backed RAG and some detailed instruction facts require a local index built from materials you are authorized to use. The recorded RAG demos above used the local knowledge corpus.
+Executable packages include the reviewed fact corpus and project-authored examples for RAG. Vendor manuals and original manual-text indexes are excluded. Generated runtime data is separate from the source repository; source users can copy a package's `knowledge/` to `resources/knowledge/` and its `resources/instructions/mitsubishi/` to the matching source directory.
 
-Native saving, code checking, GX import, and simulation require the corresponding Mitsubishi software locally. Read-only PLC monitoring requires MX Component and a configured logical station. These Mitsubishi applications are not included in the repository.
+Native saving, code checking, GX import, and simulation require the corresponding Mitsubishi software locally. Read-only PLC monitoring requires MX Component and a configured logical station. These Mitsubishi applications are not included.
 
 ## Current scope
 

@@ -7,11 +7,14 @@ def run():
     if sys.argv[1:] == ["--self-test-core"]:
         import importlib
         from gxw.object_model import default_baseline, native_catalog
+        from gxw.project_templates import blank_fbd_baseline, blank_fbd_models
         from gxw.token_q import _catalog
         packages = ("agent_runtime", "application", "gxw", "gxworks2", "inspection", "integrations",
                     "knowledge", "model_runtime", "plc", "rendering", "shared", "simulator", "storage")
-        compiled = all(hasattr(importlib.import_module(name), "__compiled__") for name in packages)
-        templates = len(default_baseline()) > 0 and len(native_catalog()) > 0
+        imports = all(importlib.import_module(name) is not None for name in packages)
+        models = blank_fbd_models()
+        templates = (len(models) == 57 and all(blank_fbd_baseline(model) for model in models)
+                     and len(default_baseline()) > 0 and len(native_catalog()) > 0)
         catalogs = bool(_catalog("q02")["headers"] and _catalog("q03udv")["headers"])
         from application.compact_protocol import expand_compact_ladder
         from application.generation_agent import direct_response_schema
@@ -24,9 +27,9 @@ def run():
         protocol = operations(legacy) == operations(current) == [("LD", ["X0"]), ("OUT", ["Y0"])]
         schema = direct_response_schema()
         protocol = protocol and schema.get("type") == "object" and "anyOf" not in schema
-        print(json.dumps({"native_compiled": compiled, "embedded_templates": templates,
+        print(json.dumps({"core_imports": imports, "frozen": bool(getattr(sys, "frozen", False)), "templates": templates,
                           "cpu_catalogs": catalogs, "generation_protocol": protocol, "native_operations": False}))
-        return 0 if compiled and templates and catalogs and protocol else 1
+        return 0 if imports and templates and catalogs and protocol else 1
     if sys.argv[1:] == ["--self-test-settings"]:
         from storage.user_data import runtime_self_test
         status = runtime_self_test()
