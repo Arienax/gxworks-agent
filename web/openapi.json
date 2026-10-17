@@ -630,7 +630,8 @@
             "enum": [
               "gx_import",
               "simulation",
-              "debug"
+              "debug",
+              "native_engineering"
             ],
             "title": "Action",
             "type": "string"
@@ -640,6 +641,18 @@
             "description": "Operator acknowledged manual backup for an ordinary CSV GX send; does not grant execution approval.",
             "title": "Manual Backup Acknowledged",
             "type": "boolean"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan"
           },
           "plan_id": {
             "anyOf": [
@@ -7623,6 +7636,72 @@
           }
         },
         "summary": "Edit Simulation Draft"
+      }
+    },
+    "/api/projects/{project_id}/versions/{version_id}/simulation-workbench/live": {
+      "get": {
+        "operationId": "simulation_live_api_projects__project_id__versions__version_id__simulation_workbench_live_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "title": "After",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "view_id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "View Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Simulation Live"
       }
     },
     "/api/projects/{project_id}/versions/{version_id}/simulation-workbench/plans": {

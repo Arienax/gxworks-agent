@@ -111,7 +111,7 @@ test('production chunks defer optional panels and respect the default size budge
     assert.ok(bytes(chunk) <= 500_000, `${chunk.fileName} exceeds Vite's default 500 kB warning budget.`);
   }
   const deferred = new Set(chunks.flatMap(chunk => chunk.dynamicImports));
-  for (const feature of ['Settings', 'SimulationWorkbench', 'FBDPanel', 'HardwarePanel']) {
+  for (const feature of ['Settings', 'SimulationWorkbench', 'FBDPanel', 'HardwarePanel', 'NativeEngineeringPlan']) {
     const owners = chunks.filter(chunk => Object.keys(chunk.modules).some(id =>
       id.replaceAll('\\', '/').endsWith(`/src/features/${feature}.tsx`)));
     assert.ok(owners.length, `${feature} must remain in the production build.`);

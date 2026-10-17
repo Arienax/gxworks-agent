@@ -124,6 +124,10 @@ def unpack_candidate(snapshot, output):
     if snapshot['target_mode'] == 'sfc':
         from .sfc import validate_candidate as validate_sfc_candidate
         validate_sfc_candidate(files)
+    elif snapshot['target_mode'] == 'st':
+        from .native_st import validate_candidate as validate_st_candidate
+        validate_st_candidate(files, plc_model=snapshot['plc_model'],
+            program_name=snapshot['metadata'].get('program_name'), metadata=snapshot['metadata'])
     else:
         validate_candidate(files)
     output = Path(output)
@@ -329,6 +333,9 @@ def prepare_candidate(output, *, model=None, baseline=None, imported=None, progr
         metadata['validation'].update(report['validation'])
         metadata['native_compilation'] = {'build':report['native_validation'],'cold_reopen':report['cold_validation']}
         messages[:] = ['当前源码已原生编译、完整检查并保存；独立冷重开后的保存代码与重新编译一致。运行验证尚未执行。']
+        if report['validation'].get('gui_configuration') != 'matched':
+            metadata['validation']['status'] = 'unverified'
+            messages.append('GUI 自动分配配置尚未完整验证；已验证的编译、源码检查和保存代码记录分别保留，不能视为可见原生会话通过。')
     if library_source is not None:
         metadata['library_import'] = copy.deepcopy(report['library_import'])
         for definition in metadata['library_import']['definitions']:

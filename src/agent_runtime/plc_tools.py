@@ -29,11 +29,14 @@ SAFE_TOOL_NAMES = (
     "patch_program",
     "validate_current_program",
     "import_current_program_to_gxworks2",
+    "execute_native_engineering",
     "get_fbd_catalog",
     "read_fbd_project",
     "read_fbd_libraries",
     "read_fbd_definition",
     "create_fbd_candidate",
+    "read_st_project",
+    "create_st_candidate",
     "read_sfc_project",
     "create_sfc_candidate",
     "list_gxworks2_sessions",
@@ -62,6 +65,7 @@ READ_ONLY_TOOL_NAMES = frozenset({
     "read_fbd_libraries",
     "read_fbd_definition",
     "read_sfc_project",
+    "read_st_project",
     "list_gxworks2_sessions", "read_gxworks2_snapshot",
     "list_simulator_targets", "get_simulator_status", "read_simulator_devices",
     "connect_simulator", "prepare_simulator_scenario", "start_simulator_trace",
@@ -174,7 +178,7 @@ class ToolDefinition:
             return "model"
         if self.name in SOURCE_TOOL_NAMES or self.name == "compile_project":
             return "program"
-        if self.name in {"patch_program", "import_current_program_to_gxworks2", "read_fbd_definition"} | NATIVE_INSPECTION_TOOL_NAMES:
+        if self.name in {"patch_program", "import_current_program_to_gxworks2", "execute_native_engineering", "read_fbd_definition"} | NATIVE_INSPECTION_TOOL_NAMES:
             return "version"
         return "project"
 
@@ -1016,6 +1020,33 @@ def _patch_program(context: ToolContext, arguments: Mapping[str, Any], *, genera
     }
 
 
+def _request_native_engineering(context: ToolContext, arguments: Mapping[str, Any]) -> Dict[str, Any]:
+    from application.native_engineering import normalize_native_plan, validate_native_baseline
+    if not isinstance(context.version, Mapping) or context.version.get('target_mode') not in {'fbd', 'st'}:
+        raise ValueError('可见原生工程执行需要已选择的结构化 FBD 或 ST 保存版本。')
+    baseline = context.native_snapshot or context.fbd_baseline
+    if not baseline:
+        raise ValueError('可见原生工程执行需要当前版本保存的 GXW 工程。')
+    try:
+        plan = normalize_native_plan(arguments.get('plan'), plc_model=context.plc_model)
+    except ValueError as error:
+        raise ToolPreconditionError('INVALID_ARGUMENTS', str(error)) from error
+    validate_native_baseline(baseline, plc_model=context.plc_model)
+    if context.version['target_mode'] == 'st':
+        from gxw.fb_authoring import st_program_snapshot
+        from gxw.visible_engineering import normalized_st
+        selected = [row for row in st_program_snapshot(baseline)['programs']
+                    if row['program'] == context.version.get('program_name')]
+        if (len(selected) != 1 or len(selected[0]['task_bindings']) != 1
+                or not isinstance(context.st_text, str)
+                or normalized_st(selected[0]['st_text']) != normalized_st(context.st_text)):
+            raise ValueError('ST 版本正文、当前 Program 及唯一任务绑定不一致。')
+    return {'requires_confirmation': True,
+        'message': '工程方案已冻结。获准后会在独立 GX Works2 工程副本中执行，核对所请求的验证层后保存新版本。',
+        'pending_action': {'type': 'execute_native_engineering', 'project_id': context.project_id,
+                           'version_id': context.version_id, 'plan': plan}}
+
+
 def _request_gxworks2_import(
     context: ToolContext, _arguments: Mapping[str, Any]
 ) -> Dict[str, Any]:
@@ -1178,12 +1209,19 @@ def _create_fbd_candidate(context: ToolContext, arguments: Mapping[str, Any], *,
                if 'library_import' in payload['metadata'] else {}),
             'generation_handoff': copy.deepcopy(payload['metadata'].get('generation_handoff')),
             'maintainability_review': copy.deepcopy(payload['metadata'].get('maintainability_review')),
-            'verification': {'structural_checks_passed': True, 'native_verified': operation=='compile',
+            'verification': {'structural_checks_passed': True,
+                             'native_verified': operation=='compile' and payload['metadata']['validation'].get('gui_configuration') == 'matched',
                              'gx_compile': payload['metadata']['validation']['gx_compile'],
+                             **({key: payload['metadata']['validation'][key] for key in
+                                 ('gui_configuration', 'saved_code', 'public_check', 'cold_reopen')
+                                 if key in payload['metadata']['validation']} if operation == 'compile' else {}),
                              **({key: copy.deepcopy(payload['metadata']['validation'][key])
                                  for key in ('library_definitions', 'native_initial_value_changes')}
                                 if 'library_import' in payload['metadata'] else {})},
-            'message': 'FBD 编译保存候选已完成独立冷读和代码对应检查，等待工程确认。' if operation=='compile' else 'FBD 候选已完成结构、声明与预览校验，等待工程确认；GX Works2 编译尚未执行。',
+            'message': ('FBD 编译保存候选已完成独立冷读和代码对应检查，等待工程确认。'
+                        + ('GUI 自动分配配置尚未完整验证，不能视为可见原生会话通过。'
+                           if payload['metadata']['validation'].get('gui_configuration') != 'matched' else ''))
+                        if operation=='compile' else 'FBD 候选已完成结构、声明与预览校验，等待工程确认；GX Works2 编译尚未执行。',
             'pending_action': action}
 
 
@@ -1236,6 +1274,38 @@ def _create_sfc_candidate(context: ToolContext, arguments: Mapping[str, Any]) ->
                 'base_version_id': context.version_id or None, 'target_mode': 'sfc',
                 'summary': payload['metadata']['summary'], 'validation': payload['metadata']['validation'],
                 '_confirmed_spec': copy.deepcopy(_confirmed_spec(context)), '_sfc_candidate': snapshot}}
+
+
+def _read_st_project(context: ToolContext, arguments: Mapping[str, Any]) -> Dict[str, Any]:
+    from application.fbd import decode_upload
+    from gxw.fb_authoring import st_program_snapshot
+    raw = decode_upload(arguments['data_base64']) if 'data_base64' in arguments else context.native_snapshot
+    if raw is None:
+        raise ValueError('请选择带 GXW 快照的版本或提供已有 ST 工程。')
+    snapshot = st_program_snapshot(raw)
+    if 'program' in arguments:
+        snapshot['programs'] = [row for row in snapshot['programs'] if row['program'] == arguments['program']]
+        if len(snapshot['programs']) != 1:
+            raise ValueError('没有唯一匹配的普通 ST Program。')
+    return {'available': True, 'version_id': context.version_id or None, **snapshot}
+
+
+def _create_st_candidate(context: ToolContext, arguments: Mapping[str, Any]) -> Dict[str, Any]:
+    import tempfile
+    from application.fbd import decode_upload, pack_candidate
+    from application.native_st import prepare_candidate
+    if arguments.get('operation') != 'import':
+        raise ValueError('ST 工程候选入口仅导入已保存的原生工程。')
+    raw = decode_upload(arguments['data_base64'])
+    with tempfile.TemporaryDirectory(prefix='gxw-st-candidate-') as directory:
+        payload = prepare_candidate(directory, imported=raw, program_name=arguments['program'],
+            plc_model=context.plc_model, summary=arguments.get('summary') or '导入保存的 ST Program 工程')
+        snapshot = pack_candidate(payload, directory)
+    return {'requires_confirmation': True, 'verification': payload['metadata']['validation'],
+        'pending_action': {'type': 'accept_st_candidate', 'project_id': context.project_id,
+            'base_version_id': context.version_id or None, 'target_mode': 'st',
+            'summary': payload['metadata']['summary'], 'validation': payload['metadata']['validation'],
+            '_confirmed_spec': copy.deepcopy(_confirmed_spec(context)), '_st_candidate': snapshot}}
 
 
 def build_default_tool_registry() -> ToolRegistry:
@@ -1506,6 +1576,27 @@ def build_default_tool_registry() -> ToolRegistry:
             confirmation_required=True,
         )
     )
+    registry.register(ToolDefinition('execute_native_engineering',
+        '请求在独立 GX Works2 进程和托管工程副本中执行显式工程方案。需要已保存的 FX3U 工程版本；支持已验证的标签、默认初值结构体、ST FB、普通 ST Program（新建时显式指定已有资源和任务）、FBD 调用及既有图形改接、D/M 分配、编译、全局地址交叉引用、保存和重开。图形动作使用当前源码节点和连线标识，连接必须显式给出端口及正交路径。经现有审批后执行；不接受路径、PID 或原生驱动参数。',
+        {'type': 'object', 'properties': {'plan': {'type': 'object',
+            'properties': {'schema_version': {'type': 'integer', 'enum': [1]},
+                'commands': {'type': 'array', 'minItems': 1, 'maxItems': 256,
+                    'items': {'type': 'object', 'properties': {'operation': {'type': 'string', 'enum': [
+                        'create_global_labels', 'edit_global_labels', 'edit_pou_labels', 'create_structure', 'create_st_fb', 'edit_st_fb',
+                        'create_st_program', 'edit_st_program', 'edit_fbd_graph',
+                        'configure_project', 'create_fbd_call', 'compile', 'show_assignments', 'save', 'reopen']},
+                        'source_name': {'type': 'string'}, 'declarations': {'type': 'array', 'items': {'type': 'object'}},
+                        'members': {'type': 'array', 'items': {'type': 'object'}},
+                        'st_text': {'type': 'string'}, 'options': {'type': 'object'}, 'caller': {'type': 'string'},
+                        'instance': {'type': 'string'}, 'definition': {'type': 'string'},
+                        'resource': {'type': 'string'}, 'task': {'type': 'string'},
+                        'scope_mode': {'type': 'string', 'enum': ['existing_task']},
+                        'actions': {'type': 'array', 'minItems': 1, 'maxItems': 128, 'items': {'type': 'object'}},
+                        'arguments': {'type': 'object'}, 'queries': {'type': 'array', 'items': {'type': 'object'}}},
+                        'required': ['operation'], 'additionalProperties': False}}},
+            'required': ['schema_version', 'commands'], 'additionalProperties': False}},
+            'required': ['plan'], 'additionalProperties': False},
+        _request_native_engineering, confirmation_required=True))
     registry.register(ToolDefinition('get_fbd_catalog',
         '读取当前 CPU 的空白 FBD 模板、工程源码引脚和声明表；启用 56 个 Q/L/FX 原生菜单，当前 FBD 复现流程不支持 FX1，按合并菜单身份选择模板。',
         {'type': 'object', 'properties': {'program': {'type': 'string'}}, 'additionalProperties': False},
@@ -1547,6 +1638,16 @@ def build_default_tool_registry() -> ToolRegistry:
          'summary': {'type': 'string'}, 'generation_context_id': {'type': 'string', 'maxLength': 128}},
          'required': ['operation'], 'additionalProperties': False},
         fbd_candidate, confirmation_required=True))
+    registry.register(ToolDefinition('read_st_project',
+        '读取保存 GXW 中普通 ST Program 的正文、局部声明、资源及任务成员；program 使用返回的逻辑 POU 名称。只读，不根据正文生成工程。',
+        {'type': 'object', 'properties': {'program': {'type': 'string'}, 'data_base64': {'type': 'string'}},
+         'additionalProperties': False}, _read_st_project))
+    registry.register(ToolDefinition('create_st_candidate',
+        '导入已保存 GXW 中明确选定的普通 ST Program，保留整个工程、声明和任务绑定，作为可见原生工程执行的保存版本。必须指定 read_st_project 返回的逻辑 program；编译及运行验证另行执行。',
+        {'type': 'object', 'properties': {'operation': {'type': 'string', 'enum': ['import']},
+            'data_base64': {'type': 'string'}, 'program': {'type': 'string'}, 'summary': {'type': 'string'}},
+         'required': ['operation', 'data_base64', 'program'], 'additionalProperties': False},
+        _create_st_candidate, confirmation_required=True))
     registry.register(ToolDefinition('read_sfc_project',
         '读取当前 GXW 或上传工程中 SFC 的 CPU、声明、图形引用和子程序。native=true 在隔离工作区只读取得原生格点；已有对应证据时复用，不推断执行语义。',
         {'type': 'object', 'properties': {'program': {'type': 'string'}, 'data_base64': {'type': 'string'}, 'native': {'type': 'boolean'}},

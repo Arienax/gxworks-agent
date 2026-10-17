@@ -11,7 +11,7 @@ from __future__ import annotations
 from .workspace import ConflictError, atomic_json, contained, read_json
 
 MODES = frozenset({"ask", "auto", "full"})
-EXTERNAL_ACTIONS = frozenset({"gx_import", "simulation", "debug"})
+EXTERNAL_ACTIONS = frozenset({"gx_import", "simulation", "debug", "native_engineering"})
 
 
 def allows(mode, action, payload):
@@ -19,7 +19,7 @@ def allows(mode, action, payload):
         return False
     if not payload.get("project_id") or not payload.get("version_id"):
         return False
-    if action in {"simulation", "debug"} and not isinstance(payload.get("plan"), dict):
+    if action in {"simulation", "debug", "native_engineering"} and not isinstance(payload.get("plan"), dict):
         return False
     return mode == "full" or (mode == "auto" and action in {"simulation", "debug"})
 

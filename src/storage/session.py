@@ -543,13 +543,15 @@ class SessionStore:
                 **dict(metadata),
             }
         )
+        # Persist the complete version before the project's atomic visibility
+        # and activation commit. Failed writes must leave the prior selection.
+        self._write_json(
+            self.version_dir(project_id, version_id) / "version.json", version
+        )
         project.setdefault("versions", []).append(version)
         if activate:
             project["active_version_id"] = version_id
         self.save_project(project)
-        self._write_json(
-            self.version_dir(project_id, version_id) / "version.json", version
-        )
         return version
 
     def update_version_metadata(self, project_id, version_id, updates):

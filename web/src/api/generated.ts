@@ -845,6 +845,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/versions/{version_id}/simulation-workbench/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Simulation Live */
+        get: operations["simulation_live_api_projects__project_id__versions__version_id__simulation_workbench_live_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/versions/{version_id}/simulation-workbench/plans": {
         parameters: {
             query?: never;
@@ -1439,13 +1456,17 @@ export interface components {
              * Action
              * @enum {string}
              */
-            action: "gx_import" | "simulation" | "debug";
+            action: "gx_import" | "simulation" | "debug" | "native_engineering";
             /**
              * Manual Backup Acknowledged
              * @description Operator acknowledged manual backup for an ordinary CSV GX send; does not grant execution approval.
              * @default false
              */
             manual_backup_acknowledged: boolean;
+            /** Plan */
+            plan?: {
+                [key: string]: unknown;
+            } | null;
             /** Plan Id */
             plan_id?: string | null;
             /** Project Id */
@@ -4501,6 +4522,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicObject"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    simulation_live_api_projects__project_id__versions__version_id__simulation_workbench_live_get: {
+        parameters: {
+            query?: {
+                after?: number;
+                view_id?: string;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

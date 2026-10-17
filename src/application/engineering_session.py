@@ -243,7 +243,7 @@ class EngineeringSession:
             data.pop("pending_action", None)
         elif proposal["status"] == "pending":
             envelope["status"] = "execution_consent_required"
-            data["message"] = "GX import requires operator startup consent: --approval-mode full --confirm-full-access. Submit a new import call after configuration; existing pending actions are not executed automatically."
+            data["message"] = "This native engineering operation requires operator startup consent: --approval-mode full --confirm-full-access. Submit a new operation call after configuration; existing pending actions are not executed automatically."
         else:
             envelope["status"] = proposal["status"]
             data.update(requires_confirmation=False, execution_result=result)

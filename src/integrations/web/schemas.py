@@ -69,10 +69,11 @@ class ProposalDecision(Command):
 
 
 class ExecutionProposal(Command):
-    action: Literal["gx_import", "simulation", "debug"]
+    action: Literal["gx_import", "simulation", "debug", "native_engineering"]
     project_id: str
     version_id: str
     plan_id: str | None = None
+    plan: dict[str, Any] | None = None
     request_id: str = Field(min_length=1, max_length=128)
     manual_backup_acknowledged: bool = Field(default=False, strict=True,
         description="Operator acknowledged manual backup for an ordinary CSV GX send; does not grant execution approval.")

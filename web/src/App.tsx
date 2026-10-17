@@ -80,6 +80,7 @@ const SimulationWorkbench = lazy(() => import("./features/SimulationWorkbench").
 const FBDPanel = lazy(() => import("./features/FBDPanel").then(module => ({ default: module.FBDPanel })));
 const SFCPanel = lazy(() => import("./features/SFCPanel").then(module => ({ default: module.SFCPanel })));
 const FBDImport = lazy(() => import("./features/FBDPanel").then(module => ({ default: module.FBDImport })));
+const NativeEngineeringPlan = lazy(() => import("./features/NativeEngineeringPlan").then(module => ({ default: module.NativeEngineeringPlan })));
 
 let bootstrapToken =
   new URLSearchParams(location.hash.slice(1)).get("token") || "";
@@ -1760,6 +1761,8 @@ export default function App() {
                     <strong>
                       {p.action === "accept_local"
                         ? t("保存候选")
+                        : p.action === "native_engineering"
+                          ? t("在 GX Works2 中编辑工程")
                         : p.action}
                     </strong>
                     {status(p.status)}
@@ -1795,7 +1798,11 @@ export default function App() {
                       {!!preview.plan && (
                         <>
                           <h3>{t("指定执行方案")}</h3>
-                          <DataView value={preview.plan} />
+                          {preview.action === "native_engineering"
+                            ? <Suspense fallback={<p role="status">{t("正在读取…")}</p>}>
+                                <NativeEngineeringPlan value={preview.plan} t={t} />
+                              </Suspense>
+                            : <DataView value={preview.plan} />}
                         </>
                       )}
                     </div>

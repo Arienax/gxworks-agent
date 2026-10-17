@@ -32,7 +32,8 @@ def mcp_tool(schema):
                     "get_simulator_status", "read_simulator_devices", "list_projects", "get_operation_status",
                     "connect_simulator", "prepare_simulator_scenario", "start_simulator_trace",
                     "get_simulator_trace", "stop_simulator_trace"},
-                    "destructiveHint": function["name"] == "import_current_program_to_gxworks2"})
+                    "destructiveHint": function["name"] in {
+                        "import_current_program_to_gxworks2", "execute_native_engineering"}})
 
 
 logger = logging.getLogger(__name__)

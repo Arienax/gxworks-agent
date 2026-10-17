@@ -12,7 +12,7 @@ from .workspace import (ConflictError, artifact_relative_path, atomic_json, bind
                         private_state_dir, public_payload, read_json, record_id)
 
 
-_ACTIONS = frozenset({"accept_local", "gx_import", "simulation", "debug"})
+_ACTIONS = frozenset({"accept_local", "gx_import", "simulation", "debug", "native_engineering"})
 _PUBLIC = ("id", "action", "project_id", "base_version_id", "status", "created_at",
            "updated_at", "summary", "result", "error_code")
 
@@ -148,6 +148,14 @@ class ProposalService:
         elif payload.get("target_mode") == "sfc":
             from .sfc import validate_candidate
             validate_candidate({name: data for name, _relative, data in prepared})
+        elif payload.get("target_mode") == "st" and 'gxw' in manifest:
+            from .native_st import validate_candidate
+            if not isinstance(payload.get('metadata'), dict) or not isinstance(payload.get('plc_model'), str):
+                raise ValueError('Native ST candidate requires explicit source metadata and PLC model')
+            validate_candidate({name: data for name, _relative, data in prepared},
+                plc_model=payload.get('plc_model'),
+                program_name=(payload.get('metadata') or {}).get('program_name'),
+                metadata=payload.get('metadata'))
         target = contained(self.directory / proposal_id, self.directory)
         target.mkdir(exist_ok=False)
         for name, relative, data in prepared:
@@ -378,3 +386,35 @@ class ProposalService:
             if version_id is not None and self.store.get_version(project_id, version_id) is None:
                 self.store.discard_version(project_id, version_id)
             raise
+
+    def complete_native_candidate(self, proposal_id, candidate):
+        """Commit a verified native result under its already executing approval.
+
+        Called on the workspace writer thread after the COM future returns.
+        The approved batch remains immutable; result artifacts use the same
+        frozen staging and version transaction as ordinary local candidates.
+        """
+        with self.lock.thread_lock:
+            self.lock.require_acquired()
+            record = self._load(proposal_id)
+            if record['action'] != 'native_engineering' or record['status'] != 'executing':
+                raise ConflictError('A native result requires its executing approved proposal')
+            self._check_binding(record)
+            base = self.store.get_version(record['project_id'], record['base_version_id'])
+            mode = base.get('target_mode') if isinstance(base, dict) else None
+            if (not isinstance(candidate, dict) or mode not in ('fbd', 'st')
+                    or candidate.get('target_mode') != mode):
+                raise ValueError('Native engineering requires a verified candidate in the approved source mode')
+            if mode == 'st':
+                expected_cpu = base.get('plc_model') or self._project(record['project_id']).get('plc_model')
+                if candidate.get('plc_model') != expected_cpu:
+                    raise ValueError('Native ST result differs from the approved PLC model')
+                if (not isinstance(candidate.get('artifacts'), dict)
+                        or not {'gxw', 'st', 'write_report'} <= candidate['artifacts'].keys()):
+                    raise ValueError('Native ST result requires its saved GXW source artifacts')
+            payload = copy.deepcopy(candidate)
+            payload.update(project_id=record['project_id'], base_version_id=record['base_version_id'],
+                _confirmed_spec=copy.deepcopy(self._project(record['project_id']).get('confirmed_spec')))
+            self._candidate_scope(record['project_id'], record['base_version_id'], payload)
+            payload = self._freeze_staging(proposal_id, payload)
+            return self._accept_local({**record, 'private_payload': payload})

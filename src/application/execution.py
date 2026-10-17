@@ -11,6 +11,7 @@ import copy
 import hashlib
 import importlib
 import json
+import math
 import os
 import queue
 import re
@@ -84,6 +85,11 @@ def _default_com():
 
 def _default_dependencies(operation):
     """Loading this bundle is permitted only inside an explicit worker task."""
+    if operation == 'native_engineering':
+        from gxworks2.engineering_driver import NativeEngineeringDriver
+        from application.native_engineering import NativeEngineeringSession
+        return {'driver_factory': NativeEngineeringDriver.start_from_saved,
+                'session_factory': NativeEngineeringSession}
     from gxworks2 import import_current_program
 
     bundle = {"importer": import_current_program}
@@ -169,6 +175,34 @@ def _contained(path, root):
         raise ValueError("Execution artifact escapes its managed directory.") from error
 
 
+def _native_engineering_filename(projection):
+    """Use the saved logical project identity inside the exclusive run folder."""
+    name = (projection.get('configuration') or {}).get('name')
+    stem = name[:-4] if isinstance(name, str) and name.endswith('.prj') else ''
+    reserved = {'CON', 'PRN', 'AUX', 'NUL', *(f'COM{n}' for n in range(1, 10)),
+                *(f'LPT{n}' for n in range(1, 10))}
+    if (not 1 <= len(stem) <= 30 or re.search(r'[<>:"/\\|?*\x00-\x1f]', stem)
+            or stem.endswith(('.', ' ')) or stem.split('.')[0].upper() in reserved):
+        raise ValueError('Saved native project identity is not a supported managed GX filename')
+    return stem + '.gxw'
+
+
+def _native_diagnostic_value(value):
+    """Detach private diagnostics without serializing project or binary data."""
+    if isinstance(value, Mapping):
+        return {key: _native_diagnostic_value(item) for key, item in value.items()
+                if isinstance(key, str) and key not in {'data', 'unverified_data'}
+                and not isinstance(item, (bytes, bytearray, memoryview))}
+    if isinstance(value, (list, tuple)):
+        return [_native_diagnostic_value(item) for item in value
+                if not isinstance(item, (bytes, bytearray, memoryview))]
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float) and math.isfinite(value):
+        return value
+    return None
+
+
 class GXExecutionCoordinator:
     """Serialize import, simulation and debug on one fixed COM thread.
 
@@ -177,7 +211,7 @@ class GXExecutionCoordinator:
     Shutdown drains approved operations by default; it never retries them.
     """
 
-    OPERATIONS = {"gx_import", "simulation", "debug"}
+    OPERATIONS = {"gx_import", "simulation", "debug", "native_engineering"}
     READ_OPERATIONS = {"inspect_gx", "read_gx"}
     _ALIASES = {"import_gx": "gx_import", "simulate": "simulation"}
 
@@ -360,6 +394,8 @@ class GXExecutionCoordinator:
         from application.workspace import contained
 
         project_id, version_id, version, root = self._version(payload)
+        if operation == 'native_engineering':
+            return self._native_engineering(payload, version, root, project_id, progress)
         # Dependencies are loaded only after the queued snapshot has been rechecked.
         bundle = self._dependencies_factory(operation)
         if operation == "gx_import":
@@ -470,6 +506,82 @@ class GXExecutionCoordinator:
         # A job finishing is not proof of a verified PLC test result.
         result["passed"] = result.get("status") == "passed"
         return result
+
+    def _native_engineering(self, payload, version, root, project_id, progress):
+        from application.native_engineering import (normalize_native_plan, validate_native_baseline,
+            verified_native_data, native_engineering_summary)
+        from application.workspace import artifact_relative_path, contained
+        if set(payload) - {'project_id', 'version_id', 'plan', 'type', 'change_scope'}:
+            raise ValueError('Native engineering accepts only a version-bound domain plan')
+        if version.get('target_mode') not in {'fbd', 'st'}:
+            raise ValueError('Native engineering requires a saved structured FBD or ST version')
+        cpu = version.get('plc_model') or self.store.get_project(project_id).get('plc_model')
+        plan = normalize_native_plan(payload.get('plan'), plc_model=cpu)
+        artifacts = {name: contained(root / artifact_relative_path(filename), root).read_bytes()
+                     for name, filename in version['artifacts'].items()}
+        if version['target_mode'] == 'st':
+            from application.native_st import validate_candidate
+            validate_candidate(artifacts, plc_model=cpu, program_name=version.get('program_name'), metadata=version)
+        else:
+            from application.fbd import validate_candidate
+            validate_candidate(artifacts)
+        projection = validate_native_baseline(artifacts['gxw'], plc_model=cpu)
+        filename = _native_engineering_filename(projection)
+        directory = contained(self.store.project_dir(project_id) / 'gxw_runs' / uuid.uuid4().hex,
+                              self.store.project_dir(project_id))
+        directory.mkdir(parents=True, exist_ok=False)
+        path = directory / filename
+        path.write_bytes(artifacts['gxw'])
+        def observed(step):
+            # Native observations and errors may contain private evidence paths.
+            # Only a sentence formed from whitelisted operation/status values
+            # leaves the desktop worker; machine receipt fields stay unchanged.
+            if progress is not None:
+                actions = {
+                    'create_structure': '建立结构类型', 'create_global_labels': '建立全局标签表',
+                    'edit_global_labels': '写入全局声明', 'edit_pou_labels': '写入局部声明',
+                    'create_st_fb': '建立 ST 功能块', 'edit_st_fb': '写入 ST 实现',
+                    'create_st_program': '建立 ST 程序并登录任务', 'edit_st_program': '写入 ST 程序',
+                    'edit_fbd_graph': '修改图形连接',
+                    'create_fbd_call': '建立功能块调用', 'configure_project': '设置自动分配范围',
+                    'compile': '编译工程', 'show_assignments': '核对地址映射',
+                    'save': '保存工程', 'reopen': '重新打开工程',
+                }
+                for change in native_engineering_summary({'steps': [step]})['changes']:
+                    action = actions.get(change['operation'])
+                    if action is not None:
+                        progress({
+                            'executing': f'正在{action}。', 'completed': f'已完成：{action}。',
+                            'failed': f'{action}未完成。', 'interrupted': f'已中止{action}。',
+                            'unverified': f'尚未确认{action}是否完成。',
+                        }[change['status']])
+        try:
+            bundle = self._dependencies_factory('native_engineering')
+            driver = bundle['driver_factory'](path, cpu, timeout=30, progress=None,
+                                             evidence_directory=directory / 'evidence')
+            try:
+                session = bundle['session_factory'](driver, expected_cpu=cpu, progress=observed)
+            except Exception:
+                driver.close()
+                raise
+            result = session.run(plan['commands'], baseline=artifacts['gxw'])
+            from application.workspace import atomic_json
+            atomic_json(contained(directory / 'receipt.json', directory), _native_diagnostic_value(result))
+        except Exception as error:
+            from application.workspace import atomic_json
+            failure = {'type': type(error).__name__, 'message': str(error),
+                       'observation': getattr(error, 'observation', None)}
+            atomic_json(contained(directory / 'failure.json', directory), _native_diagnostic_value(failure))
+            raise
+        summary = native_engineering_summary(result)
+        try:
+            verified_native_data(result, plan)
+        except ValueError:
+            summary.update(status='interrupted', passed=False,
+                message='原生工程会话或请求的验证层未完成，未创建活动版本。')
+            return summary
+        # Internal-only receipt, consumed by WorkbenchService before projection.
+        return {'status': 'completed', 'passed': True, '_native_result': result}
 
     def close(self, *, wait=True, cancel_pending=False):
         with self._guard:

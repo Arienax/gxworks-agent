@@ -954,7 +954,7 @@ class WorkbenchService:
 
     def _pending_proposal(self, pending, request_id, *, base_version_id=None, consent=None, direct_request=False,
                           change_scope=None):
-        if pending.get('type') in ('accept_fbd_candidate', 'accept_sfc_candidate'):
+        if pending.get('type') in ('accept_fbd_candidate', 'accept_sfc_candidate', 'accept_st_candidate'):
             from application.fbd import unpack_candidate
             mode = pending['target_mode']
             candidate_key = '_' + mode + '_candidate'
@@ -971,6 +971,8 @@ class WorkbenchService:
             action = "accept_local"
         elif kind == "import_current_program_to_gxworks2":
             action = "gx_import"
+        elif kind == 'execute_native_engineering':
+            action = 'native_engineering'
         else:
             raise ValueError("Unsupported pending engineering action")
         base_id = pending.get("base_version_id") or pending.get("version_id") or base_version_id
@@ -1012,7 +1014,7 @@ class WorkbenchService:
                        last_call_at=datetime.now(timezone.utc).isoformat())
         if name == "get_generation_context":
             current["generation_context_observed"] = True
-        if name in {"create_program_candidate", "patch_program", "create_fbd_candidate", "create_sfc_candidate"} and response.get("proposal_id"):
+        if name in {"create_program_candidate", "patch_program", "create_fbd_candidate", "create_sfc_candidate", "create_st_candidate"} and response.get("proposal_id"):
             current["candidate_proposal_id"] = response["proposal_id"]
         self._mcp_activity[project_id] = current
 
@@ -1090,6 +1092,15 @@ class WorkbenchService:
                         "GX Works2 已运行，但尚未新建或打开目标工程。"
                     )
             payload = {"project_id": project_id, "version_id": version_id}
+            if command['action'] == 'native_engineering':
+                from application.native_engineering import normalize_native_plan, validate_native_baseline
+                if version.get('target_mode') not in {'fbd', 'st'} or command.get('plan_id') is not None:
+                    raise ValueError('Native engineering requires a saved structured FBD or ST version and an explicit batch plan')
+                cpu = version.get('plc_model') or self.store.get_project(project_id).get('plc_model')
+                payload['plan'] = normalize_native_plan(command.get('plan'), plc_model=cpu)
+                validate_native_baseline(self.projects.artifact(project_id, version_id, 'gxw').read_bytes(), plc_model=cpu)
+            elif command.get('plan') is not None:
+                raise ValueError('An explicit batch plan is only supported for native engineering')
             if manual_backup:
                 payload["manual_backup_acknowledged"] = True
             plan_id = command.get("plan_id")
@@ -1101,7 +1112,8 @@ class WorkbenchService:
             prior = next((p for p in self.proposals.list(project_id)
                           if self.proposals._load(p["id"]).get("request_id") == command["request_id"]), None)
             proposal = self.proposals.create(command["action"], project_id, payload,
-                public_summary={"summary": {"gx_import": "将指定版本导入 GX Works2", "simulation": "导入指定版本并运行指定仿真方案", "debug": "执行指定调试方案"}[command["action"]],
+                public_summary={"summary": {"gx_import": "将指定版本导入 GX Works2", "simulation": "导入指定版本并运行指定仿真方案", "debug": "执行指定调试方案",
+                                           'native_engineering': '在独立 GX Works2 工程副本中执行已冻结的可见工程方案'}[command["action"]],
                                 "version_id": version_id, "plan_id": plan_id},
                 base_version_id=version_id, request_id=command["request_id"])
             return proposal if prior else self._apply_execution_policy(proposal)
@@ -1124,15 +1136,59 @@ class WorkbenchService:
                     payload = self.proposals.read_private(proposal_id)
                     if current != policy or not allows(current["mode"], proposal["action"], payload):
                         raise PermissionError("Approval settings changed before execution; manual review required")
-                result = self.proposals.accept(proposal_id, approved_by="policy" if policy else "user",
-                    approval_mode=policy["mode"] if policy else None, executor=lambda payload, approved_id:
-                    self.execution.submit_approved({"gx_import": "import_gx", "simulation": "simulate", "debug": "debug"}[proposal["action"]],
+                def execute(payload, approved_id):
+                    native = self.execution.submit_approved({"gx_import": "import_gx", "simulation": "simulate", "debug": "debug",
+                        'native_engineering': 'native_engineering'}[proposal['action']],
                         payload, approval_id=approved_id,
-                        progress=lambda *m: ctx.emit("progress", {"message": str(m[-1])})).result())
+                        progress=lambda *m: ctx.emit("progress", {"message": str(m[-1])})).result()
+                    if proposal['action'] == 'native_engineering':
+                        return self._complete_native_engineering(payload, approved_id, native)
+                    return native
+                result = self.proposals.accept(proposal_id, approved_by="policy" if policy else "user",
+                    approval_mode=policy["mode"] if policy else None, executor=execute)
             return {"proposal_id": proposal_id, "status": result["status"], "result": result.get("result")}
         return {"job": self.jobs.submit("execution", {"project_id": proposal["project_id"], "version_id": proposal["base_version_id"],
                     "proposal_id": proposal_id, "approval_policy": policy}, worker,
                     request_id=("policy_" + str(policy["revision"]) + "_" if policy else "approve_") + proposal_id)}
+
+    def _complete_native_engineering(self, payload, approved_id, result):
+        from application.native_engineering import normalize_native_plan, verified_native_data, native_engineering_summary
+        receipt = result.get('_native_result') if isinstance(result, dict) else None
+        if not isinstance(receipt, dict):
+            summary = native_engineering_summary(result)
+            summary.update(status='interrupted', passed=False,
+                message='原生工程会话未完成，未创建活动版本。')
+            return summary
+        project_id, base_id = payload['project_id'], payload['version_id']
+        version = self.projects.raw_version(project_id, base_id)
+        cpu = version.get('plc_model') or self.store.get_project(project_id).get('plc_model')
+        plan = normalize_native_plan(payload.get('plan'), plc_model=cpu)
+        try:
+            raw = verified_native_data(receipt, plan)
+        except ValueError:
+            summary = native_engineering_summary(receipt)
+            summary.update(status='interrupted', passed=False,
+                message='请求的原生验证层未完成，未创建活动版本。')
+            return summary
+        summary = native_engineering_summary(receipt)
+        # Artifact projection is pure Core readback. Do not open an offline
+        # Workspace or compile a second copy to replace this GUI evidence.
+        with tempfile.TemporaryDirectory(dir=self.state_dir, prefix='native-result-') as directory:
+            if version['target_mode'] == 'st':
+                from application.native_st import prepare_candidate
+            else:
+                from application.fbd import prepare_candidate
+            candidate = prepare_candidate(directory, imported=raw, plc_model=cpu,
+                program_name=version.get('program_name'), summary='可见原生工程会话')
+            validation = candidate['metadata']['validation']
+            validation.update(native_save='passed', native_source_save_required=True,
+                gx_compile=summary['gx_compile_status'],
+                messages=['已核对同一原生会话保存的声明、实现、图形和配置；运行对应关系仍未验证。'])
+            candidate['metadata']['generation_metadata'] = {'native_engineering': summary,
+                'native_cpu_menu': 'FX3U/FX3UC', 'software_version': '1.635.0.1'}
+            saved = self.proposals.complete_native_candidate(approved_id, candidate)
+        return {**summary, **saved, 'status': 'completed', 'base_version_id': base_id,
+                'project_id': project_id}
 
     def _candidate_diff(self, project_id, base_version_id, payload):
         """Review the proposal's bound version, never the UI's active selection."""
@@ -1166,9 +1222,12 @@ class WorkbenchService:
             report = json.loads(artifacts['write_report'])
             if report.get('operation') == 'native_compilation_save':
                 result['compilation_save'] = {'public_check':report['cold_validation']['public_check'],
-                    'saved_code':report['cold_validation']['inspection']['saved_code'],'execution':'not_run'}
+                    'saved_code':report['cold_validation']['inspection']['saved_code'],
+                    'gui_configuration':report.get('validation', {}).get('gui_configuration', 'not_verified'), 'execution':'not_run'}
                 result['has_changes'] = True
                 result['unified_diff'] += '\n+ 已保存原生编译结果；冷重开代码与重新编译一致，运行尚未验证。\n'
+                if report.get('validation', {}).get('gui_configuration') != 'matched':
+                    result['unified_diff'] += '+ GUI 自动分配配置尚未完整验证，不能视为可见原生会话通过。\n'
             if report.get('operation') == 'native_library_import':
                 definition = report['library_import']
                 result['library_changes'] = {'added': [definition['name']],

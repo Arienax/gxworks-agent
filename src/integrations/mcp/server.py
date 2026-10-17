@@ -58,6 +58,12 @@ WORKFLOW_INSTRUCTIONS = (
     "Use read_fbd_libraries to inspect user-library definitions. To add a library to a saved FBD project, "
     "use create_fbd_candidate with operation=import_library, library_name and the donor GXW in data_base64; "
     "this imports definitions and library types, while preserving the target caller programs. "
+    "For an existing ordinary ST Program use read_st_project and import the saved GXW with "
+    "create_st_candidate(operation=import, program=<exact logical source>, data_base64=...); "
+    "this entry does not synthesize a GXW from ST text. Use execute_native_engineering for visible "
+    "edits in one native IDE session, including ordinary ST Programs and explicit existing FBD node/wire actions. "
+    "New ST Programs require an explicitly selected existing resource and task. Compile in that session before "
+    "showing compiler-assigned addresses, then save and reopen to verify the result. "
     "Report only actual tool results: structural acceptance is distinct from behavior, simulation and native validation. "
     "Never generate canonical IR or override server-owned project, profile, revision or approval fields. "
 )
@@ -65,7 +71,7 @@ WORKFLOW_INSTRUCTIONS = (
 
 SERVER_INSTRUCTIONS = WORKFLOW_INSTRUCTIONS + (
     "GXWorks tools inspect the configured saved PLC project through ToolRuntime. "
-    "create_program_candidate, create_fbd_candidate, patch_program and import_current_program_to_gxworks2 return confirmation_required; "
+    "create_program_candidate, create_fbd_candidate, create_st_candidate, patch_program and import_current_program_to_gxworks2 return confirmation_required; "
     "they do not save a version, change active_version_id or import into GX Works2. "
     "This standalone server cannot approve, commit candidates or execute imports; read-only native snapshots remain available. "
     "MCP tool approval is not engineering confirmation. "
