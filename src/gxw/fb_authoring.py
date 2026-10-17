@@ -1,4 +1,4 @@
-"""Current-project type/FB authoring, independent of imported user libraries."""
+"""Current-project definition plans, independent of imported user libraries."""
 from __future__ import annotations
 
 import base64
@@ -170,6 +170,23 @@ def _pou_labels_plan(config, streams, groups, sources, command, caller):
     return plan,dict(name=document.owner_name,kind='pou_labels',program=logical,declarations=_rows(document,sources)),expected,caller
 
 
+def validate_configuration_ranges(edits, *, cpu, known_devices):
+    """Validate allocation bounds without requiring an editable workspace."""
+    if not isinstance(edits, dict) or set(edits) - set(known_devices):
+        raise GXWFormatError('range changes require known device classes')
+    normalized = {}
+    for key, pair in edits.items():
+        if pair is None:
+            pair = [0xffffffff, 0xffffffff]
+        if (not isinstance(pair, list) or len(pair) != 2 or any(type(v) is not int for v in pair)
+                or not (pair == [0xffffffff, 0xffffffff] or 0 <= pair[0] <= pair[1] < 2**31)):
+            raise GXWFormatError('system variable range requires ordered integer bounds or null')
+        if cpu == 'FX3U/FX3UC' and key == 'D' and pair != [0xffffffff, 0xffffffff] and pair[1] > 7999:
+            raise GXWFormatError('FX3U allocation range exceeds D7999')
+        normalized[key] = tuple(pair)
+    return normalized
+
+
 def _configuration_plan(config,streams,command,caller):
     from .project_metadata import read_project_system_variables
     if set(command)!={'operation','source_name','options'} or not isinstance(command['options'],dict):
@@ -180,18 +197,10 @@ def _configuration_plan(config,streams,command,caller):
     if name not in streams or not name.endswith('.prj'):
         raise GXWFormatError('configuration requires the current project metadata identity')
     before=read_project_system_variables(streams[name])['ranges']
-    edits=command['options'].get('system_variable_ranges',{})
-    if not isinstance(edits,dict) or set(edits)-before.keys():
-        raise GXWFormatError('range changes require known device classes')
+    edits=validate_configuration_ranges(command['options'].get('system_variable_ranges',{}),
+        cpu=config['cpu'],known_devices=before)
     after=dict(before);ranges=[]
     for key,pair in edits.items():
-        if pair is None:pair=[0xffffffff,0xffffffff]
-        if (not isinstance(pair,list) or len(pair)!=2 or any(type(v)is not int for v in pair)
-                or not (pair==[0xffffffff,0xffffffff] or 0<=pair[0]<=pair[1]<2**31)):
-            raise GXWFormatError('system variable range requires ordered integer bounds or null')
-        # These are compiler allocation ranges, not physical device writes.
-        if config['cpu']=='FX3U/FX3UC' and key=='D' and pair!=[0xffffffff,0xffffffff] and pair[1]>7999:
-            raise GXWFormatError('FX3U allocation range exceeds D7999')
         after[key]=tuple(pair)
         signed=lambda values:[-1 if v==0xffffffff else v for v in values]
         ranges.append(dict(device=key,before=signed(before[key]),after=signed(pair)))
@@ -212,7 +221,7 @@ def _configuration_plan(config,streams,command,caller):
     return plan,original,expected,caller
 
 
-def _context(raw):
+def _context(raw, *, require_fbd=True):
     outer = validate_cfb_streams(raw)
     nested = validate_cfb_streams(outer['_hdb'])
     mapping = logical_mapping(outer['projectdatalist.xml'])
@@ -221,9 +230,14 @@ def _context(raw):
     if len(configs) != 1:
         raise GXWFormatError('definition authoring requires one project CPU configuration')
     groups, issues = project_source_groups(outer['projectdatalist.xml'])
-    callers = [name for name in groups if name in streams and streams[name][source_payload_offset(streams[name])] == 208]
+    callers = [name for name in groups if name in streams
+               and streams[name][source_payload_offset(streams[name])] == 208]
+    if not callers and not require_fbd:
+        callers = [name for name in groups if name in streams
+                   and streams[name][source_payload_offset(streams[name])] == 193]
     if issues or not callers:
-        raise GXWFormatError('definition authoring requires a current FBD caller')
+        raise GXWFormatError('definition authoring requires a current FBD caller' if require_fbd
+                             else 'definition authoring requires a current structured ST/FBD source')
     sources = ProjectCallableSources.from_project(raw, callers[0])
     return configs[0], streams, groups, sources, callers[0]
 
@@ -246,8 +260,76 @@ def _rows(document, sources=None):
             for row in sorted(document.rows, key=lambda row: (row.record_id, row.class_code))]
 
 
-def definition_snapshot(raw, name=None):
-    config, streams, groups, sources, caller = _context(raw)
+def _definition_rows(config, sources, document, declarations, *, structure=False):
+    """Use the existing declaration editor for a complete local row set."""
+    if not isinstance(declarations, list) or len(declarations) > 8192 or structure and not declarations:
+        raise GXWFormatError('definition requires explicit declarations or nonempty members')
+    supplied, seen = [], set()
+    for row in declarations:
+        allowed = {'name', 'data_type', 'initial_value', 'comment'}
+        if not structure:
+            allowed |= {'class_name', 'kind'}
+        if not isinstance(row, dict) or set(row) - allowed or not {'name', 'data_type'} <= row.keys():
+            raise GXWFormatError('invalid definition declaration fields')
+        _name(row['name'], config['codepage'])
+        if row['name'].casefold() in seen:
+            raise GXWFormatError('duplicate definition member: ' + row['name'])
+        seen.add(row['name'].casefold())
+        base_type, bounds = _type_parts(row['data_type'])
+        if len(bounds) > 1 or any(not -2**31 <= low <= high < 2**31 for low, high in bounds):
+            raise GXWFormatError('definition creation currently supports rank-one arrays')
+        item = dict(row)
+        if base_type not in BASIC_TYPES:
+            if item.get('kind') == 'function_block':
+                sources.definition(base_type, 'FUNCTION_BLOCK')
+                if bounds or item.get('class_name', 'VAR') != 'VAR' or structure:
+                    raise GXWFormatError('FB instance declarations require a scalar local VAR')
+            else:
+                sources.structure(base_type)
+                item['kind'] = 'structure'
+        if structure:
+            item['class_name'] = 'VAR'
+        else:
+            item.setdefault('class_name', 'VAR')
+            if item['class_name'] not in ('VAR', 'VAR_CONSTANT', 'VAR_INPUT', 'VAR_OUTPUT', 'VAR_IN_OUT'):
+                raise GXWFormatError('project POU declaration requires a local variable class')
+        supplied.append(item)
+    return _rows(edit_declarations(replace(document, rows=()), upserts=supplied,
+                                   native_fbd_locals=True), sources)
+
+
+def _st_implementation(text):
+    if not isinstance(text, str) or '\0' in text:
+        raise GXWFormatError('ST implementation text is required without embedded NUL')
+    try:
+        if len(text.encode('utf-16le')) > 8 * 1024 * 1024 - 18:
+            raise GXWFormatError('ST implementation exceeds the native body bound')
+    except UnicodeError as error:
+        raise GXWFormatError('ST implementation must be valid UTF-16 text') from error
+    return text
+
+
+def _native_rows(rows):
+    return [dict(name=row['name'], data_type=row['data_type'],
+        class_code=CLASS_CODES[row['class_name']], initial_value=row['initial_value'],
+        comment=row['comment'], line=index + 1) for index, row in enumerate(rows)]
+
+
+def _visible_st_declaration_rows(rows):
+    """The observed GUI adds one space after ARRAY; retain the rest exactly."""
+    result = []
+    for row in rows:
+        item = dict(row)
+        data_type = item['data_type']
+        if re.match(r'^ARRAY ?\[', data_type):
+            _type_parts(data_type)
+            item['data_type'] = re.sub(r'^ARRAY ?(?=\[)', 'ARRAY ', data_type)
+        result.append(item)
+    return result
+
+
+def definition_snapshot(raw, name=None, *, require_fbd=True):
+    config, streams, groups, sources, caller = _context(raw, require_fbd=require_fbd)
     definitions = []
     for logical, group in groups.items():
         document = sources.declarations.get(group['labels'])
@@ -282,9 +364,215 @@ def definition_snapshot(raw, name=None):
                 compilation='not_run', execution='not_run')
 
 
-def authoring_plan(raw, command):
+def st_program_snapshot(raw, source_name=None):
+    """Read ordinary ST Programs and their current source task membership.
+
+    This also works in ST-only projects. A Program never acquires an FB
+    interface merely because its declarations use the same table layout.
+    """
+    from .native_write import _native_scope_inventory
+    config, streams, groups, sources, _ = _context(raw, require_fbd=False)
+    resources, tasks = _native_scope_inventory(raw)
+    programs, owners = [], set()
+    for logical, group in groups.items():
+        document = sources.declarations.get(group['labels'])
+        if logical not in streams or document is None or sources.source_groups.get(logical) != group:
+            raise GXWFormatError('ST Program requires current paired source and declaration ownership')
+        owner = document.owner_name
+        if not owner or owner.casefold() in owners:
+            raise GXWFormatError('ambiguous current project POU owner')
+        owners.add(owner.casefold())
+        if (document.owner_pou_type != 0x1000000
+                or streams[logical][source_payload_offset(streams[logical])] != 193):
+            continue
+        source = parse_st_pou(streams[logical])
+        if source.text is None:
+            raise GXWFormatError('project ST Program text is opaque: ' + owner)
+        bindings = [dict(resource=task['resource'], task=task['task'], line=row['line'])
+                    for task in tasks for row in task['programs'] if row['name'].casefold() == owner.casefold()]
+        if len(bindings) > 1:
+            raise GXWFormatError('ordinary ST Program has ambiguous task membership: ' + owner)
+        programs.append(dict(name=owner, kind='program', language='st', program=logical,
+            labels=group['labels'], declarations=_rows(document, sources), st_text=source.text,
+            task_bindings=bindings))
+    if source_name is not None:
+        if not isinstance(source_name, str):
+            raise GXWFormatError('ST Program selection requires its current owner name')
+        programs = [row for row in programs if row['name'].casefold() == source_name.casefold()]
+        if len(programs) != 1:
+            raise GXWFormatError('missing or ambiguous current ordinary ST Program: ' + source_name)
+    return dict(cpu=config['cpu'], programs=programs, resources=[name[:-4] for name in resources],
+                tasks=tasks, compilation='not_run', execution='not_run')
+
+
+def st_program_authoring_plan(raw, command):
+    """Prepare visible ST Program edits without broadening AuthorDefinition.
+
+    New Programs require an explicit existing task. Creating task/resource
+    objects is a separate native operation and has no implicit default here.
+    """
+    from .native_write import native_program_creation_plan
+    if not isinstance(command, dict) or command.get('operation') not in ('create_st_program', 'edit_st_program'):
+        raise GXWFormatError('unsupported visible ST Program operation')
+    create = command['operation'] == 'create_st_program'
+    allowed = {'operation', 'source_name', 'declarations', 'st_text'}
+    if create:
+        allowed |= {'resource', 'task', 'scope_mode'}
+    if set(command) - allowed:
+        raise GXWFormatError('unknown ST Program authoring fields')
+    config, streams, groups, sources, caller = _context(raw, require_fbd=False)
+    inventory = st_program_snapshot(raw)
+    before = None
+    if create:
+        name = _name(command.get('source_name'), config['codepage'])
+        owners = [document.owner_name for logical, group in groups.items()
+                  if (document := sources.declarations.get(group['labels'])) is not None]
+        if (any(owner and owner.casefold() == name.casefold() for owner in owners)
+                or name.casefold() in sources.catalog or name.casefold() in sources.project_structures
+                or any(key[1] == name.casefold() for key in sources.library_structures)):
+            raise GXWFormatError('project callable, Program or type already exists: ' + name)
+        if command.get('scope_mode') != 'existing_task':
+            raise GXWFormatError('visible ST Program creation requires explicit existing_task scope')
+        scope = native_program_creation_plan(raw, name, resource=command.get('resource'),
+                                            task=command.get('task'), scope_mode='existing_task')
+        template = sources.declarations[groups[caller]['labels']]
+        document = replace(template, owner_name=name, owner_pou_type=0x1000000,
+                           owner_return_type=None, rows=())
+    else:
+        if not isinstance(command.get('source_name'), str):
+            raise GXWFormatError('ST Program selection requires its current owner name')
+        before, = st_program_snapshot(raw, command['source_name'])['programs']
+        name = before['name']
+        document = sources.declarations[before['labels']]
+        scope = {}
+    keep_declarations = not create and command.get('declarations') is None
+    expected = before['declarations'] if keep_declarations else _definition_rows(
+        config, sources, document, command.get('declarations'))
+    plan = dict(scope)
+    plan.update(cpu=config['cpu'], codepage=config['codepage'], operation=command['operation'],
+        source_name=name, source_language='st', pou_type=0x1000000, program_kind=193,
+        write_declarations=not keep_declarations, rows=_native_rows(expected),
+        st_text=_st_implementation(command.get('st_text')), tasks=inventory['tasks'])
+    if before is not None:
+        plan.update(program=before['program'], before_body=base64.b64encode(
+            workspace_body(streams[before['program']])).decode('ascii'),
+            before_rows=[dict(name=row['name'], data_type=row['data_type'],
+                             class_code=CLASS_CODES[row['class_name']]) for row in before['declarations']])
+    else:
+        selected, = [task for task in inventory['tasks']
+                     if task['resource'] == scope['resource'] and task['task'] == scope['task']]
+        plan['line'] = 1 + max([0] + [row['line'] for row in selected['programs']])
+    return plan, before, expected, caller
+
+
+def _visible_task_append_header(before, after, *, cpu):
+    """Bound the GUI save metadata seen in the FX3U native ST Program witness.
+
+    Only the selected appended task may update its common SYSTEMTIME and
+    compile-pending word. The source description, all other prefix bytes and
+    all task payload bytes are still checked by verify_task_source_append.
+    """
+    from .project_metadata import read_task_source
+    from .source_header import normalize_visible_save_header
+    previous, saved = read_task_source(before), read_task_source(after)
+    normalized, observed = normalize_visible_save_header(previous['header'], saved['header'], cpu=cpu)
+    return normalized + bytes(after[len(saved['header']):]), observed
+
+
+def verify_st_program_readback(baseline, command, saved):
+    """Check saved source/task bytes independently of UI or offline call logs.
+
+    A passing result establishes the selected source edit and preservation;
+    native compilation, GUI completion and execution need their own evidence.
+    """
+    from .native_write import _native_scope_inventory, _values
+    from .project_metadata import verify_task_source_append
+    plan, before, expected, _ = st_program_authoring_plan(baseline, command)
+    previous = _context(baseline, require_fbd=False)
+    current = _context(saved, require_fbd=False)
+    if (previous[0]['cpu'], previous[0]['codepage']) != (current[0]['cpu'], current[0]['codepage']):
+        raise GXWFormatError('ST Program save changed the project CPU or codepage')
+    actual, = st_program_snapshot(saved, plan['source_name'])['programs']
+    normalize = lambda text: text.replace('\r\n', '\n').replace('\r', '\n')
+    declarations = actual['declarations']
+    expected_declarations = expected
+    if plan['write_declarations'] and plan['cpu'] == 'FX3U/FX3UC':
+        declarations, expected_declarations = map(_visible_st_declaration_rows, (declarations, expected))
+    if declarations != expected_declarations or normalize(actual['st_text']) != normalize(plan['st_text']):
+        raise GXWFormatError('ST Program readback differs from the requested declarations or implementation')
+
+    def source_inventory(context):
+        _, streams, groups, sources, _ = context
+        rows = {}
+        for logical, group in groups.items():
+            document = sources.declarations[group['labels']]
+            source = streams[logical]
+            kind = source[source_payload_offset(source)]
+            if kind == 193:
+                text = parse_st_pou(source).text
+                if text is None:
+                    raise GXWFormatError('ST Program preservation requires readable current source text')
+                body = normalize(text)
+            elif kind == 208:
+                body = (workspace_body(source), source[-24:])
+            else:
+                raise GXWFormatError('ST Program preservation covers current structured ST/FBD sources')
+            values = sorted((_values(row, omit=('record_id',)) for row in document.rows),
+                            key=lambda row: (row['name'], row['class_code']))
+            rows[document.owner_name] = dict(kind=kind, body=body, pou_type=document.owner_pou_type,
+                return_type=document.owner_return_type, declarations=values)
+        return rows
+
+    left, right = source_inventory(previous), source_inventory(current)
+    target = plan['source_name']
+    if {name: row for name, row in left.items() if name != target} != {
+            name: row for name, row in right.items() if name != target}:
+        raise GXWFormatError('ST Program save changed an unrelated POU or its declarations')
+    if before is not None and not plan['write_declarations'] and left[target]['declarations'] != right[target]['declarations']:
+        raise GXWFormatError('ST Program body edit changed retained local declarations')
+    if before is not None and plan['write_declarations']:
+        old_rows = {row['name'].casefold(): row for row in left[target]['declarations']}
+        for row in right[target]['declarations']:
+            old = old_rows.get(row['name'].casefold())
+            if old is not None and any(old[key] != row[key] for key in (
+                    'device', 'iec_address', 'unknown_u32', 'unknown_text', 'value_extension')):
+                raise GXWFormatError('ST Program declaration edit changed retained addresses or unknown fields')
+    for logical, document in previous[3].declarations.items():
+        if document.scope == 'global' or logical.endswith('.lnl'):
+            if logical not in current[1] or previous[1][logical] != current[1][logical]:
+                raise GXWFormatError('ST Program save changed an unrelated global/library declaration')
+    old_resources, old_tasks = _native_scope_inventory(baseline)
+    new_resources, new_tasks = _native_scope_inventory(saved)
+    if {name: row['tasks'] for name, row in old_resources.items()} != {
+            name: row['tasks'] for name, row in new_resources.items()}:
+        raise GXWFormatError('ST Program save changed resource/task ownership')
+    if before is None:
+        expected_tasks = [{**task, 'programs': task['programs'] + ([{'name': target, 'line': plan['line']}]
+            if (task['resource'], task['task']) == (plan['resource'], plan['task']) else [])} for task in old_tasks]
+    else:
+        expected_tasks = old_tasks
+    if new_tasks != expected_tasks:
+        raise GXWFormatError('ST Program save changed the explicit task plan or existing task configuration')
+    task_header_changes = []
+    for resource in old_resources.values():
+        for logical in resource['tasks']:
+            if before is None and logical == plan['task'] + '.tsk':
+                task, header = _visible_task_append_header(previous[1][logical], current[1][logical], cpu=plan['cpu'])
+                if header is not None:
+                    task_header_changes.append(dict(task=logical, **header))
+                verify_task_source_append(previous[1][logical], task,
+                                          program_name=target, line=plan['line'])
+            elif previous[1][logical] != current[1][logical]:
+                raise GXWFormatError('ST Program save changed unedited task bytes')
+    return dict(operation=command['operation'], program=actual, task_header_changes=task_header_changes,
+        validation=dict(source_readback='matched', unedited_sources='preserved',
+                        task_configuration='exact', task_membership='matched',
+                        compilation='not_run', execution='not_run'))
+
+
+def authoring_plan(raw, command, *, require_fbd=True):
     """Validate engineering rows with the existing declaration/type contracts."""
-    config, streams, groups, sources, caller = _context(raw)
+    config, streams, groups, sources, caller = _context(raw, require_fbd=require_fbd)
     operation = command.get('operation')
     if operation == 'remove_empty_program':
         from .native_write import _native_project_source_inventory, _native_scope_inventory
@@ -319,7 +607,7 @@ def authoring_plan(raw, command):
     if set(command) - allowed:
         raise GXWFormatError('unknown project definition fields')
     name = _name(command.get('source_name'), config['codepage'])
-    existing = definition_snapshot(raw)['definitions']
+    existing = definition_snapshot(raw, require_fbd=require_fbd)['definitions']
     matched = [row for row in existing if row['name'].casefold() == name.casefold()]
     before = None
     if operation == 'edit_st_fb':
@@ -341,54 +629,15 @@ def authoring_plan(raw, command):
     else:
         base = sources.declarations[groups[caller]['labels']]
         document = replace(base, owner_name=name, owner_pou_type=0x1000002, rows=())
-        supplied = []
-        seen = set()
-        for row in declarations:
-            allowed = {'name', 'data_type', 'initial_value', 'comment'}
-            if operation != 'create_structure':
-                allowed |= {'class_name', 'kind'}
-            if not isinstance(row, dict) or set(row) - allowed or not {'name', 'data_type'} <= row.keys():
-                raise GXWFormatError('invalid definition declaration fields')
-            _name(row['name'], config['codepage'])
-            if row['name'].casefold() in seen:
-                raise GXWFormatError('duplicate definition member: ' + row['name'])
-            seen.add(row['name'].casefold())
-            base_type, bounds = _type_parts(row['data_type'])
-            if len(bounds) > 1 or any(not -2**31 <= low <= high < 2**31 for low, high in bounds):
-                raise GXWFormatError('definition creation currently supports rank-one arrays')
-            item = dict(row)
-            if base_type not in BASIC_TYPES:
-                if item.get('kind') == 'function_block':
-                    sources.definition(base_type, 'FUNCTION_BLOCK')
-                    if bounds or item.get('class_name', 'VAR') != 'VAR' or operation == 'create_structure':
-                        raise GXWFormatError('FB instance declarations require a scalar local VAR')
-                else:
-                    sources.structure(base_type)  # No guessed type or placeholder.
-                    item['kind'] = 'structure'
-            if operation == 'create_structure':
-                item['class_name'] = 'VAR'
-            else:
-                item.setdefault('class_name', 'VAR')
-                if item['class_name'] not in ('VAR', 'VAR_CONSTANT', 'VAR_INPUT', 'VAR_OUTPUT', 'VAR_IN_OUT'):
-                    raise GXWFormatError('project FB declaration requires a local variable class')
-            supplied.append(item)
-        edited = edit_declarations(document, upserts=supplied, native_fbd_locals=True)
-        normalized = _rows(edited, sources)
+        normalized = _definition_rows(config, sources, document, declarations,
+                                      structure=operation == 'create_structure')
     st_text = command.get('st_text')
     if operation != 'create_structure':
-        if not isinstance(st_text, str) or '\0' in st_text:
-            raise GXWFormatError('ST implementation text is required without embedded NUL')
-        try:
-            if len(st_text.encode('utf-16le')) > 8 * 1024 * 1024 - 18:
-                raise GXWFormatError('ST implementation exceeds the native body bound')
-        except UnicodeError as error:
-            raise GXWFormatError('ST implementation must be valid UTF-16 text') from error
+        _st_implementation(st_text)
     elif st_text is not None or command.get('declarations') is not None:
         raise GXWFormatError('structure creation accepts members, not an FB implementation')
     plan = dict(cpu=config['cpu'], codepage=config['codepage'], operation=operation,
-                source_name=name, write_declarations=not keep_declarations, rows=[dict(name=row['name'], data_type=row['data_type'],
-                    class_code=CLASS_CODES[row['class_name']], initial_value=row['initial_value'],
-                    comment=row['comment'], line=index+1) for index, row in enumerate(normalized)])
+                source_name=name, write_declarations=not keep_declarations, rows=_native_rows(normalized))
     if st_text is not None:
         plan['st_text'] = st_text
     if before is not None:

@@ -30,7 +30,14 @@ def verify_native_compilation_save(before, saved, validation, cold, observation)
         raise GXWFormatError('native compile save changed current source bodies or CPU')
     from .project_metadata import project_gui_configuration
     gui = project_gui_configuration(saved)
-    if current['cpu'] == 'FX3U/FX3UC' and gui['status'] != 'matched':
+    # Earlier saved Workspace exports retained the generic T record without
+    # the GUI's 100T field. They still bind current source and cold code below,
+    # but do not establish the complete GUI allocation layer. Visible sessions
+    # independently require that layer to be matched before native execution.
+    legacy_timer_gap = (gui.get('status') == 'missing' and gui.get('missing') == ['T']
+        and not gui.get('differences') and not gui.get('unverified_selectors')
+        and gui.get('word_device') == 0 and gui.get('bit_device') == 3)
+    if current['cpu'] == 'FX3U/FX3UC' and gui['status'] != 'matched' and not legacy_timer_gap:
         raise GXWFormatError('saved GUI allocation configuration differs from the current workspace')
     for result in (validation, cold):
         if (result.get('compilation',{}).get('acceptance') != 'accepted'

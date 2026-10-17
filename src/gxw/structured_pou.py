@@ -27,6 +27,10 @@ BODY_SIZE_OFFSET = 0x47
 CANVAS_HEIGHT_OFFSET = 0x57
 RECORD_COUNT_OFFSET = 0x5B
 OBSERVED_TRAILER_SIZE = 24
+# Original native captures include zero and this opaque retained value after
+# editing the left rail in GX Works2 1.635.0.1. Preserve it without assigning
+# PLC semantics or accepting arbitrary trailer words.
+OBSERVED_STRUCTURED_TRAILERS = frozenset((bytes(24), struct.pack('<I', 2) + bytes(20)))
 
 
 def _u16(data: bytes, offset: int) -> int:
@@ -232,9 +236,9 @@ def parse_structured_pou(
                                       data[start:start + BLOCK_HEADER_SIZE]))
 
     trailer = data[cursor:]
-    if len(trailer) != OBSERVED_TRAILER_SIZE or any(trailer):
+    if trailer not in OBSERVED_STRUCTURED_TRAILERS:
         raise GXWFormatError(
-            "unsupported Program.pou trailer; expected 24 zero bytes after records"
+            "unsupported Program.pou trailer; expected an observed 24-byte trailer after records"
         )
 
     return StructuredProgram(

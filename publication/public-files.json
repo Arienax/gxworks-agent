@@ -201,6 +201,8 @@
     "src/gxw/token_q.py",
     "src/gxw/token_resource.py",
     "src/gxw/topology.py",
+    "src/gxw/visible_engineering.py",
+    "src/gxw/visible_graph.py",
     "src/gxworks2/__init__.py",
     "src/gxworks2/api.py",
     "src/gxworks2/baseline_store.py",

@@ -194,7 +194,7 @@ _GUI_RANGE_NAMES = {name: ('10T' if name == 'T10' else name)
                     for name in ('D', 'R', 'W', 'T', 'ST', 'C', 'M', 'B', 'P', 'S', 'T10')}
 
 
-def read_gui_system_variables(raw: bytes | None) -> dict:
+def read_gui_system_variables(raw: bytes | None, *, cpu: str | None = None) -> dict:
     """Read the GUI's separate Option/SystemVariable record, without defaults.
 
     GX Works2 1.635 loads these values from Gppw2.gpj and can overwrite the
@@ -202,12 +202,13 @@ def read_gui_system_variables(raw: bytes | None) -> dict:
     unknown, not agreement with the workspace record.
     """
     if raw is None:
-        return {'ranges': {}, 'word_device': None, 'bit_device': None}
+        return {'ranges': {}, 'stored_ranges': {}, 'retained_fields': {},
+                'word_device': None, 'bit_device': None, 'unverified_selectors': []}
     try:
         text = raw.decode('utf-16le')
     except UnicodeError as error:
         raise GXWFormatError('invalid GUI application configuration encoding') from error
-    values = {}
+    values, retained = {}, {}
     section = subsection = None
     for line in text.removeprefix('\ufeff').rstrip('\0').splitlines():
         if line.startswith('[') and line.endswith(']'):
@@ -224,15 +225,49 @@ def read_gui_system_variables(raw: bytes | None) -> dict:
                 if number > (0xffffffff if kind == 'DWORD' else 0xffff):
                     raise GXWFormatError('GUI system variable field exceeds its storage type')
                 values[key] = number
-    return {'ranges': {name: (values[key+'Min'], values[key+'Max'])
-                       for name,key in _GUI_RANGE_NAMES.items()
-                       if key+'Min' in values and key+'Max' in values},
-            'word_device': values.get('WordDevice'), 'bit_device': values.get('BitDevice')}
+                retained[key] = {'storage_type': kind, 'value': number}
+    stored = {name: (values[key+'Min'], values[key+'Max'])
+              for name,key in {**_GUI_RANGE_NAMES, '100T': '100T'}.items()
+              if key+'Min' in values and key+'Max' in values}
+    ranges = {name: pair for name, pair in stored.items() if name in _GUI_RANGE_NAMES}
+    unresolved = []
+    if cpu == 'FX3U/FX3UC':
+        # Independent GUI 1.635 FX3U observations: the 100 ms timer controls
+        # use 100T, while T is a retained field for another timer profile.
+        # The selected D/M classes enable their ranges; R/W/B can retain
+        # inactive host values without becoming compiler allocation ranges.
+        ranges.pop('T', None)
+        if '100T' in stored:
+            ranges['T'] = stored['100T']
+        if values.get('WordDevice') == 0:
+            ranges.update(R=(0xffffffff, 0xffffffff), W=(0xffffffff, 0xffffffff))
+        else:
+            unresolved.append('WordDevice')
+            for name in ('D', 'R', 'W'):
+                ranges.pop(name, None)
+        if values.get('BitDevice') == 3:
+            ranges['B'] = (0xffffffff, 0xffffffff)
+        else:
+            unresolved.append('BitDevice')
+            for name in ('M', 'B'):
+                ranges.pop(name, None)
+    return {'ranges': ranges, 'stored_ranges': stored, 'retained_fields': retained,
+            'word_device': values.get('WordDevice'), 'bit_device': values.get('BitDevice'),
+            'unverified_selectors': unresolved}
 
 
-def write_gui_system_variables(raw: bytes | None, ranges: dict) -> bytes:
-    """Update only known range fields; retain unrelated GUI options verbatim."""
-    read_gui_system_variables(raw)  # Validate existing known fields first.
+def write_gui_system_variables(raw: bytes | None, ranges: dict, *, cpu: str | None = None) -> bytes:
+    """Update known fields, with an explicit native profile for effective ranges.
+
+    Omitting CPU retains the raw field API. FX3U's effective timer uses 100T;
+    inactive device backups and the generic T profile remain untouched.
+    """
+    existing = read_gui_system_variables(raw)  # Validate existing fields first.
+    if cpu not in (None, 'FX3U/FX3UC'):
+        raise GXWFormatError('GUI allocation writer is not observed for this CPU')
+    profiled = cpu == 'FX3U/FX3UC'
+    if profiled and (existing['word_device'] not in (None, 0) or existing['bit_device'] not in (None, 3)):
+        raise GXWFormatError('GUI allocation writer requires the observed FX3U D/M selectors')
     if set(ranges) - _GUI_RANGE_NAMES.keys():
         raise GXWFormatError('unknown GUI system variable device')
     text = (raw.decode('utf-16le') if raw is not None else
@@ -269,11 +304,18 @@ def write_gui_system_variables(raw: bytes | None, ranges: dict) -> bytes:
         if (not isinstance(pair,(list,tuple)) or len(pair)!=2
                 or any(type(v) is not int or not 0 <= v <= 0xffffffff for v in pair)):
             raise GXWFormatError('invalid GUI allocation range')
+        if profiled and name in {'R', 'W', 'B'}:
+            if tuple(pair) != (0xffffffff, 0xffffffff):
+                raise GXWFormatError('inactive FX3U selector ranges cannot be enabled through the D/M profile')
+            continue  # Preserve the stored backup, including its absence.
+        if (profiled and name == 'ST' and tuple(pair) == (0xffffffff, 0xffffffff)
+                and existing['ranges'].get('ST') == (0xfffffffe, 0xfffffffe)):
+            continue  # Native FX disabled sentinel, equivalent to workspace -1.
+        field = '100T' if profiled and name == 'T' else _GUI_RANGE_NAMES[name]
         for bound,value in zip(('Min','Max'),pair):
-            updates[_GUI_RANGE_NAMES[name]+bound] = ('DWORD',value)
+            updates[field+bound] = ('DWORD',value)
     # These selectors were observed in the FX3U D/M controls. Existing choices
     # are retained; other CPUs are not assigned a guessed selector here.
-    existing = read_gui_system_variables(raw)
     if existing['word_device'] is None: updates['WordDevice'] = ('WORD',0)
     if existing['bit_device'] is None: updates['BitDevice'] = ('WORD',3)
     for i in range(start,end):
@@ -305,7 +347,7 @@ def gui_application_save_plan(raw: bytes, source: dict) -> bytes | None:
     if source.get('operation') == 'configure_project':
         for edit in source['ranges']:
             ranges[edit['device']] = tuple(value & 0xffffffff for value in edit['after'])
-    return write_gui_system_variables(streams.get('Gppw2.gpj'), ranges)
+    return write_gui_system_variables(streams.get('Gppw2.gpj'), ranges, cpu='FX3U/FX3UC')
 
 
 def project_gui_configuration(raw: bytes) -> dict:
@@ -318,14 +360,17 @@ def project_gui_configuration(raw: bytes) -> dict:
     if len(metadata)!=1 or read_project_text_context(metadata[0])['cpu']!='FX3U/FX3UC':
         return {'status':'not_verified','reason':'GUI allocation profile not observed for this CPU'}
     workspace = read_project_system_variables(metadata[0])['ranges']
-    gui = read_gui_system_variables(streams.get('Gppw2.gpj'))
+    gui = read_gui_system_variables(streams.get('Gppw2.gpj'), cpu='FX3U/FX3UC')
     missing = sorted(set(workspace)-gui['ranges'].keys())
     differences = {name:{'workspace':list(pair),'gui':list(gui['ranges'][name])}
                    for name,pair in workspace.items() if name in gui['ranges'] and pair!=gui['ranges'][name]
                    and not (pair==(0xffffffff,0xffffffff) and gui['ranges'][name]==(0xfffffffe,0xfffffffe))}
-    return {'status':'missing' if missing else 'differs' if differences else 'matched',
+    return {'status':'missing' if missing else 'not_verified' if gui['unverified_selectors'] else 'differs' if differences else 'matched',
             'source':'Gppw2.gpj/Option/SystemVariable','missing':missing,'differences':differences,
-            'word_device':gui['word_device'],'bit_device':gui['bit_device']}
+            'word_device':gui['word_device'],'bit_device':gui['bit_device'],
+            'effective_ranges':{name:list(pair) for name,pair in gui['ranges'].items()},
+            'stored_ranges':{name:list(pair) for name,pair in gui['stored_ranges'].items()},
+            'retained_fields':gui['retained_fields'], 'unverified_selectors':gui['unverified_selectors']}
 
 
 def native_fbd_pointer_initialization(metadata: bytes, program_kind: int):

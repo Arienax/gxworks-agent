@@ -20,6 +20,33 @@ from .object_model import _key, build_object_program
 TOPOLOGY_VERSION = "source-topology-v1"
 
 
+def validate_typed_connections(endpoints, connections):
+    """Shared source-port direction, exact type and single-writer contract.
+
+    Values in ``endpoints`` are source-derived port dictionaries, never client
+    supplied declarations. Callers may use this for existing or new geometry.
+    """
+    writers, seen = {}, set()
+    for row in connections:
+        if not isinstance(row, dict) or set(row) != {'from', 'to'}:
+            raise GXWFormatError('semantic connections need named endpoints only')
+        source, target = row['from'], row['to']
+        if not isinstance(source, str) or not isinstance(target, str) or source not in endpoints or target not in endpoints:
+            raise GXWFormatError('topology endpoint is missing from the current source')
+        if (source, target) in seen or target in writers:
+            raise GXWFormatError('duplicate connection or multiple port writers')
+        left, right = endpoints[source], endpoints[target]
+        if left.get('side') != 'out' or right.get('side') != 'in':
+            raise GXWFormatError('topology port direction mismatch')
+        a, b = left.get('data_type'), right.get('data_type')
+        if (not isinstance(a, str) or not isinstance(b, str)
+                or _type_parts(a) != _type_parts(b) or a.upper().startswith('ANY')):
+            raise GXWFormatError('topology port type is incompatible or unresolved')
+        seen.add((source, target))
+        writers[target] = source
+    return writers
+
+
 def _terminal_type(symbol, sources, plc_model):
     structure = sources.structure_value(symbol)
     if structure is not None:
@@ -240,9 +267,9 @@ def assemble_topology(context, topology, *, plc_model, base_model=None, layout_o
         new_nodes.append((node, ports))
     model["nodes"].extend(node for node, _ in new_nodes)
     endpoints = {node["id"] + "." + port["name"]: (node, port) for node, ports in new_nodes for port in ports}
+    validate_typed_connections({name: port for name, (_, port) in endpoints.items()}, connections)
     reserved = {identity: {(node["x"] + port["x"] + (step if port["side"] == "out" else -step), node["y"] + port["y"])
                            for step in range(1, 4)} for identity, (node, port) in endpoints.items()}
-    writers, seen_connections = {}, set()
     obstacles = set()
     for node in model["nodes"]:
         if node["width"] > 1024 or node["height"] > 1024:
@@ -259,18 +286,8 @@ def assemble_topology(context, topology, *, plc_model, base_model=None, layout_o
     if max_x > 4096 or max_y > 4096:
         raise GXWFormatError("topology canvas is outside the initial routing scope")
     for row in connections:
-        if not isinstance(row, dict) or set(row) != {"from", "to"}:
-            raise GXWFormatError("semantic connections need named endpoints only")
         source, target = row["from"], row["to"]
-        if source not in endpoints or target not in endpoints:
-            raise GXWFormatError("initial topology endpoints must belong to the explicit additive scope")
-        if (source, target) in seen_connections or target in writers:
-            raise GXWFormatError("duplicate connection or multiple port writers")
         a, ap = endpoints[source]; b, bp = endpoints[target]
-        if ap["side"] != "out" or bp["side"] != "in":
-            raise GXWFormatError("topology port direction mismatch")
-        if _type_parts(ap["data_type"]) != _type_parts(bp["data_type"]) or ap["data_type"].upper().startswith("ANY"):
-            raise GXWFormatError("topology port type is incompatible or unresolved")
         start = (a["x"] + ap["x"], a["y"] + ap["y"])
         end = (b["x"] + bp["x"], b["y"] + bp["y"])
         blocked = (obstacles | {p for p, owner in routed_corners if owner != source}
@@ -287,7 +304,6 @@ def assemble_topology(context, topology, *, plc_model, base_model=None, layout_o
             routed_segments.append((left, right, source))
         routed_corners.extend((p, source) for p in points)
         model["wires"].append({"from": source, "to": target, "via": [list(p) for p in points[1:-1]]})
-        writers[target] = source; seen_connections.add((source, target))
     model["canvas_height"] = max(model["canvas_height"], max_y)
     if model.get("blocks"):
         model["blocks"][0]["canvas_height"] = model["canvas_height"]

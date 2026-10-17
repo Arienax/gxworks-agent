@@ -21,6 +21,7 @@ from .structured_pou import (
     CANVAS_HEIGHT_OFFSET,
     RECORD_COUNT_OFFSET,
     STRUCTURED_RECORDS_OFFSET,
+    OBSERVED_STRUCTURED_TRAILERS,
     parse_structured_pou,
 )
 
@@ -200,8 +201,8 @@ def serialize_structured_pou(
         struct.pack_into("<I", header, 20, len(serialized_records))
         containers.append(bytes(header) + body)
         total_records += len(serialized_records)
-    if len(program.trailer) != 24 or any(program.trailer):
-        raise GXWFormatError("writer only supports the observed 24-zero-byte trailer")
+    if program.trailer not in OBSERVED_STRUCTURED_TRAILERS:
+        raise GXWFormatError("writer only supports the observed 24-byte native trailers")
     header = bytearray(program.raw[:PROGRAM_PREFIX_SIZE])
     body = b"".join(containers) + program.trailer
     size_like = len(header) + len(body) - 83
