@@ -58,6 +58,7 @@ class GenerationRequest:
     fresh_confirmed_generation: bool = False
     direct_generation: bool = False
     user_fact_text: Optional[str] = None
+    direct_user_facts: object = None
 
     def __post_init__(self):
         object.__setattr__(self, "effort", None)
@@ -363,7 +364,8 @@ class GenerationWorkflow:
                 elif self.direct_generation:
                     from application.generation_agent import generate_direct_ladder
                     result = generate_direct_ladder(
-                        self.user_input, self.plc_model, confirmed_spec=self.confirmed_context,
+                        self.user_input, self.plc_model, confirmed_spec=(self.direct_user_facts
+                            if self.direct_user_facts is not None else self.confirmed_context),
                         user_fact_text=self.user_fact_text,
                         model_name=self.model_name, construction_examples=self.construction_examples,
                         image_attachments=self.image_attachments,
@@ -373,11 +375,9 @@ class GenerationWorkflow:
                     )
                     generation_handoff = copy.deepcopy(result.get("generation_handoff") or {})
                     generation_agent_metadata = {"mode": "direct_generation", "model_calls": 1}
-                    if result.get("status") == "needs_input":
-                        self._emit("needs_input", {"missing_info": result["missing_info"]})
-                        return {"status": "needs_input", "target_mode": "ladder",
-                                "missing_info": result["missing_info"], "generation_handoff": generation_handoff,
-                                "first_pass_pipeline": generation_agent_metadata, "artifacts": {}}
+                    for key in ("operation_binding", "construction_binding", "confirmed_predicate_binding"):
+                        if key in result:
+                            generation_agent_metadata[key] = copy.deepcopy(result[key])
                     direct_candidate = copy.deepcopy(result["ladder"])
                     self.confirmed_context = copy.deepcopy(result["user_facts"])
                     full_content = json.dumps(direct_candidate, ensure_ascii=False, separators=(",", ":"))
@@ -662,6 +662,8 @@ class GenerationWorkflow:
                     "target_mode": "ladder",
                     "repair_attempts": repair_attempts,
                     "first_pass_pipeline": generation_agent_metadata or {"mode": "direct"},
+                    **({"generator_notes": copy.deepcopy(generation_handoff["generator_notes"])}
+                       if "generator_notes" in generation_handoff else {}),
                     "generation_handoff": {**generation_handoff,
                         "confirmed_spec_sha256": canonical_sha256(self.request.confirmed_context if direct_facts else self.confirmed_context)
                             if (self.request.confirmed_context if direct_facts else self.confirmed_context) is not None else None,

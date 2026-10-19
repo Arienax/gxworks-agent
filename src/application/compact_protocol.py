@@ -8,9 +8,12 @@ import re
 from functools import lru_cache
 
 from jsonschema import Draft202012Validator
-from plc.comments import confirmed_device_comments
+from plc.comments import (
+    GXWORKS2_DEVICE_COMMENT_MAX_CHARS, confirmed_device_comments,
+    normalize_device_comments, normalize_generated_device_comments,
+)
 
-PROTOCOL_VERSION = "compact_ladder/1.2"
+PROTOCOL_VERSION = "compact_ladder/1.3"
 _MAX_BYTES = 2 * 1024 * 1024
 _MAX_NODES = 100000
 _MAX_DEPTH = 32
@@ -86,20 +89,22 @@ def normalize_compact(value):
     # Direct's documented transport envelope carries exactly one result. Never
     # pick a program out of a mixed response or discard a clarification payload.
     if (isinstance(result, dict) and set(result) == {"result"}
-            and isinstance(result["result"], dict) and set(result["result"]) == {"r"}):
+            and isinstance(result["result"], dict) and "r" in result["result"]
+            and set(result["result"]) <= {"r", "device_comments"}):
         result = result["result"]
         changes.append({"rule": "direct_result_envelope", "path": "content"})
     # A transport format annotation carries no ladder semantics. Remove only
     # this exact, observed spelling; conflicting/unknown fields still fail.
-    if (isinstance(result, dict) and set(result) == {'r', 'type'}
+    if (isinstance(result, dict) and {'r', 'type'} <= set(result) <= {'r', 'type', 'device_comments'}
             and result['type'] == 'json_object' and isinstance(result['r'], list)):
         result.pop('type')
         changes.append({'rule': 'transport_format_annotation', 'path': 'content',
                         'removed_field': 'type', 'value': 'json_object'})
     # One observed field alias, never unwrap arbitrary objects or choose between
     # competing representations. Full schema/PLC checks still run afterwards.
-    if isinstance(result, dict) and set(result) == {"root"} and isinstance(result["root"], list):
-        result = {"r": result["root"]}
+    if (isinstance(result, dict) and "root" in result and set(result) <= {"root", "device_comments"}
+            and isinstance(result["root"], list)):
+        result["r"] = result.pop("root")
         changes.append({"rule": "root_field_alias", "path": "content.r",
                         "from_field": "root", "to_field": "r"})
     if isinstance(result, dict) and isinstance(result.get("r"), list):
@@ -212,8 +217,22 @@ def compact_response_schema(*, allow_construct=False, legacy=False):
         rung["required"] = ["h", "s", "b"]
     schema = {
         "type": "object",
-        "properties": {"r": {"type": "array", "minItems": 1, "items": rung}},
-        "required": ["r"],
+        "properties": {
+            "r": {"type": "array", "minItems": 1, "items": rung},
+            "device_comments": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "address": copy.deepcopy(simple),
+                        "comment": {"type": "string", "maxLength": GXWORKS2_DEVICE_COMMENT_MAX_CHARS},
+                    },
+                    "required": ["address", "comment"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["r", "device_comments"],
         "additionalProperties": False,
     }
     if allow_construct:
@@ -228,6 +247,8 @@ def _compact_validator(part="root"):
     # A private snapshot: callers of compact_response_schema cannot mutate it.
     schema = compact_response_schema(legacy=part == "legacy")
     if part == "root":
+        # New wire responses carry annotations; older compact replies remain valid.
+        schema["required"] = ["r"]
         schema["properties"]["r"]["items"] = {}
     else:
         schema = schema["properties"]["r"]["items"]
@@ -391,12 +412,17 @@ def expand_compact_ladder(compact, projected=None):
             "branches": expanded_branches,
         })
 
-    return {"device_comments": _confirmed_comments(projected or {}), "rungs": rungs}
+    comments = normalize_generated_device_comments(
+        {row["address"]: row["comment"] for row in compact.get("device_comments", [])},
+        projected, include_confirmed=True,
+    )
+    return {"device_comments": normalize_device_comments(comments), "rungs": rungs}
 
 
 def canonical_compact_example():
     """One valid wire example; these example devices are not project allocations."""
-    return {"r": [{"c": ["NO M0"], "b": [{"i": [], "o": ["COIL M1"]}]}]}
+    return {"r": [{"c": ["NO M0"], "b": [{"i": [], "o": ["COIL M1"]}]}],
+            "device_comments": [{"address": "M0", "comment": "使能"}, {"address": "M1", "comment": "输出"}]}
 
 
 def compact_protocol_prompt():
@@ -406,7 +432,7 @@ def compact_protocol_prompt():
     branch = rung["properties"]["b"]["items"]
     return (
         "\n# Compact wire representation " + PROTOCOL_VERSION + "\n"
-        + "程序对象必填字段：" + "、".join(schema["required"]) + "（梯级数组）。\n"
+        + "程序对象必填字段：" + "、".join(schema["required"]) + "；r 为梯级数组，device_comments 为软元件用途注释数组，无可用注释时写 []。\n"
         + "每个梯级必填字段：" + "、".join(rung["required"]) + "。\n"
         + "每个输出分支必填字段：" + "、".join(branch["required"]) + "。\n"
         + "c 是所有输出分支共用的串联条件列表，i 是各分支追加的串联条件列表；二者始终为数组，无条件时写 []，不省略。\n"
@@ -418,7 +444,9 @@ def compact_protocol_prompt():
         + 'OR 只在 i 内用 {"or":[[简单输入,...],[简单输入,...]]}；子数组是串联支路，不嵌套 OR。\n'
         + "标准输出：" + ", ".join(sorted(_TYPED_OUTPUTS)) + "；COIL/PLS/PLF 后接地址，TIMER/COUNTER 后接地址和设定值。\n"
         + "其他输出直接写 opcode 与空格分隔的 operands，例如 MOV K1 D0。\n"
-        + "编号、布局和 device_comments 由本地补齐；仅输出协议 JSON。\n"
+        + 'device_comments 每项为 {"address":"软元件地址","comment":"用途短名称"}，'
+        + f"用途名称最多 {GXWORKS2_DEVICE_COMMENT_MAX_CHARS} 字符；为程序中用途明确的软元件填写，保留原文及逐项问答已明确的用途，不为注释新增追问。\n"
+        + "注释仅用于展示，不作为电平、接线或控制语义的依据；已确认名称由本地优先补齐。编号、布局由本地补齐；仅输出协议 JSON。\n"
     )
 
 

@@ -678,8 +678,38 @@ class WorkbenchService:
             if not answer and question.get("required", True):
                 raise ValueError("请回答所有必填问题：" + question["question"])
             if answer:
-                rows.append({"id": question["id"], "question": question["question"], "answer": answer})
+                rows.append({"id": question["id"], "question": question["question"], "answer": answer,
+                             **({"io_binding": copy.deepcopy(question["io_binding"])}
+                                if isinstance(question.get("io_binding"), dict) else {})})
         return rows
+
+    def _direct_snapshot_facts(self, snapshot):
+        """Replay legacy human revisions by turn, retaining their answer targets."""
+        from application.confirmed_generation_context import project_direct_user_facts
+        chain, visited = [], set()
+        while "direct_user_facts" not in snapshot:
+            chain.append(snapshot)
+            parent_id = snapshot.get("clarification_job_id")
+            if not parent_id:
+                break
+            if parent_id in visited:
+                raise ConflictError("续答作业链存在循环。")
+            visited.add(parent_id)
+            snapshot = self.jobs._load(record_id(parent_id))["snapshot"]
+        facts = snapshot.get("direct_user_facts", snapshot.get("project", {}).get("confirmed_spec"))
+        for turn in reversed(chain):
+            answers = []
+            if turn.get("clarification_job_id") and isinstance(turn.get("clarification_answers"), dict):
+                previous = self.output(turn["clarification_job_id"])
+                questions = (previous.get("generation") or {}).get("missing_info", [])
+                # Recovery accepts partial historical answers; new submissions
+                # still use the existing form validation above.
+                known_ids = {q["id"] for q in questions}
+                answers = self._direct_answer_rows([{**q, "required": False} for q in questions],
+                    {key: value for key, value in turn["clarification_answers"].items() if key in known_ids})
+            facts = project_direct_user_facts(turn.get("text", ""),
+                turn["project"].get("plc_model", "FX3U"), facts, answers=answers)
+        return copy.deepcopy(facts)
 
     def _submit_job(self, command):
         self.writable()
@@ -710,6 +740,7 @@ class WorkbenchService:
                         raise ValueError("完整重新生成不能同时指定局部修改或修复。")
                     snapshot["fresh_confirmed_generation"] = True
             if command["kind"] == "direct_generation":
+                from application.confirmed_generation_context import project_direct_user_facts
                 if project.get("target_mode") != "ladder" or context.program_ir is not None or scope is not None:
                     raise ValueError("Direct 一次生成用于新 Ladder 程序；已有工程编辑使用生成程序入口。")
                 if not str(command.get("text") or "").strip() and not command.get("clarification_answers"):
@@ -728,6 +759,7 @@ class WorkbenchService:
                     prior_text = parent["snapshot"].get("raw_requirement", parent["snapshot"].get("text", ""))
                     questions = (previous.get("generation") or {}).get("missing_info", [])
                     answer_text = command.get("text", "")
+                    rows = []
                     if "clarification_answers" in command:
                         rows = self._direct_answer_rows(questions, command["clarification_answers"])
                         snapshot["clarification_answers"] = {row["id"]: row["answer"] for row in rows}
@@ -744,11 +776,16 @@ class WorkbenchService:
                             + "\n用户续答：\n" + answer_text)
                     snapshot["user_fact_text"] = (self._direct_user_fact_text(parent["snapshot"])
                         + "\n用户续答：\n" + answer_text)
+                    parent_facts = self._direct_snapshot_facts(parent["snapshot"])
+                    snapshot["direct_user_facts"] = project_direct_user_facts(
+                        command.get("text", ""), project["plc_model"], parent_facts, answers=rows)
                     snapshot["attachment_ids"] = list(dict.fromkeys([
                         *parent["snapshot"].get("attachment_ids", []), *command.get("attachment_ids", [])]))
                 else:
                     snapshot["raw_requirement"] = command["text"]
                     snapshot["user_fact_text"] = command["text"]
+                    snapshot["direct_user_facts"] = project_direct_user_facts(
+                        command["text"], project["plc_model"], project.get("confirmed_spec"))
             if context.version and context.version.get("target_mode") == "fbd":
                 raw = self.projects.artifact(project_id, context.version_id, "gxw").read_bytes()
                 snapshot["fbd_baseline"] = base64.b64encode(raw).decode("ascii")
@@ -872,10 +909,11 @@ class WorkbenchService:
                     previous_json = ir_to_ladder(program) if program else None
                 request = GenerationRequest(
                     user_input=snapshot.get("raw_requirement", scoped_text), effort=None, target_mode=project["target_mode"],
-                    user_fact_text=snapshot.get("user_fact_text"),
+                    user_fact_text="" if kind == "direct_generation" and "direct_user_facts" in snapshot else snapshot.get("user_fact_text"),
                     previous_json=previous_json,
                     previous_ir=None if fresh_confirmed_generation else program,
                     confirmed_context=project.get("confirmed_spec"),
+                    direct_user_facts=snapshot.get("direct_user_facts") if kind == "direct_generation" else None,
                     decision_receipt_id=project.get("confirmed_decision_receipt_id"),
                     conversation_history=[] if (repair_mode or format_repair) else project.get("messages", []),
                     task_type=snapshot.get("task_type"),
@@ -898,13 +936,6 @@ class WorkbenchService:
             output = {"generation": metadata}
             if snapshot.get("generation_action"):
                 output["generation_action"] = snapshot["generation_action"]
-            if metadata.get("status") == "needs_input":
-                with self.lock.thread_lock:
-                    self._check_snapshot(snapshot)
-                output.update(status="needs_input", clarification_job_id=ctx.job_id,
-                              missing_info=copy.deepcopy(metadata["missing_info"]))
-                atomic_json(self.state_dir / "outputs" / (ctx.job_id + ".json"), output)
-                return {"status": "needs_input", "clarification_job_id": ctx.job_id}
             payload = {"project_id": project_id, "target_mode": metadata["target_mode"],
                        "plc_model": project.get("plc_model", "FX3U"), "_confirmed_spec": project.get("confirmed_spec"),
                        "_validation_profile": metadata.get("validation_profile", "strict"),

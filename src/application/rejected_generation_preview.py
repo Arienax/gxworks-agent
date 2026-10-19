@@ -82,7 +82,7 @@ def recover_compact_for_validation(raw_text: str, *, confirmed_spec=None) -> tup
     original = _clean_json_text(raw_text)
     repaired, count = _repair_compact_json(original)
     parsed = json.loads(repaired)
-    if not isinstance(parsed, Mapping) or set(parsed) != {"r"}:
+    if not isinstance(parsed, Mapping) or "r" not in parsed or set(parsed) - {"r", "device_comments"}:
         raise ValueError("response is not one complete compact ladder")
     ladder = _expand_compact(parsed, confirmed_spec)
     return ladder, {
