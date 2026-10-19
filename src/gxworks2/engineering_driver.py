@@ -17,7 +17,11 @@ import time
 
 from .finder import GXWorks2Finder
 from .project_profiles import GXWORKS2_NATIVE_VERSION, native_project_profile
+from .native_locale import (inspect_native_language, native_caption, native_menu_selection,
+                            native_tree_path, standard_yes_no_captions, NativeLanguageNotReadyError)
 from .ui_automation import PywinautoGXWorks2UIAutomation
+from gxw.native_locale import (canonical_label_columns, label_title, native_language,
+                               program_title, rebuild_completion_markers, strict_project_text, ui_text)
 
 
 class NativeEngineeringDriverError(RuntimeError):
@@ -28,6 +32,11 @@ class NativeEngineeringDriverError(RuntimeError):
 
 def _same_text(left, right):
     return left.replace('\r\n', '\n').replace('\r', '\n') == right.replace('\r\n', '\n').replace('\r', '\n')
+
+
+def _label_display_type(data_type):
+    # Native chooser display strings witnessed independently of CSV spelling.
+    return {'BOOL': 'Bit', 'INT': 'Word[Signed]'}.get(data_type, data_type)
 
 
 def _post_native_client_click(handle, x, y, *, right=False):
@@ -118,20 +127,19 @@ def _abbreviated_project_path(title_path, path):
 
 
 def _label_csv(raw):
-    if len(raw) > 8 * 1024 * 1024 or not raw.startswith((b'\xff\xfe', b'\xfe\xff')):
-        raise NativeEngineeringDriverError('原生标签 CSV 缺少已验证的 UTF-16 格式。')
-    rows = list(csv.reader(io.StringIO(raw.decode('utf-16')), delimiter='\t', strict=True))
-    if len(rows) < 2 or len(rows[0]) != 1 or len(set(rows[1])) != len(rows[1]):
-        raise NativeEngineeringDriverError('原生标签 CSV 的表头不明确。')
-    body = [r for r in rows[2:] if r and any(r)]
-    if any(len(r) != len(rows[1]) for r in body):
-        raise NativeEngineeringDriverError('原生标签 CSV 的列数不一致。')
-    return rows[0], rows[1], body
+    from gxw.active_context import parse_active_label_csv
+    from gxw.models import GXWFormatError
+    try:
+        return parse_active_label_csv(raw)
+    except GXWFormatError as error:
+        raise NativeEngineeringDriverError(str(error)) from error
 
 
-def _merge_label_csv(raw, rows, *, structure=False):
+def _merge_label_csv(raw, rows, *, structure=False, native_ui_language='zh-CN'):
     """Mechanical column transport; types/defaults have already passed Core."""
     title, header, previous = _label_csv(raw)
+    native_header = header
+    header = canonical_label_columns(header, language=native_ui_language)
     known = {'类', '标签名', '数据类型', '常量', '软元件', '地址', '注释', '备注',
              '系统标签的关联', '系统标签名', '属性'}
     required = {'类', '标签名', '数据类型', '常量', '注释'}
@@ -169,12 +177,12 @@ def _merge_label_csv(raw, rows, *, structure=False):
     output = io.StringIO(newline='')
     writer = csv.writer(output, delimiter='\t', quoting=csv.QUOTE_ALL, lineterminator='\r\n')
     writer.writerow(title)
-    writer.writerow(header)
+    writer.writerow(native_header)
     writer.writerows(result)
     return output.getvalue().encode('utf-16')
 
 
-def _grid_calibration(pixels):
+def _grid_calibration(pixels, *, include_lattice=False):
     """Observe the native dot lattice; never guess a cached editor rectangle."""
     from collections import defaultdict
 
@@ -239,6 +247,17 @@ def _grid_calibration(pixels):
                                    'proof': proof,
                                    'x': min(x for x, _ in support) - pitch,
                                    'y': min(y for _, y in support) - pitch})
+    # Text can hide the vertical neighbour of a boundary dot. Keep that dot
+    # as evidence for alias checking only when an observed immediate neighbour
+    # already belongs to the fine lattice. Do not extend the lattice repeatedly:
+    # a separate, compatible coarse grid must remain ambiguous.
+    for candidate in candidates:
+        pitch, points = candidate['pitch'], candidate['points']
+        candidate['alias_points'] = points | {
+            (x, y) for x, y in dots
+            if (x % pitch, y % pitch) == candidate['phase'] and any(
+                point in points for point in ((x-pitch, y), (x+pitch, y),
+                                               (x, y-pitch), (x, y+pitch)))}
     # A complete lattice also supports integral multiples of its period. Only
     # discard such an alias when all its observed rectangles are explained by
     # the finer lattice; a second independent grid must remain ambiguous.
@@ -247,16 +266,81 @@ def _grid_calibration(pixels):
         and candidate['pitch'] % other['pitch'] == 0
         and candidate['phase'][0] % other['pitch'] == other['phase'][0]
         and candidate['phase'][1] % other['pitch'] == other['phase'][1]
-        and candidate['proof'] <= other['points']
+        and candidate['proof'] <= other['alias_points']
         for other in candidates)]
-    if len(candidates) != 1:
+    horizontal_limit = None
+    grid = candidates[0] if len(candidates) == 1 else None
+    if len(candidates) == 2:
+        left, right = sorted(candidates, key=lambda item: min(x for x, _ in item['proof']))
+        pitch = left['pitch']
+        phase_distance = min((left['phase'][0] - right['phase'][0]) % pitch,
+                             (right['phase'][0] - left['phase'][0]) % pitch)
+        if (right['pitch'] == pitch and left['phase'][1] == right['phase'][1]
+                and left['y'] == right['y'] and phase_distance == 1):
+            sides = []
+            for candidate in (left, right):
+                rows = defaultdict(set)
+                for x, y in candidate['proof']:
+                    rows[y].add(x)
+                sides.append(rows)
+            shared = sorted(sides[0].keys() & sides[1].keys())
+            seams = [(max(sides[0][y]), min(sides[1][y])) for y in shared]
+            # Wide native captures can shift one horizontal raster pixel at a
+            # narrow vertical boundary. Prove adjacent, equal-period rows on
+            # both sides; unrelated or overlapping lattices remain ambiguous.
+            if (len(seams) >= 3 and all(pitch - 1 <= end - start <= 2 * pitch + 1
+                                      for start, end in seams)
+                    and max(end for _, end in seams) - min(end for _, end in seams) <= pitch):
+                limit = min(x for x, _ in right['points']) - pitch
+                stable_rows = [xs for y, xs in sides[0].items() if any(
+                    all(x + column * pitch in xs and x + column * pitch < limit for column in range(8))
+                    for x in xs)]
+                if len(stable_rows) >= 3:
+                    grid, horizontal_limit = left, limit
+    if grid is None:
         raise NativeEngineeringDriverError('无法唯一确认当前 FBD 页面的二维原生网格。')
-    grid = candidates[0]
-    return {'pitch': grid['pitch'], 'x': grid['x'], 'y': grid['y'],
-            'width': width, 'height': height}
+    result = {'pitch': grid['pitch'], 'x': grid['x'], 'y': grid['y'],
+              'width': width, 'height': height}
+    if horizontal_limit is not None:
+        # Only the independently observed left area has this coordinate map.
+        # Never extrapolate it into the raster transition or the other phase.
+        result['calibrated_x_limit'] = horizontal_limit
+    if include_lattice:
+        # Observe only the phase established above; another network can have
+        # its own vertical origin. A white view below a network is not cells.
+        def dot(x, y):
+            if max(samples[x, y]) >= 180:
+                return False
+            seen, pending = {(x, y)}, [(x, y)]
+            while pending:
+                px, py = pending.pop()
+                for dx, dy in ((-1,-1),(0,-1),(1,-1),(-1,0),(1,0),(-1,1),(0,1),(1,1)):
+                    point = (px+dx, py+dy)
+                    if point in seen or not (0 <= point[0] < width and 0 <= point[1] < height):
+                        continue
+                    if max(samples[point[0], point[1]]) < 180:
+                        seen.add(point)
+                        if (len(seen) > 4 or max(a for a,b in seen)-min(a for a,b in seen)>1
+                                or max(b for a,b in seen)-min(b for a,b in seen)>1):
+                            return False
+                        pending.append(point)
+            return min(a for a,b in seen) == x and min(b for a,b in seen) == y
+        points, rows = set(), []
+        for y in range(grid['y']+grid['pitch'], height-3, grid['pitch']):
+            row = {x for x in range(grid['x']+grid['pitch'], width-24, grid['pitch'])
+                   if x >= 3 and y >= 3 and dot(x,y)}
+            if not any(all(x+i*grid['pitch'] in row for i in range(8)) for x in row):
+                break
+            rows.append(y)
+            points.update((x,y) for x in row)
+        if len(rows) < 2:
+            raise NativeEngineeringDriverError('首个网络没有可确认的连续原生点阵。')
+        result['first_lattice_band'] = [rows[0], rows[-1]]
+        result['lattice_points'] = sorted([x,y] for x,y in points)
+    return result
 
 
-def _accessible_grid_rows(handle):
+def _accessible_grid_rows(handle, *, native_ui_language='zh-CN'):
     """Read the native grid's public MSAA row/cell interface, without UIA."""
     import ctypes
     from comtypes.automation import IDispatch
@@ -289,10 +373,214 @@ def _accessible_grid_rows(handle):
             if len(values) != 1 or not isinstance(values[0], str):
                 raise NativeEngineeringDriverError('原生交叉引用列不唯一：' + name)
             return values[0]
-        result.append({'native_row': int(native_row), **{key: unique(title) for key, title in (
-            ('label', '软元件/标签'), ('address', '软元件'), ('program', '程序文件名'),
-            ('pou', '数据名'), ('location', '位置'), ('read_write', '读入/写入'))}})
+        result.append({'native_row': int(native_row), **{key: unique(ui_text(title, native_ui_language)) for key, title in (
+            ('label', 'xref_label'), ('address', 'column_device'), ('program', 'xref_program'),
+            ('pou', 'xref_data'), ('location', 'xref_position'), ('read_write', 'xref_rw'))}})
     return result
+
+
+def _allocation_accessible(handle):
+    """Obtain a fresh public MSAA object; native grid objects can be snapshots."""
+    import ctypes
+    from comtypes.automation import IDispatch
+    from comtypes.client.dynamic import Dispatch
+    interface = ctypes.POINTER(IDispatch)()
+    api = ctypes.windll.oleacc.AccessibleObjectFromWindow
+    api.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_void_p, ctypes.c_void_p]
+    api.restype = ctypes.c_long
+    status = api(handle, ctypes.c_uint32(0xFFFFFFFC), ctypes.byref(IDispatch._iid_),
+                 ctypes.byref(interface))
+    if status or not interface:
+        raise NativeEngineeringDriverError('原生分配表没有提供可核对的行接口。')
+    return Dispatch(interface)
+
+
+def _allocation_grid_rows(handle):
+    grid = _allocation_accessible(handle)
+    if grid.accRole[0] != 24 or not 3 <= grid.accChildCount <= 544:
+        raise NativeEngineeringDriverError('原生分配表的身份或行数尚未验证。')
+    rows = []
+    for index in range(1, grid.accChildCount + 1):
+        row = grid.accChild[index]
+        if row.accRole[0] == 25:
+            continue  # MSAA also exposes one object per column header.
+        value = row.accValue[0]
+        if (row.accRole[0] != 28 or not isinstance(value, str) or not value.isdecimal()
+                or int(value) != len(rows) or not 3 <= row.accChildCount <= 16):
+            raise NativeEngineeringDriverError('原生分配表没有连续且唯一的实际行列。')
+        cells = []
+        for column in range(1, row.accChildCount + 1):
+            cell = row.accChild[column]
+            name, text, state = cell.accName[0], cell.accValue[0], cell.accState[0]
+            if (cell.accRole[0] != 29 or not isinstance(name, str) or not isinstance(text, str)
+                    or type(state) is not int):
+                raise NativeEngineeringDriverError('原生分配单元格的列归属或文本不明确。')
+            cells.append(dict(name=name, value=text, state=state))
+        rows.append(dict(native_row=int(value), cells=cells))
+    return rows
+
+
+def _native_focus(handle):
+    """Read the owning GUI thread, which can differ from the main frame thread."""
+    import ctypes
+    from ctypes import wintypes as w
+    import win32process
+    class GuiThreadInfo(ctypes.Structure):
+        _fields_ = [('size', w.DWORD), ('flags', w.DWORD), ('active', w.HWND),
+                    ('focus', w.HWND), ('capture', w.HWND), ('menu', w.HWND),
+                    ('move', w.HWND), ('caret', w.HWND), ('caret_rect', w.RECT)]
+    value = GuiThreadInfo()
+    value.size = ctypes.sizeof(value)
+    if not ctypes.windll.user32.GetGUIThreadInfo(win32process.GetWindowThreadProcessId(handle)[0],
+                                                ctypes.byref(value)):
+        raise NativeEngineeringDriverError('无法确认原生编辑器的实际线程焦点。')
+    return value.focus
+
+
+def _allocation_cell(handle, native_row, native_column):
+    """Resolve a cell again after every focus/edit operation, never by heap address."""
+    grid = _allocation_accessible(handle)
+    if grid.accRole[0] != 24 or not 3 <= grid.accChildCount <= 544:
+        raise NativeEngineeringDriverError('原生分配表的身份或行数已改变。')
+    matches = []
+    for index in range(1, grid.accChildCount + 1):
+        row = grid.accChild[index]
+        if row.accRole[0] == 28 and row.accValue[0] == str(native_row):
+            matches.append(row)
+    if len(matches) != 1 or matches[0].accChildCount != 8 or not 0 <= native_column < 8:
+        raise NativeEngineeringDriverError('原生分配字段没有唯一的当前单元格。')
+    cell = matches[0].accChild[native_column + 1]
+    if cell.accRole[0] != 29:
+        raise NativeEngineeringDriverError('原生分配字段的可访问角色已改变。')
+    return grid, cell
+
+
+def _allocation_cell_point(frame, handle, native_row, native_column):
+    import ctypes
+    from ctypes import wintypes as w
+    from comtypes.client import GetModule
+    import win32gui
+    GetModule('oleacc.dll')
+    from comtypes.gen.Accessibility import IAccessible
+    grid, cell = _allocation_cell(handle, native_row, native_column)
+    root_box = grid._comobj.QueryInterface(IAccessible).accLocation(0)
+    cell_box = cell._comobj.QueryInterface(IAccessible).accLocation(0)
+    api = ctypes.windll.user32.LogicalToPhysicalPointForPerMonitorDPI
+    api.argtypes = [w.HWND, ctypes.POINTER(w.POINT)]
+    api.restype = w.BOOL
+    def convert(x, y):
+        point = w.POINT(x, y)
+        # The top-level frame is the independently observed conversion anchor.
+        if not api(frame, ctypes.byref(point)):
+            raise NativeEngineeringDriverError('无法确认分配表格的原生 DPI 坐标。')
+        return point.x, point.y
+    x, y, width, height = root_box
+    physical = (*convert(x, y), *convert(x + width, y + height))
+    actual = win32gui.GetWindowRect(handle)
+    if any(abs(a - b) > tolerance for a, b, tolerance in zip(physical, actual, (2, 2, 8, 8))):
+        raise NativeEngineeringDriverError('分配表的可访问坐标与实际窗口不同。')
+    x, y, width, height = cell_box
+    left, top = convert(x, y)
+    right, bottom = convert(x + width, y + height)
+    if not (actual[0] <= left < right <= actual[2] and actual[1] <= top < bottom <= actual[3]):
+        raise NativeEngineeringDriverError('请求的原生分配单元格当前不可见。')
+    point = ((left + right) // 2, (top + bottom) // 2)
+    hit = win32gui.WindowFromPoint(point)
+    if hit != handle and not win32gui.IsChild(handle, hit):
+        raise NativeEngineeringDriverError('请求的分配单元格被其他窗口覆盖。')
+    return point
+
+
+def _compile_diagnostic_rows(rows, *, native_ui_language='zh-CN'):
+    """Project the witnessed diagnostic columns, not their dynamic control ID."""
+    from gxw.native_locale import native_diagnostic_severity
+    from gxw.models import GXWFormatError
+    titles = ('No.', *(ui_text('diagnostic_' + key, native_ui_language)
+                       for key in ('result', 'data', 'class', 'content', 'code')))
+    canonical_titles = ('No.', '结果', '数据名', '分类', '内容', '错误代码')
+    actual = [row for row in rows if row.get('role') == 28]
+    headers = [row for row in actual if row.get('value') == '0']
+    if len(headers) != 1:
+        return None
+    header = headers[0].get('cells', [])
+    names = [cell.get('name') or '' for cell in header]
+    if tuple(name for name in names if name) != titles:
+        return None
+    if any(cell.get('role') != 29 or (cell.get('value') or '') != name
+           for cell, name in zip(header, names)):
+        raise NativeEngineeringDriverError('本次编译诊断表头的实际名称与值不同。')
+    result = []
+    for row in actual:
+        value = row.get('value')
+        if value == '0':
+            continue
+        if (not isinstance(value, str) or not value.isdecimal()
+                or int(value) != len(result) + 1 or int(value) > 4096):
+            raise NativeEngineeringDriverError('本次编译诊断没有连续且唯一的实际行号。')
+        cells = row.get('cells', [])
+        if len(cells) != len(header):
+            raise NativeEngineeringDriverError('本次编译诊断的实际列数已改变。')
+        fields = {}
+        for cell, name in zip(cells, names):
+            text = cell.get('value')
+            if (cell.get('role') != 29 or (cell.get('name') or '') != name
+                    or text is not None and not isinstance(text, str)
+                    or not name and text not in ('', None)):
+                raise NativeEngineeringDriverError('本次编译诊断的列归属或文本不可确认。')
+            if name:
+                fields[canonical_titles[titles.index(name)]] = text or ''
+        try:
+            severity = native_diagnostic_severity(fields['结果'], language=native_ui_language)
+        except GXWFormatError as error:
+            raise NativeEngineeringDriverError('本次编译诊断的结果类别与原生界面语言不同。') from error
+        if fields['No.'] != value:
+            raise NativeEngineeringDriverError('本次编译诊断的编号或结果类别尚未验证。')
+        result.append(dict(native_row=int(value), no=fields['No.'], severity=severity, raw_severity=fields['结果'],
+            data_name=fields['数据名'], category=fields['分类'], message=fields['内容'], code=fields['错误代码']))
+    return result
+
+
+def _accessible_compile_diagnostic_rows(handle, *, native_ui_language='zh-CN'):
+    """Read MSAA rows: native row 0 is the header and row 1 is actual data."""
+    import ctypes
+    from comtypes.automation import IDispatch
+    from comtypes.client.dynamic import Dispatch
+    interface = ctypes.POINTER(IDispatch)()
+    status = ctypes.windll.oleacc.AccessibleObjectFromWindow(
+        handle, ctypes.c_uint32(0xFFFFFFFC), ctypes.byref(IDispatch._iid_), ctypes.byref(interface))
+    if status or not interface:
+        raise NativeEngineeringDriverError('原生编译诊断没有提供可核对的行接口。')
+    grid = Dispatch(interface)
+    if not 1 <= grid.accChildCount <= 4104:
+        raise NativeEngineeringDriverError('原生编译诊断数量超出本次回读范围。')
+    rows = []
+    for index in range(1, grid.accChildCount + 1):
+        row = grid.accChild[index]
+        if row.accRole[0] != 28:
+            continue  # The surrounding Role25 objects describe columns.
+        if not 1 <= row.accChildCount <= 64:
+            raise NativeEngineeringDriverError('原生编译诊断列数尚未验证。')
+        cells = []
+        for column in range(1, row.accChildCount + 1):
+            cell = row.accChild[column]
+            cells.append(dict(name=cell.accName[0], value=cell.accValue[0], role=cell.accRole[0]))
+        rows.append(dict(role=28, value=str(row.accValue[0]), cells=cells))
+    return _compile_diagnostic_rows(rows, native_ui_language=native_ui_language)
+
+
+def _compile_summary_counts(output, *, public_checks_requested=None, native_ui_language=None):
+    if not isinstance(output, str) or not any(marker in output for marker in rebuild_completion_markers(native_ui_language)):
+        return None
+    counts = {}
+    for name in ('Error', 'Warning', 'CheckWarning'):
+        matches = re.findall(r'(?<![A-Za-z])' + name + r'\s*:\s*([0-9]+)', output, re.IGNORECASE)
+        if not matches:
+            if name == 'CheckWarning' and public_checks_requested is False:
+                counts[name] = None  # GX omits this field when public checks were not requested.
+                continue
+            return None
+        counts[name] = int(matches[-1])
+    return counts
 
 
 class NativeEngineeringDriver:
@@ -326,6 +614,53 @@ class NativeEngineeringDriver:
         self._file_use = None
         if not all(self._binding) or session.software_version != self.VERSION:
             raise NativeEngineeringDriverError('无法确认 GX Works2 进程启动身份和已验证版本。')
+        try:
+            self.native_ui_language = inspect_native_language(session.process_id, session.executable)
+        except NativeLanguageNotReadyError:
+            def language_ready():
+                try:
+                    return inspect_native_language(self.session.process_id, self.session.executable)
+                except NativeLanguageNotReadyError:
+                    return None
+            # _wait rechecks PID/start/window/version on every observation.
+            # Mixed/unknown resources still fail immediately; no IDE command
+            # is sent while the new frame's satellites are still loading.
+            self.native_ui_language = self._wait(language_ready, '原生界面语言资源尚未完成加载。')
+        self._codepage_observation = None
+
+    def _text(self, key):
+        return ui_text(key, getattr(self, 'native_ui_language', 'zh-CN'))
+
+    def _caption(self, text):
+        return native_caption(text, getattr(self, 'native_ui_language', 'zh-CN'))
+
+    def _tree_path(self, path):
+        return native_tree_path(path, getattr(self, 'native_ui_language', 'zh-CN'))
+
+    def _program_title(self, owner, kind='program', language='fbd'):
+        return program_title(owner, kind, language,
+                             language=getattr(self, 'native_ui_language', 'zh-CN'))
+
+    @classmethod
+    def _bind_started_frame(cls, session, path, cpu, **options):
+        """Retain the exact created frame even if pre-command binding fails."""
+        try:
+            driver = cls(session, path, cpu, owned=True, **options)
+        except Exception as error:
+            from copy import deepcopy
+            observation = deepcopy(getattr(error, 'observation', {}))
+            observation.update(startup_session={key: getattr(session, key) for key in (
+                'process_id', 'window_handle', 'process_started', 'executable', 'software_version')},
+                requested_project=str(path), native_command_dispatched=False)
+            raise NativeEngineeringDriverError(str(error), observation=observation) from error
+        try:
+            if driver._frame_identity().project_open:
+                raise NativeEngineeringDriverError('新建的 GX Works2 窗口在绑定期间打开了另一个工程。')
+        except Exception as error:
+            bound = NativeEngineeringDriverError(str(error), observation={
+                **getattr(error, 'observation', {}), 'native_command_dispatched': False})
+            raise driver._startup_error(bound) from error
+        return driver
 
     @classmethod
     def start_new(cls, path, cpu, *, timeout=30, progress=None, evidence_directory=None, language='fbd'):
@@ -349,8 +684,8 @@ class NativeEngineeringDriver:
             time.sleep(.1)
         if session is None or session.project_open:
             raise NativeEngineeringDriverError('新建 GX Works2 进程没有明确的空白窗口。')
-        driver = cls(session, path, cpu, timeout=timeout, progress=progress,
-                     evidence_directory=evidence_directory, finder=finder, owned=True)
+        driver = cls._bind_started_frame(session, path, cpu, timeout=timeout, progress=progress,
+                                        evidence_directory=evidence_directory, finder=finder)
         import win32gui
         try:
             win32gui.ShowWindow(session.window_handle, 3)
@@ -384,8 +719,8 @@ class NativeEngineeringDriver:
             time.sleep(.1)
         if session is None or session.project_open:
             raise NativeEngineeringDriverError('新建 GX Works2 进程没有明确的空白窗口。')
-        driver = cls(session, path, cpu, timeout=timeout, progress=progress,
-                     evidence_directory=evidence_directory, finder=finder, owned=True)
+        driver = cls._bind_started_frame(session, path, cpu, timeout=timeout, progress=progress,
+                                        evidence_directory=evidence_directory, finder=finder)
         import win32gui
         try:
             win32gui.ShowWindow(session.window_handle, 3)
@@ -441,6 +776,9 @@ class NativeEngineeringDriver:
 
     def inspect(self):
         session = self._frame_identity()
+        actual_language = inspect_native_language(session.process_id, session.executable)
+        if actual_language != self.native_ui_language:
+            raise NativeEngineeringDriverError('原生界面语言已经改变，需要重新绑定工程会话。')
         try:
             actual_path = Path(session.project_name).resolve()
         except (OSError, ValueError):
@@ -457,9 +795,23 @@ class NativeEngineeringDriver:
         profile = self.ui._current_native_project_profile(session)
         if profile is None or profile.cpu != self.cpu:
             raise NativeEngineeringDriverError('原生状态栏 CPU 与会话目标不一致。')
+        stat = self.path.stat()
+        key = (stat.st_mtime_ns, stat.st_size)
+        cached = self._codepage_observation
+        if cached is None or cached[0] != key:
+            from gxw.fb_authoring import _context
+            codepage = _context(self.path.read_bytes(), require_fbd=False)[0]['codepage']
+            self._codepage_observation = (key, codepage)
+        project_language = self.ui._current_native_project_codepage_observation(session, actual_language)
+        if self._codepage_observation[1] not in project_language['codepage_candidates']:
+            raise NativeEngineeringDriverError('当前原生项目语言与已绑定的保存工程不同，需要重新绑定。',
+                observation={'project_language': project_language,
+                             'saved_project_codepage': self._codepage_observation[1]})
         return {**{key: getattr(session, key) for key in (
             'process_id', 'window_handle', 'process_started', 'executable', 'software_version')},
-            'project_path': str(self.path), 'cpu_menu': profile.cpu, 'path_binding': binding}
+            'project_path': str(self.path), 'cpu_menu': profile.cpu, 'path_binding': binding,
+            'native_ui_language': actual_language, 'project_codepage': self._codepage_observation[1],
+            'project_language_observation': project_language}
 
     def _window(self):
         return self.ui._main_window(self._frame_identity())
@@ -527,6 +879,68 @@ class NativeEngineeringDriver:
         if not self._window().is_enabled():
             raise NativeEngineeringDriverError('GX Works2 工程窗口尚未返回可编辑状态。')
 
+    def verify_project_codepage(self):
+        """Re-read the current Chinese GB option at an operation boundary.
+
+        The language pane deliberately represents both 936 and 54936. A saved
+        file or a previously read option cannot detect an unsaved switch.
+        Opening Options is read-only here: only selection, BM_GETCHECK and
+        Cancel are used; no OK, checkbox toggle or user-default action is sent.
+        """
+        self._idle()
+        before = self.inspect()
+        candidates = before['project_language_observation']['codepage_candidates']
+        if len(candidates) == 1:
+            return dict(status='matched', project_codepage=candidates[0],
+                        origin='current_native_project_language_status')
+        if set(candidates) != {936, 54936}:
+            raise NativeEngineeringDriverError('当前原生项目编码不明确，未继续操作。')
+        self._command(0x467)
+        title = self._text('dialog_options') + ' - ' + self.path.stem
+        def options():
+            dialogs = [d for d in self._dialogs() if d.window_text() == title and d.is_enabled()]
+            return dialogs[0] if len(dialogs) == 1 else None
+        dialog = self._wait(options, '没有确认当前工程的原生选项窗口；未重复发送。')
+        observation = None
+        try:
+            self._foreground(dialog.handle)
+            trees = [tree for tree in dialog.descendants(class_name='SysTreeView32')
+                     if tree.control_id() == 11000 and tree.is_visible() and tree.is_enabled()]
+            if len(trees) != 1:
+                raise NativeEngineeringDriverError('当前工程选项导航树不唯一。')
+            tree, = trees
+            path = [self._text('options_project'), self._text('options_common_setting')]
+            tree.get_item(path[:1], exact=True).expand()
+            tree.get_item(path, exact=True).select()
+            def checkbox():
+                controls = [control for control in dialog.descendants(class_name='Button')
+                            if control.control_id() == 15317 and control.is_visible()]
+                return controls[0] if len(controls) == 1 else None
+            control = self._wait(checkbox, '当前工程的 GB18030 编码选项不可确认。')
+            if (not control.is_enabled() or control.window_text() != self._text('options_gb18030')
+                    or control.style() & 0xF != 3):  # BS_AUTOCHECKBOX
+                raise NativeEngineeringDriverError('当前工程的 GB18030 复选框身份不一致。')
+            state = int(control.send_message(0x00F0, 0, 0))  # BM_GETCHECK only
+            if state not in (0, 1):
+                raise NativeEngineeringDriverError('当前工程的 GB18030 复选状态不明确。')
+            observation = dict(project_codepage=54936 if state else 936,
+                origin='current_native_project_options_BM_GETCHECK',
+                dialog_handle=dialog.handle, control_handle=control.handle,
+                control_id=15317, checked=state, raw_text=control.window_text())
+        finally:
+            self._click(dialog, 2)
+            self._wait(lambda: not any(d.handle == dialog.handle for d in self._dialogs()),
+                       '原生选项取消尚未结束；未重复发送。')
+        after = self.inspect()
+        fields = (*('process_id', 'window_handle', 'process_started', 'executable', 'software_version'),
+                  'project_path', 'cpu_menu', 'native_ui_language', 'project_codepage')
+        if any(before[key] != after[key] for key in fields):
+            raise NativeEngineeringDriverError('读取编码选项期间工程身份改变，需要重新绑定。')
+        if observation['project_codepage'] != before['project_codepage']:
+            raise NativeEngineeringDriverError('当前原生项目编码与已绑定的保存工程不同，需要重新绑定。',
+                observation={**observation, 'saved_project_codepage': before['project_codepage']})
+        return dict(status='matched', **observation)
+
     def _command(self, command, *, allow_dialog=False, project=True):
         if project:
             self.inspect()
@@ -550,8 +964,11 @@ class NativeEngineeringDriver:
             observation={'dialogs': [{'title': d.window_text(), 'message': self._dialog_text(d)} for d in self._dialogs()]})
 
     def _dialog(self, title):
+        expected = {self._caption(title)}
+        if title == '新建数据':
+            expected.add(self._text('dialog_new_data_navigation'))
         def found():
-            rows = [d for d in self._dialogs() if d.window_text() == title and d.is_enabled()]
+            rows = [d for d in self._dialogs() if d.window_text() in expected and d.is_enabled()]
             return rows[0] if len(rows) == 1 else None
         return self._wait(found, '未确认原生对话框：' + title)
 
@@ -566,6 +983,7 @@ class NativeEngineeringDriver:
         win32gui.PostMessage(button.handle, 0x00F5, 0, 0)
 
     def _confirm(self, fragment, control_id):
+        fragment = self._caption(fragment)
         def found():
             rows = [d for d in self._dialogs() if d.is_enabled() and fragment in self._dialog_text(d)]
             return rows[0] if len(rows) == 1 else None
@@ -626,27 +1044,55 @@ class NativeEngineeringDriver:
         dialog = self._dialog('新建')
         profile = native_project_profile(self.cpu)
         series = dialog.child_window(control_id=10002, class_name='ComboBox')
-        choices = [s for s in series.item_texts() if s in profile.series]
+        expected_series = self._text('series_q') if profile.series[0].startswith('QCPU') else profile.series[0]
+        choices = [s for s in series.item_texts() if s == expected_series]
         if len(choices) != 1:
             raise NativeEngineeringDriverError('未确认新建工程的 CPU 系列。')
         self.ui._select_native_combo(series, choices[0])
         self.ui._select_native_combo(dialog.child_window(control_id=10003, class_name='ComboBox'), self.cpu)
         kind = dialog.child_window(control_id=10001, class_name='ComboBox')
         if kind.is_enabled():
-            self.ui._select_native_combo(kind, '结构化工程')
-        elif kind.selected_text() != '结构化工程':
+            self.ui._select_native_combo(kind, self._text('project_structured'))
+        elif kind.selected_text() != self._text('project_structured'):
             raise NativeEngineeringDriverError('此 CPU 当前没有已验证的结构化工程页面。')
         self.ui._select_native_combo(dialog.child_window(control_id=10070, class_name='ComboBox'),
-                                     'ST' if language == 'st' else '结构化梯形图/FBD')
+                                     'ST' if language == 'st' else self._text('language_fbd'))
         self._click(dialog, 1)
-        self._wait(lambda: 'POU_01' in self._window().window_text() and not self._dialogs(), '未确认原生空白 FBD 工程。')
+        creation_dialog_handle = dialog.handle
+        created_ready_since = [None]
+        def created():
+            dialogs = self._dialogs()
+            if any(current.handle == creation_dialog_handle for current in dialogs):
+                created_ready_since[0] = None
+                return None  # The posted native New handler is still returning.
+            if dialogs:
+                created_ready_since[0] = None
+                self.ui._acknowledge_known_save_notices(self.session,
+                    native_ui_language=getattr(self, 'native_ui_language', 'zh-CN'))
+                return None
+            if 'POU_01' not in self._window().window_text() or not self._window().is_enabled():
+                created_ready_since[0] = None
+                return None
+            if created_ready_since[0] is None:
+                created_ready_since[0] = time.monotonic()
+            return time.monotonic() - created_ready_since[0] >= .4
+        self._wait(created, '未确认原生空白 FBD 工程。')
         self._command(self.ui.SAVE_PROJECT_COMMAND, project=False)
         dialog = self._dialog('工程另存为')
         if self.path.exists():
             raise NativeEngineeringDriverError('新工程目标文件已出现，未覆盖。')
         self._file_name(dialog, self.path)
-        self._wait(lambda: self.path.is_file() and self.path.name.casefold() in self._window().window_text().casefold()
-                   and not self._dialogs(), '未确认新工程已经保存。')
+        save_dialog_handle = dialog.handle
+        def initially_saved():
+            dialogs = self._dialogs()
+            if any(current.handle == save_dialog_handle for current in dialogs):
+                return None  # File acceptance was dispatched once; never replay it.
+            if dialogs:
+                self.ui._acknowledge_known_save_notices(self.session,
+                    native_ui_language=getattr(self, 'native_ui_language', 'zh-CN'))
+                return None
+            return self.path.is_file() and self.path.name.casefold() in self._window().window_text().casefold()
+        self._wait(initially_saved, '未确认新工程已经保存。')
         self.inspect()
         self._last_saved = self.path.read_bytes()
         if language == 'fbd':
@@ -702,6 +1148,66 @@ class NativeEngineeringDriver:
             raise NativeEngineeringDriverError('原生工程没有活动编辑页面。')
         return self.ui._application(self.session).window(handle=handle)
 
+    def _clear_fb_instance_view(self, document, owner, expected_title):
+        """Return one exact FB instance view to its definition, without Save."""
+        import win32gui
+        import win32process
+        title = document.window_text().rstrip()
+        body, fbd = self._text('nav_body'), self._text('language_fbd')
+        instance = re.fullmatch(re.escape(owner) +
+            r' \[([^\[\]\r\n]+\.[^\[\]\r\n]+)\] ' + re.escape(body) +
+            r' \[(ST|' + re.escape(fbd) + r')\]', title)
+        if instance is None or expected_title != owner + ' [FB] ' + body + ' [' + instance[2] + ']':
+            raise NativeEngineeringDriverError('实例显示与明确指定的 FB 定义页面不同。')
+        self._idle()
+        handle, frame, pid = int(document.handle), self.session.window_handle, self.session.process_id
+        def same_document():
+            return (win32gui.IsWindow(handle) and win32gui.IsChild(frame, handle)
+                and win32process.GetWindowThreadProcessId(handle)[1] == pid
+                and self._active_document().handle == handle)
+        if not same_document() or win32gui.GetWindowText(handle).rstrip() != title:
+            raise NativeEngineeringDriverError('待解除的 FB 实例页面已改变。')
+        # RT_MENU128/136 command0x4EF opens RT_DIALOG10000. Its Clear button
+        #10001 calls native SetInstance with an empty path and ends the dialog.
+        # Cache HWNDs before posting; pywinauto specs cannot resolve a destroyed
+        # dialog after Clear has returned. Each message is sent once.
+        self._command(0x4EF)
+        dialog = self._dialog('FB实例选择')
+        dialog_handle = int(dialog.handle)
+        dialogs = self._dialogs()
+        if (len(dialogs) != 1 or int(dialogs[0].handle) != dialog_handle
+                or win32gui.GetClassName(dialog_handle) != '#32770'
+                or win32process.GetWindowThreadProcessId(dialog_handle)[1] != pid
+                or win32gui.GetAncestor(dialog_handle, 3) != frame or not dialog.is_enabled()):
+            raise NativeEngineeringDriverError('FB 实例选择对话框不属于当前工程窗口。')
+        expected = {10001: ('Button', '解除选择(&C)'), 10002: ('ListBox', None),
+                    1: ('Button', '确定'), 2: ('Button', '取消')}
+        controls = {}
+        for identity, (class_name, caption) in expected.items():
+            control = win32gui.GetDlgItem(dialog_handle, identity)
+            if (not control or not win32gui.IsChild(dialog_handle, control)
+                    or win32process.GetWindowThreadProcessId(control)[1] != pid
+                    or win32gui.GetClassName(control) != class_name
+                    or caption is not None and win32gui.GetWindowText(control) != self._caption(caption)):
+                raise NativeEngineeringDriverError('FB 实例选择对话框的原生控件结构不同。')
+            controls[identity] = int(control)
+        clear = controls[10001]
+        if (not win32gui.IsWindowVisible(clear) or not win32gui.IsWindowEnabled(clear)
+                or not same_document() or win32gui.GetWindowText(handle).rstrip() != title):
+            raise NativeEngineeringDriverError('当前 FB 实例页面或解除选择按钮不可用。')
+        win32gui.PostMessage(dialog_handle, 0x0111, 10001, clear)  # BN_CLICKED, once
+        def returned():
+            if win32gui.IsWindow(dialog_handle) and win32gui.IsWindowVisible(dialog_handle):
+                return None
+            if self._dialogs():
+                raise NativeEngineeringDriverError('解除 FB 实例显示后出现了未确认的原生提示。')
+            if not same_document():
+                raise NativeEngineeringDriverError('解除 FB 实例显示后活动文档已改变。')
+            if win32gui.GetWindowText(handle).rstrip() != expected_title:
+                return None
+            return self._active_document()
+        return self._wait(returned, '当前 FB 实例显示尚未返回同一文档的定义页面。')
+
     def _navigate(self, paths, title_pattern):
         self._idle()
         self._foreground()
@@ -712,7 +1218,7 @@ class NativeEngineeringDriver:
             if (win32gui.IsWindowVisible(handle)
                     and win32process.GetWindowThreadProcessId(handle)[1] == self.session.process_id
                     and win32gui.GetClassName(handle) == 'XTPDockingPaneMiniWnd'
-                    and win32gui.GetWindowText(handle).strip() == '交叉参照'):
+                    and win32gui.GetWindowText(handle).strip() == self._caption('交叉参照')):
                 result_windows.append(handle)
         win32gui.EnumWindows(find_result, None)
         for handle in result_windows:
@@ -731,7 +1237,7 @@ class NativeEngineeringDriver:
             matches = []
             for path in paths:
                 try:
-                    item = trees[0].get_item(path, exact=True)
+                    item = trees[0].get_item(self._tree_path(path), exact=True)
                 except (IndexError, RuntimeError):
                     continue
                 if item is not None:
@@ -742,8 +1248,31 @@ class NativeEngineeringDriver:
         item = self._wait(tree_item, '原生工程对象路径尚未出现。')
         self.ui._select_native_tree_item(trees[0], item)
         self.ui._send_tree_enter(trees[0])
+        fb_owner = None
+        if (len(paths) == 1 and len(paths[0]) == 4 and tuple(paths[0][:2]) == ('程序部件', 'FB/FUN')
+                and paths[0][3] == '程序本体'):
+            owner = paths[0][2]
+            definition_prefix = '^' + re.escape(owner + ' [FB] ' + self._text('nav_body') + ' [')
+            if title_pattern.replace(r'\ ', ' ').startswith(definition_prefix.replace(r'\ ', ' ')):
+                fb_owner = owner
+        instance_clear_attempted = False
         def active():
+            nonlocal instance_clear_attempted
             doc = self._active_document()
+            if not re.search(title_pattern, doc.window_text()):
+                # Prefer an already-open exact definition MDI. A native FB
+                # instance can instead reuse that same MDI with a qualified
+                # instance caption, so tree Enter alone cannot restore it.
+                if self.ui._activate_native_document(self.session, re.compile(title_pattern)):
+                    doc = self._active_document()
+                elif fb_owner is not None and not instance_clear_attempted:
+                    instance = re.fullmatch(re.escape(fb_owner) +
+                        r' \[([^\[\]\r\n]+\.[^\[\]\r\n]+)\] ' + re.escape(self._text('nav_body')) +
+                        r' \[(ST|' + re.escape(self._text('language_fbd')) + r')\]\s*', doc.window_text())
+                    expected_title = fb_owner + ' [FB] ' + self._text('nav_body') + ' [' + instance[2] + ']' if instance else None
+                    if expected_title and re.search(title_pattern, expected_title):
+                        instance_clear_attempted = True
+                        doc = self._clear_fb_instance_view(doc, fb_owner, expected_title)
             return doc if re.search(title_pattern, doc.window_text()) else None
         doc = self._wait(active, '原生页面没有切换到指定工程对象。')
         self.ui._activate_native_document(self.session, re.compile(title_pattern))
@@ -751,22 +1280,150 @@ class NativeEngineeringDriver:
 
     def _labels_page(self, name, scope):
         if scope == 'global':
-            return self._navigate([('全局标签', name)], '^全局标签设置 ' + re.escape(name) + r'\s*$')
+            return self._navigate([('全局标签', name)], '^' + re.escape(self._text('title_global') + ' ' + name) + r'\s*$')
         if scope == 'structure':
-            return self._navigate([('程序部件', '结构体', name)], '^结构体设置 ' + re.escape(name) + r'\s*$')
+            return self._navigate([('程序部件', '结构体', name)], '^' + re.escape(self._text('title_structure') + ' ' + name) + r'\s*$')
         owner = '程序' if scope == 'program' else 'FB/FUN'
-        prefix = '局部标签设置' if scope == 'program' else '函数/FB标签设置'
-        return self._navigate([('程序部件', owner, name, '局部标签')], '^' + prefix + ' ' + re.escape(name) + r' \[')
+        expected = label_title(name, scope, language=getattr(self, 'native_ui_language', 'zh-CN'))
+        return self._navigate([('程序部件', owner, name, '局部标签')], '^' + re.escape(expected) + r'\s*$')
 
     def _program_page(self, name, kind='program', language='fbd'):
         owner = '程序' if kind == 'program' else 'FB/FUN'
-        suffix = r'\[ST\]' if language == 'st' else r'\[结构化梯形图/FBD\]'
-        pattern = '^' + re.escape(name) + r' \[' + ('PRG' if kind == 'program' else 'FB') + r'\] 程序本体 ' + suffix
+        pattern = '^' + re.escape(self._program_title(name, kind, language)) + r'\s*$'
         return self._navigate([('程序部件', owner, name, '程序本体')], pattern)
 
-    def snapshot(self):
-        self._idle()
+    def focus_graph_network(self, adapter, owner, kind, network):
+        """Jump once within one currently observed native graph, without Save."""
+        from gxw.active_graph import graph_source_state
+        if (not isinstance(owner, str) or not owner or any(c in owner for c in '\0\r\n')
+                or kind not in ('program', 'fb') or type(network) is not int or not 0 <= network < 512):
+            raise NativeEngineeringDriverError('图形网络定位需要明确的 Program/FB 归属及网络编号。')
+        # A retained child may still own the UI-thread critical section. No
+        # GUI query or navigation is safe until that same child has returned.
+        adapter._require_ready()
+        sent = False
+        try:
+            import win32gui
+            import win32process
+            self._idle()
+            title = self._program_title(owner, kind, 'fbd')
+            if self._active_document().window_text().rstrip() != title:
+                self._program_page(owner, kind, 'fbd')
+            before = adapter.read_graph(self, owner=owner, kind=kind)
+            source = graph_source_state(before)
+            if network >= len(before['networks']):
+                raise NativeEngineeringDriverError('请求的网络不在当前原生图形范围内；未发送跳转命令。')
+            binding_keys = ('identity', 'data_id', 'document_handle', 'view_handle', 'owner', 'owner_kind')
+            binding = {key: before.get(key) for key in binding_keys}
+            if (binding['owner'] != owner or binding['owner_kind'] != kind
+                    or binding['identity'] != self.inspect()
+                    or not isinstance(binding['data_id'], str) or not binding['data_id']
+                    or any(type(binding[key]) is not int or binding[key] <= 0
+                           for key in ('document_handle', 'view_handle'))):
+                raise NativeEngineeringDriverError('当前图形工程及页面绑定不完整。')
+            frame, pid = self.session.window_handle, self.session.process_id
+
+            def same_page():
+                document, view = binding['document_handle'], binding['view_handle']
+                return (win32gui.IsWindow(document) and win32gui.IsWindow(view)
+                    and win32gui.IsChild(frame, document) and win32gui.IsChild(document, view)
+                    and win32process.GetWindowThreadProcessId(document)[1] == pid
+                    and win32process.GetWindowThreadProcessId(view)[1] == pid
+                    and self._active_document().handle == document
+                    and win32gui.GetWindowText(document).rstrip() == title)
+
+            def checked(current):
+                if ({key: current.get(key) for key in binding_keys} != binding or not same_page()
+                        or graph_source_state(current) != source):
+                    raise NativeEngineeringDriverError('网络定位期间工程、页面或图形源码已改变。')
+                state = current.get('native_edit_state')
+                if (not isinstance(state, dict) or type(state.get('inline_editor')) is not int
+                        or state['inline_editor'] != 0 or type(state.get('network_clipboard_active')) is not int
+                        or state['network_clipboard_active'] != 0
+                        or type(current.get('active_network')) is not int
+                        or not 0 <= current['active_network'] < len(current['networks'])):
+                    raise NativeEngineeringDriverError('当前网络存在未结束的原生编辑或网络状态不明确。')
+                return current
+
+            checked(before)
+            if before['active_network'] == network:
+                return before
+            current = checked(adapter.read_graph(self, owner=owner, kind=kind, data_id=binding['data_id']))
+            if current['active_network'] == network:
+                return current
+            # BasicLib RT_DIALOG10012 is shared by the native FBD Jump command.
+            # Its editable ComboBox owns Edit1001; ComboWrapper has no setter.
+            sent = True
+            self._command(0x606)
+            def jump_dialog():
+                rows = self._dialogs()
+                if not rows:
+                    return None
+                if len(rows) != 1 or rows[0].window_text() != self._caption('跳转'):
+                    raise NativeEngineeringDriverError('网络定位出现了非本次跳转的原生对话框。')
+                return rows[0]
+            dialog = self._wait(jump_dialog, '没有确认本次原生网络跳转对话框。')
+            dialog_handle = int(dialog.handle)
+            if (win32gui.GetClassName(dialog_handle) != '#32770'
+                    or win32process.GetWindowThreadProcessId(dialog_handle)[1] != pid
+                    or win32gui.GetAncestor(dialog_handle, 3) != frame
+                    or not dialog.is_enabled() or not same_page()):
+                raise NativeEngineeringDriverError('网络跳转对话框不属于当前绑定页面。')
+            controls = {}
+            for control_id, (class_name, caption) in {
+                    10013: ('ComboBox', None), 10014: ('Button', '确定'),
+                    10015: ('Button', '取消'), 10016: ('Static', '梯形图块号')}.items():
+                handle = win32gui.GetDlgItem(dialog_handle, control_id)
+                if (not handle or win32gui.GetParent(handle) != dialog_handle
+                        or win32process.GetWindowThreadProcessId(handle)[1] != pid
+                        or win32gui.GetClassName(handle) != class_name
+                        or caption is not None and win32gui.GetWindowText(handle) != self._caption(caption)):
+                    raise NativeEngineeringDriverError('网络跳转对话框的原生控件结构不同。')
+                controls[control_id] = int(handle)
+            combo = dialog.child_window(control_id=10013, class_name='ComboBox').wrapper_object()
+            editors = combo.children(class_name='Edit')
+            if (int(combo.handle) != controls[10013] or len(editors) != 1
+                    or editors[0].control_id() != 1001):
+                raise NativeEngineeringDriverError('网络跳转没有唯一的原生编号输入框。')
+            editor = editors[0]
+            edit_handle = int(editor.handle)
+            if (win32gui.GetParent(edit_handle) != controls[10013]
+                    or win32process.GetWindowThreadProcessId(edit_handle)[1] != pid
+                    or not all(win32gui.IsWindowVisible(handle) and win32gui.IsWindowEnabled(handle)
+                               for handle in (controls[10013], controls[10014], edit_handle))):
+                raise NativeEngineeringDriverError('网络跳转编号输入框不可用或归属不明确。')
+            requested = str(network + 1)
+            editor.set_edit_text(requested)
+            def input_matches():
+                dialogs = self._dialogs()
+                if (not same_page() or not win32gui.IsWindow(dialog_handle)
+                        or [int(row.handle) for row in dialogs] != [dialog_handle]):
+                    raise NativeEngineeringDriverError('填写网络编号期间绑定页面或对话框已改变。')
+                return editor.window_text() == requested and combo.window_text() == requested
+            self._wait(input_matches, '原生网络跳转编号没有回读为请求值。')
+            if win32gui.GetDlgItem(dialog_handle, 10014) != controls[10014]:
+                raise NativeEngineeringDriverError('网络跳转确认按钮已改变。')
+            self._click(dialog, 10014)
+            # Keep the integer HWND: resolving a WindowSpecification after its
+            # dialog has closed can wait for a different future dialog.
+            self._wait(lambda: not win32gui.IsWindow(dialog_handle), '本次原生网络跳转对话框尚未结束。')
+            def arrived():
+                self._idle()
+                after = checked(adapter.read_graph(self, owner=owner, kind=kind, data_id=binding['data_id']))
+                return after if after['active_network'] == network else None
+            return self._wait(arrived, '原生网络跳转没有回读到请求的网络；未重复发送。')
+        except Exception as error:
+            observation = getattr(error, 'observation', {})
+            raise NativeEngineeringDriverError(str(error), observation={**observation,
+                'status': 'unconfirmed' if sent else 'rejected', 'network_navigation_started': sent,
+                'requested_network': network, 'source_mutation_requested': False, 'save_performed': False}) from error
+
+    def snapshot(self, *, on_dispatch=None):
+        if on_dispatch is not None and not callable(on_dispatch):
+            raise NativeEngineeringDriverError('保存命令的内部发送回执必须为可调用函数。')
+        self.verify_project_codepage()
         self._foreground()
+        self.inspect()
         import win32gui
         import pywintypes
         # Return from the actual Save handler before accepting an unchanged
@@ -776,12 +1433,29 @@ class NativeEngineeringDriver:
             win32gui.SendMessageTimeout(self.session.window_handle, 0x0111,
                                        self.ui.SAVE_PROJECT_COMMAND, 0, 2, 1500)
         except pywintypes.error as error:
-            if getattr(error, 'winerror', error.args[0]) not in (0, 1460):
+            code = getattr(error, 'winerror', error.args[0] if error.args else None)
+            uncertain = code in (0, 1460)
+            if on_dispatch is not None:
+                on_dispatch(dict(send_attempted=True, save_dispatched=uncertain,
+                    dispatch_status='timed_out' if uncertain else 'rejected', native_error_code=code))
+            if not uncertain:
                 raise
+        else:
+            if on_dispatch is not None:
+                on_dispatch(dict(send_attempted=True, save_dispatched=True, dispatch_status='returned'))
+        raw = self.read_saved_project(acknowledge_notices=True)
+        self._last_saved = raw
+        return raw
+
+    def read_saved_project(self, *, acknowledge_notices=False):
+        """Observe complete owned file bytes without sending a Save command."""
+        self.inspect()
         stable = [None, None]
         def saved():
             if self._dialogs():
-                self.ui._acknowledge_known_save_notices(self.session)
+                if acknowledge_notices:
+                    self.ui._acknowledge_known_save_notices(self.session,
+                        native_ui_language=getattr(self, 'native_ui_language', 'zh-CN'))
                 return None
             if not self.path.is_file() or not self._window().is_enabled():
                 return None
@@ -794,33 +1468,58 @@ class NativeEngineeringDriver:
                 return None
             try:
                 raw = self.path.read_bytes()
+                after = self.path.stat()
+                if (after.st_size, after.st_mtime_ns) != key:
+                    stable[:] = [None, None]
+                    return None
                 from gxw.container_writer import validate_cfb_streams
                 validate_cfb_streams(raw)
             except (OSError, ValueError):
                 return None
             return raw
-        raw = self._wait(saved, '没有取得本次原生保存后的完整工程。')
+        raw = self._wait(saved, '没有取得当前受控工程的稳定完整文件。')
         self.inspect()
-        self._last_saved = raw
         return raw
 
     def _save_until(self, verify):
         """Re-observe an async UI edit; never replay the engineering mutation."""
         deadline = time.monotonic() + self.timeout
         error = None
-        while time.monotonic() < deadline:
-            raw = self.snapshot()
+        raw = self.snapshot()
+        while True:
             try:
                 verify(raw)
             except (ValueError, NativeEngineeringDriverError) as observed:
                 error = observed
+                if time.monotonic() >= deadline:
+                    break
                 time.sleep(.15)
+                raw = self.read_saved_project()
                 continue
+            self._last_saved = raw
             return raw
         raise NativeEngineeringDriverError('原生修改尚未通过保存回读：' + str(error))
 
-    def _csv_labels(self, name, scope, rows):
-        self._labels_page(name, scope)
+    def verify_saved_source(self, raw):
+        """Match current pages to the observed file without flushing UI edits."""
+        from .live_driver import LiveEngineeringDriver
+        from gxw.live_context import verify_active_saved_context
+        if self.path.read_bytes() != raw:
+            raise NativeEngineeringDriverError('核对当前源码前工程文件已改变。')
+        observer = LiveEngineeringDriver(self, raw, self.cpu)
+        current = observer.read_context()
+        verification = verify_active_saved_context(raw, current, raw)
+        if self.path.read_bytes() != raw:
+            raise NativeEngineeringDriverError('核对当前源码期间工程文件已改变。')
+        return verification
+
+    def _export_label_csv(self, name, scope):
+        """Observe the current table through native export, without saving it."""
+        if scope not in ('global', 'program', 'fb', 'structure'):
+            raise NativeEngineeringDriverError('读取标签需要明确的 global、program、fb 或 structure 归属。')
+        identity = self.inspect()
+        document = self._labels_page(name, scope)
+        title = document.window_text()
         # GX starts reading after its confirmation dialog closes. Keep transfer
         # files for the entire run, including interrupted native imports.
         self._transfers += 1
@@ -831,8 +1530,58 @@ class NativeEngineeringDriver:
         self._command(self.ui.WRITE_CSV_COMMAND)
         self._confirm('将当前显示的标签信息写入至CSV文件。', 6)
         self._file_name(self._dialog('写入至CSV文件'), exported)
-        self._wait(lambda: exported.is_file() and not self._dialogs(), '原生标签 CSV 导出未完成。')
-        replacement = _merge_label_csv(exported.read_bytes(), rows, structure=scope == 'structure')
+        stable = [None, None]
+        def ready():
+            if not exported.is_file() or self._dialogs():
+                return None
+            stat = exported.stat()
+            key = stat.st_size, stat.st_mtime_ns
+            if key != stable[0]:
+                stable[:] = [key, time.monotonic()]
+                return None
+            if time.monotonic() - stable[1] < .1:
+                return None
+            if not 0 < stat.st_size <= 8 * 1024 * 1024:
+                raise NativeEngineeringDriverError('原生标签 CSV 导出大小超出范围。')
+            raw = exported.read_bytes()
+            _label_csv(raw)
+            return raw
+        raw = self._wait(ready, '原生标签 CSV 导出未完成。')
+        self._verify_read_page(identity, document, title)
+        return dict(raw_bytes=raw, identity=identity, document_handle=document.handle,
+                    document_title=title, export_file=str(exported))
+
+    def _verify_read_page(self, identity, document, title):
+        self._idle()
+        current = self._active_document()
+        if (self.inspect() != identity or current.handle != document.handle
+                or current.window_text() != title):
+            raise NativeEngineeringDriverError('原生读取期间工程或活动页面已改变。')
+
+    def read_labels(self, name, scope, *, type_sources=None):
+        """Read the actual current table; CSV export is an explicit operation."""
+        from gxw.active_context import read_active_label_grid
+        from gxw.models import GXWFormatError
+        from .active_document import ActiveDocumentAdapter
+        if not hasattr(self, '_label_reader'):
+            self._label_reader = ActiveDocumentAdapter()
+        observed = self._label_reader.read_label_table(self, owner=name, scope=scope)
+        try:
+            return read_active_label_grid(observed['table'], owner=name, scope=scope, identity=observed['identity'],
+                document_handle=observed['document_handle'], document_title=observed['document_title'], type_sources=type_sources)
+        except GXWFormatError as error:
+            raise NativeEngineeringDriverError(str(error)) from error
+
+    def _csv_labels(self, name, scope, rows):
+        observed = self.read_labels(name, scope)
+        replacement = _merge_label_csv(observed['raw_bytes'], rows, structure=scope == 'structure',
+            native_ui_language=getattr(self, 'native_ui_language', 'zh-CN'))
+        # The only transfer file is the requested import. Reading the current
+        # table and checking the result never request a CSV export.
+        self._transfers += 1
+        directory = (self.evidence_directory / f'labels-{self._transfers:03d}'
+                     if self.evidence_directory else Path(tempfile.mkdtemp(prefix='gxw-visible-labels-')))
+        directory.mkdir(parents=True, exist_ok=self.evidence_directory is None)
         path = directory / 'change.csv'
         path.write_bytes(replacement)
         self._command(self.ui.READ_CSV_COMMAND)
@@ -852,15 +1601,81 @@ class NativeEngineeringDriver:
         return self._visible(page,
                              transfer_file=str(path))
 
+    def _delete_label(self, prepared):
+        """Delete the one Core-approved cursor row through the native prompt."""
+        import win32gui
+        import win32process
+        from pywinauto.keyboard import send_keys
+        if prepared.get('kind') != 'active_label_delete' or prepared.get('scope') != 'program':
+            raise NativeEngineeringDriverError('标签行删除需要当前 Program 的独立 Core 计划。')
+        plan, before = prepared['plan'], prepared['before']
+        observed = self.read_labels(plan['source_name'], 'program')
+        if (observed['csv_columns'] != before['csv_columns'] or
+                [row['raw_fields'] for row in observed['declarations']] !=
+                [row['raw_fields'] for row in before['declarations']]):
+            raise NativeEngineeringDriverError('删除前原生标签表已偏离本次完整基础表，未发出删除。')
+        index = plan['csv_row']
+        if (type(index) is not int or not 0 <= index < len(observed['declarations'])
+                or observed['declarations'][index]['raw_fields'] != plan['before_fields']):
+            raise NativeEngineeringDriverError('删除目标与本次 CSV 行身份不同，未发出删除。')
+        document = self._labels_page(plan['source_name'], 'program')
+        grids = [grid for grid in document.descendants(class_name='SPR32AU70_SpreadSheet')
+                 if grid.is_visible() and grid.is_enabled()]
+        if len(grids) != 1:
+            raise NativeEngineeringDriverError('标签行删除没有唯一的活动原生表格。')
+        grid, = grids
+        self._foreground()
+        grid.set_focus()
+        send_keys('^{HOME}{RIGHT}' + ('{DOWN ' + str(index) + '}' if index else '') + '{F2}', vk_packet=False)
+        editors = [editor for editor in grid.descendants(class_name='SPR32AU70EditHScroll')
+                   if editor.control_id() == 200 and editor.is_visible() and editor.is_enabled()]
+        if len(editors) != 1 or editors[0].window_text() != plan['name']:
+            raise NativeEngineeringDriverError('原生光标没有落在本次指定的标签名称，未发出删除。')
+        if (not win32gui.IsChild(document.handle, grid.handle)
+                or not win32gui.IsChild(grid.handle, editors[0].handle)
+                or win32process.GetWindowThreadProcessId(editors[0].handle)[1] != self.session.process_id):
+            raise NativeEngineeringDriverError('原生名称单元格不属于本次工程页面，未发出删除。')
+        self._command(0x692)  # Native label-table Delete Cursor Row, once.
+        def confirmation():
+            dialogs = self._dialogs()
+            if not dialogs:
+                return None
+            if (len(dialogs) != 1 or dialogs[0].window_text() != self._caption('MELSOFT系列 GX Works2')
+                    or self._dialog_text(dialogs[0]) != self._caption('删除光标行。确定吗？')):
+                raise NativeEngineeringDriverError('本次删除没有出现已核实的光标行确认，未确认其他提示。')
+            dialog = dialogs[0]
+            buttons = [dialog.child_window(control_id=control_id, class_name='Button') for control_id in (6, 7)]
+            if (not all(button.is_enabled() for button in buttons)
+                    or not standard_yes_no_captions(*(button.window_text() for button in buttons))):
+                raise NativeEngineeringDriverError('原生删除确认按钮与已核实的控件不同。')
+            return dialog
+        dialog = self._wait(confirmation, '尚未确认本次原生标签行删除提示。')
+        self._click(dialog, 6)
+        self._wait(lambda: not self._dialogs() and self._window().is_enabled(), '本次标签行删除尚未结束。')
+        return dict(delete_dispatched=True, confirmation_sent=True, source_name=plan['source_name'],
+                    name=plan['name'], save_performed=False)
+
     def _new_object(self, name, kind, language=None):
         self._idle()
         self._command(0x408)
         dialog = self._dialog('新建数据')
-        self.ui._select_native_combo(dialog.child_window(control_id=10001, class_name='ComboBox'), kind)
+        return self._complete_new_object(dialog, name, kind, language)
+
+    def _complete_new_object(self, dialog, name, kind, language=None):
+        """Complete the already-open owned New Data action, without dispatching it again."""
+        self.inspect()
+        if dialog.handle != self._dialog('新建数据').handle:
+            raise NativeEngineeringDriverError('新建数据操作不属于本次已打开的原生对话框。')
+        key = {'程序块': 'new_kind_program', '全局标签': 'new_kind_global',
+               '结构体': 'new_kind_structure', 'FB': 'new_kind_fb', '函数': 'new_kind_function'}.get(kind)
+        if key is None:
+            raise NativeEngineeringDriverError('新建对象类型没有已核对的原生资源身份。')
+        self.ui._select_native_combo(dialog.child_window(control_id=10001, class_name='ComboBox'), self._text(key))
         dialog.child_window(control_id=10006, class_name='Edit').set_edit_text(name)
         if language:
             control = dialog.child_window(control_id=10003, class_name='ListBox')
             choices = control.item_texts()
+            language = self._caption(language)
             if choices.count(language) != 1:
                 raise NativeEngineeringDriverError('新建对象没有明确的原生语言选项。')
             index = choices.index(language)
@@ -869,6 +1684,30 @@ class NativeEngineeringDriver:
             control.notify_parent(1)
         self._click(dialog, 1)
         self._wait(lambda: not self._dialogs(), '新建工程对象没有完成。')
+
+    def read_st(self, name, kind='program'):
+        """Read the exact current RichEdit body, with no saved-project fallback."""
+        from gxw.active_context import read_active_st_text
+        from gxw.models import GXWFormatError
+        if kind not in ('program', 'fb'):
+            raise NativeEngineeringDriverError('读取 ST 需要明确的 program 或 fb 归属。')
+        identity = self.inspect()
+        document = self._program_page(name, kind, 'st')
+        title = document.window_text()
+        controls = [control for control in document.descendants(class_name='RichEdit20W')
+                    if control.control_id() == 100]
+        if len(controls) != 1:
+            raise NativeEngineeringDriverError('ST 编辑器的原生文本控件不明确。')
+        editor = controls[0]
+        text = editor.window_text()
+        self._verify_read_page(identity, document, title)
+        if editor.window_text() != text:
+            raise NativeEngineeringDriverError('ST 正文在读取期间发生变化。')
+        try:
+            return read_active_st_text(text, owner=name, kind=kind, identity=identity,
+                document_handle=document.handle, document_title=title, editor_handle=editor.handle)
+        except GXWFormatError as error:
+            raise NativeEngineeringDriverError(str(error)) from error
 
     def _write_st(self, name, text, *, before=None, kind='fb'):
         import win32gui
@@ -884,8 +1723,26 @@ class NativeEngineeringDriver:
         self._wait(lambda: _same_text(editor.window_text(), text), '原生 ST 编辑器回读与请求正文不同。')
         return self._visible(name + ' ST 编辑器', native_text=editor.window_text())
 
-    def _bind_program_task(self, plan):
+    def _task_tree_item(self, tree, resource, task):
+        root = tree.get_item((self._text('nav_settings'),), exact=True)
+        buckets = {self._text(key) for key in ('nav_execution', 'nav_initial_program',
+            'nav_scan_program', 'nav_standby_program', 'nav_fixed_scan_program', 'nav_no_execution_type')}
+        matches = []
+        for bucket in root.children():
+            for current_resource in bucket.children():
+                if current_resource.text() != resource:
+                    continue
+                for current_task in current_resource.children():
+                    if current_task.text() == task:
+                        matches.append((bucket.text(), current_task))
+        if len(matches) != 1 or matches[0][0] not in buckets:
+            raise NativeEngineeringDriverError('当前任务没有唯一且已识别的原生执行类型归属。')
+        return matches[0][1]
+
+    def _bind_program_task(self, plan, *, stage_save=True):
         """Append a Program through its actual native task registration page."""
+        if type(stage_save) is not bool:
+            raise NativeEngineeringDriverError('任务登记保存边界必须是明确的布尔值。')
         import win32gui
         import win32process
         from pywinauto.keyboard import send_keys
@@ -901,7 +1758,7 @@ class NativeEngineeringDriver:
             raise NativeEngineeringDriverError('原生任务导航树不明确。')
         tree = trees[0]
         tree.set_focus()
-        item = tree.get_item(('程序设置', '执行程序', plan['resource'], plan['task']), exact=True)
+        item = self._task_tree_item(tree, plan['resource'], plan['task'])
         item.ensure_visible()
         self.ui._select_native_tree_item(tree, item)
         if tree.send_message(0x110A, 9, 0) != item.elem:
@@ -925,8 +1782,10 @@ class NativeEngineeringDriver:
         handle = self._wait(popup, '没有确认所选任务的原生上下文菜单。')
         if win32gui.GetForegroundWindow() not in (handle, self.session.window_handle):
             raise NativeEngineeringDriverError('原生任务菜单不再拥有前台焦点。')
-        send_keys('t', vk_packet=False)  # 打开任务登录(T), verified native task menu
-        pattern = '^任务登录 ' + re.escape(plan['task']) + r'\s*$'
+        from .native_locale import native_accelerator
+        send_keys(native_accelerator('task_open_registration',
+            getattr(self, 'native_ui_language', 'zh-CN')), vk_packet=False)
+        pattern = '^' + re.escape(self._text('title_task') + ' ' + plan['task']) + r'\s*$'
         def task_document():
             doc = self._active_document()
             return doc if re.search(pattern, doc.window_text()) and not popup() else None
@@ -955,6 +1814,20 @@ class NativeEngineeringDriver:
         expected = [{**task, 'programs': task['programs'] + ([{'name': plan['source_name'], 'line': line}]
                     if (task['resource'], task['task']) == (plan['resource'], plan['task']) else [])}
                     for task in plan['tasks']]
+        if not stage_save:
+            # TAB commits the first editor. Re-enter the same actual cell;
+            # reading the old Edit HWND would only prove its pending text.
+            grid.set_focus()
+            send_keys('^{HOME}' + ('{DOWN %d}' % (line - 1) if line > 1 else '') + '{F2}', vk_packet=False)
+            committed = self._wait(cell, '任务登录表没有重新打开已提交的程序单元格。')
+            if committed.window_text() != plan['source_name']:
+                raise NativeEngineeringDriverError('任务登录单元格提交后实读与追加计划不同。')
+            send_keys('{ESC}', vk_packet=False)
+            self.inspect()
+            visible = self._visible(plan['task'] + ' 任务登录', program=plan['source_name'], line=line)
+            return {**visible, 'task_append_confirmation': dict(status='matched',
+                origin='native_task_cell_committed_readback', resource=plan['resource'], task=plan['task'],
+                program=plan['source_name'], line=line, save_performed=False), 'expected_tasks': expected}
         def bound(raw):
             current = native_task_scope_context(raw)
             if current['status'] != 'available' or current['tasks'] != expected:
@@ -964,7 +1837,12 @@ class NativeEngineeringDriver:
 
     def _choose_label(self, name, *, expected_type=None):
         dialog = self._dialog('标签登录/选择')
-        self.ui._select_native_combo(dialog.child_window(control_id=6651, class_name='ComboBox'), '<全部>')
+        self.ui._select_native_combo(dialog.child_window(control_id=6651, class_name='ComboBox'), self._text('chooser_all'))
+        type_filter = dialog.child_window(control_id=6660, class_name='ComboBox')
+        if type_filter.is_enabled() and 'ANY' in type_filter.item_texts():
+            # Placeholder terminals retain the previous chooser's Bit filter.
+            # This is the search filter, not the declaration's data-type field.
+            self.ui._select_native_combo(type_filter, 'ANY')
         labels = dialog.child_window(control_id=6650, class_name='ListBox')
         choices = labels.item_texts()
         matches = [value for value in choices if value in (name, '+' + name)]
@@ -1011,7 +1889,7 @@ class NativeEngineeringDriver:
             raise NativeEngineeringDriverError('原生 FBD 图形视图不明确。')
         return controls[0]
 
-    def _graph_grid(self, view):
+    def _graph_grid(self, view, *, include_lattice=False):
         import win32gui
         # These are the editor's actual scroll bars, not frame/status titles.
         for control in view.parent().descendants(class_name='ScrollBar'):
@@ -1019,13 +1897,26 @@ class NativeEngineeringDriver:
                 info = win32gui.GetScrollInfo(control.handle, 2)
                 if info[4] != 0:
                     raise NativeEngineeringDriverError('FBD 视图已滚动；尚未验证当前源码到画面的坐标映射。')
-        return _grid_calibration(view.capture_as_image())
+        return _grid_calibration(view.capture_as_image(), include_lattice=include_lattice)
+
+    def _graph_placement_point(self, view, grid, x, y):
+        """Require all empty input cells on the actual first network lattice."""
+        current = self._graph_grid(view, include_lattice=True)
+        if any(current[key] != grid[key] for key in ('pitch', 'x', 'y', 'width', 'height')):
+            raise NativeEngineeringDriverError('新增前实际图形网格或视口发生变化，未发出插入。')
+        points = {tuple(point) for point in current['lattice_points']}
+        for column, row in ((x+1,y+1),(x+2,y+1),(x+1,y+2),(x+2,y+2)):
+            if self._graph_point(current, column, row) not in points:
+                raise NativeEngineeringDriverError('新增区域不在已观察到的首个网络点阵中，未发出插入。')
+        return self._graph_point(current, x+2, y+1)
 
     @staticmethod
     def _graph_point(grid, x, y):
         point = (round(grid['x'] + x * grid['pitch']), round(grid['y'] + y * grid['pitch']))
         if not 5 < point[0] < grid['width'] - 28 or not 5 < point[1] < grid['height'] - 28:
             raise NativeEngineeringDriverError('目标图形对象不在当前可见区域。')
+        if 'calibrated_x_limit' in grid and point[0] >= grid['calibrated_x_limit']:
+            raise NativeEngineeringDriverError('目标超出当前已校准的网格区域，需要重新定位视口。')
         return point
 
     def _graph_drag(self, view, grid, source, target):
@@ -1033,7 +1924,9 @@ class NativeEngineeringDriver:
         if (win32process.GetWindowThreadProcessId(view.handle)[1] != self.session.process_id
                 or not view.is_visible() or not view.is_enabled()
                 or any(not (5 < point[0] < grid['width'] - 28
-                            and 5 < point[1] < grid['height'] - 28) for point in (source, target))):
+                            and 5 < point[1] < grid['height'] - 28
+                            and point[0] < grid.get('calibrated_x_limit', grid['width']))
+                       for point in (source, target))):
             raise NativeEngineeringDriverError('图形拖拽没有明确绑定在当前原生编辑区域内。')
         self._idle()
         self._foreground()
@@ -1117,7 +2010,7 @@ class NativeEngineeringDriver:
                     dialogs = self._dialogs()
                     if not dialogs:
                         self._command(0x60F)
-                    elif len(dialogs) != 1 or dialogs[0].window_text() != '标签登录/选择':
+                    elif len(dialogs) != 1 or dialogs[0].window_text() != self._caption('标签登录/选择'):
                         raise NativeEngineeringDriverError('原生端子编辑出现了未确认的对话框。')
                     self._choose_label(anchor['symbol'])
                 else:
@@ -1140,7 +2033,7 @@ class NativeEngineeringDriver:
                             dialogs = self._dialogs()
                             if dialogs:
                                 if (len(dialogs) != 1 or self._dialog_text(dialogs[0]) !=
-                                        '梯形图图形重叠。是否继续处理？'):
+                                        self._caption('梯形图图形重叠。是否继续处理？')):
                                     raise NativeEngineeringDriverError('图形移动出现了未确认的原生提示。')
                                 self._visible(name + ' 图形布局提示', dialog=dialogs[0],
                                               action=action, index=index)
@@ -1263,56 +2156,289 @@ class NativeEngineeringDriver:
             self._visible(name + ' FBD 参数连接', formal=formal, symbol=symbol)
         return self._visible(name + ' FBD 编辑器', instance=command['instance'], bindings=bindings)
 
-    def _configure(self, plan):
-        # CPU-specific controls below have independent native FX3U observations.
-        # Other CPU menus are deliberately left unverified, even though they
-        # share the offline Core configuration planner.
-        if self.cpu != 'FX3U/FX3UC' or 'parameter_after' in plan:
-            raise NativeEngineeringDriverError('此前台分配驱动只验证了 FX3U/FX3UC 范围设置。')
-        controls = {'D': (14069, 14072), 'M': (14096, 14099)}
-        if any(row['device'] not in controls or any(v < 0 for v in row['after']) for row in plan['ranges']):
-            raise NativeEngineeringDriverError('此前台范围字段或禁用方式尚未验证。')
+    def _edit_allocation_grid_field(self, dialog, field, value):
+        import win32gui
+        from pywinauto.keyboard import send_keys
+        from pywinauto.mouse import click
+        if (field.get('grid_role') != 'allocation' or field.get('native_column') not in (5, 6)
+                or field.get('state', 0) & (1 | 0x40) or not re.fullmatch(r'[0-9]+', str(value))):
+            raise NativeEngineeringDriverError('请求的原生分配表格字段不可编辑。')
+        grids = [grid for grid in dialog.descendants(class_name='VSFlexGrid8N')
+                 if grid.is_visible() and grid.is_enabled()]
+        candidates = [grid for grid in grids if {len(row['cells']) for row in _allocation_grid_rows(grid.handle)} == {8}]
+        if len(candidates) != 1:
+            raise NativeEngineeringDriverError('待编辑的原生分配表归属不唯一。')
+        grid = candidates[0]
+        if any(child.is_visible() and child.control_id() == 666 for child in grid.descendants()):
+            raise NativeEngineeringDriverError('分配表已有未完成的原生单元格编辑。')
+        self._foreground(dialog.handle)
+        point = _allocation_cell_point(self.session.window_handle, grid.handle,
+                                       field['native_row'], field['native_column'])
+        _, cell = _allocation_cell(grid.handle, field['native_row'], field['native_column'])
+        if cell.accValue[0] != field['text']:
+            raise NativeEngineeringDriverError('分配单元格已偏离本次核对的值。')
+        click(coords=point)
+        # MSAA child objects are snapshots: reacquire after the native click.
+        def selected():
+            _, current = _allocation_cell(grid.handle, field['native_row'], field['native_column'])
+            return (current.accValue[0] == field['text'] and current.accState[0] & 2
+                    and _native_focus(grid.handle) == grid.handle)
+        self._wait(selected, '原生分配单元格的选择与实际焦点未确认。')
+        send_keys('{F2}', pause=0, vk_packet=False)
+        def editor_ready():
+            matches = [child for child in grid.descendants() if child.is_visible() and child.is_enabled()
+                and child.control_id() == 666 and re.fullmatch(r'ATL:[0-9A-Fa-f]+', child.class_name())
+                and win32gui.GetParent(child.handle) == grid.handle]
+            if len(matches) != 1:
+                return None
+            editor = matches[0]
+            if (editor.window_text() != field['text'] or _native_focus(editor.handle) != editor.handle
+                    or win32gui.GetWindowLong(editor.handle, -16) & 0xffffffff != 0x500001c6):
+                return None
+            return editor
+        editor = self._wait(editor_ready, '原生分配单元格没有形成已确认的内嵌编辑器。')
+        self.inspect()
+        if (not dialog.is_enabled() or _native_focus(editor.handle) != editor.handle
+                or win32gui.GetParent(editor.handle) != grid.handle):
+            raise NativeEngineeringDriverError('原生分配编辑器归属或焦点已改变。')
+        if not win32gui.SendMessage(editor.handle, 0x000C, 0, str(value)) or editor.window_text() != str(value):
+            raise NativeEngineeringDriverError('原生分配编辑器未保留请求值，未提交单元格。')
+        if _native_focus(editor.handle) != editor.handle:
+            raise NativeEngineeringDriverError('提交前原生分配编辑器焦点已改变。')
+        send_keys('{TAB}', pause=0, vk_packet=False)
+
+    def _configuration_fields(self, dialog):
+        """Identify actual controls; resource IDs never stand in for grid HWNDs."""
+        from gxw.project_metadata import project_allocation_profile, read_native_allocation_grids
+        if not self.cpu.startswith('FX'):
+            grids = [grid for grid in dialog.descendants(class_name='VSFlexGrid8N')
+                     if grid.is_visible() and grid.is_enabled()]
+            if len(grids) != 2:
+                raise NativeEngineeringDriverError('当前型号没有两个明确的原生分配表格。')
+            by_role = {}
+            for grid in grids:
+                rows = _allocation_grid_rows(grid.handle)
+                columns = {len(row['cells']) for row in rows}
+                role = 'allocation' if columns == {8} else 'parameter' if columns == {3} else None
+                if role is None or role in by_role:
+                    raise NativeEngineeringDriverError('当前型号分配表的列结构或归属不唯一。')
+                by_role[role] = rows
+            fields = read_native_allocation_grids(by_role,
+                native_ui_language=getattr(self, 'native_ui_language', 'zh-CN'))
+            return {**fields, 'allocation_profile': project_allocation_profile(self.cpu)['allocation_profile']}
+        fields, ranges = {}, {}
+        for device, controls in {'D': (14069, 14072), 'M': (14096, 14099)}.items():
+            values = []
+            for control_id in controls:
+                editor = dialog.child_window(control_id=control_id, class_name='Edit')
+                text = editor.window_text()
+                values.append(dict(control_id=control_id, text=text, enabled=bool(editor.is_enabled())))
+            fields[device] = values
+            ranges[device] = ([int(value['text']) for value in values]
+                              if all(re.fullmatch(r'[0-9]+', value['text']) for value in values) else None)
+        result = dict(raw_fields=fields, ranges=ranges, coverage='verified_D_M_controls_only')
+        if self.cpu != 'FX3U/FX3UC':
+            result.update(control_profile='device_range_fx', coverage='observed_D_M_controls',
+                allocation_profile=project_allocation_profile(self.cpu)['allocation_profile'])
+        return result
+
+    def read_configuration(self):
+        """Observe the current native range dialog and cancel it without Save."""
+        if native_project_profile(self.cpu) is None or not native_project_profile(self.cpu).program_supported:
+            return dict(status='unavailable', origin='active_native_configuration',
+                        reason='native_configuration_controls_not_verified_for_cpu', cpu=self.cpu,
+                        driver_saved=False)
+        identity = self.inspect()
         self._command(0x685)
         dialog = self._dialog('自动分配软元件设置')
-        for row in plan['ranges']:
-            for control_id, expected, after in zip(controls[row['device']], row['before'], row['after']):
-                editor = dialog.child_window(control_id=control_id, class_name='Edit')
-                if editor.window_text() != str(expected):
-                    raise NativeEngineeringDriverError('活动自动分配范围与当前 Core 配置不同。')
-                editor.set_edit_text(str(after))
-                if editor.window_text() != str(after):
-                    raise NativeEngineeringDriverError('原生自动分配字段回读不同。')
-        self._click(dialog, 1)
-        notices = []
+        close_dialog = True
+        try:
+            fields = self._configuration_fields(dialog)
+            if self.inspect() != identity:
+                raise NativeEngineeringDriverError('读取分配设置期间原生工程身份已改变。')
+            visible = self._visible('自动分配软元件设置', dialog=dialog, **fields)
+            from gxw.project_metadata import native_allocation_observation_state
+            if native_allocation_observation_state(self._configuration_fields(dialog)) != native_allocation_observation_state(fields):
+                close_dialog = False
+                raise NativeEngineeringDriverError('分配设置字段在读取期间已改变，保留当前对话框。',
+                    observation={'source_status': 'requires_reconciliation'})
+            details = dict(fields)
+            coverage = details.pop('coverage', 'verified_D_M_controls_only')
+            return dict(status='available' if all(value is not None for value in fields['ranges'].values()) else 'partial',
+                origin='active_native_configuration', identity=identity, cpu=self.cpu,
+                dialog_handle=dialog.handle, **details, driver_saved=False,
+                coverage=coverage, visible_completion=visible)
+        finally:
+            # Only cancel the same owned dialog while its project identity is
+            # still intact. A changed target remains for explicit reconciliation.
+            if self.inspect() != identity:
+                raise NativeEngineeringDriverError('读取分配设置期间原生工程身份已改变。',
+                    observation={'source_status': 'requires_reconciliation'})
+            if close_dialog:
+                self._click(dialog, 2)
+                self._wait(lambda: not self._dialogs(), '读取后的原生分配设置页尚未关闭。')
+
+    def _finish_allocation_notices(self):
+        """Observe confirmations for an already posted allocation commit."""
+        notices, acknowledged = [], set()
         deadline = time.monotonic() + self.timeout
         while self._dialogs() and time.monotonic() < deadline:
             dialogs = [d for d in self._dialogs() if d.is_enabled()]
             handled = False
             for current in dialogs:
+                if current.handle in acknowledged:
+                    continue
                 text = self._dialog_text(current)
-                if ('设置与PLC参数中的锁存设置范围重复。' in text
-                        or text.startswith('自动分配软元件设置被更改，因此需要全部编译工程。')):
+                normalized = text.replace('\r\n', '\n').replace('\r', '\n')
+                overlap = re.escape(self._text('allocation_overlap_format')).replace(
+                    re.escape('%1!s!'), r'[^\r\n]{1,80}')
+                if (re.fullmatch(overlap, normalized)
+                        or _same_text(text, self._text('allocation_rebuild_notice'))):
                     notices.append(text)
+                    acknowledged.add(current.handle)
                     self._click(current, 6)
                     handled = True
                     break
             if not handled:
                 time.sleep(.05)
         self._wait(lambda: not self._dialogs(), '自动分配范围没有完成，保留原生提示。')
+        return notices
+
+    def _configure(self, plan):
+        from copy import deepcopy
+        from gxw.models import GXWFormatError
+        from gxw.project_metadata import native_allocation_observation_state
+        if 'parameter_after' in plan:
+            raise NativeEngineeringDriverError('此前台驱动尚未验证 PLC 参数容量编辑。')
+        if any(row['device'] not in ('D', 'M') or any(v < 0 for v in row['after']) for row in plan['ranges']):
+            raise NativeEngineeringDriverError('此前台范围字段或禁用方式尚未验证。')
         self._command(0x685)
         dialog = self._dialog('自动分配软元件设置')
+        before = self._configuration_fields(dialog)
+        for key in ('allocation_profile', 'control_profile'):
+            if key in plan and plan[key] != before.get(key):
+                raise NativeEngineeringDriverError('当前分配设置页面与 Core 计划的型号或控件配置不同。')
+        expected = deepcopy(before)
         for row in plan['ranges']:
-            for control_id, expected in zip(controls[row['device']], row['after']):
-                if dialog.child_window(control_id=control_id, class_name='Edit').window_text() != str(expected):
-                    raise NativeEngineeringDriverError('重新打开的原生分配范围与本步设置不同。')
-        visible = self._visible('自动分配软元件设置', dialog=dialog,
-                                ranges=plan['ranges'], notices=notices)
-        self._click(dialog, 2)
-        self._wait(lambda: not self._dialogs(), '已展示的分配设置页尚未关闭。')
-        return visible
+            for field, previous, after in zip(expected['raw_fields'][row['device']], row['before'], row['after']):
+                if field['text'] != str(previous) or field.get('enabled') is False:
+                    raise NativeEngineeringDriverError('活动自动分配范围与当前 Core 配置不同。')
+                field['text'] = str(after)
+            expected['ranges'][row['device']] = list(row['after'])
+            if before.get('control_profile') == 'device_range_grid':
+                fields = expected['raw_fields'][row['device']]
+                cells = expected['grid_rows']['allocation'][fields[0]['native_row']]['cells']
+                for field, value in zip(fields, row['after']):
+                    cells[field['native_column']]['value'] = str(value)
+                cells[7]['value'] = str(row['after'][1] - row['after'][0] + 1)
+        self._last_compile_run = None
+        if before.get('control_profile') == 'device_range_grid':
+            rolling = deepcopy(before)
+            for row in plan['ranges']:
+                # Keep the interval valid after each native Tab commit.
+                order = (1, 0) if row['after'][0] > row['before'][1] else (0, 1)
+                for index in order:
+                    field = rolling['raw_fields'][row['device']][index]
+                    after = row['after'][index]
+                    if field['text'] == str(after):
+                        continue
+                    target = deepcopy(rolling)
+                    target['raw_fields'][row['device']][index]['text'] = str(after)
+                    target['ranges'][row['device']][index] = after
+                    cells = target['grid_rows']['allocation'][field['native_row']]['cells']
+                    cells[field['native_column']]['value'] = str(after)
+                    low, high = target['ranges'][row['device']]
+                    cells[7]['value'] = str(high - low + 1)
+                    self._edit_allocation_grid_field(dialog, field, after)
+                    def committed():
+                        try:
+                            current = self._configuration_fields(dialog)
+                        except GXWFormatError:
+                            return None  # The native total can update after its range cell.
+                        return current if native_allocation_observation_state(current) == native_allocation_observation_state(target) else None
+                    rolling = self._wait(committed, '原生分配单元格提交后未通过整表保留核对。')
+        else:
+            for row in plan['ranges']:
+                for field, after in zip(before['raw_fields'][row['device']], row['after']):
+                    editor = dialog.child_window(control_id=field['control_id'], class_name='Edit')
+                    if not editor.is_enabled() or editor.window_text() != field['text']:
+                        raise NativeEngineeringDriverError('原生自动分配字段状态在修改前已改变。')
+                    editor.set_edit_text(str(after))
+                    if editor.window_text() != str(after):
+                        raise NativeEngineeringDriverError('原生自动分配字段回读不同。')
+        if native_allocation_observation_state(self._configuration_fields(dialog)) != native_allocation_observation_state(expected):
+            raise NativeEngineeringDriverError('应用前原生分配设置未通过请求字段及保留字段核对。')
+        self._click(dialog, 1)
+        notices = self._finish_allocation_notices()
+        current = self.read_configuration()
+        if native_allocation_observation_state(current) != native_allocation_observation_state(expected):
+            raise NativeEngineeringDriverError('重新打开的原生分配范围与本步设置不同，或未请求字段已改变。')
+        return {**current['visible_completion'], 'configuration': current, 'notices': notices}
 
-    def _compile(self, plan):
+    def compile_current(self, plan):
+        """Compile the live revision; GX itself may save, this driver does not."""
+        self.verify_project_codepage()
+        return self._compile(plan, legacy_save=False)
+
+    def _read_compile_diagnostics(self, summary, run):
+        from copy import deepcopy
+        binding = dict(compile_run_id=run['compile_run_id'], revision=run['revision'],
+            pid=run['identity']['process_id'], identity=deepcopy(run['identity']),
+            origin='current_native_compile_diagnostic_grid')
+        expected = _compile_summary_counts(run.get('output'),
+            public_checks_requested=run.get('public_checks_requested'),
+            native_ui_language=getattr(self, 'native_ui_language', 'zh-CN'))
+        try:
+            grids = summary.parent().descendants(class_name='VSFlexGrid8N')
+            candidates, failures = [], []
+            for grid in grids:
+                try:
+                    rows = _accessible_compile_diagnostic_rows(grid.handle,
+                        native_ui_language=getattr(self, 'native_ui_language', 'zh-CN'))
+                except Exception as error:
+                    failures.append(type(error).__name__)
+                    continue
+                if rows is not None:
+                    candidates.append(rows)
+        except Exception as error:
+            return dict(binding, status='unavailable', reason='native_diagnostic_grid_not_available',
+                        error_type=type(error).__name__, rows=[])
+        if len(candidates) != 1 or failures:
+            return dict(binding, status='unavailable', rows=[],
+                reason='native_diagnostic_grid_missing_ambiguous_or_unreadable',
+                candidate_count=len(candidates), unreadable_count=len(failures))
+        rows, = candidates
+        counts = {name: sum(row['severity'] == name for row in rows)
+                  for name in ('Error', 'Warning', 'CheckWarning', 'Information')}
+        matched = expected is not None and all(counts[name] == (0 if value is None else value)
+                                              for name, value in expected.items())
+        return dict(binding, status='observed' if matched else 'unconfirmed', rows=rows,
+            severity_counts=counts, expected_counts=expected,
+            **({} if matched else {'reason': 'diagnostic_severity_counts_differ_from_current_summary'}))
+
+    def _completed_compile_receipt(self, run, summary, output, *, driver_saved=False):
+        from copy import deepcopy
+        result = dict(command='rebuild_all', output=output, completed=True, output_kind='native_summary',
+            source_unchanged=True if driver_saved else None, saved=True if driver_saved else None,
+            driver_saved=driver_saved, native_save_behavior='compile_may_save',
+            source_binding='saved_snapshot_required' if driver_saved else 'session_revision_required',
+            compile_run_id=run['compile_run_id'], identity=deepcopy(run['identity']), summary_handle=summary.handle,
+            pid=run['identity']['process_id'], revision=run['revision'],
+            public_checks_requested=run['public_checks_requested'])
+        result['diagnostics'] = self._read_compile_diagnostics(summary, result)
+        return result
+
+    def _compile(self, plan, *, legacy_save=True):
+        from copy import deepcopy
+        from uuid import uuid4
+        if type(plan.get('revision')) is not int or plan['revision'] < 0 or type(legacy_save) is not bool:
+            raise NativeEngineeringDriverError('原生编译需要明确的当前源码修订。')
+        if 'public_checks_requested' in plan and type(plan['public_checks_requested']) is not bool:
+            raise NativeEngineeringDriverError('原生编译后的程序检查设置必须是明确布尔值。')
         self._idle()
+        if getattr(self, '_pending_compile_run', None) is not None:
+            raise NativeEngineeringDriverError('此前原生编译尚待核对，未重新发送编译命令。')
+        self._last_compile_run = None
         # Clear only the native output summary control before dispatch. A
         # previous successful build cannot satisfy this operation's completion.
         # The output can be an inactive page in a floating docking group.
@@ -1325,30 +2451,112 @@ class NativeEngineeringDriver:
         win32gui.SendMessage(summary.handle, 0x000C, 0, '')
         if summary.window_text():
             raise NativeEngineeringDriverError('无法建立本次编译的新输出完成点。')
+        identity = self.inspect()
+        pending = dict(compile_run_id=uuid4().hex, identity=deepcopy(identity), revision=plan['revision'],
+            summary_handle=summary.handle, fresh_output_reset=True, command_dispatched=False,
+            confirmation_dispatched=False, confirmation_accepted=False, public_checks_requested=None)
+        self._pending_compile_run = pending
         self._command(0x4A1)
+        pending['command_dispatched'] = True
         def prompt():
-            rows = [d for d in self._dialogs() if d.is_enabled() and '是否执行全部编译？' in self._dialog_text(d)]
+            rows = [d for d in self._dialogs() if d.is_enabled() and self._text('compile_confirm') in self._dialog_text(d)]
             return rows[0] if len(rows) == 1 else None
         dialog = self._wait(prompt, '没有出现本次全部编译确认页。')
+        pending['confirmation_handle'] = dialog.handle
         checks = dialog.child_window(control_id=12270, class_name='Button')
-        if not checks.get_check_state():
+        check_state = checks.get_check_state()
+        if check_state not in (0, 1):
+            raise NativeEngineeringDriverError('原生编译后的程序检查选项状态不可确认。')
+        expected_check = (1 if legacy_save else int(plan.get('public_checks_requested', bool(check_state))))
+        if check_state != expected_check:
             self._click(dialog, 12270)
-        if checks.get_check_state() != 1:
-            raise NativeEngineeringDriverError('原生编译后的程序检查没有启用。')
+            self._wait(lambda: checks.get_check_state() == expected_check, '原生编译后的程序检查没有匹配工程设置。')
+        if checks.get_check_state() != expected_check:
+            raise NativeEngineeringDriverError('原生编译检查选项在确认前发生改变。')
+        pending['public_checks_requested'] = bool(expected_check)
         self._click(dialog, 1)
+        pending['confirmation_dispatched'] = True
         def completed():
             output = summary.window_text()
+            dialogs = self._dialogs()
+            if not any(d.handle == pending['confirmation_handle'] for d in dialogs):
+                pending['confirmation_accepted'] = True
             if (win32gui.IsWindowVisible(summary.handle)
-                    and '已完成全部编译' in output and re.search(r'\bError\s*:\s*\d+', output)
-                    and self._window().is_enabled() and not self._dialogs()):
+                    and _compile_summary_counts(output,
+                        public_checks_requested=pending['public_checks_requested'],
+                        native_ui_language=getattr(self, 'native_ui_language', 'zh-CN')) is not None
+                    and self._window().is_enabled() and not dialogs and pending['confirmation_accepted']):
                 return output
             return None
         output = self._wait(completed, '本次原生全部编译尚未完成。')
-        self.snapshot()
-        return {'command': 'rebuild_all', 'output': output, 'completed': True,
-                'source_unchanged': True, 'saved': True, 'pid': self.session.process_id,
-                'revision': plan['revision'], 'public_checks_requested': True,
-                'visible_completion': self._visible('本次原生编译输出', output=output)}
+        if self.inspect() != identity:
+            raise NativeEngineeringDriverError('原生编译期间工程身份已改变。')
+        if legacy_save:
+            self.snapshot()
+        result = self._completed_compile_receipt(pending, summary, output, driver_saved=legacy_save)
+        if (self.inspect() != identity or summary.window_text() != output
+                or self._dialogs() or not self._window().is_enabled()):
+            raise NativeEngineeringDriverError('核对本次编译诊断时摘要或工程状态发生改变。')
+        self._last_compile_run = deepcopy(result)
+        self._pending_compile_run = None
+        result['visible_completion'] = self._visible('本次原生编译输出', output=output)
+        self._last_compile_run = deepcopy(result)
+        return result
+
+    def read_current_compile_result(self, *, revision):
+        """Recheck a run started by this driver, never adopt an old output pane."""
+        from copy import deepcopy
+        previous = getattr(self, '_last_compile_run', None)
+        pending = getattr(self, '_pending_compile_run', None)
+        missing = dict(status='unavailable', origin='active_native_compile', revision=revision,
+                       driver_saved=False, source_binding='session_revision_required')
+        recovering = not isinstance(previous, dict) and isinstance(pending, dict)
+        run = pending if recovering else previous
+        if not isinstance(run, dict) or type(revision) is not int or revision != run.get('revision'):
+            return {**missing, 'reason': 'no_completed_compile_for_requested_revision'}
+        identity = self.inspect()
+        if identity != run.get('identity'):
+            return {**missing, 'reason': 'native_project_identity_changed'}
+        try:
+            self._idle()
+        except NativeEngineeringDriverError:
+            return {**missing, 'reason': 'native_compile_or_modal_operation_not_finished'}
+        controls = self._owned_control_handles('Edit', 10013, visible=False)
+        if controls != [run.get('summary_handle')]:
+            return {**missing, 'reason': 'compile_output_control_changed_or_ambiguous'}
+        summary = self.ui._application(self.session).window(handle=controls[0])
+        output = summary.window_text()
+        if recovering:
+            import win32gui
+            if (run.get('fresh_output_reset') is not True or run.get('command_dispatched') is not True
+                    or run.get('confirmation_dispatched') is not True
+                    or type(run.get('public_checks_requested')) is not bool):
+                return {**missing, 'reason': 'original_compile_confirmation_not_dispatched'}
+            if (not win32gui.IsWindowVisible(summary.handle) or _compile_summary_counts(output,
+                    public_checks_requested=run['public_checks_requested'],
+                    native_ui_language=getattr(self, 'native_ui_language', 'zh-CN')) is None
+                    or self._dialogs() or not self._window().is_enabled()):
+                return {**missing, 'reason': 'original_native_compile_not_completed'}
+            run['confirmation_accepted'] = True
+            previous = self._completed_compile_receipt(run, summary, output)
+            previous['recovered'] = True
+        elif output != previous.get('output'):
+            return {**missing, 'reason': 'compile_output_or_project_changed'}
+        if (self.inspect() != identity or summary.window_text() != output):
+            return {**missing, 'reason': 'compile_output_or_project_changed'}
+        diagnostics = self._read_compile_diagnostics(summary, previous)
+        old_diagnostics = previous.get('diagnostics', {})
+        if (old_diagnostics.get('status') == 'observed' and (diagnostics.get('status') != 'observed'
+                or diagnostics.get('rows') != old_diagnostics.get('rows'))):
+            return {**missing, 'reason': 'compile_diagnostic_rows_changed_or_unavailable'}
+        previous = {**deepcopy(previous), 'diagnostics': diagnostics}
+        if self.inspect() != identity or summary.window_text() != output:
+            return {**missing, 'reason': 'compile_output_or_project_changed'}
+        self._last_compile_run = deepcopy(previous)
+        if recovering:
+            self._pending_compile_run = None
+        return {**deepcopy(previous), 'status': 'observed', 'origin': 'active_native_compile',
+                'read_driver_saved': False}
 
     def _owned_control_handles(self, class_name, control_id, *, visible=True):
         import win32gui
@@ -1385,7 +2593,9 @@ class NativeEngineeringDriver:
             return panel
         # Codejock routes this menu through its active command bar. A direct
         # frame WM_COMMAND can return without opening the search pane.
-        self._choose_native_menu([('%f', '搜索/替换(F)')], 's')
+        entries, final_key = native_menu_selection('menu_find', 'menu_cross_reference',
+            getattr(self, 'native_ui_language', 'zh-CN'))
+        self._choose_native_menu(entries, final_key)
         return self._wait(lambda: self._cross_reference_panel(allow_missing=True),
                           '原生交叉参照窗口没有打开。')
 
@@ -1418,10 +2628,18 @@ class NativeEngineeringDriver:
     def _show_assignments(self, plan):
         import win32gui
         from copy import deepcopy
-        queries = plan.get('queries')
-        if (not isinstance(queries, list) or not 1 <= len(queries) <= 32
-                or any(q.get('scope') != 'global' for q in queries)):
-            raise NativeEngineeringDriverError('前台地址展示需要 1 至 32 个明确的全局标签查询。')
+        from gxw.live_assignments import live_assignment_queries
+        try:
+            queries = live_assignment_queries(plan.get('queries'))
+        except ValueError as error:
+            raise NativeEngineeringDriverError(str(error)) from error
+        context = plan.get('allocation_context')
+        searches = []
+        for query in queries:
+            entries = [entry for entry in (context or {}).get('queries', []) if entry.get('query') == query]
+            if context is not None and (len(entries) != 1 or entries[0].get('status') != 'prepared'):
+                raise NativeEngineeringDriverError('地址展示没有该变量的当前编译来源。')
+            searches.append(entries[0]['search_text'] if entries else query['name'])
         panel = self._open_cross_reference()
         # Use the native docking caption to float the real result pane, then
         # resize it so the address row is actually visible beside the graph.
@@ -1442,7 +2660,7 @@ class NativeEngineeringDriver:
         win32gui.SetWindowPos(floating.handle, 0, frame.left + 40,
                              frame.bottom - height - 60, width, height, 0x0014)
         results = []
-        for query in queries:
+        for query, search_text in zip(queries, searches):
             panel = self._cross_reference_panel()
             self._foreground(floating.handle)
             search = panel.child_window(control_id=20102, class_name='ComboBox')
@@ -1450,24 +2668,140 @@ class NativeEngineeringDriver:
             win32gui.SendMessage(summary.handle, 0x000C, 0, '')
             editor = search.child_window(class_name='Edit')
             editor.set_focus()
-            editor.set_edit_text(query['name'])
+            editor.set_edit_text(search_text)
             search.notify_parent(5)  # CBN_EDITCHANGE, like editing the native search box
             panel.child_window(control_id=20101, class_name='Button').set_focus()
             panel.child_window(control_id=20101, class_name='Button').click_input()
-            text = self._wait(lambda: summary.window_text() if ('"' + query['name'] + '"')
-                              in summary.window_text() else None, '本次交叉引用搜索没有完成。')
+            from gxw.native_locale import cross_reference_summary_count
+            def completed_search():
+                current = summary.window_text()
+                return current if cross_reference_summary_count(current, search_text,
+                    language=getattr(self, 'native_ui_language', 'zh-CN')) is not None else None
+            text = self._wait(completed_search, '本次交叉引用搜索没有完成。')
             grids = [c for c in panel.descendants(class_name='VSFlexGrid8N') if c.is_visible()]
             if len(grids) != 1 or grids[0].rectangle().height() < 120:
                 raise NativeEngineeringDriverError('原生地址结果行没有足够的可见区域。')
-            rows = _accessible_grid_rows(grids[0].handle)
-            completion = self._visible('本次编译的交叉引用', query=query['name'], rows=rows)
+            rows = _accessible_grid_rows(grids[0].handle,
+                native_ui_language=getattr(self, 'native_ui_language', 'zh-CN'))
+            completion = self._visible('本次编译的交叉引用', query=query['name'], source=query['source'],
+                                       scope=query.get('scope', 'local'), rows=rows)
             results.append({'query': deepcopy(query), 'search_text': search.window_text(),
                             'summary': text, 'rows': rows, 'visible_completion': completion})
         return {'cross_references': results, 'pid': self.session.process_id,
                 'revision': plan['revision'], 'visible_completion': completion}
 
+    def read_assignments(self, queries, *, revision, compilation=None, allocation_context=None):
+        """Join current native rows to Core's acknowledged same-build allocations.
+
+        The owning session supplies its fresh compile-save projection. This
+        driver never reads an old GXW/snapshot or runs an offline compilation.
+        """
+        from copy import deepcopy
+        from gxw.live_assignments import live_assignment_queries, verify_live_assignments
+        from gxw.live_context import _identity
+        if type(revision) is not int or revision < 0:
+            raise NativeEngineeringDriverError('活动地址读取需要 1 至 32 个明确查询。')
+        try:
+            queries = live_assignment_queries(queries)
+        except ValueError as error:
+            raise NativeEngineeringDriverError(str(error)) from error
+        self._last_current_assignments = None
+        result = dict(status='unavailable', origin='current_native_cross_reference', revision=revision,
+            allocation_status='unverified', owner_binding='source_and_compiled_component', driver_saved=False,
+            execution='not_run', results=[])
+        def unavailable(reason):
+            result['results'] = [dict(query=deepcopy(query), status='unavailable', reason=reason) for query in queries]
+            return result
+        if not isinstance(allocation_context, dict) or allocation_context.get('kind') != 'current_compile_allocations':
+            return unavailable('acknowledged_current_compile_save_allocations_required')
+        entries = allocation_context.get('queries')
+        if (not isinstance(entries, list) or any(not isinstance(entry, dict) for entry in entries)
+                or [entry.get('query') for entry in entries] != queries
+                or allocation_context.get('revision') != revision):
+            raise NativeEngineeringDriverError('当前编译分配来源与本次查询或修订不一致。')
+        current = self.read_current_compile_result(revision=revision)
+        if current.get('status') != 'observed':
+            reason = current.get('reason', 'current_compile_unavailable')
+        elif (not isinstance(compilation, dict) or compilation.get('status') != 'passed'
+                or type(compilation.get('revision')) is not int or compilation['revision'] != revision
+                or compilation.get('compile_run_id') != current.get('compile_run_id')):
+            reason = 'core_verified_current_compile_required'
+        else:
+            reason = None
+        if reason:
+            return unavailable(reason)
+        identity = _identity(current.get('identity'))
+        if (allocation_context.get('compile_run_id') != current['compile_run_id']
+                or allocation_context.get('identity') != identity):
+            return unavailable('allocation_context_belongs_to_another_compile_or_project')
+        requested = [entry['query'] for entry in entries if entry.get('status') == 'prepared']
+        if not requested:
+            return verify_live_assignments(allocation_context, dict(revision=revision,
+                compile_run_id=current['compile_run_id'], identity=identity, cross_references=[]))
+        observed = self._show_assignments({'queries': requested, 'revision': revision,
+                                          'allocation_context': allocation_context})
+        fresh = self.read_current_compile_result(revision=revision)
+        if (fresh.get('status') != 'observed' or fresh.get('compile_run_id') != current['compile_run_id']
+                or fresh.get('identity') != current.get('identity')):
+            unavailable('compile_changed_during_assignment_read')
+            result['unverified_observation'] = deepcopy(observed)
+            return result
+        records = observed.get('cross_references')
+        if (not isinstance(records, list) or len(records) != len(requested)
+                or any(not isinstance(row, dict) or row.get('query') != query
+                       for row, query in zip(records, requested))):
+            raise NativeEngineeringDriverError('原生交叉引用读回与本次查询不一致。')
+        if observed.get('revision') != revision or observed.get('pid') != identity['process_id']:
+            raise NativeEngineeringDriverError('原生交叉引用读回属于其它进程或修订。')
+        verified = verify_live_assignments(allocation_context, {**observed,
+            'compile_run_id': current['compile_run_id'], 'identity': deepcopy(identity)})
+        result = {**verified, 'cross_references': deepcopy(records),
+                  'visible_completion': deepcopy(observed.get('visible_completion'))}
+        confirmed = [entry['query'] for entry in verified['results'] if entry['status'] in ('current', 'partial')]
+        last = next((record for record in reversed(records) if record['query'] in confirmed), None)
+        if last is not None:
+            self._last_current_assignments = dict(result=deepcopy(result), record=deepcopy(last),
+                allocation_context=deepcopy(allocation_context))
+        return result
+
+    def show_assignments_completion(self, observation):
+        """Reopen one confirmed native query after full-context page readback."""
+        from copy import deepcopy
+        from gxw.live_context import _identity
+        cached = getattr(self, '_last_current_assignments', None)
+        if (not isinstance(cached, dict) or not isinstance(observation, dict)
+                or any(observation.get(key) != cached['result'].get(key)
+                       for key in ('revision', 'compile_run_id', 'identity', 'cross_references'))):
+            raise NativeEngineeringDriverError('地址展示缺少本次已核对查询的原始回执。')
+        expected = cached['result']
+        def current():
+            run = self.read_current_compile_result(revision=expected['revision'])
+            if (run.get('status') != 'observed' or run.get('compile_run_id') != expected['compile_run_id']
+                    or _identity(run.get('identity')) != expected['identity']):
+                raise NativeEngineeringDriverError('地址完成页面已不属于本次编译或工程。')
+        current()
+        record = cached['record']
+        observed = self._show_assignments(dict(queries=[deepcopy(record['query'])], revision=expected['revision'],
+                                              allocation_context=cached['allocation_context']))
+        current()
+        records = observed.get('cross_references')
+        if (observed.get('revision') != expected['revision']
+                or observed.get('pid') != expected['identity']['process_id']
+                or not isinstance(records, list) or len(records) != 1
+                or not isinstance(records[0], dict)
+                or any(records[0].get(key) != record.get(key) for key in ('query', 'search_text', 'summary', 'rows'))):
+            raise NativeEngineeringDriverError('重新展示的原生地址行已改变，原查询不能证明当前结果。',
+                                                observation={'status': 'unconfirmed', 'cross_references': records})
+        completion = records[0].get('visible_completion')
+        if not isinstance(completion, dict) or completion.get('completed') is not True:
+            raise NativeEngineeringDriverError('本次地址结果没有形成实际可见的完成页面。')
+        return deepcopy(completion)
+
     def reopen(self):
-        saved = self.snapshot()
+        self._idle()
+        saved = self.read_saved_project()
+        if self._last_saved is None or saved != self._last_saved:
+            raise NativeEngineeringDriverError('重新打开需要当前已确认的保存工程；未发送保存或关闭。')
         self._command(0x401)
         self._wait(lambda: not self._frame_identity().project_open and not self._dialogs(), '工程未冷关闭，未丢弃任何修改。')
         self._command(0x400, project=False)
@@ -1475,7 +2809,9 @@ class NativeEngineeringDriver:
         self._wait(lambda: self.path.name.casefold() in self._window().window_text().casefold()
                    and not self._dialogs(), '保存的工程没有重新打开。')
         self.inspect()
-        reopened = self.snapshot()
+        reopened = self.read_saved_project()
+        if reopened != saved:
+            raise NativeEngineeringDriverError('重新打开期间工程文件发生变化，需要重新核对。')
         self._visible('保存工程冷重开', path=str(self.path), same_process=True)
         return reopened
 
@@ -1487,7 +2823,7 @@ class NativeEngineeringDriver:
         self._closed = True
 
     def execute(self, command, prepared):
-        self._idle()
+        self.verify_project_codepage()
         if self._last_saved is None or self.path.read_bytes() != self._last_saved:
             raise NativeEngineeringDriverError('工程文件在本步骤前已被其他写入改变。')
         operation = command['operation']

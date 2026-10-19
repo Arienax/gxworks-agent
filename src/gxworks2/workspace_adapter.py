@@ -124,9 +124,14 @@ class NativeWorkspaceSourceSave(_NativeWorkspaceAdapter):
 
     def author(self, raw, command, *, timeout=None):
         from gxw.fb_authoring import authoring_plan, verify_authoring
-        plan, _, _, _ = authoring_plan(raw, command)
+        from gxw.st_program import (ST_PROGRAM_OPERATIONS, background_st_program_plan,
+                                    verify_background_st_program_save)
+        ordinary_st = command.get('operation') in ST_PROGRAM_OPERATIONS
+        planner = background_st_program_plan if ordinary_st else authoring_plan
+        verifier = verify_background_st_program_save if ordinary_st else verify_authoring
+        plan, _, _, _ = planner(raw, command)
         if os.name != 'nt' or not self.executable.is_file() or self.installation is None:
-            raise WorkspaceSaveError('新建类型或编写 FB 需要本地 GX Works2 离线工作区适配器。')
+            raise WorkspaceSaveError('新建类型或编写 ST/FB 需要本地 GX Works2 离线工作区适配器。')
         with tempfile.TemporaryDirectory(prefix='gxw-definition-') as directory:
             root = Path(directory); (root / 'input.gxw').write_bytes(raw)
             request = {'operation': 'author_definition', 'protocol_version': 1, 'installation': str(self.installation),
@@ -137,7 +142,7 @@ class NativeWorkspaceSourceSave(_NativeWorkspaceAdapter):
             required.add('Definition.RemoveEmptyProgram' if command['operation']=='remove_empty_program' else 'Definition.ConfigureProject' if command['operation']=='configure_project'
                 else 'Definition.GetGlobalTable' if command['operation'] in ('edit_global_labels','create_global_labels')
                 else 'Definition.EditPOULabels' if command['operation']=='edit_pou_labels'
-                else 'Definition.GetOwner' if command['operation'] == 'edit_st_fb' else 'Definition.Create')
+                else 'Definition.GetOwner' if command['operation'] in ('edit_st_fb', 'edit_st_program') else 'Definition.Create')
             if command['operation'] not in ('create_structure','edit_global_labels','create_global_labels','edit_pou_labels','configure_project','remove_empty_program'):
                 required.add('Definition.SetSTBody')
             if (code or observed.get('status') != 'saved' or observed.get('protocol_version') != 1
@@ -151,7 +156,7 @@ class NativeWorkspaceSourceSave(_NativeWorkspaceAdapter):
             if not output.is_file() or not 0 < output.stat().st_size <= 30 * 1024 * 1024:
                 raise WorkspaceSaveError('原生定义写入缺少有效候选文件。', observed)
             try:
-                return verify_authoring(raw, command, output.read_bytes(), observed)
+                return verifier(raw, command, output.read_bytes(), observed)
             except GXWFormatError as error:
                 raise WorkspaceSaveError('原生定义回读不一致：' + str(error), observed) from error
 

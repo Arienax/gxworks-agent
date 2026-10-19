@@ -29,7 +29,7 @@ class GXWorks2UIAutomation(ABC):
 
     @abstractmethod
     def export_current_program(self, session, destination):
-        """Use GX Works2's CSV writer to create the pre-import backup."""
+        """Export the program for an explicit read/export request."""
 
     @abstractmethod
     def import_program_csv(self, session, csv_path):
@@ -37,7 +37,7 @@ class GXWorks2UIAutomation(ABC):
 
     @abstractmethod
     def export_current_comments(self, session, destination):
-        """Back up the project's global device comments."""
+        """Export device comments for an explicit read/export request."""
 
     @abstractmethod
     def import_comments_csv(self, session, csv_path):
@@ -599,6 +599,45 @@ class PywinautoGXWorks2UIAutomation(GXWorks2UIAutomation):
                 continue
             profiles.update(profile for value in bar.texts() if (profile := native_project_profile(value)) is not None)
         return next(iter(profiles)) if len(profiles) == 1 else None
+
+    def _current_native_project_codepage_observation(self, session, native_ui_language):
+        """Read the bound frame's current project-language status without caching.
+
+        The observation retains the CP936/GB18030 ambiguity in the native
+        status resources. A caller needs separate live evidence to resolve it.
+        """
+        import win32gui
+        import win32process
+        from gxw.native_locale import LANGUAGES, project_codepage_status
+
+        if native_ui_language not in LANGUAGES:
+            raise RuntimeError('GX Works2原生界面语言未确认，不能读取当前工程语言。')
+        frame = self._main_window(session)
+        frame_handle = int(frame.handle)
+        if frame_handle != int(session.window_handle):
+            raise RuntimeError('GX Works2当前工程语言的窗口不属于已绑定会话。')
+        bars = [bar for bar in frame.descendants(class_name='msctls_statusbar32')
+                if bar.control_id() == 59393]
+        if len(bars) != 1:
+            raise RuntimeError('GX Works2当前工程语言的原生状态栏缺失或不唯一。')
+        bar = bars[0]
+        bar_handle = int(bar.handle)
+
+        def bound_statusbar():
+            return (win32gui.IsWindow(frame_handle) and win32gui.IsWindow(bar_handle)
+                and win32process.GetWindowThreadProcessId(frame_handle)[1] == session.process_id
+                and win32process.GetWindowThreadProcessId(bar_handle)[1] == session.process_id
+                and win32gui.IsChild(frame_handle, bar_handle)
+                and win32gui.IsWindowVisible(bar_handle)
+                and win32gui.GetClassName(bar_handle).casefold() == 'msctls_statusbar32'
+                and win32gui.GetDlgCtrlID(bar_handle) == 59393)
+
+        if not bound_statusbar():
+            raise RuntimeError('GX Works2当前工程语言的状态栏身份已改变。')
+        texts = bar.texts()
+        if not bound_statusbar():
+            raise RuntimeError('GX Works2读取当前工程语言时状态栏身份已改变。')
+        return project_codepage_status(texts, language=native_ui_language)
 
     def _wait_dialog(self, session, title_pattern, timeout=None):
         deadline = time.monotonic() + (self.timeout if timeout is None else timeout)
@@ -1552,15 +1591,34 @@ class PywinautoGXWorks2UIAutomation(GXWorks2UIAutomation):
             time.sleep(.05)
         raise TimeoutError("未确认GX Works2已建立可编辑的MAIN。")
 
-    def _acknowledge_known_save_notices(self, session):
+    def _acknowledge_known_save_notices(self, session, *, native_ui_language='zh-CN'):
         """Acknowledge only the observed one-button native parameter notice.
 
         No PLC parameter, authentication mode or operation-history setting is
         changed. Every other dialog is left for inspection and stops the save.
         """
+        from gxw.native_locale import ui_text
+        expected_notice = ui_text('auth_save_notice', native_ui_language)
+        # This one-button notice uses Windows' message-button language even
+        # when its body comes from another GX resource satellite. Its exact
+        # body, sole ID2 button and ownership are still checked independently.
+        expected_buttons = {ui_text('ok', language) for language in ('zh-CN', 'en', 'ja')}
         notices = []
         user32 = ctypes.windll.user32 if os.name == "nt" else None
+        def owned_window(handle):
+            process_id = ctypes.c_ulong()
+            user32.GetWindowThreadProcessId(handle, ctypes.byref(process_id))
+            return int(process_id.value) == int(session.process_id)
         for handle in self._native_dialog_handles(session):
+            if not user32.IsWindow(handle):
+                continue
+            class_buffer = ctypes.create_unicode_buffer(128)
+            user32.GetClassNameW(handle, class_buffer, len(class_buffer))
+            if (class_buffer.value != '#32770' or not user32.IsWindowVisible(handle)
+                    or not user32.IsWindow(session.window_handle) or not owned_window(session.window_handle)
+                    or not owned_window(handle)
+                    or int(user32.GetAncestor(handle, 3) or 0) != int(session.window_handle)):
+                raise RuntimeError('GX Works2保存提示不属于已绑定的原生窗口。')
             messages, buttons = [], []
             for child in self._native_descendants(handle):
                 class_buffer = ctypes.create_unicode_buffer(128)
@@ -1575,11 +1633,16 @@ class PywinautoGXWorks2UIAutomation(GXWorks2UIAutomation):
             # retry after the informational dialog has already closed.
             if not user32.IsWindow(handle):
                 continue
-            if (messages != [self.USER_AUTH_SAVE_NOTICE] or len(buttons) != 1
-                    or buttons[0][1] != 2 or buttons[0][2] != "确定"):
+            if (messages != [expected_notice] or len(buttons) != 1
+                    or buttons[0][1] != 2 or buttons[0][2] not in expected_buttons):
                 raise RuntimeError("GX Works2保存时出现未适配的提示：" + self._native_dialog_text(handle))
+            button = buttons[0][0]
+            if (not user32.IsWindow(button) or not user32.IsWindowEnabled(button)
+                    or not user32.IsChild(handle, button) or not owned_window(handle) or not owned_window(button)
+                    or int(user32.GetAncestor(handle, 3) or 0) != int(session.window_handle)):
+                raise RuntimeError('GX Works2保存提示的确认按钮不属于已绑定的原生窗口。')
             notices.append(messages[0])
-            user32.SendMessageW(buttons[0][0], 0x00F5, 0, 0)  # BM_CLICK
+            user32.SendMessageW(button, 0x00F5, 0, 0)  # BM_CLICK
         return notices
 
     def save_project(self, session):

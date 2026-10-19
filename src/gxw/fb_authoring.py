@@ -47,7 +47,8 @@ def _global_plan(config, sources, command, caller):
     from gxworks2.project_profiles import native_project_profile
     device_profile=command.get('device_profile',config['cpu'])
     profile=native_project_profile(device_profile)
-    if profile is None or profile.cpu!=config['cpu']:
+    current_profile=native_project_profile(config['cpu'])
+    if profile is None or current_profile is None or profile.cpu!=current_profile.cpu:
         raise GXWFormatError('global device profile differs from current native CPU menu')
     logical = command['source_name'] if command['source_name'].endswith('.gh') else command['source_name']+'.gh'
     create=command['operation']=='create_global_labels'
@@ -406,14 +407,14 @@ def st_program_snapshot(raw, source_name=None):
 
 
 def st_program_authoring_plan(raw, command):
-    """Prepare visible ST Program edits without broadening AuthorDefinition.
+    """Prepare ordinary ST Program edits for native pages or isolated saves.
 
     New Programs require an explicit existing task. Creating task/resource
     objects is a separate native operation and has no implicit default here.
     """
     from .native_write import native_program_creation_plan
     if not isinstance(command, dict) or command.get('operation') not in ('create_st_program', 'edit_st_program'):
-        raise GXWFormatError('unsupported visible ST Program operation')
+        raise GXWFormatError('unsupported ordinary ST Program operation')
     create = command['operation'] == 'create_st_program'
     allowed = {'operation', 'source_name', 'declarations', 'st_text'}
     if create:
@@ -432,7 +433,7 @@ def st_program_authoring_plan(raw, command):
                 or any(key[1] == name.casefold() for key in sources.library_structures)):
             raise GXWFormatError('project callable, Program or type already exists: ' + name)
         if command.get('scope_mode') != 'existing_task':
-            raise GXWFormatError('visible ST Program creation requires explicit existing_task scope')
+            raise GXWFormatError('ST Program creation requires explicit existing_task scope')
         scope = native_program_creation_plan(raw, name, resource=command.get('resource'),
                                             task=command.get('task'), scope_mode='existing_task')
         template = sources.declarations[groups[caller]['labels']]
@@ -465,8 +466,8 @@ def st_program_authoring_plan(raw, command):
     return plan, before, expected, caller
 
 
-def _visible_task_append_header(before, after, *, cpu):
-    """Bound the GUI save metadata seen in the FX3U native ST Program witness.
+def _visible_task_append_header(before, after, *, cpu, native_identity=None):
+    """Bound measured task-append save metadata to the actual native context.
 
     Only the selected appended task may update its common SYSTEMTIME and
     compile-pending word. The source description, all other prefix bytes and
@@ -475,7 +476,8 @@ def _visible_task_append_header(before, after, *, cpu):
     from .project_metadata import read_task_source
     from .source_header import normalize_visible_save_header
     previous, saved = read_task_source(before), read_task_source(after)
-    normalized, observed = normalize_visible_save_header(previous['header'], saved['header'], cpu=cpu)
+    normalized, observed = normalize_visible_save_header(previous['header'], saved['header'], cpu=cpu,
+        native_identity=native_identity, operation='task_append')
     return normalized + bytes(after[len(saved['header']):]), observed
 
 

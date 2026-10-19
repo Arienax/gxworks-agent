@@ -436,7 +436,12 @@
           "kind": "special_adapter",
           "access": "FX3U/FX3UC 中第1至第4台模拟量特殊适配器的通道1-4输入数据依次为 D8260-D8263、D8270-D8273、D8280-D8283、D8290-D8293",
           "instruction_restriction": "不得使用 RD3A；RD3A 仅支持 FX0N-3A 或 FX2N-2AD",
-          "optional_context": ["适配器连接顺序", "通道", "输入量程", "CPU版本"]
+          "optional_context": [
+            "适配器连接顺序",
+            "通道",
+            "输入量程",
+            "CPU版本"
+          ]
         }
       }
     },
@@ -446,13 +451,23 @@
         "FX3U-4DA": {
           "kind": "special_function_block",
           "access": "按模块手册使用缓冲存储器及 TO/FROM 等访问方式",
-          "optional_context": ["单元号", "通道", "输出量程", "模块手册版本"]
+          "optional_context": [
+            "单元号",
+            "通道",
+            "输出量程",
+            "模块手册版本"
+          ]
         },
         "FX3U-4DA-ADP": {
           "kind": "special_adapter",
           "access": "按 CPU/适配器手册使用分配的专用软元件；FX3U/FX3UC 中第1至第4台模拟量特殊适配器的通道1-4输出数据依次为 D8260-D8263、D8270-D8273、D8280-D8283、D8290-D8293",
           "instruction_restriction": "不得使用 WR3A；WR3A 仅支持 FX0N-3A 或 FX2N-2DA",
-          "optional_context": ["适配器连接顺序", "通道", "输出量程", "CPU版本"]
+          "optional_context": [
+            "适配器连接顺序",
+            "通道",
+            "输出量程",
+            "CPU版本"
+          ]
         }
       },
       "forbidden_assumptions": [
@@ -617,7 +632,13 @@
     },
     "analog_output": {
       "selection_rule": "用户提供模块/适配器型号及工程配置时按其选择访问方式；未提供时记录非阻断假设，不得套用 FX3U-4DA 或 FX3U-4DA-ADP 地址",
-      "optional_context": ["CPU完整型号", "模块完整型号", "模块配置位置", "通道", "输出量程"],
+      "optional_context": [
+        "CPU完整型号",
+        "模块完整型号",
+        "模块配置位置",
+        "通道",
+        "输出量程"
+      ],
       "forbidden_assumptions": [
         "禁止臆造 D8260 或其他模拟量输出地址",
         "禁止把 FX3U 模块的 BFM/专用寄存器直接用于 FX5U"
@@ -1214,8 +1235,21 @@
     "family": "Q",
     "desc": "Q00UJ default-allocation device subset; native compilation and execution require separate evidence.",
     "coverage": "source_subset",
-    "addressing": {"radices": {"B": 16, "W": 16}, "default": 10},
-    "soft_limits": {"M": 8191, "D": 12287, "B": 8191, "W": 8191, "SM": 2047, "SD": 2047},
+    "addressing": {
+      "radices": {
+        "B": 16,
+        "W": 16
+      },
+      "default": 10
+    },
+    "soft_limits": {
+      "M": 8191,
+      "D": 12287,
+      "B": 8191,
+      "W": 8191,
+      "SM": 2047,
+      "SD": 2047
+    },
     "manual_reference": {
       "title": "Q00UJCPU Performance specifications",
       "target_model": "Q00UJ",
@@ -1224,26 +1258,82 @@
     "notes": "M/D/B/W bounds describe the documented default allocation, also observed in the isolated Q00UJ project. Parameter changes need their own allocation evidence. Only these six device classes are covered; instruction support, physical I/O and execution are not established by this profile.",
     "validation": {
       "status": "source_subset",
-      "device_limits": {"M": 8191, "D": 12287, "B": 8191, "W": 8191, "SM": 2047, "SD": 2047},
-      "radices": {"B": 16, "W": 16},
-      "sources": [{
-        "title": "Q00UJCPU Performance specifications",
-        "target_model": "Q00UJ",
-        "official_url": "https://www.mitsubishielectric.com/fa/products/faspec/detail.page?formNm=QnUCPU_Q00UJCPU_3827&kisyu=%2Fplcq&lang=2&popup=1"
-      }],
-      "bit_prefixes": ["M", "B", "SM"],
-      "word_bit_prefixes": ["D", "W", "SD"],
-      "special_regions": {"SM": [[0, 2047]], "SD": [[0, 2047]]},
-      "native_read_prefixes": ["M", "D", "B", "W", "SM", "SD"],
-      "native_feedback_prefixes": ["B", "W"]
+      "device_limits": {
+        "M": 8191,
+        "D": 12287,
+        "B": 8191,
+        "W": 8191,
+        "SM": 2047,
+        "SD": 2047
+      },
+      "radices": {
+        "B": 16,
+        "W": 16
+      },
+      "sources": [
+        {
+          "title": "Q00UJCPU Performance specifications",
+          "target_model": "Q00UJ",
+          "official_url": "https://www.mitsubishielectric.com/fa/products/faspec/detail.page?formNm=QnUCPU_Q00UJCPU_3827&kisyu=%2Fplcq&lang=2&popup=1"
+        }
+      ],
+      "bit_prefixes": [
+        "M",
+        "B",
+        "SM"
+      ],
+      "word_bit_prefixes": [
+        "D",
+        "W",
+        "SD"
+      ],
+      "special_regions": {
+        "SM": [
+          [
+            0,
+            2047
+          ]
+        ],
+        "SD": [
+          [
+            0,
+            2047
+          ]
+        ]
+      },
+      "native_read_prefixes": [
+        "M",
+        "D",
+        "B",
+        "W",
+        "SM",
+        "SD"
+      ],
+      "native_feedback_prefixes": [
+        "B",
+        "W"
+      ]
     }
   },
   "Q00U": {
     "family": "Q",
     "desc": "Q00U default-allocation device subset; native compilation and execution require separate evidence.",
     "coverage": "source_subset",
-    "addressing": {"radices": {"B": 16, "W": 16}, "default": 10},
-    "soft_limits": {"M": 8191, "D": 12287, "B": 8191, "W": 8191, "SM": 2047, "SD": 2047},
+    "addressing": {
+      "radices": {
+        "B": 16,
+        "W": 16
+      },
+      "default": 10
+    },
+    "soft_limits": {
+      "M": 8191,
+      "D": 12287,
+      "B": 8191,
+      "W": 8191,
+      "SM": 2047,
+      "SD": 2047
+    },
     "manual_reference": {
       "title": "Q00UCPU Performance specifications",
       "target_model": "Q00U",
@@ -1252,18 +1342,61 @@
     "notes": "M/D/B/W bounds describe this model's documented default allocation, independently observed in the isolated Q00U GUI baseline. Parameter changes need their own allocation evidence. Only these six device classes are covered; instruction support, physical I/O and execution are not established by this profile.",
     "validation": {
       "status": "source_subset",
-      "device_limits": {"M": 8191, "D": 12287, "B": 8191, "W": 8191, "SM": 2047, "SD": 2047},
-      "radices": {"B": 16, "W": 16},
-      "sources": [{
-        "title": "Q00UCPU Performance specifications",
-        "target_model": "Q00U",
-        "official_url": "https://www.mitsubishielectric.com/fa/products/faspec/detail.page?category=ex&formNm=QnUCPU_Q00UCPU_3885&id=spec&kisyu=%2Fplcq&lang=2"
-      }],
-      "bit_prefixes": ["M", "B", "SM"],
-      "word_bit_prefixes": ["D", "W", "SD"],
-      "special_regions": {"SM": [[0, 2047]], "SD": [[0, 2047]]},
-      "native_read_prefixes": ["M", "D", "B", "W", "SM", "SD"],
-      "native_feedback_prefixes": ["B", "W"]
+      "device_limits": {
+        "M": 8191,
+        "D": 12287,
+        "B": 8191,
+        "W": 8191,
+        "SM": 2047,
+        "SD": 2047
+      },
+      "radices": {
+        "B": 16,
+        "W": 16
+      },
+      "sources": [
+        {
+          "title": "Q00UCPU Performance specifications",
+          "target_model": "Q00U",
+          "official_url": "https://www.mitsubishielectric.com/fa/products/faspec/detail.page?category=ex&formNm=QnUCPU_Q00UCPU_3885&id=spec&kisyu=%2Fplcq&lang=2"
+        }
+      ],
+      "bit_prefixes": [
+        "M",
+        "B",
+        "SM"
+      ],
+      "word_bit_prefixes": [
+        "D",
+        "W",
+        "SD"
+      ],
+      "special_regions": {
+        "SM": [
+          [
+            0,
+            2047
+          ]
+        ],
+        "SD": [
+          [
+            0,
+            2047
+          ]
+        ]
+      },
+      "native_read_prefixes": [
+        "M",
+        "D",
+        "B",
+        "W",
+        "SM",
+        "SD"
+      ],
+      "native_feedback_prefixes": [
+        "B",
+        "W"
+      ]
     }
   },
   "Q06UDV": {
@@ -1271,36 +1404,109 @@
     "desc": "Q06UDV source-scoped device-address subset; instruction and execution support require separate evidence.",
     "coverage": "source_subset",
     "addressing": {
-      "radices": {"X": 16, "Y": 16, "B": 16, "W": 16},
+      "radices": {
+        "X": 16,
+        "Y": 16,
+        "B": 16,
+        "W": 16
+      },
       "default": 10
     },
     "soft_limits": {
-      "X": 8191, "Y": 8191, "M": 15359, "D": 22527,
-      "B": 8191, "W": 8191, "SM": 2047, "SD": 2047
+      "X": 8191,
+      "Y": 8191,
+      "M": 15359,
+      "D": 22527,
+      "B": 8191,
+      "W": 8191,
+      "SM": 2047,
+      "SD": 2047
     },
     "manual_reference": {
-      "manual_id": "sh080807engaf", "manual": "SH080807ENG", "revision": "AF",
-      "pdf_page": 346, "related_pdf_pages": [348, 349], "target_model": "Q06UDV",
+      "manual_id": "sh080807engaf",
+      "manual": "SH080807ENG",
+      "revision": "AF",
+      "pdf_page": 346,
+      "related_pdf_pages": [
+        348,
+        349
+      ],
+      "target_model": "Q06UDV",
       "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080807eng/sh080807engaf.pdf"
     },
     "notes": "Only listed device classes are covered. M/D ceilings use the Q06UDV-specific notes on PDF page 348. Actual PLC parameter allocation and physical I/O remain project-specific; this profile does not verify installed points or runtime behavior.",
     "validation": {
       "status": "source_subset",
       "device_limits": {
-        "X": 8191, "Y": 8191, "M": 15359, "D": 22527,
-        "B": 8191, "W": 8191, "SM": 2047, "SD": 2047
+        "X": 8191,
+        "Y": 8191,
+        "M": 15359,
+        "D": 22527,
+        "B": 8191,
+        "W": 8191,
+        "SM": 2047,
+        "SD": 2047
       },
-      "radices": {"X": 16, "Y": 16, "B": 16, "W": 16},
-      "sources": [{
-        "manual_id": "sh080807engaf", "manual": "SH080807ENG", "revision": "AF",
-        "pdf_page": 346, "related_pdf_pages": [348, 349], "target_model": "Q06UDV",
-        "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080807eng/sh080807engaf.pdf"
-      }],
-      "bit_prefixes": ["X", "Y", "M", "B", "SM"],
-      "word_bit_prefixes": ["D", "W", "SD"],
-      "special_regions": {"SM": [[0, 2047]], "SD": [[0, 2047]]},
-      "native_read_prefixes": ["X", "Y", "M", "D", "B", "W", "SM", "SD"],
-      "native_feedback_prefixes": ["B", "W"]
+      "radices": {
+        "X": 16,
+        "Y": 16,
+        "B": 16,
+        "W": 16
+      },
+      "sources": [
+        {
+          "manual_id": "sh080807engaf",
+          "manual": "SH080807ENG",
+          "revision": "AF",
+          "pdf_page": 346,
+          "related_pdf_pages": [
+            348,
+            349
+          ],
+          "target_model": "Q06UDV",
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080807eng/sh080807engaf.pdf"
+        }
+      ],
+      "bit_prefixes": [
+        "X",
+        "Y",
+        "M",
+        "B",
+        "SM"
+      ],
+      "word_bit_prefixes": [
+        "D",
+        "W",
+        "SD"
+      ],
+      "special_regions": {
+        "SM": [
+          [
+            0,
+            2047
+          ]
+        ],
+        "SD": [
+          [
+            0,
+            2047
+          ]
+        ]
+      },
+      "native_read_prefixes": [
+        "X",
+        "Y",
+        "M",
+        "D",
+        "B",
+        "W",
+        "SM",
+        "SD"
+      ],
+      "native_feedback_prefixes": [
+        "B",
+        "W"
+      ]
     }
   },
   "L02": {
@@ -1448,8 +1654,23 @@
         "W",
         "SW"
       ],
-      "native_read_prefixes": ["X", "Y", "M", "D", "S", "T", "C", "B", "W", "SM", "SD"],
-      "native_feedback_prefixes": ["B", "W"],
+      "native_read_prefixes": [
+        "X",
+        "Y",
+        "M",
+        "D",
+        "S",
+        "T",
+        "C",
+        "B",
+        "W",
+        "SM",
+        "SD"
+      ],
+      "native_feedback_prefixes": [
+        "B",
+        "W"
+      ],
       "special_regions": {
         "SM": [
           [
@@ -1464,6 +1685,1102 @@
           ]
         ]
       }
+    }
+  },
+  "FX3S": {
+    "family": "FX",
+    "coverage": "source_subset",
+    "desc": "Source-scoped M/D address subset; native operations and instruction semantics require separate evidence.",
+    "manual_reference": {
+      "manual_id": "jy997d16601r",
+      "manual": "JY997D16601",
+      "revision": "R",
+      "pdf_page": 95,
+      "related_pdf_pages": [
+        133
+      ],
+      "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d16601/jy997d16601r.pdf",
+      "target_model": "FX3S",
+      "covered_models": [
+        "FX3S"
+      ]
+    },
+    "addressing": {
+      "default": 10
+    },
+    "soft_limits": {
+      "M": 8511,
+      "D": 8511
+    },
+    "notes": "Only the cited M/D namespaces are covered. Parameter-dependent extensions, other device classes, special-device meanings, native I/O and runtime behavior remain separately scoped.",
+    "validation": {
+      "status": "source_subset",
+      "device_limits": {
+        "M": 8511,
+        "D": 8511
+      },
+      "radices": {},
+      "sources": [
+        {
+          "manual_id": "jy997d16601r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 95,
+          "related_pdf_pages": [
+            133
+          ],
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d16601/jy997d16601r.pdf",
+          "target_model": "FX3S",
+          "covered_models": [
+            "FX3S"
+          ]
+        }
+      ],
+      "bit_prefixes": [
+        "M"
+      ],
+      "word_bit_prefixes": [],
+      "special_access": {},
+      "native_read_prefixes": [
+        "M",
+        "D"
+      ],
+      "native_feedback_prefixes": [],
+      "special_regions": {
+        "M": [
+          [
+            8000,
+            8511
+          ]
+        ],
+        "D": [
+          [
+            8000,
+            8511
+          ]
+        ]
+      },
+      "device_regions": {
+        "M": [
+          [
+            0,
+            1535
+          ],
+          [
+            8000,
+            8511
+          ]
+        ],
+        "D": [
+          [
+            0,
+            2999
+          ],
+          [
+            8000,
+            8511
+          ]
+        ]
+      }
+    }
+  },
+  "FX3G": {
+    "family": "FX",
+    "coverage": "source_subset",
+    "desc": "Source-scoped M/D address subset; native operations and instruction semantics require separate evidence.",
+    "manual_reference": {
+      "manual_id": "jy997d16601r",
+      "manual": "JY997D16601",
+      "revision": "R",
+      "pdf_page": 95,
+      "related_pdf_pages": [
+        133
+      ],
+      "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d16601/jy997d16601r.pdf",
+      "target_model": "FX3G",
+      "covered_models": [
+        "FX3G"
+      ]
+    },
+    "addressing": {
+      "default": 10
+    },
+    "soft_limits": {
+      "M": 8511,
+      "D": 8511
+    },
+    "notes": "Only the cited M/D namespaces are covered. Parameter-dependent extensions, other device classes, special-device meanings, native I/O and runtime behavior remain separately scoped.",
+    "validation": {
+      "status": "source_subset",
+      "device_limits": {
+        "M": 8511,
+        "D": 8511
+      },
+      "radices": {},
+      "sources": [
+        {
+          "manual_id": "jy997d16601r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 95,
+          "related_pdf_pages": [
+            133
+          ],
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d16601/jy997d16601r.pdf",
+          "target_model": "FX3G",
+          "covered_models": [
+            "FX3G"
+          ]
+        }
+      ],
+      "bit_prefixes": [
+        "M"
+      ],
+      "word_bit_prefixes": [],
+      "special_access": {},
+      "native_read_prefixes": [
+        "M",
+        "D"
+      ],
+      "native_feedback_prefixes": [],
+      "special_regions": {
+        "M": [
+          [
+            8000,
+            8511
+          ]
+        ],
+        "D": [
+          [
+            8000,
+            8511
+          ]
+        ]
+      },
+      "device_regions": {
+        "M": [
+          [
+            0,
+            7679
+          ],
+          [
+            8000,
+            8511
+          ]
+        ],
+        "D": [
+          [
+            0,
+            7999
+          ],
+          [
+            8000,
+            8511
+          ]
+        ]
+      }
+    }
+  },
+  "FX3GC": {
+    "family": "FX",
+    "coverage": "source_subset",
+    "desc": "Source-scoped M/D address subset; native operations and instruction semantics require separate evidence.",
+    "manual_reference": {
+      "manual_id": "jy997d16601r",
+      "manual": "JY997D16601",
+      "revision": "R",
+      "pdf_page": 95,
+      "related_pdf_pages": [
+        133
+      ],
+      "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d16601/jy997d16601r.pdf",
+      "target_model": "FX3GC",
+      "covered_models": [
+        "FX3GC"
+      ]
+    },
+    "addressing": {
+      "default": 10
+    },
+    "soft_limits": {
+      "M": 8511,
+      "D": 8511
+    },
+    "notes": "Only the cited M/D namespaces are covered. Parameter-dependent extensions, other device classes, special-device meanings, native I/O and runtime behavior remain separately scoped.",
+    "validation": {
+      "status": "source_subset",
+      "device_limits": {
+        "M": 8511,
+        "D": 8511
+      },
+      "radices": {},
+      "sources": [
+        {
+          "manual_id": "jy997d16601r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 95,
+          "related_pdf_pages": [
+            133
+          ],
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d16601/jy997d16601r.pdf",
+          "target_model": "FX3GC",
+          "covered_models": [
+            "FX3GC"
+          ]
+        }
+      ],
+      "bit_prefixes": [
+        "M"
+      ],
+      "word_bit_prefixes": [],
+      "special_access": {},
+      "native_read_prefixes": [
+        "M",
+        "D"
+      ],
+      "native_feedback_prefixes": [],
+      "special_regions": {
+        "M": [
+          [
+            8000,
+            8511
+          ]
+        ],
+        "D": [
+          [
+            8000,
+            8511
+          ]
+        ]
+      },
+      "device_regions": {
+        "M": [
+          [
+            0,
+            7679
+          ],
+          [
+            8000,
+            8511
+          ]
+        ],
+        "D": [
+          [
+            0,
+            7999
+          ],
+          [
+            8000,
+            8511
+          ]
+        ]
+      }
+    }
+  },
+  "FX3G/FX3GC": {
+    "family": "FX",
+    "coverage": "source_subset",
+    "desc": "Source-scoped M/D address subset; native operations and instruction semantics require separate evidence.",
+    "manual_reference": {
+      "manual_id": "jy997d16601r",
+      "manual": "JY997D16601",
+      "revision": "R",
+      "pdf_page": 95,
+      "related_pdf_pages": [
+        133
+      ],
+      "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d16601/jy997d16601r.pdf",
+      "target_model": "FX3G/FX3GC",
+      "covered_models": [
+        "FX3G",
+        "FX3GC"
+      ]
+    },
+    "addressing": {
+      "default": 10
+    },
+    "soft_limits": {
+      "M": 8511,
+      "D": 8511
+    },
+    "notes": "Only the cited M/D namespaces are covered. Parameter-dependent extensions, other device classes, special-device meanings, native I/O and runtime behavior remain separately scoped.",
+    "validation": {
+      "status": "source_subset",
+      "device_limits": {
+        "M": 8511,
+        "D": 8511
+      },
+      "radices": {},
+      "sources": [
+        {
+          "manual_id": "jy997d16601r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 95,
+          "related_pdf_pages": [
+            133
+          ],
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d16601/jy997d16601r.pdf",
+          "target_model": "FX3G/FX3GC",
+          "covered_models": [
+            "FX3G",
+            "FX3GC"
+          ]
+        }
+      ],
+      "bit_prefixes": [
+        "M"
+      ],
+      "word_bit_prefixes": [],
+      "special_access": {},
+      "native_read_prefixes": [
+        "M",
+        "D"
+      ],
+      "native_feedback_prefixes": [],
+      "special_regions": {
+        "M": [
+          [
+            8000,
+            8511
+          ]
+        ],
+        "D": [
+          [
+            8000,
+            8511
+          ]
+        ]
+      },
+      "device_regions": {
+        "M": [
+          [
+            0,
+            7679
+          ],
+          [
+            8000,
+            8511
+          ]
+        ],
+        "D": [
+          [
+            0,
+            7999
+          ],
+          [
+            8000,
+            8511
+          ]
+        ]
+      }
+    }
+  },
+  "FX3UC": {
+    "family": "FX",
+    "coverage": "source_subset",
+    "desc": "Source-scoped M/D address subset; native operations and instruction semantics require separate evidence.",
+    "manual_reference": {
+      "manual_id": "jy997d16601r",
+      "manual": "JY997D16601",
+      "revision": "R",
+      "pdf_page": 95,
+      "related_pdf_pages": [
+        133
+      ],
+      "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d16601/jy997d16601r.pdf",
+      "target_model": "FX3UC",
+      "covered_models": [
+        "FX3UC"
+      ]
+    },
+    "addressing": {
+      "default": 10
+    },
+    "soft_limits": {
+      "M": 8511,
+      "D": 8511
+    },
+    "notes": "Only the cited M/D namespaces are covered. Parameter-dependent extensions, other device classes, special-device meanings, native I/O and runtime behavior remain separately scoped.",
+    "validation": {
+      "status": "source_subset",
+      "device_limits": {
+        "M": 8511,
+        "D": 8511
+      },
+      "radices": {},
+      "sources": [
+        {
+          "manual_id": "jy997d16601r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 95,
+          "related_pdf_pages": [
+            133
+          ],
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d16601/jy997d16601r.pdf",
+          "target_model": "FX3UC",
+          "covered_models": [
+            "FX3UC"
+          ]
+        }
+      ],
+      "bit_prefixes": [
+        "M"
+      ],
+      "word_bit_prefixes": [],
+      "special_access": {},
+      "native_read_prefixes": [
+        "M",
+        "D"
+      ],
+      "native_feedback_prefixes": [],
+      "special_regions": {
+        "M": [
+          [
+            8000,
+            8511
+          ]
+        ],
+        "D": [
+          [
+            8000,
+            8511
+          ]
+        ]
+      },
+      "device_regions": {
+        "M": [
+          [
+            0,
+            7679
+          ],
+          [
+            8000,
+            8511
+          ]
+        ],
+        "D": [
+          [
+            0,
+            7999
+          ],
+          [
+            8000,
+            8511
+          ]
+        ]
+      }
+    }
+  },
+  "FX3U/FX3UC": {
+    "family": "FX",
+    "coverage": "source_subset",
+    "desc": "Source-scoped M/D address subset; native operations and instruction semantics require separate evidence.",
+    "manual_reference": {
+      "manual_id": "jy997d16601r",
+      "manual": "JY997D16601",
+      "revision": "R",
+      "pdf_page": 95,
+      "related_pdf_pages": [
+        133
+      ],
+      "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d16601/jy997d16601r.pdf",
+      "target_model": "FX3U/FX3UC",
+      "covered_models": [
+        "FX3U",
+        "FX3UC"
+      ]
+    },
+    "addressing": {
+      "default": 10
+    },
+    "soft_limits": {
+      "M": 8511,
+      "D": 8511
+    },
+    "notes": "Only the cited M/D namespaces are covered. Parameter-dependent extensions, other device classes, special-device meanings, native I/O and runtime behavior remain separately scoped.",
+    "validation": {
+      "status": "source_subset",
+      "device_limits": {
+        "M": 8511,
+        "D": 8511
+      },
+      "radices": {},
+      "sources": [
+        {
+          "manual_id": "jy997d16601r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 95,
+          "related_pdf_pages": [
+            133
+          ],
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d16601/jy997d16601r.pdf",
+          "target_model": "FX3U/FX3UC",
+          "covered_models": [
+            "FX3U",
+            "FX3UC"
+          ]
+        }
+      ],
+      "bit_prefixes": [
+        "M"
+      ],
+      "word_bit_prefixes": [],
+      "special_access": {},
+      "native_read_prefixes": [
+        "M",
+        "D"
+      ],
+      "native_feedback_prefixes": [],
+      "special_regions": {
+        "M": [
+          [
+            8000,
+            8511
+          ]
+        ],
+        "D": [
+          [
+            8000,
+            8511
+          ]
+        ]
+      },
+      "device_regions": {
+        "M": [
+          [
+            0,
+            7679
+          ],
+          [
+            8000,
+            8511
+          ]
+        ],
+        "D": [
+          [
+            0,
+            7999
+          ],
+          [
+            8000,
+            8511
+          ]
+        ]
+      }
+    }
+  },
+  "L02-P": {
+    "family": "L",
+    "coverage": "source_subset",
+    "desc": "Source-scoped M/D address subset; native operations and instruction semantics require separate evidence.",
+    "manual_reference": {
+      "manual_id": "sh080890engaj",
+      "manual": "SH080890ENG",
+      "revision": "AJ",
+      "pdf_page": 74,
+      "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc/sh080890eng/sh080890engaj.pdf",
+      "target_model": "L02-P",
+      "covered_models": [
+        "L02-P"
+      ]
+    },
+    "addressing": {
+      "default": 10
+    },
+    "soft_limits": {
+      "M": 8191,
+      "D": 12287
+    },
+    "notes": "Only the cited M/D namespaces are covered. Parameter-dependent extensions, other device classes, special-device meanings, native I/O and runtime behavior remain separately scoped.",
+    "validation": {
+      "status": "source_subset",
+      "device_limits": {
+        "M": 8191,
+        "D": 12287
+      },
+      "radices": {},
+      "sources": [
+        {
+          "manual_id": "sh080890engaj",
+          "manual": "SH080890ENG",
+          "revision": "AJ",
+          "pdf_page": 74,
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc/sh080890eng/sh080890engaj.pdf",
+          "target_model": "L02-P",
+          "covered_models": [
+            "L02-P"
+          ]
+        }
+      ],
+      "bit_prefixes": [
+        "M"
+      ],
+      "word_bit_prefixes": [],
+      "special_access": {},
+      "native_read_prefixes": [
+        "M",
+        "D"
+      ],
+      "native_feedback_prefixes": [],
+      "special_regions": {}
+    }
+  },
+  "L02/L02-P": {
+    "family": "L",
+    "coverage": "source_subset",
+    "desc": "Source-scoped M/D address subset; native operations and instruction semantics require separate evidence.",
+    "manual_reference": {
+      "manual_id": "sh080890engaj",
+      "manual": "SH080890ENG",
+      "revision": "AJ",
+      "pdf_page": 74,
+      "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc/sh080890eng/sh080890engaj.pdf",
+      "target_model": "L02/L02-P",
+      "covered_models": [
+        "L02",
+        "L02-P"
+      ]
+    },
+    "addressing": {
+      "default": 10
+    },
+    "soft_limits": {
+      "M": 8191,
+      "D": 12287
+    },
+    "notes": "Only the cited M/D namespaces are covered. Parameter-dependent extensions, other device classes, special-device meanings, native I/O and runtime behavior remain separately scoped.",
+    "validation": {
+      "status": "source_subset",
+      "device_limits": {
+        "M": 8191,
+        "D": 12287
+      },
+      "radices": {},
+      "sources": [
+        {
+          "manual_id": "sh080890engaj",
+          "manual": "SH080890ENG",
+          "revision": "AJ",
+          "pdf_page": 74,
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc/sh080890eng/sh080890engaj.pdf",
+          "target_model": "L02/L02-P",
+          "covered_models": [
+            "L02",
+            "L02-P"
+          ]
+        }
+      ],
+      "bit_prefixes": [
+        "M"
+      ],
+      "word_bit_prefixes": [],
+      "special_access": {},
+      "native_read_prefixes": [
+        "M",
+        "D"
+      ],
+      "native_feedback_prefixes": [],
+      "special_regions": {}
+    }
+  },
+  "L06": {
+    "family": "L",
+    "coverage": "source_subset",
+    "desc": "Source-scoped M/D address subset; native operations and instruction semantics require separate evidence.",
+    "manual_reference": {
+      "manual_id": "sh080890engaj",
+      "manual": "SH080890ENG",
+      "revision": "AJ",
+      "pdf_page": 74,
+      "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc/sh080890eng/sh080890engaj.pdf",
+      "target_model": "L06",
+      "covered_models": [
+        "L06"
+      ]
+    },
+    "addressing": {
+      "default": 10
+    },
+    "soft_limits": {
+      "M": 8191,
+      "D": 12287
+    },
+    "notes": "Only the cited M/D namespaces are covered. Parameter-dependent extensions, other device classes, special-device meanings, native I/O and runtime behavior remain separately scoped.",
+    "validation": {
+      "status": "source_subset",
+      "device_limits": {
+        "M": 8191,
+        "D": 12287
+      },
+      "radices": {},
+      "sources": [
+        {
+          "manual_id": "sh080890engaj",
+          "manual": "SH080890ENG",
+          "revision": "AJ",
+          "pdf_page": 74,
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc/sh080890eng/sh080890engaj.pdf",
+          "target_model": "L06",
+          "covered_models": [
+            "L06"
+          ]
+        }
+      ],
+      "bit_prefixes": [
+        "M"
+      ],
+      "word_bit_prefixes": [],
+      "special_access": {},
+      "native_read_prefixes": [
+        "M",
+        "D"
+      ],
+      "native_feedback_prefixes": [],
+      "special_regions": {}
+    }
+  },
+  "L06-P": {
+    "family": "L",
+    "coverage": "source_subset",
+    "desc": "Source-scoped M/D address subset; native operations and instruction semantics require separate evidence.",
+    "manual_reference": {
+      "manual_id": "sh080890engaj",
+      "manual": "SH080890ENG",
+      "revision": "AJ",
+      "pdf_page": 74,
+      "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc/sh080890eng/sh080890engaj.pdf",
+      "target_model": "L06-P",
+      "covered_models": [
+        "L06-P"
+      ]
+    },
+    "addressing": {
+      "default": 10
+    },
+    "soft_limits": {
+      "M": 8191,
+      "D": 12287
+    },
+    "notes": "Only the cited M/D namespaces are covered. Parameter-dependent extensions, other device classes, special-device meanings, native I/O and runtime behavior remain separately scoped.",
+    "validation": {
+      "status": "source_subset",
+      "device_limits": {
+        "M": 8191,
+        "D": 12287
+      },
+      "radices": {},
+      "sources": [
+        {
+          "manual_id": "sh080890engaj",
+          "manual": "SH080890ENG",
+          "revision": "AJ",
+          "pdf_page": 74,
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc/sh080890eng/sh080890engaj.pdf",
+          "target_model": "L06-P",
+          "covered_models": [
+            "L06-P"
+          ]
+        }
+      ],
+      "bit_prefixes": [
+        "M"
+      ],
+      "word_bit_prefixes": [],
+      "special_access": {},
+      "native_read_prefixes": [
+        "M",
+        "D"
+      ],
+      "native_feedback_prefixes": [],
+      "special_regions": {}
+    }
+  },
+  "L06/L06-P": {
+    "family": "L",
+    "coverage": "source_subset",
+    "desc": "Source-scoped M/D address subset; native operations and instruction semantics require separate evidence.",
+    "manual_reference": {
+      "manual_id": "sh080890engaj",
+      "manual": "SH080890ENG",
+      "revision": "AJ",
+      "pdf_page": 74,
+      "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc/sh080890eng/sh080890engaj.pdf",
+      "target_model": "L06/L06-P",
+      "covered_models": [
+        "L06",
+        "L06-P"
+      ]
+    },
+    "addressing": {
+      "default": 10
+    },
+    "soft_limits": {
+      "M": 8191,
+      "D": 12287
+    },
+    "notes": "Only the cited M/D namespaces are covered. Parameter-dependent extensions, other device classes, special-device meanings, native I/O and runtime behavior remain separately scoped.",
+    "validation": {
+      "status": "source_subset",
+      "device_limits": {
+        "M": 8191,
+        "D": 12287
+      },
+      "radices": {},
+      "sources": [
+        {
+          "manual_id": "sh080890engaj",
+          "manual": "SH080890ENG",
+          "revision": "AJ",
+          "pdf_page": 74,
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc/sh080890eng/sh080890engaj.pdf",
+          "target_model": "L06/L06-P",
+          "covered_models": [
+            "L06",
+            "L06-P"
+          ]
+        }
+      ],
+      "bit_prefixes": [
+        "M"
+      ],
+      "word_bit_prefixes": [],
+      "special_access": {},
+      "native_read_prefixes": [
+        "M",
+        "D"
+      ],
+      "native_feedback_prefixes": [],
+      "special_regions": {}
+    }
+  },
+  "L26": {
+    "family": "L",
+    "coverage": "source_subset",
+    "desc": "Source-scoped M/D address subset; native operations and instruction semantics require separate evidence.",
+    "manual_reference": {
+      "manual_id": "sh080890engaj",
+      "manual": "SH080890ENG",
+      "revision": "AJ",
+      "pdf_page": 74,
+      "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc/sh080890eng/sh080890engaj.pdf",
+      "target_model": "L26",
+      "covered_models": [
+        "L26"
+      ]
+    },
+    "addressing": {
+      "default": 10
+    },
+    "soft_limits": {
+      "M": 8191,
+      "D": 12287
+    },
+    "notes": "Only the cited M/D namespaces are covered. Parameter-dependent extensions, other device classes, special-device meanings, native I/O and runtime behavior remain separately scoped.",
+    "validation": {
+      "status": "source_subset",
+      "device_limits": {
+        "M": 8191,
+        "D": 12287
+      },
+      "radices": {},
+      "sources": [
+        {
+          "manual_id": "sh080890engaj",
+          "manual": "SH080890ENG",
+          "revision": "AJ",
+          "pdf_page": 74,
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc/sh080890eng/sh080890engaj.pdf",
+          "target_model": "L26",
+          "covered_models": [
+            "L26"
+          ]
+        }
+      ],
+      "bit_prefixes": [
+        "M"
+      ],
+      "word_bit_prefixes": [],
+      "special_access": {},
+      "native_read_prefixes": [
+        "M",
+        "D"
+      ],
+      "native_feedback_prefixes": [],
+      "special_regions": {}
+    }
+  },
+  "L26-P": {
+    "family": "L",
+    "coverage": "source_subset",
+    "desc": "Source-scoped M/D address subset; native operations and instruction semantics require separate evidence.",
+    "manual_reference": {
+      "manual_id": "sh080890engaj",
+      "manual": "SH080890ENG",
+      "revision": "AJ",
+      "pdf_page": 74,
+      "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc/sh080890eng/sh080890engaj.pdf",
+      "target_model": "L26-P",
+      "covered_models": [
+        "L26-P"
+      ]
+    },
+    "addressing": {
+      "default": 10
+    },
+    "soft_limits": {
+      "M": 8191,
+      "D": 12287
+    },
+    "notes": "Only the cited M/D namespaces are covered. Parameter-dependent extensions, other device classes, special-device meanings, native I/O and runtime behavior remain separately scoped.",
+    "validation": {
+      "status": "source_subset",
+      "device_limits": {
+        "M": 8191,
+        "D": 12287
+      },
+      "radices": {},
+      "sources": [
+        {
+          "manual_id": "sh080890engaj",
+          "manual": "SH080890ENG",
+          "revision": "AJ",
+          "pdf_page": 74,
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc/sh080890eng/sh080890engaj.pdf",
+          "target_model": "L26-P",
+          "covered_models": [
+            "L26-P"
+          ]
+        }
+      ],
+      "bit_prefixes": [
+        "M"
+      ],
+      "word_bit_prefixes": [],
+      "special_access": {},
+      "native_read_prefixes": [
+        "M",
+        "D"
+      ],
+      "native_feedback_prefixes": [],
+      "special_regions": {}
+    }
+  },
+  "L26/L26-P": {
+    "family": "L",
+    "coverage": "source_subset",
+    "desc": "Source-scoped M/D address subset; native operations and instruction semantics require separate evidence.",
+    "manual_reference": {
+      "manual_id": "sh080890engaj",
+      "manual": "SH080890ENG",
+      "revision": "AJ",
+      "pdf_page": 74,
+      "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc/sh080890eng/sh080890engaj.pdf",
+      "target_model": "L26/L26-P",
+      "covered_models": [
+        "L26",
+        "L26-P"
+      ]
+    },
+    "addressing": {
+      "default": 10
+    },
+    "soft_limits": {
+      "M": 8191,
+      "D": 12287
+    },
+    "notes": "Only the cited M/D namespaces are covered. Parameter-dependent extensions, other device classes, special-device meanings, native I/O and runtime behavior remain separately scoped.",
+    "validation": {
+      "status": "source_subset",
+      "device_limits": {
+        "M": 8191,
+        "D": 12287
+      },
+      "radices": {},
+      "sources": [
+        {
+          "manual_id": "sh080890engaj",
+          "manual": "SH080890ENG",
+          "revision": "AJ",
+          "pdf_page": 74,
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc/sh080890eng/sh080890engaj.pdf",
+          "target_model": "L26/L26-P",
+          "covered_models": [
+            "L26",
+            "L26-P"
+          ]
+        }
+      ],
+      "bit_prefixes": [
+        "M"
+      ],
+      "word_bit_prefixes": [],
+      "special_access": {},
+      "native_read_prefixes": [
+        "M",
+        "D"
+      ],
+      "native_feedback_prefixes": [],
+      "special_regions": {}
+    }
+  },
+  "Q06UDEH": {
+    "family": "Q",
+    "coverage": "source_subset",
+    "desc": "Source-scoped M/D address subset; native operations and instruction semantics require separate evidence.",
+    "manual_reference": {
+      "manual_id": "sh080483engbc",
+      "manual": "SH080483ENG",
+      "revision": "BC",
+      "pdf_page": 179,
+      "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc/sh080483eng/sh080483engbc.pdf",
+      "target_model": "Q06UDEH",
+      "covered_models": [
+        "Q06UDEH"
+      ]
+    },
+    "addressing": {
+      "default": 10
+    },
+    "soft_limits": {
+      "M": 8191,
+      "D": 12287
+    },
+    "notes": "Only the cited M/D namespaces are covered. Parameter-dependent extensions, other device classes, special-device meanings, native I/O and runtime behavior remain separately scoped.",
+    "validation": {
+      "status": "source_subset",
+      "device_limits": {
+        "M": 8191,
+        "D": 12287
+      },
+      "radices": {},
+      "sources": [
+        {
+          "manual_id": "sh080483engbc",
+          "manual": "SH080483ENG",
+          "revision": "BC",
+          "pdf_page": 179,
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc/sh080483eng/sh080483engbc.pdf",
+          "target_model": "Q06UDEH",
+          "covered_models": [
+            "Q06UDEH"
+          ]
+        }
+      ],
+      "bit_prefixes": [
+        "M"
+      ],
+      "word_bit_prefixes": [],
+      "special_access": {},
+      "native_read_prefixes": [
+        "M",
+        "D"
+      ],
+      "native_feedback_prefixes": [],
+      "special_regions": {}
     }
   }
 }

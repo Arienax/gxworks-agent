@@ -1091,13 +1091,15 @@ def _saved_object_names(before_metadata, before_mapping, saved_metadata, saved_m
         if local is not None:
             owner = documents[local].owner_name
             allowed[program], allowed[local] = owner + '.Program.pou', owner + '.Labels.lh'
-    # The original workspace normalizes these built-in library child names on
-    # first save. Accept only the observed role/name pairs; other payload
-    # changes remain separately visible in the caller's save report.
+    # Workspace normalizes built-in child names; the visible IDE can restore
+    # the two witnessed Function aliases. Roles remain exact and callers still
+    # compare complete library payloads rather than normalizing their contents.
     library_names = {
         'UserLibrary.col': ('UserLibraryCollection.col', ('1', '87', '0', '0', '1')),
         'MELSECFunction.lif': ('MELSEC.lif', ('1', '48', '0', '0', '0')),
         'IECFunction.lif': ('IEC.lif', ('1', '64', '0', '0', '0')),
+        'MELSEC.lif': ('MELSECFunction.lif', ('1', '48', '0', '0', '0')),
+        'IEC.lif': ('IECFunction.lif', ('1', '64', '0', '0', '0')),
     }
     for original, (saved, role) in library_names.items():
         if original in before and before[original][1:] == role:

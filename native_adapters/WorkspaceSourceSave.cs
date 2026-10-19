@@ -756,6 +756,42 @@ namespace PlcAi.NativeAdapter
                 if (!selected.Contains(member.Key)) Check("Definition.RemoveMember", Slot<DeleteCall>(workspace, 20)(workspace, member.Value, out code), code);
             if (Children(parent).Count != rows.Length) throw new InvalidOperationException("definition_member_count_differs");
         }
+        void AppendAuthoredProgramTask(ObjectId project, string name, IDictionary<string, object> source,
+                List<TaskInventory> before)
+        {
+            string resourceName = Text(source["resource"]), taskName = Text(source["task"]);
+            var matches = before.FindAll(delegate(TaskInventory row) {
+                return row.ResourceName == resourceName && row.TaskName == taskName;
+            });
+            if (matches.Count != 1) throw new InvalidOperationException("authored_st_program_task_not_unique");
+            TaskInventory selected = matches[0]; int last = 0, code;
+            foreach (TaskInventory task in before)
+                foreach (TaskRow row in task.Rows)
+                    if (String.Equals(row.Name, name, StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidOperationException("authored_st_program_already_registered");
+            foreach (TaskRow row in selected.Rows) last = Math.Max(last, row.Line);
+            int line = NativeRequest.Integer(source["line"]);
+            if (last == Int32.MaxValue || line != last + 1) throw new InvalidOperationException("authored_st_program_task_line_differs");
+            ObjectId created;
+            Check("Workspace.CreateTaskElement", Slot<TaskCreateCall>(workspace, 1976)(workspace, selected.Task, out created, out code), code);
+            Check("Workspace.SetTaskElementName", Slot<IdSetStringCall>(workspace, 60)(workspace, created, BStr(name), out code), code);
+            Check("Workspace.SetTaskElementLine", Slot<IdSetIntegerCall>(workspace, 1628)(workspace, created, line, out code), code);
+            Facts(created, 12, name); Parent(created, selected.Task);
+            List<TaskInventory> after = TaskInventories(project);
+            if (after.Count != before.Count) throw new InvalidOperationException("authored_st_program_changed_task_membership");
+            var selectedAfter = after.FindAll(delegate(TaskInventory row) { return Same(row.Task, selected.Task); });
+            if (selectedAfter.Count != 1) throw new InvalidOperationException("authored_st_program_changed_task_identity");
+            var added = selectedAfter[0].Rows.FindAll(delegate(TaskRow row) {
+                return Same(row.Identity, created) && row.Name == name && row.Line == line;
+            });
+            if (added.Count != 1) throw new InvalidOperationException("authored_st_program_task_append_differs");
+            object afterProjection = TaskProjection(after);
+            selectedAfter[0].Rows.Remove(added[0]);
+            VerifyOldTasks(before, after);
+            Event(new { operation = "Definition.STProgramTaskBinding", before_tasks = TaskProjection(before),
+                after_tasks = afterProjection, name = name, line = line });
+        }
+
         void AuthorDefinition(string root, IDictionary<string, object> request)
         {
             var supplied = request["source"] as IDictionary<string, object>;
@@ -764,23 +800,36 @@ namespace PlcAi.NativeAdapter
             if (operation == "edit_pou_labels") { EditPouLabels(root, request); return; }
             if (operation == "configure_project") { ConfigureProject(root, request); return; }
             if (operation == "remove_empty_program") { RemoveEmptyProgram(root, request); return; }
-            bool structure = operation == "create_structure", edit = operation == "edit_st_fb";
-            if (!structure && !edit && operation != "create_st_fb") throw new ArgumentException("unsupported_definition_operation");
+            bool structure = operation == "create_structure", ordinary = operation == "create_st_program" || operation == "edit_st_program";
+            bool edit = operation == "edit_st_fb" || operation == "edit_st_program";
+            if (!structure && !ordinary && !edit && operation != "create_st_fb") throw new ArgumentException("unsupported_definition_operation");
+            int expectedPouType = ordinary ? 0x1000000 : 0x1000002;
             var names = new List<string> { "cpu", "codepage", "operation", "source_name", "rows", "write_declarations" };
             if (!structure) names.Add("st_text");
             if (edit) { names.Add("before_body"); names.Add("before_rows"); }
+            if (ordinary) {
+                names.Add("programs"); names.Add("tasks");
+                if (edit) names.Add("after_body");
+                else { names.Add("resource"); names.Add("task"); names.Add("line"); }
+            }
             var source = Fields(supplied, names.ToArray()); string name = Text(source["source_name"]);
             PrepareProjectFiles(root); PrepareTemporaryDirectory(Text(request["owner_token"])); Initialize(Text(request["installation"]));
             IntPtr home, ws, project;
             ObjectId id = Open(root, Text(source["cpu"]), NativeRequest.Integer(source["codepage"]), out home, out ws, out project);
             int code; ObjectId owner, body = new ObjectId(), labels = new ObjectId(), collection;
+            List<TaskInventory> originalTasks = null;
+            if (ordinary) {
+                ScopeVerifySources(id, Entries(source["programs"]));
+                originalTasks = TaskInventories(id);
+                VerifyTaskSelection(originalTasks, Entries(source["tasks"]));
+            }
             if (edit)
             {
                 object identity;
                 body = SourceIdentity(id, name, 193, "before-definition-edit", out identity);
                 Check("Definition.GetOwner", Slot<ParentCall>(workspace, 40)(workspace, body, out owner, out code), code);
                 int pouType; Check("Definition.GetPOUType", Slot<IdIntegerCall>(workspace, 1668)(workspace, owner, out pouType, out code), code);
-                if (pouType != 0x1000002 || !Equal(ReadBody(body), Body(source["before_body"]))) throw new InvalidOperationException("selected_st_fb_differs");
+                if (pouType != expectedPouType || !Equal(ReadBody(body), Body(source["before_body"]))) throw new InvalidOperationException("selected_st_owner_or_body_differs");
                 Check("Definition.GetLocalLabels", Slot<ParentCall>(workspace, 1748)(workspace, body, out labels, out code), code);
                 Declarations(body, labels, Entries(source["before_rows"]));
             }
@@ -792,14 +841,20 @@ namespace PlcAi.NativeAdapter
                     int kind; string actual; ObjectFacts(child, out kind, out actual);
                     if (String.Equals(actual, name, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("project_definition_already_exists");
                 }
-                Check("Definition.Create", Slot<CreateSourceCall>(workspace, 1972)(workspace, collection, BStr(name), structure ? 18 : 0x1000002, structure ? (byte)0 : (byte)193, out owner, out code), code);
+                Check("Definition.Create", Slot<CreateSourceCall>(workspace, 1972)(workspace, collection, BStr(name), structure ? 18 : expectedPouType, structure ? (byte)0 : (byte)193, out owner, out code), code);
                 Facts(owner, structure ? 18 : 26, name); Parent(owner, collection);
                 if (!structure)
                 {
                     object identity; body = SourceIdentity(id, name, 193, "created-definition", out identity);
                     Check("Definition.GetLocalLabels", Slot<ParentCall>(workspace, 1748)(workspace, body, out labels, out code), code);
-                    if (Children(labels).Count != 0) throw new InvalidOperationException("created_fb_labels_not_empty");
+                    if (Children(labels).Count != 0) throw new InvalidOperationException("created_st_labels_not_empty");
                 }
+            }
+            if (ordinary) {
+                int actualType; byte language;
+                Check("Definition.GetPOUType", Slot<IdIntegerCall>(workspace, 1668)(workspace, owner, out actualType, out code), code);
+                Check("Definition.GetProgramLanguage", Slot<LanguageCall>(workspace, 1648)(workspace, owner, out language, out code), code);
+                if (actualType != expectedPouType || language != 193) throw new InvalidOperationException("authored_st_program_type_differs");
             }
             if (!(source["write_declarations"] is bool)) throw new ArgumentException("invalid_definition_declaration_selection");
             if ((bool)source["write_declarations"]) AuthoredRows(structure ? owner : labels, Entries(source["rows"]), structure);
@@ -814,6 +869,8 @@ namespace PlcAi.NativeAdapter
                 Array.Copy(previous, previous.Length - 4, replacement, replacement.Length - 4, 4);
                 Array.Copy(BitConverter.GetBytes(replacement.Length), replacement, 4);
                 Array.Copy(BitConverter.GetBytes(payload.Length / 2), 0, replacement, 8, 4);
+                if (ordinary && edit && !Equal(replacement, Body(source["after_body"])))
+                    throw new InvalidOperationException("authored_st_program_body_plan_differs");
                 IntPtr buffer = Marshal.AllocCoTaskMem(replacement.Length);
                 try { Marshal.Copy(replacement, 0, buffer, replacement.Length); Check("Definition.SetSTBody", Slot<WriteBodyCall>(workspace, 1688)(workspace, body, replacement.Length, buffer, out code), code); }
                 finally { Marshal.FreeCoTaskMem(buffer); }
@@ -823,6 +880,23 @@ namespace PlcAi.NativeAdapter
             {
                 Check("Definition.MarkEdited", Slot<IdSetIntegerCall>(workspace, 68)(workspace, changed, 1, out code), code);
                 Check("Definition.MarkCompileChanged", Slot<IdSetIntegerCall>(workspace, 1560)(workspace, changed, 1, out code), code);
+            }
+            if (ordinary) {
+                var inventory = new List<object>();
+                foreach (object item in Entries(source["programs"])) {
+                    var row = new Dictionary<string, object>(Fields(item, "name", "program_kind", "pou_type", "body"));
+                    if (Text(row["name"]) == name) row["body"] = Convert.ToBase64String(ReadBody(body));
+                    inventory.Add(row);
+                }
+                if (!edit) inventory.Add(new Dictionary<string, object>{{"name",name},{"program_kind",193},
+                    {"pou_type",expectedPouType},{"body",Convert.ToBase64String(ReadBody(body))}});
+                ScopeVerifySources(id, inventory.ToArray());
+                if (edit) {
+                    List<TaskInventory> afterTasks = TaskInventories(id);
+                    if (afterTasks.Count != originalTasks.Count) throw new InvalidOperationException("authored_st_edit_changed_task_membership");
+                    VerifyOldTasks(originalTasks, afterTasks);
+                }
+                else AppendAuthoredProgramTask(id, name, source, originalTasks);
             }
             ExportSavedProject(root, id, home, ws, project);
         }

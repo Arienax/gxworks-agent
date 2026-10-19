@@ -24,6 +24,54 @@ from .topology import _terminal_type, validate_typed_connections
 OPERATION = 'edit_fbd_graph'
 
 
+def validate_graph_actions(actions):
+    """Check request syntax without reading a project or resolving identities.
+
+    Nodes, ports and wire handles may be created by earlier engineering steps.
+    Their existence, direction, type and current geometry belong to planning
+    against that step's actual context, after this pure ingress check.
+    """
+    if not isinstance(actions, list) or not 1 <= len(actions) <= 128:
+        raise GXWFormatError('visible graph edit requires 1 to 128 explicit actions')
+    fields = {'rebind_terminal': {'action', 'node', 'symbol'},
+              'delete_terminal': {'action', 'node'}, 'move_node': {'action', 'node', 'x', 'y'},
+              'delete_wire': {'action', 'wire'}, 'add_wire': {'action', 'id', 'from', 'to', 'via'}}
+
+    def text(value):
+        return isinstance(value, str) and bool(value.strip()) and '\0' not in value
+
+    def point(value):
+        return (isinstance(value, list) and len(value) == 2
+                and all(type(v) is int and 0 <= v <= 4096 for v in value))
+
+    def endpoint(value):
+        return isinstance(value, dict) and (
+            set(value) == {'node', 'port'} and text(value['node']) and text(value['port'])
+            or set(value) == {'wire', 'point'} and text(value['wire']) and point(value['point']))
+
+    for action in actions:
+        if not isinstance(action, dict):
+            raise GXWFormatError('visible graph action must be an object')
+        kind = action.get('action')
+        if not isinstance(kind, str) or kind not in fields or set(action) != fields[kind]:
+            raise GXWFormatError('invalid visible graph action fields')
+        if any(not text(action[key]) for key in ('node', 'wire', 'symbol') if key in action):
+            raise GXWFormatError('visible graph identities and symbols must be nonempty text')
+        if kind == 'move_node' and any(type(action[key]) is not int or not 0 <= action[key] <= 4096
+                                       for key in ('x', 'y')):
+            raise GXWFormatError('move_node requires a bounded integer position')
+        if kind == 'add_wire':
+            if not isinstance(action['id'], str) or not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,63}', action['id']):
+                raise GXWFormatError('add_wire needs a segment handle prefix')
+            if not all(endpoint(action[key]) for key in ('from', 'to')):
+                raise GXWFormatError('wire endpoint must name one current port or wire tap')
+            via = action['via']
+            if not isinstance(via, list) or len(via) > 128 or not all(point(p) for p in via):
+                raise GXWFormatError('via must contain bounded explicit grid points')
+            for start, end in zip(via, via[1:]):
+                _segment(start, end)
+
+
 def _membership(program):
     return {r.offset: index for index, (_, records) in enumerate(program.block_records()) for r in records}
 
@@ -289,6 +337,7 @@ def prepare_graph_edit(raw, command, *, device_profile=None):
             or command['operation'] != OPERATION or not isinstance(command['caller'], str)
             or not isinstance(command['actions'], list) or not 1 <= len(command['actions']) <= 128):
         raise GXWFormatError('visible graph edit requires caller and 1 to 128 explicit actions')
+    validate_graph_actions(command['actions'])
     context = read_project_context(raw, command['caller'])
     if command['caller'] != context.program.logical_name:
         raise GXWFormatError('visible graph caller must name the current logical source')
@@ -323,14 +372,7 @@ def prepare_graph_edit(raw, command, *, device_profile=None):
         'initial': initial, 'device_profile': device_profile}
     program = context.program
     for index, action in enumerate(command['actions']):
-        if not isinstance(action, dict):
-            raise GXWFormatError('visible graph action must be an object')
         kind = action.get('action')
-        fields = {'rebind_terminal': {'action', 'node', 'symbol'},
-                  'delete_terminal': {'action', 'node'}, 'move_node': {'action', 'node', 'x', 'y'},
-                  'delete_wire': {'action', 'wire'}, 'add_wire': {'action', 'id', 'from', 'to', 'via'}}
-        if not isinstance(kind, str) or kind not in fields or set(action) != fields[kind]:
-            raise GXWFormatError('invalid visible graph action fields')
         before = _checkpoint(program, node_ids, protected, contracts)
         current_nodes = {identity: node for node in program.nodes for identity in (node_ids[node.offset],)}
         step = {'index': index, 'action': deepcopy(action), 'before': before,

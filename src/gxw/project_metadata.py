@@ -4,6 +4,8 @@ from __future__ import annotations
 import base64
 from collections import defaultdict
 from dataclasses import dataclass, field
+from copy import deepcopy
+from functools import lru_cache
 import hashlib
 import struct
 import re
@@ -194,6 +196,302 @@ _GUI_RANGE_NAMES = {name: ('10T' if name == 'T10' else name)
                     for name in ('D', 'R', 'W', 'T', 'ST', 'C', 'M', 'B', 'P', 'S', 'T10')}
 
 
+def _project_allocation_records(raw: bytes) -> tuple[str, bytes, bytes | None]:
+    """Read one current saved allocation source, without constructing a POU."""
+    from .container_writer import validate_cfb_streams
+    outer = validate_cfb_streams(raw)
+    nested = validate_cfb_streams(outer['_hdb'])
+    mapping = logical_mapping(outer['projectdatalist.xml'])
+    streams = {name: nested[key] for name, key in mapping.items() if key in nested}
+    names = [name for name in streams if name.endswith('.prj')]
+    if len(names) != 1:
+        raise GXWFormatError('project allocation requires one current project metadata source')
+    name, = names
+    return name, streams[name], streams.get('Gppw2.gpj')
+
+
+@lru_cache(maxsize=64)
+def _native_allocation_template(cpu_menu: str) -> dict:
+    from .project_templates import blank_fbd_baseline
+    _, metadata, _ = _project_allocation_records(blank_fbd_baseline(cpu_menu))
+    return {'stored_cpu': read_project_text_context(metadata)['cpu'],
+            'ranges': read_project_system_variables(metadata)['ranges']}
+
+
+def native_allocation_controls(control_profile: str) -> dict:
+    """Static three-language resource schemas, not CPU dispatch evidence.
+
+    A driver selects a schema only after inspecting the actual owned dialog.
+    Grid handles and control IDs are dynamic. Its field bindings come from
+    the current row observations, never template control IDs 14252/14253.
+    """
+    schemas = {
+        'device_range_classic': {'dialog_id': 10002,
+            'devices': {'D': {'selector_id': 14014, 'start_id': 14017, 'end_id': 14020},
+                        'M': {'selector_id': 14043, 'start_id': 14044, 'end_id': 14047}}},
+        'device_range_fx': {'dialog_id': 10003,
+            'devices': {'D': {'selector_id': 14066, 'start_id': 14069, 'end_id': 14072},
+                        'M': {'selector_id': 14094, 'start_id': 14096, 'end_id': 14099}}},
+        'device_range_grid': {'dialog_id': 10004, 'runtime_control_ids': 'dynamic',
+            'grid_roles': {'allocation': {'columns': 8}, 'parameter': {'columns': 3}},
+            'field_columns': {'start': 5, 'end': 6, 'total': 7}},
+    }
+    if not isinstance(control_profile, str) or control_profile not in schemas:
+        raise GXWFormatError('native allocation control profile is unverified')
+    return {'control_profile': control_profile, 'status': 'static_resource_observed',
+            'software_version': '1.635.0.1', **schemas[control_profile]}
+
+
+def _bounded_allocation_grid_rows(rows, columns):
+    """Copy only the explicit bounded MSAA transport, rejecting unknown shapes."""
+    if not isinstance(rows, list) or not 2 <= len(rows) <= 256:
+        raise GXWFormatError('native allocation grid row count is outside the observed bound')
+    for index, row in enumerate(rows):
+        if (not isinstance(row, dict) or set(row) != {'native_row', 'cells'}
+                or type(row['native_row']) is not int or row['native_row'] != index
+                or not isinstance(row['cells'], list) or len(row['cells']) != columns):
+            raise GXWFormatError('native allocation grid rows or columns are incomplete or unordered')
+        for cell in row['cells']:
+            if (not isinstance(cell, dict) or set(cell) != {'name', 'value', 'state'}
+                    or any(not isinstance(cell[key], str) or '\0' in cell[key]
+                           or len(cell[key]) > 4096 for key in ('name', 'value'))
+                    or type(cell['state']) is not int or not 0 <= cell['state'] <= 0xffffffff):
+                raise GXWFormatError('native allocation grid cell text or accessibility state is invalid')
+            try:
+                (cell['name'] + cell['value']).encode('utf-16le')
+            except UnicodeError as error:
+                raise GXWFormatError('native allocation grid has invalid UTF-16 cell text') from error
+    return deepcopy(rows)
+
+
+def _allocation_decimal_pair(first, last, *, total=None):
+    if (not re.fullmatch('[0-9]+', first) or not re.fullmatch('[0-9]+', last)
+            or not 0 <= int(first) <= int(last) < 2**31
+            or total is not None and (not re.fullmatch('[0-9]+', total)
+                                      or int(total) != int(last) - int(first) + 1)):
+        raise GXWFormatError('native allocation range or total is not a consistent decimal interval')
+    return [int(first), int(last)]
+
+
+def read_native_allocation_grid(rows, *, native_ui_language='zh-CN') -> dict:
+    """Resolve the current grid's ordinary D/M rows without checkbox inference.
+
+    Chinese Q03UDV provides the native row witness. Other languages use exact
+    corresponding resource captions and retain their separate runtime status.
+    Uninterpreted cell values and state bits remain in ``grid_rows``.
+    """
+    from .native_locale import ui_text
+    raw = _bounded_allocation_grid_rows(rows, 8)
+    text = lambda key: ui_text('allocation_grid_' + key, native_ui_language)
+    header = ['', '', text('device'), text('digit'), text('assign'), text('range'), text('range'), text('total')]
+    second = ['', '', text('device'), text('digit'), text('selection'), text('start'), text('end'), text('total')]
+    for row, values in zip(raw[:2], (header, second)):
+        if [cell['name'] for cell in row['cells']] != header or [cell['value'] for cell in row['cells']] != values:
+            raise GXWFormatError('native allocation grid has no complete ordered localized headers')
+    group_order = ('word', 'bit', 'pointer', 'timer', 'retentive', 'counter')
+    group_names = {text(key): key for key in group_order}
+    devices = {
+        'word': {'var': {'D', 'W', 'R'}, 'retain': {text(key) for key in ('d_latch', 'w_latch', 'zr_latch')}},
+        'bit': {'var': {'M', 'B'}, 'retain': {text(key) for key in ('l_latch', 'b_latch')}},
+        'pointer': {'var': {'P'}, 'retain': set()},
+        'timer': {'var': {'T'}, 'retain': {text('t_latch')}},
+        'retentive': {'var': {'ST'}, 'retain': {text('st_latch')}},
+        'counter': {'var': {'C'}, 'retain': {text('c_latch')}},
+    }
+    hexadecimal = {'W', 'B', text('w_latch'), text('b_latch')}
+    group, scope, groups, ranges, fields = None, None, [], {}, {}
+    for row in raw[2:]:
+        cells = row['cells']
+        values = [cell['value'] for cell in cells]
+        if [cell['name'] for cell in cells] != header:
+            raise GXWFormatError('native allocation cell captions belong to another column or language')
+        if values[0] in group_names:
+            group = group_names[values[0]]
+            if (len(groups) >= len(group_order) or groups != list(group_order[:len(groups)])
+                    or group != group_order[len(groups)] or any(values[1:])):
+                raise GXWFormatError('native allocation device groups changed order or ownership')
+            groups.append(group)
+            scope = None
+            continue
+        if group is None:
+            raise GXWFormatError('native allocation device row has no current group')
+        if values[0] == text('var'):
+            scope = 'var'
+        elif values[0] == text('var_retain'):
+            scope = 'retain'
+        elif values[0]:
+            raise GXWFormatError('native allocation row has an unknown declaration range group')
+        if (scope is None or values[2] not in devices[group][scope]
+                or values[3] != ('16' if values[2] in hexadecimal else '10')
+                or scope == 'var' and values[1]
+                or scope == 'retain' and values[1] not in ('', text('latch1'), text('latch2'))):
+            raise GXWFormatError('native allocation row has a foreign device, radix or VAR group')
+        device = values[2]
+        if device in ('D', 'M'):
+            if scope != 'var' or values[0] != text('var') or device in fields:
+                raise GXWFormatError('native allocation has no unique ordinary D/M declaration row')
+            ranges[device] = _allocation_decimal_pair(values[5], values[6], total=values[7])
+            fields[device] = [dict(grid_role='allocation', native_row=row['native_row'], native_column=column,
+                                  text=cells[column]['value'], state=cells[column]['state'] & ~0x6)
+                              for column in (5, 6)]
+    if groups != list(group_order) or set(ranges) != {'D', 'M'}:
+        raise GXWFormatError('native allocation grid is incomplete or has no unique ordinary D/M ranges')
+    return {'control_profile': 'device_range_grid', 'coverage': 'observed_D_M_grid',
+            'ranges': ranges, 'raw_fields': fields, 'grid_rows': raw,
+            'selection_status': 'not_observed_in_msaa'}
+
+
+def read_native_allocation_grids(grid_rows, *, native_ui_language='zh-CN') -> dict:
+    """Bind the two current native grid roles and retain every observed cell."""
+    from .native_locale import ui_text
+    if not isinstance(grid_rows, dict) or set(grid_rows) != {'allocation', 'parameter'}:
+        raise GXWFormatError('native allocation requires both current allocation and PLC-parameter grids')
+    result = read_native_allocation_grid(grid_rows['allocation'], native_ui_language=native_ui_language)
+    parameter = _bounded_allocation_grid_rows(grid_rows['parameter'], 3)
+    if len(parameter) != len(result['grid_rows']):
+        raise GXWFormatError('native allocation and parameter grid row counts differ')
+    caption = ui_text('allocation_grid_parameter', native_ui_language)
+    setting = ui_text('allocation_grid_parameter_range', native_ui_language)
+    for row in parameter:
+        if [cell['name'] for cell in row['cells']] != [caption] * 3:
+            raise GXWFormatError('native parameter grid column captions belong to another language')
+    if ([cell['value'] for cell in parameter[0]['cells']] != [caption] * 3
+            or [cell['value'] for cell in parameter[1]['cells']] != [setting] * 3):
+        raise GXWFormatError('native allocation parameter grid has no complete localized headers')
+    parameter_ranges = {}
+    for device, fields in result['raw_fields'].items():
+        row = parameter[fields[0]['native_row']]
+        values = [cell['value'] for cell in row['cells']]
+        if values[1] != ui_text('allocation_grid_separator', native_ui_language):
+            raise GXWFormatError('native allocation parameter range separator is unverified')
+        bounds = _allocation_decimal_pair(values[0], values[2])
+        current = result['ranges'][device]
+        if not bounds[0] <= current[0] <= current[1] <= bounds[1]:
+            raise GXWFormatError('native allocation range exceeds its current PLC-parameter interval')
+        parameter_ranges[device] = bounds
+    result['grid_rows'] = {'allocation': result['grid_rows'], 'parameter': parameter}
+    result['parameter_ranges'] = parameter_ranges
+    return result
+
+
+def native_allocation_grid_state(grid_rows) -> dict:
+    """Ignore only transient selected/focused MSAA state, retaining other bits."""
+    if not isinstance(grid_rows, dict) or set(grid_rows) != {'allocation', 'parameter'}:
+        raise GXWFormatError('native allocation grid state requires both observed grid roles')
+    result = {role: _bounded_allocation_grid_rows(grid_rows[role], columns)
+              for role, columns in (('allocation', 8), ('parameter', 3))}
+    for rows in result.values():
+        for row in rows:
+            for cell in row['cells']:
+                cell['state'] &= ~0x6
+    return result
+
+
+def native_allocation_observation_state(observation) -> dict:
+    """Compare observed setting values without transient native handles.
+
+    The caller separately binds project/process identity. This projection is
+    for the repeated field reads around a dialog or its visible completion.
+    Original raw grid rows remain unchanged on the supplied observation.
+    """
+    if not isinstance(observation, dict):
+        raise GXWFormatError('native allocation observation requires explicit field data')
+    keys = ('allocation_profile', 'control_profile', 'coverage', 'ranges', 'raw_fields',
+            'grid_rows', 'parameter_ranges', 'selection_status')
+    result = {key: deepcopy(observation[key]) for key in keys if key in observation}
+    if 'grid_rows' in result:
+        result['grid_rows'] = native_allocation_grid_state(result['grid_rows'])
+    return result
+
+
+def project_allocation_profile(cpu: str) -> dict:
+    """Describe exact-menu storage evidence separately from native UI evidence.
+
+    Template ranges are observed legal intervals, not device capacity limits.
+    An unverified UI profile does not become supported merely because another
+    CPU uses the same resource or the same saved range record.
+    """
+    from gxworks2.project_profiles import native_project_profile
+    profile = native_project_profile(cpu)
+    if profile is None:
+        return {'allocation_profile': None, 'cpu_menu': None, 'program_supported': None,
+                'status': 'unknown', 'reason': 'unknown_native_cpu_menu',
+                'observed_ranges': {}, 'saved_fields': [], 'native_controls': {}}
+    result = {'allocation_profile': 'gxworks2-1.635-system-variables/' + profile.cpu,
+              'cpu_menu': profile.cpu, 'software_version': '1.635.0.1',
+              'program_supported': profile.program_supported,
+              'status': 'saved_template_observed' if profile.program_supported else 'parameter_only',
+              'saved_fields': list(_GUI_RANGE_NAMES) if profile.program_supported else [],
+              'observed_ranges': {}, 'native_controls': {'status': 'unverified'},
+              'saved_gui_mirror': 'unverified', 'compile_option_ui': 'unverified'}
+    if not profile.program_supported:
+        return result
+    observed = _native_allocation_template(profile.cpu)
+    result.update(stored_cpu=observed['stored_cpu'],
+                  observed_ranges={name: list(pair) for name, pair in observed['ranges'].items()},
+                  source='native_cpu_bound_blank_project_template')
+    if profile.cpu == 'FX3U/FX3UC':
+        result.update(saved_gui_mirror='verified', compile_option_ui='verified', native_ui_evidence_languages=['zh-CN'])
+        result['native_controls'] = {**native_allocation_controls('device_range_fx'), 'status': 'verified',
+            'coverage': 'verified_D_M_controls_only'}
+    elif profile.cpu in ('L02S/L02S-P', 'L02/L02-P', 'L06/L06-P', 'L26/L26-P', 'L26-BT/L26-PBT'):
+        # Separate native GUI save/cold-open witnesses retain all -1 values in
+        # this FX-shaped host section while .prj contains effective L ranges.
+        result['saved_gui_mirror'] = 'inactive_host_values_observed'
+    return result
+
+
+def validate_project_allocation_ranges(edits, *, cpu: str, known_devices=None) -> dict:
+    """Validate exact-target ranges without borrowing another CPU's limits.
+
+    Reviewed device profiles may establish a wider address interval. Otherwise
+    an edit must stay inside that exact menu template's configured interval.
+    This is intentionally narrower than claiming a physical device maximum.
+    The live UI planner separately rejects unobserved disable operations.
+    """
+    profile = project_allocation_profile(cpu)
+    if profile['status'] == 'unknown':
+        raise GXWFormatError('allocation configuration has no known exact native CPU menu')
+    if not profile['program_supported']:
+        raise GXWFormatError('parameter-only native targets have no program allocation ranges')
+    allowed = set(_GUI_RANGE_NAMES) if known_devices is None else set(known_devices)
+    if (not isinstance(edits, dict) or not set(edits) <= allowed
+            or not set(edits) <= _GUI_RANGE_NAMES.keys()):
+        raise GXWFormatError('range changes require known device classes')
+    # Reuse the existing reviewed address catalogue; do not create a second
+    # per-family device limit table for engineering allocation.
+    from plc.validation import SOURCE_DEVICE_PROFILES
+    members = profile['cpu_menu'].split('/')
+    sources = [SOURCE_DEVICE_PROFILES.get(member) for member in members]
+    normalized = {}
+    for device, pair in edits.items():
+        if pair is None:
+            pair = [0xffffffff, 0xffffffff]
+        if (not isinstance(pair, list) or len(pair) != 2 or any(type(v) is not int for v in pair)
+                or not (pair == [0xffffffff, 0xffffffff] or 0 <= pair[0] <= pair[1] < 2**31)):
+            raise GXWFormatError('system variable range requires ordered integer bounds or null')
+        if pair != [0xffffffff, 0xffffffff]:
+            intervals = []
+            observed = profile['observed_ranges'].get(device)
+            if observed and 0 <= observed[0] <= observed[1] < 2**31:
+                intervals.append(tuple(observed))
+            if sources and all(source is not None and device in source['device_limits'] for source in sources):
+                upper = min(source['device_limits'][device] for source in sources)
+                # Allocation must not occupy the source-defined system region.
+                special = [region for source in sources
+                           for region in source.get('special_regions', {}).get(device, [])]
+                upper = min([upper] + [low - 1 for low, _ in special])
+                if upper >= 0:
+                    intervals.append((0, upper))
+            if profile['cpu_menu'] == 'FX3U/FX3UC' and device == 'D':
+                intervals.append((0, 7999))  # Existing exact-menu native D profile.
+            if not any(low <= pair[0] <= pair[1] <= high for low, high in intervals):
+                raise GXWFormatError('allocation range is outside the observed exact CPU interval: '
+                                     + profile['cpu_menu'] + '/' + device)
+        normalized[device] = tuple(pair)
+    return normalized
+
+
 def read_gui_system_variables(raw: bytes | None, *, cpu: str | None = None) -> dict:
     """Read the GUI's separate Option/SystemVariable record, without defaults.
 
@@ -251,6 +549,13 @@ def read_gui_system_variables(raw: bytes | None, *, cpu: str | None = None) -> d
             unresolved.append('BitDevice')
             for name in ('M', 'B'):
                 ranges.pop(name, None)
+    elif cpu is not None:
+        # The common field names do not prove this CPU reads the host section.
+        # The independently saved L witnesses retain all -1 host values while
+        # their actual .prj allocation ranges are enabled. Keep those bytes as
+        # raw evidence; never compare them as an effective compiler profile.
+        ranges = {}
+        unresolved.append('CPUProfile')
     return {'ranges': ranges, 'stored_ranges': stored, 'retained_fields': retained,
             'word_device': values.get('WordDevice'), 'bit_device': values.get('BitDevice'),
             'unverified_selectors': unresolved}
@@ -352,20 +657,25 @@ def gui_application_save_plan(raw: bytes, source: dict) -> bytes | None:
 
 def project_gui_configuration(raw: bytes) -> dict:
     """Report GUI/workspace allocation agreement independently of compilation."""
-    from .container_writer import validate_cfb_streams
-    outer = validate_cfb_streams(raw); nested = validate_cfb_streams(outer['_hdb'])
-    mapping = logical_mapping(outer['projectdatalist.xml'])
-    streams = {name:nested[key] for name,key in mapping.items() if key in nested}
-    metadata = [value for name,value in streams.items() if name.endswith('.prj')]
-    if len(metadata)!=1 or read_project_text_context(metadata[0])['cpu']!='FX3U/FX3UC':
-        return {'status':'not_verified','reason':'GUI allocation profile not observed for this CPU'}
-    workspace = read_project_system_variables(metadata[0])['ranges']
-    gui = read_gui_system_variables(streams.get('Gppw2.gpj'), cpu='FX3U/FX3UC')
+    source_name, metadata, application = _project_allocation_records(raw)
+    cpu = read_project_text_context(metadata)['cpu']
+    profile = project_allocation_profile(cpu)
+    workspace = read_project_system_variables(metadata)['ranges']
+    common = {'allocation_profile': profile['allocation_profile'], 'cpu_menu': profile['cpu_menu'],
+              'workspace_source': source_name, 'workspace_ranges': {name: list(pair) for name, pair in workspace.items()},
+              'gui_mirror_status': profile.get('saved_gui_mirror', 'unverified')}
+    gui = read_gui_system_variables(application, cpu=cpu)
+    if profile.get('saved_gui_mirror') != 'verified':
+        return {**common, 'status': 'not_verified', 'reason': 'GUI allocation profile not observed for this CPU',
+                'source': 'Gppw2.gpj/Option/SystemVariable', 'missing': [], 'differences': {},
+                'word_device': gui['word_device'], 'bit_device': gui['bit_device'],
+                'effective_ranges': {}, 'stored_ranges': {name: list(pair) for name, pair in gui['stored_ranges'].items()},
+                'retained_fields': gui['retained_fields'], 'unverified_selectors': gui['unverified_selectors']}
     missing = sorted(set(workspace)-gui['ranges'].keys())
     differences = {name:{'workspace':list(pair),'gui':list(gui['ranges'][name])}
                    for name,pair in workspace.items() if name in gui['ranges'] and pair!=gui['ranges'][name]
                    and not (pair==(0xffffffff,0xffffffff) and gui['ranges'][name]==(0xfffffffe,0xfffffffe))}
-    return {'status':'missing' if missing else 'not_verified' if gui['unverified_selectors'] else 'differs' if differences else 'matched',
+    return {**common, 'status':'missing' if missing else 'not_verified' if gui['unverified_selectors'] else 'differs' if differences else 'matched',
             'source':'Gppw2.gpj/Option/SystemVariable','missing':missing,'differences':differences,
             'word_device':gui['word_device'],'bit_device':gui['bit_device'],
             'effective_ranges':{name:list(pair) for name,pair in gui['ranges'].items()},
@@ -373,19 +683,46 @@ def project_gui_configuration(raw: bytes) -> dict:
             'retained_fields':gui['retained_fields'], 'unverified_selectors':gui['unverified_selectors']}
 
 
-def native_fbd_pointer_initialization(metadata: bytes, program_kind: int):
+_LIVE_FBD_POINTER_DEFAULTS = {
+    # Exact native P grid and saved defaults; no family/language fallback.
+    ('L02/L02-P', 'en', 932): (2048, 4095),
+    ('L06/L06-P', 'en', 932): (2048, 4095),
+    ('L26/L26-P', 'en', 932): (2048, 4095),
+    ('Q00U', 'en', 932): (256, 511),
+    ('Q03UDV', 'en', 932): (2048, 4095),
+    ('Q03UDV', 'en', 936): (2048, 4095),
+    ('Q06UDEH', 'en', 932): (2048, 4095),
+}
+
+
+def native_fbd_pointer_initialization(metadata: bytes, program_kind: int, *, native_identity=None):
     """Missing P default observed separately in five GX Works2 1.635 L menus.
 
     Original GUI compilation, original Workspace setter/save and cold compile
     controls are frozen in gxw-fbd-ui-entry-20261013.zip/l-pointer-allocation/.
     Configured and partial ranges are preserved. This is not a family rule.
+    Live controls are separately measured per menu, language and code page.
+    The live identity must match the actual stored project code page.
     """
-    cpu = read_project_text_context(metadata)['cpu']
-    if program_kind != 208 or cpu not in ('L02S', 'L02', 'L06', 'L26', 'L26-BT'):
+    text_context = read_project_text_context(metadata)
+    cpu = text_context['cpu']
+    measured = cpu in ('L02S', 'L02', 'L06', 'L26', 'L26-BT')
+    after = (2048, 4095) if measured else None
+    if native_identity is not None:
+        from gxworks2.project_profiles import native_project_profile
+        profile = native_project_profile(cpu)
+        measured = (isinstance(native_identity, dict) and profile is not None
+            and native_identity.get('cpu_menu') == profile.cpu
+            and native_identity.get('software_version') == '1.635.0.1'
+            and type(native_identity.get('project_codepage')) is int
+            and native_identity['project_codepage'] == text_context['codepage'])
+        after = (_LIVE_FBD_POINTER_DEFAULTS.get((profile.cpu,
+            native_identity.get('native_ui_language'),native_identity['project_codepage'])) if measured else None)
+    if program_kind != 208 or not measured or after is None:
         return None
     if read_project_system_variables(metadata)['ranges']['P'] != (0xffffffff, 0xffffffff):
         return None
-    return {'offset': 68, 'before': [-1, -1], 'after': [2048, 4095]}
+    return {'offset': 68, 'before': [-1, -1], 'after': list(after)}
 
 
 def read_project_compile_options(raw: bytes) -> dict:

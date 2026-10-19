@@ -382,12 +382,19 @@ def saved_assignments(raw):
     if 'CGTable.dat' not in streams:
         return {'status': 'unavailable', 'rows': []}
     tables = parse_compiler_tables(streams['CGTable.dat'])
-    encoding = 'cp' + str(config['codepage'])
+    encoding = config['text_encoding']
+    if encoding is None:
+        raise GXWFormatError('saved assignments require the project codepage; host encoding is not a fallback')
     rows = []
     for symbol in compiler_symbols(tables):
         assignment = symbol.assignment
-        rows.append({'source': tables.pou_at(symbol.pou_offset).name_bytes.decode(encoding),
-            'name': symbol.component.name_bytes.decode(encoding), 'status': assignment.status,
+        try:
+            source = tables.pou_at(symbol.pou_offset).name_bytes.decode(encoding)
+            name = symbol.component.name_bytes.decode(encoding)
+        except UnicodeError as error:
+            raise GXWFormatError('saved compiler names are not valid in the project codepage') from error
+        rows.append({'source': source,
+            'name': name, 'status': assignment.status,
             'address': assignment.operand if assignment.device_family is not None else None,
             'iec_address': assignment.iec_address, 'constant_value': assignment.constant_value,
             'role': assignment.role, 'count': assignment.reserved_count})

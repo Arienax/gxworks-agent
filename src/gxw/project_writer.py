@@ -104,6 +104,10 @@ class PreparedProjectWrite:
     def requires_native_save(self):
         if not any(old != new for _, old, new in self.replacements.values()):
             return False
+        if any(isinstance(program, StructuredTextSource) for program in self.programs.values()):
+            # Workspace exports can legitimately omit Project.gd2. An ST body
+            # edit still needs the original native save, regardless of envelope.
+            return True
         if self.outer.get('Project.gd2'):
             return True
         # An imported native export may omit Project.gd2 and still need the
@@ -243,7 +247,7 @@ def prepare_st_project_write(baseline: bytes, logical_name: str, source: Structu
     remain separate operations through the existing workspace adapter.
     """
     outer = validate_cfb_streams(baseline)
-    if not all(name in outer for name in ('_hdb', 'projectdatalist.xml', 'history.xml', 'Project.gd2')):
+    if not all(name in outer for name in ('_hdb', 'projectdatalist.xml', 'history.xml')):
         raise GXWFormatError('ST edit requires an existing native GX Works2 project')
     mapping = logical_mapping(outer['projectdatalist.xml'])
     nested = validate_cfb_streams(outer['_hdb'])

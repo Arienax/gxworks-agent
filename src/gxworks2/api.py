@@ -74,10 +74,10 @@ def import_current_program(
     synchronize_comments=False,
     verify_roundtrip=False,
     save_project=False,
-    pre_import_policy="protected",
+    pre_import_policy="project_file",
     create_project_path=None,
 ):
-    """Validate and import a complete CSV, with pre-import protection by default.
+    """Validate CSV, back up an existing GXW, and import without CSV exports.
 
     This is the only public import operation. UI click/key primitives remain
     internal to an injected automation driver.

@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from shared.paths import resource_path
 
 _AUTHORITY_RESOURCE = "resources/instructions/mitsubishi/instruction_source_authority.json"
-_SOURCE_MANIFEST = "knowledge/sources.json"
+_SOURCE_MANIFEST = "knowledge/runtime/manifest.json"
 
 
 def _manual_catalog():
@@ -17,11 +17,18 @@ def _manual_catalog():
     manuals = payload.get("manuals") if isinstance(payload, Mapping) else None
     if not isinstance(manuals, list):
         raise ValueError("knowledge source manifest has no manuals list")
-    return {
-        str(row.get("id") or "").strip(): row
-        for row in manuals
-        if isinstance(row, Mapping) and str(row.get("id") or "").strip()
-    }
+    result = {}
+    for row in manuals:
+        if not isinstance(row, Mapping):
+            continue
+        identity = str(row.get("manual_id") or row.get("id") or "").strip()
+        if not identity:
+            continue
+        models = row.get("plc_models") or ()
+        if isinstance(models, str):
+            models = [value.strip() for value in models.split(",") if value.strip()]
+        result[identity] = {**row, "plc_models": models}
+    return result
 
 
 @lru_cache(maxsize=1)

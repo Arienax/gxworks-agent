@@ -47,7 +47,7 @@ class NativeProjectProfile:
 
 NATIVE_PROJECT_PROFILES = tuple(
     NativeProjectProfile(cpu, series, cpu not in _PARAMETER_ONLY)
-    for series, cpus in ((('QCPU(Q模式)', 'QCPU (Q mode)'), _Q_CPUS),
+    for series, cpus in ((('QCPU(Q模式)', 'QCPU (Q mode)', 'QCPU(Qモード)'), _Q_CPUS),
                          (('LCPU',), _L_CPUS), (('FXCPU',), _FX_CPUS))
     for cpu in cpus
 )
