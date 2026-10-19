@@ -31,7 +31,8 @@ export function useGenerationResult(job: Job | undefined, retry: number) {
   const validation = metadata?.validation && typeof metadata.validation === "object" && !Array.isArray(metadata.validation)
     ? metadata.validation as Output : undefined;
   const blocked = job?.result?.status === "contract_mismatch" || value?.status === "contract_mismatch" || !!metadata?.contract_mismatch;
-  const needsInput = job?.result?.status === "needs_input" || value?.status === "needs_input";
+  const needsInput = job?.kind === "direct_generation" && job.status === "completed"
+    && (job.result?.status === "needs_input" || value?.status === "needs_input");
   const invalidCandidate = value?.status === "saved_invalid" || validation?.status === "invalid_candidate";
   const unverifiedCandidate = value?.status === "saved_unverified" || validation?.profile === "unavailable_target";
   const proposalId = typeof value?.proposal_id === "string" ? value.proposal_id
@@ -60,6 +61,9 @@ export function GenerationResult({ result, busy, onOpen, onRetry, onRepair, onSp
   const mismatch = result.metadata?.contract_mismatch;
   const detail = mismatch && typeof mismatch === "object" && !Array.isArray(mismatch)
     ? mismatch as Output : undefined;
+  const notes = result.metadata?.generator_notes;
+  const generatorNotes = notes && typeof notes === "object" && !Array.isArray(notes) && notes.source === "generator"
+    ? notes as Output : undefined;
   const freshCsv = result.projectId && result.versionId ? (
     <Button
       disabled={busy}
@@ -98,6 +102,16 @@ export function GenerationResult({ result, busy, onOpen, onRetry, onRepair, onSp
     </> : result.loading ? <p role="status">{t("正在读取生成结果")}</p> : <>
       <p className="error-text" role="alert">{t("暂时无法读取结果，请重试。")}</p>
     </>}
+    {result.versionId && !result.needsInput && generatorNotes && (
+      [["decisions", "实现说明"], ["open_items", "可选调整"]] as const
+    ).map(([key, label]) => {
+      const items = generatorNotes[key];
+      return Array.isArray(items) && items.length > 0 ? <details key={key}>
+        <summary>{t(label)}</summary>
+        <p>{t("来自生成器的说明")}</p>
+        <ul>{items.filter((item): item is string => typeof item === "string").map((item, index) => <li key={index}>{item}</li>)}</ul>
+      </details> : null;
+    })}
     <CapabilityReview metadata={result.metadata} t={t} />
     <Button disabled={busy} onClick={onRetry}>{t("重新读取结果")}</Button>
   </section>;

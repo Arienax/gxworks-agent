@@ -1,8 +1,8 @@
 <h1 align="center">GXWorks Agent</h1>
 
-<h3 align="center">MCP tools and an AI workbench for Mitsubishi PLC engineering.</h3>
+<h3 align="center">MCP engineering tools and an AI workbench for Mitsubishi PLC workflows.</h3>
 
-<p align="center"><strong>Read project context. Build and review programs. Deliver to GX Works2.</strong></p>
+<p align="center"><strong>Read project context · Build and review programs · Drive native GX Works2 engineering and diagnostics</strong></p>
 
 <p align="center">
   <a href="https://github.com/Arienax/gxworks-agent/releases/latest"><img src="https://img.shields.io/github/v/release/Arienax/gxworks-agent?style=flat-square&amp;color=2563eb" alt="Latest release"></a>
@@ -13,109 +13,122 @@
 
 <p align="center"><strong><a href="https://github.com/Arienax/gxworks-agent/releases/latest">Downloads</a> · <a href="#mcp">MCP &amp; Web</a> · <a href="https://github.com/Arienax/gxworks-agent/issues">Issues</a></strong></p>
 
-<p align="center"><a href="#quick-start">Quick start</a> · <a href="#ladder">Ladder</a> · <a href="#st">ST</a> · <a href="#fbd">FBD</a> · <a href="#web">Web</a> · <a href="#diagnostics">Diagnostics</a></p>
+<p align="center"><a href="#quick-start">Quick start</a> · <a href="#ladder">Ladder</a> · <a href="#st">ST</a> · <a href="#fbd">FBD</a> · <a href="#native-session">Native sessions</a> · <a href="#web">Web workbench</a> · <a href="#diagnostics">Diagnostics</a></p>
 
 <p align="center"><a href="README.zh-CN.md">简体中文</a> · <strong>English</strong> · <a href="README.ja.md">日本語</a></p>
 
-GXWorks Agent supports Ladder, Structured Text (ST), and native FBD workflows. It gives external agents project context, CPU-specific instructions, manual evidence, and engineering tools through MCP. Connect through MCP, use your own model, and save versioned engineering artifacts. The default MCP runtime works independently; the Web workbench is optional.
+GXWorks Agent brings together project context, CPU-scoped instruction facts, deterministic static checks, and native GX Works2 operations into a unified engineering toolchain. It supports **Ladder**, **Structured Text (ST)**, and **Function Block Diagram (FBD)** workflows, along with controlled editing and inspection for existing **SFC** projects.
+
+Connect any MCP client—such as Codex, Claude Desktop, or Cursor—to use 42 engineering tools with your own model for planning, generation, live native editing, and verification, while saving versioned engineering artifacts. The standalone MCP server runs independently; the optional **Web workbench** adds browser-based Direct generation, graphical diff review, simulation testing, and operator-approved GX Works2 delivery.
 
 <a name="ladder"></a>
 
-## Ladder: from engineering context to a saved program
+## Ladder: from engineering context to deliverable artifacts
 
 ![Ladder context retrieval, instruction evidence, candidate construction and saved artifacts](resources/assets/ladder-rag-core-demo-en.gif)
 
-An FX3U conveyor example: retrieve context for `WSFL`, `INC`, and `T200`, construct a Ladder candidate, and save it through MCP. Structured instruction facts and manual evidence inform the candidate; the saved version includes Ladder JSON, IR, SVG, ST derived from IR, and GX import CSVs.
+In this FX3U conveyor example, the agent retrieves CPU-specific facts and manual evidence for `WSFL`, `INC`, and `T200`, constructs a Ladder candidate, and commits it through MCP. Python Core validates structure and operands, merges shared conditions, and checks maintainability. Each saved version produces Ladder JSON, PLC IR, SVG diagrams, traceable ST derived from IR, and GX Works2 import CSVs for `MAIN` and device comments. For targeted fixes on an existing version, `read_network` and `patch_program` apply scoped network patches.
 
-The GIF visualizes actual SDK/MCP results and generated artifacts. The assistant constructed the candidate from the returned context; this is not a recording of an embedded model running autonomously.
+The animation renders actual SDK/MCP responses and saved artifacts; the candidate was constructed by an external client from the returned context rather than recorded from an autonomous embedded model.
 
 <a name="st"></a>
 
-## ST: generate and review Structured Text
+## ST: Structured Text generation and native project editing
 
-ST has its own generation workflow in the Web workbench: analyze the requirement, confirm the specification, and generate `program.st` using the selected CPU's instruction context and ST signatures. Preview the candidate, inspect text differences between versions, and save the ST artifact. Ladder programs can also export traceable ST from their PLC IR.
+ST workflows cover both standalone text generation and native `.gxw` project maintenance:
 
-Local ST inspection checks the supported syntax and semantics and reports unsupported constructs. It is a bounded parser, not the GX Works2 compiler; native compilation and PLC behavior remain separate. MCP can provide ST context and existing diagnostics, while `create_program_candidate` currently accepts Ladder candidates.
+- **Standalone generation and review in Web**: Analyze requirements, confirm the specification, and generate `program.st` using the selected CPU's instruction context and ST call signatures. Preview candidates, inspect text diffs across versions, and save ST artifacts. Ladder versions can also export traceable ST from their PLC IR.
+- **Native GXW ST project read/write**: Inspect ordinary ST Programs, local declarations, and task bindings in a saved `.gxw` with `read_st_project`. Import an existing ST project or create and edit ordinary ST Programs bound to an explicit resource and existing task via `create_st_candidate`, or edit ST Programs and ST Function Blocks alongside FBD graphs in a persistent native session.
 
-## What the API provides
-
-- **Project-bound context.** Create or select a project, read its CPU and current program, discover applicable instructions and callable interfaces, and continue from a saved version.
-- **Engineering RAG.** CPU-scoped instruction facts and manual excerpts carry source references. The retrieval architecture combines entity, full-text, and dense/LSA retrieval with rank fusion; structured facts cover known instruction details while residual retrieval supplies supporting evidence.
-- **Candidate editing and artifacts.** Submit Ladder or FBD changes through shared engineering tools. Core checks the supported structure and operands, prepares artifacts, and returns version-bound results. Local saving, native compilation, and behavior verification have separate outcomes.
-- **GX Works2 delivery.** With operator-configured execution consent, import the current Ladder version's MAIN and device comments and receive the native operation result. The optional Web bridge retains workbench review.
-
-Your client or harness supplies the model and planning loop. GXWorks Agent supplies the engineering context, tools, persistence, and operation receipts.
-
-<a name="web"></a>
-
-## Web GUI: inspect and export a program
-
-![Web workbench showing a saved Ladder program, network and device inspection, and the export menu](resources/assets/web-gui-view-deliver-en.gif)
-
-Configure a model API directly in the workbench and use the built-in Direct generation workflow, then inspect program networks, device addresses, and available exports. Direct can reduce external agent orchestration overhead; actual token use depends on the model and task. It shares the engineering context pipeline with MCP, and workbench question-answering can still involve tool loops.
-
-When site facts are missing, each question has its own input. Submit the answers together after completing the required fields; switching panels or reloading the result retains entered answers. Generation uses strict structured output when the endpoint supports it and normalizes unambiguous format differences locally before program validation.
+The local ST checker validates supported syntax and semantics and flags unsupported constructs. It is a bounded static parser, not a replacement for the GX Works2 compiler or PLC runtime verification.
 
 <a name="fbd"></a>
 
-## FBD: edit an existing GXW project
+## FBD: from blank CPU templates to full GXW editing
 
 ![MCP adds fault latching, reset and delayed enable to the first axis of an existing FBD project](resources/assets/fbd-control-logic-demo-en.gif)
 
-Add fault latching, reset, and a 500 ms enable delay to the first axis of Mitsubishi Electric's MotionControl JEC example. The edit preserves existing FB implementations and Axis `IN_OUT` wiring, adds SR/TON logic, and connects the permit to the existing power-control block.
+Above, MCP adds fault latching, reset, and a 500 ms enable delay to the first axis of [Mitsubishi Electric's MotionControl JEC example](https://eu-assets.contentstack.com/v3/assets/blt5412ff9af9aef77f/blt9206f69c182f67c3/634ea5238602a36d8e991e63/MotionControl_JEC_a.zip). The edit preserves existing FB implementations and Axis `IN_OUT` wiring, inserts SR/TON logic, and routes the motion permit into the existing power-control block.
 
-Source: [Mitsubishi Electric MotionControl JEC example](https://eu-assets.contentstack.com/v3/assets/blt5412ff9af9aef77f/blt9206f69c182f67c3/634ea5238602a36d8e991e63/MotionControl_JEC_a.zip).
+Beyond wiring edits on imported files, the FBD module supports end-to-end project authoring:
 
-FBD goes beyond the wiring change in the demo. Generate or edit candidates from a starting project or imported GXW; add, change, or remove objects, connections, declarations, and multiple networks; use project/library FB interfaces and `IN_OUT` parameters; and inspect graphical previews, version differences, and GXW artifacts.
-
-Where the source project supports it, create FBs and Programs. A new Program can be registered in an existing task, a new task, or a new resource. Native saving, compilation, and code checking are separate operations with results tied to the corresponding project version.
+- **Start from templates or imported projects**: 57 CPU-specific blank FBD templates let you start a project directly by CPU model, or import an existing `.gxw` to continue editing.
+- **Parameter-level and geometry-level editing**: Submit high-level `calls` and `arguments` against the schema returned by `get_fbd_catalog`—letting Core expand ports, `IN_OUT` pairs, and routing automatically—or explicitly add, modify, and remove nodes, terminals, orthogonal wires, and multiple networks.
+- **Definitions, user libraries, and task registration**: Read and author project structures, ST/FBD Function Blocks, and global/local declaration tables; import user library definitions from a donor `.gxw` (`read_fbd_libraries` / `import_library`) while keeping caller programs intact; create FBs and Programs where supported by the source project; register Programs to an existing task, new task, or new resource; and configure compiler device-allocation ranges.
+- **Decoupled artifacts and validation**: Every saved version produces `program.gxw`, `fbd.json`, `fbd.svg`, and a write verification report. Local readback verification, native saving, standalone compilation, and code checking run as distinct operations bound to the project version.
 
 <a name="native-session"></a>
 
 ## Persistent native engineering sessions
 
-MCP can continue declaration, ST Program/FB, task and FBD edits in one GX Works2 engineering session, then compile the current source, inspect compiled addresses and save a stage. FBD operations use current-document node and terminal identities. Source edits invalidate earlier compilation and address results; interrupted operations retain a pending receipt for reconciliation.
+With `execute_native_engineering(mode="live")`, an MCP client can drive multi-step edits inside **one continuously open GX Works2 process** across tool calls, without saving and reopening the project between every action:
 
-Native engineering requires GX Works2 1.635.0.1, an interactive Windows desktop and operator-configured execution consent.
+- **Multi-step live authoring**: Sequentially edit global and local label tables, create or update ordinary ST Programs and ST FBs, insert FBD call instances, and rebind terminals, move nodes, or reroute wires using the active document's live node and terminal identities.
+- **In-session compilation and scoped address lookup**: Compile the current source (`compile`) and query compiler-assigned addresses for global declarations, local Program variables, and `Instance.Member` paths via native cross-reference (`show_assignments`). Any subsequent source edit automatically marks earlier compilation and address results `stale`.
+- **Paced execution and safe reconciliation**: Configure step dwell time (`dwell_ms`), single-step execution (`step_mode`), pause (`pause_native_engineering_session`), and resume. The session tracks active edits (`revision`), verified disk saves (`saved_revision`), and committed application versions (`version_revision`) separately. Interrupted or timed-out steps retain an `unconfirmed` receipt and reconcile against actual UI state via `rebind` rather than blindly replaying actions.
+
+Native engineering sessions require an interactive Windows desktop, GX Works2 `1.635.0.1`, and operator-configured execution consent.
+
+<a name="web"></a>
+
+## Web workbench: Direct generation, visual review, and export
+
+![Web workbench showing a saved Ladder program, network and device inspection, and the export menu](resources/assets/web-gui-view-deliver-en.gif)
+
+Configure a model API in the workbench to use the built-in **Direct generation workflow**—analyzing requirements, confirming specifications, and generating programs—then inspect Ladder networks, FBD/SFC graphs, device usage, version diffs, and downloadable artifacts. Direct shares the same engineering context and RAG pipeline as MCP while reducing external agent orchestration overhead; workbench Q&A can still invoke read-only tools as needed.
+
+When process facts are missing, each clarification question appears as an individual input field that preserves entered text across panel switches and reloads until submitted together. Generation uses strict structured output where supported by the endpoint and normalizes unambiguous format differences locally before Core validation.
+
+## What the toolchain provides
+
+- **Project-bound context and live session discovery**: Create or select versioned projects by CPU and language, or call `list_gxworks2_sessions` and `read_gxworks2_snapshot` without an Agent project to inspect a read-only snapshot of a program currently open in GX Works2.
+- **CPU-scoped engineering RAG**: Retrieval combines entity matching, full-text search, and dense/LSA vector retrieval with rank fusion. Structured facts supply exact operand, step-width, and modifier rules for known instructions, while residual retrieval adds manual evidence and project-authored examples without duplicating context.
+- **Deterministic Core validation and versioned artifacts**: Python Core owns PLC domain semantics—building IR, checking operands and timing, verifying FBD topology and declarations, and preparing version-bound artifacts. Local structural acceptance, native compilation, simulator observation, and physical PLC behavior remain strictly separate outcomes.
+- **Controlled GX Works2 delivery**: Under operator-configured approval policies, import the current Ladder version's `MAIN` and device comments into GX Works2, or execute native FBD/ST saves, compilations, and live session steps with version-bound operation receipts.
+
+Your client or harness owns the model and planning loop; GXWorks Agent provides the engineering context, deterministic tools, version persistence, and operation receipts.
 
 <a name="diagnostics"></a>
 
-## Project management, diagnostics, and validation
+## Project management, diagnostics, and simulation
 
-| Feature | Available work |
+| Capability | What you can do |
 | --- | --- |
-| Projects and versions | Create or select a project by CPU and program type, manage requirements and confirmed specifications, review candidates, compare versions, and inspect or export versioned artifacts. |
-| Native diagnostics | Compile and check a GXW that matches the current version. Where location information is available, associate diagnostics with ST lines, declarations, FBD networks, objects, or call instances; retain an unresolved result when the location is ambiguous. |
-| Existing SFC projects | Import an existing SFC project, read its program and graph, edit existing action and transition subprograms, and change supported step action numbers and jump targets. Preview candidates and version differences; creating a complete SFC project from scratch is not supported. |
-| Ladder simulation | Define test plans, device inputs, and expected results; run supported simulation backends; save and review results; and relate tests to requirements. Instruction and CPU support depend on the backend. |
-| Read-only PLC monitoring | With operator approval, read selected devices through a configured MX Component logical station and view values and read records. Revocable permissions are bound to the project version, address range, and expiry; this feature does not write to the PLC. |
+| Projects and versions | Create or select projects by CPU and program type (Ladder / ST / FBD / SFC), manage requirements and confirmed specifications, review candidates, compare versions, and export versioned artifacts. |
+| Live GX read-only snapshots | Discover running GX Works2 windows and take a temporary read-only snapshot (`source_ref`) without creating an Agent project, then read networks and run static analysis. |
+| Native compilation and source-level diagnostics | Compile and check a saved `.gxw` in an isolated workspace, query assigned addresses for declarations and FB instance members (`read_native_device_assignments`), compare saved code channels against fresh compilation (`compare_native_compiled_code`), and map diagnostics or code steps (`locate_native_code_steps`) to ST lines, declarations, FBD networks/nodes, or call instances—retaining `unresolved` when a location is ambiguous. |
+| Existing SFC project editing | Import an existing SFC project, inspect its chart and program structure, edit existing action and transition subprograms, update supported step action numbers and jump targets, and preview candidates and diffs. Creating a complete SFC project from scratch is not supported. |
+| Ladder simulation and live timeline viewer | Run version-bound simulation test plans with device stimuli and assertions; or use `connect_simulator` and `start_simulator_trace` to sample typed signals read-only from a connected GX Simulator2 target and inspect waveforms in the bundled Web timeline viewer (`simulator.html`). Observation performs no unapproved writes and keeps `program_correspondence="unverified"` explicit. |
+| Read-only PLC monitoring | With operator approval, read selected devices through a configured MX Component logical station and review values and read history. Permissions are bound to the project version, address range, and expiry, can be revoked at any time, and never write to the PLC. |
 
 <a name="quick-start"></a>
 
 ## Quick start
 
-On Windows 10/11 x64, download the component you need from the [releases page](https://github.com/Arienax/gxworks-agent/releases/latest). Extract the entire ZIP. The executable packages work independently and require neither Python nor Node.js.
+On Windows 10/11 x64, download the package you need from the [releases page](https://github.com/Arienax/gxworks-agent/releases/latest) and extract the entire ZIP. Both executable packages run standalone and require neither Python nor Node.js.
 
-| Package | Usage | Entry point |
+| Package | Best for | Entry point |
 | --- | --- | --- |
-| `GXWorks-Agent-MCP-windows-x64.zip` | Connect an MCP client such as Codex and use its model | `gxworks-agent-mcp.exe --local` |
-| `GXWorks-Agent-Full-windows-x64.zip` | Web workbench and MCP, with shared runtime resources | `start-web.cmd` / `gxworks-agent-mcp.exe --local` |
+| `GXWorks-Agent-MCP-windows-x64.zip` | Connecting an MCP client (Codex, Claude Desktop, Cursor) and using its model | `gxworks-agent-mcp.exe --local` |
+| `GXWorks-Agent-Full-windows-x64.zip` | Running the Web workbench and MCP with shared runtime resources | `start-web.cmd` / `gxworks-agent-mcp.exe --local` |
 
-The MCP package omits the Web workbench and model SDK while retaining engineering tools, retrieval, templates and the simulator viewer. Full includes both entrypoints; its MCP works independently with `--local`, or connects to a running Web workbench with `--service` to share its project and review flow.
+The lean `MCP` package omits the Web server, model SDK, offline PDF ingestion dependencies, and demo animations, while keeping all 42 engineering tools, RAG retrieval, engineering templates, native helpers, and the simulator timeline viewer. `Full` includes both entrypoints: its MCP server runs independently with `--local`, or connects to a running Web workbench with `--service` to share projects and review flows.
 
 <a name="mcp"></a>
 
-### Independent MCP
+### Standalone MCP
 
-Add a stdio server in your client: use the extracted `gxworks-agent-mcp.exe` as the command and `--local` as its argument. Refresh the connection, call `list_projects`, then select a project or create one with its actual CPU and program type.
+Register a stdio server in your MCP client using the full path to `gxworks-agent-mcp.exe` as the command and `--local` as its argument. Refresh the connection, call `list_projects` to select an existing project or create one with your actual CPU and program type, or call `list_gxworks2_sessions` to inspect an already-open GX Works2 window.
 
-Try: “Create an FX3U Ladder project. Read the generation context and relevant instruction evidence. Count each press of X0, turn on Y0 after three counts, and reset with X1. Save the candidate and show its artifacts and remaining diagnostics.”
+Try a prompt like:
 
-External clients use their own models without running Web. GX import follows configured execution consent. Web is optional when you want to share a project and its review flow.
+> “Create an FX3U Ladder project and read the generation context and relevant instruction evidence first. Count each press of X0, turn on Y0 after 3 counts, and reset with X1. Save the candidate version and show its artifacts and any remaining diagnostics.”
+
+External clients use their own models without starting Web. GX import and native operations follow configured execution consent; add the Web workbench whenever you want shared visual review.
 
 ### Web workbench
 
-Run `start-web.cmd` in the extracted Full directory and choose an engineering workspace folder. Create a project and configure a model API under **Settings → Model → Model API** to generate programs. Viewing existing projects requires no model call. Extract updates into a new directory and retain your separate workspace and personal settings.
+Run `start-web.cmd` in the extracted `Full` directory and choose an engineering workspace folder. Create a project and configure a model service under **Settings → Model → Model API** to generate programs; browsing existing projects, inspecting graphs, and exporting artifacts require no model calls. When updating, extract the new release into a fresh directory—your separate workspace and personal settings remain intact.
 
 ### Run from source
 
@@ -128,24 +141,24 @@ cd gxworks-agent
 .\start-web.cmd
 ```
 
-For MCP-only source use, create `.venv-mcp`, install `requirements/mcp.txt`, and use `gxworks-agent-mcp.cmd --local`. It does not need Node.js.
+For MCP-only source use, create `.venv-mcp`, install `requirements/mcp.txt`, and launch `gxworks-agent-mcp.cmd --local`. Node.js is not required for MCP-only source runs.
 
 ### Engineering templates and knowledge resources
 
-Packages include the FX3U baseline, node and token templates, and 57 CPU-specific blank FBD projects under `gxw/templates/`; their source location is `src/gxw/templates/`. Keep these files when copying the application. Template availability does not establish native compilation or PLC behavior for every CPU.
+Release packages include the FX3U baseline project, node and token-grammar templates, and 57 CPU-specific blank FBD projects under `gxw/templates/` (`src/gxw/templates/` in source). Keep these files intact when copying the application. Template availability does not imply verified native compilation or PLC runtime behavior for every CPU.
 
-Executable packages include the reviewed fact corpus and project-authored examples for RAG. Vendor manuals and original manual-text indexes are excluded. Generated runtime data is separate from the source repository; source users can copy a package's `knowledge/` to `resources/knowledge/` and its `resources/instructions/mitsubishi/` to the matching source directory.
+Executable packages bundle the reviewed runtime fact corpus and project-authored examples for RAG, excluding vendor manual PDFs and raw manual-text indexes. Runtime knowledge data is distributed separately from the source repository; when running from source, you can copy a release package's `knowledge/` into `resources/knowledge/` and its `resources/instructions/mitsubishi/` into the matching source directory.
 
-Native saving, code checking, GX import, and simulation require the corresponding Mitsubishi software locally. Read-only PLC monitoring requires MX Component and a configured logical station. These Mitsubishi applications are not included.
+Native saving, code checking, GX import, and simulation require the corresponding Mitsubishi software installed locally; read-only PLC monitoring requires MX Component and a configured logical station. These Mitsubishi applications are not included.
 
 ## Before operating machinery
 
-Review generated logic against the selected CPU, wiring, motion limits, and operating modes. Back up the target GX project before import, then compile and inspect it in the intended GX Works2 environment before commissioning. Sending to GX Works2 does **not** download a program to a PLC.
+Review all generated logic against the target CPU, field wiring, motion limits, and operating modes. Back up the target GX project before import, then compile and inspect it in the intended GX Works2 environment before commissioning. **Sending a program to GX Works2 updates the project only—it does not download a program to a PLC.**
 
-Emergency stops, guarding, and other safety functions require an independent safety system. Generated application logic and software checks do not replace it. Sanitize diagnostics before sharing; never publish credentials or local session links.
+Emergency stops, safety interlocks, and overtravel protection must be implemented in an independent safety system; generated application logic and software checks do not replace hardware safety. Sanitize diagnostic records before sharing, and never publish API credentials or local session URLs.
 
 ## Guides and license
 
 [Release changes](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Issues](https://github.com/Arienax/gxworks-agent/issues) · [Security](SECURITY.md)
 
-Project-authored Core, Web, MCP and native-adapter source uses [Apache License 2.0](LICENSE); see the [license scope](LICENSE-SCOPE.md) and [third-party notices](THIRD_PARTY_NOTICES.md). Contributors retain their copyright. Previously distributed versions retain their original licenses.
+Project-authored Core, Web, MCP, and native-adapter source code is licensed under the [Apache License 2.0](LICENSE); see the [license scope](LICENSE-SCOPE.md) and [third-party notices](THIRD_PARTY_NOTICES.md) for details. Contributors retain their copyright, and previously distributed releases retain their original licenses.

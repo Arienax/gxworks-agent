@@ -1,5 +1,16 @@
 # Release changes
 
+## 0.3.2 — 2026-10-19
+
+- Direct generation returns a program with implementation notes and optional
+  adjustments. Notes do not block candidate review, opening or export.
+- Input-level facts retain their device addresses across equivalent wording
+  and explicit revisions. Historical clarification answers continue directly
+  into generation with their original project context.
+- Existing compact program responses remain compatible, including providers
+  that omit the two explanation arrays.
+- Updated English, Simplified Chinese and Japanese usage documentation.
+
 ## 0.3.1 — 2026-10-19
 
 - Standalone MCP packaging follows runtime imports and excludes the Web server,

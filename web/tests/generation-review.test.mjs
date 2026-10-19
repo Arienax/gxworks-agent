@@ -7,6 +7,60 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { generationReview } from "../src/features/generationReview.ts";
 import { translate } from "../src/i18n.ts";
+import { clarificationQuestions } from "../src/features/clarificationAnswers.ts";
+
+function resultComponent(reactOverrides = {}) {
+  const path = new URL("../src/features/GenerationResult.tsx", import.meta.url);
+  const code = ts.transpileModule(readFileSync(path, "utf8"), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText;
+  const module = { exports: {} }, require = createRequire(path);
+  new Function("require", "module", "exports", code)(name => {
+    if (name === "react") return { ...require(name), ...reactOverrides };
+    if (name === "../api/client") return { api: () => { throw Error("Unexpected request"); }, freshGxCsvUrl: () => "/export" };
+    if (name === "../components/ui") return { Button: props => createElement("button", props) };
+    if (name === "./CapabilityReview") return { CapabilityReview: () => null };
+    if (name === "./DirectClarification") return { DirectClarification: () => createElement("form", {}, "历史澄清") };
+    if (name === "./clarificationAnswers") return { clarificationQuestions };
+    return require(name);
+  }, module, module.exports);
+  return module.exports;
+}
+
+test("Direct program actions precede collapsible generator notes with no required form", () => {
+  const { GenerationResult } = resultComponent();
+  const markup = renderToStaticMarkup(createElement(GenerationResult, {
+    result: { id: "job", projectId: "project", versionId: "v0001", needsInput: false,
+      metadata: { generator_notes: { source: "generator", decisions: ["已采用内部状态"], open_items: ["需要调整时可以主动修改"] } } },
+    busy: false, onOpen() {}, onRetry() {}, onRepair() {}, onSpec() {}, t: key => key,
+  }));
+  const ordered = ["程序已保存", "查看程序", "重新导出 GX Works2 CSV", "实现说明", "可选调整"];
+  let previous = -1;
+  for (const text of ordered) { const index = markup.indexOf(text); assert.ok(index > previous, text); previous = index; }
+  assert.match(markup, /<details><summary>实现说明<\/summary>/);
+  assert.match(markup, /<details><summary>可选调整<\/summary>/);
+  assert.doesNotMatch(markup, /<form|<input|disabled|<details open/);
+});
+
+test("only completed historical needs_input jobs expose clarification; failure ends loading", () => {
+  const { useGenerationResult, GenerationResult } = resultComponent({
+    useState: () => [{ id: "job", value: { version_id: "v1", generation: {
+      generator_notes: { source: "generator", decisions: ["需要采用内部状态"], open_items: ["建议调整"] },
+    } } }, () => {}], useEffect: () => {},
+  });
+  const job = { id: "job", kind: "direct_generation", project_id: "project", status: "completed" };
+  const result = useGenerationResult(job, 0);
+  assert.equal(result.needsInput, false); assert.equal(result.loading, false); assert.equal(result.versionId, "v1");
+  const failed = useGenerationResult({ ...job, status: "failed", result: null }, 0);
+  assert.equal(failed.loading, false); assert.equal(failed.needsInput, false); assert.equal(failed.id, "");
+  const old = useGenerationResult({ ...job, result: { status: "needs_input" } }, 0);
+  assert.equal(old.needsInput, true);
+  const markup = renderToStaticMarkup(createElement(GenerationResult, {
+    result: { ...old, questions: [{ id: "level", question: "X0电平？" }] }, busy: false,
+    clarification: { answers: {}, onChange() {}, disabled: false }, t: key => key,
+  }));
+  assert.match(markup, /<form>历史澄清<\/form>/);
+});
 
 test("Direct compact header failure exposes the explicit repair action", () => {
   const path = new URL("../src/features/JobFailure.tsx", import.meta.url);

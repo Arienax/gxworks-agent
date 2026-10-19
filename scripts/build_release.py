@@ -27,7 +27,7 @@ def main():
     parser.add_argument('--component', choices=('full', 'web', 'mcp', 'both'), default='both',
                         help='web is a compatibility alias for full; both builds mcp and full')
     parser.add_argument('--skip-frontend', action='store_true')
-    parser.add_argument('--version', default='0.3.1')
+    parser.add_argument('--version', default='0.3.2')
     args = parser.parse_args()
     output = args.output.resolve()
     if output == ROOT or output.is_relative_to(ROOT) or ROOT.is_relative_to(output):
