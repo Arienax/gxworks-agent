@@ -36,6 +36,14 @@ NO 在位=1时导通，NC 在位=0时导通；二者只读位值，不设定初�
 下方谓词是当前绑定的电平事实；active 表示信号用途成立，run_permit 表示停止未生效。未定电平保持未知；edit 时本轮修改优先。边沿与完整工艺逻辑仍按规格实现。
 检查启动可达性、串联条件一致性及停止/故障与计数、状态转移的同扫描优先级。按既有协议输出一份最终程序。"""
 
+DIRECT_EXECUTION_POLICY = """# Direct execution policy
+完整原文和明确答复都是工艺事实来源。结构化事实只是辅助视图，未提取不等于未提供；缺少确认规格不构成生成条件。
+内部地址、指令、数据结构和实现方法由生成器自行决定，可由已知条件推导的参数直接推导。
+用户未要求的额外功能不成为前置条件；真实现场信息不能伪造为已确认事实。
+已有明确确认事实继续继承，本轮明确修订更新对应字段。只输出一份程序及简短的已采用选择和可选调整说明。
+NO 在位=1时导通，NC 在位=0时导通；输入含义取自原文、明确答复和已有电平事实。P 检测0→1，F 检测1→0。
+下方谓词只是已提取的辅助事实；未解析字段仍须结合完整原文理解，不等于用户没有提供。"""
+
 
 def generation_execution_prompt(confirmed_spec, *, evidence_text="", task_type="generate", plc_model=None, raw_request=False):
     """Render one shared materialization policy from the current public snapshot.
@@ -50,9 +58,7 @@ def generation_execution_prompt(confirmed_spec, *, evidence_text="", task_type="
     facts = generation_input_conditions(spec.get("io_bindings"), plc_model=plc_model or spec.get("plc_model") or "FX3U")
     facts["basis"] = "explicit_user_facts" if raw_request else "edit_baseline" if task_type == "edit" else "current_confirmed_bindings"
     facts["retrieved_text_present"] = bool(str(evidence_text or "").strip())
-    policy = GENERATION_EXECUTION_POLICY
-    if raw_request:
-        policy = policy.replace("只实现当前确认规格与所选方案。", "根据完整原文与明确用户事实实现；真实缺参先问必要问题。")
+    policy = DIRECT_EXECUTION_POLICY if raw_request else GENERATION_EXECUTION_POLICY
     from plc.timing import scan_timing_guidance
     timing = scan_timing_guidance(plc_model or spec.get("plc_model") or "FX3U")
     return ("\n\n" + policy + "\n\n" + timing + "\n# Settled input predicates (not a new requirement)\n"
@@ -246,7 +252,7 @@ def build_confirmed_generation_context(
     handoff.update(copy.deepcopy(compiled.provenance_receipt))
     handoff["budget_report"] = copy.deepcopy(compiled.budget_report)
     # This receipt identifies the policy, not a claimed reduction in model tokens.
-    handoff["generation_execution_policy"] = GENERATION_EXECUTION_POLICY_VERSION
+    handoff["generation_execution_policy"] = "direct-program-v1" if raw_request else GENERATION_EXECUTION_POLICY_VERSION
     if raw_request:
         handoff.update(
             mode="direct_generation", raw_requirement=request,
@@ -266,21 +272,35 @@ def build_confirmed_generation_context(
     )
 
 
-def project_direct_user_facts(user_requirement, plc_model, confirmed_spec=None):
+def project_direct_user_facts(user_requirement, plc_model, confirmed_spec=None, *, answers=()):
     """Use only user facts and Core declarations; never manufacture a confirmed plan."""
-    from plc.specification.bindings import extract_declared_bindings, merge_declared_bindings
+    from plc.specification.bindings import (
+        extract_declared_bindings, merge_declared_bindings, apply_direct_answers,
+        discard_superseded_level_parameters,
+    )
     facts = project_confirmed_specification(confirmed_spec)
     declared = extract_declared_bindings(user_requirement, plc_model)
+    for answer in answers:
+        # Each answer is its own address scope. Joining "X0" from one answer
+        # and "low active" from another would manufacture a physical fact.
+        declared.extend(extract_declared_bindings(answer.get("answer", ""), plc_model))
     rows = [*facts.get("io_table", []), *facts.get("io_bindings", []), *declared]
     bindings = merge_declared_bindings(rows, existing=facts.get("io_bindings", []), declared=declared)
     if bindings:
         facts["io_bindings"] = bindings
-        facts["io_table"] = [{"kind": row["kind"], "address": row["address"], "label": row.get("label", "")}
-                             for row in bindings]
+        table = {row["address"]: copy.deepcopy(row) for row in facts.get("io_table", [])}
+        for row in bindings:
+            existing = table.get(row["address"], {})
+            table[row["address"]] = {**existing, "kind": row["kind"], "address": row["address"],
+                                      "label": row.get("label") or existing.get("label", "")}
+        facts["io_table"] = list(table.values())
+    if "parameters" in facts:
+        facts["parameters"] = discard_superseded_level_parameters(
+            facts["parameters"], bindings, {row["address"] for row in declared if "active_level" in row})
     # An empty public fact snapshot is valid for a raw request. The marker is
     # schema metadata, never a selected method or a model-authored user fact.
     facts.setdefault("schema_version", 4)
-    return facts
+    return apply_direct_answers(facts, answers) if answers else facts
 
 
 def build_direct_generation_context(user_requirement, plc_model, *, confirmed_spec=None,

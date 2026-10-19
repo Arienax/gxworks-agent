@@ -33,7 +33,7 @@ _DECLARED_IO_LINE_RE = re.compile(
     re.IGNORECASE,
 )
 _INPUT_QUALIFIER_RE = re.compile(
-    r"[,，(（]\s*(?:按下|未按下|松开|释放|动作|未动作|常开|常闭|常開|常閉|normally\b|active\b)",
+    r"[,，(（]\s*(?:按下|未按下|松开|释放|动作|未动作|[高低]电平有效|常开|常闭|常開|常閉|normally\b|active\b)",
     re.IGNORECASE,
 )
 _DECLARATION_SEPARATOR_RE = re.compile(
@@ -57,6 +57,15 @@ _GROUPED_INPUT_LEVEL_RE = re.compile(
 _ADJACENT_INPUT_DECLARATION_RE = re.compile(
     r"(?<![A-Za-z0-9_/／])(?=X\s*\d+\s*(?:[：:=]|为|是|is\b))", re.I,
 )
+
+
+def _question_is_input_level(text):
+    text = str(text or "")
+    if re.search(r"电平|极性|接线形式|常[开開闭閉]|polarity|normally[ _-]+(?:open|closed)", text, re.I):
+        return True
+    return bool(re.search(r"按下|松开|动作|释放|\b(?:active|inactive)\b", text, re.I)
+                and re.search(r"[01]|ON|OFF|高|低|状态|位值", _DEVICE.sub("", text), re.I)
+                and not re.search(r"秒|时间|延时|次数|数量|duration|delay|count", text, re.I))
 
 
 def _declared_io_value(statement):
@@ -104,7 +113,8 @@ def _declared_io_segments(user_text):
             # assignment is never used as a boundary: that would turn
             # "X0=1启动Y0=1" (control logic) into two wiring declarations.
             boundaries = [match.start() for match in _ADJACENT_INPUT_DECLARATION_RE.finditer(segment)
-                          if match.start() and not segment[:match.start()].rstrip().endswith(("/", "／"))]
+                          if match.start() and not segment[:match.start()].rstrip().endswith(("/", "／"))
+                          and not re.match(r"X\s*\d+\s*=\s*[01](?!\d)", segment[match.start():], re.I)]
             limits = [0, *boundaries, len(segment)]
             separated = [segment[start:end].strip(" \t\r\n,，、")
                          for start, end in zip(limits, limits[1:])]
@@ -214,7 +224,10 @@ def extract_declared_bindings(user_text, plc_model=None):
             continue
         purpose = _INPUT_QUALIFIER_RE.split(raw_value, maxsplit=1)[0].strip()
         label = device_purpose_label(purpose or raw_value)
-        if not label:
+        level_only = raw_value.strip() in {"高电平有效", "低电平有效"}
+        if level_only:
+            label = ""
+        if not label and not level_only:
             continue
         role = canonical_signal_role(label)
         identity = f"declared.{role or kind.casefold()}.{address}"
@@ -229,7 +242,7 @@ def extract_declared_bindings(user_text, plc_model=None):
         if role:
             item["role"] = role
         if kind == "X":
-            item.update(confirmed_input_levels(raw_value))
+            item.update(confirmed_input_levels(raw_value, address=address))
             if level is not None:
                 item.update(active_level=level, inactive_level=1 - level)
         prior = seen.get(identity)
@@ -245,6 +258,26 @@ def extract_declared_bindings(user_text, plc_model=None):
             continue
         seen[identity] = item
         result.append(item)
+    # Level-only statements can qualify an earlier declaration, including when
+    # the device is inside the action phrase. Never infer a purpose from them.
+    for address in dict.fromkeys(canonical_device(m.group()) for m in _DEVICE.finditer(str(user_text or ""))):
+        if not address.startswith("X"):
+            continue
+        if model == "FX3U" and any(char not in "01234567" for char in address[1:]):
+            continue
+        levels = _input_level_evidence(user_text, address=address)
+        if not levels:
+            continue
+        matches = [item for item in result if item["address"] == address]
+        if not matches:
+            matches = [{"binding_id": f"declared.x.{address}", "kind": "X", "address": address,
+                        "label": "", "name": "", "source": "user_request"}]
+            result.extend(matches)
+        for item in matches:
+            if "active_level" in item:
+                levels = levels | {item["active_level"]}
+            active = next(iter(levels)) if len(levels) == 1 else None
+            item.update(active_level=active, inactive_level=1 - active if active is not None else None)
     return result
 
 
@@ -264,11 +297,17 @@ def merge_declared_bindings(rows, existing=(), declared=()):
         if item["address"] in active:
             result[str(item["binding_id"])] = item
 
+    stated_levels = {}
+    for item in declared or ():
+        if isinstance(item, dict) and "active_level" in item:
+            stated_levels.setdefault(canonical_device(item.get("address")), set()).add(item["active_level"])
     for source in (declared or ()):
         if not isinstance(source, dict) or not source.get("binding_id"):
             continue
         item = copy.deepcopy(source)
         item["address"] = canonical_device(str(item.get("address") or "").strip().upper())
+        if len(stated_levels.get(item["address"], ())) > 1:
+            item.update(active_level=None, inactive_level=None)
         if item["address"] not in active:
             continue
         same_role = [
@@ -277,11 +316,16 @@ def merge_declared_bindings(rows, existing=(), declared=()):
             and value.get("role") == item.get("role")
             and value.get("address") == item["address"]
         ]
+        if not same_role:
+            same_role = [key for key, value in result.items()
+                         if value.get("kind") == item.get("kind") and value.get("address") == item["address"]]
         if len(same_role) == 1:
             key = same_role[0]
             merged = result[key]
-            for field in ("active_level", "inactive_level", "label", "name", "source"):
+            for field in ("active_level", "inactive_level", "label", "name", "source", "role"):
                 if field in item:
+                    if field in {"label", "name"} and not item[field]:
+                        continue
                     merged[field] = copy.deepcopy(item[field])
             result[key] = merged
             continue
@@ -412,7 +456,7 @@ def binding_hint(parameter, related=()):
     # explicit input reference identifies the point the user is qualifying;
     # no purpose or input polarity is guessed from the question's wording.
     name = str(parameter.get("name") or parameter.get("question") or "")
-    if re.search(r"极性|polarity|常[开開闭閉]|normally[ _-]+(?:open|closed)", name, re.I):
+    if _question_is_input_level(name):
         address = single_address(name, "X")
         if address is not None:
             identity = identifier or hashlib.sha256(name.encode("utf-8")).hexdigest()[:16]
@@ -432,14 +476,40 @@ def single_address(value, kind=None):
     return address if kind is None or prefix == kind else None
 
 
-def confirmed_input_levels(value):
+def _input_level_evidence(value, *, address=None):
+    """Collect levels in the scope of one address, retaining contradictions."""
+    text = str(value or "").casefold()
+    addresses = {canonical_device(m.group()) for m in _DEVICE.finditer(text)}
+    if address is None and len(addresses) > 1:
+        return set()
+    target = canonical_device(address) if address is not None else next(iter(addresses), None)
+    owner = target if not addresses else None
+    clauses = []
+    for clause in re.split(r"[,，;；。\n]+", text):
+        named = {canonical_device(m.group()) for m in _DEVICE.finditer(clause)}
+        if named:
+            owner = next(iter(named)) if len(named) == 1 else None
+        if owner == target:
+            clauses.append(_DEVICE.sub("", clause))
+    text = ",".join(clauses)
+    return _unscoped_input_levels(text)
+
+
+def confirmed_input_levels(value, *, address=None):
     """Decode a confirmed physical input answer, never options or model notes.
 
     Active/inactive describe the input bit when the signal acts. They are not
     ladder NO/NC contacts. Conflicting statements remain unresolved; this helper
     neither fills an unanswered question nor changes generated logic.
     """
-    text = str(value or "").casefold()
+    levels = _input_level_evidence(value, address=address)
+    if len(levels) != 1:
+        return {}
+    active = next(iter(levels))
+    return {"active_level": active, "inactive_level": 1 - active}
+
+
+def _unscoped_input_levels(text):
     explicit = set()
     # Parse event-level statements for any input, not just a start/stop button.
     # Negative states contribute the inverse level; contradictory statements
@@ -462,6 +532,8 @@ def confirmed_input_levels(value):
         explicit.add(1 - level if match[1] in {"inactive", "released"} else level)
     for match in re.finditer(r"(?<![a-z])(?:active|level)[_ -](high|low)(?![a-z])", text):
         explicit.add(1 if match[1] == "high" else 0)
+    for match in re.finditer(r"([高低])电平有效", text):
+        explicit.add(1 if match[1] == "高" else 0)
     if explicit:
         levels = explicit
     else:
@@ -470,10 +542,84 @@ def confirmed_input_levels(value):
             levels.add(1)
         if re.search(r"常闭|常閉|normally[ _-]+closed|(?<![a-z])nc(?![a-z])", text):
             levels.add(0)
-    if len(levels) != 1:
-        return {}
-    active = levels.pop()
-    return {"active_level": active, "inactive_level": 1 - active}
+    return levels
+
+
+def apply_direct_answers(spec, answers):
+    """Apply only identified legacy answers; unbound Q/A stays in raw context.
+
+    Existing parameter IDs and typed I/O identities own their fields. A single
+    named input can identify a level question, but arbitrary prose cannot.
+    """
+    result = copy.deepcopy(spec)
+    parameters = result.get("parameters", [])
+    updates = []
+    for answer in answers or ():
+        value = answer.get("answer", "")
+        if not isinstance(value, str) or not value.strip():
+            continue
+        prior = [p for p in parameters if p.get("id") == answer.get("id")]
+        item = {**(prior[0] if len(prior) == 1 else {}), **copy.deepcopy(answer),
+                "name": answer.get("question", ""), "value": value, "source": "user"}
+        item.pop("answer", None)
+        hint = binding_hint(item, [*updates, *({"io_binding": b} for b in result.get("io_bindings", []))])
+        if hint:
+            question = str(item["name"])
+            # A scalar bit answers only an unambiguous active/inactive question.
+            # Do not interpret a bare number answering a multi-state question.
+            if _question_is_input_level(question) and re.fullmatch(r"\s*(?:[01]|on|off)\s*", value, re.I):
+                inactive = bool(re.search(r"未按下|未动作|松开|释放|\binactive\b", question, re.I))
+                active_text = re.sub(r"未按下|未动作", "", question)
+                active = bool(re.search(r"按下|动作|有效|\bactive\b", active_text, re.I))
+                if active != inactive:
+                    item["value"] = ("按下为" if active else "释放为") + value
+            item["io_binding"] = hint
+            updates.append(item)
+        elif len(prior) == 1 or (_question_is_address(item["name"]) and single_address(value)):
+            # An exact saved parameter identity is reliable even for a scalar
+            # time/count answer. Model question options are never copied.
+            updates.append(item)
+    rows, remaining, bindings, _ = bind_answers(result.get("io_table", []), updates,
+                                               result.get("io_bindings", []))
+    updated_ids = {p.get("id") for p in updates}
+    result.update(io_table=rows, io_bindings=bindings,
+                  parameters=[p for p in parameters if p.get("id") not in updated_ids] + remaining)
+    # An answer owner may qualify a physical point whose original declaration
+    # had an unknown level. Update that field without discarding its identity.
+    changed_levels = {}
+    for binding in bindings:
+        if binding.get("source_parameter_id") in updated_ids and "active_level" in binding:
+            changed_levels.setdefault(binding["address"], set()).add(binding["active_level"])
+    for address, levels in changed_levels.items():
+        level = next(iter(levels)) if len(levels) == 1 else None
+        for other in bindings:
+            if other.get("address") == address and other.get("kind") == "X":
+                other.update(active_level=level, inactive_level=1-level if level is not None else None)
+                other.pop("value", None)
+    result["parameters"] = discard_superseded_level_parameters(
+        result["parameters"], bindings, changed_levels)
+    row_owners = {row.get("binding_id") for row in rows if row.get("binding_id")}
+    for binding in bindings:
+        if binding.get("row_binding_id") not in row_owners:
+            # Public fact views omit row IDs. Do not invent an owning row that
+            # a subsequent projection would interpret as a deleted identity.
+            binding.pop("row_binding_id", None)
+    return result
+
+
+def discard_superseded_level_parameters(parameters, bindings, revised_addresses):
+    """A revised level replaces its old answer, including a saved unknown value."""
+    result = []
+    for parameter in parameters:
+        hint = binding_hint(parameter)
+        owners = [b for b in bindings if b.get("source_parameter_id") == parameter.get("id")
+                  or hint and b.get("binding_id") == hint["binding_id"]]
+        level_field = bool(confirmed_input_levels(parameter.get("value")) or _question_is_input_level(
+            parameter.get("name") or parameter.get("question")))
+        if level_field and any(b.get("address") in revised_addresses for b in owners):
+            continue
+        result.append(parameter)
+    return result
 
 
 def _question_is_address(name):
