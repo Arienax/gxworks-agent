@@ -2,23 +2,21 @@
 import os
 import sys
 from pathlib import Path
-from PyInstaller.utils.hooks import collect_all
+from PyInstaller.utils.hooks import copy_metadata, get_package_paths
 
 root = Path(SPECPATH).resolve().parents[1]
 sys.path.insert(0, str(root))
 from scripts.runtime_knowledge_resources import runtime_knowledge_data, runtime_instruction_data, runtime_viewer_data
 
 component = os.environ['GX_RELEASE_COMPONENT']
-if component not in {'web', 'mcp'}:
+if component not in {'full', 'mcp'}:
     raise ValueError('Unknown release component')
 resources = Path(os.environ['GX_RELEASE_RESOURCES']).resolve()
 helpers = Path(os.environ['GX_RELEASE_HELPERS']).resolve()
-name = 'GXWorks-Agent-Web' if component == 'web' else 'GXWorks-Agent-MCP'
-entry = 'web_entry.py' if component == 'web' else 'mcp_entry.py'
-executable_name = 'GXWorks-Agent-Web' if component == 'web' else 'gxworks-agent-mcp'
+name = 'GXWorks-Agent-Full' if component == 'full' else 'GXWorks-Agent-MCP'
 
 datas = [
-    (str(root / 'src/gxw/templates'), 'gxw/templates'),
+    (str(resources / 'gxw/templates'), 'gxw/templates'),
     (str(root / 'resources/model_catalog'), 'resources/model_catalog'),
     (str(root / 'resources/locales'), 'resources/locales'),
     (str(root / 'resources/config.default.json'), '.'),
@@ -27,7 +25,8 @@ datas = [
     (str(root / 'resources/instructions/control_runtime.json'), 'resources/instructions'),
 ]
 datas += runtime_knowledge_data(resources) + runtime_instruction_data(resources)
-datas += ([(str(root / 'web/dist'), 'web/dist')] if component == 'web' else runtime_viewer_data(root))
+datas += ([(str(root / 'web/dist'), 'web/dist')] if component == 'full' else runtime_viewer_data(root))
+datas += copy_metadata('haystack-ai')
 for directory, executable in (
     ('workspace-adapter', 'PlcAi.WorkspaceSourceSave.exe'),
     ('native-active', 'PlcAi.ActiveDocument.exe'),
@@ -39,37 +38,50 @@ for directory, executable in (
         raise FileNotFoundError(source)
     datas.append((str(source), directory))
 
-hiddenimports = []
-for source in (root / 'src').rglob('*.py'):
-    parts = source.relative_to(root / 'src').with_suffix('').parts
-    module = '.'.join(parts[:-1] if parts[-1] == '__init__' else parts)
-    if module and not (component == 'mcp' and module.startswith('integrations.web')):
-        hiddenimports.append(module)
-hiddenimports += [
-    'openai', 'openai._client', 'numpy', 'pythoncom', 'pywinauto',
+# Let Analysis follow the entry's imports. Collecting every application/Haystack
+# module also ships offline PDF ingestion, optional integrations and model SDKs.
+# Only imports resolved dynamically at runtime need explicit roots here.
+hiddenimports = [
+    'pythoncom', 'pywinauto',
     'pywinauto.controls.uia_controls', 'comtypes.client', 'win32com.client',
     'anyio._backends._asyncio',
 ]
-if component == 'web':
-    hiddenimports += ['uvicorn.logging', 'uvicorn.loops.asyncio',
-        'uvicorn.protocols.http.h11_impl', 'uvicorn.lifespan.on']
-binaries = []
-for package in ('pydantic', 'pydantic_core', 'annotated_types', 'typing_inspection',
-                'jiter', 'haystack', 'haystack_experimental', 'lazy_imports', 'docstring_parser'):
-    package_datas, package_binaries, package_hidden = collect_all(package, on_error='warn once')
-    datas += package_datas
-    binaries += package_binaries
-    hiddenimports += package_hidden
 
-a = Analysis([str(root / 'scripts' / entry)], pathex=[str(root / 'src')],
-    binaries=binaries, datas=datas, hiddenimports=hiddenimports,
-    hookspath=[], hooksconfig={}, runtime_hooks=[],
-    excludes=['PyQt5', 'PyQt6', 'PySide2', 'PySide6', 'tkinter', 'mcp.cli'] +
-             (['integrations.web', 'fastapi', 'uvicorn'] if component == 'mcp' else []),
-    noarchive=False, optimize=1)
-pyz = PYZ(a.pure)
-exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name=executable_name,
-    debug=False, bootloader_ignore_signals=False, strip=False, upx=False,
-    console=True, disable_windowed_traceback=False, contents_directory='.',
-    icon=[str(root / 'resources/app.ico')])
-coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name=name)
+# Haystack's lazy package exports contain TYPE_CHECKING imports of every
+# optional component. Our retrieval boundary uses only MetadataRouter; prevent
+# those type-only imports from pulling PDF/model integrations into either build.
+haystack_components = Path(get_package_paths('haystack')[1]) / 'components'
+unused_components = [
+    'haystack.components.' + path.stem for path in haystack_components.iterdir()
+    if path.name not in {'__init__.py', '__pycache__', 'routers'}
+    and (path.is_dir() or path.suffix == '.py')
+] + [
+    'haystack.components.routers.' + path.stem
+    for path in (haystack_components / 'routers').glob('*.py')
+    if path.name not in {'__init__.py', 'metadata_router.py'}
+]
+
+def freeze(entry, executable_name, *, web=False):
+    dynamic_imports = hiddenimports + (['uvicorn.logging', 'uvicorn.loops.asyncio',
+        'uvicorn.protocols.http.h11_impl', 'uvicorn.lifespan.on'] if web else [])
+    a = Analysis([str(root / 'scripts' / entry)], pathex=[str(root / 'src')],
+        binaries=[], datas=datas, hiddenimports=dynamic_imports,
+        hookspath=[], hooksconfig={}, runtime_hooks=[],
+        excludes=unused_components + ['PyQt5', 'PyQt6', 'PySide2', 'PySide6', 'tkinter', 'mcp.cli',
+                 'pytest', '_pytest', 'IPython'] +
+                 ([] if web else ['integrations.web', 'fastapi', 'uvicorn', 'openai', 'jiter']),
+        noarchive=False, optimize=1)
+    pyz = PYZ(a.pure)
+    exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name=executable_name,
+        debug=False, bootloader_ignore_signals=False, strip=False, upx=False,
+        console=True, disable_windowed_traceback=False, contents_directory='.',
+        icon=[str(root / 'resources/app.ico')])
+    return exe, a.binaries, a.datas
+
+
+collected = list(freeze('mcp_entry.py', 'gxworks-agent-mcp'))
+if component == 'full':
+    collected.extend(freeze('web_entry.py', 'GXWorks-Agent-Web', web=True))
+# Both entrypoints share DLLs, templates, knowledge and frontend assets in one
+# onedir distribution. No nested copy of the standalone MCP distribution.
+coll = COLLECT(*collected, strip=False, upx=False, name=name)

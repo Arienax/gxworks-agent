@@ -65,7 +65,10 @@ try {
     $releaseExecutable = Join-Path $applicationRoot "GXWorks-Agent-Web.exe"
     $sourcePython = Join-Path $applicationRoot ".venv\Scripts\python.exe"
     $sourceEntry = Join-Path $applicationRoot "src\integrations\web\__main__.py"
-    $builtPackageExecutable = Join-Path $applicationRoot "dist\GXWorks-Agent-Web\GXWorks-Agent-Web.exe"
+    $builtPackageExecutable = Join-Path $applicationRoot "dist\GXWorks-Agent-Full\GXWorks-Agent-Web.exe"
+    if (-not (Test-Path -LiteralPath $builtPackageExecutable -PathType Leaf)) {
+        $builtPackageExecutable = Join-Path $applicationRoot "dist\GXWorks-Agent-Web\GXWorks-Agent-Web.exe"
+    }
     $hasSourceRuntime = Test-Path -LiteralPath $sourcePython -PathType Leaf
     $isSourceCheckout = Test-Path -LiteralPath $sourceEntry -PathType Leaf
     $hasReleaseExecutable = Test-Path -LiteralPath $releaseExecutable -PathType Leaf

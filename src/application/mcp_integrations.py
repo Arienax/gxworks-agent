@@ -40,7 +40,7 @@ def launcher_invocation() -> list[str]:
             path = Path(configured).expanduser().resolve()
             if path.name.lower() == "gxworks-agent-mcp.exe" and path.is_file():
                 return [str(path)]
-        raise MCPIntegrationError("MCP 是独立下载包；如需桥接，请安装 MCP 并将 GXWORKS_MCP_EXE 指向 gxworks-agent-mcp.exe 后重启 Web。")
+        raise MCPIntegrationError("未找到 MCP 启动器；请完整解压 Full 包，或安装 MCP 独立下载包并将 GXWORKS_MCP_EXE 指向 gxworks-agent-mcp.exe 后重启 Web。")
     script = _root() / "scripts" / "mcp_entry.py"
     if not script.is_file():
         raise MCPIntegrationError("源码 MCP launcher 不完整。")

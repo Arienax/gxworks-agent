@@ -1,5 +1,14 @@
 # Release changes
 
+## 0.3.1 — 2026-10-19
+
+- Standalone MCP packaging follows runtime imports and excludes the Web server,
+  model SDK, offline PDF ingestion and demo animations. Engineering templates,
+  reviewed retrieval resources and the simulator viewer remain included.
+- Full replaces the Web-only package and includes Web and MCP executables with
+  shared resources. Its MCP supports independent and Web service modes.
+- Release builds verify both staged directories and extracted final ZIPs.
+
 ## 0.3.0 — 2026-10-19
 
 - Persistent native engineering sessions can continue across MCP calls, with

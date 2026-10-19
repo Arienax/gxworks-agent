@@ -14,16 +14,22 @@ def stage(package: Path, component: str):
                  'README.md', 'README.zh-CN.md', 'README.ja.md', 'CHANGELOG.md',
                  'CONTRIBUTING.md', 'SECURITY.md'):
         shutil.copyfile(ROOT / name, package / name)
-    assets = package / 'resources/assets'
-    assets.mkdir(parents=True, exist_ok=True)
-    for source in (ROOT / 'resources/assets').glob('*.gif'):
-        shutil.copyfile(source, assets / source.name)
-    if component == 'web':
+    if component == 'full':
+        assets = package / 'resources/assets'
+        assets.mkdir(parents=True, exist_ok=True)
+        for source in (ROOT / 'resources/assets').glob('*.gif'):
+            shutil.copyfile(source, assets / source.name)
         shutil.copyfile(ROOT / 'start-web.cmd', package / 'start-web.cmd')
         (package / 'scripts').mkdir(exist_ok=True)
         shutil.copyfile(ROOT / 'scripts/start_web.ps1', package / 'scripts/start_web.ps1')
     else:
-        shutil.copyfile(ROOT / 'gxworks-agent-mcp.cmd', package / 'gxworks-agent-mcp.cmd')
+        # Keep README demos usable without shipping their animation payloads.
+        for name in ('README.md', 'README.zh-CN.md', 'README.ja.md'):
+            path = package / name
+            path.write_text(path.read_text(encoding='utf-8').replace(
+                '(resources/assets/', '(https://raw.githubusercontent.com/Arienax/gxworks-agent/main/resources/assets/'),
+                encoding='utf-8')
+    shutil.copyfile(ROOT / 'gxworks-agent-mcp.cmd', package / 'gxworks-agent-mcp.cmd')
     output = package / 'THIRD_PARTY_LICENSES'
     output.mkdir(exist_ok=True)
     index = ['# Included dependency licenses', '']

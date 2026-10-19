@@ -99,7 +99,9 @@ On Windows 10/11 x64, download the component you need from the [releases page](h
 | Package | Usage | Entry point |
 | --- | --- | --- |
 | `GXWorks-Agent-MCP-windows-x64.zip` | Connect an MCP client such as Codex and use its model | `gxworks-agent-mcp.exe --local` |
-| `GXWorks-Agent-Web-windows-x64.zip` | Generate, edit, and manage projects in a browser | `start-web.cmd` |
+| `GXWorks-Agent-Full-windows-x64.zip` | Web workbench and MCP, with shared runtime resources | `start-web.cmd` / `gxworks-agent-mcp.exe --local` |
+
+The MCP package omits the Web workbench and model SDK while retaining engineering tools, retrieval, templates and the simulator viewer. Full includes both entrypoints; its MCP works independently with `--local`, or connects to a running Web workbench with `--service` to share its project and review flow.
 
 <a name="mcp"></a>
 
@@ -113,7 +115,7 @@ External clients use their own models without running Web. GX import follows con
 
 ### Web workbench
 
-Run `start-web.cmd` in the extracted Web directory and choose an engineering workspace folder. Create a project and configure a model API under **Settings → Model → Model API** to generate programs. Viewing existing projects requires no model call. Extract updates into a new directory and retain your separate workspace and personal settings.
+Run `start-web.cmd` in the extracted Full directory and choose an engineering workspace folder. Create a project and configure a model API under **Settings → Model → Model API** to generate programs. Viewing existing projects requires no model call. Extract updates into a new directory and retain your separate workspace and personal settings.
 
 ### Run from source
 

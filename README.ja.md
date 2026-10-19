@@ -99,7 +99,9 @@ Windows 10/11 x64 で[リリースページ](https://github.com/Arienax/gxworks-
 | パッケージ | 用途 | 起動入口 |
 | --- | --- | --- |
 | `GXWorks-Agent-MCP-windows-x64.zip` | Codex などの MCP クライアントに接続し、そのモデルを使用 | `gxworks-agent-mcp.exe --local` |
-| `GXWorks-Agent-Web-windows-x64.zip` | ブラウザーでプログラムの生成・編集、プロジェクト管理 | `start-web.cmd` |
+| `GXWorks-Agent-Full-windows-x64.zip` | Web ワークベンチと MCP。実行リソースを共有 | `start-web.cmd` / `gxworks-agent-mcp.exe --local` |
+
+MCP パッケージは Web ワークベンチとモデル SDK を含まず、エンジニアリングツール、検索、テンプレート、シミュレーター表示を保持します。Full は両方の起動入口を含みます。MCP は `--local` で単独動作し、`--service` で起動中の Web に接続するとプロジェクトとレビューフローを共有できます。
 
 <a name="mcp"></a>
 
@@ -113,7 +115,7 @@ Windows 10/11 x64 で[リリースページ](https://github.com/Arienax/gxworks-
 
 ### Webワークベンチ
 
-展開した Web ディレクトリの `start-web.cmd` を実行し、ワークスペースを選択してください。プロジェクトを作成し、**Settings → Model → Model API** でモデル API を設定するとプログラムを生成できます。既存プロジェクトの閲覧にはモデル呼び出しは不要です。更新版は新しいディレクトリに展開し、別に保存したワークスペースと個人設定を保持してください。
+展開した Full ディレクトリの `start-web.cmd` を実行し、ワークスペースを選択してください。プロジェクトを作成し、**Settings → Model → Model API** でモデル API を設定するとプログラムを生成できます。既存プロジェクトの閲覧にはモデル呼び出しは不要です。更新版は新しいディレクトリに展開し、別に保存したワークスペースと個人設定を保持してください。
 
 ### ソースから実行
 

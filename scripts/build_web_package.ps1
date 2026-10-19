@@ -6,5 +6,5 @@ param(
 $ErrorActionPreference = "Stop"
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 if ([string]::IsNullOrWhiteSpace($ResourceRoot)) { $ResourceRoot = $repositoryRoot }
-& $Python (Join-Path $PSScriptRoot "build_release.py") --output $OutputDirectory --resource-root $ResourceRoot
+& $Python (Join-Path $PSScriptRoot "build_release.py") --component full --output $OutputDirectory --resource-root $ResourceRoot
 if ($LASTEXITCODE -ne 0) { throw "Executable package build failed." }

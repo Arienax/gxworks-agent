@@ -27,6 +27,14 @@ def audit(package, component):
     for name in required:
         assert (package / name).is_file(), name
     assert "Apache License" in (package / "LICENSE").read_text(encoding="utf-8")[:500]
+    internal_template_keys = {'source_evidence', 'evidence', 'float32_evidence',
+                              'dll_sha256', 'instruction_lookup_rva', 'instruction_text_rva', 'operand_text_rva'}
+    for path in (package / 'gxw/templates').glob('*.json'):
+        assert not internal_template_keys.intersection(json.loads(path.read_text(encoding='utf-8'))), path
+    widths = json.loads((package / 'resources/instructions/mitsubishi/fx3u_step_widths.json').read_text(encoding='utf-8'))
+    assert 'description' not in widths['step_width_profile']
+    assert all(row.get('evidence') in {None, 'native encoding observation'} for row in
+               (*widths['step_width_profile'].get('rules', []), *widths['step_width_profile'].get('exact_forms', [])))
     for path in package.rglob("*"):
         if path.is_file():
             assert not path.is_symlink(), path
@@ -37,13 +45,28 @@ def audit(package, component):
                             ("hardware-reader", "PlcAi.HardwareReader.exe"),
                             ("simulator-gateway", "PlcAi.GxSimulator2Gateway.exe")):
         assert (package / directory / name).is_file()
-    exe = package / ("GXWorks-Agent-Web.exe" if component == "web" else "gxworks-agent-mcp.exe")
+    from PyInstaller.archive.readers import CArchiveReader
+    mcp_exe = package / "gxworks-agent-mcp.exe"
+    assert mcp_exe.is_file()
+    assert (package / "gxworks-agent-mcp.cmd").is_file()
+    modules = set(CArchiveReader(str(mcp_exe)).open_embedded_archive('PYZ.pyz').toc)
+    forbidden = {'openai', 'jiter', 'fastapi', 'uvicorn', 'pdfplumber', 'pdfminer', 'pypdfium2',
+                 'haystack_experimental', 'PyQt5', 'PyQt6', 'PySide2', 'PySide6', 'pytest', '_pytest', 'IPython'}
+    unexpected = {name.split('.')[0] for name in modules} & forbidden
+    assert not unexpected, 'Non-runtime MCP dependencies: ' + repr(sorted(unexpected))
+    assert 'integrations.web' not in modules
+    assert 'haystack.components.routers.metadata_router' in modules
+    exe = package / ("GXWorks-Agent-Web.exe" if component == "full" else "gxworks-agent-mcp.exe")
     assert exe.is_file()
     if component == "mcp":
         assert not (package / "web/dist/index.html").exists()
+        assert not (package / "GXWorks-Agent-Web.exe").exists()
+        assert not (package / "resources/assets").exists()
         assert (package / "web/dist/simulator.html").is_file()
     else:
         assert (package / "start-web.cmd").is_file()
+        assert (package / "web/dist/index.html").is_file()
+        assert (package / "web/dist/simulator.html").is_file()
     return exe
 
 
@@ -64,6 +87,9 @@ def smoke_mcp(exe, scratch):
     env = environment(scratch)
     result = subprocess.run([str(exe), "--help"], cwd=scratch, env=env, capture_output=True, timeout=30)
     assert result.returncode == 0 and not result.stdout and URL.encode() in result.stderr
+    wrapper = subprocess.run([str(exe.with_suffix('.cmd')), "--help"], cwd=scratch,
+                             env=env, capture_output=True, timeout=30)
+    assert wrapper.returncode == 0 and not wrapper.stdout and URL.encode() in wrapper.stderr
     params = StdioServerParameters(command=str(exe), args=["--local", "--workspace", str(scratch / "workspace"),
                                   "--state-dir", str(scratch / "state")], cwd=scratch, env=env)
     async def exercise():
@@ -141,8 +167,14 @@ def smoke_web(exe, scratch):
             assert json.load(opener.open(request))["authenticated"]
             assert json.load(opener.open(origin + "/api/projects")) == {"projects": []}
             assert isinstance(json.load(opener.open(origin + "/api/capabilities")), dict)
+            bridge = subprocess.run([str(exe.with_name('gxworks-agent-mcp.exe')), '--service',
+                '--service-url', origin, '--check'], cwd=scratch, env=env, capture_output=True, timeout=30)
+            assert bridge.returncode == 0, bridge.stderr.decode(errors='replace')
+            bridge_status = json.loads(bridge.stdout)
+            assert bridge_status['ok'] and bridge_status['tool_count'] > 0
             assert not workspace.exists()
-            return {"http_started": True, "login": True, "assets": len(assets), "github_link": True, "core_and_knowledge": True}
+            return {"http_started": True, "login": True, "assets": len(assets), "github_link": True,
+                    "core_and_knowledge": True, "mcp_service_bridge": True}
         finally:
             process.terminate()
             try: process.wait(timeout=8)
@@ -151,10 +183,18 @@ def smoke_web(exe, scratch):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("component", choices=("web", "mcp"))
+    parser.add_argument("component", choices=("full", "web", "mcp"))
     parser.add_argument("package", type=Path)
     args = parser.parse_args()
-    exe = audit(args.package.resolve(), args.component)
+    component = 'full' if args.component == 'web' else args.component
+    exe = audit(args.package.resolve(), component)
     with tempfile.TemporaryDirectory(prefix="gx-release-smoke-") as directory:
-        result = (smoke_web if args.component == "web" else smoke_mcp)(exe, Path(directory))
-    print(json.dumps({"component": args.component, "package_audit": True, **result}))
+        scratch = Path(directory)
+        mcp_state = scratch / 'mcp'
+        mcp_state.mkdir()
+        result = {'mcp': smoke_mcp(exe.with_name('gxworks-agent-mcp.exe'), mcp_state)}
+        if component == 'full':
+            web_state = scratch / 'web'
+            web_state.mkdir()
+            result['web'] = smoke_web(exe, web_state)
+    print(json.dumps({"component": component, "package_audit": True, **result}))

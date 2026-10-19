@@ -99,7 +99,9 @@ MCP 可以在同一 GX Works2 工程会话中分步修改声明、ST Program／F
 | 发布包 | 使用方式 | 启动入口 |
 | --- | --- | --- |
 | `GXWorks-Agent-MCP-windows-x64.zip` | 接入 Codex 等 MCP 客户端，使用客户端的模型 | `gxworks-agent-mcp.exe --local` |
-| `GXWorks-Agent-Web-windows-x64.zip` | 通过浏览器生成、编辑和管理工程 | `start-web.cmd` |
+| `GXWorks-Agent-Full-windows-x64.zip` | Web 工作台与 MCP，共用运行资源 | `start-web.cmd` / `gxworks-agent-mcp.exe --local` |
+
+MCP 精简包不含 Web 工作台和模型 SDK，保留工程工具、检索、工程模板与仿真查看器。Full 包内置两个入口：MCP 可用 `--local` 独立运行，也可用 `--service` 连接已启动的 Web，共用工程与审阅流程。
 
 <a name="mcp"></a>
 
