@@ -9,6 +9,7 @@ import hashlib
 import json
 from pathlib import Path
 import tempfile
+import time
 
 from gxw.object_model import (export_object_model,
                               prepare_object_project, read_project_context)
@@ -255,7 +256,8 @@ def _target_context(baseline, plc_model, program_name=None):
 def prepare_candidate(output, *, model=None, baseline=None, imported=None, program_name=None,
                       summary="FBD 候选工程", source_ladder=None, plc_model="FX3U", source_name=None,
                       native_save=False, pou_kind='function_block', resource=None, task=None, scope_mode=None,
-                      library_source=None, library_name=None, authoring=None, compile_save=False):
+                      library_source=None, library_name=None, authoring=None, compile_save=False,
+                      _prepared_result=None):
     if compile_save and baseline is None:
         raise ValueError('编译保存需要当前已保存的 FBD 基础版本。')
     scoped = any(value is not None for value in (resource, task, scope_mode))
@@ -294,7 +296,8 @@ def prepare_candidate(output, *, model=None, baseline=None, imported=None, progr
         raw, report = result.data, result.report
         program_name = report['created_program']
     elif imported is None:
-        result = _write_candidate(model, baseline=baseline, native_save=native_save)
+        result = (_prepared_result if _prepared_result is not None else
+                  _write_candidate(model, baseline=baseline, native_save=native_save))
         raw, report = result.data, result.report
         program_name = result.saved_object_name(model.get("program"))
     else:
@@ -473,6 +476,24 @@ def generate_candidate(output, snapshot, images, ctx):
 class FBDService:
     def __init__(self, workbench):
         self.workbench = workbench
+        # One bounded, private artifact. It is reusable only for the exact
+        # source/model/policy that produced the already checked preview.
+        self._prepared_preview = None
+
+    def _preview_result(self, project_id, version_id, baseline, model, native_save, *, create=False):
+        model_key = json.dumps(model, ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False)
+        key = (project_id, version_id, baseline, model_key, native_save)
+        cached = self._prepared_preview
+        if cached is not None and time.monotonic() < cached['expires'] and cached['key'] == key:
+            return copy.deepcopy(cached['result'])
+        if not create:
+            return None
+        result = _write_candidate(model, baseline=baseline, native_save=native_save)
+        # Baseline and output are immutable bytes; the model/report need their
+        # own copies so caller edits cannot change this artifact's binding.
+        self._prepared_preview = (dict(key=copy.deepcopy(key), result=copy.deepcopy(result),
+            expires=time.monotonic() + 300) if len(baseline or b'') + len(result.data) <= 64 * 1024 * 1024 else None)
+        return result
 
     def _context(self, project_id, version_id=None, program_name=None):
         wb = self.workbench
@@ -529,14 +550,19 @@ class FBDService:
             try:
                 baseline = self._context(project_id, version_id, model.get('program')).raw
                 version = wb.projects.raw_version(project_id, version_id) if version_id else None
-                result = _write_candidate(model, baseline=baseline, native_save=version_requires_native_save(version))
+                result = self._preview_result(project_id, version_id, baseline, model,
+                    version_requires_native_save(version), create=True)
                 context = read_project_context(result.data, result.saved_object_name(model.get('program')))
                 return {"model_sha256": canonical_hash(model),
                         "gxw_sha256": hashlib.sha256(result.data).hexdigest(),
                         "svg": context.svg(), "model": context.object_model(),
                         "gx_compile": "not_run"}
             except GXWFormatError as error:
+                self._prepared_preview = None
                 raise FBDValidationError(str(error)) from error
+            except Exception:
+                self._prepared_preview = None
+                raise
 
     def propose(self, command):
         from gxw.models import GXWFormatError
@@ -631,6 +657,12 @@ class FBDService:
                 raise ValueError("Unsupported FBD operation")
             wb.state_dir.mkdir(parents=True, exist_ok=True)
             with tempfile.TemporaryDirectory(dir=wb.state_dir, prefix="fbd-") as directory:
+                if operation in ('edit', 'generate'):
+                    source = baseline if baseline is not None else _target_baseline(None, args['plc_model'])
+                    prepared = self._preview_result(project_id, base_id, source, command.get('model'),
+                                                    version_requires_native_save(version))
+                    if prepared is not None:
+                        args['_prepared_result'] = prepared
                 payload = prepare_candidate(directory, **args)
                 payload["_confirmed_spec"] = copy.deepcopy(project.get("confirmed_spec"))
                 payload = wb._with_candidate_diff(project_id, base_id, payload)

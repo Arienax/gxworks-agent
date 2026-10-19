@@ -60,7 +60,9 @@ class ProposalService:
 
     @staticmethod
     def _public(record):
-        result = public_payload({key: record.get(key) for key in _PUBLIC})
+        native_live = (record.get('action') == 'native_engineering'
+            and ((record.get('private_payload') or {}).get('plan') or {}).get('mode') == 'live')
+        result = public_payload({key: record.get(key) for key in _PUBLIC}, native_live=native_live)
         # Deliberately project only server-authored enum values. Do not widen
         # the generic job payload allowlist to arbitrary source/mode fields.
         audit = (record.get("summary") or {}).get("approval")
@@ -320,7 +322,10 @@ class ProposalService:
                     status, error_code = "interrupted", "execution_requires_reconciliation"
                 else:
                     status, error_code = "failed", "execution_not_successful"
-                record.update(status=status, error_code=error_code, result=public_payload(result))
+                native_live = (record['action'] == 'native_engineering'
+                    and (record['private_payload'].get('plan') or {}).get('mode') == 'live')
+                record.update(status=status, error_code=error_code,
+                              result=public_payload(result, native_live=native_live))
             except Exception:
                 # A callback may have performed its side effect before failing.
                 # Never retry it automatically or invite another approval click.

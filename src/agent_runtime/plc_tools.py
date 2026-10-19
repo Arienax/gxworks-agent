@@ -18,6 +18,9 @@ from agent_runtime.tool_errors import ToolPreconditionError, PROJECT_ACTIONS, SO
 
 SAFE_TOOL_NAMES = (
     "get_current_project",
+    "get_operation_status",
+    "get_native_engineering_session",
+    "pause_native_engineering_session",
     "get_generation_context",
     "create_program_candidate",
     "get_current_program_info",
@@ -57,7 +60,7 @@ SAFE_TOOL_NAMES = (
 # Engineering questions expose only these operations. New tools require an
 # explicit decision before they become available to the read-only assistant.
 READ_ONLY_TOOL_NAMES = frozenset({
-    "get_current_project", "get_current_program_info", "read_network",
+    "get_current_project", "get_operation_status", "get_native_engineering_session", "get_current_program_info", "read_network",
     "search_plc_manual", "get_diagnostics", "validate_project",
     "read_native_device_assignments", "compare_native_compiled_code", "locate_native_code_steps",
     "compile_project", "validate_current_program", "get_fbd_catalog",
@@ -108,6 +111,9 @@ class ToolContext:
     sfc_graph: Optional[Mapping[str, Any]] = None
     inspection: Any = None
     analysis_source: Optional[Mapping[str, Any]] = None
+    operation_status: Any = None
+    native_session_status: Any = None
+    native_session_pause: Any = None
 
     @property
     def project_id(self) -> str:
@@ -138,6 +144,9 @@ def build_tool_context(
     sfc_graph: Optional[Mapping[str, Any]] = None,
     inspection=None,
     analysis_source=None,
+    operation_status=None,
+    native_session_status=None,
+    native_session_pause=None,
 ) -> ToolContext:
     """Copy mutable UI/session state before handing it to a worker thread."""
 
@@ -158,6 +167,9 @@ def build_tool_context(
         sfc_graph=copy.deepcopy(dict(sfc_graph)) if isinstance(sfc_graph, Mapping) else None,
         inspection=inspection,
         analysis_source=copy.deepcopy(analysis_source),
+        operation_status=operation_status,
+        native_session_status=native_session_status,
+        native_session_pause=native_session_pause,
     )
 
 
@@ -172,7 +184,8 @@ class ToolDefinition:
     @property
     def context_requirement(self):
         if self.name in DISCOVERY_TOOL_NAMES or self.name in {
-                "list_projects", "create_project", "select_project", "get_project_artifacts", "get_operation_status"}:
+                "list_projects", "create_project", "select_project", "get_project_artifacts", "get_operation_status",
+                "get_native_engineering_session", "pause_native_engineering_session"}:
             return "none"
         if self.name == "search_plc_manual":
             return "model"
@@ -304,6 +317,8 @@ class ToolRegistry:
         try:
             decoded = self._decode_arguments(arguments)
             self._validate_arguments(definition.parameters, decoded)
+            if definition.name in {'execute_native_engineering', 'create_fbd_candidate', 'create_st_candidate'} | NATIVE_INSPECTION_TOOL_NAMES:
+                _validate_engineering_input(definition.name, definition.parameters, decoded)
         except ValueError as error:
             return {
                 "ok": False,
@@ -361,6 +376,8 @@ def resolve_tool_context(definition, context, arguments):
             definition.name in {"create_fbd_candidate", "create_sfc_candidate"}
             and arguments.get("operation") in {"edit", "compile", "create_fb", "create_program", "import_library", "create_structure", "create_st_fb", "edit_st_fb", "edit_global_labels", "create_global_labels", "edit_pou_labels", "configure_project"}):
         requirement = "version"
+    if definition.name == 'create_st_candidate' and arguments.get('operation') in {'create_st_program', 'edit_st_program'}:
+        requirement = 'version'
     if requirement == "none":
         return context
     if requirement == "model":
@@ -399,6 +416,348 @@ _EMPTY_OBJECT_SCHEMA = {
     "properties": {},
     "additionalProperties": False,
 }
+
+
+def _engineering_object(properties, required=(), **bounds):
+    return {'type': 'object', 'properties': properties, 'required': list(required),
+            'additionalProperties': False, **bounds}
+
+
+def _engineering_text(*, empty=False, maximum=None):
+    return {'type': 'string', 'pattern': r'^[^\x00]*$' if empty else r'^(?=[\s\S]*\S)[^\x00]+$',
+            **({} if empty else {'minLength': 1}), **({'maxLength': maximum} if maximum is not None else {})}
+
+
+def _engineering_declarations(scope, *, maximum=4096, nonempty=False):
+    text = _engineering_text(empty=True)
+    fields = {'name': _engineering_text(maximum=255),
+              'data_type': _engineering_text(), 'initial_value': text, 'comment': text}
+    if scope != 'structure':
+        classes = (['VAR_GLOBAL', 'VAR_GLOBAL_CONSTANT'] if scope == 'global' else
+                   ['VAR', 'VAR_CONSTANT'] if scope == 'program' else
+                   ['VAR', 'VAR_CONSTANT', 'VAR_INPUT', 'VAR_OUTPUT', 'VAR_IN_OUT'] +
+                   (['VAR_INPUT_CONSTANT', 'VAR_IN_EXT'] if scope == 'pou' else []))
+        fields.update(class_name={'type': 'string', 'enum': classes},
+                      kind={'type': 'string', 'enum': ['variable', 'structure', 'function_block']})
+    if scope == 'global':
+        pair = _engineering_object({'device': text, 'iec_address': text}, ['device'])
+        fields.update(device=text, iec_address=text, member_devices={'type': 'object',
+            'propertyNames': _engineering_text(), 'additionalProperties': {'oneOf': [text, pair]}})
+    return {'type': 'array', 'maxItems': maximum, 'minItems': 1 if nonempty else 0,
+            'items': _engineering_object(fields, ['name', 'data_type'])}
+
+
+def _engineering_configuration(*, visible, live=False):
+    pair = {'type': 'array', 'minItems': 2, 'maxItems': 2,
+            'items': {'type': 'integer', 'minimum': 0, 'maximum': 2147483647}}
+    if live:
+        ranges = _engineering_object({key: pair for key in ('D', 'R', 'W', 'T', 'ST', 'C', 'M', 'B', 'P', 'S', 'T10')},
+                                     minProperties=1)
+    elif visible:
+        ranges = _engineering_object({'D': {**pair, 'items': {'type': 'integer', 'minimum': 0, 'maximum': 7999}},
+                                      'M': pair}, minProperties=1)
+    else:
+        pair = {**pair, 'items': {'type': 'integer', 'minimum': 0, 'maximum': 4294967295}}
+        ranges = {'type': 'object', 'propertyNames': _engineering_text(),
+                  'additionalProperties': {'oneOf': [pair, {'type': 'null'}]}}
+    fields = {'system_variable_ranges': ranges}
+    if not visible:
+        fields['program_capacity'] = {'type': 'integer', 'enum': [16000, 64000]}
+    return _engineering_object(fields, ['system_variable_ranges'] if visible else (), minProperties=1)
+
+
+def _engineering_graph_actions(*, live=False):
+    text = _engineering_text()
+    coordinate = {'type': 'integer', 'minimum': 0, 'maximum': 4096}
+    point = {'type': 'array', 'minItems': 2, 'maxItems': 2, 'items': coordinate}
+    node_endpoint = _engineering_object({'node': text, 'port': text}, ['node', 'port'])
+    endpoint = node_endpoint if live else {'oneOf': [node_endpoint,
+                          _engineering_object({'wire': text, 'point': point}, ['wire', 'point'])]}
+    variants = {
+        'rebind_terminal': {'node': text, 'symbol': text}, 'delete_terminal': {'node': text},
+        'move_node': {'node': text, 'x': coordinate, 'y': coordinate}, 'delete_wire': {'wire': text},
+        'add_wire': {'id': {'type': 'string', 'pattern': r'^[A-Za-z][A-Za-z0-9_-]{0,63}$'},
+                     'from': endpoint, 'to': endpoint,
+                     'via': {'type': 'array', 'maxItems': 128, 'items': point}}}
+    if live:
+        variants['add_terminal'] = {'template': {'type': 'string', 'enum': ['input']},
+            'symbol': text, 'x': coordinate, 'y': coordinate}
+        variants = {name: {'network': ({'type': 'integer', 'enum': [0]}
+                                      if name in ('move_node', 'add_wire', 'add_terminal') else
+                                      {'type': 'integer', 'minimum': 0, 'maximum': 511}), **fields}
+                    for name, fields in variants.items()}
+    return {'type': 'array', 'minItems': 1, 'maxItems': 128, 'items': {'oneOf': [
+        _engineering_object({'action': {'type': 'string', 'enum': [name]}, **fields}, ['action', *fields])
+        for name, fields in variants.items()]}}
+
+
+def _engineering_authoring_commands(*, visible):
+    identity = _engineering_text(maximum=255)
+    body = _engineering_text(empty=not visible, maximum=4 * 1024 * 1024)
+    declarations = lambda scope: _engineering_declarations(scope, maximum=4096 if visible else 8192)
+    commands = {}
+    for name in ('create_global_labels', 'edit_global_labels', 'edit_pou_labels'):
+        # Global tables also accept their exact logical source with .gh.
+        source = identity if name == 'edit_pou_labels' else _engineering_text(maximum=512)
+        commands[name] = _engineering_object({'source_name': source,
+            'declarations': declarations('pou' if name == 'edit_pou_labels' else 'global')},
+            ['source_name', 'declarations'])
+        if visible and name != 'edit_pou_labels':
+            row = commands[name]['properties']['declarations']['items']['properties']
+            row.pop('member_devices')
+            row['kind']['enum'] = ['variable', 'function_block']
+    commands['create_structure'] = _engineering_object({'source_name': identity,
+        'members': _engineering_declarations('structure', maximum=4096 if visible else 8192, nonempty=True)},
+        ['source_name', 'members'])
+    for name in ('create_st_fb', 'edit_st_fb', 'create_st_program', 'edit_st_program'):
+        fields = {'source_name': identity, 'st_text': body,
+                  'declarations': declarations('program' if name.endswith('program') else 'fb')}
+        required = ['source_name', 'st_text'] + (['declarations'] if name.startswith('create_') else [])
+        if name == 'create_st_program':
+            fields.update(resource=identity, task=identity, scope_mode={'type': 'string', 'enum': ['existing_task']})
+            required += ['resource', 'task', 'scope_mode']
+        commands[name] = _engineering_object(fields, required)
+    commands['configure_project'] = _engineering_object({'source_name': _engineering_text(maximum=512),
+        'options': _engineering_configuration(visible=visible)}, ['source_name', 'options'])
+    return commands
+
+
+def _engineering_native_schema():
+    commands = _engineering_authoring_commands(visible=True)
+    text = _engineering_text(maximum=512)
+    commands.update(create_fbd_call=_engineering_object({'caller': text, 'instance': text, 'definition': text,
+        'arguments': {'type': 'object', 'minProperties': 1, 'maxProperties': 256,
+                      'propertyNames': _engineering_text(), 'additionalProperties': _engineering_text()}},
+        ['caller', 'instance', 'definition', 'arguments']),
+        edit_fbd_graph=_engineering_object({'caller': text, 'actions': _engineering_graph_actions()}, ['caller', 'actions']),
+        show_assignments=_engineering_object({'queries': {'type': 'array', 'minItems': 1, 'maxItems': 32,
+            'items': _engineering_object({'scope': {'type': 'string', 'enum': ['global']}, 'source': text, 'name': text},
+                                        ['scope', 'source', 'name'])}}, ['queries']))
+    commands.update({name: _engineering_object({}) for name in ('compile', 'save', 'reopen')})
+    variants = [_engineering_object({'operation': {'type': 'string', 'enum': [name]}, **rule['properties']},
+                 ['operation', *rule['required']]) for name, rule in commands.items()]
+    common = {key: value for rule in variants for key, value in rule['properties'].items()}
+    # Keep discoverable common properties while oneOf enforces operation-local
+    # required fields and rejects arguments belonging to a different operation.
+    common['operation'] = {'type': 'string', 'enum': list(commands)}
+    common['declarations'] = _engineering_declarations('global')
+    common['declarations']['items']['properties']['class_name']['enum'] += [
+        'VAR', 'VAR_CONSTANT', 'VAR_INPUT', 'VAR_OUTPUT', 'VAR_IN_OUT', 'VAR_INPUT_CONSTANT', 'VAR_IN_EXT']
+    command = _engineering_object(common, ['operation'], oneOf=variants)
+    batch = _engineering_object({
+        'schema_version': {'type': 'integer', 'enum': [1]},
+        'commands': {'type': 'array', 'minItems': 1, 'maxItems': 256, 'items': command}},
+        ['schema_version', 'commands'])
+    live_command = copy.deepcopy(command)
+    live_command['oneOf'] = [variant for variant in live_command['oneOf']
+                            if variant['properties']['operation']['enum'][0] != 'create_structure']
+    live_command['properties']['operation']['enum'].remove('create_structure')
+    for variant in live_command['oneOf']:
+        operation = variant['properties']['operation']['enum'][0]
+        if operation == 'edit_fbd_graph':
+            variant['properties']['actions'] = _engineering_graph_actions(live=True)
+        elif operation == 'show_assignments':
+            variant['properties']['queries']['items']['properties']['scope']['enum'] = ['global', 'local', 'instance']
+        elif operation == 'configure_project':
+            variant['properties']['options'] = _engineering_configuration(visible=True, live=True)
+    delete_fields = {'scope': {'type': 'string', 'enum': ['program']},
+                     'source_name': _engineering_text(maximum=255), 'name': _engineering_text(maximum=255)}
+    live_command['oneOf'].append(_engineering_object({
+        'operation': {'type': 'string', 'enum': ['delete_label']}, **delete_fields},
+        ['operation', *delete_fields]))
+    live_command['properties']['operation']['enum'].append('delete_label')
+    live_command['properties'].update(delete_fields)
+    live_command['properties']['actions'] = _engineering_graph_actions(live=True)
+    live_command['properties']['options'] = _engineering_configuration(visible=True, live=True)
+    live_command['properties']['queries']['items']['properties']['scope']['enum'] = ['global', 'local', 'instance']
+    controls = _engineering_object({
+        'dwell_ms': {'type': 'integer', 'minimum': 0, 'maximum': 60000},
+        'max_steps': {'type': 'integer', 'minimum': 1, 'maximum': 256},
+        'expected_revision': {'type': 'integer', 'minimum': 0, 'maximum': 2147483647},
+        'step_mode': {'type': 'boolean'}, 'resume_pending': {'type': 'boolean'}})
+    live = _engineering_object({'schema_version': {'type': 'integer', 'enum': [1]},
+        'mode': {'type': 'string', 'enum': ['live']},
+        'session_action': {'type': 'string', 'enum': ['start', 'continue', 'end', 'rebind']},
+        'session_id': {'type': 'string', 'pattern': r'^[a-f0-9]{32}$'},
+        'controls': controls,
+        'commands': {'type': 'array', 'minItems': 0, 'maxItems': 256, 'items': live_command}},
+        ['schema_version', 'mode', 'commands'])
+    discoverable = copy.deepcopy(common)
+    discoverable['operation']['enum'].append('delete_label')
+    discoverable.update(delete_fields)
+    discoverable['actions'] = {'oneOf': [_engineering_graph_actions(), _engineering_graph_actions(live=True)]}
+    discoverable['options'] = _engineering_configuration(visible=True, live=True)
+    discoverable['queries']['items']['properties']['scope']['enum'] = ['global', 'local', 'instance']
+    properties = {**batch['properties'], **live['properties'],
+        'commands': {'type': 'array', 'maxItems': 256, 'items': _engineering_object(discoverable, ['operation'])}}
+    return _engineering_object({'plan': _engineering_object(properties, ['schema_version', 'commands'],
+        oneOf=[batch, live])}, ['plan'])
+
+
+def _engineering_st_schema():
+    commands = _engineering_authoring_commands(visible=False)
+    commands = {key: commands[key] for key in ('create_st_program', 'edit_st_program')}
+    commands = {'import': _engineering_object({'data_base64': _engineering_text(),
+        'program': _engineering_text(maximum=512)}, ['data_base64', 'program']), **commands}
+    variants = [_engineering_object({'operation': {'type': 'string', 'enum': [name]},
+        **rule['properties'], 'summary': _engineering_text(empty=True)}, ['operation', *rule['required']])
+        for name, rule in commands.items()]
+    common = {key: value for rule in variants for key, value in rule['properties'].items()}
+    common['operation'] = {'type': 'string', 'enum': list(commands)}
+    return _engineering_object(common, ['operation'], oneOf=variants)
+
+
+def _engineering_fbd_schema():
+    commands = {name: rule for name, rule in _engineering_authoring_commands(visible=False).items()
+                if name not in {'create_st_program', 'edit_st_program'}}
+    text = _engineering_text(maximum=255)
+    commands.update({name: _engineering_object({'model': {'type': 'object'}}, ['model'])
+                     for name in ('generate', 'edit')})
+    commands.update(import_library=_engineering_object({'data_base64': _engineering_text(), 'library_name': text},
+                                                       ['data_base64', 'library_name']),
+        create_fb=_engineering_object({'source_name': text}, ['source_name']),
+        create_program=_engineering_object({'source_name': text, 'resource': text, 'task': text,
+            'scope_mode': {'type': 'string', 'enum': ['existing_task', 'new_task', 'new_resource']}},
+            ['source_name', 'resource', 'task', 'scope_mode']),
+        remove_empty_program=_engineering_object({'source_name': _engineering_text(maximum=512)}, ['source_name']),
+        compile=_engineering_object({}))
+    commands['import'] = _engineering_object({'data_base64': _engineering_text(), 'program': _engineering_text(),
+                                             'native_save': {'type': 'boolean'}}, ['data_base64'])
+    extras = {'summary': _engineering_text(empty=True),
+              'generation_context_id': _engineering_text(maximum=128)}
+    variants = [_engineering_object({'operation': {'type': 'string', 'enum': [name]},
+        **rule['properties'], **extras}, ['operation', *rule['required']]) for name, rule in commands.items()]
+    common = {key: value for rule in variants for key, value in rule['properties'].items()}
+    common['operation'] = {'type': 'string', 'enum': list(commands)}
+    common['declarations'] = _engineering_declarations('global', maximum=8192)
+    common['declarations']['items']['properties']['class_name']['enum'] += [
+        'VAR', 'VAR_CONSTANT', 'VAR_INPUT', 'VAR_OUTPUT', 'VAR_IN_OUT', 'VAR_INPUT_CONSTANT', 'VAR_IN_EXT']
+    return _engineering_object(common, ['operation'], oneOf=variants)
+
+
+def _validate_engineering_schema(rule, value, path='arguments'):
+    """Validate the engineering schema subset without project or native I/O."""
+    if not rule:
+        return
+    if 'oneOf' in rule:
+        matches = 0
+        for option in rule['oneOf']:
+            try:
+                _validate_engineering_schema(option, value, path)
+            except ValueError:
+                continue
+            matches += 1
+        if matches != 1:
+            raise ValueError(path + ' must match one operation or value structure')
+    types = {'object': lambda x: isinstance(x, Mapping), 'array': lambda x: isinstance(x, list),
+             'string': lambda x: isinstance(x, str), 'integer': lambda x: type(x) is int,
+             'boolean': lambda x: type(x) is bool, 'null': lambda x: x is None}
+    if rule.get('type') in types and not types[rule['type']](value):
+        raise ValueError(path + ' must be ' + rule['type'])
+    if 'enum' in rule and value not in rule['enum']:
+        raise ValueError(path + ' is not an allowed value')
+    if isinstance(value, Mapping):
+        fields = rule.get('properties', {})
+        if not set(rule.get('required', ())) <= value.keys():
+            raise ValueError(path + ' is missing required fields')
+        if not rule.get('minProperties', 0) <= len(value) <= rule.get('maxProperties', float('inf')):
+            raise ValueError(path + ' has an invalid field count')
+        for key, item in value.items():
+            if 'propertyNames' in rule:
+                _validate_engineering_schema(rule['propertyNames'], key, path + '.key')
+            additional = rule.get('additionalProperties', True)
+            if key not in fields and additional is False:
+                raise ValueError(path + ' has an unknown field: ' + str(key))
+            child = fields.get(key, additional if isinstance(additional, dict) else {})
+            _validate_engineering_schema(child, item, path + '.' + str(key))
+    elif isinstance(value, list):
+        if not rule.get('minItems', 0) <= len(value) <= rule.get('maxItems', float('inf')):
+            raise ValueError(path + ' has an invalid item count')
+        if 'items' in rule:
+            for index, item in enumerate(value):
+                _validate_engineering_schema(rule['items'], item, path + '[' + str(index) + ']')
+    elif isinstance(value, str):
+        if not rule.get('minLength', 0) <= len(value) <= rule.get('maxLength', float('inf')):
+            raise ValueError(path + ' has an invalid text length')
+        if 'pattern' in rule and not re.fullmatch(rule['pattern'], value):
+            raise ValueError(path + ' has invalid text syntax')
+    elif type(value) is int and not rule.get('minimum', -float('inf')) <= value <= rule.get('maximum', float('inf')):
+        raise ValueError(path + ' has an out-of-range integer')
+
+
+def _validate_engineering_input(name, schema, arguments):
+    try:
+        encoded = json.dumps(arguments, ensure_ascii=False, allow_nan=False).encode('utf-8')
+    except (TypeError, ValueError, UnicodeError) as error:
+        raise ValueError('Engineering commands must be valid JSON text') from error
+    if name == 'execute_native_engineering' and len(encoded) > 4 * 1024 * 1024 + 32:
+        raise ValueError('Native engineering plan is too large')
+    _validate_engineering_schema(schema, arguments)
+    if name == 'execute_native_engineering':
+        if arguments['plan'].get('mode') == 'live':
+            from application.live_engineering import normalize_live_plan
+            normalize_live_plan(arguments['plan'])
+        else:
+            from application.native_engineering import normalize_native_plan
+            normalize_native_plan(arguments['plan'])
+    commands = arguments.get('plan', {}).get('commands', []) if name == 'execute_native_engineering' else [arguments]
+    for command in commands:
+        rows = command.get('members', command.get('declarations', []))
+        if rows:
+            from gxw.fb_authoring import _name
+            from gxw.declarations import _type_parts
+            seen = set()
+            for row in rows:
+                _name(row['name'], 65001)
+                if row['name'].casefold() in seen:
+                    raise ValueError('Duplicate engineering declaration name')
+                seen.add(row['name'].casefold())
+                _, bounds = _type_parts(row['data_type'])
+                if len(bounds) > 1 or any(not -2**31 <= low <= high < 2**31 for low, high in bounds):
+                    raise ValueError('Engineering declarations require scalar or rank-one types')
+        if command.get('operation') in ('create_st_fb', 'edit_st_fb', 'create_st_program', 'edit_st_program'):
+            from gxw.fb_authoring import _st_implementation
+            _st_implementation(command['st_text'])
+        if command.get('operation') == 'configure_project':
+            from gxw.fb_authoring import validate_configuration_ranges
+            ranges = command['options'].get('system_variable_ranges', {})
+            validate_configuration_ranges(ranges, cpu='', known_devices=ranges)
+    if name in NATIVE_INSPECTION_TOOL_NAMES:
+        queries = arguments.get('queries', [])
+        for query in queries:
+            fields = ('source', 'name') if name == 'read_native_device_assignments' else ('resource',)
+            if any(any(ord(char) < 32 or ord(char) == 127 for char in query[field]) for field in fields):
+                raise ValueError('Native inspection names cannot contain control characters')
+        identities = [(q.get('source'), q.get('name'), q.get('scope', 'local'))
+                      if name == 'read_native_device_assignments' else (q.get('resource'), q.get('step')) for q in queries]
+        if len(set(identities)) != len(identities):
+            raise ValueError('Duplicate native inspection query')
+
+
+def _get_operation_status(context: ToolContext, arguments: Mapping[str, Any]) -> Dict[str, Any]:
+    if not context.project_id:
+        raise ToolPreconditionError('NO_PROJECT_SELECTED', '请先明确选择需要查询执行回执的工程。',
+                                    next_actions=PROJECT_ACTIONS)
+    if sum(key in arguments for key in ('proposal_id', 'execution_job_id')) != 1:
+        raise ToolPreconditionError('INVALID_ARGUMENTS', '请提供 proposal_id 或 execution_job_id 中的一项。')
+    if not callable(context.operation_status):
+        raise ToolPreconditionError('OPERATION_STATUS_UNAVAILABLE', '当前接入方式没有绑定应用执行回执查询。')
+    return context.operation_status(context.project_id, **arguments)
+
+
+def _get_native_engineering_session(context: ToolContext, arguments: Mapping[str, Any]) -> Dict[str, Any]:
+    if not context.project_id:
+        raise ToolPreconditionError('NO_PROJECT_SELECTED', 'Select the intended engineering project first.',
+                                    next_actions=PROJECT_ACTIONS)
+    if not callable(context.native_session_status):
+        return {'mode': 'background', 'status': 'not_started', 'project_id': context.project_id}
+    return context.native_session_status(context.project_id, arguments.get('session_id'))
+
+
+def _pause_native_engineering_session(context: ToolContext, arguments: Mapping[str, Any]) -> Dict[str, Any]:
+    if not context.project_id or not callable(context.native_session_pause):
+        raise ValueError('No native engineering session is available in this selected project')
+    return context.native_session_pause(context.project_id, arguments['session_id'])
 
 
 def _get_current_project(context: ToolContext, _arguments: Mapping[str, Any]) -> Dict[str, Any]:
@@ -446,6 +805,36 @@ def _device_summary(program_ir: Mapping[str, Any]) -> Dict[str, Any]:
 def _get_generation_context(
     context: ToolContext, arguments: Mapping[str, Any]
 ) -> Dict[str, Any]:
+    # A saved version is authoritative after changing a project's language.
+    target_mode = str((context.version or {}).get('target_mode')
+                      or context.project.get('target_mode') or 'ladder')
+    selection = arguments.get('execution_mode')
+    if context.project_id and selection != 'background' and callable(context.native_session_status):
+        native = context.native_session_status(context.project_id, None)
+        if native.get('mode') == 'live' and native.get('status') not in ('ended', 'closed'):
+            contract = {'tool': 'execute_native_engineering', 'mode': 'live',
+                'session_action': 'continue', 'session_id': native['session_id'],
+                'expected_revision': native['revision'], 'schema_version': 1,
+                'controls': {'expected_revision': native['revision']}}
+            state = native.get('status')
+            if state in ('running', 'busy', 'pause_requested'):
+                contract = {'tool': 'get_native_engineering_session', 'session_id': native['session_id']}
+            elif state in ('unconfirmed', 'failed'):
+                contract.update(session_action='rebind', commands=[])
+            elif state == 'paused' and native.get('pending_commands', 0):
+                contract['controls']['resume_pending'] = True
+                contract['commands'] = []
+            return {'project_id': context.project_id, 'plc_model': context.plc_model,
+                'execution_mode': 'live', 'target_mode': target_mode,
+                'current_version_id': context.version_id or None, 'native_session': native,
+                'current_context': native.get('current_context'),
+                'generation_request': str(arguments.get('user_requirement') or ''),
+                'output_contract': contract,
+                'limitations': ['Current context is the last confirmed native source revision; an in-progress operation remains separate.',
+                    'Query a running session; reconcile unconfirmed or failed operations without replay; resume an existing paused sequence before submitting new commands.',
+                    'Save is an explicit stage boundary. Compilation and actual variable addresses have separate revision bindings.']}
+    if selection == 'live':
+        raise ValueError('Start a native engineering session before requesting its live generation context')
     from plc.generation_contract import generation_output_contract
     from application.generation_context import (
         _build_knowledge_context, build_generation_instructions, generation_user_input,
@@ -456,14 +845,82 @@ def _get_generation_context(
         CONFIRMED_GENERATION_REQUEST, project_confirmed_specification,
     )
     public_spec = public_generation_specification(confirmed_spec)
-    if (context.version or {}).get('target_mode') == 'sfc':
+    if target_mode == 'sfc':
         snapshot = _read_sfc_project(context, {})
         return {'project_id': context.project_id, 'plc_model': snapshot['model']['cpu'], 'target_mode': 'sfc',
                 'current_version_id': context.version_id, 'current_model': snapshot['model'],
                 'output_contract': {'tool': 'create_sfc_candidate', 'operation': 'edit'},
                 'limitations': ['Existing source records only; no SFC compiler or graph generator.',
                                 'Native compilation, checking and PLC execution are separate results.']}
-    if context.project.get('target_mode') == 'fbd' or (context.version or {}).get('target_mode') == 'fbd':
+    if target_mode == 'st' and context.native_snapshot is not None:
+        from gxw.declarations import CLASS_CODES
+        from gxw.st_program import project_context_snapshot
+        from gxw.visible_engineering import normalized_st
+        from gxworks2.project_profiles import native_project_profile
+        from shared.public_results import public_result_field
+
+        selected_name = (context.version or {}).get('program_name')
+        if not isinstance(selected_name, str) or not selected_name:
+            raise ValueError('Saved ST generation context requires its exact current logical Program')
+        snapshot = project_context_snapshot(context.native_snapshot, selected_name)
+        profile = native_project_profile(context.plc_model)
+        if profile is None or profile.cpu != snapshot['cpu']:
+            raise ValueError('Saved ST generation context CPU differs from its selected PLC model')
+        selected = [row for row in snapshot['pous'] if row['program'] == selected_name]
+        if (len(selected) != 1 or selected[0]['kind'] != 'program' or selected[0]['language'] != 'st'
+                or selected[0]['source_status'] != 'available' or len(selected[0]['task_bindings']) != 1
+                or not isinstance(context.st_text, str)
+                or normalized_st(selected[0]['st_text']) != normalized_st(context.st_text)):
+            raise ValueError('Saved ST generation context differs from its current ordinary Program, text or task')
+
+        # Core owns the source interpretation. This projection removes native
+        # storage/layout evidence before either raw or model tool results exist.
+        private_fields = {'storage', 'raw', 'vendor', 'bytes', 'source_stream', 'source_offset',
+            'definition_offset', 'node_offset', 'unknown_record_count', 'codepage', 'type_code',
+            'record_id', 'record_ids', 'offset', 'class_code', 'record', 'records',
+            'snapshot', 'observation', 'data_id', 'control_id', 'hwnd', 'pointer', 'ptr'}
+        class_names = {value: key for key, value in CLASS_CODES.items()}
+        def engineering_value(value):
+            if isinstance(value, Mapping):
+                result = {key: engineering_value(item) for key, item in value.items()
+                    if public_result_field(key) and str(key).lower() not in private_fields
+                    and not str(key).lower().startswith(('raw_', 'vendor_', 'native_'))
+                    and not str(key).lower().endswith(('_offset', '_path', '_dir', '_file', '_handle', '_pointer'))
+                    and not any(token in str(key).lower() for token in
+                        ('base64', 'password', 'credential', 'api_key', 'token', 'secret'))
+                    and not isinstance(item, (bytes, bytearray, memoryview))}
+                if value.get('class_code') in class_names and 'class_name' not in result:
+                    result['class_name'] = class_names[value['class_code']]
+                return result
+            if isinstance(value, (list, tuple)):
+                return [engineering_value(item) for item in value if not isinstance(item, (bytes, bytearray, memoryview))]
+            return public_generation_value(value)
+
+        current = public_generation_value(engineering_value({key: snapshot[key] for key in (
+            'status', 'origin', 'cpu', 'selected_source', 'globals', 'pous', 'structures',
+            'configuration', 'resources', 'tasks', 'issues', 'compilation', 'execution')}))
+        program, = [row for row in current['pous'] if row['program'] == selected_name]
+        return {'project_id': context.project_id, 'plc_model': context.plc_model,
+            'target_mode': 'st', 'execution_mode': 'background',
+            'workflow_mode': str(context.project.get('workflow_mode') or 'generate'),
+            'current_version_id': context.version_id, 'has_confirmed_spec': isinstance(confirmed_spec, Mapping),
+            'confirmed_spec': public_spec, 'current_context': current, 'selected_program': program,
+            'generation_request': public_generation_value(str(arguments.get('user_requirement') or '')),
+            'generation_instructions': 'Edit the selected ordinary ST Program in the current saved project. '
+                'Keep its existing declarations, task binding and other project sources unless explicitly requested. '
+                'Return create_st_candidate arguments using operation edit_st_program and the selected logical source_name. '
+                'st_text replaces the complete body; omitted declarations retain the current declarations. '
+                'Include declaration upserts only when requested; do not replace this project with a template.',
+            'output_contract': {'tool': 'create_st_candidate', 'operation': 'edit_st_program',
+                'source_name': selected_name, 'input_shape': 'arguments',
+                'required_fields': ['operation', 'source_name'],
+                'editable_fields': ['st_text', 'declarations'],
+                'requires_any': ['st_text', 'declarations'],
+                'declarations': 'upserts; omitted declarations preserve current rows'},
+            'limitations': ['This context is read from the selected saved GXW version, not the unsaved active IDE.',
+                'The candidate uses the shared approval and isolated native source-save path.',
+                'Native compilation, current device allocation and PLC execution remain separate results.']}
+    if target_mode == 'fbd':
         from application.fbd import build_fbd_generation_context
         catalog = _get_fbd_catalog(context, {})
         previous = _read_fbd_project(context, {})['model'] if context.fbd_baseline is not None else None
@@ -489,7 +946,6 @@ def _get_generation_context(
         source = ir_to_ladder(context.program_ir)
     current_ladder = public_generation_ladder(source)
     user_requirement = public_generation_value(str(arguments.get("user_requirement") or ""))
-    target_mode = str(context.project.get("target_mode") or "ladder")
     is_edit_mode = target_mode == "ladder" and current_ladder is not None
     if (target_mode == "ladder" and not is_edit_mode
             and arguments.get("workflow") != "detailed"
@@ -1027,11 +1483,18 @@ def _request_native_engineering(context: ToolContext, arguments: Mapping[str, An
     baseline = context.native_snapshot or context.fbd_baseline
     if not baseline:
         raise ValueError('可见原生工程执行需要当前版本保存的 GXW 工程。')
+    selected_cpu = context.version.get('plc_model') or context.project.get('plc_model')
+    if not isinstance(selected_cpu, str) or not selected_cpu.strip():
+        raise ToolPreconditionError('PLC_MODEL_REQUIRED', 'Native engineering requires the selected saved project CPU model.')
     try:
-        plan = normalize_native_plan(arguments.get('plan'), plc_model=context.plc_model)
+        if arguments.get('plan', {}).get('mode') == 'live':
+            from application.live_engineering import normalize_live_plan
+            plan = normalize_live_plan(arguments['plan'], plc_model=selected_cpu)
+        else:
+            plan = normalize_native_plan(arguments.get('plan'), plc_model=selected_cpu)
     except ValueError as error:
         raise ToolPreconditionError('INVALID_ARGUMENTS', str(error)) from error
-    validate_native_baseline(baseline, plc_model=context.plc_model)
+    validate_native_baseline(baseline, plc_model=selected_cpu, live=plan.get('mode') == 'live')
     if context.version['target_mode'] == 'st':
         from gxw.fb_authoring import st_program_snapshot
         from gxw.visible_engineering import normalized_st
@@ -1042,7 +1505,9 @@ def _request_native_engineering(context: ToolContext, arguments: Mapping[str, An
                 or normalized_st(selected[0]['st_text']) != normalized_st(context.st_text)):
             raise ValueError('ST 版本正文、当前 Program 及唯一任务绑定不一致。')
     return {'requires_confirmation': True,
-        'message': '工程方案已冻结。获准后会在独立 GX Works2 工程副本中执行，核对所请求的验证层后保存新版本。',
+        'message': ('工程步骤已冻结，获准后沿同一原生会话执行；保存步骤单独交付版本。'
+                    if plan.get('mode') == 'live' else
+                    '工程方案已冻结。获准后会在独立 GX Works2 工程副本中执行，核对所请求的验证层后保存新版本。'),
         'pending_action': {'type': 'execute_native_engineering', 'project_id': context.project_id,
                            'version_id': context.version_id, 'plan': plan}}
 
@@ -1292,14 +1757,29 @@ def _read_st_project(context: ToolContext, arguments: Mapping[str, Any]) -> Dict
 
 def _create_st_candidate(context: ToolContext, arguments: Mapping[str, Any]) -> Dict[str, Any]:
     import tempfile
-    from application.fbd import decode_upload, pack_candidate
+    from application.fbd import _native_candidate, decode_upload, pack_candidate
     from application.native_st import prepare_candidate
-    if arguments.get('operation') != 'import':
-        raise ValueError('ST 工程候选入口仅导入已保存的原生工程。')
-    raw = decode_upload(arguments['data_base64'])
+    operation = arguments['operation']
+    authored = None
+    if operation == 'import':
+        raw, selected = decode_upload(arguments['data_base64']), arguments['program']
+    else:
+        from gxw.st_program import background_st_program_plan
+        baseline = context.native_snapshot or context.fbd_baseline
+        if baseline is None:
+            raise ValueError('普通 ST Program 后台创建和编辑需要当前版本的完整 GXW 工程。')
+        command = {key: value for key, value in arguments.items() if key != 'summary'}
+        background_st_program_plan(baseline, command)
+        authored = _native_candidate('author', baseline, command)
+        raw = authored.data
+        selected = authored.report['definition_after']['program']
     with tempfile.TemporaryDirectory(prefix='gxw-st-candidate-') as directory:
-        payload = prepare_candidate(directory, imported=raw, program_name=arguments['program'],
-            plc_model=context.plc_model, summary=arguments.get('summary') or '导入保存的 ST Program 工程')
+        payload = prepare_candidate(directory, imported=raw, program_name=selected,
+            plc_model=context.plc_model, summary=arguments.get('summary') or '普通 ST Program 工程候选')
+        if authored is not None:
+            payload['metadata']['validation'].update(native_save='passed', definition_readback='matched')
+            payload['metadata']['validation']['messages'] = [
+                '普通 ST Program 已在隔离工作区写入并核对源码、声明和任务；编译及活动 IDE 编辑另行验证。']
         snapshot = pack_candidate(payload, directory)
     return {'requires_confirmation': True, 'verification': payload['metadata']['validation'],
         'pending_action': {'type': 'accept_st_candidate', 'project_id': context.project_id,
@@ -1369,6 +1849,23 @@ def build_default_tool_registry() -> ToolRegistry:
             _get_current_project,
         )
     )
+    registry.register(ToolDefinition('get_operation_status',
+        '查询当前选定工程中真实的提案或执行任务回执。提供 proposal_id 或 execution_job_id 中的一项；返回当前状态、已有执行结果及其保存版本标识，不批准或重试操作。',
+        {'type': 'object', 'properties': {
+            'proposal_id': {'type': 'string', 'minLength': 1, 'maxLength': 128,
+                            'pattern': r'[A-Za-z0-9][A-Za-z0-9._-]{0,127}'},
+            'execution_job_id': {'type': 'string', 'minLength': 1, 'maxLength': 128,
+                                 'pattern': r'[A-Za-z0-9][A-Za-z0-9._-]{0,127}'}},
+            'oneOf': [{'required': ['proposal_id']}, {'required': ['execution_job_id']}],
+            'additionalProperties': False}, _get_operation_status))
+    registry.register(ToolDefinition('get_native_engineering_session',
+        '读取选定工程的持续原生会话、当前确认修订、未保存状态和真实执行回执；省略 session_id 时查询该工程唯一的活动会话，不操作原生页面。',
+        _engineering_object({'session_id': {'type': 'string', 'pattern': r'^[a-f0-9]{32}$'}}),
+        _get_native_engineering_session))
+    registry.register(ToolDefinition('pause_native_engineering_session',
+        '请求持续原生会话在当前操作完成并核对后暂停；不打断已发出的原生修改。恢复和单步通过既有 execute_native_engineering 的已审批 continue 请求完成。',
+        _engineering_object({'session_id': {'type': 'string', 'pattern': r'^[a-f0-9]{32}$'}}, ['session_id']),
+        _pause_native_engineering_session))
     registry.register(
         ToolDefinition(
             "get_generation_context",
@@ -1382,6 +1879,8 @@ def build_default_tool_registry() -> ToolRegistry:
                     },
                     "workflow": {"type": "string", "enum": ["direct_generation", "detailed"],
                                  "description": "新 Ladder 有原始需求时默认 Direct；已确认规格可显式选 Direct，编辑仍沿用原入口。"},
+                    "execution_mode": {"type": "string", "enum": ["background", "live"],
+                        "description": "选择保存版本的后台上下文或持续原生会话当前确认的源码。省略时优先使用已启动的原生会话。"},
                 },
                 "additionalProperties": False,
             },
@@ -1577,25 +2076,8 @@ def build_default_tool_registry() -> ToolRegistry:
         )
     )
     registry.register(ToolDefinition('execute_native_engineering',
-        '请求在独立 GX Works2 进程和托管工程副本中执行显式工程方案。需要已保存的 FX3U 工程版本；支持已验证的标签、默认初值结构体、ST FB、普通 ST Program（新建时显式指定已有资源和任务）、FBD 调用及既有图形改接、D/M 分配、编译、全局地址交叉引用、保存和重开。图形动作使用当前源码节点和连线标识，连接必须显式给出端口及正交路径。经现有审批后执行；不接受路径、PID 或原生驱动参数。',
-        {'type': 'object', 'properties': {'plan': {'type': 'object',
-            'properties': {'schema_version': {'type': 'integer', 'enum': [1]},
-                'commands': {'type': 'array', 'minItems': 1, 'maxItems': 256,
-                    'items': {'type': 'object', 'properties': {'operation': {'type': 'string', 'enum': [
-                        'create_global_labels', 'edit_global_labels', 'edit_pou_labels', 'create_structure', 'create_st_fb', 'edit_st_fb',
-                        'create_st_program', 'edit_st_program', 'edit_fbd_graph',
-                        'configure_project', 'create_fbd_call', 'compile', 'show_assignments', 'save', 'reopen']},
-                        'source_name': {'type': 'string'}, 'declarations': {'type': 'array', 'items': {'type': 'object'}},
-                        'members': {'type': 'array', 'items': {'type': 'object'}},
-                        'st_text': {'type': 'string'}, 'options': {'type': 'object'}, 'caller': {'type': 'string'},
-                        'instance': {'type': 'string'}, 'definition': {'type': 'string'},
-                        'resource': {'type': 'string'}, 'task': {'type': 'string'},
-                        'scope_mode': {'type': 'string', 'enum': ['existing_task']},
-                        'actions': {'type': 'array', 'minItems': 1, 'maxItems': 128, 'items': {'type': 'object'}},
-                        'arguments': {'type': 'object'}, 'queries': {'type': 'array', 'items': {'type': 'object'}}},
-                        'required': ['operation'], 'additionalProperties': False}}},
-            'required': ['schema_version', 'commands'], 'additionalProperties': False}},
-            'required': ['plan'], 'additionalProperties': False},
+        '请求在独立 GX Works2 进程和托管工程副本中执行显式工程方案。持续会话接受原生 FX/Q/L 可编程 CPU 菜单，实际操作按具体 CPU、软件版本和中英日界面的已验证能力执行；仅参数型号不能执行程序操作。后台批次仍限已验证 FX3U。标签、ST FB、普通 ST Program、FBD 调用与改接、分配、编译、当前地址、保存和重开共用现有审批；新 Program 需明确已有资源和任务。图形动作使用当前源码节点和连线标识，连接显式给出端口及正交路径。不接受路径、PID 或原生驱动参数。',
+        _engineering_native_schema(),
         _request_native_engineering, confirmation_required=True))
     registry.register(ToolDefinition('get_fbd_catalog',
         '读取当前 CPU 的空白 FBD 模板、工程源码引脚和声明表；启用 56 个 Q/L/FX 原生菜单，当前 FBD 复现流程不支持 FX1，按合并菜单身份选择模板。',
@@ -1616,37 +2098,15 @@ def build_default_tool_registry() -> ToolRegistry:
          'additionalProperties': False}, _read_fbd_definition))
     registry.register(ToolDefinition('create_fbd_candidate',
         '在当前工程副本上编写 FBD。generate/edit 的 model 可只填 networks：calls 用 id/type/instance/arguments，组合逻辑用 nodes 和 from/to 端口连接。Core 从当前定义生成接口、IN_OUT、分块和布线，不需要坐标；参数 schema 见 get_fbd_catalog.parameter_schema。原有 v2 对象编辑仍支持。create_structure 用 source_name/members 新建类型；create_st_fb 用 source_name/declarations/st_text 编写完整 ST FB；edit_st_fb 省略 declarations 时保留接口。create_global_labels/edit_global_labels 用表名和 declarations 新建或更新全局表，结构设备映射用 member_devices；edit_pou_labels 用 POU 名和 declarations 更新局部表。configure_project 用目录 project_configuration 的 source_name 和 options 修改 system_variable_ranges，program_capacity 当前仅支持已验证 FX3U/FX3UC 的 16000/64000。create_fb 新建空 FBD FB 后用 edit 编写图形。定义和配置操作需基础版本。import_library 单独导入现有库；create_program 需资源和任务。compile 在当前基础版本上原生编译、完整检查、保存并冷重开比较三个代码通道，不接受源码修改参数；运行验证另行执行。',
-        {'type': 'object', 'properties': {'operation': {'type': 'string', 'enum': ['generate', 'edit', 'import', 'create_fb', 'create_program', 'import_library', 'create_structure', 'create_st_fb', 'edit_st_fb', 'edit_global_labels', 'create_global_labels', 'edit_pou_labels', 'configure_project', 'remove_empty_program', 'compile']},
-         'model': {'type': 'object'}, 'data_base64': {'type': 'string'}, 'program': {'type': 'string'},
-         'native_save': {'type': 'boolean'},
-         'options': {'type':'object'},
-         'source_name': {'type': 'string', 'minLength': 1, 'maxLength': 255},
-         'library_name': {'type': 'string', 'minLength': 1, 'maxLength': 255},
-         'st_text': {'type': 'string', 'maxLength': 4 * 1024 * 1024},
-         **{field: {'type': 'array', 'maxItems': 8192, 'items': {'type': 'object',
-             'properties': {key: {'type': 'string'} for key in (
-                 ('name', 'data_type', 'initial_value', 'comment') if field == 'members'
-                 else ('name', 'data_type', 'class_name', 'kind', 'initial_value', 'comment', 'device', 'iec_address'))} | (
-                 {'member_devices': {'type':'object','additionalProperties': {'oneOf':[{'type':'string'},{'type':'object',
-                    'properties': {'device':{'type':'string'},'iec_address':{'type':'string'}},
-                    'required':['device'],'additionalProperties':False}]}}} if field=='declarations' else {}),
-             'required': ['name', 'data_type'], 'additionalProperties': False}}
-            for field in ('members', 'declarations')},
-         'resource': {'type': 'string', 'minLength': 1, 'maxLength': 255},
-         'task': {'type': 'string', 'minLength': 1, 'maxLength': 255},
-         'scope_mode': {'type': 'string', 'enum': ['existing_task', 'new_task', 'new_resource']},
-         'summary': {'type': 'string'}, 'generation_context_id': {'type': 'string', 'maxLength': 128}},
-         'required': ['operation'], 'additionalProperties': False},
+        _engineering_fbd_schema(),
         fbd_candidate, confirmation_required=True))
     registry.register(ToolDefinition('read_st_project',
         '读取保存 GXW 中普通 ST Program 的正文、局部声明、资源及任务成员；program 使用返回的逻辑 POU 名称。只读，不根据正文生成工程。',
         {'type': 'object', 'properties': {'program': {'type': 'string'}, 'data_base64': {'type': 'string'}},
          'additionalProperties': False}, _read_st_project))
     registry.register(ToolDefinition('create_st_candidate',
-        '导入已保存 GXW 中明确选定的普通 ST Program，保留整个工程、声明和任务绑定，作为可见原生工程执行的保存版本。必须指定 read_st_project 返回的逻辑 program；编译及运行验证另行执行。',
-        {'type': 'object', 'properties': {'operation': {'type': 'string', 'enum': ['import']},
-            'data_base64': {'type': 'string'}, 'program': {'type': 'string'}, 'summary': {'type': 'string'}},
-         'required': ['operation', 'data_base64', 'program'], 'additionalProperties': False},
+        '在当前保存 GXW 的隔离副本中创建或编辑普通 ST Program，或 import 已保存工程。create_st_program 使用 source_name/declarations/st_text，并显式指定已有 resource/task/scope_mode=existing_task；edit_st_program 用 source_name/st_text，可选 declarations。import 使用 read_st_project 返回的逻辑 program 和 data_base64。写入复用原生后台适配器及 Core 回读，不修改活动 IDE；候选经现有事务保存版本，编译和运行验证分别执行。',
+        _engineering_st_schema(),
         _create_st_candidate, confirmation_required=True))
     registry.register(ToolDefinition('read_sfc_project',
         '读取当前 GXW 或上传工程中 SFC 的 CPU、声明、图形引用和子程序。native=true 在隔离工作区只读取得原生格点；已有对应证据时复用，不推断执行语义。',

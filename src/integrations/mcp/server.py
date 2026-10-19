@@ -62,8 +62,17 @@ WORKFLOW_INSTRUCTIONS = (
     "create_st_candidate(operation=import, program=<exact logical source>, data_base64=...); "
     "this entry does not synthesize a GXW from ST text. Use execute_native_engineering for visible "
     "edits in one native IDE session, including ordinary ST Programs and explicit existing FBD node/wire actions. "
+    "For persistent foreground editing set execute_native_engineering plan.mode=live and session_action=start. "
+    "Keep its server-issued session_id; continue with session_action=continue and controls.expected_revision from "
+    "get_native_engineering_session. The active context spans calls without saving or reopening between edits. "
+    "get_generation_context follows that active session unless execution_mode=background is explicit. "
+    "Use pause_native_engineering_session to request a stop after the current step; resume pending steps with "
+    "empty commands and controls.resume_pending=true. Rebind only reconciles the same owned process and never "
+    "replays an uncertain edit. End releases the controller and leaves GX open. "
     "New ST Programs require an explicitly selected existing resource and task. Compile in that session before "
-    "showing compiler-assigned addresses, then save and reopen to verify the result. "
+    "showing compiler-assigned addresses; each edit makes prior compilation and assignments stale. "
+    "Save is an explicit phase boundary that can create an application version; active page changes and GX's "
+    "own compiler Save are reported separately. Reopen is an explicit representative persistence check. "
     "Report only actual tool results: structural acceptance is distinct from behavior, simulation and native validation. "
     "Never generate canonical IR or override server-owned project, profile, revision or approval fields. "
 )
@@ -129,6 +138,9 @@ def create_local_server(session) -> Server:
 
 def _create_adapter_server(adapter, instructions):
     limiter = anyio.CapacityLimiter(1)
+    query_limiter = anyio.CapacityLimiter(4)
+    cached_controls = {'get_operation_status', 'get_native_engineering_session',
+                       'pause_native_engineering_session'}
 
     async def list_tools(
         ctx: ServerRequestContext, params: PaginatedRequestParams | None
@@ -140,7 +152,7 @@ def _create_adapter_server(adapter, instructions):
     ) -> CallToolResult:
         return await anyio.to_thread.run_sync(
             adapter.call_tool, params.name, params.arguments, str(ctx.request_id),
-            limiter=limiter,
+            limiter=query_limiter if params.name in cached_controls else limiter,
         )
 
     return Server(

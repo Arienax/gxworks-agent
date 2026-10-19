@@ -19,6 +19,10 @@ class ToolRuntime(Protocol):
 
 def _public_value(value: Any) -> Any:
     if isinstance(value, Mapping):
+        if value.get('mode') == 'live':
+            from application.live_engineering import is_live_engineering_receipt, live_engineering_summary
+            if is_live_engineering_receipt(value):
+                return live_engineering_summary(value)
         from application.capability_context import public_discovery
         return {
             key: public_discovery(item) if key == "capability_discovery" else _public_value(item)
@@ -32,6 +36,7 @@ def _public_value(value: Any) -> Any:
 
 _DEBUG_TOOLS = frozenset({
     'get_diagnostics', 'validate_current_program', 'validate_project',
+    'get_operation_status',
     'compare_native_compiled_code', 'get_simulator_trace',
     'read_native_device_assignments', 'locate_native_code_steps',
 })
@@ -44,7 +49,21 @@ def _model_tool_value(name, value):
     if name in _DEBUG_TOOLS or name == 'search_plc_manual':
         return public
     from shared.model_context import technical_value
-    return technical_value(public)
+    projected = technical_value(public)
+    def live_receipts(original, current):
+        if isinstance(original, Mapping) and original.get('mode') == 'live':
+            # Live step verification and native diagnostics are operational
+            # receipts, already bounded by their application projection.
+            from application.live_engineering import is_live_engineering_receipt, live_engineering_summary
+            if is_live_engineering_receipt(original):
+                return live_engineering_summary(original)
+        if isinstance(current, Mapping) and isinstance(original, Mapping):
+            return {key: live_receipts(original[key], item) if key in original else item
+                    for key, item in current.items()}
+        if isinstance(current, list) and isinstance(original, (list, tuple)):
+            return [live_receipts(before, after) for before, after in zip(original, current)]
+        return current
+    return live_receipts(public, projected)
 
 
 def public_tool_result_data(result: ToolResult) -> Mapping[str, Any]:

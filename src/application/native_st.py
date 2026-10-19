@@ -14,7 +14,7 @@ from pathlib import Path
 from gxw.fb_authoring import st_program_snapshot
 from gxw.native_diagnostics import native_validation_source_plan
 from gxw.project_metadata import project_gui_configuration
-from gxw.visible_engineering import source_projection
+from gxw.st_program import project_context_snapshot
 from gxworks2.project_profiles import native_project_profile
 from .fbd import json_bytes
 
@@ -54,7 +54,9 @@ def _source_snapshot(raw, *, program_name, plc_model):
         raise ValueError('ST candidate task row does not bind the exact current Program owner')
     return dict(cpu=snapshot['cpu'], selected_program=program,
         task_scopes=dict(resources=snapshot['resources'], tasks=snapshot['tasks']),
-        project=_json_projection(source_projection(raw)),
+        # Saved candidate readback must also retain readable declarations whose
+        # address storage is outside the stricter visible editing contract.
+        project=_json_projection(project_context_snapshot(raw, program_name)),
         compiler_sources=native_validation_source_plan(raw, include_logical_names=True),
         gui_configuration=_json_projection(project_gui_configuration(raw)))
 

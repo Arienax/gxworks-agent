@@ -7,6 +7,7 @@ import hashlib
 import json
 import re
 import tempfile
+import threading
 import uuid
 import shared.diagnostics as diagnostics
 from datetime import datetime, timezone
@@ -18,6 +19,21 @@ from agent_runtime.messages import ToolCall
 from agent_runtime.runtime import public_tool_result_data
 from plc.change_scope import ChangeScopeError
 from shared.context_audit import ContextAudit, context_audit_scope
+
+
+def _native_generation_metadata(cpu, receipt, summary):
+    """Retain the selected menu and observed native identity on saved versions."""
+    from plc.target_support import require_native_program_target
+    selected = require_native_program_target(cpu)
+    identity = receipt.get('identity') or {}
+    if identity.get('cpu_menu') is not None:
+        actual = require_native_program_target(identity['cpu_menu'])
+        if actual.cpu != selected.cpu:
+            raise ValueError('Native engineering receipt CPU differs from the saved target')
+    result = {'native_engineering': summary, 'native_cpu_menu': selected.cpu}
+    result.update({key: copy.deepcopy(identity[key]) for key in
+                   ('software_version', 'native_ui_language', 'project_codepage') if key in identity})
+    return result
 
 
 class WorkbenchService:
@@ -35,6 +51,8 @@ class WorkbenchService:
         self.jobs = None
         self.proposals = None
         self.execution = None
+        self._lifecycle_lock = threading.RLock()
+        self._started = False
         self._mcp_activity = {}
         from application.approval import ApprovalPolicy
         self.approval = ApprovalPolicy(self.state_dir)
@@ -44,31 +62,46 @@ class WorkbenchService:
         self.sfc = SFCService(self)
 
     def start(self):
-        if not self.read_only:
-            from application.jobs import JobManager
-            from application.proposals import ProposalService
-            from application.execution import GXExecutionCoordinator
-            self.lock = WorkspaceWriterLock(self.store.base_dir).acquire()
-            try:
-                with self.lock.thread_lock:
-                    self.spec_migration = self.store.migrate_confirmed_specs()
-                self.jobs = JobManager(self.state_dir, self.lock)
-                self.proposals = ProposalService(self.store, self.state_dir, self.lock)
-                self.execution = GXExecutionCoordinator(self.store)
-            except Exception:
-                self.close()
-                raise
+        with self._lifecycle_lock:
+            if self._started:
+                return self
+            if not self.read_only:
+                from application.jobs import JobManager
+                from application.proposals import ProposalService
+                from application.execution import GXExecutionCoordinator
+                self.lock = WorkspaceWriterLock(self.store.base_dir).acquire()
+                try:
+                    with self.lock.thread_lock:
+                        self.spec_migration = self.store.migrate_confirmed_specs()
+                    self.jobs = JobManager(self.state_dir, self.lock)
+                    self.proposals = ProposalService(self.store, self.state_dir, self.lock)
+                    self.execution = GXExecutionCoordinator(self.store)
+                except Exception:
+                    self.close()
+                    raise
+            self._started = True
+            return self
 
     def close(self):
-        # Keep ownership until outstanding workers reach completion/checkpoints.
-        if getattr(self, "hardware", None):
-            self.hardware.close()
-        if self.jobs:
-            self.jobs.shutdown(wait=True)
-        if self.execution:
-            self.execution.close(wait=True)
-        if self.lock:
-            self.lock.release()
+        with self._lifecycle_lock:
+            # Keep ownership until outstanding workers reach their checkpoints.
+            try:
+                if getattr(self, 'hardware', None):
+                    hardware, self.hardware = self.hardware, None
+                    hardware.close()
+            finally:
+                try:
+                    if self.jobs:
+                        self.jobs.shutdown(wait=True)
+                finally:
+                    try:
+                        if self.execution:
+                            self.execution.close(wait=True)
+                    finally:
+                        if self.lock:
+                            self.lock.release()
+                        self.jobs = self.proposals = self.execution = self.lock = None
+                        self._started = False
 
     def writable(self):
         if self.read_only or not self.lock:
@@ -1020,6 +1053,20 @@ class WorkbenchService:
 
     def agent_call(self, command, *, observe_client=True, direct_request=False):
         self.writable()
+        if command.get('name') in {'get_operation_status', 'get_native_engineering_session', 'pause_native_engineering_session'}:
+            # Execution workers may hold the workspace writer lock while GX
+            # runs. Read atomic public receipts without waiting for that write
+            # transaction or replaying a cached observation from an old query.
+            from agent_runtime.plc_tools import build_tool_context
+            context = build_tool_context(self.projects.raw_project(command['project_id']),
+                                         operation_status=self.operation_status,
+                                         native_session_status=self.native_session_status,
+                                         native_session_pause=self.native_session_pause)
+            result = self.projects.runtime.invoke(ToolCall(command['call_id'], command['name'],
+                command.get('arguments', {})), context)
+            envelope = public_tool_result_data(result)
+            return {'data': envelope, 'content': json.dumps(envelope, ensure_ascii=False),
+                    'is_error': result.is_error, 'call_id': command['call_id'], 'name': command['name']}
         request_key = hashlib.sha256((command["project_id"] + ":" + command["call_id"]).encode()).hexdigest()
         path = self.state_dir / "agent_calls" / (request_key + ".json")
         # This is an application invocation option, never an Agent argument.
@@ -1033,6 +1080,10 @@ class WorkbenchService:
                     self._observe_mcp_call(command, saved["response"])
                 return saved["response"]
             context = self.projects.tool_context(command["project_id"], command.get("version_id"))
+            from dataclasses import replace
+            context = replace(context, operation_status=self.operation_status,
+                              native_session_status=self.native_session_status,
+                              native_session_pause=self.native_session_pause)
             scope = self._command_scope(command, context)
             result = self.projects.runtime.invoke(ToolCall(command["call_id"], command["name"], command.get("arguments", {})), context)
             envelope = public_tool_result_data(result)
@@ -1051,6 +1102,96 @@ class WorkbenchService:
             if observe_client:
                 self._observe_mcp_call(command, response)
             return response
+
+    def native_session_status(self, project_id, session_id=None):
+        project_id = record_id(project_id)
+        self.projects.raw_project(project_id)
+        if self.execution is None:
+            if session_id is not None:
+                raise KeyError('No native session is owned by this application process')
+            return {'mode': 'background', 'status': 'not_started', 'project_id': project_id}
+        from application.live_engineering import live_engineering_summary
+        return live_engineering_summary(self.execution.live_session_status(project_id, session_id))
+
+    def native_session_pause(self, project_id, session_id):
+        project_id = record_id(project_id)
+        self.projects.raw_project(project_id)
+        if self.execution is None:
+            raise KeyError('No native session is owned by this application process')
+        return self.execution.request_live_session_pause(project_id, session_id)
+
+    def operation_status(self, project_id, *, proposal_id=None, execution_job_id=None):
+        """Read durable public receipts for one selected project, without execution.
+
+        Proposal writes use atomic JSON replacement. Reading their public
+        snapshot here deliberately avoids the workspace transaction lock held
+        by a running external operation. Frozen inputs never leave this method.
+        """
+        project_id = record_id(project_id)
+        self.projects.raw_project(project_id)
+        if (proposal_id is None) == (execution_job_id is None):
+            raise ValueError('Provide exactly one proposal_id or execution_job_id')
+        from application.jobs import JobManager
+        from application.proposals import ProposalService
+        from application.workspace import bind_workspace_state
+        state_dir = bind_workspace_state(self.state_dir, self.store.base_dir, read_only=True)
+
+        def read_record(group, identifier):
+            directory = contained(state_dir / group, state_dir)
+            path = contained(directory / (identifier + '.json'), directory)
+            if not path.is_file():
+                raise KeyError(identifier)
+            record = read_json(path)
+            if record.get('id') != identifier:
+                raise ValueError('Invalid operation record')
+            return record
+
+        def proposal_record(identifier):
+            record = read_record('proposals', record_id(identifier))
+            if record.get('project_id') != project_id:
+                raise KeyError('Operation not found in the selected project')
+            return public(ProposalService._public(record))
+
+        proposal, job = None, None
+        if proposal_id is not None:
+            proposal = proposal_record(proposal_id)
+        else:
+            execution_job_id = record_id(execution_job_id)
+            record = read_record('jobs', execution_job_id)
+            snapshot = record.get('snapshot') or {}
+            if snapshot.get('project_id') != project_id:
+                raise KeyError('Operation not found in the selected project')
+            job = public(JobManager._public(record))
+            proposal_id = snapshot.get('proposal_id')
+            if proposal_id is not None:
+                proposal = proposal_record(proposal_id)
+                if snapshot.get('version_id') != proposal.get('base_version_id'):
+                    raise ValueError('Execution job and proposal use different saved baselines')
+                observed = job.get('result')
+                if (isinstance(observed, dict) and observed.get('proposal_id') is not None
+                        and observed['proposal_id'] != proposal_id):
+                    raise ValueError('Execution job result belongs to a different proposal')
+
+        result = (proposal or {}).get('result')
+        if result is None and job is not None:
+            result = job.get('result')
+            if isinstance(result, dict) and proposal is not None:
+                result = result.get('result')
+        if isinstance(result, dict) and result.get('project_id') not in (None, project_id):
+            raise ValueError('Execution result belongs to a different project')
+        response = {'project_id': project_id, 'status': (job or proposal)['status'],
+                    'execution_result': copy.deepcopy(result)}
+        if proposal is not None:
+            response.update(proposal_id=proposal['id'], proposal=proposal,
+                            base_version_id=proposal.get('base_version_id'))
+        if job is not None:
+            response.update(execution_job_id=job['id'], job=job)
+            response.setdefault('base_version_id', job.get('version_id'))
+        if isinstance(result, dict) and result.get('version_id') is not None:
+            version_id = record_id(result['version_id'])
+            self.projects.raw_version(project_id, version_id)
+            response['version_id'] = version_id
+        return response
 
     @staticmethod
     def _command_scope(command, context):
@@ -1094,11 +1235,17 @@ class WorkbenchService:
             payload = {"project_id": project_id, "version_id": version_id}
             if command['action'] == 'native_engineering':
                 from application.native_engineering import normalize_native_plan, validate_native_baseline
+                from application.execution import native_saved_cpu
                 if version.get('target_mode') not in {'fbd', 'st'} or command.get('plan_id') is not None:
                     raise ValueError('Native engineering requires a saved structured FBD or ST version and an explicit batch plan')
-                cpu = version.get('plc_model') or self.store.get_project(project_id).get('plc_model')
-                payload['plan'] = normalize_native_plan(command.get('plan'), plc_model=cpu)
-                validate_native_baseline(self.projects.artifact(project_id, version_id, 'gxw').read_bytes(), plc_model=cpu)
+                cpu = native_saved_cpu(version, self.store.get_project(project_id))
+                if (command.get('plan') or {}).get('mode') == 'live':
+                    from application.live_engineering import normalize_live_plan
+                    payload['plan'] = normalize_live_plan(command['plan'], plc_model=cpu)
+                else:
+                    payload['plan'] = normalize_native_plan(command.get('plan'), plc_model=cpu)
+                validate_native_baseline(self.projects.artifact(project_id, version_id, 'gxw').read_bytes(),
+                                         plc_model=cpu, live=payload['plan'].get('mode') == 'live')
             elif command.get('plan') is not None:
                 raise ValueError('An explicit batch plan is only supported for native engineering')
             if manual_backup:
@@ -1152,6 +1299,8 @@ class WorkbenchService:
                     request_id=("policy_" + str(policy["revision"]) + "_" if policy else "approve_") + proposal_id)}
 
     def _complete_native_engineering(self, payload, approved_id, result):
+        if (payload.get('plan') or {}).get('mode') == 'live':
+            return self._complete_live_engineering(payload, approved_id, result)
         from application.native_engineering import normalize_native_plan, verified_native_data, native_engineering_summary
         receipt = result.get('_native_result') if isinstance(result, dict) else None
         if not isinstance(receipt, dict):
@@ -1161,7 +1310,8 @@ class WorkbenchService:
             return summary
         project_id, base_id = payload['project_id'], payload['version_id']
         version = self.projects.raw_version(project_id, base_id)
-        cpu = version.get('plc_model') or self.store.get_project(project_id).get('plc_model')
+        from application.execution import native_saved_cpu
+        cpu = native_saved_cpu(version, self.store.get_project(project_id))
         plan = normalize_native_plan(payload.get('plan'), plc_model=cpu)
         try:
             raw = verified_native_data(receipt, plan)
@@ -1184,11 +1334,52 @@ class WorkbenchService:
             validation.update(native_save='passed', native_source_save_required=True,
                 gx_compile=summary['gx_compile_status'],
                 messages=['已核对同一原生会话保存的声明、实现、图形和配置；运行对应关系仍未验证。'])
-            candidate['metadata']['generation_metadata'] = {'native_engineering': summary,
-                'native_cpu_menu': 'FX3U/FX3UC', 'software_version': '1.635.0.1'}
+            candidate['metadata']['generation_metadata'] = _native_generation_metadata(cpu, receipt, summary)
             saved = self.proposals.complete_native_candidate(approved_id, candidate)
         return {**summary, **saved, 'status': 'completed', 'base_version_id': base_id,
                 'project_id': project_id}
+
+    def _complete_live_engineering(self, payload, approved_id, result):
+        from application.live_engineering import live_engineering_summary, verified_live_data
+        receipt = result.get('_live_result') if isinstance(result, dict) else None
+        if not isinstance(receipt, dict):
+            failure = result if isinstance(result, dict) else {}
+            return {'status': failure.get('status') if failure.get('status') in ('error', 'unavailable') else 'interrupted',
+                    'passed': False, 'mode': 'live',
+                    'message': failure.get('message') or '持续原生工程执行没有返回可确认的会话回执。'}
+        summary = live_engineering_summary(receipt)
+        successful = receipt.get('passed') is True and receipt.get('status') in ('completed', 'paused', 'ready', 'ended')
+        if not successful:
+            return {**summary, 'status': 'interrupted', 'passed': False}
+        summary.update(session_status=receipt['status'], status='completed', passed=True)
+        if not isinstance(receipt.get('data'), bytes):
+            return summary
+        project_id, base_id = payload['project_id'], payload['version_id']
+        version = self.projects.raw_version(project_id, base_id)
+        from application.execution import native_saved_cpu
+        cpu = native_saved_cpu(version, self.store.get_project(project_id))
+        baseline = self.projects.artifact(project_id, base_id, 'gxw').read_bytes()
+        raw = verified_live_data(receipt, baseline)
+        with tempfile.TemporaryDirectory(dir=self.state_dir, prefix='live-native-result-') as directory:
+            if version['target_mode'] == 'st':
+                from application.native_st import prepare_candidate
+            else:
+                from application.fbd import prepare_candidate
+            candidate = prepare_candidate(directory, imported=raw, plc_model=cpu,
+                program_name=version.get('program_name'), summary='持续原生工程阶段保存')
+            current_compile = receipt.get('compile') or {}
+            compile_status = (current_compile.get('status') if current_compile.get('revision') == receipt['data_revision']
+                              else 'unverified')
+            candidate['metadata']['validation'].update(native_save='passed',
+                native_source_save_required=True, gx_compile=compile_status,
+                messages=['已核对本阶段保存与实际原生页面；编译和地址结果分别绑定其修订。'])
+            candidate['metadata']['generation_metadata'] = _native_generation_metadata(cpu, receipt, summary)
+            saved = self.proposals.complete_native_candidate(approved_id, candidate)
+        self.execution.rebase_live_session(project_id, receipt['session_id'], base_id, saved['version_id'])
+        summary.update(version_revision=receipt['data_revision'],
+                       version_matches_active_source=receipt['data_revision'] == receipt['revision'])
+        return {**summary, **saved, 'status': 'completed', 'project_id': project_id,
+                'base_version_id': base_id, 'data_revision': receipt['data_revision']}
 
     def _candidate_diff(self, project_id, base_version_id, payload):
         """Review the proposal's bound version, never the UI's active selection."""
@@ -1265,8 +1456,21 @@ class WorkbenchService:
             before = ""
             if base_version_id:
                 base = self.projects.raw_version(project_id, base_version_id)
-                artifact_id = "st" if "st" in (base.get("artifacts") or {}) else "st_from_ir"
-                before = self.projects.artifact(project_id, base_version_id, artifact_id).read_text(encoding="utf-8")
+                artifacts = base.get('artifacts') or {}
+                binding = ((payload.get('metadata') or {}).get('validation') or {}).get('source_binding')
+                if (isinstance(binding, dict) and binding.get('kind') == 'program'
+                        and binding.get('language') == 'st' and 'gxw' in artifacts):
+                    from gxw.fb_authoring import st_program_snapshot
+                    saved = self.projects.artifact(project_id, base_version_id, 'gxw').read_bytes()
+                    same_owner = [row for row in st_program_snapshot(saved)['programs']
+                                  if row['name'].casefold() == binding['owner'].casefold()]
+                    if len(same_owner) > 1:
+                        raise ValueError('ST 候选在基础工程中的 Program 归属不唯一。')
+                    before = same_owner[0]['st_text'] if same_owner else ''
+                else:
+                    artifact_id = next((key for key in ('st', 'st_from_ir') if key in artifacts), None)
+                    if artifact_id:
+                        before = self.projects.artifact(project_id, base_version_id, artifact_id).read_text(encoding="utf-8")
             root = contained(Path(payload["staging_dir"]), self.state_dir)
             entry = payload["artifacts"]["st"]
             data = contained(root / entry["path"], root).read_bytes()

@@ -1936,8 +1936,8 @@ export default function App() {
           </button>
         </div>
       )}
-      <Modal open={!!gxSend} onOpenChange={open => !open && setGXSend(null)} title={t("发送前请备份")}
-        description={t("将覆盖 GX Works2 当前 MAIN 和相关软元件注释，请先备份。")}
+      <Modal open={!!gxSend} onOpenChange={open => !open && setGXSend(null)} title={t("确认发送到 GX")}
+        description={t("将覆盖 GX Works2 当前 MAIN 和相关软元件注释，已有 GXW 文件会自动备份。")}
       >
         <p>{t("本地项目")}：<strong>{gxSend?.projectName}</strong></p>
         <p>{t("待发送版本")}：<strong>{gxSend?.versionId}</strong></p>

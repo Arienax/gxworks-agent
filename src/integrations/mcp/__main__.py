@@ -107,6 +107,7 @@ def main(argv=None) -> int:
         parser.error("MCP requires Python 3.10+")
     logging.basicConfig(level=logging.INFO, stream=sys.stderr, format="%(levelname)s %(name)s: %(message)s")
 
+    session = None
     try:
         with redirect_stdout(sys.stderr):
             if standalone:
@@ -172,6 +173,9 @@ def main(argv=None) -> int:
         anyio.run(runner, *runner_args)
     except KeyboardInterrupt:
         pass
+    finally:
+        if session is not None:
+            session.close()
     return 0
 
 

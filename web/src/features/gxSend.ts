@@ -13,7 +13,7 @@ export async function submitGXSend(
   if (!isCurrent()) throw new Error("项目或版本已变化，请重新点击发送到 GX。");
   const proposal = await request<Proposal>("/proposals", "POST", {
     action: "gx_import", project_id: selection.projectId, version_id: selection.versionId,
-    request_id: selection.requestId, manual_backup_acknowledged: true,
+    request_id: selection.requestId,
   });
   // In full mode the policy may already have queued the operation. Never approve twice.
   if (!isCurrent()) return { proposal };

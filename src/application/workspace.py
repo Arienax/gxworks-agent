@@ -91,16 +91,27 @@ def private_state_dir(path: Path, workspace: Path) -> Path:
     return path
 
 
-def bind_workspace_state(path: Path, workspace: Path) -> Path:
+def bind_workspace_state(path: Path, workspace: Path, *, read_only=False) -> Path:
     """Bind application records to exactly one workspace, without storing its path.
 
     This is intentionally separate from private_state_dir: the OS lock directory
     is shared by many workspaces, whereas job/proposal state must never be shared.
     """
-    path = private_state_dir(path, workspace)
+    if read_only:
+        path, workspace = Path(path).resolve(), Path(workspace).resolve()
+        if path == workspace or workspace in path.parents:
+            raise ValueError('Application state must be outside the engineering workspace')
+    else:
+        path = private_state_dir(path, workspace)
     marker = contained(path / ".workspace.json", path)
     key = os.path.normcase(str(Path(workspace).expanduser().resolve()))
     expected = {"schema_version": 1, "workspace_sha256": hashlib.sha256(key.encode("utf-8")).hexdigest()}
+    if read_only:
+        if not marker.is_file():
+            raise KeyError('No durable application receipts exist for this workspace')
+        if read_json(marker) != expected:
+            raise ConflictError('Application state belongs to another workspace')
+        return path
     try:
         descriptor = os.open(str(marker), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except FileExistsError:
@@ -140,9 +151,16 @@ _PUBLIC_FIELDS = frozenset({
 })
 
 
-def public_payload(value: Any) -> Any:
+def public_payload(value: Any, *, native_live: bool = False) -> Any:
     if isinstance(value, dict):
-        result = {key: public_payload(item) for key, item in value.items() if key in _PUBLIC_FIELDS}
+        if native_live and value.get('mode') == 'live':
+            # Only trusted native-engineering/execution owners enable this
+            # typed receipt. Ordinary job payloads keep the generic allowlist.
+            from .live_engineering import is_live_engineering_receipt, live_engineering_summary
+            if is_live_engineering_receipt(value):
+                return live_engineering_summary(value)
+        result = {key: public_payload(item, native_live=native_live)
+                  for key, item in value.items() if key in _PUBLIC_FIELDS}
         if "error_details" in value:
             # Diagnostic JSON paths are schema locations, not arbitrary file
             # paths. Reproject this one typed resource without widening the
@@ -157,7 +175,7 @@ def public_payload(value: Any) -> Any:
             # or expanding the generic payload whitelist to arbitrary details.
             summary = value["gx_import_summary"]
             projected = {}
-            if isinstance(summary.get("pre_import_policy"), str) and summary["pre_import_policy"] in {"protected", "manual_backup"}:
+            if isinstance(summary.get("pre_import_policy"), str) and summary["pre_import_policy"] in {"project_file", "protected", "manual_backup"}:
                 projected["pre_import_policy"] = summary["pre_import_policy"]
             if type(summary.get("backup_performed")) is bool:
                 projected["backup_performed"] = summary["backup_performed"]
@@ -172,7 +190,7 @@ def public_payload(value: Any) -> Any:
             result["gx_import_summary"] = projected
         return result
     if isinstance(value, (list, tuple)):
-        return [public_payload(item) for item in value]
+        return [public_payload(item, native_live=native_live) for item in value]
     if isinstance(value, str):
         # Paths belong in managed artifact URLs, never in raw service responses.
         if re.search(r"(?:[A-Za-z]:[\\/]|\\\\|/(?:Users|home|tmp|var|etc)/)", value):

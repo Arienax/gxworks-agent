@@ -61,7 +61,8 @@ def _public_context_audit(value) -> dict:
 def append_event(record: dict, event_type: str, data=None) -> dict:
     from model_runtime.usage import public_usage
     payload = (public_usage(data) if event_type == "model_request" else
-               _public_context_audit(data) if event_type == "context_audit" else public_payload(data or {}))
+               _public_context_audit(data) if event_type == "context_audit" else
+               public_payload(data or {}, native_live=record.get('kind') == 'execution'))
     event = {
         "job_id": record["id"],
         "project_id": record.get("snapshot", {}).get("project_id"),

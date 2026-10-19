@@ -128,8 +128,15 @@ class ApplicationServiceClient:
         result = ToolResult(call_id, name, str(response.get("content") or ""), data, is_error=bool(response.get("is_error")))
         # Defense in depth: never trust a transport response with private IR.
         public = public_tool_result_data(result)
-        if response.get("proposal_id"):
-            public["proposal_id"] = str(response["proposal_id"])
+        for key in ('proposal_id', 'execution_job_id', 'version_id'):
+            value = response.get(key)
+            if value is None:
+                continue
+            if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,127}', value):
+                raise ServiceConnectionError('Local agent service returned an invalid operation identifier.')
+            if key in public and public[key] != value:
+                raise ServiceConnectionError('Local agent service returned inconsistent operation identifiers.')
+            public[key] = value
         return ToolResult(call_id, name, json.dumps(public, ensure_ascii=False), public, is_error=result.is_error)
 
 
@@ -163,4 +170,4 @@ class ServiceMCPToolAdapter:
             result = self.client.call_tool(name, arguments, logical_id, project_id=self.project_id, version_id=self.version_id)
             return to_mcp_result(ToolResult(call_id, result.name, result.content, result.data, result.is_error))
         except (ServiceConnectionError, ValueError):
-            return _error(call, "SERVICE_UNAVAILABLE", "Local application service call failed; check the service and agent token. No approval was granted.")
+            return _error(call, "SERVICE_UNAVAILABLE", "Local application service call failed; inspect the existing operation receipt before submitting a new action.")

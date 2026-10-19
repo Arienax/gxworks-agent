@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import threading
+from dataclasses import replace
 from pathlib import Path
 
 from agent_runtime.messages import ToolCall, ToolResult
@@ -42,10 +43,10 @@ class _ExternalClientSettings:
 
 
 class EngineeringSession:
-    """A local client owns its selection, with workspace ownership per call.
+    """A local client owns its selection and one persistent application service.
 
-    Writers may share a workspace between calls. An active owner is never
-    bypassed, and native work finishes before the writer lock is released.
+    Writers share a workspace only after explicit close releases ownership.
+    Native work finishes before its worker and writer lock are released.
     Startup consent comes from operator CLI/configuration, not tool arguments.
     """
 
@@ -71,6 +72,7 @@ class EngineeringSession:
         self.confirm_full_access = confirm_full_access
         self._consent_initialized = False
         self._call_lock = threading.RLock()
+        self._closed = False
         self.registry = self._session_registry()
         self.inspection = self.service.projects.inspection
 
@@ -91,17 +93,17 @@ class EngineeringSession:
              ("project_id",), self._select_project),
             ("get_project_artifacts", "Return verified managed artifact paths for the selected saved version, without exporting or overwriting files.",
              {}, (), self._artifacts),
-            ("get_operation_status", "Read the actual saved proposal and native execution receipt for this session's selected project.",
-             {"proposal_id": {"type": "string", "minLength": 1, "maxLength": 128}},
-             ("proposal_id",), self._operation_status),
         )
         for name, description, properties, required, handler in definitions:
             registry.register(ToolDefinition(name, description,
                 {"type": "object", "properties": properties, "required": list(required), "additionalProperties": False}, handler))
+        shared = self.service.projects.runtime.registry._tools['get_operation_status']
+        registry.register(replace(shared, handler=self._operation_status))
         return registry
 
     def list_tools(self, context=None):
-        return self.registry.schemas() + self.service.projects.runtime.list_tools()
+        return self.registry.schemas() + [tool for tool in self.service.projects.runtime.list_tools()
+            if tool['function']['name'] not in self.registry.names]
 
     def check(self):
         """Read-only setup diagnostics; do not create state or inspect credentials."""
@@ -144,10 +146,10 @@ class EngineeringSession:
         return {"project_id": project_id, "version_id": context.version_id, "artifacts": artifacts}
 
     def _operation_status(self, _context, arguments):
-        proposal = self.service.proposals.get(record_id(arguments["proposal_id"], "proposal"))
-        if proposal["project_id"] != self._require_project():
-            raise ValueError("Operation belongs to another project; select that project explicitly")
-        return {"proposal": proposal}
+        context = build_tool_context(self.service.projects.raw_project(self._require_project()),
+                                     operation_status=self.service.operation_status)
+        shared = self.service.projects.runtime.registry._tools['get_operation_status']
+        return shared.handler(context, arguments)
 
     @staticmethod
     def _error(call, code, message):
@@ -155,6 +157,8 @@ class EngineeringSession:
         return ToolResult(call.id, call.name, json.dumps(envelope, ensure_ascii=False), envelope, is_error=True)
 
     def invoke(self, call: ToolCall, context=None) -> ToolResult:
+        if self._closed:
+            return self._error(call, 'SESSION_CLOSED', 'The engineering session is closed')
         if call.name not in (*SESSION_TOOL_NAMES, *SAFE_TOOL_NAMES):
             return self._error(call, "UNKNOWN_TOOL", "Tool is not in the engineering tool registry")
         try:
@@ -163,7 +167,28 @@ class EngineeringSession:
         except ValueError as error:
             return self._error(call, "INVALID_ARGUMENTS", str(error))
         try:
+            if call.name in {'get_operation_status', 'get_native_engineering_session',
+                             'pause_native_engineering_session'}:
+                definition = self.service.projects.runtime.registry._tools[call.name]
+                try:
+                    ToolRegistry._validate_arguments(definition.parameters, arguments)
+                except ValueError as error:
+                    return self._error(call, 'INVALID_ARGUMENTS', str(error))
+                # The in-flight engineering call holds _call_lock while waiting
+                # for its real job. These callbacks read caches or set an Event.
+                # Capture selection once so a later selection cannot redirect it.
+                project_id = self.project_id
+                project = self.service.projects.raw_project(project_id) if project_id else {}
+                context = build_tool_context(project,
+                    operation_status=lambda _project, **query: self.service.operation_status(project_id, **query),
+                    native_session_status=lambda _project, session_id=None:
+                        self.service.native_session_status(project_id, session_id),
+                    native_session_pause=lambda _project, session_id:
+                        self.service.native_session_pause(project_id, session_id))
+                return self.service.projects.runtime.invoke(call, context)
             with self._call_lock:
+                if self._closed:
+                    return self._error(call, 'SESSION_CLOSED', 'The engineering session is closed')
                 # Inspection never initializes a writer, migrates projects, or
                 # inherits an execution approval merely to read a source.
                 if call.name in READ_ONLY_TOOL_NAMES and not arguments.get("native"):
@@ -172,7 +197,10 @@ class EngineeringSession:
                                    or bool(arguments.get("source_ref")))
                     context = (build_tool_context({}) if independent or not self.project_id else
                                self.service.projects.tool_context(self.project_id, self.version_id))
-                    context = replace(context, inspection=self.inspection)
+                    context = replace(context, inspection=self.inspection,
+                                      operation_status=self.service.operation_status,
+                                      native_session_status=self.service.native_session_status,
+                                      native_session_pause=self.service.native_session_pause)
                     return self.service.projects.runtime.invoke(call, context)
                 if call.name in SAFE_TOOL_NAMES:
                     definition = self.service.projects.runtime.registry._tools[call.name]
@@ -182,34 +210,32 @@ class EngineeringSession:
                         return self._error(call, "INVALID_ARGUMENTS", str(error))
                     self._require_project()
                 self.service.start()
-                try:
-                    if not self._consent_initialized:
-                        if self.approval_mode is not None:
-                            self.service.update_approval_settings(mode=self.approval_mode,
-                                expected_revision=self.service.approval.read()["revision"],
-                                confirm_full_access=self.confirm_full_access)
-                        self._consent_initialized = True
-                    path = self.service.state_dir / "mcp_calls" / (hashlib.sha256(call.id.encode()).hexdigest() + ".json")
-                    if path.is_file():
-                        saved = read_json(path)
-                        if saved["input_hash"] != digest:
-                            raise ConflictError("MCP call ID was already used with other arguments")
-                        envelope = saved["response"]
-                    elif call.name in SESSION_TOOL_NAMES:
-                        with self.service.lock.thread_lock:
-                            envelope = self.registry.call(call.name, arguments, None)
-                            atomic_json(path, {"input_hash": digest, "response": envelope})
-                    else:
-                        response = self.service.agent_call({"project_id": self._require_project(),
-                            "version_id": self.version_id, "name": call.name,
-                            "arguments": arguments, "call_id": call.id}, direct_request=True, observe_client=False)
-                        # Finish external work before releasing workspace ownership.
-                        # The coordinator and proposal service own execution consent.
-                        self.service.jobs.shutdown(wait=True)
-                        envelope = self._completed_response(response)
+                if not self._consent_initialized:
+                    if self.approval_mode is not None:
+                        self.service.update_approval_settings(mode=self.approval_mode,
+                            expected_revision=self.service.approval.read()["revision"],
+                            confirm_full_access=self.confirm_full_access)
+                    self._consent_initialized = True
+                path = self.service.state_dir / "mcp_calls" / (hashlib.sha256(call.id.encode()).hexdigest() + ".json")
+                if path.is_file():
+                    saved = read_json(path)
+                    if saved["input_hash"] != digest:
+                        raise ConflictError("MCP call ID was already used with other arguments")
+                    envelope = saved["response"]
+                elif call.name in SESSION_TOOL_NAMES:
+                    with self.service.lock.thread_lock:
+                        envelope = self.registry.call(call.name, arguments, None)
                         atomic_json(path, {"input_hash": digest, "response": envelope})
-                finally:
-                    self.service.close()
+                else:
+                    response = self.service.agent_call({"project_id": self._require_project(),
+                        "version_id": self.version_id, "name": call.name,
+                        "arguments": arguments, "call_id": call.id}, direct_request=True, observe_client=False)
+                    # Wait only for this operation's real job; retain its worker
+                    # and apartment-bound native sessions for the next call.
+                    if response.get('execution_job_id'):
+                        self.service.jobs.wait(response['execution_job_id'])
+                    envelope = self._completed_response(response)
+                    atomic_json(path, {"input_hash": digest, "response": envelope})
             public = public_tool_result_data(ToolResult(call.id, call.name, "", envelope))
             return ToolResult(call.id, call.name, json.dumps(public, ensure_ascii=False), public, is_error=not bool(public.get("ok")))
         except WorkspaceBusyError:
@@ -226,6 +252,20 @@ class EngineeringSession:
         except ValueError as error:
             return self._error(call, "CONTEXT_UNAVAILABLE", str(error))
 
+    def close(self):
+        with self._call_lock:
+            if not self._closed:
+                self._closed = True
+                self.service.close()
+
+    shutdown = close
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
     def _completed_response(self, response):
         envelope = copy.deepcopy(response["data"])
         proposal_id = response.get("proposal_id")
@@ -233,9 +273,14 @@ class EngineeringSession:
             return envelope
         proposal = self.service.proposals.get(proposal_id)
         envelope["proposal_id"] = proposal_id
+        for key in ('execution_job_id', 'version_id'):
+            if response.get(key) is not None:
+                envelope[key] = response[key]
         data = envelope.setdefault("data", {})
         data.update(proposal_id=proposal_id, proposal_status=proposal["status"])
         result = proposal.get("result") or {}
+        if result.get('version_id') is not None:
+            envelope['version_id'] = result['version_id']
         if proposal["action"] == "accept_local" and proposal["status"] == "accepted":
             envelope["status"] = "saved"
             data.update(requires_confirmation=False, version_id=result["version_id"], save_result=result)

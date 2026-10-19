@@ -125,7 +125,8 @@ class JobManager:
         return public_payload({**{key: record.get(key) for key in _JOB_FIELDS},
                                "model_usage": record.get("model_usage", snapshot.get("model", {})),
                                "project_id": snapshot.get("project_id"),
-                               "version_id": snapshot.get("version_id") or snapshot.get("base_version_id")})
+                               "version_id": snapshot.get("version_id") or snapshot.get("base_version_id")},
+                              native_live=record.get('kind') == 'execution')
 
     def get(self, job_id):
         with self._record_lock:
@@ -415,7 +416,8 @@ class JobManager:
                         error_code = workflow_error_code(exc) or error_code
         with self._record_lock:
             record = self._load(job_id)
-            record.update(status=status, error_code=error_code, error_details=error_details, result=public_payload(result))
+            record.update(status=status, error_code=error_code, error_details=error_details,
+                          result=public_payload(result, native_live=record.get('kind') == 'execution'))
             append_event(record, status, {"result": record["result"], "error_code": error_code, "error_details": error_details})
             self._save(record)
 
@@ -433,6 +435,17 @@ class JobManager:
                                        "cancel_requested": bool(record.get("cancel_requested"))},
             )
             return self._public(record)
+
+    def wait(self, job_id, timeout=None):
+        """Wait for this job's actual worker, preserving the reusable executor."""
+        with self._record_lock:
+            record = self._load(job_id)
+            future = self._futures.get(job_id)
+            if future is None and record.get('status') in _ACTIVE:
+                raise RuntimeError('The active job has no worker in this manager')
+        if future is not None:
+            future.result(timeout=timeout)
+        return self.get(job_id)
 
     def shutdown(self, wait=True):
         with self._record_lock:

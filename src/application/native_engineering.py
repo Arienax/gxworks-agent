@@ -16,7 +16,7 @@ from gxw.models import GXWFormatError
 from gxw.visible_engineering import (AUTHORING_OPERATIONS, prepare_authoring,
     prepare_assignment_cross_references, prepare_fbd_call, saved_assignments, source_projection,
     verify_authoring_readback, verify_fbd_call, verify_native_cross_references)
-from gxw.visible_graph import prepare_graph_edit, verify_graph_edit
+from gxw.visible_graph import prepare_graph_edit, validate_graph_actions, verify_graph_edit
 
 
 _IDENTITY_FIELDS = ('process_id', 'window_handle', 'process_started', 'executable',
@@ -42,10 +42,23 @@ _PRODUCT_FIELDS = {
 }
 
 
-def normalize_native_plan(plan, *, plc_model):
+def normalize_native_plan(plan, *, plc_model=None):
     """Freeze a domain batch, with no process, path or driver option surface."""
-    if str(plc_model).upper() != 'FX3U':
+    if plc_model is not None and str(plc_model).upper() != 'FX3U':
         raise ValueError('Visible native engineering is verified only for FX3U (FX3U/FX3UC native menu)')
+    return _normalize_native_syntax(plan, plc_model=plc_model, live=False)
+
+
+def _normalize_native_syntax(plan, *, plc_model=None, live=False):
+    """Check command syntax separately from target selection and native evidence.
+
+    The live controller resolves current objects and operation capabilities at
+    execution time. Passing no CPU performs no family or model substitution.
+    """
+    profile = None
+    if plc_model is not None:
+        from plc.target_support import require_native_program_target
+        profile = require_native_program_target(plc_model)
     if (not isinstance(plan, dict) or set(plan) != {'schema_version', 'commands'}
             or type(plan['schema_version']) is not int or plan['schema_version'] != 1
             or not isinstance(plan['commands'], list) or not 1 <= len(plan['commands']) <= 256):
@@ -57,9 +70,9 @@ def normalize_native_plan(plan, *, plc_model):
     if len(encoded.encode('utf-8')) > 4 * 1024 * 1024:
         raise ValueError('Native engineering plan is too large')
     compiled, last_edit, last_layers = False, -1, {}
-    reference_steps = []
     for index, command in enumerate(plan['commands']):
-        if not isinstance(command, dict) or command.get('operation') not in _PRODUCT_FIELDS:
+        if (not isinstance(command, dict) or not isinstance(command.get('operation'), str)
+                or command['operation'] not in _PRODUCT_FIELDS):
             raise ValueError('This native engineering operation is not verified for product execution')
         operation = command['operation']
         if set(command) - _PRODUCT_FIELDS[operation]:
@@ -72,10 +85,8 @@ def normalize_native_plan(plan, *, plc_model):
                 raise ValueError('Native engineering source identities and ST text must be nonempty strings')
         if operation == 'create_st_program' and command['scope_mode'] != 'existing_task':
             raise ValueError('Visible ST Program creation requires an explicit existing_task scope')
-        if operation == 'edit_fbd_graph' and (not isinstance(command['actions'], list)
-                or not 1 <= len(command['actions']) <= 128
-                or any(not isinstance(action, dict) for action in command['actions'])):
-            raise ValueError('Visible graph edits require 1 to 128 explicit actions')
+        if operation == 'edit_fbd_graph':
+            validate_graph_actions(command['actions'])
         rows = command.get('members') if operation == 'create_structure' else command.get('declarations')
         if 'declarations' in command or 'members' in command:
             if (not isinstance(rows, list) or len(rows) > 4096
@@ -98,13 +109,20 @@ def normalize_native_plan(plan, *, plc_model):
             if (not isinstance(options, dict) or set(options) != {'system_variable_ranges'}
                     or not isinstance(options['system_variable_ranges'], dict)
                     or not options['system_variable_ranges']
-                    or set(options['system_variable_ranges']) - {'D', 'M'}):
-                raise ValueError('Visible product allocation currently covers only D/M ranges; program capacity is unverified')
+                    or (not live and set(options['system_variable_ranges']) - {'D', 'M'})):
+                raise ValueError('Visible allocation requires explicit device ranges; program capacity is unverified')
             for pair in options['system_variable_ranges'].values():
                 if not isinstance(pair, list) or len(pair) != 2 or any(type(value) is not int for value in pair):
-                    raise ValueError('Visible D/M allocation requires explicit integer bounds')
+                    raise ValueError('Visible allocation requires explicit integer bounds')
+            if any(not isinstance(device, str) or device not in {'D', 'R', 'W', 'T', 'ST', 'C', 'M', 'B', 'P', 'S', 'T10'}
+                   for device in options['system_variable_ranges']):
+                raise ValueError('Visible allocation requires explicit native device classes')
             from gxw.fb_authoring import validate_configuration_ranges
-            validate_configuration_ranges(options['system_variable_ranges'], cpu='FX3U/FX3UC', known_devices={'D', 'M'})
+            validate_configuration_ranges(options['system_variable_ranges'],
+                cpu=profile.cpu if profile else '', known_devices=options['system_variable_ranges'])
+            if live and profile is not None:
+                from gxw.project_metadata import validate_project_allocation_ranges
+                validate_project_allocation_ranges(options['system_variable_ranges'], cpu=profile.cpu)
         if operation == 'show_assignments':
             queries = command['queries']
             if not compiled or not isinstance(queries, list) or not 1 <= len(queries) <= 32:
@@ -119,21 +137,22 @@ def normalize_native_plan(plan, *, plc_model):
                 if identity in seen:
                     raise ValueError('Duplicate native address query')
                 seen.add(identity)
-            reference_steps.append(index)
         elif operation == 'compile':
             compiled = True
         elif operation not in _AUXILIARY_OPERATIONS:
             compiled = False
             last_edit = index
-        if operation in {'compile', 'save', 'reopen'}:
+        if operation in {'compile', 'show_assignments', 'save', 'reopen'}:
             last_layers[operation] = index
-    if any(index < last_edit for index in last_layers.values()) or any(index < last_edit for index in reference_steps):
-        raise ValueError('Requested final verification layers must follow the last source edit; repeat compile, save or reopen after editing')
+    # Earlier observations retain their own revision. Only the latest requested
+    # layer must still describe the final source delivered by this batch.
+    if any(index < last_edit for index in last_layers.values()):
+        raise ValueError('Requested final verification layers must follow the last source edit; repeat compile, address display, save or reopen after editing')
     return copy.deepcopy(plan)
 
 
 def verified_native_data(result, plan):
-    """Require every requested layer at the final revision before persistence."""
+    """Require completed revision-bound steps and current final layers to persist."""
     if (not isinstance(result, dict) or result.get('status') != 'completed' or result.get('passed') is not True
             or result.get('data_status') != 'last_verified_source'
             or not isinstance(result.get('data'), bytes) or not result['data']
@@ -144,13 +163,16 @@ def verified_native_data(result, plan):
     if (type(revision) is not int or revision < 0 or not isinstance(steps, list) or len(steps) != len(commands)
             or any(not isinstance(step, dict) or step.get('operation') != command['operation']
                    or step.get('status') != 'completed' or (step.get('verification') or {}).get('status') != 'matched'
+                   or type(step.get('revision')) is not int or not 0 <= step['revision'] <= revision
                    for command, step in zip(commands, steps))):
         raise ValueError('Native engineering step verification is incomplete')
     requested = {command['operation'] for command in commands}
+    last_steps = {step['operation']: step for step in steps}
     for operation in ('compile', 'save', 'reopen'):
         if operation in requested:
             layer = result.get(operation) or {}
-            if layer.get('status') != 'passed' or layer.get('revision') != revision:
+            if (layer.get('status') != 'passed' or layer.get('revision') != revision
+                    or last_steps[operation]['revision'] != revision):
                 raise ValueError('A requested native engineering layer is stale or incomplete')
     if 'compile' in requested and (result['compile'].get('errors') != 0
             or type(result['compile'].get('errors')) is not int):
@@ -161,12 +183,26 @@ def verified_native_data(result, plan):
                 or layer.get('origin') != 'current_gui_compile_saved_snapshot'
                 or (layer.get('native_cross_references') or {}).get('status') != 'matched'):
             raise ValueError('The requested native address mapping is not current')
+        compiled_revision, previous_revision, last_references = None, 0, None
         for command, step in zip(commands, steps):
-            if command['operation'] == 'show_assignments':
+            current_revision = step['revision']
+            if current_revision < previous_revision:
+                raise ValueError('Native engineering step revisions are out of order')
+            operation = command['operation']
+            if operation == 'compile':
+                compiled_revision = current_revision
+            elif operation not in _AUXILIARY_OPERATIONS:
+                compiled_revision = None
+            if operation == 'show_assignments':
                 references = (step['verification'].get('native_cross_references') or {})
-                if (step.get('revision') != revision or references.get('status') != 'matched'
+                if (current_revision != compiled_revision or references.get('status') != 'matched'
                         or [row.get('query') for row in references.get('queries', [])] != command['queries']):
                     raise ValueError('A requested native cross-reference query was not verified')
+                last_references = references
+            previous_revision = current_revision
+        if (last_steps['show_assignments']['revision'] != revision
+                or layer['native_cross_references'] != last_references):
+            raise ValueError('The requested final native address mapping is stale or inconsistent')
     return result['data']
 
 
@@ -229,14 +265,27 @@ def _project_projection(raw):
     return result
 
 
-def validate_native_baseline(raw, *, plc_model):
-    """Reject unsupported or uninitialized saved projects before approval."""
-    if str(plc_model).upper() != 'FX3U':
-        raise ValueError('Visible native engineering is verified only for FX3U (FX3U/FX3UC native menu)')
+def validate_native_baseline(raw, *, plc_model, live=False):
+    """Bind a saved baseline before choosing live observation or offline writes.
+
+    A live owner will re-read actual native allocation pages. An unobserved
+    non-FX3U GUI mirror therefore stays explicitly unverified at this structural
+    boundary. Offline writes still require a verified saved mirror, and a known
+    FX3U mirror must be initialized and consistent in either mode.
+    """
+    from plc.target_support import require_native_program_target
+    if type(live) is not bool:
+        raise ValueError('The native baseline observation mode must be boolean')
+    profile = require_native_program_target(plc_model)
     projection = _project_projection(raw)
-    if projection['cpu'] != 'FX3U/FX3UC':
-        raise ValueError('The saved engineering CPU differs from the selected FX3U model')
-    if projection['gui_configuration'].get('status') != 'matched':
+    actual = require_native_program_target(projection['cpu'])
+    if actual.cpu != profile.cpu:
+        raise ValueError('The saved engineering CPU differs from the selected native CPU menu')
+    gui = projection['gui_configuration']
+    unobserved_live_mirror = (live and actual.cpu != 'FX3U/FX3UC'
+        and gui.get('status') == 'not_verified'
+        and gui.get('gui_mirror_status') in ('unverified', 'inactive_host_values_observed'))
+    if gui.get('status') != 'matched' and not unobserved_live_mirror:
         raise ValueError('The saved GUI allocation configuration is uninitialized or inconsistent; apply and save it in GX Works2 before submitting this session')
     return projection
 
@@ -260,10 +309,22 @@ def _identity(value, expected_cpu):
         raise ValueError('The selected native CPU differs from the requested engineering target')
     for key in ('executable', 'project_path'):
         result[key] = ntpath.normcase(ntpath.normpath(result[key]))
+    metadata = {'native_ui_language', 'project_codepage'}
+    if metadata & value.keys():
+        from plc.target_support import NATIVE_UI_LANGUAGES
+        import codecs
+        if (not metadata <= value.keys() or value['native_ui_language'] not in NATIVE_UI_LANGUAGES
+                or type(value['project_codepage']) is not int or not 0 < value['project_codepage'] <= 65535):
+            raise ValueError('The native UI language and project codepage identity is incomplete')
+        try:
+            codecs.lookup('cp' + str(value['project_codepage']))
+        except LookupError as error:
+            raise ValueError('The native project codepage is unknown') from error
+        result.update({key: value[key] for key in metadata})
     return result
 
 
-def compile_observation(observation, *, process_id, revision):
+def compile_observation(observation, *, process_id, revision, require_saved=True):
     """Project one completed GUI rebuild; command dispatch alone proves nothing."""
     result = {'status': 'unverified', 'errors': None, 'warnings': None,
               'check_warnings': None, 'output': observation.get('output', ''),
@@ -275,11 +336,15 @@ def compile_observation(observation, *, process_id, revision):
     for field, key in (('Error', 'errors'), ('Warning', 'warnings'), ('CheckWarning', 'check_warnings')):
         values = re.findall(r'(?<![A-Za-z])' + field + r'\s*:\s*([0-9]+)', output, re.IGNORECASE)
         if not values:
+            if field == 'CheckWarning' and observation.get('public_checks_requested') is False:
+                counts[key] = None
+                continue
             return result
         counts[key] = int(values[-1])
     result.update(counts)
     if (observation.get('command') != 'rebuild_all' or observation.get('completed') is not True
-            or observation.get('source_unchanged') is not True or observation.get('saved') is not True
+            or observation.get('source_unchanged') is not True
+            or require_saved and observation.get('saved') is not True
             or type(observation.get('pid')) is not int or observation['pid'] != process_id
             or type(observation.get('revision')) is not int or observation['revision'] != revision):
         return result
@@ -324,9 +389,9 @@ class NativeEngineeringSession:
             raise RuntimeError('The native process, window, project, software version or CPU changed during the session')
         return current
 
-    def _snapshot(self):
+    def _observe_saved(self, *, verify_current=True):
         self._inspect()
-        raw = self.driver.snapshot()
+        raw = self.driver.read_saved_project()
         if not isinstance(raw, (bytes, bytearray)) or not raw:
             raise ValueError('The active native document did not return saved GXW bytes')
         raw = bytes(raw)
@@ -337,6 +402,10 @@ class NativeEngineeringSession:
         from gxworks2.project_profiles import native_project_profile
         if native_project_profile(projection['cpu']).cpu != native_project_profile(self.expected_cpu).cpu:
             raise GXWFormatError('The saved active project CPU differs from the selected native target')
+        if verify_current and hasattr(self.driver, 'verify_saved_source'):
+            # A file read must not hide an unsaved external source edit. The
+            # native driver compares current pages without dispatching Save.
+            self.driver.verify_saved_source(raw)
         return raw, projection
 
     def _emit(self, step):
@@ -371,7 +440,7 @@ class NativeEngineeringSession:
                 if command.get('operation') not in AUTHORING_OPERATIONS | _AUXILIARY_OPERATIONS | {'create_fbd_call', 'edit_fbd_graph'}:
                     raise ValueError('Unsupported visible engineering operation')
             self._inspect()
-            initial, initial_projection = self._snapshot()
+            initial, initial_projection = self._observe_saved(verify_current=False)
             if baseline is not None and _project_projection(bytes(baseline)) != initial_projection:
                 raise GXWFormatError('The active native project does not match the selected engineering baseline')
             current, projection = initial, initial_projection
@@ -384,7 +453,7 @@ class NativeEngineeringSession:
                 result['steps'].append(step)
                 self._emit(step)
                 self._inspect()
-                observed, latest_projection = self._snapshot()
+                observed, latest_projection = self._observe_saved()
                 if latest_projection != projection:
                     raise GXWFormatError('The active native source changed outside this engineering step')
                 _require_current_assignments(observed, result)
@@ -421,7 +490,7 @@ class NativeEngineeringSession:
                     if after_projection != projection:
                         raise GXWFormatError('Declarations, code, graph or configuration changed after cold reopen')
                     _require_current_assignments(saved, result)
-                    actual, actual_projection = self._snapshot()
+                    actual, actual_projection = self._observe_saved()
                     if actual_projection != after_projection:
                         raise GXWFormatError('Cold reopened document differs from its returned saved bytes')
                     _require_current_assignments(actual, result)
@@ -436,7 +505,7 @@ class NativeEngineeringSession:
                     step['observation'] = copy.deepcopy(observation)
                     step['visible_completion'] = self._visible(observation)
                     self._inspect()
-                    saved, after_projection = self._snapshot()
+                    saved, after_projection = self._observe_saved()
                     if operation in AUTHORING_OPERATIONS:
                         verification = verify_authoring_readback(current, command, saved, prepared)
                     elif operation == 'create_fbd_call':

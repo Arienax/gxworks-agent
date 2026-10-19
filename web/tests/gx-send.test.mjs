@@ -18,7 +18,7 @@ for (const mode of ["ask", "auto", "full"]) {
     const result = await submitGXSend(selection, () => true, request);
     assert.deepEqual(result, { proposal, job });
     assert.deepEqual(calls[0], { path: "/proposals", method: "POST", body: {
-      action: "gx_import", project_id: "p1", version_id: "v1", request_id: "one-confirmation", manual_backup_acknowledged: true,
+      action: "gx_import", project_id: "p1", version_id: "v1", request_id: "one-confirmation",
     } });
     assert.equal(calls.length, 2);
     assert.equal(calls[1].path, mode === "full" ? "/jobs/job1" : "/proposals/proposal1/decision");

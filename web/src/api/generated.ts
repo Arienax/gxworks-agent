@@ -1459,7 +1459,8 @@ export interface components {
             action: "gx_import" | "simulation" | "debug" | "native_engineering";
             /**
              * Manual Backup Acknowledged
-             * @description Operator acknowledged manual backup for an ordinary CSV GX send; does not grant execution approval.
+             * @deprecated
+             * @description Legacy CSV-send acknowledgement. All CSV imports now back up the existing GXW file automatically; this field does not change backup or execution approval.
              * @default false
              */
             manual_backup_acknowledged: boolean;

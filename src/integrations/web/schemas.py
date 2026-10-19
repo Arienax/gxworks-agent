@@ -75,8 +75,8 @@ class ExecutionProposal(Command):
     plan_id: str | None = None
     plan: dict[str, Any] | None = None
     request_id: str = Field(min_length=1, max_length=128)
-    manual_backup_acknowledged: bool = Field(default=False, strict=True,
-        description="Operator acknowledged manual backup for an ordinary CSV GX send; does not grant execution approval.")
+    manual_backup_acknowledged: bool = Field(default=False, strict=True, deprecated=True,
+        description="Legacy CSV-send acknowledgement. All CSV imports now back up the existing GXW file automatically; this field does not change backup or execution approval.")
 
 
 class AgentCall(Command):

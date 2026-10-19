@@ -88,8 +88,11 @@ def _default_dependencies(operation):
     if operation == 'native_engineering':
         from gxworks2.engineering_driver import NativeEngineeringDriver
         from application.native_engineering import NativeEngineeringSession
+        def live_session_factory(*args, **kwargs):
+            from application.live_engineering import LiveEngineeringSession
+            return LiveEngineeringSession(*args, **kwargs)
         return {'driver_factory': NativeEngineeringDriver.start_from_saved,
-                'session_factory': NativeEngineeringSession}
+                'session_factory': NativeEngineeringSession, 'live_session_factory': live_session_factory}
     from gxworks2 import import_current_program
 
     bundle = {"importer": import_current_program}
@@ -187,6 +190,14 @@ def _native_engineering_filename(projection):
     return stem + '.gxw'
 
 
+def native_saved_cpu(version, project):
+    """Require explicit saved selection; generic syntax must never choose a CPU."""
+    cpu = version.get('plc_model') or project.get('plc_model')
+    if not isinstance(cpu, str) or not cpu.strip():
+        raise ValueError('Native engineering requires an explicit saved project CPU model')
+    return cpu.strip()
+
+
 def _native_diagnostic_value(value):
     """Detach private diagnostics without serializing project or binary data."""
     if isinstance(value, Mapping):
@@ -224,6 +235,10 @@ class GXExecutionCoordinator:
         self._guard = threading.Lock()
         self._thread = None
         self._closed = False
+        self._live_guard = threading.RLock()
+        self._live_sessions = {}
+        self._live_com = None
+        self._worker_com = None
 
     def submit_approved(self, operation, payload, *, approval_id, progress=None, test_progress=None):
         operation = self._ALIASES.get(operation, operation)
@@ -258,6 +273,9 @@ class GXExecutionCoordinator:
             item = self._queue.get()
             try:
                 if item is None:
+                    # A controller close never saves or closes its IDE. Release
+                    # apartment-bound wrappers on their owning worker thread.
+                    self._close_live_sessions()
                     return
                 future, operation, payload, approval_id, progress, test_progress = item
                 if not future.set_running_or_notify_cancel():
@@ -267,6 +285,7 @@ class GXExecutionCoordinator:
                     with DesktopResourceLock(self.resource_lock_path):
                         com = self._com_factory()
                         com.CoInitialize()
+                        self._worker_com = com
                         try:
                             result = (
                                 self._read(operation, payload, progress)
@@ -275,6 +294,7 @@ class GXExecutionCoordinator:
                             )
                         finally:
                             com.CoUninitialize()
+                            self._worker_com = None
                     result["approval_id"] = approval_id
                     result["operation"] = operation
                     future.set_result(result)
@@ -420,10 +440,8 @@ class GXExecutionCoordinator:
                         "message": imported.get("message", ""), "import": imported,
                         "gx_compile_status": "unverified", "simulation_status": "not_run"}
             paths = self._csv_artifacts(version, root)
-            # Only the Web operator's version-bound backup acknowledgement
-            # selects the fast path. Old proposals and Agent calls stay protected.
-            pre_import_policy = ("manual_backup" if payload.get("manual_backup_acknowledged") is True
-                                 else "protected")
+            # Web, MCP and replayed proposals share the same file-backup import.
+            pre_import_policy = "project_file"
             directory = contained(self.store.project_dir(project_id) / "gx_runs" / uuid.uuid4().hex,
                                   self.store.project_dir(project_id))
             directory.mkdir(parents=True, exist_ok=False)
@@ -515,7 +533,9 @@ class GXExecutionCoordinator:
             raise ValueError('Native engineering accepts only a version-bound domain plan')
         if version.get('target_mode') not in {'fbd', 'st'}:
             raise ValueError('Native engineering requires a saved structured FBD or ST version')
-        cpu = version.get('plc_model') or self.store.get_project(project_id).get('plc_model')
+        cpu = native_saved_cpu(version, self.store.get_project(project_id))
+        if isinstance(payload.get('plan'), dict) and payload['plan'].get('mode') == 'live':
+            return self._live_native_engineering(payload, version, root, project_id, cpu, progress)
         plan = normalize_native_plan(payload.get('plan'), plc_model=cpu)
         artifacts = {name: contained(root / artifact_relative_path(filename), root).read_bytes()
                      for name, filename in version['artifacts'].items()}
@@ -582,6 +602,250 @@ class GXExecutionCoordinator:
             return summary
         # Internal-only receipt, consumed by WorkbenchService before projection.
         return {'status': 'completed', 'passed': True, '_native_result': result}
+
+    def _release_live_com(self):
+        if self._live_com is not None and not any(not row['closed'] for row in self._live_sessions.values()):
+            com, self._live_com = self._live_com, None
+            com.CoUninitialize()
+
+    def _persist_live_receipt(self, row):
+        from application.workspace import atomic_json, contained
+        with self._live_guard:
+            durable = copy.deepcopy(row['cached'])
+        native_error = getattr(row['controller'], '_private_native_error', None)
+        if native_error is not None:
+            durable['private_native_observation'] = _native_diagnostic_value(native_error)
+        atomic_json(contained(row['directory'] / 'receipt.json', row['directory']), durable)
+
+    def _close_live_sessions(self):
+        try:
+            with self._live_guard:
+                rows = list(self._live_sessions.values())
+            for row in rows:
+                if not row['closed']:
+                    controller_closed = False
+                    try:
+                        result = row['controller'].close()
+                        if not isinstance(result, dict):
+                            result = row['controller'].status()
+                        with self._live_guard:
+                            row['cached'] = _native_diagnostic_value(result)
+                        controller_closed = True
+                    except Exception as error:
+                        with self._live_guard:
+                            row['cached'].update(status='requires_reconciliation', passed=False,
+                                                 error={'type': type(error).__name__, 'message': str(error)})
+                    finally:
+                        with self._live_guard:
+                            # The service worker is ending; this registry row
+                            # cannot be resumed even when native close refused.
+                            row['closed'] = True
+                            row['cached'].update(controller_closed=controller_closed,
+                                                 ide_policy='keep_open', com_release='worker_shutdown')
+                        try:
+                            self._persist_live_receipt(row)
+                        except Exception as error:
+                            with self._live_guard:
+                                row['cached']['receipt_error'] = {'type': type(error).__name__, 'message': str(error)}
+        finally:
+            self._release_live_com()
+
+    def live_session_status(self, project_id, session_id=None):
+        """Read a detached cache, without queueing work or touching native UI."""
+        project_id = _record_id(project_id, 'project')
+        with self._live_guard:
+            if session_id is None:
+                active = [(key, value) for key, value in self._live_sessions.items()
+                          if value['project_id'] == project_id and not value['closed']]
+                if not active:
+                    return {'mode': 'background', 'status': 'not_started', 'project_id': project_id}
+                if len(active) != 1:
+                    raise RuntimeError('Multiple active live sessions in this project')
+                session_id, row = active[0]
+            else:
+                session_id = _record_id(session_id, 'session')
+                row = self._live_sessions.get(session_id)
+                if row is None or row['project_id'] != project_id:
+                    raise KeyError('Live session not found in this project')
+            return {**copy.deepcopy(row['cached']), 'mode': 'live', 'session_id': session_id,
+                    'project_id': project_id, 'base_version_id': row['base_version_id'],
+                    'operation_in_progress': row['busy'], 'pending_save_transaction': bool(row['pending_save']),
+                    'pending_stage_save': copy.deepcopy(row['pending_save']) if row['pending_save'] else None}
+
+    def request_live_session_pause(self, project_id, session_id):
+        """Signal a controller Event; no GUI call or desktop execution is queued."""
+        project_id, session_id = _record_id(project_id, 'project'), _record_id(session_id, 'session')
+        with self._live_guard:
+            row = self._live_sessions.get(session_id)
+            if row is None or row['project_id'] != project_id:
+                raise KeyError('Live session not found in this project')
+            if row['closed']:
+                raise ValueError('The live session is closed')
+            request = row['controller'].request_pause()
+            row['cached']['pause_requested'] = True
+            return {**copy.deepcopy(request), 'mode': 'live', 'project_id': project_id,
+                    'session_id': session_id, 'pause_requested': True}
+
+    @staticmethod
+    def _live_stage_save_receipt(result):
+        """Bind returned bytes to this run's confirmed save, including resumed work."""
+        if result.get('data') is None:
+            return None
+        revision = result.get('data_revision')
+        saved_revision = result.get('saved_revision')
+        saves, executed = result.get('stage_saves'), result.get('executed_steps')
+        if (not isinstance(result['data'], bytes) or result.get('data_status') != 'verified_stage_save'
+                or type(revision) is not int or revision < 0 or type(saved_revision) is not int
+                or saved_revision < revision
+                or not isinstance(saves, list) or not saves or not isinstance(executed, list)):
+            raise ValueError('Live project data has no current verified stage save')
+        saved = saves[-1]
+        if (not isinstance(saved, dict) or saved.get('revision') != revision
+                or type(saved.get('sequence')) is not int or saved['sequence'] < 1
+                or not isinstance(saved.get('validation'), dict)):
+            raise ValueError('Live project data has an invalid stage save binding')
+        matches = [step for step in executed if isinstance(step, dict)
+                   and step.get('index') == saved['sequence']]
+        if len(matches) != 1:
+            raise ValueError('Live stage save is absent or ambiguous in this run')
+        step, verification = matches[0], matches[0].get('verification')
+        if (step.get('operation') != 'save' or step.get('status') != 'completed'
+                or step.get('revision') != revision or not isinstance(verification, dict)
+                or verification.get('status') != 'passed' or verification.get('revision') != revision
+                or verification.get('validation') != saved['validation']):
+            raise ValueError('Live stage save does not match this run\'s completed native step')
+        return copy.deepcopy(saved)
+
+    def rebase_live_session(self, project_id, session_id, old_base, new_base):
+        """A completed Workbench version transaction updates metadata only."""
+        project_id, session_id = _record_id(project_id, 'project'), _record_id(session_id, 'session')
+        old_base, new_base = _record_id(old_base, 'version'), _record_id(new_base, 'version')
+        with self._live_guard:
+            row = self._live_sessions.get(session_id)
+            if row is None or row['project_id'] != project_id:
+                raise KeyError('Live session not found in this project')
+            if row['closed'] or row['busy'] or row['base_version_id'] != old_base or not row['pending_save']:
+                raise ValueError('Live session save baseline changed or no verified save is pending')
+            if self.store.get_project(project_id).get('active_version_id') != new_base:
+                raise ValueError('Live session rebase requires the committed active version')
+            row['controller'].set_base_version(new_base)
+            row.update(base_version_id=new_base, pending_save=False)
+            row['cached'] = _native_diagnostic_value(row['controller'].status())
+            row['cached']['base_version_id'] = new_base
+            return self.live_session_status(project_id, session_id)
+
+    def _live_native_engineering(self, payload, version, root, project_id, cpu, progress):
+        from application.live_engineering import normalize_live_plan
+        from application.workspace import artifact_relative_path, contained
+        from application.native_engineering import validate_native_baseline
+        if not isinstance(cpu, str) or not cpu.strip():
+            raise ValueError('Native engineering requires an explicit saved project CPU model')
+        plan = normalize_live_plan(payload['plan'], plc_model=cpu)
+        action = plan['session_action']
+        if action == 'start':
+            with self._live_guard:
+                if any(row['project_id'] == project_id and not row['closed'] for row in self._live_sessions.values()):
+                    raise ValueError('This project already has an active live session')
+            artifacts = {name: contained(root / artifact_relative_path(filename), root).read_bytes()
+                         for name, filename in version['artifacts'].items()}
+            if version['target_mode'] == 'st':
+                from application.native_st import validate_candidate
+                validate_candidate(artifacts, plc_model=cpu, program_name=version.get('program_name'), metadata=version)
+            else:
+                from application.fbd import validate_candidate
+                validate_candidate(artifacts)
+            projection = validate_native_baseline(artifacts['gxw'], plc_model=cpu, live=True)
+            session_id = uuid.uuid4().hex
+            directory = contained(self.store.project_dir(project_id) / 'gxw_runs' / session_id,
+                                  self.store.project_dir(project_id))
+            directory.mkdir(parents=True, exist_ok=False)
+            path = directory / _native_engineering_filename(projection)
+            path.write_bytes(artifacts['gxw'])
+            if self._live_com is None:
+                self._worker_com.CoInitialize()
+                self._live_com = self._worker_com
+            driver = None
+            try:
+                bundle = self._dependencies_factory('native_engineering')
+                driver = bundle['driver_factory'](path, cpu, timeout=30, progress=None,
+                    evidence_directory=directory / 'evidence')
+                controller = bundle['live_session_factory'](driver, expected_cpu=cpu, baseline=artifacts['gxw'],
+                    session_id=session_id, project_id=project_id, base_version_id=version['id'], progress=None)
+                row = dict(project_id=project_id, base_version_id=version['id'], controller=controller,
+                    directory=directory, cached=_native_diagnostic_value(controller.status()),
+                    busy=False, closed=False, pending_save=False)
+                with self._live_guard:
+                    self._live_sessions[session_id] = row
+            except Exception:
+                try:
+                    if driver is not None:
+                        driver.close()
+                finally:
+                    self._release_live_com()
+                raise
+        else:
+            session_id = _record_id(plan.get('session_id'), 'session')
+            with self._live_guard:
+                row = self._live_sessions.get(session_id)
+                if row is None or row['project_id'] != project_id:
+                    raise KeyError('Live session not found in this project')
+                if row['closed'] or row['base_version_id'] != version['id']:
+                    raise ValueError('Live session closed or saved project baseline changed')
+                if row['pending_save'] and action != 'end':
+                    raise ValueError('The verified live save has not completed its version transaction')
+        with self._live_guard:
+            row['busy'] = True
+        try:
+            controller = row['controller']
+            def observed(step):
+                # The native controller survives this job. Its observer must
+                # belong to the current approved call, never a finished job.
+                with self._live_guard:
+                    row['cached'] = _native_diagnostic_value(controller.status())
+                if progress is not None and isinstance(step, dict) and step.get('status') in (
+                        'executing', 'completed', 'failed', 'interrupted', 'unverified'):
+                    progress({'executing': '正在执行原生工程步骤。', 'completed': '原生工程步骤已完成。',
+                        'failed': '原生工程步骤未完成。', 'interrupted': '原生工程步骤已中止。',
+                        'unverified': '尚未确认原生工程步骤。'}[step['status']])
+            controller.progress = observed
+            if action == 'end':
+                result = controller.close()
+                result = result if isinstance(result, dict) else controller.status()
+                with self._live_guard:
+                    row['closed'] = True
+            elif action == 'rebind':
+                result = controller.rebind()
+                result = result if isinstance(result, dict) else controller.status()
+            else:
+                result = controller.run(plan['commands'], controls=plan.get('controls'))
+            if not isinstance(result, dict) or result.get('session_id') != session_id or result.get('mode') != 'live':
+                raise ValueError('Live session returned an unbound receipt')
+            stage_save = self._live_stage_save_receipt(result)
+            with self._live_guard:
+                row['cached'] = _native_diagnostic_value(result)
+                row['pending_save'] = row['pending_save'] or stage_save
+            self._persist_live_receipt(row)
+            return {'status': result.get('status', 'unverified'), 'passed': result.get('passed') is True,
+                    '_live_result': result}
+        except Exception as error:
+            try:
+                current = _native_diagnostic_value(row['controller'].status())
+            except Exception:
+                current = {}
+            with self._live_guard:
+                row['cached'].update(current)
+                row['cached'].update(status='requires_reconciliation', passed=False,
+                    error={'type': type(error).__name__, 'message': str(error)})
+            try:
+                self._persist_live_receipt(row)
+            except Exception as receipt_error:
+                with self._live_guard:
+                    row['cached']['receipt_error'] = {'type': type(receipt_error).__name__, 'message': str(receipt_error)}
+            raise
+        finally:
+            with self._live_guard:
+                row['busy'] = False
+                self._release_live_com()
 
     def close(self, *, wait=True, cancel_pending=False):
         with self._guard:

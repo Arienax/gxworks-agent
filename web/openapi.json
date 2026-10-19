@@ -638,7 +638,8 @@
           },
           "manual_backup_acknowledged": {
             "default": false,
-            "description": "Operator acknowledged manual backup for an ordinary CSV GX send; does not grant execution approval.",
+            "deprecated": true,
+            "description": "Legacy CSV-send acknowledgement. All CSV imports now back up the existing GXW file automatically; this field does not change backup or execution approval.",
             "title": "Manual Backup Acknowledged",
             "type": "boolean"
           },

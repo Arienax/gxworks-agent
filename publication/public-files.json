@@ -125,6 +125,7 @@
     "src/application/hardware.py",
     "src/application/job_errors.py",
     "src/application/jobs.py",
+    "src/application/live_engineering.py",
     "src/application/mcp_integrations.py",
     "src/application/model_api.py",
     "src/application/model_detection.py",
