@@ -24,7 +24,7 @@ def main():
                         help='Root containing the separately reviewed runtime fact resources')
     parser.add_argument('--component', choices=('web', 'mcp', 'both'), default='both')
     parser.add_argument('--skip-frontend', action='store_true')
-    parser.add_argument('--version', default='0.2.1')
+    parser.add_argument('--version', default='0.3.0')
     args = parser.parse_args()
     output = args.output.resolve()
     if output == ROOT or output.is_relative_to(ROOT) or ROOT.is_relative_to(output):
@@ -62,6 +62,7 @@ def main():
     helpers = output / 'helpers'
     for label, script, directory in (
         ('workspace-helper', 'build_workspace_adapter.ps1', 'workspace-adapter'),
+        ('active-document-helper', 'build_active_document.ps1', 'native-active'),
         ('hardware-helper', 'build_hardware_reader.ps1', 'hardware-reader'),
         ('simulator-helper', 'build_simulator_gateway.ps1', 'simulator-gateway'),
     ):

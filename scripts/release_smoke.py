@@ -33,6 +33,7 @@ def audit(package, component):
             assert path.suffix.lower() not in {".pdf", ".pdb", ".map", ".cs", ".ipynb"}, path
             assert not {"research", "reports", "evidence", ".git"} & set(path.relative_to(package).parts), path
     for directory, name in (("workspace-adapter", "PlcAi.WorkspaceSourceSave.exe"),
+                            ("native-active", "PlcAi.ActiveDocument.exe"),
                             ("hardware-reader", "PlcAi.HardwareReader.exe"),
                             ("simulator-gateway", "PlcAi.GxSimulator2Gateway.exe")):
         assert (package / directory / name).is_file()

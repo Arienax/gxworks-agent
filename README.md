@@ -70,6 +70,14 @@ FBD goes beyond the wiring change in the demo. Generate or edit candidates from 
 
 Where the source project supports it, create FBs and Programs. A new Program can be registered in an existing task, a new task, or a new resource. Native saving, compilation, and code checking are separate operations with results tied to the corresponding project version.
 
+<a name="native-session"></a>
+
+## Persistent native engineering sessions
+
+MCP can continue declaration, ST Program/FB, task and FBD edits in one GX Works2 engineering session, then compile the current source, inspect compiled addresses and save a stage. FBD operations use current-document node and terminal identities. Source edits invalidate earlier compilation and address results; interrupted operations retain a pending receipt for reconciliation.
+
+Native engineering requires GX Works2 1.635.0.1, an interactive Windows desktop and operator-configured execution consent.
+
 <a name="diagnostics"></a>
 
 ## Project management, diagnostics, and validation
@@ -127,14 +135,6 @@ Packages include the FX3U baseline, node and token templates, and 57 CPU-specifi
 Executable packages include the reviewed fact corpus and project-authored examples for RAG. Vendor manuals and original manual-text indexes are excluded. Generated runtime data is separate from the source repository; source users can copy a package's `knowledge/` to `resources/knowledge/` and its `resources/instructions/mitsubishi/` to the matching source directory.
 
 Native saving, code checking, GX import, and simulation require the corresponding Mitsubishi software locally. Read-only PLC monitoring requires MX Component and a configured logical station. These Mitsubishi applications are not included.
-
-## Current scope
-
-- GX integration requires Windows; desktop delivery needs an interactive Windows session.
-- Native FBD integration is tied to GX Works2 **1.635.0.1**. Ladder and ST generation, editing, and export do not require this version. Supported Q/L/FX CPU menu entries have matching blank FBD starting projects; imported projects retain their CPU and interfaces. FX1 is currently excluded from FBD generation. Template availability and native compilation acceptance are tracked separately.
-- CPU menu availability does not imply uniform instruction or validation coverage. Unsupported validation profiles return an unverified result.
-- FBD supports objects, connections, declarations, networks, and source-bound FB/Program creation. SFC supports editing existing action and transition subprograms; the Web panel can change supported step action numbers and jump targets and preview candidates. It is not a complete graphical SFC IDE.
-- A saved artifact or successful import does not establish successful compilation or correct PLC behavior.
 
 ## Before operating machinery
 

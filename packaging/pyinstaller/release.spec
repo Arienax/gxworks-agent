@@ -30,6 +30,7 @@ datas += runtime_knowledge_data(resources) + runtime_instruction_data(resources)
 datas += ([(str(root / 'web/dist'), 'web/dist')] if component == 'web' else runtime_viewer_data(root))
 for directory, executable in (
     ('workspace-adapter', 'PlcAi.WorkspaceSourceSave.exe'),
+    ('native-active', 'PlcAi.ActiveDocument.exe'),
     ('hardware-reader', 'PlcAi.HardwareReader.exe'),
     ('simulator-gateway', 'PlcAi.GxSimulator2Gateway.exe'),
 ):
