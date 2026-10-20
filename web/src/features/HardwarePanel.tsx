@@ -4,11 +4,10 @@ import { api } from "../api/client";
 import { Button } from "../components/ui";
 import "./hardware.css";
 
-type Target = { logical_station: number; target_label: string; addresses: string[]; plc_model: string; ttl_seconds: number };
-type Audit = { sequence: number; created_at: string; action: string; addresses?: string[]; values?: Record<string, number>; reason?: string };
-type Session = { id: string; status: string; target: Target; expires_at?: number; owned_by_current_operator: boolean; audit: Audit[]; read_count: number };
-type State = { default_enabled: false; reader: { available: boolean; message: string }; sessions: Session[] };
-type Observation = { values: Record<string, number>; target_label: string; logical_station: number; observed_at: string; replayed: boolean };
+import type { ApiSchema } from "../api/client";
+type State = ApiSchema["HardwareState"];
+type Observation = ApiSchema["HardwareObservation"];
+
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error);
 const actionText: Record<string,string> = { proposed: "提出授权", approved: "确认只读授权", revoked: "撤销授权", read_requested: "发起手动读取", read_completed: "读取完成", read_failed: "读取失败", read_denied: "读取被拒绝" };
 

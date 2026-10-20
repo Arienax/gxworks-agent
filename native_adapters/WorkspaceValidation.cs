@@ -130,6 +130,7 @@ namespace PlcAi.NativeAdapter
                 var observation = new Dictionary<string, object>(scope) {
                     { "operation", "NativeCodeLexicalRead" }, { "resource", resource.Key }, { "body_bytes", body.Length },
                     { "calls", calls }, { "prefixes", prefixes }, { "completed", false },
+                    { "evidence", WorkspaceEvidence.Describe(EvidenceOrigin.CodeLexicalRead) },
                     { "provenance", "original ChangePToILcode and GetStepSize; retained generated primary bytes after check; not execution" } };
                 IntPtr handle = IntPtr.Zero; ReaderCloseCall close = null; ReaderDeleteCall destroy = null;
                 try
@@ -533,6 +534,7 @@ namespace PlcAi.NativeAdapter
                 byte[] actual = ReadBody(body), expected = Body(program["body"]);
                 string file = (librarySources ? "library-source-" : "source-") + stage + "-" + i + ".bin"; File.WriteAllBytes(Path.Combine(validationRoot, file), actual);
                 Event(new { operation = "NativeBodyRead", stage = stage, body = body.Words, bytes = actual.Length, file = file,
+                    evidence = WorkspaceEvidence.Describe(EvidenceOrigin.SourceBody),
                     provenance = "original Workspace.GetPOUBodyData(1692); source bytes, not compiled PCode" });
                 if (!Equal(actual, expected)) throw new InvalidOperationException("native_current_source_body_differs");
                 if (language == 193 || language == 208 || language == 240)
@@ -573,6 +575,7 @@ namespace PlcAi.NativeAdapter
                 }
                 Event(new { operation = "NativeTaskSelection", resource = resourceFacts, tasks = tasks,
                     parent = new { hresult = parentHr, code = parentCode, id = resourceParent.Words },
+                    evidence = WorkspaceEvidence.Describe(EvidenceOrigin.TaskSelection),
                     provenance = "original Workspace collection, child, type, name and parent reads before compilation" });
             }
         }
@@ -927,6 +930,7 @@ namespace PlcAi.NativeAdapter
                 nativeReferences = rows;
                 Event(new { operation = "NativeSourceReferences", query = "all-references", declared = 0, plural = 0,
                     symbol = "", scope = "", hresult = hr, code = code, count = count, rows = rows,
+                    evidence = WorkspaceEvidence.Describe(EvidenceOrigin.SourceReferences),
                     provenance = "original CreateProgramAnalysis3 and GetProgramAnalysis3; current compilation; 88-byte public records" });
             }
             finally
@@ -1079,11 +1083,13 @@ namespace PlcAi.NativeAdapter
                     resource_name = new { codepage = nativeCodePage, raw_hex = BitConverter.ToString(nameBytes).Replace("-", "").ToLowerInvariant() },
                     framing = new { reader_module = "ECCompiler_IEC.dll", reader_version = "15.50", reader_rva = 0x39f30,
                         code = code, mode = mode, body_offset = offset, body_bytes = bodySize, first_length = first, second_length = second,
+                        evidence = WorkspaceEvidence.Describe(EvidenceOrigin.StructuredCheckEnvelope),
                         provenance = "original checker envelope helper; optional tables omitted; read-only" } });
             }
             Event(new { operation = "OwnedCheckInput", target = target.Words, stage = stage, mask = Marshal.ReadInt32(manager, 24),
                 manager = manager.ToString(), compiler_member_offset = 12, manager_records_offset = 32, rows = rows,
                 input_contract = new { schema_version = 1, kind = "structured", status = "verified" },
+                evidence = WorkspaceEvidence.Describe(EvidenceOrigin.OwnedCheckInput),
                 provenance = "original ProcessManager.ProgramCheck owned code copy; read-only; no interception" });
         }
         IntPtr ReadSfcBackend(IntPtr compiler)
@@ -1136,12 +1142,14 @@ namespace PlcAi.NativeAdapter
                     resource_name = new { codepage = nativeCodePage, raw_hex = BitConverter.ToString(nameBytes).Replace("-", "").ToLowerInvariant() },
                     framing = new { reader_module = "DZDataABS_SICConverter.dll", reader_version = NativeVersion,
                         first_length = first, second_length = second, body_offset = offset, body_bytes = size - offset,
+                        evidence = WorkspaceEvidence.Describe(EvidenceOrigin.SfcLengthPrefix),
                         provenance = "observed SFC length prefix; remaining header bytes uninterpreted" } });
             }
             Event(new { operation = "OwnedCheckInput", target = target.Words, stage = stage,
                 mask = Marshal.ReadInt32(manager, 24), manager = manager.ToString(), compiler_member_offset = 8,
                 manager_records_offset = 32, rows = rows,
                 input_contract = new { schema_version = 1, kind = "sfc", status = "verified" },
+                evidence = WorkspaceEvidence.Describe(EvidenceOrigin.OwnedCheckInput),
                 input_backend = new { module = "DZDataABS_Compiler.dll", version = NativeVersion,
                     progress_rva = 0x73e5, program_check_rva = 0x4810 },
                 provenance = "original ProcessManager.ProgramCheck owned code copy; read-only; no interception" });

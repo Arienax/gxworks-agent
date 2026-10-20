@@ -12,17 +12,15 @@ import {
 } from "lucide-react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { lazy } from "react";
-import type { Job, JobKind, Json, Project, Proposal } from "../api/client";
-import { activeJob, api, artifactUrl } from "../api/client";
+import type { Job, JobKind, Json, Project, Proposal, PreviewDocument, ProgramDocument } from "../api/client";
+import { activeJob, api, artifactUrl, isFBDModel, isSFCModel, isFBDEditorView } from "../api/client";
 import { Badge, Button } from "../components/ui";
 import { CapabilityReview } from "../features/CapabilityReview";
 import { DeliverySummary } from "../features/DeliverySummary";
-import type { EditorView as FBDEditorView, FBDModel } from "../features/FBDPanel";
 import { FirstProjectGuide } from "../features/FirstProjectGuide";
 import { useGenerationResult } from "../features/GenerationResult";
 import type { IssueContext } from "../features/ProgramExplorer";
 import { IssueCards, ProgramExplorer } from "../features/ProgramExplorer";
-import type { SFCModel } from "../features/SFCPanel";
 import type { CreationWorkflow, TaskPurpose } from "../features/conversationRouting";
 import type { CreationCapabilities } from "./useCapabilities";
 
@@ -48,9 +46,9 @@ export type EditorContentProps = {
   setModal: Dispatch<SetStateAction<string>>;
   vid: string;
   selectedProposal: Proposal | null;
-  preview: Record<string, Json> | null;
+  preview: PreviewDocument | null;
   version: NonNullable<Project["versions"]>[number] | undefined;
-  visibleProgram: Record<string, Json> | null | undefined;
+  visibleProgram: ProgramDocument | null | undefined;
   showFBDProposal: (value: Proposal) => Promise<void>;
   svg: string;
   generationResult: ReturnType<typeof useGenerationResult>;
@@ -154,7 +152,7 @@ export function EditorContent({
       key={`${pid}:${vid}:${selectedProposal?.id || "version"}`}
       value={
         preview?.target_mode === "sfc" || (!preview && version?.target_mode === "sfc")
-          ? (visibleProgram as unknown as SFCModel | null)
+          ? (isSFCModel(visibleProgram) ? visibleProgram : null)
           : null
       }
       pid={pid}
@@ -170,14 +168,14 @@ export function EditorContent({
         (version?.target_mode === "fbd" || (!version && project.target_mode === "fbd")))) ? (
     <FBDPanel
       key={`${pid}:${vid}:${selectedProposal?.id || "version"}`}
-      value={Array.isArray(visibleProgram?.nodes) ? (visibleProgram as unknown as FBDModel) : null}
+      value={isFBDModel(visibleProgram) ? visibleProgram : null}
       svg={svg}
       pid={pid}
       vid={vid}
       readOnly={!canWrite}
       preview={!!preview}
       previewEditor={
-        preview?.target_mode === "fbd" ? (preview.editor as unknown as FBDEditorView) : undefined
+        preview?.target_mode === "fbd" && isFBDEditorView(preview.editor) ? preview.editor : undefined
       }
       t={t}
       onProposal={showFBDProposal}

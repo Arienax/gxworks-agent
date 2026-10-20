@@ -7,13 +7,32 @@ qualified GX Works2 skill concepts. It does not apply a second scoring layer.
 
 from __future__ import annotations
 
+from knowledge.record_projection import (
+    MAX_TOP_K,
+    format_result_block,
+    select_ranked,
+)
+from knowledge.scope import (
+    query_is_out_of_scope,
+)
+from knowledge.text_matching import (
+    DEVICE_RE,
+    MITSUBISHI_SCOPE_MARKERS,
+    PLC_DOMAIN_MARKERS,
+    PRODUCT_TERM_RE,
+    alias_occurs,
+    error_terms,
+    normalize_text,
+)
+
 from collections.abc import Mapping
 import re
+import sqlite3
 from shared.context_audit import audit_retrieval_fragment
 
 from knowledge.gxworks2_concepts import CONTEXT_RE as _GXW2_CONTEXT_RE, query_skill_concepts
 
-import knowledge.core as _core
+from knowledge import core
 
 
 def _query_has_gxw2_skill_concept(query, task_type="generate"):
@@ -23,19 +42,19 @@ def _query_has_gxw2_skill_concept(query, task_type="generate"):
 def _query_has_plc_context(query):
     """Return whether a query is specific enough to expose third-party PLC support."""
 
-    normalized = _core._normalize_text(query)
+    normalized = normalize_text(query)
     if not normalized:
         return False
     normalized_folded = normalized.casefold()
     if _GXW2_CONTEXT_RE.search(normalized):
         return True
-    if any(marker.casefold() in normalized_folded for marker in _core._PLC_DOMAIN_MARKERS):
+    if any(marker.casefold() in normalized_folded for marker in PLC_DOMAIN_MARKERS):
         return True
-    if any(marker.casefold() in normalized_folded for marker in _core._MITSUBISHI_SCOPE_MARKERS):
+    if any(marker.casefold() in normalized_folded for marker in MITSUBISHI_SCOPE_MARKERS):
         return True
-    if _core._DEVICE_RE.search(query) or _core._PRODUCT_TERM_RE.search(query):
+    if DEVICE_RE.search(query) or PRODUCT_TERM_RE.search(query):
         return True
-    if _core._error_terms(query):
+    if error_terms(query):
         return True
     # Strong concepts such as VAR_IN_OUT/LREAL/PRG_MAIN are sufficiently
     # domain-specific. Weak concepts only return True above when explicit
@@ -45,6 +64,8 @@ def _query_has_plc_context(query):
 
 def _fact_identity(kind, value):
     kind = str(kind or "").strip().casefold()
+    if kind == "positioning" and isinstance(value, Mapping):
+        return str(value.get("target") or "").strip().upper(), None
     if kind == "instruction":
         if isinstance(value, Mapping):
             opcode = str(value.get("opcode") or value.get("base_opcode") or "").strip().upper()
@@ -75,6 +96,7 @@ def _covered_structured_kinds(targets, records, *, limits=False):
         ("error", "errors"),
         ("device_family", "device_families"),
         ("language", "language_features"),
+        ("positioning", "positioning"),
     ):
         requested = [
             _fact_identity(kind, value)
@@ -91,7 +113,7 @@ def _covered_structured_kinds(targets, records, *, limits=False):
             ).strip().casefold()
             if row_kind != kind:
                 continue
-            if kind in {'instruction', 'language'}:
+            if kind in {'instruction', 'language', 'positioning'}:
                 from knowledge.structured_facts import fact_record_coverage
                 if not fact_record_coverage(row, limits=limits):
                     continue
@@ -149,7 +171,7 @@ def _residual_fact_text(query, targets, covered_kinds):
             continue
         for target in targets.get(key, ()):
             value = (target.get('opcode') or target.get('base_opcode')) if isinstance(target, Mapping) else target
-            if value and not _core._alias_occurs(residual, str(value)):
+            if value and not alias_occurs(residual, str(value)):
                 missing.append(str(value))
     return ' '.join([residual, *missing]).strip()
 
@@ -167,13 +189,13 @@ def retrieve_knowledge(
     """Return ranked complete records; legacy char_budget is ignored."""
 
     try:
-        normalized_top_k = max(0, min(_core._MAX_TOP_K, int(top_k)))
+        normalized_top_k = max(0, min(MAX_TOP_K, int(top_k)))
     except (TypeError, ValueError):
         return []
     if normalized_top_k == 0:
         return []
 
-    task = _core._normalize_text(task_type).casefold() or "generate"
+    task = normalize_text(task_type).casefold() or "generate"
     from knowledge.scope import retrieval_plan, filter_records
     plan = retrieval_plan(query, task)
     if not plan["facts"]:
@@ -182,6 +204,33 @@ def retrieve_knowledge(
     source_lanes = tuple(sorted(permitted if source_lanes is None else permitted.intersection(source_lanes)))
     if not source_lanes:
         return []
+    if query_is_out_of_scope(query, plc_model):
+        return []
+    # These are explicit structured questions, outside generic RRF. Keep the
+    # long-standing public entry point useful while routing their facts through
+    # the same deterministic owners used by fact-aware prompt construction.
+    from knowledge.fact_queries import (
+        query_is_direction_output_assignment, query_is_timer_preset,
+    )
+    direct = []
+    if query_is_direction_output_assignment(query) or query_is_timer_preset(query):
+        from knowledge.structured_facts import (
+            resolve_device_records, resolve_positioning_records, structured_fact_targets,
+        )
+        try:
+            targets = structured_fact_targets(query, plc_model=plc_model)
+            direct.extend(resolve_positioning_records(targets.get("positioning"),
+                          plc_model=plc_model, task_type=task))
+            if query_is_timer_preset(query):
+                direct.extend(resolve_device_records(targets.get("devices"),
+                              plc_model=plc_model, task_type=task, query=query))
+        except (OSError, sqlite3.Error):
+            # Preserve the public broad entry's optional-index behavior. The
+            # failed structured read is never cached and can retry next call.
+            from knowledge.index_access import close_thread_connection
+            close_thread_connection()
+            direct = []
+        direct = filter_records(direct, source_lanes)
     semantic_function = getattr(query, 'metadata', {}).get('semantic_function')
     if semantic_function:
         from knowledge.fact_corpus import resolve
@@ -193,10 +242,10 @@ def retrieve_knowledge(
         and _query_has_gxw2_skill_concept(query, task)
     )
     candidate_top_k = min(
-        _core._MAX_TOP_K,
+        MAX_TOP_K,
         max(normalized_top_k, 40 if expand else normalized_top_k),
     )
-    results = _core._retrieve_knowledge(
+    results = core.retrieve_broad_knowledge(
         query,
         plc_model=plc_model,
         task_type=task,
@@ -205,7 +254,7 @@ def retrieve_knowledge(
         exclude_chunk_types=exclude_chunk_types,
         exclude_structured_kinds=exclude_structured_kinds,
     )
-    results = filter_records(results, source_lanes)
+    results = filter_records([*direct, *results], source_lanes)
     if not results:
         return []
 
@@ -218,16 +267,16 @@ def retrieve_knowledge(
         results = [
             item
             for item in results
-            if _core._normalize_text(item.get("manual_type", "")).casefold()
+            if normalize_text(item.get("manual_type", "")).casefold()
             != "third_party_skill"
         ]
 
     if not results or not expand:
-        return results[:normalized_top_k]
+        return select_ranked(results, normalized_top_k)
 
     # Skill-concept routing may widen recall, but final ordering remains the
     # same generic RRF score produced by knowledge.core.
-    return _core._select_ranked(results, normalized_top_k)
+    return select_ranked(results, normalized_top_k)
 
 
 def retrieve_design_knowledge(
@@ -238,7 +287,7 @@ def retrieve_design_knowledge(
     char_budget=None,
 ):
     """Return analysis-only curated design evidence from the SQLite index."""
-    return _core._retrieve_design_knowledge(
+    return core.retrieve_design_records(
         query,
         plc_model=plc_model,
         task_type=task_type,
@@ -270,22 +319,23 @@ def retrieve_fact_aware_knowledge(
         resolve_instruction_records,
         resolve_device_family_records,
         resolve_language_records,
+        resolve_positioning_records,
         structured_fact_targets,
         without_structured_targets,
     )
 
     try:
-        normalized_top_k = max(0, min(_core._MAX_TOP_K, int(top_k)))
+        normalized_top_k = max(0, min(MAX_TOP_K, int(top_k)))
     except (TypeError, ValueError):
         return []
     if not normalized_top_k:
         return []
     # Exact registry rows can exist outside the bundled manual catalogue.
     # Apply the same target/vendor boundary before either retrieval path.
-    if _core._query_is_out_of_scope(query, plc_model):
+    if query_is_out_of_scope(query, plc_model):
         return []
 
-    task = _core._normalize_text(task_type).casefold() or "analysis"
+    task = normalize_text(task_type).casefold() or "analysis"
     plan = retrieval_plan(query, task)
     if not plan["facts"]:
         return []
@@ -298,6 +348,7 @@ def retrieve_fact_aware_knowledge(
 
     targets = structured_fact_targets(query, plc_model=plc_model)
     direct = [
+        *resolve_positioning_records(targets.get("positioning"), plc_model=plc_model, task_type=task),
         *resolve_language_records(targets.get('language_features') or (), plc_model=plc_model, task_type=task),
         *resolve_instruction_records(
             targets.get("instructions") or (),
@@ -333,7 +384,7 @@ def retrieve_fact_aware_knowledge(
         residual,
         plc_model=plc_model,
         task_type=task,
-        top_k=min(_core._MAX_TOP_K, max(12, normalized_top_k * 3)),
+        top_k=min(MAX_TOP_K, max(12, normalized_top_k * 3)),
         source_lanes=lanes,
         **prefilters,
     ) if plan["facts"] and residual.strip() and not diagnostic_only else []
@@ -342,7 +393,7 @@ def retrieve_fact_aware_knowledge(
     broad = project_device_source_records(broad,plc_model=plc_model)
 
     # Exact rows precede residual matches; retain each selected source whole.
-    return _core._select_ranked(
+    return select_ranked(
         [*direct, *broad],
         normalized_top_k,
     )
@@ -363,7 +414,7 @@ def format_knowledge_reference(result, *, debug=False):
                      "operand restrictions on the cited instruction pages. Source scope does not verify execution.\n")
     elif applicability.get("instruction_support") == "unknown":
         condition = "Source applicability: this manual covers the CPU; instruction-specific support is unverified.\n"
-    return "Reference role: " + evidence_record(result)["role"] + "\n" + condition + _core._format_result_block(result)
+    return "Reference role: " + evidence_record(result)["role"] + "\n" + condition + format_result_block(result)
 
 
 def build_knowledge_context(
@@ -377,11 +428,11 @@ def build_knowledge_context(
     """
     from knowledge.evidence import KnowledgeContext, evidence_record, text_sha256, estimate_tokens, context_reference
 
-    task = _core._normalize_text(task_type).casefold() or "generate"
+    task = normalize_text(task_type).casefold() or "generate"
     manifest = {"stage": task, "status": "empty_or_unavailable", "plc_model": plc_model,
                 "query_sha256": text_sha256(query), "records": [], "omitted_ids": []}
     try:
-        count = max(0, min(_core._MAX_TOP_K, int(top_k)))
+        count = max(0, min(MAX_TOP_K, int(top_k)))
     except (TypeError, ValueError):
         return KnowledgeContext("", {**manifest, "status": "excluded", "reason": "invalid_top_k"})
     manifest["selection_policy"] = "relevance_complete_units"
@@ -454,6 +505,7 @@ def build_knowledge_context(
         resolve_process_records,
         resolve_device_family_records,
         resolve_language_records,
+        resolve_positioning_records,
     )
 
     provided_structured = (
@@ -504,6 +556,8 @@ def build_knowledge_context(
                 instruction_targets, plc_model=plc_model, task_type=task,
             ))
     if plan["facts"]:
+        direct_results.extend(resolve_positioning_records(exact_targets.get("positioning"),
+                              plc_model=plc_model, task_type=task))
         direct_results.extend(resolve_device_records(
             device_targets, plc_model=plc_model, task_type=task,
             query=(query_meta.get('capability_requirement') or query) if isinstance(query_meta, dict) else query,
@@ -540,7 +594,7 @@ def build_knowledge_context(
         should_retrieve_residual = has_generation_fact_target(residual_query)
     broad_results = retrieve_knowledge(
         residual_query, plc_model=plc_model, task_type=task,
-        top_k=min(_core._MAX_TOP_K, max(12, fact_slots * 3)),
+        top_k=min(MAX_TOP_K, max(12, fact_slots * 3)),
         source_lanes=tuple(plan["source_lanes"]),
         **prefilters,
     ) if should_retrieve_residual else []
@@ -558,6 +612,7 @@ def build_knowledge_context(
             "errors": error_targets,
             "process": process_targets,
             "language_features": exact_targets.get('language_features', []),
+            "positioning": exact_targets.get("positioning", []),
         },
         "record_ids": [str(item.get("id")) for item in direct_results if item.get("id")],
         "direct_covered_kinds": sorted(covered_kinds),
@@ -631,11 +686,6 @@ def discover_capabilities(requirement, *, plc_model="FX3U", target_mode="ladder"
                     explicit_targets=explicit_targets, catalog=catalog,
                     retrieve=retrieve_knowledge, relation_records=relation_records, relation_limit=relation_limit)
 
-
-def __getattr__(name):
-    # Preserve access to private helper functions/constants that existing tests
-    # and diagnostics import from knowledge_retriever.
-    return getattr(_core, name)
 
 
 __all__ = ["retrieve_knowledge", "retrieve_fact_aware_knowledge", "retrieve_design_knowledge", "build_knowledge_context", "discover_capabilities", "format_knowledge_reference"]

@@ -6,7 +6,7 @@ from pydantic import Field
 
 from application.native_validation import NativeValidationService
 from .schemas import AttachmentUpload, Command
-from .responses import AgentToolResult, PublicObject
+from .responses import NativeValidationToolResult, FBDEditorView, FBDDraftPreview, NativeEvidence, NativeRecord
 
 
 class FBDPreview(Command):
@@ -42,20 +42,20 @@ class NativeValidationCheck(Command):
 def register(app, service):
     native = NativeValidationService(service)
 
-    @app.post("/api/fbd/editor", response_model=PublicObject)
+    @app.post("/api/fbd/editor", response_model=FBDEditorView, response_model_exclude_unset=True)
     def edit_draft(command: FBDDraftEdit):
         return service.fbd.editor(**command.model_dump())
 
-    @app.post("/api/fbd/preview", response_model=PublicObject)
+    @app.post("/api/fbd/preview", response_model=FBDDraftPreview, response_model_exclude_unset=True)
     def preview(command: FBDPreview):
         return service.fbd.preview(**command.model_dump())
 
-    @app.get("/api/projects/{project_id}/versions/{version_id}/native-validation", response_model=PublicObject)
+    @app.get("/api/projects/{project_id}/versions/{version_id}/native-validation", response_model=NativeEvidence, response_model_exclude_unset=True)
     def records(project_id: str, version_id: str):
         return native.list(project_id, version_id)
 
     @app.post("/api/projects/{project_id}/versions/{version_id}/native-validation/check",
-              response_model=AgentToolResult, response_model_exclude_unset=True)
+              response_model=NativeValidationToolResult, response_model_exclude_unset=True)
     def check(project_id: str, version_id: str, command: NativeValidationCheck):
         arguments = {'native': True}
         if command.program is not None:
@@ -64,7 +64,7 @@ def register(app, service):
             'name': 'validate_project', 'arguments': arguments,
             'call_id': 'native-validation_' + command.request_id}, observe_client=False)
 
-    @app.post("/api/projects/{project_id}/versions/{version_id}/native-validation", status_code=201, response_model=PublicObject)
+    @app.post("/api/projects/{project_id}/versions/{version_id}/native-validation", status_code=201, response_model=NativeRecord, response_model_exclude_unset=True)
     def record(project_id: str, version_id: str, command: NativeValidationRecord):
         return native.record(project_id, version_id, command.model_dump(exclude_none=True))
 

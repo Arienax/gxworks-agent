@@ -30,8 +30,13 @@ def contained(path: Path, root: Path) -> Path:
                              message="Resource escapes its storage directory", error_type=ProjectError)
 
 
-def public(value: Any) -> Any:
+def public(value: Any, *, document: str | None = None) -> Any:
     """Defense in depth for metadata; resource schemas remain allowlisted."""
+    if document is not None:
+        from shared.engineering_documents import project_document
+        return project_document(value, kind=document, project_text=redact_paths,
+            field_allowed=lambda k: public_result_field(k) and not filesystem_field(k)
+                and not credential_field(k, fragments=True, any_token=True) and "staging_dir" not in str(k).lower())
     if isinstance(value, Mapping):
         from application.capability_context import public_discovery
         return {str(k): public_discovery(v) if k == "capability_discovery" else public(v) for k, v in value.items()
@@ -75,7 +80,7 @@ class ProjectService:
         result["effort"] = None  # retired project field; preserve stored history
         result["version_count"] = len(project["versions"])
         if detail:
-            result["confirmed_spec"] = public(project.get("confirmed_spec"))
+            result["confirmed_spec"] = public(project.get("confirmed_spec"), document="spec")
             result["versions"] = [self.version(project_id, v["id"]) for v in project["versions"]]
             result["messages"] = [{k: public(m.get(k)) for k in ("id", "role", "kind", "content", "created_at")}
                                   for m in project.get("messages", []) if isinstance(m, dict)]
@@ -97,6 +102,7 @@ class ProjectService:
                 "parent_version_id", "ir_sha256", "confirmed_spec_hash", "confirmed_spec_snapshot",
                 "gx_sync", "simulator_runs", "simulator_test_plans", "debug_attempts")
         result = {k: public(version.get(k)) for k in keys}
+        result["confirmed_spec_snapshot"] = public(version.get("confirmed_spec_snapshot"), document="spec")
         for key in ("generation_handoff", "maintainability_review"):
             if key in version:
                 result[key] = public(version[key])
@@ -334,7 +340,7 @@ class ProjectService:
         result = self.store.load_simulator_run(project_id, version_id, run_id)
         if result is None:
             raise KeyError("Run evidence not found")
-        return public(result)
+        return public(result, document="simulation")
 
 
 def media_type(path: Path) -> str:

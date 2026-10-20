@@ -4,23 +4,10 @@ import { Button } from "../components/ui";
 import { ChangeSummary } from "./ChangeSummary";
 import "./explorer.css";
 
-export type ExploreNetwork = {
-  id: string;
-  comment: string;
-  reads: string[];
-  writes: string[];
-  instructions: { op?: string; args?: string[] }[];
-  bounds: { top: number; height: number; display_number: number };
-};
-type Device = { comment?: string; kind?: string; read_by: string[]; written_by: string[] };
-type Exploration = {
-  width: number;
-  height: number;
-  svg: string;
-  networks: ExploreNetwork[];
-  devices: Record<string, Device>;
-  address_targets: { address: string; x: number; y: number; width: number; height: number }[];
-};
+import type { ApiSchema } from "../api/client";
+export type ExploreNetwork = ApiSchema["ExploreNetwork"];
+type Exploration = ApiSchema["Exploration"];
+
 type Props = {
   pid: string;
   vid: string;
@@ -254,16 +241,7 @@ export const ProgramExplorer = memo(function ProgramExplorer({
 });
 
 export type IssueContext = { id: string; title: string; addresses: string[]; planId?: string };
-type Issue = IssueContext & {
-  severity: string;
-  source: string;
-  message: string;
-  suggestion: string;
-  evidence: string[];
-  networks: string[];
-  unresolved_networks: string[];
-  tests: { plan_id: string; test_names: string[] }[];
-};
+
 export function IssueCards({
   pid,
   vid,
@@ -283,7 +261,7 @@ export function IssueCards({
   t: (s: string) => string;
   refreshKey?: number;
 }) {
-  const { value, error, loading } = useResource<{ issues: Issue[] }>(
+  const { value, error, loading } = useResource<ApiSchema["IssueList"]>(
     `/projects/${pid}/versions/${vid}/issues${reportId ? `?report_id=${encodeURIComponent(reportId)}` : ""}`,
     refreshKey,
   );
@@ -324,7 +302,7 @@ export function IssueCards({
               {issue.evidence.length ? (
                 <ul>
                   {issue.evidence.map((e, i) => (
-                    <li key={i}>{e}</li>
+                    <li key={i}>{typeof e === "string" ? e : JSON.stringify(e)}</li>
                   ))}
                 </ul>
               ) : (

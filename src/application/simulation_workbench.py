@@ -46,7 +46,7 @@ def plan_view(plan):
                 issues.append(issue)
         source = source or meta.get("source_plan_id")
     return public({**plan, "suite_sha256": canonical_sha256(plan["suite"]),
-                   "requirement_links": links, "issue_ids": issues, "source_plan_id": source})
+                   "requirement_links": links, "issue_ids": issues, "source_plan_id": source}, document="simulation")
 
 
 class SimulationWorkbenchService:
@@ -110,7 +110,7 @@ class SimulationWorkbenchService:
         return public({"project_id": project_id, "version_id": version_id, "ir_sha256": canonical_sha256(program),
                        "plc_model": program["plc"]["cpu"], "devices": devices, "plans": plans,
                        "unavailable_plans": unavailable, "unavailable_runs": unavailable_runs,
-                       "requirements": requirements, "runs": runs, "editor": editor_metadata(program["plc"]["cpu"])})
+                       "requirements": requirements, "runs": runs, "editor": editor_metadata(program["plc"]["cpu"])}, document="simulation_workbench")
 
     def edit_draft(self, project_id, version_id, *, suite, command):
         _, program = self._context(project_id, version_id)
@@ -210,4 +210,4 @@ class SimulationWorkbenchService:
         timeline = recorded_observation(saved["suite"], saved["result"], binding={"project_id": project_id, "version_id": version_id})
         return public({"run_id": run_id, "version_id": version_id, "binding": saved["binding"],
                        "verification": saved["verification"], "status": saved["result"].get("status"), "cases": cases,
-                       "timeline": timeline})
+                       "timeline": timeline}, document="simulation")

@@ -28,7 +28,7 @@ class CandidateViews:
             from plc.specification.confirmed import restore_review_choices
             if isinstance(output.get("spec_draft"), dict):
                 output["spec_draft"] = restore_review_choices(output["spec_draft"], output["analysis"])
-        return public(output)
+        return public(output, document="job_output")
 
     def render_ladder_preview(
         self, program, *, theme=None, confirmed_spec=None, validation_profile="strict"
@@ -44,7 +44,7 @@ class CandidateViews:
         )
         ladder = ir_to_ladder(program)
         svg = AdvancedSVGLadder().generate_ladder(json.dumps(ladder, ensure_ascii=False))
-        return {"target_mode": "ladder", "ladder": ladder, "program": public(program),
+        return {"target_mode": "ladder", "ladder": ladder, "program": public(program, document="program"),
                 "svg": self.projects.themed_svg(svg, theme), "st": render_plc_ir_to_st(program)}
 
     def version_preview(self, project_id, version_id, *, theme=None):
@@ -239,12 +239,12 @@ class CandidateViews:
             from application.fbd import editor_snapshot, staged_bytes
             artifacts = staged_bytes(payload, self.state_dir)
             model = json.loads(artifacts['fbd'])
-            editor = public(editor_snapshot(artifacts['gxw'], model['program']))
+            editor = public(editor_snapshot(artifacts['gxw'], model['program']), document="editor")
             # SVG is a verified engineering artifact, not metadata containing
             # host paths. Use the same bytes as the proposal's diagram.
             editor['source_svg'] = artifacts['svg'].decode('utf-8')
-            return {"target_mode": "fbd", "program": public(json.loads(artifacts["fbd"])),
-                    "svg": artifacts["svg"].decode("utf-8"), "diff": public(payload["_preview_diff"]),
+            return {"target_mode": "fbd", "program": public(json.loads(artifacts["fbd"]), document="program"),
+                    "svg": artifacts["svg"].decode("utf-8"), "diff": public(payload["_preview_diff"], document="preview_diff"),
                     'editor': editor}
         if "_candidate_ir" in payload:
             # read_private verified the frozen payload hash. Re-render each read
@@ -253,13 +253,13 @@ class CandidateViews:
                         payload["_candidate_ir"], theme=theme,
                         confirmed_spec=payload.get("_confirmed_spec"),
                         validation_profile=payload.get("_validation_profile", "strict")),
-                    "diff": public(payload.get("_preview_diff") or self.candidate_diff(record["project_id"], record["base_version_id"], payload))}
+                    "diff": public(payload.get("_preview_diff") or self.candidate_diff(record["project_id"], record["base_version_id"], payload), document="preview_diff")}
         if payload.get("target_mode") == "sfc":
             from application.fbd import staged_bytes
             artifacts = staged_bytes(payload, self.state_dir)
-            return {'target_mode': 'sfc', 'program': public(json.loads(artifacts['sfc'])),
+            return {'target_mode': 'sfc', 'program': public(json.loads(artifacts['sfc']), document="program"),
                     'validation': public(payload['metadata']['validation']),
-                    'diff': public(payload['_preview_diff'])}
+                    'diff': public(payload['_preview_diff'], document="preview_diff")}
         if payload.get("target_mode") == "st":
             entry = payload["artifacts"]["st"]
             path = contained(Path(payload["staging_dir"]) / entry["path"], self.state_dir)
@@ -282,4 +282,4 @@ class CandidateViews:
             if mode == "st" and st is None:
                 raise ValueError("The execution proposal's ST artifact is unavailable")
             return {"action": record["action"], "version_id": version_id, "version": version, "target_mode": mode,
-                    "program": public(program), "svg": svg, "st": st, "plan": public(payload.get("plan"))}
+                    "program": public(program, document="program"), "svg": svg, "st": st, "plan": public(payload.get("plan"), document="simulation")}

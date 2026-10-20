@@ -40,8 +40,8 @@ def main(argv=None):
         parser.error("--static-dir must contain a built index.html")
     from .app import create_app
     import uvicorn
-    from knowledge.scope import runtime_status
-    knowledge = runtime_status()
+    from application.execution import knowledge_runtime_status
+    knowledge = knowledge_runtime_status()
     if knowledge["status"] != "available":
         import json
         print("PLC knowledge unavailable in this Web runtime: " + json.dumps(knowledge, ensure_ascii=True), file=sys.stderr)

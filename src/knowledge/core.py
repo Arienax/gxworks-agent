@@ -21,706 +21,87 @@ import json
 from pathlib import Path
 import re
 import sqlite3
-import threading
-import unicodedata
-from urllib.parse import quote
 
-from shared.paths import resource_path
 from knowledge.gxworks2_concepts import query_skill_concepts
-from plc.device_identity import REFERENCE_DEVICE_TOKEN_RE
+
+from knowledge.index_access import (
+    CHUNK_ID_COLUMNS as _CHUNK_ID_COLUMNS,
+    TEXT_COLUMNS as _TEXT_COLUMNS,
+    SOURCE_COLUMNS as _SOURCE_COLUMNS,
+    PAGE_COLUMNS as _PAGE_COLUMNS,
+    PAGE_END_COLUMNS as _PAGE_END_COLUMNS,
+    PDF_PAGE_COLUMNS as _PDF_PAGE_COLUMNS,
+    SECTION_COLUMNS as _SECTION_COLUMNS,
+    MODEL_COLUMNS as _MODEL_COLUMNS,
+    TASK_COLUMNS as _TASK_COLUMNS,
+    ENTITY_TERM_COLUMNS as _ENTITY_TERM_COLUMNS,
+    ENTITY_CHUNK_COLUMNS as _ENTITY_CHUNK_COLUMNS,
+    ENTITY_OCCURRENCE_COLUMNS as _ENTITY_OCCURRENCE_COLUMNS,
+    quote_identifier as _quote_identifier,
+    first_column as _first_column,
+    matching_columns as _matching_columns,
+    row_value as _row_value,
+    index_path as _index_path,
+    index_identity as _index_identity,
+    close_thread_connection as _close_thread_connection,
+    connection as _connection,
+    table_columns as _table_columns,
+    schema as _schema,
+    load_meta as _load_meta,
+    fetch_chunks as _fetch_chunks,
+)
+from knowledge.text_matching import (
+    DEVICE_RE as _DEVICE_RE,
+    ERROR_CODE_RE as _ERROR_CODE_RE,
+    ASCII_TERM_RE as _ASCII_TERM_RE,
+    COMPARISON_FAMILY_RE as _COMPARISON_FAMILY_RE,
+    PRODUCT_TERM_RE as _PRODUCT_TERM_RE,
+    ASCII_WORD_RE as _ASCII_WORD_RE,
+    CJK_RUN_RE as _CJK_RUN_RE,
+    EXACT_NOISE as _EXACT_NOISE,
+    PLC_DOMAIN_MARKERS as _PLC_DOMAIN_MARKERS,
+    NON_MITSUBISHI_MARKERS as _NON_MITSUBISHI_MARKERS,
+    MITSUBISHI_SCOPE_MARKERS as _MITSUBISHI_SCOPE_MARKERS,
+    normalize_text as _normalize_text,
+    literal_instruction_word as _literal_instruction_word,
+    exact_terms as _exact_terms,
+    entity_term_variants as _entity_term_variants,
+    error_terms as _error_terms,
+    fts_tokens as _fts_tokens,
+    cjk_bigram_set as _cjk_bigram_set,
+    fts_expression as _fts_expression,
+    fts_match_quality as _fts_match_quality,
+    alias_occurs as _alias_occurs,
+    instruction_heading_terms as _instruction_heading_terms,
+)
+from knowledge.scope import (
+    query_is_out_of_scope as _query_is_out_of_scope,
+    scope_values as _scope_values,
+    scope_matches as _scope_matches,
+    row_in_scope as _row_in_scope,
+)
+from knowledge.record_projection import (
+    default_source as _default_source,
+    chunk_result as _chunk_result,
+    source_applicability as _source_applicability,
+    structured_instruction_record as _structured_instruction_record,
+    augment_structured_instruction as _augment_structured_instruction,
+    format_result_block as _format_result_block,
+    select_ranked as _select_ranked,
+)
+from knowledge.record_projection import MAX_TOP_K as _MAX_TOP_K
+from knowledge import index_access
 
 
-_INDEX_RESOURCE = "knowledge/runtime/plc_facts.sqlite"
 _CACHE_SIZE = 256
-_MAX_TOP_K = 50
 _MAX_CANDIDATES = 200
 _MAX_ENTITY_ROWS_PER_TERM = 64
 _RRF_K = 60.0
 
-_thread_state = threading.local()
 
-_DEVICE_RE = REFERENCE_DEVICE_TOKEN_RE
-_ERROR_CODE_RE = re.compile(
-    r"(?<![A-Za-z0-9])(?:0X)?([0-9A-F]{4,5})(H)?(?![A-Za-z0-9])",
-    re.IGNORECASE,
-)
-_ASCII_TERM_RE = re.compile(
-    r"(?<![A-Za-z0-9_])[A-Za-z][A-Za-z0-9_]{1,23}"
-    r"(?:<>|<=|>=|[<>=])?(?![A-Za-z0-9_<>=])"
-)
 # Official manuals abbreviate comparison families in headings, for example
 # "AND=, >, <, < >, <=, >=". Expand the heading, never the source text.
-_COMPARISON_FAMILY_RE = re.compile(
-    r"(?<![A-Za-z0-9_])([A-Za-z][A-Za-z0-9_]*)"
-    r"((?:<>|<=|>=|[<>=])(?:\s*,\s*(?:<\s*>|<\s*=|>\s*=|[<>=]))+)"
-)
 from knowledge.scope import OFFICIAL_INSTRUCTION_TYPES as _OFFICIAL_INSTRUCTION_MANUAL_TYPES
-_PRODUCT_TERM_RE = re.compile(
-    r"(?<![A-Za-z0-9_])FX\d[A-Z0-9]*(?:-[A-Z0-9]+)+(?![A-Za-z0-9_])",
-    re.IGNORECASE,
-)
-_ASCII_WORD_RE = re.compile(r"[A-Za-z][A-Za-z0-9_+.-]*|\d+(?:\.\d+)?")
-_CJK_RUN_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]+")
-_EXACT_NOISE = {
-    "AI",
-    "AND",
-    "APP",
-    "APP_INSTR",
-    "CPU",
-    "FALSE",
-    "FX",
-    "FX3G",
-    "FX3U",
-    "FX3UC",
-    "FX5U",
-    "GX",
-    "JSON",
-    "LADDER",
-    "NC",
-    "NO",
-    "OFF",
-    "ON",
-    "OR",
-    "PDF",
-    "PLC",
-    "ST",
-    "TRUE",
-    "WORKS",
-    "WORKS2",
-}
-_PLC_DOMAIN_MARKERS = (
-    "plc",
-    "ladder",
-    "timer",
-    "counter",
-    "pulse",
-    "position",
-    "servo",
-    "inverter",
-    "modbus",
-    "serial",
-    "register",
-    "relay",
-    "frequency",
-    "instruction",
-    "i/o",
-    "io mapping",
-    "input relay",
-    "output relay",
-    "input filter",
-    "input terminal",
-    "output terminal",
-    "error code",
-    "fault code",
-    "structured programming",
-    "structured project",
-    "gx works2",
-    "\u7ed3\u6784\u5316\u7f16\u7a0b",
-    "\u7ed3\u6784\u5316\u5de5\u7a0b",
-    "\u6807\u7b7e",
-    "软元件",
-    "继电器",
-    "寄存器",
-    "计数",
-    "定时",
-    "指令",
-    "梯形图",
-    "脉冲",
-    "定位",
-    "原点",
-    "高速",
-    "频率",
-    "模拟量",
-    "通信",
-    "串行",
-    "变频器",
-    "输入继电器",
-    "输出继电器",
-    "输入滤波",
-    "输入端",
-    "输出端",
-    "输出形式",
-    "错误代码",
-    "故障代码",
-    "报警代码",
-    "扫描",
-    "中断",
-    "步进",
-    "看门狗",
-    "缓冲存储器",
-)
-
-_NON_MITSUBISHI_MARKERS = (
-    "siemens",
-    "s7-1200",
-    "s7-1500",
-    "tia portal",
-    "omron",
-    "sysmac",
-    "arduino",
-    "raspberry pi",
-    "gpio",
-    "\u897f\u95e8\u5b50",
-    "\u6b27\u59c6\u9f99",
-    "\u6811\u8393\u6d3e",
-)
-_MITSUBISHI_SCOPE_MARKERS = (
-    "fx3s",
-    "fx3g",
-    "fx3gc",
-    "fx3u",
-    "fx3uc",
-    "mitsubishi",
-    "gx works2",
-    "\u4e09\u83f1",
-)
-
-_CHUNK_ID_COLUMNS = ("chunk_id", "chunk_key", "id")
-_TEXT_COLUMNS = ("text", "content", "content_text", "chunk_text", "body")
-_SOURCE_COLUMNS = (
-    "source",
-    "source_name",
-    "manual_title",
-    "manual_id",
-    "document",
-    "document_title",
-    "document_id",
-    "title",
-)
-_PAGE_COLUMNS = (
-    "printed_page",
-    "page",
-    "page_number",
-    "manual_page",
-    "page_start",
-    "start_page",
-    "source_page",
-)
-_PAGE_END_COLUMNS = ("page_end", "end_page")
-_PDF_PAGE_COLUMNS = ("pdf_page", "pdf_page_number", "page_pdf")
-_SECTION_COLUMNS = (
-    "outline_path",
-    "section_path",
-    "section",
-    "section_title",
-    "heading",
-    "chapter",
-)
-_MODEL_COLUMNS = (
-    "plc_model",
-    "plc_models",
-    "model",
-    "plc_family",
-    "applies_to",
-)
-_TASK_COLUMNS = (
-    "task_type",
-    "task_types",
-    "tasks",
-    "workflow",
-    "applies_to_task",
-)
-_ENTITY_TERM_COLUMNS = (
-    "entity_norm",
-    "normalized_entity",
-    "normalized_alias",
-    "normalized",
-    "entity",
-    "entity_value",
-    "canonical",
-    "canonical_key",
-    "term",
-    "alias",
-    "alias_norm",
-    "opcode",
-    "device",
-    "name",
-    "key",
-)
-_ENTITY_CHUNK_COLUMNS = ("chunk_id", "target_chunk_id", "content_id")
-_ENTITY_OCCURRENCE_COLUMNS = (
-    "occurrences",
-    "occurrence_count",
-    "frequency",
-    "count",
-    "weight",
-)
-
-
-def _normalize_text(value):
-    text = unicodedata.normalize("NFKC", str(value or ""))
-    return " ".join(text.strip().split())
-
-
-def _query_is_out_of_scope(query, plc_model):
-    model = _normalize_text(plc_model).upper()
-    from gxworks2.project_profiles import native_project_profile
-    from plc.validation import SUPPORTED_PLC_MODELS
-    # Knowledge targets include source-supported CPUs beyond the GX Works2
-    # New-dialog menu. Retrieval never grants native project support.
-    if model and model not in SUPPORTED_PLC_MODELS and native_project_profile(model) is None:
-        return True
-    normalized = _normalize_text(query).casefold()
-    foreign = any(marker.casefold() in normalized for marker in _NON_MITSUBISHI_MARKERS)
-    in_scope = any(marker.casefold() in normalized for marker in _MITSUBISHI_SCOPE_MARKERS)
-    return foreign and not in_scope
-
-
-def _quote_identifier(value):
-    return '"' + str(value).replace('"', '""') + '"'
-
-
-def _first_column(columns, candidates):
-    lookup = {str(column).casefold(): str(column) for column in columns}
-    for candidate in candidates:
-        matched = lookup.get(candidate.casefold())
-        if matched:
-            return matched
-    return None
-
-
-def _matching_columns(columns, candidates):
-    lookup = {str(column).casefold(): str(column) for column in columns}
-    return [lookup[item.casefold()] for item in candidates if item.casefold() in lookup]
-
-
-def _row_value(row, columns, default=None):
-    keys = {str(key).casefold(): key for key in row.keys()}
-    for column in columns:
-        key = keys.get(column.casefold())
-        if key is None:
-            continue
-        value = row[key]
-        if value is not None and str(value).strip():
-            return value
-    return default
-
-
-def _index_path():
-    try:
-        path = Path(resource_path(_INDEX_RESOURCE))
-    except (OSError, TypeError, ValueError):
-        return None
-    if not path.is_file():
-        return None
-    # Renaming/copying the historical full-text corpus must not re-enable it.
-    from knowledge.fact_corpus import CORPUS_KIND
-    try:
-        with sqlite3.connect(path.resolve().as_uri() + "?mode=ro&immutable=1", uri=True) as check:
-            row = check.execute("SELECT value FROM meta WHERE key='corpus_kind'").fetchone()
-        return path if row and row[0] == CORPUS_KIND else None
-    except sqlite3.Error:
-        return None
-
-
-def _index_identity(path):
-    if path is None:
-        return ("missing", 0, 0)
-    try:
-        stat = path.stat()
-    except OSError:
-        return ("missing", 0, 0)
-    return (str(path.resolve()), int(stat.st_mtime_ns), int(stat.st_size))
-
-
-def _close_thread_connection():
-    connection = getattr(_thread_state, "connection", None)
-    if connection is not None:
-        try:
-            connection.close()
-        except sqlite3.Error:
-            pass
-    _thread_state.connection = None
-    _thread_state.identity = None
-    _thread_state.schema = None
-    _thread_state.dense_verification = None
-    _thread_state.instruction_sections = None
-
-
-def _connection(path, identity):
-    if (
-        getattr(_thread_state, "connection", None) is not None
-        and getattr(_thread_state, "identity", None) == identity
-    ):
-        return _thread_state.connection
-
-    _close_thread_connection()
-    encoded_path = quote(path.resolve().as_posix(), safe="/:")
-    connection = sqlite3.connect(
-        "file:{}?mode=ro&immutable=1".format(encoded_path),
-        uri=True,
-        timeout=0.2,
-        check_same_thread=True,
-    )
-    connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA query_only=ON")
-    connection.execute("PRAGMA temp_store=MEMORY")
-    try:
-        connection.execute("PRAGMA mmap_size=268435456")
-    except sqlite3.Error:
-        pass
-
-    _thread_state.connection = connection
-    _thread_state.identity = identity
-    _thread_state.schema = None
-    _thread_state.dense_verification = None
-    return connection
-
-
-def _table_columns(connection, table_name):
-    rows = connection.execute(
-        "PRAGMA table_info({})".format(_quote_identifier(table_name))
-    ).fetchall()
-    return tuple(str(row[1]) for row in rows)
-
-
-def _schema(connection):
-    cached = getattr(_thread_state, "schema", None)
-    if cached is not None:
-        return cached
-
-    table_rows = connection.execute(
-        "SELECT name FROM sqlite_master WHERE type IN ('table', 'view')"
-    ).fetchall()
-    table_lookup = {str(row[0]).casefold(): str(row[0]) for row in table_rows}
-    schema = {}
-    for expected in (
-        "meta",
-        "manuals",
-        "chunks",
-        "entity_index",
-        "chunks_fts",
-        "instructions",
-        "instruction_aliases",
-        "device_records",
-        "device_sections",
-        "error_records",
-        "debug_cases",
-        "vector_embeddings",
-        "facts",
-    ):
-        actual = table_lookup.get(expected.casefold())
-        if actual:
-            schema[expected] = {
-                "name": actual,
-                "columns": _table_columns(connection, actual),
-            }
-    _thread_state.schema = schema
-    return schema
-
-
-def _load_meta(connection, schema):
-    table = schema.get("meta")
-    if not table:
-        return {}
-    columns = table["columns"]
-    if not columns:
-        return {}
-    rows = connection.execute(
-        "SELECT * FROM {} LIMIT 128".format(_quote_identifier(table["name"]))
-    ).fetchall()
-    if not rows:
-        return {}
-
-    key_column = _first_column(columns, ("key", "name", "meta_key"))
-    value_column = _first_column(columns, ("value", "meta_value", "content"))
-    if key_column and value_column:
-        return {
-            str(row[key_column]).strip().casefold(): row[value_column]
-            for row in rows
-            if row[key_column] is not None
-        }
-    return {str(key).casefold(): rows[0][key] for key in rows[0].keys()}
-
-
-def _scope_values(value):
-    if value is None:
-        return set()
-    if isinstance(value, (list, tuple, set)):
-        return {str(item).strip().upper() for item in value if str(item).strip()}
-    text = str(value).strip()
-    if not text:
-        return set()
-    if text[:1] in "[{":
-        try:
-            parsed = json.loads(text)
-        except (TypeError, ValueError):
-            parsed = None
-        if isinstance(parsed, (list, tuple, set)):
-            return {str(item).strip().upper() for item in parsed if str(item).strip()}
-    return {
-        item.upper()
-        for item in re.split(r"[,;|/\s]+", text)
-        if item.strip()
-    }
-
-
-def _scope_matches(value, requested):
-    values = _scope_values(value)
-    if not values or values.intersection({"*", "ALL", "ANY", "COMMON"}):
-        return True
-    requested = str(requested or "").strip().upper()
-    # Native merged menu options retain their range. A shared source must
-    # cover every member, rather than silently treating one member as all.
-    from gxworks2.project_profiles import native_project_profile
-    profile = native_project_profile(requested)
-    if profile is not None and requested == profile.cpu.upper():
-        members = {member.upper() for member in profile.cpu.removesuffix("(RemoteI/O)").split("/")}
-        return members.issubset(values)
-    return not requested or requested in values
-
-
-def _row_in_scope(row, plc_model, task_type):
-    model = _row_value(row, _MODEL_COLUMNS)
-    task = _row_value(row, _TASK_COLUMNS)
-    return _scope_matches(model, plc_model) and _scope_matches(task, task_type)
-
-
-def _literal_instruction_word(query, word):
-    """Disambiguate the English preposition from an explicitly named FOR opcode."""
-    if str(word).upper() != "FOR":
-        return True
-    normalized = _normalize_text(query)
-    if normalized.casefold() == "for":
-        return True
-    if re.search(r"(?<![A-Za-z0-9_])FOR(?![A-Za-z0-9_])", normalized):
-        return True
-    return bool(re.search(
-        r"[`\"']for[`\"']|\bfor\s*(?:/\s*next\b|instruction\b|指令|循环)|"
-        r"\bfor\s+(?:K[+-]?\d+|D\d+)(?![A-Za-z0-9_])",
-        normalized, re.IGNORECASE,
-    ))
-
-
-def _exact_terms(query):
-    ordered = []
-    seen = set()
-
-    def add(value):
-        term = _normalize_text(value).upper()
-        if not term or term in _EXACT_NOISE or term in seen or not _literal_instruction_word(query, term):
-            return
-        seen.add(term)
-        ordered.append(term)
-
-    matches = [
-        (match.start(), -len(match.group(0)), match.group(0))
-        for match in _DEVICE_RE.finditer(query)
-    ]
-    matches.extend(
-        (match.start(), -len(match.group(0)), match.group(0))
-        for match in _PRODUCT_TERM_RE.finditer(query)
-    )
-    matches.extend(
-        (match.start(), -len(match.group(0)), match.group(0))
-        for match in _ASCII_TERM_RE.finditer(query)
-    )
-    for _position, _negative_length, value in sorted(matches):
-        add(value)
-    return ordered[:32]
-
-
-def _entity_term_variants(term):
-    """Return display-equivalent X/Y addresses used across Mitsubishi manuals."""
-
-    normalized = _normalize_text(term).upper()
-    matched = re.fullmatch(r"([XY])0*(\d+)", normalized)
-    if not matched:
-        return [normalized]
-    prefix, digits = matched.groups()
-    number = int(digits or "0")
-    variants = [normalized, f"{prefix}{number}", f"{prefix}{number:02d}", f"{prefix}{number:03d}"]
-    return list(dict.fromkeys(variants))
-
-
-def _query_is_positioning(query):
-    """Recognize motion queries without confusing a step state machine with a stepper."""
-
-    normalized = _normalize_text(query)
-    return bool(
-        re.search(
-            r"(?<![A-Za-z0-9_])(?:DRVI|DRVA|ZRN|DSZR|DVIT|PLSY|DPLSY|PLSV)"
-            r"(?![A-Za-z0-9_])|"
-            r"(?<![A-Za-z0-9_])(?:M8029|M8336|D834[0-9]|D835[0-9])"
-            r"(?![A-Za-z0-9_])|"
-            r"FX\d[A-Z0-9]*(?:-[A-Z0-9]+)+|"
-            r"position(?:ing)?|pulse output|zero return|home return|servo|stepper|"
-            r"\u5b9a\u4f4d|\u8109\u51b2|\u539f\u70b9|\u56de\u96f6|"
-            r"\u4f3a\u670d|\u6b65\u8fdb\u7535\u673a|\u6b65\u8fdb\u9a71\u52a8\u5668",
-            normalized,
-            flags=re.IGNORECASE,
-        )
-    )
-
-
-def _query_is_direction_output_assignment(query):
-    """Recognize pulse/direction wiring assignment questions in either language."""
-
-    normalized = _normalize_text(query)
-    direction = re.search(
-        r"方向(?:输出|信号)|direction\s+(?:signal|output)", normalized, re.IGNORECASE,
-    )
-    assignment = re.search(
-        r"固定|配对|映射|任意|指定|分配|可以用|assign|arbitrary|fixed|pair|any\s+output|must",
-        normalized, re.IGNORECASE,
-    )
-    motion = _query_is_positioning(normalized) or re.search(
-        r"(?<![A-Za-z0-9_])Y\d+(?![A-Za-z0-9_])", normalized, re.IGNORECASE,
-    )
-    return bool(direction and assignment and motion)
-
-
-def _query_is_clock_semantics(query):
-    normalized = _normalize_text(query)
-    return bool(
-        re.search(
-            r"(?<![A-Za-z0-9_])M801[1-4](?![A-Za-z0-9_])|"
-            r"时钟|闪烁|振荡|方波|\bclock\b|\bblink\w*\b|\bflash\w*\b|"
-            r"\boscillat\w*\b|square\s*wave",
-            normalized,
-            re.IGNORECASE,
-        )
-    )
-
-
-def _query_is_timer_preset(query):
-    """Scope device-range evidence to timer settings, units, and time-base questions."""
-    normalized = _normalize_text(query)
-    timer = re.search(r"\btimers?\b|\bT\d+\b|定时器|计时器|时基", normalized, re.IGNORECASE)
-    setting = re.search(
-        r"\bK\d*\b|\bpreset\b|\btime\s*base\b|\bresolution\b|\bunits?\b|"
-        r"\btimer\s+(?:numbers?|ranges?)\b|时基|时间基准|分辨率|预置值|设定值|定时器编号",
-        normalized, re.IGNORECASE,
-    )
-    return bool(timer and setting and not _query_is_clock_semantics(normalized))
-
-
-def _timer_range_evidence(text, plc_model):
-    """Require model, timer range and time units in the original evidence body."""
-    body = re.split(r"\n\[(?:PAGE|TABLE)\b", str(text or ""), maxsplit=1)[-1]
-    model = _normalize_text(plc_model)
-    if not model:
-        return False
-    model_pattern = r"\s*".join(re.escape(character) for character in model)
-    return bool(
-        re.search(r"(?<![A-Za-z0-9])" + model_pattern + r"(?![A-Za-z0-9])", body, re.IGNORECASE)
-        and re.search(r"\bT\d+\s*(?:to|[-–～]|至)\s*T\d+\b", body, re.IGNORECASE)
-        and re.search(r"\b\d+(?:\.\d+)?\s*(?:ms|s|sec|seconds?)\b", body, re.IGNORECASE)
-    )
-
-
-def _error_terms(query):
-    normalized = _normalize_text(query)
-    has_error_context = bool(
-        re.search(
-            r"error|fault|alarm|diagnos|错误|故障|报警|异常|诊断",
-            normalized,
-            flags=re.IGNORECASE,
-        )
-    )
-    values = []
-    seen = set()
-    for match in _ERROR_CODE_RE.finditer(normalized):
-        code = match.group(1).upper() + ("H" if match.group(2) else "")
-        has_hex_letter = bool(re.search(r"[A-F]", match.group(1), flags=re.I))
-        if not (has_error_context or match.group(2) or has_hex_letter):
-            continue
-        for value in (code, code[:-1] if code.endswith("H") else code + "H"):
-            if value.casefold() not in seen:
-                seen.add(value.casefold())
-                values.append(value)
-    return values[:12]
-
-
-def _fts_tokens(query):
-    tokens = []
-    seen = set()
-
-    def add(value):
-        token = _normalize_text(value).casefold().replace('"', "")
-        if not token or token in seen:
-            return
-        seen.add(token)
-        tokens.append(token)
-
-    for term in _exact_terms(query):
-        add(term)
-    for match in _ASCII_WORD_RE.finditer(query):
-        value = match.group(0)
-        if value.upper() not in _EXACT_NOISE and _literal_instruction_word(query, value):
-            add(value)
-    for match in _CJK_RUN_RE.finditer(query):
-        run = match.group(0)
-        if len(run) <= 12:
-            add(run)
-        if len(run) == 1:
-            add(run)
-        else:
-            for index in range(len(run) - 1):
-                add(run[index : index + 2])
-    return tokens[:48]
-
-
-def _cjk_bigram_set(value):
-    terms = set()
-    for match in _CJK_RUN_RE.finditer(_normalize_text(value)):
-        run = match.group(0)
-        terms.update(run[index : index + 2] for index in range(len(run) - 1))
-    return terms
-
-
-def _fts_expression(query):
-    tokens = _fts_tokens(query)
-    if not tokens:
-        return ""
-    return " OR ".join('"{}"'.format(token.replace('"', '""')) for token in tokens)
-
-
-def _fts_match_quality(query, result, bm25_score=0.0):
-    """Return lexical coverage for a candidate, or zero when it is too weak.
-
-    CJK bigram OR queries deliberately favor recall, but without a coverage
-    gate generic requests such as "modify this program" match arbitrary pages
-    containing only one common word.  Exact entity hits bypass this function;
-    FTS-only evidence must cover a meaningful share of the actual query.
-    """
-
-    tokens = _fts_tokens(query)
-    if not tokens:
-        return 0.0, []
-    haystack = _normalize_text(
-        " ".join(
-            str(result.get(key, "") or "")
-            for key in ("section", "text")
-        )
-    ).casefold()
-    matched = [token for token in tokens if token.casefold() in haystack]
-    coverage = len(matched) / len(tokens)
-    product_hits = [
-        term
-        for term in _exact_terms(query)
-        if _PRODUCT_TERM_RE.fullmatch(term) and term.casefold() in haystack
-    ]
-    # A full Mitsubishi module identifier is already an unambiguous lexical
-    # match.  Do not reject its English manual page merely because the rest of
-    # the user query is Chinese and therefore cannot overlap that page.
-    if product_hits:
-        return max(coverage, 0.55), matched
-    normalized_query = _normalize_text(query).casefold()
-    has_domain_marker = any(
-        marker.casefold() in normalized_query for marker in _PLC_DOMAIN_MARKERS
-    )
-    if len(tokens) <= 3:
-        relevant = bool(matched) and coverage >= (1 / 3)
-    else:
-        relevant = len(matched) >= 2 and coverage >= 0.30
-    # BM25 measures textual similarity, not PLC relevance.  Generic requests
-    # such as "modify program" can receive a very strong score on an error-code
-    # page simply because common bigrams repeat there.  FTS-only evidence must
-    # therefore contain an unambiguous PLC-domain marker; exact opcodes/devices
-    # are handled separately by the entity index and do not need this fallback.
-    relevant = relevant and has_domain_marker
-    return (coverage if relevant else 0.0), matched
 
 
 def _entity_references(connection, schema, terms, plc_model, task_type, source_lanes=None, exclude_chunk_types=(), exclude_structured_kinds=()):
@@ -848,33 +229,6 @@ def _entity_references(connection, schema, terms, plc_model, task_type, source_l
     return references[:_MAX_CANDIDATES]
 
 
-def _alias_occurs(query, alias):
-    normalized_query = _normalize_text(query).casefold()
-    normalized_alias = _normalize_text(alias).casefold()
-    if not normalized_alias:
-        return False
-    if re.fullmatch(r"[a-z][a-z0-9_]*(?:<>|<=|>=|[<>=]|\s+[0-9]+)?", normalized_alias):
-        return bool(
-            re.search(
-                rf"(?<![a-z0-9_]){re.escape(normalized_alias)}(?![a-z0-9_<>=])",
-                normalized_query,
-                flags=re.IGNORECASE,
-            )
-        )
-    return len(normalized_alias) >= 2 and normalized_alias in normalized_query
-
-
-def _instruction_heading_terms(section):
-    terms = set(_exact_terms(section))
-    for match in _COMPARISON_FAMILY_RE.finditer(section):
-        prefix, operators = match.groups()
-        terms.update(
-            prefix.upper() + re.sub(r"\s+", "", operator)
-            for operator in operators.split(",")
-        )
-    return terms
-
-
 def _broad_metadata_references(connection, schema, query, terms, plc_model, task_type, source_lanes=None):
     """Return broad metadata-routed candidates; exact PLC facts live elsewhere."""
 
@@ -959,33 +313,6 @@ def _broad_metadata_references(connection, schema, query, terms, plc_model, task
             matched_rows.sort(key=lambda item: (-item[0], item[1]))
             for _coverage, _stable_id, chunk_id, section in matched_rows[:16]:
                 add(chunk_id, section, "manual_section")
-
-    # Precise metadata routes remain candidate selectors, not scoring boosts.
-    if (
-        chunks
-        and {"id", "manual_type", "section"}.issubset(chunks["columns"])
-        and _query_is_direction_output_assignment(query)
-    ):
-        rows = connection.execute(
-            "SELECT id,section FROM {} WHERE manual_type='positioning' "
-            "AND section LIKE '%Assignment of Output Numbers%'".format(
-                _quote_identifier(chunks["name"]),
-            )
-        ).fetchall()
-        for row in rows:
-            add(row["id"], row["section"], "manual_section")
-
-    if (
-        chunks and {"id", "manual_type", "section", "text"}.issubset(chunks["columns"])
-        and _query_is_timer_preset(query)
-    ):
-        rows = connection.execute(
-            "SELECT * FROM {} WHERE manual_type IN ('programming','structured_device') "
-            "AND section LIKE '%Numbers of timers%'".format(_quote_identifier(chunks["name"])),
-        ).fetchall()
-        for row in rows:
-            if _row_in_scope(row, plc_model, task_type) and _timer_range_evidence(row["text"], plc_model):
-                add(row["id"], row["section"], "manual_section")
 
     cases = schema.get("debug_cases") if source_lanes is None or "debug" in source_lanes else None
     if cases and {
@@ -1110,14 +437,14 @@ def _query_has_dense_scope(query, structured_refs):
 def _dense_index_ready(connection, schema):
     """Verify sidecar/database identity once per read-only thread connection."""
 
-    cached = getattr(_thread_state, "dense_verification", None)
+    cached = index_access.cached_value(connection, "dense_verification")
     if cached is not None:
         return cached
     result = {"ready": False, "model": "", "reason": "unavailable"}
     vector_table = schema.get("vector_embeddings")
     chunks_table = schema.get("chunks")
     if not vector_table or not chunks_table:
-        _thread_state.dense_verification = result
+        index_access.cache_value(connection, "dense_verification", result)
         return result
     try:
         from knowledge.dense import dense_model_info
@@ -1152,7 +479,7 @@ def _dense_index_ready(connection, schema):
                 result["reason"] = "stale_chunk_vectors"
     except (ImportError, OSError, sqlite3.Error, TypeError, ValueError, KeyError):
         result["reason"] = "verification_failed"
-    _thread_state.dense_verification = result
+    index_access.cache_value(connection, "dense_verification", result)
     return result
 
 
@@ -1180,226 +507,6 @@ def _dense_references(connection, schema, query, candidate_limit, structured_ref
         )
     except (ImportError, OSError, TypeError, ValueError):
         return []
-
-
-def _fetch_chunks(connection, schema, references):
-    table = schema.get("chunks")
-    if not table or not references:
-        return {}
-    columns = table["columns"]
-    id_column = _first_column(columns, _CHUNK_ID_COLUMNS)
-    by_id = []
-    by_rowid = []
-    for kind, value in references:
-        if kind == "id" and id_column:
-            by_id.append(value)
-        else:
-            by_rowid.append(value)
-
-    found = {}
-    table_name = _quote_identifier(table["name"])
-    if by_id and id_column:
-        placeholders = ",".join("?" for _item in by_id)
-        sql = "SELECT rowid AS _chunk_rowid, * FROM {} WHERE {} IN ({})".format(
-            table_name,
-            _quote_identifier(id_column),
-            placeholders,
-        )
-        for row in connection.execute(sql, by_id).fetchall():
-            found[("id", str(row[id_column]))] = row
-    if by_rowid:
-        placeholders = ",".join("?" for _item in by_rowid)
-        sql = "SELECT rowid AS _chunk_rowid, * FROM {} WHERE rowid IN ({})".format(
-            table_name,
-            placeholders,
-        )
-        for row in connection.execute(sql, by_rowid).fetchall():
-            found[("rowid", str(row["_chunk_rowid"]))] = row
-    return found
-
-
-def _default_source(meta, path):
-    for key in (
-        "source",
-        "manual_title",
-        "title",
-        "manual_number",
-        "document",
-    ):
-        value = meta.get(key)
-        if value is not None and str(value).strip():
-            return str(value).strip()
-    return path.stem
-
-
-def _chunk_result(row, meta, path, plc_model, task_type):
-    if row is None or not _row_in_scope(row, plc_model, task_type):
-        return None
-    text = _row_value(row, _TEXT_COLUMNS)
-    if text is None or not str(text).strip():
-        return None
-    chunk_id = _row_value(row, _CHUNK_ID_COLUMNS, row["_chunk_rowid"])
-    source = _row_value(row, _SOURCE_COLUMNS, _default_source(meta, path))
-    page = _row_value(row, _PAGE_COLUMNS, "")
-    pdf_page = _row_value(row, _PDF_PAGE_COLUMNS, "")
-    if page in (None, ""):
-        page = pdf_page
-    page_end = _row_value(
-        row,
-        ("printed_page_end", "page_end", "end_page", "pdf_page_end"),
-        "",
-    )
-    section = _row_value(row, _SECTION_COLUMNS, "")
-    result = {
-        "id": str(chunk_id),
-        "source": str(source),
-        "page": page,
-        "page_end": page_end,
-        "pdf_page": pdf_page,
-        "section": str(section or ""),
-        "text": str(text).strip(),
-        "manual_id": str(_row_value(row, ("manual_id",), "") or ""),
-        "manual_number": str(_row_value(row, ("manual_number",), "") or ""),
-        "revision": str(_row_value(row, ("revision",), "") or ""),
-        "manual_type": str(_row_value(row, ("manual_type",), "") or ""),
-        "chunk_type": str(_row_value(row, ("chunk_type",), "") or ""),
-        "instruction_opcode": str(
-            _row_value(row, ("instruction_opcode", "opcode"), "") or ""
-        ),
-        "plc_models": str(_row_value(row, _MODEL_COLUMNS, "") or ""),
-        "source_applicability": _source_applicability(row),
-        "table_binding_status": str(_row_value(row, ("device_table_binding_status",), "") or ""),
-        "manual_priority": int(
-            _row_value(row, ("manual_priority", "priority"), 0) or 0
-        ),
-    }
-    if meta.get("corpus_kind") == "authored_plc_facts_v1":
-        try:
-            authored = json.loads(_row_value(row, ("metadata_json",), "{}"))
-        except (ValueError, TypeError):
-            return None
-        from knowledge.fact_corpus import PUBLICATION_STATUS
-        if (not isinstance(authored, dict) or authored.get("distribution_status") != PUBLICATION_STATUS
-                or authored.get("content_origin") not in {"authored_fact", "original_case"}):
-            return None
-        result.update(authored)
-    return result
-
-
-def _source_applicability(row):
-    """Return source conditions separately from executable CPU admission."""
-    raw = _row_value(row, ("source_applicability_json",), "")
-    try:
-        value = json.loads(raw) if raw else {}
-    except (TypeError, ValueError):
-        return {"basis": "invalid_source_metadata", "instruction_support": "unknown"}
-    return value if isinstance(value, dict) else {}
-
-
-def _structured_instruction_record(connection, schema, chunk_id):
-    """Render authoritative instruction fields from SQLite at retrieval time."""
-    table = schema.get("instructions")
-    if not table:
-        return ""
-    required = {"chunk_id", "opcode", "operands_json", "restrictions_json"}
-    if not required.issubset(set(table["columns"])):
-        return ""
-    selected = ["opcode", "operands_json", "restrictions_json"]
-    if "completion_flags_json" in table["columns"]:
-        selected.append("completion_flags_json")
-    row = connection.execute(
-        "SELECT {} FROM {} WHERE chunk_id=? LIMIT 1".format(
-            ",".join(_quote_identifier(column) for column in selected),
-            _quote_identifier(table["name"]),
-        ),
-        (chunk_id,),
-    ).fetchone()
-    if row is None:
-        return ""
-    try:
-        operands = json.loads(str(row["operands_json"] or "[]"))
-    except (TypeError, ValueError):
-        operands = []
-    try:
-        restrictions = json.loads(str(row["restrictions_json"] or "[]"))
-    except (TypeError, ValueError):
-        restrictions = []
-    flags = []
-    if "completion_flags_json" in selected:
-        try:
-            flags = json.loads(str(row["completion_flags_json"] or "[]"))
-        except (TypeError, ValueError):
-            flags = []
-    lines = ["[STRUCTURED INSTRUCTION RECORD]", f"INSTRUCTION: {row['opcode']}"]
-    rendered = []
-    for item in operands if isinstance(operands, list) else []:
-        if not isinstance(item, dict):
-            continue
-        part = f"{item.get('position', '')}: {item.get('description', '')}".strip()
-        if item.get("data_type"):
-            part += f" [{item['data_type']}]"
-        devices = item.get("applicable_devices") or []
-        if isinstance(devices, list) and devices:
-            part += " applicable=" + ",".join(str(value) for value in devices)
-        if part:
-            rendered.append(part)
-    if rendered:
-        lines.append("OPERANDS: " + "; ".join(rendered))
-    if flags:
-        lines.append("COMPLETION_FLAGS: " + ", ".join(str(value) for value in flags))
-    if restrictions:
-        lines.append("KEY_RESTRICTIONS: " + " | ".join(str(value) for value in restrictions[:3]))
-    return "\n".join(lines) if len(lines) > 2 else ""
-
-
-def _augment_structured_instruction(connection, schema, result):
-    if result is None:
-        return None
-    prefix = _structured_instruction_record(connection, schema, result.get("id"))
-    if not prefix:
-        return result
-    enriched = dict(result)
-    body = str(enriched.get("text") or "")
-    if body.startswith("[STRUCTURED INSTRUCTION RECORD]"):
-        _old, separator, remainder = body.partition("\n\n")
-        body = remainder if separator else ""
-    enriched["text"] = prefix + ("\n\n" + body if body else "")
-    return enriched
-
-def _format_result_block(result):
-    citation = {
-        "id": result.get("id", ""),
-        "source": result.get("source", ""),
-        "page": result.get("page", ""),
-    }
-    if result.get("pdf_page") not in (None, ""):
-        citation["pdf_page"] = result["pdf_page"]
-    if result.get("page_end") not in (None, ""):
-        citation["page_end"] = result["page_end"]
-    if result.get("section"):
-        citation["section"] = result["section"]
-    for key in ("manual_id", "manual_number", "revision", "plc_models", "fact_kind",
-                "fact_target", "device_definition_status", "evidence_scope", "content_status"):
-        if key in result:
-            citation[key] = result[key]
-    return "[KNOWLEDGE {}]\n{}\n[/KNOWLEDGE]".format(
-        json.dumps(citation, ensure_ascii=False, separators=(",", ":")),
-        result.get("text", ""),
-    )
-
-
-def _select_ranked(candidates, top_k):
-    selected = []
-    seen = set()
-    for candidate in candidates:
-        chunk_id = str(candidate.get("id", ""))
-        if not chunk_id or chunk_id in seen:
-            continue
-        selected.append(candidate)
-        seen.add(chunk_id)
-        if len(selected) >= top_k:
-            break
-    return selected
 
 
 def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_budget, source_lanes=None, exclude_chunk_types=(), exclude_structured_kinds=()):
@@ -1697,7 +804,7 @@ def _retrieve_design_cached(identity, query, plc_model, task_type, top_k, char_b
     )
 
 
-def _retrieve_design_knowledge(
+def retrieve_design_records(
     query,
     plc_model="FX3U",
     task_type="analysis",
@@ -1718,7 +825,7 @@ def _retrieve_design_knowledge(
     normalized_model = _normalize_text(plc_model).upper() or "FX3U"
     if _query_is_out_of_scope(normalized_query, normalized_model):
         return []
-    path = _index_path()
+    path = index_access.index_path()
     identity = _index_identity(path)
     try:
         frozen = _retrieve_design_cached(
@@ -1764,7 +871,7 @@ def _retrieve_cached(identity, query, plc_model, task_type, top_k, char_budget, 
     return _freeze_results(results)
 
 
-def _retrieve_knowledge(
+def retrieve_broad_knowledge(
     query,
     plc_model="FX3U",
     task_type="generate",
@@ -1806,7 +913,7 @@ def _retrieve_knowledge(
     }))
     if _query_is_out_of_scope(normalized_query, normalized_model):
         return []
-    path = _index_path()
+    path = index_access.index_path()
     identity = _index_identity(path)
     try:
         frozen = _retrieve_cached(
@@ -1848,3 +955,13 @@ def build_knowledge_context(*args, **kwargs):
 
 
 __all__ = []  # internal backend; public API lives in knowledge.retriever
+
+# Internal compatibility for diagnostics which explicitly import the backend.
+_retrieve_knowledge = retrieve_broad_knowledge
+_retrieve_design_knowledge = retrieve_design_records
+
+
+def clear_query_cache():
+    """Invalidate frozen broad/design results after an explicit index override."""
+    _retrieve_cached.cache_clear()
+    _retrieve_design_cached.cache_clear()

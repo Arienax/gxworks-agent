@@ -140,6 +140,12 @@ def read_gx_environment():
     }
 
 
+def knowledge_runtime_status():
+    """Application-owned availability query for protocol launchers."""
+    from knowledge.scope import runtime_status
+    return runtime_status()
+
+
 def read_environment():
     """Observe installed software/processes without creating or starting a gateway."""
     from simulator.gateway import detect_simulator_environment

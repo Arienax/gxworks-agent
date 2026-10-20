@@ -1,6 +1,7 @@
 """Bind native observations to exact source, input and instance identity."""
 from __future__ import annotations
 from .diagnostic_events import EventIndex
+from gxworks2.workspace_observations import EvidenceOrigin, evidence_origin_bound
 from gxworks2.workspace_observations import (native_code_reader_scope, check_input_kind,
     check_input_layout_bound, check_input_framing_bound, workspace_code_read_origin,
     source_reference_modules_bound, structured_input_reader_bound, public_report_converter_bound,
@@ -51,7 +52,7 @@ def bind_native_code_lexical_read(events, generated, snapshots, *, cpu, codepage
             calls = row.get('calls')
             if (any(row.get(key) != value for key, value in scope.items())
                     or row.get('completed') is not True or check_end < 0 or event_index <= check_end
-                    or row.get('provenance') != 'original ChangePToILcode and GetStepSize; retained generated primary bytes after check; not execution'
+                    or not evidence_origin_bound(row, EvidenceOrigin.CODE_LEXICAL_READ)
                     or not isinstance(calls, dict) or calls.get('object_new') is not True
                     or any(type(calls.get(key)) is not int or calls[key] != 0 for key in ('open', 'decode', 'close'))
                     or (type(calls.get('set_version')) is not int or calls['set_version'] != 0
@@ -106,7 +107,8 @@ def bind_native_code_lexical_read(events, generated, snapshots, *, cpu, codepage
                     'source_end': item.tokens[-1].offset + len(item.tokens[-1].raw),
                     'op': item.mnemonic, 'args': list(item.args)})
             results.append({**base, 'status': 'current', 'records': records, 'body_bytes': len(body),
-                            'provenance': row['provenance'], 'scope': scope})
+                            'scope': scope,
+                            **({'provenance': row['provenance']} if 'provenance' in row else {})})
         except (GXWFormatError, UnicodeError, LookupError) as error:
             results.append({**base, 'reason': str(error)})
     return results
@@ -141,7 +143,7 @@ def bind_native_check_input(submitted, completed, *, generated, snapshots,
     for event in (submitted, completed):
         rows = event.get('rows')
         if (event.get('operation') != 'OwnedCheckInput'
-                or event.get('provenance') != 'original ProcessManager.ProgramCheck owned code copy; read-only; no interception'
+                or not evidence_origin_bound(event, EvidenceOrigin.OWNED_CHECK_INPUT)
                 or not check_input_layout_bound(event, sfc=sfc)
                 or not isinstance(rows, list) or not 1 <= len(rows) <= 1024):
             return {**unresolved, 'reason': 'original owned input table is not bound'}
@@ -227,7 +229,7 @@ def bind_native_source_snapshot(program_raw, *, body_id, reads, snapshots):
         return {**missing, 'reason': 'original native source body read is missing'}
     latest = matching[-1]
     filename, size = latest.get('file'), latest.get('bytes')
-    if (latest.get('provenance') != 'original Workspace.GetPOUBodyData(1692); source bytes, not compiled PCode'
+    if (not evidence_origin_bound(latest, EvidenceOrigin.SOURCE_BODY)
             or not isinstance(filename, str) or type(size) is not int or size < 0):
         return {**missing, 'reason': 'original native source body read is not bound'}
     current = snapshots.get(filename)

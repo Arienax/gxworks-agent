@@ -268,7 +268,7 @@ export function useWorkbenchController() {
       void guarded(() => redrawVersion(vid, next));
   }
 
-  const visibleProgram = preview ? (preview.program as Record<string, Json> | undefined) : program;
+  const visibleProgram = preview ? preview.program : program;
 
   const networks = Array.isArray(visibleProgram?.networks)
     ? (visibleProgram.networks as Record<string, Json>[])

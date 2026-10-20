@@ -2,6 +2,7 @@
 from __future__ import annotations
 from collections import Counter, defaultdict
 from .diagnostic_events import EventIndex
+from gxworks2.workspace_observations import EvidenceOrigin, evidence_origin_bound
 from gxworks2.workspace_observations import (native_code_reader_scope, check_input_kind,
     check_input_layout_bound, check_input_framing_bound, workspace_code_read_origin,
     source_reference_modules_bound, structured_input_reader_bound, public_report_converter_bound,
@@ -388,7 +389,7 @@ def bind_native_source_references(events, *, compilation):
             for row in (create, query, record) for key in ('hresult', 'code'))
             or record.get('query') != 'all-references' or record.get('declared') != 0 or record.get('plural') != 0
             or record.get('symbol') != '' or record.get('scope') != ''
-            or record.get('provenance') != 'original CreateProgramAnalysis3 and GetProgramAnalysis3; current compilation; 88-byte public records'
+            or not evidence_origin_bound(record, EvidenceOrigin.SOURCE_REFERENCES)
             or not isinstance(record.get('rows'), list) or type(record.get('count')) is not int
             or not 0 <= record['count'] <= 100000 or query.get('count') != record['count']
             or record['count'] != len(record['rows']) or any(not isinstance(row, dict) for row in record['rows'])
@@ -413,7 +414,8 @@ def bind_native_source_references(events, *, compilation):
         seen.add(poll['poll'])
     terminal = polls[-1][1]['percent'] == 100
     return {'status': 'current' if terminal else 'unresolved', 'rows': record['rows'] if terminal else [],
-            'count': record['count'], 'provenance': record['provenance']}
+            'count': record['count'],
+            **({'provenance': record['provenance']} if 'provenance' in record else {})}
 
 
 def _native_task_source_bindings(tasks, local_programs, source_bodies, events, references, *,

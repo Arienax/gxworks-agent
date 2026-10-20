@@ -25,7 +25,7 @@ export function AcceptedMessage({
   return <pre className="accepted-content">{text}</pre>;
 }
 
-export function DiffView({ value, t }: { value: Json; t: (key: string) => string }) {
+export function DiffView({ value, t }: { value: unknown; t: (key: string) => string }) {
   if (!value || typeof value !== "object" || Array.isArray(value))
     return <DataView value={value} />;
   const diff = value as Record<string, Json>;

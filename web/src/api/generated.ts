@@ -1286,6 +1286,19 @@ export interface components {
             /** Version Id */
             version_id: string;
         };
+        /** AddressTarget */
+        AddressTarget: {
+            /** Address */
+            address: string;
+            /** Height */
+            height: number;
+            /** Width */
+            width: number;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+        };
         /** AgentCall */
         AgentCall: {
             /** Arguments */
@@ -1309,9 +1322,7 @@ export interface components {
             /** Content */
             content: string;
             /** Data */
-            data: {
-                [key: string]: components["schemas"]["JsonValue"];
-            };
+            data: components["schemas"]["ProgramInfoEnvelope"] | components["schemas"]["NetworkEnvelope"] | components["schemas"]["DiagnosticsEnvelope"] | components["schemas"]["SourceSnapshotEnvelope"] | components["schemas"]["CatalogEnvelope"] | components["schemas"]["GenerationContextEnvelope"] | components["schemas"]["NativeCheckEnvelope"] | components["schemas"]["MetadataToolEnvelope"];
             /** Execution Job Id */
             execution_job_id?: string | null;
             /** Is Error */
@@ -1329,6 +1340,11 @@ export interface components {
             tools: {
                 [key: string]: components["schemas"]["JsonValue"];
             }[];
+        };
+        /** AnalysisPropertyChange */
+        AnalysisPropertyChange: {
+            after: components["schemas"]["ProgramAnalysis"] | null;
+            before: components["schemas"]["ProgramAnalysis"] | null;
         };
         /** ApprovalSettings */
         ApprovalSettings: {
@@ -1390,6 +1406,16 @@ export interface components {
             /** Size Bytes */
             size_bytes: number;
         };
+        /** BehaviorTransition */
+        BehaviorTransition: {
+            /** Effects */
+            effects: components["schemas"]["OperationEffect"][];
+            /** Id */
+            id: string;
+            when: components["schemas"]["SpecificationExpression"];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
         /** Capabilities */
         Capabilities: {
             /** Body Form */
@@ -1414,12 +1440,197 @@ export interface components {
         } & {
             [key: string]: components["schemas"]["JsonValue"];
         };
+        /** CatalogEnvelope */
+        CatalogEnvelope: {
+            data?: components["schemas"]["FBDCatalog"] | null;
+            error?: components["schemas"]["NativeToolError"] | null;
+            /** Ok */
+            ok: boolean;
+            /**
+             * Tool
+             * @constant
+             */
+            tool: "get_fbd_catalog";
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** CatalogNode */
+        CatalogNode: {
+            /** Height */
+            height: number;
+            /** Kind */
+            kind: string;
+            /** Ports */
+            ports: components["schemas"]["FBDPort"][];
+            /** Symbol */
+            symbol: string;
+            /** Template */
+            template: string;
+            /** Width */
+            width: number;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
         /** ChangeScope */
         ChangeScope: {
             /** Addresses */
             addresses?: string[] | null;
             /** Network Ids */
             network_ids?: string[] | null;
+        };
+        /** ConstructionInstance */
+        ConstructionInstance: {
+            /** Depends On */
+            depends_on?: string[] | null;
+            /** Id */
+            id?: string | null;
+            /** Method */
+            method?: string | null;
+            /** Requirement Id */
+            requirement_id?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ConstructionRange */
+        ConstructionRange: {
+            /** End */
+            end: string;
+            /** Start */
+            start: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** DeclarationEdit */
+        DeclarationEdit: {
+            /** Remove */
+            remove?: string[];
+            /** Renames */
+            renames?: {
+                [key: string]: string;
+            };
+            /** Upserts */
+            upserts?: components["schemas"]["FBDLabel"][];
+        };
+        /** DefinitionInterface */
+        DefinitionInterface: {
+            /** Inputs */
+            inputs: components["schemas"]["DefinitionInterfaceParameter"][];
+            /** Outputs */
+            outputs: components["schemas"]["DefinitionInterfaceParameter"][];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** DefinitionInterfaceParameter */
+        DefinitionInterfaceParameter: {
+            /** Class Code */
+            class_code?: number | null;
+            /** Data Type */
+            data_type?: string | null;
+            /** Declared Type */
+            declared_type?: string | null;
+            /** Name */
+            name: string;
+            /** Type Code */
+            type_code?: number | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** DeleteProjectResult */
+        DeleteProjectResult: {
+            /** Deleted */
+            deleted: boolean;
+            /** Project Id */
+            project_id: string;
+        };
+        /** DeliveryArtifact */
+        DeliveryArtifact: {
+            /** Available */
+            available: boolean;
+            /** Filename */
+            filename?: string | null;
+            /** Id */
+            id: string;
+            /** Sha256 */
+            sha256?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** DeliveryDeviceCommentChange */
+        DeliveryDeviceCommentChange: {
+            /** Address */
+            address: string;
+            /** After */
+            after: string | null;
+            /** Before */
+            before: string | null;
+        };
+        /** DeliveryDiff */
+        DeliveryDiff: {
+            /** Added */
+            added: string[];
+            /** Deleted */
+            deleted: string[];
+            /** Device Comment Changes */
+            device_comment_changes: components["schemas"]["DeliveryDeviceCommentChange"][];
+            /** Modified */
+            modified: string[];
+            /** Network Order Changed */
+            network_order_changed: boolean;
+            property_changes: components["schemas"]["ProgramPropertyChanges"];
+        };
+        /** DeliverySummary */
+        DeliverySummary: {
+            /** Artifacts */
+            artifacts: components["schemas"]["DeliveryArtifact"][];
+            changes?: components["schemas"]["DeliveryDiff"] | null;
+            confirmed_spec?: components["schemas"]["Specification"] | null;
+            /** Confirmed Spec Hash */
+            confirmed_spec_hash?: string | null;
+            /** Created At */
+            created_at: string;
+            /** Decision Receipt Id */
+            decision_receipt_id?: string | null;
+            /** Decision Receipt Status */
+            decision_receipt_status?: string | null;
+            /** Device Io */
+            device_io: {
+                [key: string]: components["schemas"]["DeviceRecord"];
+            };
+            /** Fbd Declarations */
+            fbd_declarations: {
+                [key: string]: components["schemas"]["FBDLabel"][];
+            };
+            /** Fbd Objects */
+            fbd_objects: components["schemas"]["FBDNode"][];
+            /** Ir Sha256 */
+            ir_sha256?: string | null;
+            /** Is Active Version */
+            is_active_version: boolean;
+            /** Limitations */
+            limitations: string[];
+            /** Markdown */
+            markdown: string;
+            native_validation: components["schemas"]["NativeEvidence"] | null;
+            /** Plc Model */
+            plc_model: string;
+            /** Project Id */
+            project_id: string;
+            /** Project Name */
+            project_name: string;
+            /** Requirements */
+            requirements: components["schemas"]["Requirement"][];
+            /** Simulation Runs */
+            simulation_runs: components["schemas"]["SimulationRunSummary"][];
+            /** Summary */
+            summary?: string | null;
+            /** Target Mode */
+            target_mode: string;
+            /** Validation Profile */
+            validation_profile?: string | null;
+            /** Version Id */
+            version_id: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
         };
         /** DeviceCommentChange */
         DeviceCommentChange: {
@@ -1429,6 +1640,91 @@ export interface components {
             after: string | null;
             /** Before */
             before: string | null;
+        };
+        /** DeviceRecord */
+        DeviceRecord: {
+            /** Comment */
+            comment?: string | null;
+            /** Kind */
+            kind?: string | null;
+            /** Label */
+            label?: string | null;
+            /** Read By */
+            read_by?: string[];
+            /** Written By */
+            written_by?: string[];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** DeviceSummary */
+        DeviceSummary: {
+            /** Addresses */
+            addresses: string[];
+            /** By Type */
+            by_type: {
+                [key: string]: number;
+            };
+            /** Count */
+            count: number;
+            /** Truncated */
+            truncated?: boolean | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** Diagnostics */
+        Diagnostics: {
+            /** Errors */
+            errors?: components["schemas"]["JsonValue"][] | null;
+            /** Findings */
+            findings?: components["schemas"]["Finding"][] | null;
+            /** Messages */
+            messages?: string[] | null;
+            /** Status */
+            status?: string | null;
+            /** Valid */
+            valid?: boolean | null;
+            /** Values */
+            values?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Variables */
+            variables?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Warnings */
+            warnings?: components["schemas"]["JsonValue"][] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** DiagnosticsEnvelope */
+        DiagnosticsEnvelope: {
+            data?: components["schemas"]["Diagnostics"] | null;
+            error?: components["schemas"]["NativeToolError"] | null;
+            /** Ok */
+            ok: boolean;
+            /**
+             * Tool
+             * @constant
+             */
+            tool: "get_diagnostics";
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** EffectTarget */
+        EffectTarget: {
+            /** Device */
+            device: string;
+            /** Kind */
+            kind: string;
+            /** Offset */
+            offset?: number | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** EngineeringPropertyChange */
+        EngineeringPropertyChange: {
+            after: components["schemas"]["JsonValue"];
+            before: components["schemas"]["JsonValue"];
         };
         /** Environment */
         Environment: {
@@ -1445,6 +1741,42 @@ export interface components {
             /** Status */
             status: string;
         };
+        /** EventPayload */
+        EventPayload: {
+            /**
+             * Program
+             * @default null
+             */
+            program: components["schemas"]["PLCProgram"] | components["schemas"]["FBDModel"] | components["schemas"]["SFCModel"] | components["schemas"]["LadderDocument"] | null;
+            /**
+             * Values
+             * @default null
+             */
+            values: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** EvidenceBinding */
+        EvidenceBinding: {
+            /** Ir Sha256 */
+            ir_sha256?: string | null;
+            /** Plan Id */
+            plan_id?: string | null;
+            /** Project Id */
+            project_id?: string | null;
+            /** Result Sha256 */
+            result_sha256?: string | null;
+            /** Run Id */
+            run_id?: string | null;
+            /** Suite Sha256 */
+            suite_sha256?: string | null;
+            /** Version Id */
+            version_id?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
         /** ExecutionPreview */
         ExecutionPreview: {
             /** Action */
@@ -1454,9 +1786,7 @@ export interface components {
                 [key: string]: components["schemas"]["JsonValue"];
             } | null;
             /** Program */
-            program: {
-                [key: string]: components["schemas"]["JsonValue"];
-            } | null;
+            program: components["schemas"]["PLCProgram"] | components["schemas"]["FBDModel"] | components["schemas"]["SFCModel"] | components["schemas"]["LadderDocument"] | null;
             /** St */
             st: string | null;
             /** Svg */
@@ -1494,16 +1824,149 @@ export interface components {
             /** Version Id */
             version_id: string;
         };
-        /** FBDDefinitionChanges */
-        FBDDefinitionChanges: {
-            /** After */
-            after: {
+        /** ExecutionTrigger */
+        ExecutionTrigger: {
+            /** Device */
+            device?: string | null;
+            /** Path */
+            path: string;
+            /** Period Ms */
+            period_ms?: number | null;
+            /** Semantic */
+            semantic: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** Expectation */
+        Expectation: {
+            /** Address */
+            address: string;
+            /** Operator */
+            operator: string;
+            /** Tolerance */
+            tolerance?: number | null;
+            value: components["schemas"]["JsonValue"];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** Exploration */
+        Exploration: {
+            /** Address Targets */
+            address_targets: components["schemas"]["AddressTarget"][];
+            /** Devices */
+            devices: {
+                [key: string]: components["schemas"]["DeviceRecord"];
+            };
+            /** Height */
+            height: number;
+            /** Ir Sha256 */
+            ir_sha256: string;
+            /** Networks */
+            networks: components["schemas"]["ExploreNetwork"][];
+            /** Svg */
+            svg: string;
+            /** Width */
+            width: number;
+        };
+        /** ExploreBounds */
+        ExploreBounds: {
+            /** Display Number */
+            display_number: number;
+            /** Height */
+            height: number;
+            /** Top */
+            top: number;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ExploreNetwork */
+        ExploreNetwork: {
+            bounds: components["schemas"]["ExploreBounds"];
+            /** Comment */
+            comment: string;
+            /** Id */
+            id: string;
+            /** Instructions */
+            instructions: components["schemas"]["Instruction"][];
+            /** Reads */
+            reads: string[];
+            /** Writes */
+            writes: string[];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ExpressionValueType */
+        ExpressionValueType: {
+            /** Bits */
+            bits?: number | null;
+            /** Count */
+            count?: number | null;
+            element?: components["schemas"]["ExpressionValueType"] | null;
+            /** Encoding */
+            encoding?: string | null;
+            /** Kind */
+            kind: string;
+            /** Signed */
+            signed?: boolean | null;
+            /** Unit */
+            unit?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** FBDAllocationDifference */
+        FBDAllocationDifference: {
+            /** Gui */
+            gui: number[];
+            /** Workspace */
+            workspace: number[];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** FBDCatalog */
+        FBDCatalog: {
+            /** Cpu */
+            cpu: string;
+            /** Declaration Tables */
+            declaration_tables: {
+                [key: string]: string;
+            };
+            empty_model: components["schemas"]["FBDModel"];
+            empty_parameter_model: components["schemas"]["FBDParameterModel"];
+            /** Generation Plc Models */
+            generation_plc_models: string[];
+            /** Nodes */
+            nodes: components["schemas"]["CatalogNode"][];
+            parameter_model: components["schemas"]["FBDParameterModel"];
+            /** Parameter Schema */
+            parameter_schema: {
                 [key: string]: components["schemas"]["JsonValue"];
             };
-            /** Before */
-            before: {
-                [key: string]: components["schemas"]["JsonValue"];
-            } | null;
+            /** Program */
+            program: string;
+            /** Programs */
+            programs: string[];
+            project_configuration: components["schemas"]["FBDProjectConfiguration"];
+            /** Schema Version */
+            schema_version: number;
+            task_scopes: components["schemas"]["TaskScopes"];
+            /** Unsupported Generation Plc Models */
+            unsupported_generation_plc_models: components["schemas"]["UnsupportedModel"][];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** FBDCompilationSave */
+        FBDCompilationSave: {
+            /** Execution */
+            execution: string;
+            /** Gui Configuration */
+            gui_configuration: string;
+            public_check: components["schemas"]["NativeCheckState"];
+            saved_code: components["schemas"]["SavedCodeComparison"];
+        };
+        /** FBDDefinitionChanges */
+        FBDDefinitionChanges: {
+            after: components["schemas"]["SourceDefinition"];
+            before: components["schemas"]["SourceDefinition"] | null;
         };
         /** FBDDiff */
         FBDDiff: {
@@ -1517,10 +1980,7 @@ export interface components {
             before_object_count: number;
             /** Before Wire Count */
             before_wire_count: number;
-            /** Compilation Save */
-            compilation_save?: {
-                [key: string]: components["schemas"]["JsonValue"];
-            } | null;
+            compilation_save?: components["schemas"]["FBDCompilationSave"] | null;
             /** Declarations Changed */
             declarations_changed: boolean;
             definition_changes?: components["schemas"]["FBDDefinitionChanges"] | null;
@@ -1552,6 +2012,126 @@ export interface components {
             /** Version Id */
             version_id?: string | null;
         };
+        /** FBDDraftPreview */
+        FBDDraftPreview: {
+            /** Gx Compile */
+            gx_compile: string;
+            /** Gxw Sha256 */
+            gxw_sha256: string;
+            model: components["schemas"]["FBDModel"];
+            /** Model Sha256 */
+            model_sha256: string;
+            /** Svg */
+            svg: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** FBDEditorView */
+        FBDEditorView: {
+            /** Catalog */
+            catalog: components["schemas"]["CatalogNode"][];
+            /** Gx Compile */
+            gx_compile?: string | null;
+            model: components["schemas"]["FBDModel"];
+            presentation: components["schemas"]["FBDPresentation"];
+            /** Programs */
+            programs: string[];
+            /** Source Svg */
+            source_svg: string;
+            task_scopes: components["schemas"]["TaskScopes"];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** FBDEndpoint */
+        FBDEndpoint: {
+            /** Label */
+            label: string;
+            /** Point */
+            point: number[];
+            /** Value */
+            value: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** FBDGUIConfiguration */
+        FBDGUIConfiguration: {
+            /** Allocation Profile */
+            allocation_profile: string;
+            /** Bit Device */
+            bit_device: number | null;
+            /** Cpu Menu */
+            cpu_menu: string;
+            /** Differences */
+            differences: {
+                [key: string]: components["schemas"]["FBDAllocationDifference"];
+            };
+            /** Effective Ranges */
+            effective_ranges: {
+                [key: string]: number[];
+            };
+            /** Gui Mirror Status */
+            gui_mirror_status: string;
+            /** Missing */
+            missing: string[];
+            /** Reason */
+            reason?: string | null;
+            /** Retained Fields */
+            retained_fields: {
+                [key: string]: components["schemas"]["FBDStoredAllocationField"];
+            };
+            /** Source */
+            source: string;
+            /** Status */
+            status: string;
+            /** Stored Ranges */
+            stored_ranges: {
+                [key: string]: number[];
+            };
+            /** Unverified Selectors */
+            unverified_selectors: string[];
+            /** Word Device */
+            word_device: number | null;
+            /** Workspace Ranges */
+            workspace_ranges: {
+                [key: string]: number[];
+            };
+            /** Workspace Source */
+            workspace_source: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** FBDInspection */
+        FBDInspection: {
+            /** Programs */
+            programs: string[];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** FBDLabel */
+        FBDLabel: {
+            /** Class Name */
+            class_name?: string | null;
+            /** Comment */
+            comment?: string | null;
+            /** Data Type */
+            data_type?: string | null;
+            /** Device */
+            device?: string | null;
+            /** Iec Address */
+            iec_address?: string | null;
+            /** Initial Value */
+            initial_value?: string | null;
+            /** Kind */
+            kind?: string | null;
+            /** Member Devices */
+            member_devices?: {
+                [key: string]: components["schemas"]["FBDMemberDevice"];
+            } | null;
+            /** Name */
+            name: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
         /** FBDLibraryChanges */
         FBDLibraryChanges: {
             /** Added */
@@ -1563,8 +2143,202 @@ export interface components {
             /** Structures */
             structures: string[];
         };
+        /** FBDMemberDevice */
+        FBDMemberDevice: {
+            /** Device */
+            device: string;
+            /** Iec Address */
+            iec_address: string;
+        };
+        /** FBDModel */
+        FBDModel: {
+            /** Canvas Height */
+            canvas_height?: number | null;
+            /** Cpu */
+            cpu?: string | null;
+            /** Declaration Edits */
+            declaration_edits?: {
+                [key: string]: components["schemas"]["DeclarationEdit"];
+            } | null;
+            /** Issues */
+            issues?: components["schemas"]["SourceIssue"][] | null;
+            /** Labels */
+            labels?: {
+                [key: string]: components["schemas"]["FBDLabel"][];
+            } | null;
+            /** Metadata */
+            metadata?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Nodes */
+            nodes: components["schemas"]["FBDNode"][];
+            /** Program */
+            program: string;
+            /** Schema Version */
+            schema_version: number;
+            /** Unknown Record Count */
+            unknown_record_count?: number | null;
+            /** Wires */
+            wires: components["schemas"]["FBDWire"][];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** FBDNode */
+        FBDNode: {
+            /** Height */
+            height?: number | null;
+            /** Id */
+            id: string;
+            /** Port Edits */
+            port_edits?: {
+                [key: string]: components["schemas"]["FBDPortEdit"];
+            } | null;
+            /** Ports */
+            ports?: components["schemas"]["FBDPort"][] | null;
+            /** Prototype Offset */
+            prototype_offset?: number | null;
+            /** Source Offset */
+            source_offset?: number | null;
+            /** Symbol */
+            symbol: string;
+            /** Template */
+            template: string;
+            /** Width */
+            width?: number | null;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** FBDParameterCall */
+        FBDParameterCall: {
+            /** Arguments */
+            arguments?: {
+                [key: string]: string;
+            } | null;
+            /** Id */
+            id: string;
+            /** Instance */
+            instance: string;
+            /** Type */
+            type: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** FBDParameterModel */
+        FBDParameterModel: {
+            /** Declaration Edits */
+            declaration_edits?: {
+                [key: string]: components["schemas"]["DeclarationEdit"];
+            } | null;
+            /** Networks */
+            networks: components["schemas"]["FBDParameterNetwork"][];
+            /** Preserve Blocks */
+            preserve_blocks?: number[] | null;
+            /** Program */
+            program?: string | null;
+            /** Schema Version */
+            schema_version?: number | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** FBDParameterNetwork */
+        FBDParameterNetwork: {
+            /** Calls */
+            calls?: components["schemas"]["FBDParameterCall"][] | null;
+            /** Comment */
+            comment?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Nodes */
+            nodes?: components["schemas"]["FBDParameterNode"][] | null;
+            /** Source Block */
+            source_block?: number | null;
+            /** Wires */
+            wires?: components["schemas"]["FBDParameterWire"][] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** FBDParameterNode */
+        FBDParameterNode: {
+            /** Arguments */
+            arguments?: {
+                [key: string]: string;
+            } | null;
+            /** Id */
+            id: string;
+            /** Port Edits */
+            port_edits?: {
+                [key: string]: components["schemas"]["FBDPortEdit"];
+            } | null;
+            /** Symbol */
+            symbol?: string | null;
+            /** Template */
+            template: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** FBDParameterWire */
+        FBDParameterWire: {
+            /** From */
+            from: string;
+            /** To */
+            to: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** FBDPort */
+        FBDPort: {
+            /** Data Type */
+            data_type?: string | null;
+            /** Formal Name */
+            formal_name?: string | null;
+            /** Name */
+            name: string;
+            /** Side */
+            side?: string | null;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** FBDPortEdit */
+        FBDPortEdit: {
+            /** Negated */
+            negated: boolean;
+        };
+        /** FBDPresentation */
+        FBDPresentation: {
+            /** Endpoints */
+            endpoints: components["schemas"]["FBDEndpoint"][];
+            /** Nodes */
+            nodes: components["schemas"]["FBDPresentationNode"][];
+            /** Rows */
+            rows: {
+                [key: string]: components["schemas"]["FBDLabel"][];
+            };
+            /** Tables */
+            tables: string[];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** FBDPresentationNode */
+        FBDPresentationNode: {
+            /** Id */
+            id: string;
+            /** Ports */
+            ports: components["schemas"]["FBDPort"][];
+            /** Symbol Editable */
+            symbol_editable: boolean;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
         /** FBDPreview */
-        "FBDPreview-Input": {
+        FBDPreview: {
             /** Model */
             model: {
                 [key: string]: unknown;
@@ -1574,17 +2348,11 @@ export interface components {
             /** Version Id */
             version_id?: string | null;
         };
-        /** FBDPreview */
-        "FBDPreview-Output": {
+        /** FBDPreviewResource */
+        FBDPreviewResource: {
             diff: components["schemas"]["FBDDiff"];
-            /** Editor */
-            editor: {
-                [key: string]: components["schemas"]["JsonValue"];
-            };
-            /** Program */
-            program: {
-                [key: string]: components["schemas"]["JsonValue"];
-            };
+            editor: components["schemas"]["FBDEditorView"];
+            program: components["schemas"]["FBDModel"];
             /** Svg */
             svg: string;
             /**
@@ -1592,6 +2360,18 @@ export interface components {
              * @constant
              */
             target_mode: "fbd";
+        };
+        /** FBDProjectConfiguration */
+        FBDProjectConfiguration: {
+            gui_configuration: components["schemas"]["FBDGUIConfiguration"];
+            /** Source Name */
+            source_name: string;
+            /** System Variable Ranges */
+            system_variable_ranges: {
+                [key: string]: number[];
+            };
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
         };
         /** FBDProposal */
         FBDProposal: {
@@ -1641,10 +2421,242 @@ export interface components {
             /** Version Id */
             version_id?: string | null;
         };
+        /** FBDStoredAllocationField */
+        FBDStoredAllocationField: {
+            /** Storage Type */
+            storage_type: string;
+            /** Value */
+            value: number;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** FBDWire */
+        FBDWire: {
+            /** End */
+            end?: number[] | null;
+            /** From */
+            from?: string | null;
+            /** Source Offset */
+            source_offset?: number | null;
+            /** Start */
+            start?: number[] | null;
+            /** To */
+            to?: string | null;
+            /** Via */
+            via?: number[][] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** Finding */
+        Finding: {
+            /** Addresses */
+            addresses?: string[] | null;
+            /** Code */
+            code?: string | null;
+            /** Details */
+            details?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Message */
+            message?: string | null;
+            /** Network Refs */
+            network_refs?: string[] | null;
+            /** Severity */
+            severity?: string | null;
+            /** Title */
+            title?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** GenerationCatalog */
+        GenerationCatalog: {
+            /** Cpu */
+            cpu: string;
+            /** Declaration Tables */
+            declaration_tables: {
+                [key: string]: string;
+            };
+            /** Empty Model */
+            empty_model: components["schemas"]["FBDModel"] | components["schemas"]["FBDParameterModel"];
+            empty_parameter_model: components["schemas"]["FBDParameterModel"];
+            /** Generation Plc Models */
+            generation_plc_models: string[];
+            /** Nodes */
+            nodes: components["schemas"]["CatalogNode"][];
+            parameter_model: components["schemas"]["FBDParameterModel"];
+            /** Parameter Schema */
+            parameter_schema: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /** Program */
+            program: string;
+            /** Programs */
+            programs: string[];
+            project_configuration: components["schemas"]["FBDProjectConfiguration"];
+            /** Schema Version */
+            schema_version: number;
+            task_scopes: components["schemas"]["TaskScopes"];
+            /** Unsupported Generation Plc Models */
+            unsupported_generation_plc_models: components["schemas"]["UnsupportedModel"][];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** GenerationContextEnvelope */
+        GenerationContextEnvelope: {
+            data?: components["schemas"]["GenerationContextToolData"] | null;
+            error?: components["schemas"]["NativeToolError"] | null;
+            /** Ok */
+            ok: boolean;
+            /**
+             * Tool
+             * @constant
+             */
+            tool: "get_generation_context";
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** GenerationContextToolData */
+        GenerationContextToolData: {
+            catalog?: components["schemas"]["GenerationCatalog"] | null;
+            confirmed_spec?: components["schemas"]["Specification"] | null;
+            /** Current Model */
+            current_model?: components["schemas"]["FBDModel"] | components["schemas"]["FBDParameterModel"] | components["schemas"]["SFCModel"] | null;
+            generation_input?: components["schemas"]["GenerationInput"] | null;
+            output_contract?: components["schemas"]["GenerationOutputContract"] | null;
+            /** Plc Model */
+            plc_model?: string | null;
+            /** Project Id */
+            project_id?: string | null;
+            /** Target Mode */
+            target_mode?: string | null;
+            user_facts?: components["schemas"]["Specification"] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** GenerationFBDPreview */
+        GenerationFBDPreview: {
+            diff: components["schemas"]["FBDDiff"];
+            editor: components["schemas"]["FBDEditorView"];
+            /** Job Id */
+            job_id: string;
+            program: components["schemas"]["FBDModel"];
+            /** Proposal Id */
+            proposal_id?: string | null;
+            /** Read Only */
+            read_only: boolean;
+            /** Svg */
+            svg: string;
+            /**
+             * Target Mode
+             * @constant
+             */
+            target_mode: "fbd";
+        };
+        /** GenerationInput */
+        GenerationInput: {
+            /** Parameter Schema */
+            parameter_schema?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Previous */
+            previous?: components["schemas"]["FBDModel"] | components["schemas"]["FBDParameterModel"] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** GenerationLadderPreview */
+        GenerationLadderPreview: {
+            /** Contract Mismatch */
+            contract_mismatch?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            diff?: components["schemas"]["LadderProgramDiff"] | null;
+            /** Job Id */
+            job_id: string;
+            ladder: components["schemas"]["LadderDocument"];
+            program: components["schemas"]["PLCProgram"];
+            /** Proposal Id */
+            proposal_id?: string | null;
+            /** Read Only */
+            read_only: boolean;
+            /** St */
+            st: string;
+            /** Status */
+            status?: string | null;
+            /** Svg */
+            svg: string;
+            /**
+             * Target Mode
+             * @constant
+             */
+            target_mode: "ladder";
+            /** Validation */
+            validation?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+        };
+        /** GenerationOutputContract */
+        GenerationOutputContract: {
+            /** Input Shape */
+            input_shape?: string | null;
+            /** Model Schema */
+            model_schema?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Operation */
+            operation?: string | null;
+            /** Protocol */
+            protocol?: string | null;
+            /** Schema */
+            schema?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Schema Version */
+            schema_version?: number | null;
+            /** Tool */
+            tool?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
         /** GenerationRepair */
         GenerationRepair: {
             /** Request Id */
             request_id: string;
+        };
+        /** GenerationSFCPreview */
+        GenerationSFCPreview: {
+            diff: components["schemas"]["SFCDiff"];
+            /** Gx Compile */
+            gx_compile?: string | null;
+            /** Job Id */
+            job_id: string;
+            program: components["schemas"]["SFCModel"];
+            /** Proposal Id */
+            proposal_id?: string | null;
+            /** Read Only */
+            read_only: boolean;
+            /**
+             * Target Mode
+             * @constant
+             */
+            target_mode: "sfc";
+            validation: components["schemas"]["SFCPreviewValidation"];
+        };
+        /** GenerationSTPreview */
+        GenerationSTPreview: {
+            diff: components["schemas"]["STTextDiff"];
+            /** Job Id */
+            job_id: string;
+            /** Proposal Id */
+            proposal_id?: string | null;
+            /** Read Only */
+            read_only: boolean;
+            /** St */
+            st: string;
+            /**
+             * Target Mode
+             * @constant
+             */
+            target_mode: "st";
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1670,6 +2682,42 @@ export interface components {
              */
             ttl_seconds: number;
         };
+        /** HardwareAudit */
+        HardwareAudit: {
+            /** Action */
+            action: string;
+            /** Addresses */
+            addresses?: string[] | null;
+            /** Created At */
+            created_at: string;
+            /** Reason */
+            reason?: string | null;
+            /** Sequence */
+            sequence: number;
+            /** Values */
+            values?: {
+                [key: string]: number;
+            } | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** HardwareObservation */
+        HardwareObservation: {
+            /** Logical Station */
+            logical_station: number;
+            /** Observed At */
+            observed_at: string;
+            /** Replayed */
+            replayed: boolean;
+            /** Target Label */
+            target_label: string;
+            /** Values */
+            values: {
+                [key: string]: number;
+            };
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
         /** HardwareProposal */
         HardwareProposal: {
             /** Addresses */
@@ -1691,12 +2739,219 @@ export interface components {
             /** Request Id */
             request_id: string;
         };
+        /** HardwareReader */
+        HardwareReader: {
+            /** Available */
+            available: boolean;
+            /** Message */
+            message: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** HardwareSession */
+        HardwareSession: {
+            /** Approved At */
+            approved_at: string | null;
+            /** Audit */
+            audit: components["schemas"]["HardwareAudit"][];
+            /** Created At */
+            created_at: string;
+            /** Expires At */
+            expires_at: number | null;
+            /** Id */
+            id: string;
+            /** Owned By Current Operator */
+            owned_by_current_operator: boolean;
+            /** Project Id */
+            project_id: string;
+            /** Read Count */
+            read_count: number;
+            /** Remaining Seconds */
+            remaining_seconds: number;
+            /** Status */
+            status: string;
+            target: components["schemas"]["HardwareTarget"];
+            /** Target Verification */
+            target_verification: string;
+            /** Version Id */
+            version_id: string;
+        };
+        /** HardwareState */
+        HardwareState: {
+            /**
+             * Default Enabled
+             * @constant
+             */
+            default_enabled: false;
+            reader: components["schemas"]["HardwareReader"];
+            /** Sessions */
+            sessions: components["schemas"]["HardwareSession"][];
+        };
+        /** HardwareTarget */
+        HardwareTarget: {
+            /** Addresses */
+            addresses: string[];
+            /** Logical Station */
+            logical_station: number;
+            /** Plc Model */
+            plc_model: string;
+            /** Target Label */
+            target_label: string;
+            /** Ttl Seconds */
+            ttl_seconds: number;
+        };
         /** Health */
         Health: {
             /** Application */
             application: string;
             /** Status */
             status: string;
+        };
+        /** HighCostInstruction */
+        HighCostInstruction: {
+            /** Confidence */
+            confidence: string;
+            /** Network */
+            network: string;
+            /** Opcode */
+            opcode: string;
+            /** Path */
+            path: string;
+            /** Worst Us */
+            worst_us: number;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** IORow */
+        IORow: {
+            /** Address */
+            address?: string | null;
+            /** Comment */
+            comment?: string | null;
+            /** Kind */
+            kind?: string | null;
+            /** Label */
+            label?: string | null;
+            /** Metadata */
+            metadata?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Name */
+            name?: string | null;
+            /** Type */
+            type?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** IRNetwork */
+        IRNetwork: {
+            /**
+             * Comment
+             * @default
+             */
+            comment: string;
+            /** Id */
+            id: string;
+            /** Instructions */
+            instructions: components["schemas"]["Instruction"][];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** InitializationRange */
+        InitializationRange: {
+            /** End */
+            end: string;
+            /** Start */
+            start: string;
+            /** Value */
+            value: number | boolean;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** Instruction */
+        Instruction: {
+            /** Args */
+            args?: string[];
+            /** Op */
+            op: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** InstructionTiming */
+        InstructionTiming: {
+            /** Basis */
+            basis?: string | null;
+            /** Best Us */
+            best_us?: number | null;
+            /** Confidence */
+            confidence: string;
+            /** Known */
+            known: boolean;
+            /** Opcode */
+            opcode: string;
+            /** Parameter Count */
+            parameter_count?: number | null;
+            /** Parameter Count Exact */
+            parameter_count_exact?: boolean | null;
+            /** Path */
+            path?: string | null;
+            /** Source Pdf Page */
+            source_pdf_page?: number | null;
+            /** Supported */
+            supported: boolean;
+            /** Typical Us */
+            typical_us?: number | null;
+            /** Worst Us */
+            worst_us?: number | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** IssueCard */
+        IssueCard: {
+            /** Addresses */
+            addresses: string[];
+            /** Confidence */
+            confidence: string;
+            /** Evidence */
+            evidence: components["schemas"]["JsonValue"][];
+            /** Id */
+            id: string;
+            /** Message */
+            message: string;
+            /** Networks */
+            networks: string[];
+            /** Report Id */
+            report_id: string | null;
+            /** Severity */
+            severity: string;
+            /** Source */
+            source: string;
+            /** Suggestion */
+            suggestion: string;
+            /** Tests */
+            tests: components["schemas"]["IssueTest"][];
+            /** Title */
+            title: string;
+            /** Unresolved Networks */
+            unresolved_networks: string[];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** IssueList */
+        IssueList: {
+            /** Issues */
+            issues: components["schemas"]["IssueCard"][];
+            /** Report Id */
+            report_id: string | null;
+            /** Version Id */
+            version_id: string;
+        };
+        /** IssueTest */
+        IssueTest: {
+            /** Plan Id */
+            plan_id: string;
+            /** Test Names */
+            test_names: string[];
         };
         /** Job */
         Job: {
@@ -1820,10 +3075,7 @@ export interface components {
             event_type: string;
             /** Job Id */
             job_id: string;
-            /** Payload */
-            payload?: {
-                [key: string]: components["schemas"]["JsonValue"];
-            };
+            payload?: components["schemas"]["EventPayload"];
             /**
              * Project Id
              * @default null
@@ -1844,10 +3096,7 @@ export interface components {
         };
         /** JobOutput */
         JobOutput: {
-            /** Analysis */
-            analysis?: {
-                [key: string]: components["schemas"]["JsonValue"];
-            } | null;
+            analysis?: components["schemas"]["Specification"] | null;
             /** Audit */
             audit?: {
                 [key: string]: components["schemas"]["JsonValue"];
@@ -1886,10 +3135,7 @@ export interface components {
             report_id?: string | null;
             /** Spec Base Hash */
             spec_base_hash?: string | null;
-            /** Spec Draft */
-            spec_draft?: {
-                [key: string]: components["schemas"]["JsonValue"];
-            } | null;
+            spec_draft?: components["schemas"]["Specification"] | null;
             /** Status */
             status?: string | null;
             /** Version Id */
@@ -1898,17 +3144,67 @@ export interface components {
             [key: string]: components["schemas"]["JsonValue"];
         };
         JsonValue: unknown;
+        /** LabelsPropertyChange */
+        LabelsPropertyChange: {
+            /** After */
+            after: {
+                [key: string]: components["schemas"]["FBDLabel"][];
+            } | null;
+            /** Before */
+            before: {
+                [key: string]: components["schemas"]["FBDLabel"][];
+            } | null;
+        };
+        /** LadderBranch */
+        LadderBranch: {
+            /** Branch Id */
+            branch_id?: number | null;
+            /** Inputs */
+            inputs: components["schemas"]["LadderElement"][];
+            /** Outputs */
+            outputs: components["schemas"]["LadderElement"][];
+            /** Y Offset Level */
+            y_offset_level?: number | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** LadderDocument */
+        LadderDocument: {
+            /** Device Comments */
+            device_comments?: {
+                [key: string]: string;
+            };
+            /** Rungs */
+            rungs: components["schemas"]["LadderRung"][];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** LadderElement */
+        LadderElement: {
+            /** Address */
+            address?: string | null;
+            /** Branches */
+            branches?: components["schemas"]["LadderElement"][][] | null;
+            /** Expression */
+            expression?: string | null;
+            /** Label */
+            label?: string | null;
+            /** Opcode */
+            opcode?: string | null;
+            /** Operands */
+            operands?: string[] | null;
+            /** Type */
+            type: string;
+            /** Value */
+            value?: string | number | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
         /** LadderPreview */
         LadderPreview: {
             diff: components["schemas"]["LadderProgramDiff"];
-            /** Ladder */
-            ladder: {
-                [key: string]: components["schemas"]["JsonValue"];
-            };
-            /** Program */
-            program: {
-                [key: string]: components["schemas"]["JsonValue"];
-            };
+            ladder: components["schemas"]["LadderDocument"];
+            program: components["schemas"]["PLCProgram"];
             /** St */
             st: string;
             /** Svg */
@@ -1952,10 +3248,21 @@ export interface components {
             modified: string[];
             /** Network Order Changed */
             network_order_changed: boolean;
-            /** Property Changes */
-            property_changes: {
-                [key: string]: components["schemas"]["PropertyChange"];
-            };
+            property_changes: components["schemas"]["ProgramPropertyChanges"];
+        };
+        /** LadderRung */
+        LadderRung: {
+            /** Branches */
+            branches: components["schemas"]["LadderBranch"][];
+            /** Debug Note */
+            debug_note?: string | null;
+            header_element?: components["schemas"]["LadderElement"] | null;
+            /** Rung Id */
+            rung_id?: number | null;
+            /** Shared Inputs */
+            shared_inputs?: components["schemas"]["LadderElement"][] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
         };
         /** Login */
         Login: {
@@ -2015,6 +3322,20 @@ export interface components {
             project_id: string;
             /** Service Url */
             service_url: string;
+        };
+        /** MetadataToolEnvelope */
+        MetadataToolEnvelope: {
+            /** Data */
+            data?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            error?: components["schemas"]["NativeToolError"] | null;
+            /** Ok */
+            ok: boolean;
+            /** Tool */
+            tool: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
         };
         /** ModelConnectionResult */
         ModelConnectionResult: {
@@ -2192,6 +3513,1022 @@ export interface components {
             /** Value */
             value?: unknown;
         };
+        /** NativeActionRegistration */
+        NativeActionRegistration: {
+            /** Action Name */
+            action_name?: string | null;
+            /** Action Number */
+            action_number: number;
+            /** Qualifier */
+            qualifier?: number | null;
+            /** Registration Index */
+            registration_index?: number | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeAdapter */
+        NativeAdapter: {
+            /** Exit Code */
+            exit_code?: number | null;
+            /** Message */
+            message: string;
+            /** Status */
+            status: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeAttachment */
+        NativeAttachment: {
+            /** Filename */
+            filename: string;
+            /** Integrity Verified */
+            integrity_verified: boolean;
+            /** Matches Source Bytes */
+            matches_source_bytes: boolean;
+            /** Selected Program Matches */
+            selected_program_matches: boolean;
+            /** Sha256 */
+            sha256: string;
+            /** Size */
+            size: number;
+        };
+        /** NativeBackendCheck */
+        NativeBackendCheck: {
+            /** Check Pass */
+            check_pass?: string | null;
+            /** Completed */
+            completed: boolean;
+            /** Public Check Promoted */
+            public_check_promoted?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            /** Skipped Targets */
+            skipped_targets?: components["schemas"]["NativeFailure"][] | null;
+            /** Status */
+            status: string;
+            /** Targets */
+            targets?: components["schemas"]["NativeTargetOutcome"][] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeCheck */
+        NativeCheck: {
+            adapter: components["schemas"]["NativeAdapter"];
+            checker_resources?: components["schemas"]["NativeCorrespondence"] | null;
+            /** Codepage */
+            codepage?: number | null;
+            compilation: components["schemas"]["NativeCompilation"];
+            /** Cpu */
+            cpu: string;
+            /** Current Raw Source Check */
+            current_raw_source_check: string;
+            /** Current Source Check */
+            current_source_check: string;
+            diagnostic_projection: components["schemas"]["NativeDiagnosticProjection"];
+            diagnostic_recheck?: components["schemas"]["NativeDiagnosticRecheck"] | null;
+            /**
+             * Mode
+             * @constant
+             */
+            mode: "native";
+            native_instance_locations: components["schemas"]["NativeStatus"];
+            native_source_locations: components["schemas"]["NativeStatus"];
+            /** Native Version */
+            native_version: string;
+            owned_check_inputs: components["schemas"]["NativeCorrespondence"];
+            public_check: components["schemas"]["NativeCheckState"];
+            public_diagnostic_conversion?: components["schemas"]["NativePublicDiagnosticConversion"] | null;
+            public_diagnostic_identity?: components["schemas"]["NativePublicDiagnosticIdentity"] | null;
+            publication: components["schemas"]["NativeCompletion"];
+            published_resources: components["schemas"]["NativeCorrespondence"];
+            raw_backend_check: components["schemas"]["NativeBackendCheck"];
+            /** Raw Diagnostics */
+            raw_diagnostics?: components["schemas"]["NativeDiagnostic"][] | null;
+            reopen: components["schemas"]["NativeStatus"];
+            save: components["schemas"]["NativeCompletion"];
+            selection: components["schemas"]["NativeSelection"];
+            snapshot: components["schemas"]["NativeSnapshot"];
+            source_bodies?: components["schemas"]["NativeSourceBodies"] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeCheckEnvelope */
+        NativeCheckEnvelope: {
+            data?: components["schemas"]["NativeCheck"] | null;
+            error?: components["schemas"]["NativeToolError"] | null;
+            /** Ok */
+            ok: boolean;
+            /**
+             * Tool
+             * @constant
+             */
+            tool: "validate_project";
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeCheckState */
+        NativeCheckState: {
+            /** Completed */
+            completed: boolean;
+            /** Public Check Promoted */
+            public_check_promoted?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            /** Status */
+            status: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeChildBinding */
+        NativeChildBinding: {
+            /** Id */
+            id?: number[] | null;
+            /** Name */
+            name: string;
+            /** Native Body Bytes */
+            native_body_bytes?: number | null;
+            /** Native Snapshot */
+            native_snapshot?: string | null;
+            /** Role */
+            role?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Type */
+            type?: number | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeCompilation */
+        NativeCompilation: {
+            /** Acceptance */
+            acceptance: string;
+            /** Bound Resources */
+            bound_resources?: number | null;
+            /** Completed */
+            completed: boolean;
+            declaration_context?: components["schemas"]["NativeDeclarationContext"] | null;
+            diagnostic_conversion?: components["schemas"]["NativeCompilationConversion"] | null;
+            /** Diagnostics */
+            diagnostics?: components["schemas"]["NativeReport"][] | null;
+            /** Diagnostics Complete */
+            diagnostics_complete?: boolean | null;
+            /** Failures */
+            failures?: components["schemas"]["NativeFailure"][] | null;
+            /** Returned Resources */
+            returned_resources?: number | null;
+            source_context?: components["schemas"]["NativeSourceContext"] | null;
+            /** Source Diagnostics */
+            source_diagnostics?: components["schemas"]["NativeDiagnostic"][] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeCompilationConversion */
+        NativeCompilationConversion: {
+            /** Failures */
+            failures?: components["schemas"]["NativeFailure"][] | null;
+            /** Public Check Promoted */
+            public_check_promoted?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            /** Status */
+            status: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeCompletion */
+        NativeCompletion: {
+            /** Completed */
+            completed: boolean;
+            /** Exported */
+            exported?: boolean | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeConvertedReport */
+        NativeConvertedReport: {
+            original: components["schemas"]["NativeReport"];
+            report: components["schemas"]["NativeReport"];
+            /** Resource Scope Adapted */
+            resource_scope_adapted: boolean;
+            /** Target */
+            target: number[];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeCorrespondence */
+        NativeCorrespondence: {
+            /** Correspondence */
+            correspondence: string;
+            /** Observation Errors */
+            observation_errors?: (string | components["schemas"]["NativeFailure"])[] | null;
+            /** Reads */
+            reads?: components["schemas"]["NativeResourceRead"][] | null;
+            /** Scope Verified */
+            scope_verified?: boolean | null;
+            /** Size Queries */
+            size_queries?: components["schemas"]["NativeResourceRead"][] | null;
+            /** Size Query Reads */
+            size_query_reads?: components["schemas"]["NativeResourceRead"][] | null;
+            /** Targets */
+            targets?: components["schemas"]["NativeOwnedInput"][] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeDeclaration */
+        NativeDeclaration: {
+            /** Class Code */
+            class_code?: number | null;
+            /** Data Type */
+            data_type: string;
+            /** Name */
+            name: string;
+            /** Record Id */
+            record_id?: number | null;
+            /** Variable Id */
+            variable_id?: number[] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeDeclarationBinding */
+        NativeDeclarationBinding: {
+            /** Library */
+            library?: string | null;
+            /** Logical Name */
+            logical_name?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Pou */
+            pou?: string | null;
+            /** Public Check Promoted */
+            public_check_promoted?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            /** Role */
+            role?: string | null;
+            /** Status */
+            status: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeDeclarationContext */
+        NativeDeclarationContext: {
+            global_and_structure?: components["schemas"]["NativeDeclarationContext"] | null;
+            /** Public Check Promoted */
+            public_check_promoted?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            /** Status */
+            status: string;
+            /** Tables */
+            tables?: components["schemas"]["NativeDeclarationBinding"][] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeDiagnostic */
+        NativeDiagnostic: {
+            graph_projection: components["schemas"]["NativeGraphProjection"];
+            original: components["schemas"]["NativeDiagnosticReport"];
+            report_origin?: components["schemas"]["NativeDiagnosticOrigin"] | null;
+            source_projection: components["schemas"]["NativeSourceProjection"];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeDiagnosticOrigin */
+        NativeDiagnosticOrigin: {
+            /** Check Pass */
+            check_pass?: string | null;
+            /** Phase */
+            phase?: string | null;
+            /** Poll */
+            poll?: number | null;
+            /** Report Index */
+            report_index?: number | null;
+            /** Report Interface */
+            report_interface?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeDiagnosticProjection */
+        NativeDiagnosticProjection: {
+            /** Backend Diagnostics */
+            backend_diagnostics?: components["schemas"]["NativeReport"][] | null;
+            /** Empty Public List Means No Errors */
+            empty_public_list_means_no_errors?: boolean | null;
+            /** Failures */
+            failures: components["schemas"]["NativeFailure"][];
+            /** Original Public Source Diagnostics */
+            original_public_source_diagnostics?: components["schemas"]["NativeDiagnostic"][] | null;
+            /** Public Check Promoted */
+            public_check_promoted?: boolean | null;
+            /** Public Diagnostics */
+            public_diagnostics?: components["schemas"]["NativeReport"][] | null;
+            /** Reason */
+            reason?: string | null;
+            /** Source Diagnostics */
+            source_diagnostics: components["schemas"]["NativeDiagnostic"][];
+            /** Status */
+            status: string;
+            /** Target Checks */
+            target_checks?: components["schemas"]["NativeTargetOutcome"][] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeDiagnosticRecheck */
+        NativeDiagnosticRecheck: {
+            owned_check_inputs?: components["schemas"]["NativeCorrespondence"] | null;
+            /** Previous Tasks Terminal */
+            previous_tasks_terminal?: boolean | null;
+            public_check?: components["schemas"]["NativeCheckState"] | null;
+            /** Public Check Promoted */
+            public_check_promoted?: boolean | null;
+            published_resources?: components["schemas"]["NativeCorrespondence"] | null;
+            raw_check?: components["schemas"]["NativeBackendCheck"] | null;
+            /** Reason */
+            reason?: string | null;
+            /** Same Checker Input Bytes */
+            same_checker_input_bytes?: boolean | null;
+            /** Same Compilation */
+            same_compilation?: boolean | null;
+            /** Status */
+            status: string;
+            /** Trigger Code */
+            trigger_code?: number | null;
+            /** Trigger Reasons */
+            trigger_reasons?: string[] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeDiagnosticReport */
+        NativeDiagnosticReport: {
+            /** Arguments */
+            arguments: components["schemas"]["NativeReportText"][];
+            /** Bottom */
+            bottom?: number | null;
+            /** Code */
+            code: number;
+            instance?: components["schemas"]["NativeReportText"] | null;
+            /** Instance Kind */
+            instance_kind?: number | null;
+            /** Kind */
+            kind: number;
+            /** Left */
+            left?: number | null;
+            library?: components["schemas"]["NativeReportText"] | null;
+            name?: components["schemas"]["NativeReportText"] | null;
+            /** Network */
+            network?: number | null;
+            /** Poll */
+            poll?: number | null;
+            /** Program Kind */
+            program_kind?: number | null;
+            /** Record Size */
+            record_size?: number | null;
+            /** Report Index */
+            report_index?: number | null;
+            /** Report Interface */
+            report_interface?: string | null;
+            /** Right */
+            right?: number | null;
+            /** Source Object Id */
+            source_object_id?: number[] | null;
+            /** Step */
+            step: number;
+            /** Top */
+            top?: number | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeDiagnosticSource */
+        NativeDiagnosticSource: {
+            child?: components["schemas"]["NativeSourceChild"] | null;
+            declaration?: components["schemas"]["NativeDeclaration"] | null;
+            /** Declaration Owner */
+            declaration_owner?: string | null;
+            /** Library */
+            library?: string | null;
+            /** Logical Name */
+            logical_name?: string | null;
+            /** Network */
+            network?: number | null;
+            /** Pou */
+            pou?: string | null;
+            /** Program Kind */
+            program_kind?: number | null;
+            /** Text */
+            text?: string | null;
+            /** Zero Based Line */
+            zero_based_line?: number | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeEvidence */
+        NativeEvidence: {
+            /** Automatic Verification */
+            automatic_verification: string;
+            /** Records */
+            records: components["schemas"]["NativeRecord"][];
+            /** Source Gxw Sha256 */
+            source_gxw_sha256: string;
+        };
+        /** NativeFailure */
+        NativeFailure: {
+            /** Code */
+            code?: number | null;
+            /** Hresult */
+            hresult?: number | null;
+            /** Operation */
+            operation?: string | null;
+            /** Reason */
+            reason?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeGraphCaller */
+        NativeGraphCaller: {
+            /** Instance */
+            instance?: string | null;
+            /** Network */
+            network: number;
+            /** Object Id */
+            object_id?: string | null;
+            /** Pou */
+            pou: string;
+            /** Symbol */
+            symbol?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeGraphCell */
+        NativeGraphCell: {
+            /** Id */
+            id: string;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeGraphObject */
+        NativeGraphObject: {
+            /** Object Id */
+            object_id?: string | null;
+            /** Source Offset */
+            source_offset?: number | null;
+            /** Symbol */
+            symbol: string;
+            /** Template */
+            template?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeGraphProjection */
+        NativeGraphProjection: {
+            caller?: components["schemas"]["NativeGraphCaller"] | null;
+            /** Candidates */
+            candidates?: components["schemas"]["NativeGraphCell"][] | null;
+            cell?: components["schemas"]["NativeGraphCell"] | null;
+            /** Instance */
+            instance?: string | null;
+            /** Limits */
+            limits?: string[] | null;
+            object?: components["schemas"]["NativeGraphObject"] | null;
+            /** Public Check Promoted */
+            public_check_promoted?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            /** Resource */
+            resource?: string | null;
+            source?: components["schemas"]["NativeGraphSource"] | null;
+            /** Status */
+            status: string;
+            /** Task */
+            task?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeGraphSource */
+        NativeGraphSource: {
+            /** Formal */
+            formal?: string | null;
+            /** Instance */
+            instance?: string | null;
+            /** Library */
+            library?: string | null;
+            /** Network */
+            network?: number | null;
+            /** Object Id */
+            object_id?: string | null;
+            /** Port Name */
+            port_name?: string | null;
+            /** Pou */
+            pou?: string | null;
+            /** Side */
+            side?: string | null;
+            /** Source Offset */
+            source_offset?: number | null;
+            /** Symbol */
+            symbol?: string | null;
+            /** Text */
+            text?: string | null;
+            /** Zero Based Line */
+            zero_based_line?: number | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeIdentityMismatch */
+        NativeIdentityMismatch: {
+            /** Event Index */
+            event_index: number;
+            /** Expected Object Id */
+            expected_object_id: number[];
+            original: components["schemas"]["NativeReport"];
+            /** Reason */
+            reason: string;
+            /** Reported Object Id */
+            reported_object_id: number[] | null;
+            /** Target */
+            target: number[];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeImportedStream */
+        NativeImportedStream: {
+            /** Location */
+            location?: string | null;
+            /** Logical Name */
+            logical_name: string;
+            /** Status */
+            status?: string | null;
+            /** Stream */
+            stream: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeImportedWorkspace */
+        NativeImportedWorkspace: {
+            /** Outer Only Streams */
+            outer_only_streams?: components["schemas"]["NativeImportedStream"][] | null;
+            /** Public Check Promoted */
+            public_check_promoted?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            /** Status */
+            status: string;
+            /** Streams */
+            streams?: components["schemas"]["NativeImportedStream"][] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeInstanceProjection */
+        NativeInstanceProjection: {
+            /** Instance */
+            instance?: string | null;
+            /** Public Check Promoted */
+            public_check_promoted?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            /** Resource */
+            resource?: string | null;
+            /** Status */
+            status: string;
+            /** Task */
+            task?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeInstruction */
+        NativeInstruction: {
+            /** Args */
+            args: string[];
+            /** Native Step */
+            native_step: number;
+            /** Op */
+            op: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeInstructionPosition */
+        NativeInstructionPosition: {
+            position?: components["schemas"]["NativeInstruction"] | null;
+            /** Public Check Promoted */
+            public_check_promoted?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            /** Status */
+            status: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeOwnedInput */
+        NativeOwnedInput: {
+            /** Mask */
+            mask?: number | null;
+            /** Public Check Promoted */
+            public_check_promoted?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            /** Resources */
+            resources?: components["schemas"]["NativeResourceRead"][] | null;
+            /** Status */
+            status: string;
+            /** Target */
+            target?: number[] | null;
+            /** Task Copy Stable */
+            task_copy_stable?: boolean | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativePublicDiagnosticConversion */
+        NativePublicDiagnosticConversion: {
+            /** Completed */
+            completed: boolean;
+            /** Converted Report Count */
+            converted_report_count?: number | null;
+            /** Current Source */
+            current_source: string;
+            /** Identity Mismatches */
+            identity_mismatches?: components["schemas"]["NativeIdentityMismatch"][] | null;
+            /** Origin */
+            origin?: string | null;
+            /** Original Report Count */
+            original_report_count?: number | null;
+            /** Public Check Promoted */
+            public_check_promoted?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            /** Reports */
+            reports?: (components["schemas"]["NativeReport"] | components["schemas"]["NativeConvertedReport"])[] | null;
+            /** Status */
+            status: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativePublicDiagnosticIdentity */
+        NativePublicDiagnosticIdentity: {
+            /** Checked Report Count */
+            checked_report_count: number;
+            /** Mismatches */
+            mismatches: components["schemas"]["NativeIdentityMismatch"][];
+            /** Public Check Promoted */
+            public_check_promoted?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            /** Status */
+            status: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeRecord */
+        NativeRecord: {
+            /** Automatic Verification */
+            automatic_verification: string;
+            /** Binding Current */
+            binding_current: boolean;
+            /** Created At */
+            created_at: string;
+            /** Id */
+            id: string;
+            native_gxw?: components["schemas"]["NativeAttachment"] | null;
+            /** Operator */
+            operator: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "passed" | "failed" | "inconclusive";
+            /** Project Id */
+            project_id: string;
+            /** Report */
+            report: string;
+            /** Source Gxw Sha256 */
+            source_gxw_sha256: string;
+            /** Tool Version */
+            tool_version: string;
+            /** Version Id */
+            version_id: string;
+        };
+        /** NativeReport */
+        NativeReport: {
+            /** Arguments */
+            arguments?: components["schemas"]["NativeReportText"][] | null;
+            /** Bottom */
+            bottom?: number | null;
+            /** Code */
+            code?: number | null;
+            instance?: components["schemas"]["NativeReportText"] | null;
+            /** Instance Kind */
+            instance_kind?: number | null;
+            /** Kind */
+            kind: number;
+            /** Left */
+            left?: number | null;
+            library?: components["schemas"]["NativeReportText"] | null;
+            name?: components["schemas"]["NativeReportText"] | null;
+            /** Network */
+            network?: number | null;
+            /** Poll */
+            poll?: number | null;
+            /** Program Kind */
+            program_kind?: number | null;
+            /** Record Size */
+            record_size?: number | null;
+            /** Report Index */
+            report_index?: number | null;
+            /** Report Interface */
+            report_interface?: string | null;
+            /** Right */
+            right?: number | null;
+            /** Source Object Id */
+            source_object_id?: number[] | null;
+            /** Step */
+            step?: number | null;
+            /** Top */
+            top?: number | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeReportText */
+        NativeReportText: {
+            /** Is Null */
+            is_null?: boolean | null;
+            /** Raw Hex Utf16Le */
+            raw_hex_utf16le?: string | null;
+            /** Text */
+            text: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeResourceRead */
+        NativeResourceRead: {
+            /** Body Bytes */
+            body_bytes?: number | null;
+            /** Channel Sizes */
+            channel_sizes?: number[] | null;
+            /** Name */
+            name?: string | null;
+            /** Resource */
+            resource?: string | number[] | null;
+            /** Status */
+            status?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeSFCChildren */
+        NativeSFCChildren: {
+            /** Children */
+            children?: components["schemas"]["NativeChildBinding"][] | null;
+            /** Missing */
+            missing?: components["schemas"]["NativeChildBinding"][] | null;
+            /** Public Check Promoted */
+            public_check_promoted?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            source_scope?: components["schemas"]["NativeSFCScope"] | null;
+            /** Stage */
+            stage?: string | null;
+            /** Status */
+            status: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeSFCScope */
+        NativeSFCScope: {
+            /** Children */
+            children?: components["schemas"]["NativeChildBinding"][] | null;
+            /** Native Check Promoted */
+            native_check_promoted?: boolean | null;
+            /** Public Check Promoted */
+            public_check_promoted?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            /** Status */
+            status: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeSelection */
+        NativeSelection: {
+            /** Configuration Bytes Current */
+            configuration_bytes_current?: boolean | null;
+            /** Empty Task */
+            empty_task: boolean;
+            imported_workspace?: components["schemas"]["NativeImportedWorkspace"] | null;
+            /** Public Check Promoted */
+            public_check_promoted?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            /** Selected Sources */
+            selected_sources: string[];
+            /** Source Bytes Current */
+            source_bytes_current?: boolean | null;
+            /** Status */
+            status: string;
+            /** Task Program Sources */
+            task_program_sources?: components["schemas"]["NativeTaskSource"][] | null;
+            /** Tasks */
+            tasks: components["schemas"]["NativeTask"][];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeSnapshot */
+        NativeSnapshot: {
+            /** Cpu */
+            cpu: string;
+            /** Project Id */
+            project_id: string;
+            /** Requested Program */
+            requested_program: string;
+            /** Version Id */
+            version_id: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeSourceBinding */
+        NativeSourceBinding: {
+            /** Body Id */
+            body_id?: number[] | null;
+            /** Library */
+            library?: string | null;
+            /** Logical Name */
+            logical_name?: string | null;
+            /** Native Body Bytes */
+            native_body_bytes?: number | null;
+            /** Native Snapshot */
+            native_snapshot?: string | null;
+            /** Pou */
+            pou?: string | null;
+            /** Pou Id */
+            pou_id?: number[] | null;
+            /** Public Check Promoted */
+            public_check_promoted?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            sfc_children?: components["schemas"]["NativeSFCChildren"] | null;
+            /** Source Body Bytes */
+            source_body_bytes?: number | null;
+            /** Status */
+            status: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeSourceBodies */
+        NativeSourceBodies: {
+            /** Phase Reads Complete */
+            phase_reads_complete?: boolean | null;
+            /** Public Check Promoted */
+            public_check_promoted?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            /** Sources */
+            sources: components["schemas"]["NativeSourceBinding"][];
+            /** Status */
+            status: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeSourceChild */
+        NativeSourceChild: {
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Native Type */
+            native_type?: number | null;
+            /** Number */
+            number: number | null;
+            /** Registrations */
+            registrations: components["schemas"]["NativeActionRegistration"][];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeSourceContext */
+        NativeSourceContext: {
+            /** Public Check Promoted */
+            public_check_promoted?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            /** Stages */
+            stages?: components["schemas"]["NativeSourcePhase"][] | null;
+            /** Status */
+            status: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeSourcePhase */
+        NativeSourcePhase: {
+            /** Public Check Promoted */
+            public_check_promoted?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            /** Sources */
+            sources: components["schemas"]["NativeSourceBinding"][];
+            /** Stage */
+            stage: string;
+            /** Status */
+            status: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeSourceProjection */
+        NativeSourceProjection: {
+            instance_projection?: components["schemas"]["NativeInstanceProjection"] | null;
+            /** Instance Resolution */
+            instance_resolution?: string | null;
+            instruction_position?: components["schemas"]["NativeInstructionPosition"] | null;
+            /** Limits */
+            limits?: string[] | null;
+            /** Public Check Promoted */
+            public_check_promoted?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            source?: components["schemas"]["NativeDiagnosticSource"] | null;
+            /** Status */
+            status: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeStatus */
+        NativeStatus: {
+            /** Public Check Promoted */
+            public_check_promoted?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            /** Status */
+            status: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeTargetOutcome */
+        NativeTargetOutcome: {
+            /** Completed Resource */
+            completed_resource?: string | null;
+            /** Diagnostics Complete */
+            diagnostics_complete?: boolean | null;
+            /** Observed Diagnostic Counts */
+            observed_diagnostic_counts?: number[] | null;
+            /** Public Check Promoted */
+            public_check_promoted?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            /** Reported Diagnostic Counts */
+            reported_diagnostic_counts?: number[] | null;
+            /** Reported Status */
+            reported_status?: string | null;
+            /** Resource End Marker */
+            resource_end_marker?: boolean | null;
+            /** Status */
+            status: string;
+            /** Target */
+            target?: number[] | null;
+            /** Terminal Progress */
+            terminal_progress?: boolean | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeTask */
+        NativeTask: {
+            /** Programs */
+            programs: string[];
+            /** Resource */
+            resource: string;
+            /** Task */
+            task: string;
+        };
+        /** NativeTaskSource */
+        NativeTaskSource: {
+            /** Body Id */
+            body_id?: number[] | null;
+            /** Library */
+            library?: string | null;
+            /** Pou */
+            pou?: string | null;
+            /** Public Check Promoted */
+            public_check_promoted?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            /** Resource */
+            resource?: string | null;
+            /** Status */
+            status: string;
+            /** Task */
+            task?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NativeToolError */
+        NativeToolError: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Next Actions */
+            next_actions?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            }[] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
         /** NativeValidationCheck */
         NativeValidationCheck: {
             /** Program */
@@ -2223,16 +4560,31 @@ export interface components {
             /** Tool Version */
             tool_version: string;
         };
+        /** NativeValidationToolResult */
+        NativeValidationToolResult: {
+            /** Call Id */
+            call_id: string;
+            /** Content */
+            content: string;
+            data: components["schemas"]["NativeCheckEnvelope"];
+            /** Execution Job Id */
+            execution_job_id?: string | null;
+            /** Is Error */
+            is_error: boolean;
+            /**
+             * Name
+             * @constant
+             */
+            name: "validate_project";
+            /** Proposal Id */
+            proposal_id?: string | null;
+            /** Version Id */
+            version_id?: string | null;
+        };
         /** NetworkChange */
         NetworkChange: {
-            /** After */
-            after: {
-                [key: string]: components["schemas"]["JsonValue"];
-            } | null;
-            /** Before */
-            before: {
-                [key: string]: components["schemas"]["JsonValue"];
-            } | null;
+            after: components["schemas"]["IRNetwork"] | null;
+            before: components["schemas"]["IRNetwork"] | null;
             /** Comment */
             comment: string;
             /** Instruction Count */
@@ -2245,18 +4597,849 @@ export interface components {
             /** Network */
             network: string;
         };
-        /** NullablePublicObject */
-        NullablePublicObject: {
+        /** NetworkEnvelope */
+        NetworkEnvelope: {
+            data?: components["schemas"]["ReadNetworkData"] | null;
+            error?: components["schemas"]["NativeToolError"] | null;
+            /** Ok */
+            ok: boolean;
+            /**
+             * Tool
+             * @constant
+             */
+            tool: "read_network";
+        } & {
             [key: string]: components["schemas"]["JsonValue"];
-        } | null;
+        };
+        /** NetworkSemantics */
+        NetworkSemantics: {
+            /** Execution Context */
+            execution_context: string;
+            /** Network */
+            network: string;
+            /** Semantics */
+            semantics: string[];
+            /** Triggers */
+            triggers: components["schemas"]["ExecutionTrigger"][];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NetworkSummary */
+        NetworkSummary: {
+            /** Comment */
+            comment?: string | null;
+            /** Id */
+            id: string;
+            /** Instruction Count */
+            instruction_count: number;
+            /** Reads */
+            reads?: string[] | null;
+            /** Writes */
+            writes?: string[] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** NetworkTiming */
+        NetworkTiming: {
+            /** Best Ms */
+            best_ms: number;
+            /** Instruction Count */
+            instruction_count: number;
+            /** Instructions */
+            instructions: components["schemas"]["InstructionTiming"][];
+            /** Network */
+            network: string;
+            /** Order */
+            order: number;
+            /** Primary Region */
+            primary_region: string;
+            /** Typical Ms */
+            typical_ms: number;
+            /** Worst Ms */
+            worst_ms: number;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** Observation */
+        Observation: {
+            /** At Ms */
+            at_ms: number;
+            /** Event */
+            event: string;
+            /** Values */
+            values: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+        };
+        /** OperationEffect */
+        OperationEffect: {
+            count?: components["schemas"]["SpecificationExpression"] | null;
+            /** Direction */
+            direction?: string | null;
+            /** Kind */
+            kind?: string | null;
+            shift?: components["schemas"]["SpecificationExpression"] | null;
+            source?: components["schemas"]["SpecificationExpression"] | null;
+            target: components["schemas"]["EffectTarget"];
+            value?: components["schemas"]["SpecificationExpression"] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** OperationExecution */
+        OperationExecution: {
+            /** Required State */
+            required_state?: {
+                [key: string]: number | boolean;
+            } | null;
+            /** Trigger */
+            trigger: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** OperationPresentation */
+        OperationPresentation: {
+            /** Effects */
+            effects: string[];
+            /** Enable */
+            enable: string;
+            /** Execution */
+            execution: string;
+            /** Parameters */
+            parameters: string[];
+            /** Required State */
+            required_state: string[];
+        };
+        /** OperatorOption */
+        OperatorOption: {
+            initial_value: components["schemas"]["JsonValue"];
+            /** Label */
+            label: string;
+            /** Placeholder */
+            placeholder: string;
+            /** Value */
+            value: string;
+        };
+        /** PLCDescriptor */
+        PLCDescriptor: {
+            /** Cpu */
+            cpu: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** PLCProgram */
+        PLCProgram: {
+            analysis: components["schemas"]["ProgramAnalysis"];
+            /** Devices */
+            devices: {
+                [key: string]: components["schemas"]["DeviceRecord"];
+            };
+            /** Io Map */
+            io_map: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "plc_program_ir";
+            logic: components["schemas"]["ProgramLogic"];
+            /** Metadata */
+            metadata?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Networks */
+            networks: components["schemas"]["IRNetwork"][];
+            plc: components["schemas"]["PLCDescriptor"];
+            /** Program Name */
+            program_name: string;
+            revision: components["schemas"]["JsonValue"];
+            /** Schema Version */
+            schema_version: number;
+            source: components["schemas"]["ProgramSource"];
+            timing: components["schemas"]["ProgramTiming"];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** PlanBinding */
+        PlanBinding: {
+            /** Ir Sha256 */
+            ir_sha256?: string | null;
+            /** Plan Id */
+            plan_id: string;
+            /** Project Id */
+            project_id?: string | null;
+            /** Result Sha256 */
+            result_sha256?: string | null;
+            /** Run Id */
+            run_id?: string | null;
+            /** Suite Sha256 */
+            suite_sha256?: string | null;
+            /** Version Id */
+            version_id: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramActionRef */
+        ProgramActionRef: {
+            /** Network */
+            network: string;
+            /** Path */
+            path: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramAnalysis */
+        ProgramAnalysis: {
+            config?: components["schemas"]["ProgramAnalysisConfig"] | null;
+            counts?: components["schemas"]["ProgramFindingCounts"] | null;
+            dependency_graph?: components["schemas"]["ProgramDependencyGraph"] | null;
+            /** Findings */
+            findings?: components["schemas"]["ProgramFinding"][] | null;
+            /** Mutex */
+            mutex?: components["schemas"]["ProgramMutexResult"][] | null;
+            /** Plc Model */
+            plc_model?: string | null;
+            /** Rules Checked */
+            rules_checked?: string[] | null;
+            /** Same Scan Expectations */
+            same_scan_expectations?: components["schemas"]["ProgramScanExpectation"][] | null;
+            /** Schema Version */
+            schema_version?: number | null;
+            /** State Analysis */
+            state_analysis?: components["schemas"]["ProgramStateAnalysis"][] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramAnalysisConfig */
+        ProgramAnalysisConfig: {
+            /** Mutex */
+            mutex: components["schemas"]["ProgramMutexPair"][];
+            /** Same Scan Expectations */
+            same_scan_expectations: components["schemas"]["ProgramScanExpectation"][];
+            /** Terminal States */
+            terminal_states: {
+                [key: string]: number[];
+            };
+            timing: components["schemas"]["ProgramTimingConfig"];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramCondition */
+        ProgramCondition: {
+            /** Address */
+            address: string;
+            /** Expression */
+            expression: string;
+            /** Label */
+            label: string;
+            /** Path */
+            path: string;
+            /** Period Ms */
+            period_ms?: number | null;
+            /** Semantic */
+            semantic: string;
+            /** Type */
+            type: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramCyclicSource */
+        ProgramCyclicSource: {
+            /** Device */
+            device: string | null;
+            /** Network */
+            network: string;
+            /** Path */
+            path: string;
+            /** Period Ms */
+            period_ms: number | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramDependencyEdge */
+        ProgramDependencyEdge: {
+            /** Feedback */
+            feedback: boolean;
+            /** From */
+            from: string;
+            /** Network */
+            network: string;
+            /** Precision */
+            precision: string;
+            /** Rung Id */
+            rung_id: number | null;
+            /** To */
+            to: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramDependencyGraph */
+        ProgramDependencyGraph: {
+            /** Device Edges */
+            device_edges: components["schemas"]["ProgramDependencyEdge"][];
+            /** Forward */
+            forward: {
+                [key: string]: string[];
+            };
+            /** Network Edges */
+            network_edges: components["schemas"]["ProgramScanDependency"][];
+            /** Nodes */
+            nodes: string[];
+            /** Precision */
+            precision: string;
+            /** Readers */
+            readers: {
+                [key: string]: components["schemas"]["ProgramDeviceAccess"][];
+            };
+            /** Reverse */
+            reverse: {
+                [key: string]: string[];
+            };
+            /** Schema Version */
+            schema_version: number;
+            /** Writers */
+            writers: {
+                [key: string]: components["schemas"]["ProgramDeviceAccess"][];
+            };
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramDeviceAccess */
+        ProgramDeviceAccess: {
+            /** Network */
+            network: string;
+            /** Op */
+            op?: string | null;
+            /** Order */
+            order: number;
+            /** Path */
+            path?: string | null;
+            /** Reads */
+            reads?: string[] | null;
+            /** Rung Id */
+            rung_id: number | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramEdgeTrigger */
+        ProgramEdgeTrigger: {
+            /** Device */
+            device: string;
+            /** Edge */
+            edge: string;
+            /** Network */
+            network: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramFinding */
+        ProgramFinding: {
+            /** Addresses */
+            addresses: string[];
+            /** Category */
+            category: string;
+            /** Code */
+            code: string;
+            /** Confidence */
+            confidence: string;
+            /** Evidence */
+            evidence: string[];
+            /** Fixable */
+            fixable: boolean;
+            /** Json Paths */
+            json_paths: string[];
+            /** Message */
+            message: string;
+            /** Network Refs */
+            network_refs: string[];
+            /** Rung Ids */
+            rung_ids: number[];
+            /** Severity */
+            severity: string;
+            /** Suggestion */
+            suggestion: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramFindingCounts */
+        ProgramFindingCounts: {
+            /** Error */
+            error: number;
+            /** Info */
+            info: number;
+            /** Warning */
+            warning: number;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramInfoEnvelope */
+        ProgramInfoEnvelope: {
+            data?: components["schemas"]["ProgramInfoToolData"] | null;
+            error?: components["schemas"]["NativeToolError"] | null;
+            /** Ok */
+            ok: boolean;
+            /**
+             * Tool
+             * @constant
+             */
+            tool: "get_current_program_info";
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramInfoToolData */
+        ProgramInfoToolData: {
+            /** Available */
+            available?: boolean | null;
+            /** Declaration Edits */
+            declaration_edits?: {
+                [key: string]: components["schemas"]["DeclarationEdit"];
+            } | null;
+            devices?: components["schemas"]["DeviceSummary"] | null;
+            /** Metadata */
+            metadata?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Network Count */
+            network_count?: number | null;
+            /** Networks */
+            networks?: components["schemas"]["NetworkSummary"][] | null;
+            /** Networks Truncated */
+            networks_truncated?: boolean | null;
+            /** Plc Model */
+            plc_model?: string | null;
+            /** Program Name */
+            program_name?: string | null;
+            /** Target Mode */
+            target_mode?: string | null;
+            timing?: components["schemas"]["ProgramTiming"] | null;
+            /** Version Id */
+            version_id?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramInitialization */
+        ProgramInitialization: {
+            /** Network */
+            network: string;
+            /** Status */
+            status: string;
+            /** Trigger Devices */
+            trigger_devices: string[];
+            /** Writes */
+            writes: string[];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramLogic */
+        ProgramLogic: {
+            /** Execution Model */
+            execution_model?: string | null;
+            /** Regions */
+            regions?: components["schemas"]["ProgramLogicRegion"][] | null;
+            /** Requirements */
+            requirements?: components["schemas"]["ProgramRequirement"][] | null;
+            /** Requirements Sha256 */
+            requirements_sha256?: string | null;
+            /** Schema Version */
+            schema_version?: number | null;
+            /** State Machines */
+            state_machines?: components["schemas"]["ProgramStateMachine"][] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramLogicRegion */
+        ProgramLogicRegion: {
+            /** Action Refs */
+            action_refs: components["schemas"]["ProgramActionRef"][];
+            /** Code */
+            code: string;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Network Refs */
+            network_refs: string[];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramMutexCheck */
+        ProgramMutexCheck: {
+            /** Network */
+            network: string;
+            /** Other */
+            other: string;
+            /** Path */
+            path: string;
+            /** Protected */
+            protected: boolean;
+            /** Target */
+            target: string;
+            /** Writer */
+            writer: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramMutexPair */
+        ProgramMutexPair: {
+            /** Devices */
+            devices: string[];
+            /** Source */
+            source: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramMutexResult */
+        ProgramMutexResult: {
+            /** Checks */
+            checks: components["schemas"]["ProgramMutexCheck"][];
+            /** Devices */
+            devices: string[];
+            /** Source */
+            source: string;
+            /** Status */
+            status: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramPreset */
+        ProgramPreset: {
+            /** Network */
+            network: string;
+            /** Preset */
+            preset: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramPropertyChanges */
+        ProgramPropertyChanges: {
+            analysis?: components["schemas"]["AnalysisPropertyChange"] | null;
+            device_comments?: components["schemas"]["EngineeringPropertyChange"] | null;
+            io_map?: components["schemas"]["EngineeringPropertyChange"] | null;
+            labels?: components["schemas"]["LabelsPropertyChange"] | null;
+            metadata?: components["schemas"]["EngineeringPropertyChange"] | null;
+            structs?: components["schemas"]["EngineeringPropertyChange"] | null;
+            timing?: components["schemas"]["TimingPropertyChange"] | null;
+            variables?: components["schemas"]["EngineeringPropertyChange"] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramRequirement */
+        ProgramRequirement: {
+            /** Devices */
+            devices: string[];
+            /** Effect Devices */
+            effect_devices?: string[] | null;
+            /** Effect Kind */
+            effect_kind?: string | null;
+            /** Evidence */
+            evidence: string;
+            /** Intent Id */
+            intent_id?: string | null;
+            /** Period Ms */
+            period_ms?: number | null;
+            /** Pulse Width Ms */
+            pulse_width_ms?: number | null;
+            /** Rearm */
+            rearm?: string | null;
+            /** Semantic */
+            semantic: string;
+            /** Source */
+            source: string;
+            /** Strict */
+            strict: boolean;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramScanBudget */
+        ProgramScanBudget: {
+            /** Allocation Ms */
+            allocation_ms: {
+                [key: string]: number;
+            };
+            /** Budget Ms */
+            budget_ms: number | null;
+            /** Configured */
+            configured: boolean;
+            /** Estimated Worst Ms */
+            estimated_worst_ms: number | null;
+            /** Status */
+            status: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramScanDependency */
+        ProgramScanDependency: {
+            /** Device */
+            device: string;
+            /** Reader Network */
+            reader_network: string;
+            /** Reader Order */
+            reader_order: number;
+            /** Relation */
+            relation: string;
+            /** Writer Network */
+            writer_network: string;
+            /** Writer Order */
+            writer_order: number;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramScanExpectation */
+        ProgramScanExpectation: {
+            /** Device */
+            device: string;
+            /** Reader Network */
+            reader_network: string;
+            /** Source */
+            source: string;
+            /** Status */
+            status?: string | null;
+            /** Writer Network */
+            writer_network?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramScanMonitor */
+        ProgramScanMonitor: {
+            /** Available */
+            available: boolean;
+            devices: components["schemas"]["ScanMonitorDevices"];
+            /** Enabled */
+            enabled: boolean;
+            /** Read Only */
+            read_only: boolean;
+            /** Reason */
+            reason?: string | null;
+            source?: components["schemas"]["TimingSource"] | null;
+            /** Unit Ms */
+            unit_ms: number | null;
+            /** Warning Ms */
+            warning_ms: number;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramScanPerformance */
+        ProgramScanPerformance: {
+            cycle_overhead: components["schemas"]["ScanCycleOverhead"];
+            estimate: components["schemas"]["ScanEstimate"];
+            /** High Cost Instructions */
+            high_cost_instructions: components["schemas"]["HighCostInstruction"][];
+            /** Networks */
+            networks: components["schemas"]["NetworkTiming"][];
+            /** Profile */
+            profile: string;
+            /** Region Worst Ms */
+            region_worst_ms: {
+                [key: string]: number;
+            };
+            scan_budget: components["schemas"]["ProgramScanBudget"];
+            scan_monitor: components["schemas"]["ProgramScanMonitor"];
+            /** Schema Version */
+            schema_version: number;
+            source: components["schemas"]["TimingSource"];
+            /** Supported */
+            supported: boolean;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramSemanticCoverage */
+        ProgramSemanticCoverage: {
+            /** Devices */
+            devices: string[];
+            /** Message */
+            message: string;
+            /** Network Refs */
+            network_refs: string[];
+            /** Period Ms */
+            period_ms?: number | null;
+            /** Pulse Width Ms */
+            pulse_width_ms?: number | null;
+            /** Requirement Id */
+            requirement_id: string;
+            /** Semantic */
+            semantic: string;
+            /** Status */
+            status: string;
+            /** Strict */
+            strict: boolean;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramSource */
+        ProgramSource: {
+            /** Format */
+            format?: string | null;
+            /** Ladder Sha256 */
+            ladder_sha256?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramState */
+        ProgramState: {
+            /** Name */
+            name: string;
+            /** Network Refs */
+            network_refs: string[];
+            /** Value */
+            value: number;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramStateAnalysis */
+        ProgramStateAnalysis: {
+            /** Dead End States */
+            dead_end_states: number[];
+            /** State Machine */
+            state_machine: string;
+            /** State Register */
+            state_register: string;
+            /** Terminal States */
+            terminal_states: number[];
+            /** Unreachable States */
+            unreachable_states: number[];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramStateInitialization */
+        ProgramStateInitialization: {
+            /** Network */
+            network: string;
+            /** Path */
+            path: string;
+            /** Target State */
+            target_state: number;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramStateMachine */
+        ProgramStateMachine: {
+            /** Dead End State Candidates */
+            dead_end_state_candidates: number[];
+            /** Id */
+            id: string;
+            /** Initialization */
+            initialization: components["schemas"]["ProgramStateInitialization"][];
+            separation: components["schemas"]["ProgramStateSeparation"];
+            /** State Outputs */
+            state_outputs: components["schemas"]["ProgramStateOutput"][];
+            /** State Register */
+            state_register: string;
+            /** States */
+            states: components["schemas"]["ProgramState"][];
+            /** Transitions */
+            transitions: components["schemas"]["ProgramStateTransition"][];
+            /** Type */
+            type: string;
+            /** Unreachable State Candidates */
+            unreachable_state_candidates: number[];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramStateOutput */
+        ProgramStateOutput: {
+            /** Args */
+            args: string[];
+            /** Label */
+            label: string;
+            /** Network */
+            network: string;
+            /** Op */
+            op: string;
+            /** Path */
+            path: string;
+            /** State */
+            state: number;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramStateSeparation */
+        ProgramStateSeparation: {
+            /** Logical Regions Separate */
+            logical_regions_separate: boolean;
+            /** Mixed Physical Networks */
+            mixed_physical_networks: string[];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramStateTransition */
+        ProgramStateTransition: {
+            /** Conditions */
+            conditions: components["schemas"]["ProgramCondition"][];
+            /** Devices */
+            devices: string[];
+            /** From */
+            from: number | null;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Network */
+            network: string;
+            /** Path */
+            path: string;
+            /** Semantics */
+            semantics: string[];
+            /** To */
+            to: number;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramTiming */
+        ProgramTiming: {
+            /** Counters */
+            counters?: {
+                [key: string]: components["schemas"]["ProgramPreset"];
+            } | null;
+            /** Coverage */
+            coverage?: components["schemas"]["ProgramSemanticCoverage"][] | null;
+            /** Cyclic Sources */
+            cyclic_sources?: components["schemas"]["ProgramCyclicSource"][] | null;
+            /** Edge Triggers */
+            edge_triggers?: components["schemas"]["ProgramEdgeTrigger"][] | null;
+            /** First Scan Networks */
+            first_scan_networks?: string[] | null;
+            /** Initialization */
+            initialization?: components["schemas"]["ProgramInitialization"][] | null;
+            /** Interrupt Networks */
+            interrupt_networks?: string[] | null;
+            /** Network Semantics */
+            network_semantics?: components["schemas"]["NetworkSemantics"][] | null;
+            performance?: components["schemas"]["ProgramScanPerformance"] | null;
+            /** Pulse Capture Assessments */
+            pulse_capture_assessments?: components["schemas"]["PulseCaptureAssessment"][] | null;
+            /** Requirements */
+            requirements?: components["schemas"]["ProgramRequirement"][] | null;
+            /** Scan Model */
+            scan_model?: string | null;
+            /** Schema Version */
+            schema_version?: number | null;
+            /** Supported Semantics */
+            supported_semantics?: string[] | null;
+            /** Timers */
+            timers?: {
+                [key: string]: components["schemas"]["ProgramPreset"];
+            } | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ProgramTimingConfig */
+        ProgramTimingConfig: {
+            /** Allocation */
+            allocation: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /** Scan Budget Ms */
+            scan_budget_ms: number | null;
+            /** Scan Warning Ms */
+            scan_warning_ms: number;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
         /** Project */
         Project: {
             /** Active Version Id */
             active_version_id?: string | null;
-            /** Confirmed Spec */
-            confirmed_spec?: {
-                [key: string]: components["schemas"]["JsonValue"];
-            } | null;
+            confirmed_spec?: components["schemas"]["Specification"] | null;
             /** Confirmed Spec Hash */
             confirmed_spec_hash?: string | null;
             /** Created At */
@@ -2361,11 +5544,6 @@ export interface components {
             /** Use Labels */
             use_labels?: boolean | null;
         };
-        /** PropertyChange */
-        PropertyChange: {
-            after: components["schemas"]["JsonValue"];
-            before: components["schemas"]["JsonValue"];
-        };
         /** Proposal */
         Proposal: {
             /** Action */
@@ -2415,8 +5593,141 @@ export interface components {
             /** Proposals */
             proposals?: components["schemas"]["Proposal"][];
         };
-        /** PublicObject */
-        PublicObject: {
+        /** PulseCaptureAssessment */
+        PulseCaptureAssessment: {
+            /** Comparison Basis */
+            comparison_basis: string[];
+            /** Comparison Bound Ms */
+            comparison_bound_ms: number | null;
+            /** Decision */
+            decision: string;
+            /** Devices */
+            devices: string[];
+            /** Estimated Worst Scan Ms */
+            estimated_worst_scan_ms: number | null;
+            /** Evidence */
+            evidence: string[];
+            /** Instruction Coverage */
+            instruction_coverage: number | null;
+            /** Interrupt Path Declared */
+            interrupt_path_declared: boolean;
+            /** Interrupt Requested */
+            interrupt_requested: boolean;
+            /** Is Guarantee */
+            is_guarantee: boolean;
+            /** Network Refs */
+            network_refs: string[];
+            /** Pulse Width Ms */
+            pulse_width_ms: number;
+            /** Requirement Ids */
+            requirement_ids: string[];
+            /** Scan Budget Ms */
+            scan_budget_ms: number | null;
+            /** Semantics */
+            semantics: string[];
+            /** Status */
+            status: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ReadNetworkData */
+        ReadNetworkData: {
+            /** Coverage */
+            coverage?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | string | null;
+            network: components["schemas"]["ReadNetworkSnapshot"];
+            /** Raw Instructions */
+            raw_instructions?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            }[] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ReadNetworkSnapshot */
+        ReadNetworkSnapshot: {
+            /** Comment */
+            comment?: string | null;
+            /** Id */
+            id: string;
+            /** Instructions */
+            instructions?: components["schemas"]["Instruction"][] | null;
+            /** Raw Instructions */
+            raw_instructions?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            }[] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ReplayAssertion */
+        ReplayAssertion: {
+            actual?: components["schemas"]["JsonValue"];
+            /** Address */
+            address?: string | null;
+            /** At Ms */
+            at_ms?: number | null;
+            expected?: components["schemas"]["ReplayExpected"] | null;
+            /** Message */
+            message?: string | null;
+            /** Passed */
+            passed?: boolean | null;
+            /** Step Id */
+            step_id?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ReplayCase */
+        ReplayCase: {
+            /** Assertions */
+            assertions: components["schemas"]["ReplayAssertion"][];
+            /** Backend Kind */
+            backend_kind: string | null;
+            /** Duration Ms */
+            duration_ms: number | null;
+            /** Invariant Violations */
+            invariant_violations: components["schemas"]["SimulationViolation"][];
+            /** Issue Ids */
+            issue_ids: string[];
+            /** Name */
+            name: string;
+            /** Observations */
+            observations: components["schemas"]["Observation"][];
+            /** Requirement Ids */
+            requirement_ids: string[];
+            /** Sample Ms */
+            sample_ms: number | null;
+            /** Status */
+            status: string;
+            /** Steps */
+            steps: components["schemas"]["SimulationStep"][];
+        };
+        /** ReplayExpected */
+        ReplayExpected: {
+            /** Operator */
+            operator?: string | null;
+            /** Tolerance */
+            tolerance?: number | null;
+            value?: components["schemas"]["JsonValue"];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ReportDocument */
+        ReportDocument: {
+            /** Base Version Id */
+            base_version_id?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Findings */
+            findings?: components["schemas"]["Finding"][] | null;
+            /** Report Id */
+            report_id: string;
+            /** Report Type */
+            report_type?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Summary */
+            summary?: string | null;
+        } & {
             [key: string]: components["schemas"]["JsonValue"];
         };
         /** ReportSummary */
@@ -2434,6 +5745,46 @@ export interface components {
             /** Summary */
             summary?: string | null;
         };
+        /** Requirement */
+        Requirement: {
+            /** Devices */
+            devices: string[];
+            /** Id */
+            id: string;
+            latest_run: components["schemas"]["RequirementRun"] | null;
+            /** Status */
+            status: string;
+            /** Tests */
+            tests: components["schemas"]["RequirementTest"][];
+            /** Text */
+            text: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** RequirementRun */
+        RequirementRun: {
+            /** Backend Kind */
+            backend_kind: string | null;
+            /** Created At */
+            created_at: string | null;
+            /** Recorded Status */
+            recorded_status: string | null;
+            /** Run Id */
+            run_id: string;
+            /** Status */
+            status: string;
+            /** Test Name */
+            test_name: string;
+            verification: components["schemas"]["Verification"];
+        };
+        /** RequirementTest */
+        RequirementTest: {
+            latest_run: components["schemas"]["RequirementRun"] | null;
+            /** Plan Id */
+            plan_id: string;
+            /** Test Name */
+            test_name: string;
+        };
         /** ResponseViolation */
         ResponseViolation: {
             /** Observed Opcode */
@@ -2445,6 +5796,34 @@ export interface components {
              * @enum {string}
              */
             reason: "unsupported_script" | "non_english_script" | "japanese_script" | "latin_prose" | "ambiguous_han_only" | "invalid_prose_field" | "invalid_json_object" | "invalid_code_field" | "invalid_response" | "invalid_shared_input" | "invalid_ladder_structure" | "field_too_long" | "repair_base_invalid" | "repair_identity_invalid" | "repair_shape_invalid" | "repair_scope_violation" | "repair_no_progress";
+        };
+        /** SFCAction */
+        SFCAction: {
+            /** Name */
+            name: string;
+            /** Number */
+            number: number;
+            /** Registrations */
+            registrations: components["schemas"]["SFCRegistration"][];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SFCBinding */
+        SFCBinding: {
+            /** Action Number */
+            action_number?: number | null;
+            /** Child */
+            child?: string | null;
+            /** Registrations */
+            registrations?: components["schemas"]["SFCRegistration"][] | null;
+            /** Status */
+            status: string;
+            /** Step Reference */
+            step_reference?: number | null;
+            /** Transition Number */
+            transition_number?: number | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
         };
         /** SFCBranchSymbol */
         SFCBranchSymbol: {
@@ -2460,6 +5839,37 @@ export interface components {
             /** Y */
             y: number;
         };
+        /** SFCCell */
+        SFCCell: {
+            binding: components["schemas"]["SFCBinding"];
+            /** Id */
+            id: string;
+            /** Result */
+            result: number;
+            /** Role */
+            role: string;
+            /** Type */
+            type: number;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SFCChild */
+        SFCChild: {
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Number */
+            number: number | null;
+            /** Records */
+            records: components["schemas"]["SFCChildRecord"][];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
         /** SFCChildEdit */
         SFCChildEdit: {
             /**
@@ -2471,6 +5881,19 @@ export interface components {
             name: string;
             /** Records Hex */
             records_hex: string;
+        };
+        /** SFCChildRecord */
+        SFCChildRecord: {
+            /** Args */
+            args?: string[] | null;
+            /** Kind */
+            kind: string;
+            /** Op */
+            op?: string | null;
+            /** Raw Hex */
+            raw_hex: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
         };
         /** SFCDiff */
         SFCDiff: {
@@ -2484,9 +5907,7 @@ export interface components {
              */
             kind: "sfc";
             /** Modified Children */
-            modified_children: {
-                [key: string]: components["schemas"]["JsonValue"];
-            }[];
+            modified_children: components["schemas"]["SFCModifiedChild"][];
             /** Unified Diff */
             unified_diff: string;
         };
@@ -2502,6 +5923,26 @@ export interface components {
             /** Y */
             y: number;
         };
+        /** SFCGraph */
+        SFCGraph: {
+            /** Cells */
+            cells?: components["schemas"]["SFCCell"][] | null;
+            /** Edit Profile */
+            edit_profile?: string | null;
+            /** Height */
+            height?: number | null;
+            /** Position Resolution */
+            position_resolution: string;
+            /** Records */
+            records: components["schemas"]["SFCGraphRecord"][];
+            topology?: components["schemas"]["SFCTopology"] | null;
+            /** Width */
+            width?: number | null;
+            /** Write Symbols */
+            write_symbols?: components["schemas"]["SFCWriteSymbol"][] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
         /** SFCGraphEdit */
         SFCGraphEdit: {
             /** Action Number */
@@ -2509,10 +5950,32 @@ export interface components {
             /** Step Reference */
             step_reference: number;
         };
+        /** SFCGraphRecord */
+        SFCGraphRecord: {
+            /** Kind */
+            kind: string;
+            /** References */
+            references: number[];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
         /** SFCInput */
         SFCInput: {
             /** Steps */
             steps: components["schemas"]["SFCStep"][];
+        };
+        /** SFCJump */
+        SFCJump: {
+            /** Source */
+            source: string;
+            /** Status */
+            status: string;
+            /** Step Reference */
+            step_reference: number;
+            /** Targets */
+            targets: string[];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
         };
         /** SFCJumpEdit */
         SFCJumpEdit: {
@@ -2544,6 +6007,35 @@ export interface components {
             /** X */
             x: number;
         };
+        /** SFCModel */
+        SFCModel: {
+            /** Actions */
+            actions: components["schemas"]["SFCAction"][];
+            /** Children */
+            children: components["schemas"]["SFCChild"][];
+            /** Codepage */
+            codepage: number;
+            /** Cpu */
+            cpu: string;
+            graph: components["schemas"]["SFCGraph"];
+            /** Issues */
+            issues: (string | components["schemas"]["SourceIssue"])[];
+            /** Metadata */
+            metadata?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Program */
+            program: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SFCModifiedChild */
+        SFCModifiedChild: {
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+        };
         /** SFCNodeSymbol */
         SFCNodeSymbol: {
             /**
@@ -2559,7 +6051,7 @@ export interface components {
             y: number;
         };
         /** SFCPreview */
-        "SFCPreview-Input": {
+        SFCPreview: {
             /** Child Edits */
             child_edits?: components["schemas"]["SFCChildEdit"][] | null;
             /** Graph Edits */
@@ -2571,22 +6063,37 @@ export interface components {
             /** Version Id */
             version_id: string;
         };
-        /** SFCPreview */
-        "SFCPreview-Output": {
+        /** SFCPreviewResource */
+        SFCPreviewResource: {
             diff: components["schemas"]["SFCDiff"];
-            /** Program */
-            program: {
-                [key: string]: components["schemas"]["JsonValue"];
-            };
+            /** Gx Compile */
+            gx_compile?: string | null;
+            program: components["schemas"]["SFCModel"];
             /**
              * Target Mode
              * @constant
              */
             target_mode: "sfc";
-            /** Validation */
-            validation: {
-                [key: string]: components["schemas"]["JsonValue"];
-            };
+            validation: components["schemas"]["SFCPreviewValidation"];
+        };
+        /** SFCPreviewValidation */
+        SFCPreviewValidation: {
+            /** Gx Compile */
+            gx_compile?: string | null;
+            /** Issues */
+            issues?: (string | components["schemas"]["SourceIssue"])[] | null;
+            /** Messages */
+            messages?: string[] | null;
+            /** Native Save */
+            native_save?: string | null;
+            /** Native Source Save Required */
+            native_source_save_required?: boolean | null;
+            /** Position Resolution */
+            position_resolution?: string | null;
+            /** Status */
+            status: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
         };
         /** SFCProposal */
         SFCProposal: {
@@ -2620,6 +6127,13 @@ export interface components {
             /** Symbols */
             symbols: (components["schemas"]["SFCNodeSymbol"] | components["schemas"]["SFCEndSymbol"] | components["schemas"]["SFCLineSymbol"] | components["schemas"]["SFCBranchSymbol"])[];
         };
+        /** SFCRegistration */
+        SFCRegistration: {
+            /** Qualifier */
+            qualifier: number;
+            /** Zoom */
+            zoom: string;
+        };
         /** SFCRequirement */
         SFCRequirement: {
             /**
@@ -2629,6 +6143,29 @@ export interface components {
             capability: "requirement_input";
             /** Text */
             text: string;
+        };
+        /** SFCSegment */
+        SFCSegment: {
+            /** Direction */
+            direction: string;
+            /** Source */
+            source: string;
+            /** Style */
+            style: string;
+            /** Target */
+            target: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SFCSource */
+        SFCSource: {
+            /** Gx Compile */
+            gx_compile: string;
+            model: components["schemas"]["SFCModel"];
+            /** Programs */
+            programs: string[];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
         };
         /** SFCStep */
         SFCStep: {
@@ -2653,6 +6190,66 @@ export interface components {
             left_step_reference: number;
             /** Right Step Reference */
             right_step_reference: number;
+        };
+        /** SFCSymbol */
+        SFCSymbol: {
+            /** Cell */
+            cell: string;
+            /** Initial */
+            initial?: boolean | null;
+            /** Kind */
+            kind: string;
+            /** Ports */
+            ports: ("down" | "up" | "right" | "left")[];
+            /** Reference */
+            reference?: number | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SFCTopology */
+        SFCTopology: {
+            /** Issues */
+            issues: components["schemas"]["SFCTopologyIssue"][];
+            /** Jumps */
+            jumps: components["schemas"]["SFCJump"][];
+            /** Segments */
+            segments: components["schemas"]["SFCSegment"][];
+            /** Status */
+            status: string;
+            /** Symbols */
+            symbols: components["schemas"]["SFCSymbol"][];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SFCTopologyIssue */
+        SFCTopologyIssue: {
+            /** Branch */
+            branch?: number | null;
+            /** Cell */
+            cell?: string | null;
+            /** Port */
+            port?: string | null;
+            /** Reason */
+            reason: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SFCWriteSymbol */
+        SFCWriteSymbol: {
+            /** End */
+            end?: number | null;
+            /** Kind */
+            kind: string;
+            /** Number */
+            number?: number | null;
+            /** Start */
+            start?: number | null;
+            /** X */
+            x?: number | null;
+            /** Y */
+            y?: number | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
         };
         /** STPreview */
         STPreview: {
@@ -2683,6 +6280,119 @@ export interface components {
             /** Unified Diff */
             unified_diff: string;
         };
+        /** SavedCodeChannel */
+        SavedCodeChannel: {
+            /** Channel */
+            channel: number;
+            /** Generated Bytes */
+            generated_bytes: number;
+            /** Matches */
+            matches: boolean;
+            /** Saved Bytes */
+            saved_bytes: number;
+        };
+        /** SavedCodeComparison */
+        SavedCodeComparison: {
+            /** Resources */
+            resources: components["schemas"]["SavedCodeResource"][];
+            /** Status */
+            status: string;
+        };
+        /** SavedCodeResource */
+        SavedCodeResource: {
+            /** Channels */
+            channels: components["schemas"]["SavedCodeChannel"][];
+            /** Resource */
+            resource: string;
+            /** Status */
+            status: string;
+        };
+        /** ScanCycleOverhead */
+        ScanCycleOverhead: {
+            /** Basis */
+            basis: string;
+            /** Estimated Us */
+            estimated_us: number;
+            /** Referenced Input Points */
+            referenced_input_points: number;
+            /** Referenced Output Points */
+            referenced_output_points: number;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ScanDevices */
+        ScanDevices: {
+            /** Current */
+            current?: string | null;
+            /** Maximum */
+            maximum?: string | null;
+            /** Minimum */
+            minimum?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ScanEstimate */
+        ScanEstimate: {
+            /** Best Ms */
+            best_ms: number | null;
+            /** Instruction Count */
+            instruction_count: number;
+            /** Instruction Coverage */
+            instruction_coverage: number;
+            /** Is Exact */
+            is_exact: boolean;
+            /** Known Instruction Count */
+            known_instruction_count: number;
+            /** Typical Ms */
+            typical_ms: number | null;
+            /** Uncertainty */
+            uncertainty: string[];
+            /** Unknown Opcodes */
+            unknown_opcodes: string[];
+            /** Worst Ms */
+            worst_ms: number | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ScanMonitor */
+        ScanMonitor: {
+            /** Backend Capable */
+            backend_capable: boolean;
+            devices: components["schemas"]["ScanDevices"];
+            /** Error */
+            error: string | null;
+            /** Latest Current Ms */
+            latest_current_ms: number | null;
+            /** Observed Maximum Ms */
+            observed_maximum_ms: number | null;
+            /** Observed Minimum Ms */
+            observed_minimum_ms: number | null;
+            /** Sample Count */
+            sample_count: number;
+            /** Sampled */
+            sampled: boolean;
+            /** Supported */
+            supported: boolean;
+            /** Unit Ms */
+            unit_ms: number | null;
+            /** Warning Exceeded */
+            warning_exceeded: boolean;
+            /** Warning Ms */
+            warning_ms: number | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ScanMonitorDevices */
+        ScanMonitorDevices: {
+            /** Current */
+            current?: string | null;
+            /** Maximum */
+            maximum?: string | null;
+            /** Minimum */
+            minimum?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
         /** Session */
         Session: {
             /** Authenticated */
@@ -2701,6 +6411,392 @@ export interface components {
             /** Language */
             language?: ("zh-CN" | "en" | "ja") | null;
             profile?: components["schemas"]["ModelProfileUpdate"] | null;
+        };
+        /** SimulationAssertion */
+        SimulationAssertion: {
+            actual?: components["schemas"]["JsonValue"];
+            /** Address */
+            address: string;
+            /** At Ms */
+            at_ms: number;
+            /** Data Type */
+            data_type?: string | null;
+            /** Detail */
+            detail: string;
+            expected?: components["schemas"]["JsonValue"];
+            /** Passed */
+            passed: boolean;
+            /** Step Id */
+            step_id: string;
+            /** Wait For */
+            wait_for?: boolean | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SimulationCaseResult */
+        SimulationCaseResult: {
+            /** Assertions */
+            assertions: components["schemas"]["SimulationAssertion"][];
+            /** Backend Kind */
+            backend_kind?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Display Name */
+            display_name?: string | null;
+            /** Duration Ms */
+            duration_ms?: number | null;
+            /** Environment Failure */
+            environment_failure?: boolean | null;
+            /** Error */
+            error?: string | null;
+            /** Execution Started */
+            execution_started?: boolean | null;
+            /** Fault Injections */
+            fault_injections?: components["schemas"]["SimulationFault"][] | null;
+            /** Invariant Violations */
+            invariant_violations: components["schemas"]["SimulationViolation"][];
+            /** Name */
+            name: string;
+            /** Passed */
+            passed?: boolean | null;
+            /** Plc Model */
+            plc_model?: string | null;
+            scan_monitor?: components["schemas"]["ScanMonitor"] | null;
+            /** Setup Stage */
+            setup_stage?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            /** Status */
+            status: string;
+            /** Trace */
+            trace: components["schemas"]["SimulationTrace"][];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SimulationCounts */
+        SimulationCounts: {
+            /** Error */
+            error?: number | null;
+            /** Failed */
+            failed?: number | null;
+            /** Passed */
+            passed?: number | null;
+            /** Unavailable */
+            unavailable?: number | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SimulationDevice */
+        SimulationDevice: {
+            /** Address */
+            address: string;
+            /** Label */
+            label: string;
+            /** Writable */
+            writable: boolean;
+        };
+        /** SimulationDraft */
+        SimulationDraft: {
+            suite: components["schemas"]["SimulationSuite"];
+        };
+        /** SimulationEditor */
+        SimulationEditor: {
+            default_expectation: components["schemas"]["Expectation"];
+            /** Default Input Value */
+            default_input_value: number;
+            empty_suite: components["schemas"]["SimulationSuite"];
+            /** Maximum Duration Ms */
+            maximum_duration_ms: number;
+            /** Minimum Interval Ms */
+            minimum_interval_ms: number;
+            /** Operators */
+            operators: components["schemas"]["OperatorOption"][];
+            /** Poll Ms */
+            poll_ms: number;
+            /** Wait Timeout Ms */
+            wait_timeout_ms: number;
+        };
+        /** SimulationFault */
+        SimulationFault: {
+            /** At Ms */
+            at_ms: number;
+            /** Delay Ms */
+            delay_ms?: number | null;
+            /** Device */
+            device: string;
+            /** Duration Ms */
+            duration_ms?: number | null;
+            /** Interval Ms */
+            interval_ms?: number | null;
+            /** Type */
+            type: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SimulationInvariant */
+        SimulationInvariant: {
+            /** Allow Repeat */
+            allow_repeat?: boolean | null;
+            /** Allowed */
+            allowed?: components["schemas"]["JsonValue"][] | null;
+            /** Device */
+            device?: string | null;
+            /** Devices */
+            devices?: string[] | null;
+            /** Duration Ms */
+            duration_ms?: number | null;
+            /** Name */
+            name?: string | null;
+            /** Type */
+            type: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SimulationPlan */
+        SimulationPlan: {
+            binding: components["schemas"]["PlanBinding"];
+            /** Issue Ids */
+            issue_ids: string[];
+            /** Requirement Links */
+            requirement_links: {
+                [key: string]: string[];
+            };
+            /** Schema Version */
+            schema_version: number;
+            /** Source */
+            source: string;
+            /** Source Plan Id */
+            source_plan_id: string | null;
+            suite: components["schemas"]["SimulationSuite"];
+            /** Suite Sha256 */
+            suite_sha256: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SimulationReplay */
+        SimulationReplay: {
+            binding: components["schemas"]["EvidenceBinding"];
+            /** Cases */
+            cases: components["schemas"]["ReplayCase"][];
+            /** Run Id */
+            run_id: string;
+            /** Status */
+            status: string;
+            timeline?: components["schemas"]["SimulationTimeline"] | null;
+            verification: components["schemas"]["Verification"];
+            /** Version Id */
+            version_id: string;
+        };
+        /** SimulationResult */
+        SimulationResult: {
+            /** Attempted Count */
+            attempted_count?: number | null;
+            /** Backend Kinds */
+            backend_kinds?: string[] | null;
+            counts?: components["schemas"]["SimulationCounts"] | null;
+            /** Display Name */
+            display_name?: string | null;
+            /** Executed Count */
+            executed_count?: number | null;
+            /** Name */
+            name?: string | null;
+            /** Not Executed Count */
+            not_executed_count?: number | null;
+            /** Passed */
+            passed?: boolean | null;
+            /** Plc Model */
+            plc_model?: string | null;
+            /** Results */
+            results: components["schemas"]["SimulationCaseResult"][];
+            /** Schema Version */
+            schema_version?: number | null;
+            /** Status */
+            status: string;
+            /** Suite Sha256 */
+            suite_sha256?: string | null;
+            /** Test Count */
+            test_count?: number | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SimulationRun */
+        SimulationRun: {
+            binding: components["schemas"]["EvidenceBinding"];
+            result: components["schemas"]["SimulationResult"];
+            /** Schema Version */
+            schema_version: number;
+            suite: components["schemas"]["SimulationSuite"];
+            verification: components["schemas"]["Verification"];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SimulationRunSummary */
+        SimulationRunSummary: {
+            /** Created At */
+            created_at?: string | null;
+            /** Run Id */
+            run_id: string | null;
+            /** Status */
+            status?: string | null;
+            /** Suite Name */
+            suite_name?: string | null;
+            verification?: components["schemas"]["Verification"] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SimulationStep */
+        SimulationStep: {
+            /** At Ms */
+            at_ms: number;
+            /** Expect */
+            expect: components["schemas"]["Expectation"][];
+            /** Id */
+            id: string;
+            /** Poll Ms */
+            poll_ms?: number | null;
+            /** Set */
+            set: {
+                [key: string]: number;
+            };
+            /** Timeout Ms */
+            timeout_ms?: number | null;
+            /** Wait For */
+            wait_for: components["schemas"]["Expectation"][];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SimulationSuite */
+        SimulationSuite: {
+            /** Name */
+            name: string;
+            /** Plc Model */
+            plc_model: string;
+            /** Schema Version */
+            schema_version?: number | null;
+            /** Tests */
+            tests: components["schemas"]["SimulationTest"][];
+        };
+        /** SimulationTest */
+        SimulationTest: {
+            /** Description */
+            description?: string | null;
+            /** Fault Injections */
+            fault_injections?: components["schemas"]["SimulationFault"][] | null;
+            /** Initial */
+            initial: {
+                [key: string]: number;
+            };
+            /** Invariants */
+            invariants?: components["schemas"]["SimulationInvariant"][] | null;
+            /** Metadata */
+            metadata?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Name */
+            name: string;
+            /** Plc Model */
+            plc_model: string;
+            /** Sample Ms */
+            sample_ms: number;
+            /** Steps */
+            steps: components["schemas"]["SimulationStep"][];
+            /** Timeout Ms */
+            timeout_ms: number;
+            /** Trace Devices */
+            trace_devices: string[];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SimulationTimeline */
+        SimulationTimeline: {
+            binding: components["schemas"]["TimelineBinding"];
+            config: components["schemas"]["TimelineConfig"];
+            /** Dropped Samples */
+            dropped_samples: number;
+            /** Elapsed Ms */
+            elapsed_ms: number;
+            /** Error */
+            error: string;
+            /** Events */
+            events: components["schemas"]["TimelineEvent"][];
+            latest: components["schemas"]["TimelineSample"] | null;
+            /** Revision */
+            revision: number;
+            /** Sample Count */
+            sample_count: number;
+            /** Samples */
+            samples: components["schemas"]["TimelineSample"][];
+            /** Schema Version */
+            schema_version: number;
+            /** Sequence */
+            sequence: number;
+            source: components["schemas"]["TimelineSource"];
+            /** Status */
+            status: string;
+            /** View Id */
+            view_id: string;
+        };
+        /** SimulationTrace */
+        SimulationTrace: {
+            /** At Ms */
+            at_ms: number;
+            /** Backend Kind */
+            backend_kind?: string | null;
+            /** Error */
+            error?: string | null;
+            /** Event */
+            event: string;
+            /** Step Id */
+            step_id?: string | null;
+            /** Values */
+            values?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SimulationViolation */
+        SimulationViolation: {
+            /** At Ms */
+            at_ms: number;
+            /** Invariant Index */
+            invariant_index: number;
+            /** Message */
+            message: string;
+            /** Name */
+            name: string;
+            /** Type */
+            type: string;
+            /** Values */
+            values: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SimulationWorkbench */
+        SimulationWorkbench: {
+            /** Devices */
+            devices: components["schemas"]["SimulationDevice"][];
+            editor: components["schemas"]["SimulationEditor"];
+            /** Ir Sha256 */
+            ir_sha256: string;
+            /** Plans */
+            plans: components["schemas"]["SimulationPlan"][];
+            /** Plc Model */
+            plc_model: string;
+            /** Project Id */
+            project_id: string;
+            /** Requirements */
+            requirements: components["schemas"]["Requirement"][];
+            /** Runs */
+            runs: components["schemas"]["SimulationRunSummary"][];
+            /** Unavailable Plans */
+            unavailable_plans: components["schemas"]["UnavailablePlan"][];
+            /** Unavailable Runs */
+            unavailable_runs: string[];
+            /** Version Id */
+            version_id: string;
         };
         /** SimulatorDraftEdit */
         SimulatorDraftEdit: {
@@ -2730,6 +6826,68 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** SourceDefinition */
+        SourceDefinition: {
+            /** Declarations */
+            declarations?: components["schemas"]["FBDLabel"][] | null;
+            interface?: components["schemas"]["DefinitionInterface"] | null;
+            /** Kind */
+            kind: string;
+            /** Language */
+            language?: string | null;
+            /** Members */
+            members?: components["schemas"]["FBDLabel"][] | null;
+            model?: components["schemas"]["FBDModel"] | null;
+            /** Name */
+            name: string;
+            /** Program */
+            program?: string | null;
+            /** St Text */
+            st_text?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SourceIssue */
+        SourceIssue: {
+            /** Code */
+            code?: string | null;
+            /** Message */
+            message?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SourceSnapshotEnvelope */
+        SourceSnapshotEnvelope: {
+            data?: components["schemas"]["SourceSnapshotToolData"] | null;
+            error?: components["schemas"]["NativeToolError"] | null;
+            /** Ok */
+            ok: boolean;
+            /**
+             * Tool
+             * @enum {string}
+             */
+            tool: "read_fbd_project" | "read_sfc_project" | "read_fbd_definition" | "create_fbd_candidate" | "create_sfc_candidate";
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SourceSnapshotToolData */
+        SourceSnapshotToolData: {
+            /** Available */
+            available?: boolean | null;
+            definition?: components["schemas"]["SourceDefinition"] | null;
+            /** Definitions */
+            definitions?: components["schemas"]["SourceDefinition"][] | null;
+            /** Gx Compile */
+            gx_compile?: string | null;
+            /** Model */
+            model?: components["schemas"]["FBDModel"] | components["schemas"]["SFCModel"] | null;
+            /** Programs */
+            programs?: string[] | null;
+            /** Version Id */
+            version_id?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
         /** SpecIORowEdit */
         SpecIORowEdit: {
             /** Address */
@@ -2746,6 +6904,15 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** SpecPresentationResource */
+        SpecPresentationResource: {
+            /** Behavior Constraints */
+            behavior_constraints: {
+                [key: string]: string;
+            }[];
+            /** Operation Intents */
+            operation_intents: components["schemas"]["OperationPresentation"][];
+        };
         /** SpecResult */
         SpecResult: {
             /** Hash */
@@ -2754,10 +6921,7 @@ export interface components {
             issues?: {
                 [key: string]: components["schemas"]["JsonValue"];
             } | null;
-            /** Spec */
-            spec?: {
-                [key: string]: components["schemas"]["JsonValue"];
-            } | null;
+            spec?: components["schemas"]["Specification"] | null;
             /** Valid */
             valid: boolean;
         };
@@ -2769,6 +6933,405 @@ export interface components {
             spec: {
                 [key: string]: unknown;
             };
+        };
+        /** Specification */
+        Specification: {
+            /** Approaches */
+            approaches?: components["schemas"]["SpecificationApproach"][] | null;
+            /** Behavior Constraints */
+            behavior_constraints?: components["schemas"]["SpecificationBehavior"][] | null;
+            /** Confirmed Behavior Ids */
+            confirmed_behavior_ids?: string[] | null;
+            /** Confirmed Operation Intent Ids */
+            confirmed_operation_intent_ids?: string[] | null;
+            /** Extensions */
+            extensions?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Io Table */
+            io_table?: components["schemas"]["IORow"][] | null;
+            /** Metadata */
+            metadata?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Operation Intents */
+            operation_intents?: components["schemas"]["SpecificationOperationIntent"][] | null;
+            /** Parameters */
+            parameters?: components["schemas"]["SpecificationParameter"][] | null;
+            /** Plc Model */
+            plc_model?: string | null;
+            /** Schema Version */
+            schema_version?: number | null;
+            selected_approach?: components["schemas"]["SpecificationApproach"] | null;
+            /** Structs */
+            structs?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Summary */
+            summary?: string | null;
+            /** User Notes */
+            user_notes?: string | null;
+            /** Variables */
+            variables?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SpecificationApproach */
+        SpecificationApproach: {
+            /** Approach Id */
+            approach_id?: string | null;
+            construction_plan?: components["schemas"]["SpecificationConstructionPlan"] | null;
+            /** Description */
+            description?: string | null;
+            /** Generation Guide */
+            generation_guide?: string | null;
+            /** Id */
+            id?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Title */
+            title?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SpecificationBehavior */
+        SpecificationBehavior: {
+            accept?: components["schemas"]["SpecificationExpression"] | null;
+            /** Edge */
+            edge?: string | null;
+            enable?: components["schemas"]["SpecificationExpression"] | null;
+            /** Events */
+            events?: string[] | null;
+            execution_context?: components["schemas"]["SpecificationExecutionContext"] | null;
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label?: string | null;
+            /** Output */
+            output?: string | null;
+            predicate?: components["schemas"]["SpecificationExpression"] | null;
+            provenance?: components["schemas"]["TextProvenance"] | null;
+            /** Ranges */
+            ranges?: components["schemas"]["InitializationRange"][] | null;
+            source?: components["schemas"]["SpecificationExpression"] | null;
+            /** Startup Policy */
+            startup_policy?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Transitions */
+            transitions?: components["schemas"]["BehaviorTransition"][] | null;
+            /** Values */
+            values?: {
+                [key: string]: number | boolean;
+            } | null;
+            when?: components["schemas"]["SpecificationExpression"] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SpecificationConstructionPlan */
+        SpecificationConstructionPlan: {
+            execution_context?: components["schemas"]["SpecificationExecutionContext"] | null;
+            /** Instances */
+            instances?: components["schemas"]["ConstructionInstance"][];
+            /** Internal Ranges */
+            internal_ranges?: components["schemas"]["ConstructionRange"][];
+            /** Occupied Devices */
+            occupied_devices?: string[] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SpecificationExecutionContext */
+        SpecificationExecutionContext: {
+            /** Cpu Version */
+            cpu_version?: string | null;
+            /** Initial Execution Program */
+            initial_execution_program?: boolean | null;
+            /** Program Type */
+            program_type?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SpecificationExpression */
+        SpecificationExpression: {
+            /** Args */
+            args?: components["schemas"]["SpecificationExpression"][];
+            /** Name */
+            name?: string | null;
+            /** Op */
+            op: string;
+            /** Overflow */
+            overflow?: string | null;
+            type: components["schemas"]["ExpressionValueType"];
+            value?: components["schemas"]["JsonValue"];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SpecificationOperationIntent */
+        SpecificationOperationIntent: {
+            /** Effects */
+            effects: components["schemas"]["OperationEffect"][];
+            enable: components["schemas"]["SpecificationExpression"];
+            execution?: components["schemas"]["OperationExecution"] | null;
+            /** Id */
+            id: string;
+            /** Label */
+            label?: string | null;
+            /** Opcode */
+            opcode?: string | null;
+            /** Parameters */
+            parameters?: {
+                [key: string]: components["schemas"]["SpecificationExpression"];
+            } | null;
+            provenance?: components["schemas"]["TextProvenance"] | null;
+            /** Status */
+            status?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SpecificationParameter */
+        SpecificationParameter: {
+            /** Id */
+            id?: string | null;
+            /** Label */
+            label?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Note */
+            note?: string | null;
+            note_provenance?: components["schemas"]["TextProvenance"] | null;
+            /** Options */
+            options?: string[] | null;
+            /** Question */
+            question?: string | null;
+            /** Required */
+            required?: boolean | null;
+            /** Required When */
+            required_when?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Semantic Key */
+            semantic_key?: string | null;
+            /** Source */
+            source?: string | null;
+            suggested_default?: components["schemas"]["JsonValue"];
+            value?: components["schemas"]["JsonValue"];
+            /** Value Kind */
+            value_kind?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** TaskProgram */
+        TaskProgram: {
+            /** Line */
+            line: number;
+            /** Name */
+            name: string;
+        };
+        /** TaskScope */
+        TaskScope: {
+            /** Event Name */
+            event_name?: string | null;
+            /** Interval */
+            interval?: string | null;
+            /** Priority */
+            priority?: number | null;
+            /** Programs */
+            programs: components["schemas"]["TaskProgram"][];
+            /** Resource */
+            resource: string;
+            /** Task */
+            task: string;
+        };
+        /** TaskScopes */
+        TaskScopes: {
+            /** Message */
+            message?: string | null;
+            /** Resources */
+            resources: string[];
+            /** Status */
+            status: string;
+            /** Tasks */
+            tasks: components["schemas"]["TaskScope"][];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** TextProvenance */
+        TextProvenance: {
+            /** Evidence */
+            evidence?: string[] | null;
+            /** Grounding Status */
+            grounding_status?: string | null;
+            /** Kind */
+            kind?: string | null;
+            /** Request Id */
+            request_id?: string | null;
+            /** Sha256 */
+            sha256?: string | null;
+            /** Source */
+            source?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** TimelineBinding */
+        TimelineBinding: {
+            /** Project Id */
+            project_id?: string | null;
+            /** Version Id */
+            version_id?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** TimelineConfig */
+        TimelineConfig: {
+            /** Duration Ms */
+            duration_ms: number;
+            /** Events */
+            events?: components["schemas"]["TimelinePlannedEvent"][] | null;
+            /** Plc Model */
+            plc_model: string;
+            /** Sample Ms */
+            sample_ms: number;
+            /** Signals */
+            signals: components["schemas"]["TimelineSignal"][];
+            /** Title */
+            title: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** TimelineEvent */
+        TimelineEvent: {
+            actual?: components["schemas"]["JsonValue"];
+            /** At Ms */
+            at_ms: number;
+            /** Error */
+            error?: string | null;
+            expected?: components["schemas"]["JsonValue"];
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Passed */
+            passed?: boolean | null;
+            /** Raw */
+            raw?: {
+                [key: string]: number | boolean;
+            } | null;
+            /** Seq */
+            seq: number;
+            /** Signal */
+            signal?: string | null;
+            /** Values */
+            values?: {
+                [key: string]: number | boolean;
+            } | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** TimelinePlannedEvent */
+        TimelinePlannedEvent: {
+            /** At Ms */
+            at_ms: number;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** TimelineSample */
+        TimelineSample: {
+            /** At Ms */
+            at_ms: number;
+            /** Case */
+            case?: string | null;
+            /** Errors */
+            errors: {
+                [key: string]: string;
+            };
+            /** Read At */
+            read_at?: string | null;
+            /** Seq */
+            seq: number;
+            /** Values */
+            values: {
+                [key: string]: number | boolean | null;
+            };
+        };
+        /** TimelineSignal */
+        TimelineSignal: {
+            /** Address */
+            address: string;
+            /** Addresses */
+            addresses: string[];
+            /** Cases */
+            cases?: string[] | null;
+            /** Data Type */
+            data_type: string;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Role */
+            role: string;
+            /** Unit */
+            unit: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** TimelineSource */
+        TimelineSource: {
+            /** Backend Kind */
+            backend_kind?: string | null;
+            /** Kind */
+            kind: string;
+            /** Note */
+            note?: string | null;
+            /** Physical Plc */
+            physical_plc?: boolean | null;
+            /** Program Correspondence */
+            program_correspondence?: string | null;
+            /** Route */
+            route?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** TimingPropertyChange */
+        TimingPropertyChange: {
+            after: components["schemas"]["ProgramTiming"] | null;
+            before: components["schemas"]["ProgramTiming"] | null;
+        };
+        /** TimingSource */
+        TimingSource: {
+            /** Manual */
+            manual: string;
+            /** Pdf Page */
+            pdf_page?: number | null;
+            /** Pdf Pages */
+            pdf_pages?: number[] | null;
+            /** Section */
+            section: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** UnavailablePlan */
+        UnavailablePlan: {
+            /** Message */
+            message: string;
+            /** Plan Id */
+            plan_id: string | null;
+        };
+        /** UnsupportedModel */
+        UnsupportedModel: {
+            /** Cpu */
+            cpu: string;
+            /** Reason */
+            reason: string;
+            /** Status */
+            status: string;
         };
         /** Validation */
         Validation: {
@@ -2792,6 +7355,17 @@ export interface components {
             /** Error Type */
             type: string;
         };
+        /** Verification */
+        Verification: {
+            /** Category */
+            category?: string | null;
+            /** Program Repair Allowed */
+            program_repair_allowed?: boolean | null;
+            /** Status */
+            status: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
         /** Version */
         Version: {
             /** Artifacts */
@@ -2799,10 +7373,7 @@ export interface components {
             capabilities: components["schemas"]["Capabilities"];
             /** Confirmed Spec Hash */
             confirmed_spec_hash?: string | null;
-            /** Confirmed Spec Snapshot */
-            confirmed_spec_snapshot?: {
-                [key: string]: components["schemas"]["JsonValue"];
-            } | null;
+            confirmed_spec_snapshot?: components["schemas"]["Specification"] | null;
             /** Created At */
             created_at?: string | null;
             /** Debug Attempts */
@@ -2844,6 +7415,24 @@ export interface components {
             /** Target Mode */
             target_mode?: string | null;
             validation?: components["schemas"]["Validation"] | null;
+        };
+        /** VersionPreview */
+        VersionPreview: {
+            ladder: components["schemas"]["LadderDocument"];
+            program: components["schemas"]["PLCProgram"];
+            /** Read Only */
+            read_only: boolean;
+            /** St */
+            st: string;
+            /** Svg */
+            svg: string;
+            /**
+             * Target Mode
+             * @constant
+             */
+            target_mode: "ladder";
+            /** Version Id */
+            version_id: string;
         };
     };
     responses: never;
@@ -2966,7 +7555,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["FBDCatalog"];
                 };
             };
             /** @description Validation Error */
@@ -2999,7 +7588,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["FBDEditorView"];
                 };
             };
             /** @description Validation Error */
@@ -3032,7 +7621,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["FBDInspection"];
                 };
             };
             /** @description Validation Error */
@@ -3055,7 +7644,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["FBDPreview-Input"];
+                "application/json": components["schemas"]["FBDPreview"];
             };
         };
         responses: {
@@ -3065,7 +7654,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["FBDDraftPreview"];
                 };
             };
             /** @description Validation Error */
@@ -3438,7 +8027,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["Exploration"];
                 };
             };
             /** @description Validation Error */
@@ -3502,7 +8091,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["GenerationLadderPreview"] | components["schemas"]["GenerationFBDPreview"] | components["schemas"]["GenerationSFCPreview"] | components["schemas"]["GenerationSTPreview"];
                 };
             };
             /** @description Validation Error */
@@ -3672,7 +8261,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["DeleteProjectResult"];
                 };
             };
             /** @description Validation Error */
@@ -3809,7 +8398,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["ReportDocument"];
                 };
             };
             /** @description Validation Error */
@@ -3944,7 +8533,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["DeliverySummary"];
                 };
             };
             /** @description Validation Error */
@@ -3976,7 +8565,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["DiagnosticsEnvelope"];
                 };
             };
             /** @description Validation Error */
@@ -4010,7 +8599,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["Exploration"];
                 };
             };
             /** @description Validation Error */
@@ -4074,7 +8663,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["HardwareState"];
                 };
             };
             /** @description Validation Error */
@@ -4110,7 +8699,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["HardwareSession"];
                 };
             };
             /** @description Validation Error */
@@ -4147,7 +8736,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["HardwareSession"];
                 };
             };
             /** @description Validation Error */
@@ -4184,7 +8773,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["HardwareObservation"];
                 };
             };
             /** @description Validation Error */
@@ -4217,7 +8806,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["HardwareSession"];
                 };
             };
             /** @description Validation Error */
@@ -4251,7 +8840,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["IssueList"];
                 };
             };
             /** @description Validation Error */
@@ -4283,7 +8872,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["NativeEvidence"];
                 };
             };
             /** @description Validation Error */
@@ -4319,7 +8908,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["NativeRecord"];
                 };
             };
             /** @description Validation Error */
@@ -4355,7 +8944,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AgentToolResult"];
+                    "application/json": components["schemas"]["NativeValidationToolResult"];
                 };
             };
             /** @description Validation Error */
@@ -4422,7 +9011,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["VersionPreview"];
                 };
             };
             /** @description Validation Error */
@@ -4454,7 +9043,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NullablePublicObject"];
+                    "application/json": components["schemas"]["PLCProgram"] | components["schemas"]["FBDModel"] | components["schemas"]["SFCModel"] | components["schemas"]["LadderDocument"] | null;
                 };
             };
             /** @description Validation Error */
@@ -4487,7 +9076,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["SimulationRun"];
                 };
             };
             /** @description Validation Error */
@@ -4519,7 +9108,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["SimulationWorkbench"];
                 };
             };
             /** @description Validation Error */
@@ -4555,7 +9144,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["SimulationDraft"];
                 };
             };
             /** @description Validation Error */
@@ -4626,7 +9215,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["SimulationPlan"];
                 };
             };
             /** @description Validation Error */
@@ -4659,7 +9248,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["SimulationReplay"];
                 };
             };
             /** @description Validation Error */
@@ -4822,7 +9411,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["Exploration"];
                 };
             };
             /** @description Validation Error */
@@ -4855,7 +9444,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LadderPreview"] | components["schemas"]["STPreview"] | components["schemas"]["FBDPreview-Output"] | components["schemas"]["SFCPreview-Output"] | components["schemas"]["ExecutionPreview"];
+                    "application/json": components["schemas"]["LadderPreview"] | components["schemas"]["STPreview"] | components["schemas"]["FBDPreviewResource"] | components["schemas"]["SFCPreviewResource"] | components["schemas"]["ExecutionPreview"];
                 };
             };
             /** @description Validation Error */
@@ -5336,7 +9925,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SFCPreview-Input"];
+                "application/json": components["schemas"]["SFCPreview"];
             };
         };
         responses: {
@@ -5346,7 +9935,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["SFCPreviewResource"];
                 };
             };
             /** @description Validation Error */
@@ -5446,7 +10035,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["SFCSource"];
                 };
             };
             /** @description Validation Error */
@@ -5479,7 +10068,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["IORow"];
                 };
             };
             /** @description Validation Error */
@@ -5512,7 +10101,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicObject"];
+                    "application/json": components["schemas"]["SpecPresentationResource"];
                 };
             };
             /** @description Validation Error */

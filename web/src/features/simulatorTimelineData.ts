@@ -1,12 +1,9 @@
-export type Signal = { id: string; label: string; address: string; addresses: string[]; data_type: string; role: string; unit: string };
-export type Sample = { seq: number; at_ms: number; values: Record<string, number | boolean | null>; errors: Record<string, string>; case?: string; read_at?: string };
-export type TraceEvent = { seq: number; at_ms: number; kind: string; label: string; signal?: string; expected?: unknown; actual?: unknown; passed?: boolean; error?: string; raw?: Record<string, number>; values?: Record<string, number | boolean> };
-export type TraceState = {
-  schema_version: number; view_id: string; config: { title: string; plc_model: string; signals: Signal[]; duration_ms: number; sample_ms: number; events?: { at_ms: number; label: string; kind: string }[] };
-  source: { kind: string; route?: string; program_correspondence?: string; physical_plc?: boolean; backend_kind?: string; note?: string };
-  binding: Record<string, string>; status: string; error: string; revision: number; sequence: number;
-  sample_count: number; dropped_samples: number; latest: Sample | null; samples: Sample[]; events: TraceEvent[]; elapsed_ms: number;
-};
+import type { ApiSchema } from "../api/client";
+
+export type Signal = ApiSchema["TimelineSignal"];
+export type Sample = ApiSchema["TimelineSample"];
+export type TraceEvent = ApiSchema["TimelineEvent"];
+export type TraceState = ApiSchema["SimulationTimeline"];
 
 export function mergeTrace(previous: TraceState | null, incoming: TraceState): TraceState {
   if (!previous || previous.view_id !== incoming.view_id) return incoming;

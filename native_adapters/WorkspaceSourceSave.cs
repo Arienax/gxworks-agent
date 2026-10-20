@@ -494,6 +494,7 @@ namespace PlcAi.NativeAdapter
                 bool exact = Equal(actual, Body(wanted[key]["body"]));
                 Event(new { operation = "NativeSfcChildRead", stage = stage, identity = facts, parent = owner.Words,
                     bytes = actual.Length, file = file, expected_source_exact = exact,
+                    evidence = WorkspaceEvidence.Describe(EvidenceOrigin.SourceBody),
                     provenance = "original Workspace.GetPOUBodyData(1692); source bytes, not compiled PCode" });
                 if (!exact) throw new InvalidOperationException("native_sfc_child_body_differs");
                 selected.Add(key, child);

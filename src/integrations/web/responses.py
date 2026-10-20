@@ -1,70 +1,16 @@
-"""Public HTTP resource contracts, independent of desktop and model runtimes.
-
-Transport models validate an already-public application projection. Unknown
-resource fields fail explicitly instead of Pydantic silently dropping them.
-Engineering documents and extension maps retain their complete JSON content.
-"""
+"""Public HTTP resources; application owners select the public projection."""
 from __future__ import annotations
-
-from collections.abc import Mapping
-from shared.privacy import private_field
 from typing import Literal
+from pydantic import ConfigDict, Field, JsonValue, StrictBool, model_validator
+from .response_types import (JsonObject, EngineeringObject, EngineeringMap, PublicResource,
+    ExtensibleResource, PublicObject, NullablePublicObject, _require_public)
+from .program_contracts import (ProgramDocument, PLCProgram, LadderDocument, FBDModel, SFCModel,
+    FBDNode, FBDLabel, FBDCatalog, FBDEditorView, FBDInspection, FBDDraftPreview, SFCSource,
+    DeclarationEdit, IRNetwork, ProgramTiming, FBDParameterModel, SourceDefinition,
+    PropertyChange, ProgramPropertyChanges, SourceIssue)
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, RootModel, model_validator
-
-
-JsonObject = dict[str, JsonValue]
-
-
-def _require_public(value):
-    """Reject private keys without removing legitimate engineering metadata.
-
-    In particular, json_path, source locations, validation details and new
-    capability keys remain intact. Absolute-path redaction belongs to the
-    application projection, which can distinguish paths from source text.
-    """
-    if isinstance(value, BaseModel):
-        value = value.model_dump(mode="python")
-    if isinstance(value, Mapping):
-        for key, nested in value.items():
-            key = str(key)
-            if private_field(key):
-                # Do not include a rejected key/value in the diagnostic message.
-                raise ValueError("Private data cannot be returned as an HTTP resource")
-            _require_public(nested)
-    elif isinstance(value, (list, tuple)):
-        for nested in value:
-            _require_public(nested)
-    return value
-
-
-class PublicResource(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    @model_validator(mode="before")
-    @classmethod
-    def require_public(cls, value):
-        return _require_public(value)
-
-
-class ExtensibleResource(PublicResource):
-    """Typed common fields plus lossless public engineering extensions."""
-    model_config = ConfigDict(extra="allow")
-    __pydantic_extra__: dict[str, JsonValue] = Field(init=False)
-
-
-class PublicObject(RootModel[JsonObject]):
-    @model_validator(mode="before")
-    @classmethod
-    def require_public(cls, value):
-        return _require_public(value)
-
-
-class NullablePublicObject(RootModel[JsonObject | None]):
-    @model_validator(mode="before")
-    @classmethod
-    def require_public(cls, value):
-        return _require_public(value)
+from .workbench_contracts import *
+from .native_contracts import NativeCheck, NativeDiagnostic, NativeCheckState
 
 
 class MCPIntegrationStatus(PublicResource):
@@ -142,7 +88,7 @@ class Version(PublicResource):
     parent_version_id: str | None = None
     ir_sha256: str | None = None
     confirmed_spec_hash: str | None = None
-    confirmed_spec_snapshot: JsonObject | None = None
+    confirmed_spec_snapshot: Specification | None = None
     gx_sync: JsonObject | None = None
     simulator_runs: list[JsonObject] | None = None
     simulator_test_plans: list[JsonObject] | None = None
@@ -184,7 +130,7 @@ class Project(PublicResource):
     updated_at: str | None = None
     effort: str | None = None
     active_version_id: str | None = None
-    confirmed_spec: JsonObject | None = None
+    confirmed_spec: Specification | None = None
     confirmed_spec_hash: str | None = None
     versions: list[Version] = Field(default_factory=list)
     messages: list[ProjectMessage] = Field(default_factory=list)
@@ -247,7 +193,7 @@ class JobEvent(PublicResource):
     version_id: str | None = None
     sequence: int = Field(ge=1)
     event_type: str
-    payload: JsonObject = Field(default_factory=dict)
+    payload: EventPayload = Field(default_factory=EventPayload)
     created_at: str
 
 
@@ -255,8 +201,8 @@ class JobOutput(ExtensibleResource):
     clarification_job_id: str | None = None
     missing_info: list[JsonObject] | None = None
     version_id: str | None = None
-    analysis: JsonObject | None = None
-    spec_draft: JsonObject | None = None
+    analysis: Specification | None = None
+    spec_draft: Specification | None = None
     spec_base_hash: str | None = None
     base_version_id: str | None = None
     generation: JsonObject | None = None
@@ -300,19 +246,14 @@ class NetworkChange(PublicResource):
     network: str
     comment: str
     instruction_count: int
-    before: JsonObject | None
-    after: JsonObject | None
+    before: IRNetwork | None
+    after: IRNetwork | None
 
 
 class DeviceCommentChange(PublicResource):
     address: str
     before: str | None
     after: str | None
-
-
-class PropertyChange(PublicResource):
-    before: JsonValue
-    after: JsonValue
 
 
 class LadderProgramDiff(PublicResource):
@@ -330,7 +271,7 @@ class LadderProgramDiff(PublicResource):
     before_network_order: list[str]
     after_network_order: list[str]
     network_order_changed: bool
-    property_changes: dict[str, PropertyChange]
+    property_changes: ProgramPropertyChanges
 
 
 class STTextDiff(PublicResource):
@@ -344,8 +285,8 @@ class STTextDiff(PublicResource):
 
 class LadderPreview(PublicResource):
     target_mode: Literal["ladder"]
-    ladder: JsonObject
-    program: JsonObject
+    ladder: LadderDocument
+    program: PLCProgram
     svg: str
     st: str
     diff: LadderProgramDiff
@@ -365,8 +306,33 @@ class FBDLibraryChanges(PublicResource):
 
 
 class FBDDefinitionChanges(PublicResource):
-    before: JsonObject | None
-    after: JsonObject
+    before: SourceDefinition | None
+    after: SourceDefinition
+
+
+class SavedCodeChannel(PublicResource):
+    channel: int
+    saved_bytes: int
+    generated_bytes: int
+    matches: StrictBool
+
+
+class SavedCodeResource(PublicResource):
+    resource: str
+    status: str
+    channels: list[SavedCodeChannel]
+
+
+class SavedCodeComparison(PublicResource):
+    status: str
+    resources: list[SavedCodeResource]
+
+
+class FBDCompilationSave(PublicResource):
+    public_check: NativeCheckState
+    saved_code: SavedCodeComparison
+    gui_configuration: str
+    execution: str
 
 
 class FBDDiff(PublicResource):
@@ -381,30 +347,46 @@ class FBDDiff(PublicResource):
     declarations_changed: bool
     library_changes: FBDLibraryChanges | None = None
     definition_changes: FBDDefinitionChanges | None = None
-    compilation_save: JsonObject | None = None
+    compilation_save: FBDCompilationSave | None = None
 
 
-class FBDPreview(PublicResource):
+class FBDPreviewResource(PublicResource):
     target_mode: Literal["fbd"]
-    program: JsonObject
+    program: FBDModel
     svg: str
     diff: FBDDiff
-    editor: JsonObject
+    editor: FBDEditorView
+
+
+class SFCModifiedChild(PublicResource):
+    kind: str
+    name: str
 
 
 class SFCDiff(PublicResource):
     kind: Literal['sfc']
     base_version_id: str | None = None
     has_changes: bool
-    modified_children: list[JsonObject]
+    modified_children: list[SFCModifiedChild]
     unified_diff: str
 
 
-class SFCPreview(PublicResource):
+class SFCPreviewValidation(ExtensibleResource):
+    status: str
+    gx_compile: str | None = None
+    native_save: str | None = None
+    native_source_save_required: StrictBool | None = None
+    position_resolution: str | None = None
+    issues: list[str | SourceIssue] | None = None
+    messages: list[str] | None = None
+
+
+class SFCPreviewResource(PublicResource):
     target_mode: Literal['sfc']
-    program: JsonObject
-    validation: JsonObject
+    program: SFCModel
+    validation: SFCPreviewValidation
     diff: SFCDiff
+    gx_compile: str | None = None
 
 
 class ExecutionPreview(PublicResource):
@@ -412,13 +394,48 @@ class ExecutionPreview(PublicResource):
     version_id: str
     version: Version
     target_mode: str
-    program: JsonObject | None
+    program: ProgramDocument | None
     svg: str | None
     st: str | None
     plan: JsonObject | None = None
 
 
-ProposalPreview = LadderPreview | STPreview | FBDPreview | SFCPreview | ExecutionPreview
+ProposalPreview = LadderPreview | STPreview | FBDPreviewResource | SFCPreviewResource | ExecutionPreview
+# Existing Python consumers keep their imports; schema names distinguish these
+# resources from the request models with the same historical short names.
+FBDPreview = FBDPreviewResource
+SFCPreview = SFCPreviewResource
+
+
+class GenerationLadderPreview(LadderPreview):
+    diff: LadderProgramDiff | None = None
+    job_id: str
+    read_only: bool
+    proposal_id: str | None = None
+    status: str | None = None
+    contract_mismatch: JsonObject | None = None
+    validation: JsonObject | None = None
+
+
+class GenerationFBDPreview(FBDPreviewResource):
+    job_id: str
+    read_only: bool
+    proposal_id: str | None = None
+
+
+class GenerationSFCPreview(SFCPreviewResource):
+    job_id: str
+    read_only: bool
+    proposal_id: str | None = None
+
+
+class GenerationSTPreview(STPreview):
+    job_id: str
+    read_only: bool
+    proposal_id: str | None = None
+
+
+GenerationPreview = GenerationLadderPreview | GenerationFBDPreview | GenerationSFCPreview | GenerationSTPreview
 
 
 class ModelProfile(PublicResource):
@@ -479,7 +496,7 @@ class Environment(PublicResource):
 
 class SpecResult(PublicResource):
     valid: bool
-    spec: JsonObject | None = None
+    spec: Specification | None = None
     hash: str | None = None
     issues: JsonObject | None = None
 
@@ -500,15 +517,178 @@ class AgentTools(PublicResource):
     tools: list[JsonObject]
 
 
+class NativeToolError(ExtensibleResource):
+    code: str
+    message: str
+    next_actions: list[JsonObject] | None = None
+
+
+class NativeCheckEnvelope(ExtensibleResource):
+    ok: bool
+    tool: Literal["validate_project"]
+    data: NativeCheck | None = None
+    error: NativeToolError | None = None
+
+
+class DeviceSummary(ExtensibleResource):
+    count: int
+    by_type: dict[str, int]
+    addresses: list[str]
+    truncated: bool | None = None
+
+
+class NetworkSummary(ExtensibleResource):
+    id: str
+    comment: str | None = None
+    instruction_count: int
+    reads: list[str] | None = None
+    writes: list[str] | None = None
+
+
+class ProgramInfoToolData(ExtensibleResource):
+    available: bool | None = None
+    version_id: str | None = None
+    target_mode: str | None = None
+    program_name: str | None = None
+    plc_model: str | None = None
+    devices: DeviceSummary | None = None
+    timing: ProgramTiming | None = None
+    network_count: int | None = None
+    networks_truncated: bool | None = None
+    networks: list[NetworkSummary] | None = None
+    metadata: EngineeringObject | None = None
+    declaration_edits: EngineeringMap[DeclarationEdit] | None = None
+
+
+class SourceSnapshotToolData(ExtensibleResource):
+    available: bool | None = None
+    version_id: str | None = None
+    model: FBDModel | SFCModel | None = None
+    programs: list[str] | None = None
+    gx_compile: str | None = None
+    definitions: list[SourceDefinition] | None = None
+    definition: SourceDefinition | None = None
+
+
+class ProgramInfoEnvelope(ExtensibleResource):
+    ok: bool
+    tool: Literal["get_current_program_info"]
+    data: ProgramInfoToolData | None = None
+    error: NativeToolError | None = None
+
+
+class ReadNetworkSnapshot(ExtensibleResource):
+    id: str
+    comment: str | None = None
+    instructions: list[Instruction] | None = None
+    raw_instructions: list[JsonObject] | None = None
+
+
+class ReadNetworkData(ExtensibleResource):
+    network: ReadNetworkSnapshot
+    raw_instructions: list[JsonObject] | None = None
+    coverage: JsonObject | str | None = None
+
+
+class NetworkEnvelope(ExtensibleResource):
+    ok: bool
+    tool: Literal["read_network"]
+    data: ReadNetworkData | None = None
+    error: NativeToolError | None = None
+
+
+class DiagnosticsEnvelope(ExtensibleResource):
+    ok: bool
+    tool: Literal["get_diagnostics"]
+    data: Diagnostics | None = None
+    error: NativeToolError | None = None
+
+
+class SourceSnapshotEnvelope(ExtensibleResource):
+    ok: bool
+    tool: Literal["read_fbd_project", "read_sfc_project", "read_fbd_definition",
+                  "create_fbd_candidate", "create_sfc_candidate"]
+    data: SourceSnapshotToolData | None = None
+    error: NativeToolError | None = None
+
+
+class CatalogEnvelope(ExtensibleResource):
+    ok: bool
+    tool: Literal["get_fbd_catalog"]
+    data: FBDCatalog | None = None
+    error: NativeToolError | None = None
+
+
+class GenerationCatalog(FBDCatalog):
+    empty_model: FBDModel | FBDParameterModel
+
+
+class GenerationInput(ExtensibleResource):
+    previous: FBDModel | FBDParameterModel | None = None
+    parameter_schema: EngineeringObject | None = None
+
+
+class GenerationOutputContract(ExtensibleResource):
+    model_config = ConfigDict(serialize_by_alias=True)
+    tool: str | None = None
+    operation: str | None = None
+    protocol: str | None = None
+    schema_version: int | None = None
+    input_shape: str | None = None
+    schema_document: EngineeringObject | None = Field(default=None, alias="schema")
+    model_schema: EngineeringObject | None = None
+
+
+class GenerationContextToolData(ExtensibleResource):
+    project_id: str | None = None
+    target_mode: str | None = None
+    plc_model: str | None = None
+    confirmed_spec: Specification | None = None
+    user_facts: Specification | None = None
+    current_model: FBDModel | FBDParameterModel | SFCModel | None = None
+    catalog: GenerationCatalog | None = None
+    generation_input: GenerationInput | None = None
+    output_contract: GenerationOutputContract | None = None
+
+
+class GenerationContextEnvelope(ExtensibleResource):
+    ok: bool
+    tool: Literal["get_generation_context"]
+    data: GenerationContextToolData | None = None
+    error: NativeToolError | None = None
+
+
+class MetadataToolEnvelope(ExtensibleResource):
+    ok: bool
+    tool: str
+    data: JsonObject | None = None
+    error: NativeToolError | None = None
+
+
+ToolEnvelope = (ProgramInfoEnvelope | NetworkEnvelope | DiagnosticsEnvelope | SourceSnapshotEnvelope
+                | CatalogEnvelope | GenerationContextEnvelope | NativeCheckEnvelope | MetadataToolEnvelope)
+
+
 class AgentToolResult(PublicResource):
     version_id: str | None = None
     execution_job_id: str | None = None
-    data: JsonObject
+    data: ToolEnvelope
     content: str
     is_error: bool
     call_id: str
     name: str
     proposal_id: str | None = None
+
+    @model_validator(mode="after")
+    def tool_name_matches_owner(self):
+        if self.name != self.data.tool:
+            raise ValueError("Tool result owner does not match its registered name")
+        return self
+
+
+class NativeValidationToolResult(AgentToolResult):
+    name: Literal["validate_project"]
+    data: NativeCheckEnvelope
 
 
 class ErrorDetail(PublicResource):

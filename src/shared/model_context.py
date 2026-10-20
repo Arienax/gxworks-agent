@@ -136,6 +136,19 @@ def technical_block(value):
 
 def technical_knowledge_text(record):
     """Use the existing record's technical payload, without looking up sources."""
+    def render(value):
+        context = record.get('positioning_context')
+        if record.get('fact_kind') == 'positioning' and isinstance(context, Mapping):
+            value = dict(value) if isinstance(value, Mapping) else {'value': value}
+            value['applicability'] = {
+                'plc_model': technical_value(context.get('plc_model')),
+                'hardware_context': technical_value(context.get('hardware_context')),
+                'products': technical_value(context.get('products') or []),
+                'hardware_status': ('source_scoped' if record.get('positioning_hardware_status') == 'source_scoped'
+                                    else 'unverified'),
+            }
+        return technical_block(value)
+
     text = str(record.get('text') or '')
     for line in text.splitlines():
         if line.startswith('{'):
@@ -147,11 +160,11 @@ def technical_knowledge_text(record):
                 value = technical_fact_packet(packet)
                 if isinstance(record.get('device_definition'), Mapping):
                     value['device_definition'] = _device_definition(record['device_definition'])
-                return technical_block(value)
+                return render(value)
             if text.strip() == line.strip():
-                return technical_block(packet)
+                return render(packet)
     if isinstance(record.get('device_definition'), Mapping):
-        return technical_block({'kind': 'device', 'value': _device_definition(record['device_definition'])})
+        return render({'kind': 'device', 'value': _device_definition(record['device_definition'])})
     match = re.search(r'(?ms)^\[INSTRUCTION FACTS ([^\n]*)\]\n(.*?)\n\[/INSTRUCTION FACTS\]', text)
     if match:
         marker, body = json.loads(match[1]), json.loads(match[2])
@@ -161,12 +174,12 @@ def technical_knowledge_text(record):
             packet['value']['unresolved_operands'] = [{key: conflict[key] for key in
                 ('position', 'facet', 'reason') if key in conflict}
                 for conflict in record['operand_candidate_conflicts']]
-        return technical_block(packet)
+        return render(packet)
     # Historical parsers/debug fixtures may provide technical prose. Remove
     # their known citation wrappers without interpreting or truncating prose.
     text = re.sub(r'(?m)^\[/?(?:KNOWLEDGE|INSTRUCTION FACTS|UNINTERPRETED SOURCE|SHARED SOURCE REFERENCES)[^\n]*\]\s*$', '', text)
     text = re.sub(r'(?m)^(?:Reference role:|SOURCE:|SECTION:|MANUAL:|PDF PAGE:|CPU SOURCE SCOPE:)[^\n]*\n?', '', text)
-    return technical_block({'text': text.strip()}) if text.strip() else ''
+    return render({'text': text.strip()}) if text.strip() else ''
 
 
 def _device_definition(definition):

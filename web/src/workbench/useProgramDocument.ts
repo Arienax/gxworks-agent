@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Json, Project, Session } from "../api/client";
+import type { ProgramDocument, Project, Session } from "../api/client";
 import { api, artifactUrl } from "../api/client";
 
 export function useProgramDocument(
@@ -9,7 +9,7 @@ export function useProgramDocument(
   session: Session | null,
   setError: (message: string) => void,
 ) {
-  const [program, setProgram] = useState<Record<string, Json> | null>(null);
+  const [program, setProgram] = useState<ProgramDocument | null>(null);
   const [st, setSt] = useState("");
   const stArtifact = version?.artifacts?.find(
     (a) => ["st_from_ir", "st"].includes(a.id) && a.available,
@@ -19,7 +19,7 @@ export function useProgramDocument(
     setSt("");
     if (!pid || !vid || !session) return;
     const controller = new AbortController();
-    void api<Record<string, Json>>(`/projects/${pid}/versions/${vid}/program`, "GET", undefined, {
+    void api<ProgramDocument | null>(`/projects/${pid}/versions/${vid}/program`, "GET", undefined, {
       signal: controller.signal,
     })
       .then((value) => {

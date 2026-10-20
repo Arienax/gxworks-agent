@@ -7,8 +7,11 @@ limits and check returned records before prompt packing. No LLM/reranker calls.
 from __future__ import annotations
 
 import os
+import json
 import re
 from functools import lru_cache
+from knowledge.text_matching import normalize_text, NON_MITSUBISHI_MARKERS, MITSUBISHI_SCOPE_MARKERS
+from knowledge.index_access import MODEL_COLUMNS, TASK_COLUMNS, row_value
 
 OFFICIAL_INSTRUCTION_TYPES = frozenset({
     "programming", "positioning", "structured_instruction", "structured_function",
@@ -114,7 +117,7 @@ def source_sql(connection, schema, lanes=None, *, exclude_chunk_types=()):
     runtime pre-filter over the same indexed metadata when an exact structured
     lookup already owns that candidate type.
     """
-    from knowledge.core import _quote_identifier
+    from knowledge.index_access import quote_identifier as _quote_identifier
     table = schema["chunks"]
     columns = table["columns"]
     expressions = [_quote_identifier(k) if k in columns else "''" for k in ("manual_type", "chunk_type", "manual_id")]
@@ -137,7 +140,7 @@ def source_subquery(
     exclude_chunk_types=(), exclude_structured_kinds=(),
     plc_model=None, task_type=None,
 ):
-    from knowledge.core import _first_column, _CHUNK_ID_COLUMNS, _quote_identifier
+    from knowledge.index_access import first_column as _first_column, CHUNK_ID_COLUMNS as _CHUNK_ID_COLUMNS, quote_identifier as _quote_identifier
     table = schema["chunks"]
     chunk_id_column = _first_column(table["columns"], _CHUNK_ID_COLUMNS)
     identifier = None if rowid else chunk_id_column
@@ -148,7 +151,8 @@ def source_subquery(
     predicate, values = source_sql(
         connection, schema, lanes, exclude_chunk_types=exclude_chunk_types,
     )
-    from knowledge.core import _MODEL_COLUMNS, _TASK_COLUMNS, _scope_matches
+    from knowledge.index_access import MODEL_COLUMNS as _MODEL_COLUMNS, TASK_COLUMNS as _TASK_COLUMNS
+    _scope_matches = scope_matches
     # Filter source/model partitions BEFORE any entity/BM25/vector limit.
     # Distinct metadata values are shared by many chunks; no model gets a
     # separate retrieval index or a per-row ranking boost.
@@ -200,11 +204,11 @@ def runtime_status():
     from importlib.metadata import version
     from knowledge.evidence import retrieval_failure
     try:
-        from knowledge.core import _index_path
+        from knowledge.index_access import index_path as _index_path
         import sqlite3
         plan = retrieval_plan("", "format_repair")
         path = _index_path()
-        if not path.is_file():
+        if path is None or not path.is_file():
             return {"status": "unavailable", "failure": {"code": "index_missing", "error_type": "FileNotFoundError"}}
         connection = sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True, timeout=0.2)
         try:
@@ -214,3 +218,57 @@ def runtime_status():
         return {"status": "available", "engine": plan["engine"], "haystack_version": version("haystack-ai")}
     except Exception as error:
         return {"status": "unavailable", "failure": retrieval_failure(error)}
+
+
+def query_is_out_of_scope(query, plc_model):
+    model = normalize_text(plc_model).upper()
+    from gxworks2.project_profiles import native_project_profile
+    from plc.validation import SUPPORTED_PLC_MODELS
+    # Knowledge targets include source-supported CPUs beyond the GX Works2
+    # New-dialog menu. Retrieval never grants native project support.
+    if model and model not in SUPPORTED_PLC_MODELS and native_project_profile(model) is None:
+        return True
+    normalized = normalize_text(query).casefold()
+    foreign = any(marker.casefold() in normalized for marker in NON_MITSUBISHI_MARKERS)
+    in_scope = any(marker.casefold() in normalized for marker in MITSUBISHI_SCOPE_MARKERS)
+    return foreign and not in_scope
+
+def scope_values(value):
+    if value is None:
+        return set()
+    if isinstance(value, (list, tuple, set)):
+        return {str(item).strip().upper() for item in value if str(item).strip()}
+    text = str(value).strip()
+    if not text:
+        return set()
+    if text[:1] in "[{":
+        try:
+            parsed = json.loads(text)
+        except (TypeError, ValueError):
+            parsed = None
+        if isinstance(parsed, (list, tuple, set)):
+            return {str(item).strip().upper() for item in parsed if str(item).strip()}
+    return {
+        item.upper()
+        for item in re.split(r"[,;|/\s]+", text)
+        if item.strip()
+    }
+
+def scope_matches(value, requested):
+    values = scope_values(value)
+    if not values or values.intersection({"*", "ALL", "ANY", "COMMON"}):
+        return True
+    requested = str(requested or "").strip().upper()
+    # Native merged menu options retain their range. A shared source must
+    # cover every member, rather than silently treating one member as all.
+    from gxworks2.project_profiles import native_project_profile
+    profile = native_project_profile(requested)
+    if profile is not None and requested == profile.cpu.upper():
+        members = {member.upper() for member in profile.cpu.removesuffix("(RemoteI/O)").split("/")}
+        return members.issubset(values)
+    return not requested or requested in values
+
+def row_in_scope(row, plc_model, task_type):
+    model = row_value(row, MODEL_COLUMNS)
+    task = row_value(row, TASK_COLUMNS)
+    return scope_matches(model, plc_model) and scope_matches(task, task_type)

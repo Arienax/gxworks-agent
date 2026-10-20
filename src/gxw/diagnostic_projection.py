@@ -85,6 +85,7 @@ from gxw.diagnostic_outputs import (
 from .models import GXWFormatError
 from .diagnostic_events import EventIndex
 from .diagnostic_checks import bind_native_check_selection
+from gxworks2.workspace_observations import EvidenceOrigin, evidence_origin_bound
 
 def _resource_facts(row, kind):
     identity = _id(row.get('id'))
@@ -422,8 +423,7 @@ def _task_selection(events, programs, source_bodies, imported):
     task_binding = True
     for row in events.rows('NativeTaskSelection'):
         resource = row.get('resource') or {}
-        task_binding &= _resource_facts(resource, 8) and row.get('provenance') == (
-            'original Workspace collection, child, type, name and parent reads before compilation')
+        task_binding &= _resource_facts(resource, 8) and evidence_origin_bound(row, EvidenceOrigin.TASK_SELECTION)
         resources.append(_id(resource.get('id')))
         for task in row.get('tasks', []):
             task_facts = task.get('task') or {}

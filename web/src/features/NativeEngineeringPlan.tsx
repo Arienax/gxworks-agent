@@ -1,4 +1,3 @@
-import type { Json } from "../api/client";
 
 const names: Record<string, string> = {
   create_global_labels: "建立全局标签表", edit_global_labels: "写入全局声明",
@@ -11,17 +10,17 @@ const names: Record<string, string> = {
   save: "保存工程", reopen: "重新打开并核对",
 };
 
-function record(value: Json | undefined): Record<string, Json> | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : null;
+function record(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
-function endpoint(value: Json | undefined): string {
+function endpoint(value: unknown): string {
   const end = record(value);
   return end?.node ? `${end.node}.${end.port}` : end?.wire ?
     `${end.wire} (${Array.isArray(end.point) ? end.point.join(", ") : ""})` : "";
 }
 
-export function NativeEngineeringPlan({ value, t }: { value: Json; t: (text: string) => string }) {
+export function NativeEngineeringPlan({ value, t }: { value: unknown; t: (text: string) => string }) {
   const plan = record(value);
   const steps = Array.isArray(plan?.commands) ? plan.commands : [];
   return <ol className="native-engineering-plan">{steps.map((item, index) => {

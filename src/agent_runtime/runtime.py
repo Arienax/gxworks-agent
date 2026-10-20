@@ -44,12 +44,35 @@ _DEBUG_TOOLS = frozenset({
 
 def _model_tool_value(name, value):
     public = _public_value(value)
+    # Selection belongs to the registered tool owner, never to a payload flag.
+    document = {"get_current_program_info": "program", "read_network": "program",
+                "get_diagnostics": "diagnostics", "read_sfc_project": "source_snapshot",
+                "read_fbd_project": "source_snapshot", "read_fbd_definition": "source_snapshot",
+                "create_fbd_candidate": "source_snapshot", "create_sfc_candidate": "source_snapshot",
+                "get_generation_context": "generation_context",
+                "get_fbd_catalog": "catalog"}.get(name)
+    enveloped = isinstance(value, Mapping) and value.get("tool") == name and "data" in value
+    if document:
+        from shared.engineering_documents import project_document
+        source = value["data"] if enveloped else value
+        projected_document = project_document(source, kind=document, field_allowed=public_result_field)
+        if enveloped:
+            public["data"] = projected_document
+        else:
+            public = projected_document
     # Search owns its explicit debug switch. Deterministic debug tools retain
     # their reports, while ordinary engineering tools omit attached audits.
     if name in _DEBUG_TOOLS or name == 'search_plc_manual':
         return public
     from shared.model_context import technical_value
     projected = technical_value(public)
+    if document:
+        from shared.engineering_documents import restore_document_data
+        if enveloped:
+            projected["data"] = restore_document_data(projected["data"], public["data"],
+                kind=document, project_metadata=technical_value)
+        else:
+            projected = restore_document_data(projected, public, kind=document, project_metadata=technical_value)
     def live_receipts(original, current):
         if isinstance(original, Mapping) and original.get('mode') == 'live':
             # Live step verification and native diagnostics are operational

@@ -1,6 +1,7 @@
 """SFC child source, graph and diagnostic correspondence."""
 from __future__ import annotations
 from .diagnostic_events import EventIndex
+from gxworks2.workspace_observations import EvidenceOrigin, evidence_origin_bound
 from gxw.diagnostic_scope import (
     NATIVE_SOURCE_CAPACITY,
     SFC_CHILD_INSTRUCTION_POSITION_CPUS,
@@ -54,7 +55,7 @@ def bind_native_sfc_child_snapshots(program_raw, *, owner_id, stage, reads, snap
                 or any(type(word) is not int or not 0 <= word <= 0xffffffff for word in identity)
                 or any((facts.get(key) or {}).get('hresult') != 0 or (facts.get(key) or {}).get('code') != 0
                        for key in ('read_type', 'read_name'))
-                or row.get('provenance') != 'original Workspace.GetPOUBodyData(1692); source bytes, not compiled PCode'):
+                or not evidence_origin_bound(row, EvidenceOrigin.SOURCE_BODY)):
             return {**missing, 'reason': 'original SFC child identity/getter is not bound'}
         identities.add(identity)
         current = snapshots.get(row.get('file'))

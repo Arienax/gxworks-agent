@@ -3,11 +3,37 @@ using System.Collections.Generic;
 
 namespace PlcAi.NativeAdapter
 {
+    internal enum EvidenceOrigin
+    {
+        CodeLexicalRead, OwnedCheckInput, SourceBody, SourceReferences,
+        TaskSelection, SfcLengthPrefix, StructuredCheckEnvelope
+    }
+
+    internal static class WorkspaceEvidence
+    {
+        internal static object Describe(EvidenceOrigin origin)
+        {
+            string name;
+            switch (origin)
+            {
+                case EvidenceOrigin.CodeLexicalRead: name = "code_lexical_read"; break;
+                case EvidenceOrigin.OwnedCheckInput: name = "owned_check_input"; break;
+                case EvidenceOrigin.SourceBody: name = "source_body"; break;
+                case EvidenceOrigin.SourceReferences: name = "source_references"; break;
+                case EvidenceOrigin.TaskSelection: name = "task_selection"; break;
+                case EvidenceOrigin.SfcLengthPrefix: name = "sfc_length_prefix"; break;
+                case EvidenceOrigin.StructuredCheckEnvelope: name = "structured_check_envelope"; break;
+                default: throw new ArgumentOutOfRangeException("origin");
+            }
+            return new { schema_version = 1, origin = name };
+        }
+    }
+
     // The public process accepts engineering actions and source objects. All
     // vendor language/type values, profiles and layouts stay inside this module.
     internal static class WorkspaceBusinessProtocol
     {
-        internal const int Version = 2;
+        internal const int Version = 3;
         static readonly Dictionary<string, string> Actions = new Dictionary<string, string> {
             {"edit_program", "save_source"}, {"add_program_unit", "create_source"},
             {"assign_program", "bind_program_task"}, {"add_resource", "create_resource_scope"},

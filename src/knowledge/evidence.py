@@ -157,6 +157,7 @@ def evidence_record(result):
         "plc_models", "source_applicability", "device_definition_status", "device_definition", "source_evidence",
         "fact_kind", "fact_target", "source_chunk_id", "source_section_id", "source_address_locations", "evidence_scope", "table_binding_status", "content_status", "context_projection", "raw_evidence_references",
         "content_origin", "distribution_status", "technical_status",
+        "positioning_context", "positioning_hardware_status", "positioning_lookup_basis",
     ) if key in result}
     kind = result.get("manual_type", "")
     record["role"] = ("design_reference" if kind == "curated_design" else

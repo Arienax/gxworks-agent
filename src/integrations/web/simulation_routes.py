@@ -7,7 +7,7 @@ from pydantic import Field
 from application.projects import public
 from application.simulation_workbench import SimulationWorkbenchService, SimulationWorkbenchError
 from .schemas import Command
-from .responses import PublicObject
+from .responses import SimulationWorkbench, SimulationDraft, SimulationPlan, SimulationReplay
 
 
 class SimulatorDraftEdit(Command):
@@ -32,19 +32,19 @@ def register(app, service):
 
     prefix = "/api/projects/{project_id}/versions/{version_id}/simulation-workbench"
 
-    @app.get(prefix, response_model=PublicObject)
+    @app.get(prefix, response_model=SimulationWorkbench, response_model_exclude_unset=True)
     def read_simulation_workbench(project_id: str, version_id: str):
         return simulation.read(project_id, version_id)
 
-    @app.post(prefix + "/draft", response_model=PublicObject)
+    @app.post(prefix + "/draft", response_model=SimulationDraft, response_model_exclude_unset=True)
     def edit_simulation_draft(project_id: str, version_id: str, command: SimulatorDraftEdit):
         return simulation.edit_draft(project_id, version_id, **command.model_dump())
 
-    @app.post(prefix + "/plans", status_code=201, response_model=PublicObject)
+    @app.post(prefix + "/plans", status_code=201, response_model=SimulationPlan, response_model_exclude_unset=True)
     def save_simulation_plan(project_id: str, version_id: str, command: SimulatorPlanSave):
         return simulation.save(project_id, version_id, **command.model_dump())
 
-    @app.get(prefix + "/runs/{run_id}/replay", response_model=PublicObject)
+    @app.get(prefix + "/runs/{run_id}/replay", response_model=SimulationReplay, response_model_exclude_unset=True)
     def simulation_replay(project_id: str, version_id: str, run_id: str):
         return simulation.replay(project_id, version_id, run_id)
 

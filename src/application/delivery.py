@@ -78,7 +78,7 @@ def delivery_summary(workbench, project_id, version_id):
         "fbd_declarations": (program or {}).get("labels", {}) if version.get("target_mode") == "fbd" else {},
         "limitations": ["原生编译和运行结果按版本绑定的记录核对。",
                          "需求覆盖按关联测试的实际执行结果逐条核对。",
-                         "内存后端的观测范围为软件流程；设备结果使用对应原生记录。"]})
+                         "内存后端的观测范围为软件流程；设备结果使用对应原生记录。"]}, document="delivery")
     # generation_handoff is an application-authored bounded receipt. Generic
     # metadata filtering treats every key containing "token" as a credential,
     # but ContextCompiler telemetry uses token counts. Re-project this one known

@@ -695,8 +695,8 @@ export function SimulationWorkbench({
             >
               <option value="">{t("选择运行记录")}</option>
               {data.runs.map((r) => (
-                <option key={r.run_id} value={r.run_id}>
-                  {r.suite_name} · {t(statusLabel(r.status))} · {r.created_at}
+                <option key={r.run_id} value={r.run_id ?? ""}>
+                  {r.suite_name} · {t(statusLabel(r.status ?? "unknown"))} · {r.created_at}
                 </option>
               ))}
             </select>

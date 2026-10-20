@@ -123,11 +123,11 @@ def create_app(workspace, *, state_dir=None, read_only=False, origin="http://127
         from application.execution import read_environment
         return public(read_environment())
 
-    @app.post("/api/spec/presentation", response_model=dto.PublicObject)
+    @app.post("/api/spec/presentation", response_model=dto.SpecPresentationResource, response_model_exclude_unset=True)
     def spec_presentation(command: SpecPresentation):
         return service.spec_presentation(command.spec)
 
-    @app.post("/api/spec/io-row", response_model=dto.PublicObject)
+    @app.post("/api/spec/io-row", response_model=dto.IORow, response_model_exclude_unset=True)
     def edit_spec_io_row(command: SpecIORowEdit):
         return service.edit_spec_io_row(**command.model_dump())
 
@@ -139,11 +139,11 @@ def create_app(workspace, *, state_dir=None, read_only=False, origin="http://127
     def create_project(command: ProjectCreate):
         return service.create_project(**command.model_dump())
 
-    @app.get("/api/fbd/catalog", response_model=dto.PublicObject)
+    @app.get("/api/fbd/catalog", response_model=dto.FBDCatalog, response_model_exclude_unset=True)
     def fbd_catalog(project_id: str | None = None, version_id: str | None = None, program: str | None = None):
         return service.fbd.catalog(project_id, version_id, program)
 
-    @app.post("/api/fbd/inspect", response_model=dto.PublicObject)
+    @app.post("/api/fbd/inspect", response_model=dto.FBDInspection, response_model_exclude_unset=True)
     def fbd_inspect(command: AttachmentUpload):
         from application.fbd import inspect_upload
         return inspect_upload(command.data_base64)
@@ -164,7 +164,7 @@ def create_app(workspace, *, state_dir=None, read_only=False, origin="http://127
     def update_project(project_id: str, command: ProjectUpdate):
         return service.update_project(project_id, **command.model_dump(exclude_none=True))
 
-    @app.delete("/api/projects/{project_id}", response_model=dto.PublicObject)
+    @app.delete("/api/projects/{project_id}", response_model=dto.DeleteProjectResult, response_model_exclude_unset=True)
     def delete_project(project_id: str):
         return service.delete_project(project_id)
 
@@ -184,15 +184,15 @@ def create_app(workspace, *, state_dir=None, read_only=False, origin="http://127
     def version(project_id: str, version_id: str):
         return service.projects.version(project_id, version_id)
 
-    @app.get("/api/projects/{project_id}/versions/{version_id}/program", response_model=dto.NullablePublicObject)
+    @app.get("/api/projects/{project_id}/versions/{version_id}/program", response_model=dto.ProgramDocument | None, response_model_exclude_unset=True)
     def program(project_id: str, version_id: str):
-        return public(service.projects.program(project_id, version_id))
+        return public(service.projects.program(project_id, version_id), document="program")
 
-    @app.get("/api/projects/{project_id}/versions/{version_id}/preview", response_model=dto.PublicObject)
+    @app.get("/api/projects/{project_id}/versions/{version_id}/preview", response_model=dto.VersionPreview, response_model_exclude_unset=True)
     def version_preview(project_id: str, version_id: str, theme: Literal["light", "dark"] | None = None):
         return service.version_preview(project_id, version_id, theme=theme)
 
-    @app.get("/api/projects/{project_id}/versions/{version_id}/diagnostics", response_model=dto.PublicObject)
+    @app.get("/api/projects/{project_id}/versions/{version_id}/diagnostics", response_model=dto.DiagnosticsEnvelope, response_model_exclude_unset=True)
     def diagnostics(project_id: str, version_id: str):
         return service.projects.diagnostics(project_id, version_id)
 
@@ -209,11 +209,11 @@ def create_app(workspace, *, state_dir=None, read_only=False, origin="http://127
         return FileResponse(path, media_type=media_type(path), filename=path.name if download else None,
             headers=headers)
 
-    @app.get("/api/projects/{project_id}/reports/{report_id}", response_model=dto.PublicObject)
+    @app.get("/api/projects/{project_id}/reports/{report_id}", response_model=dto.ReportDocument, response_model_exclude_unset=True)
     def report(project_id: str, report_id: str):
         return service.projects.report(project_id, report_id)
 
-    @app.get("/api/projects/{project_id}/versions/{version_id}/runs/{run_id}", response_model=dto.PublicObject)
+    @app.get("/api/projects/{project_id}/versions/{version_id}/runs/{run_id}", response_model=dto.SimulationRun, response_model_exclude_unset=True)
     def run(project_id: str, version_id: str, run_id: str):
         return service.projects.simulator_run(project_id, version_id, run_id)
 
@@ -247,7 +247,7 @@ def create_app(workspace, *, state_dir=None, read_only=False, origin="http://127
     def output(job_id: str):
         return service.output(job_id)
 
-    @app.get("/api/jobs/{job_id}/preview", response_model=dto.PublicObject)
+    @app.get("/api/jobs/{job_id}/preview", response_model=dto.GenerationPreview, response_model_exclude_unset=True)
     def generation_preview(job_id: str, theme: Literal["light", "dark"] | None = None):
         return service.generation_preview(job_id, theme=theme)
 
@@ -397,11 +397,11 @@ def create_app(workspace, *, state_dir=None, read_only=False, origin="http://127
     def sfc(command: SFCInput):
         return {"text": sfc_requirement([s.model_dump() for s in command.steps]), "capability": "requirement_input"}
 
-    @app.get('/api/sfc/source', response_model=dto.PublicObject)
+    @app.get('/api/sfc/source', response_model=dto.SFCSource, response_model_exclude_unset=True)
     def sfc_source(project_id: str, version_id: str, program: str | None = None, native: bool = False):
         return service.sfc.read(project_id, version_id, program, native=native)
 
-    @app.post('/api/sfc/preview', response_model=dto.PublicObject)
+    @app.post('/api/sfc/preview', response_model=dto.SFCPreviewResource, response_model_exclude_unset=True)
     def sfc_preview(command: SFCPreview):
         return service.sfc.preview(**command.model_dump())
 

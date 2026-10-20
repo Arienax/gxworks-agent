@@ -1,12 +1,34 @@
-"""Vendor observation decoding for current adapters and frozen legacy receipts.
+"""Strict vendor observations and stable evidence origins for current adapters.
 
-The C# collector owns live interfaces and version selection. This compatibility
-decoder retains strict ABI checks for historical raw receipts before exposing
-semantic evidence to GXW Core. No vendor call parameters are accepted here.
+The C# collector owns live interfaces and version selection. ABI checks expose
+semantic evidence to GXW Core; no vendor call parameters are accepted here.
+Historical receipts require the separate explicit offline compatibility decoder.
 """
 from __future__ import annotations
 
+from enum import Enum
+
 from gxw.models import GXWFormatError
+
+
+class EvidenceOrigin(str, Enum):
+    """Stable collector origins; descriptions are never evidence identifiers."""
+
+    CODE_LEXICAL_READ = 'code_lexical_read'
+    OWNED_CHECK_INPUT = 'owned_check_input'
+    SOURCE_BODY = 'source_body'
+    SOURCE_REFERENCES = 'source_references'
+    TASK_SELECTION = 'task_selection'
+    SFC_LENGTH_PREFIX = 'sfc_length_prefix'
+    STRUCTURED_CHECK_ENVELOPE = 'structured_check_envelope'
+
+
+def evidence_origin_bound(row, origin):
+    """Accept only the versioned, typed origin assigned by the collector."""
+    evidence = row.get('evidence') if isinstance(row, dict) else None
+    return (isinstance(evidence, dict) and evidence.keys() == {'schema_version', 'origin'}
+            and type(evidence['schema_version']) is int and evidence['schema_version'] == 1
+            and type(evidence['origin']) is str and evidence['origin'] == origin.value)
 
 
 def native_code_reader_scope(cpu):
@@ -52,10 +74,10 @@ def check_input_layout_bound(event, *, sfc):
 def check_input_framing_bound(framing, *, sfc):
     return (framing.get('reader_module') == 'DZDataABS_SICConverter.dll'
         and framing.get('reader_version') == '1.635.0.1'
-        and framing.get('provenance') == 'observed SFC length prefix; remaining header bytes uninterpreted') if sfc else (
+        and evidence_origin_bound(framing, EvidenceOrigin.SFC_LENGTH_PREFIX)) if sfc else (
         framing.get('reader_module') == 'ECCompiler_IEC.dll' and framing.get('reader_version') == '15.50'
         and framing.get('reader_rva') == 0x39f30 and framing.get('code') == 0
-        and framing.get('provenance') == 'original checker envelope helper; optional tables omitted; read-only')
+        and evidence_origin_bound(framing, EvidenceOrigin.STRUCTURED_CHECK_ENVELOPE))
 
 
 def workspace_read_scope_verified(events):

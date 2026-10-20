@@ -125,7 +125,7 @@ export function Expectations({
               aria-label={t("允许误差")}
               type="number"
               min={0}
-              value={value.tolerance}
+              value={value.tolerance ?? ""}
               onChange={(e) => edit(index, "tolerance", Number(e.target.value))}
             />
           )}

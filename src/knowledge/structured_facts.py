@@ -7,6 +7,29 @@ but it never decides which record represents the explicit fact.
 """
 from __future__ import annotations
 
+from knowledge import index_access
+from knowledge.fact_queries import (
+    positioning_targets,
+    query_is_timer_preset,
+    timer_range_evidence,
+)
+from knowledge.index_access import (
+    TEXT_COLUMNS,
+)
+from knowledge.record_projection import (
+    augment_structured_instruction,
+    chunk_result,
+)
+from knowledge.scope import (
+    row_in_scope,
+    scope_matches,
+)
+from knowledge.text_matching import (
+    alias_occurs,
+    error_terms,
+    instruction_heading_terms,
+)
+
 import copy
 import hashlib
 import json
@@ -20,7 +43,6 @@ from knowledge.scope import OFFICIAL_INSTRUCTION_TYPES as _OFFICIAL_INSTRUCTION_
 
 def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None):
     """Return exact fact identities without retrieving any manual prose."""
-    from knowledge import core
     from knowledge.analysis_router import route_analysis_request
     from knowledge.instruction_facts import instruction_fact_targets
     from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
@@ -53,7 +75,7 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None):
         # corrupt, or unhydrated index must not discard explicit identities or
         # block generation. Evidence retrieval reports storage failures at its
         # existing diagnostic boundary; it is not made successful here.
-        core._close_thread_connection()
+        index_access.close_thread_connection()
         alias_targets = []
     for target in alias_targets:
         if target["opcode"] not in identified:
@@ -69,7 +91,7 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None):
                 matched = '**' in str(query) and (st_context or str(query).strip() == '**'
                     or bool(re.search(r'\bST\b|幂|运算|\d\s*\*\*\s*\d', str(query), re.I)))
             else:
-                matched = core._alias_occurs(str(query), alias)
+                matched = alias_occurs(str(query), alias)
             if matched:
                 language_features.append(feature['target'])
                 feature_scores[feature['target']] = (feature['target'].count('.'), len(alias))
@@ -79,7 +101,7 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None):
     feature_by_target = {feature['target']: feature for feature in getattr(DEFAULT_INSTRUCTION_REGISTRY, 'language_facts', ())}
     for target in language_features:
         aliases = feature_by_target[target]['aliases']
-        if not any(alias in remaining if alias == '**' else core._alias_occurs(remaining, alias) for alias in aliases):
+        if not any(alias in remaining if alias == '**' else alias_occurs(remaining, alias) for alias in aliases):
             continue
         selected_features.append(target)
         for alias in sorted(aliases, key=len, reverse=True):
@@ -89,7 +111,7 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None):
     # its own namespace; it must not retrieve a counter or incidental examples.
     compiler_query = bool(re.search(r'编译|警告|compiler|compil(?:e|ation)|warning|GX\s*Works\s*2', str(query), re.I)
                           and re.search(r'\bC[0-9A-F]{4,7}\b', str(query), re.I))
-    errors = list(dict.fromkeys(core._error_terms(str(query or ""))))
+    errors = list(dict.fromkeys(error_terms(str(query or ""))))
     devices = list(dict.fromkeys(value.upper() for value in route.devices))
     if compiler_query:
         diagnostics = re.findall(r'\bC[0-9A-F]{4,7}\b', str(query).upper())
@@ -104,25 +126,85 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None):
         "language_features": language_features,
         "diagnostic_namespace": 'compiler' if compiler_query else None,
         "process": generation_process_fact_needs(spec, plc_model=plc_model, requirement=route.query_text),
+        "positioning": positioning_targets(query, plc_model=plc_model, confirmed_spec=spec),
     }
 
 
 def _runtime():
-    from knowledge import core
 
-    path = core._index_path()
-    identity = core._index_identity(path)
+    path = index_access.index_path()
+    identity = index_access.index_identity(path)
     if identity[0] == "missing":
-        return core, None, None, None, {}
-    connection = core._connection(path, identity)
-    schema = core._schema(connection)
-    meta = core._load_meta(connection, schema)
-    return core, path, connection, schema, meta
+        return index_access, None, None, None, {}
+    connection = index_access.connection(path, identity)
+    schema = index_access.schema(connection)
+    meta = index_access.load_meta(connection, schema)
+    return index_access, path, connection, schema, meta
 
 
 def resolve_language_records(targets, *, plc_model, task_type='analysis'):
     from knowledge.fact_corpus import resolve
     return resolve('language', targets, plc_model=plc_model, task_type=task_type) or []
+
+
+def resolve_positioning_records(targets, *, plc_model, task_type="analysis"):
+    """Resolve an explicit wiring question without adding a broad ranking signal.
+
+    Runtime facts use their ordinary exact owner. The chapter lookup is solely
+    an offline compatibility path for indexes predating structured wiring facts;
+    its complete source retains the distinction between CPU and adapter outputs.
+    """
+    from knowledge.fact_corpus import resolve
+
+    requested = [target for target in targets or () if isinstance(target, Mapping)
+                 and target.get("target") == "DIRECTION_OUTPUT_ASSIGNMENT"
+                 and str(target.get("plc_model") or "").upper() == str(plc_model).upper()]
+    if not requested:
+        return []
+    _index, _path, connection, schema, _meta = _runtime()
+    if connection is None or schema is None:
+        return []
+    authored = resolve("positioning", ["DIRECTION_OUTPUT_ASSIGNMENT"],
+                       plc_model=plc_model, task_type=task_type, connection=connection)
+    if authored is not None:
+        results = []
+        for target in requested:
+            for record in authored:
+                scoped = copy.deepcopy(record)
+                bound_context = record.get("positioning_context")
+                contextual = bool(target.get("products") or target.get("hardware_context"))
+                established = (not contextual or bound_context == dict(target)
+                               and record.get("positioning_hardware_status") == "source_scoped")
+                scoped.update(positioning_context=copy.deepcopy(dict(target)),
+                              positioning_hardware_status="source_scoped" if established else "unverified")
+                results.append(scoped)
+        return results
+    chunks = schema.get("chunks")
+    if not chunks or not {"id", "section", "manual_type", "text"}.issubset(chunks["columns"]):
+        return []
+    rows = connection.execute(
+        f"SELECT * FROM {index_access.quote_identifier(chunks['name'])} "
+        "WHERE manual_type='positioning' AND section LIKE '%Assignment of Output Numbers%'"
+    ).fetchall()
+    results = []
+    for target in requested:
+        for row in rows:
+            if not row_in_scope(row, plc_model, task_type):
+                continue
+            body = str(row["text"] or "")
+            # This legacy chapter can witness literal products, but cannot
+            # validate arbitrary structured hardware conditions supplied by a
+            # caller. Those remain unresolved until a typed fact owns them.
+            hardware_established = not target.get("hardware_context") and all(
+                alias_occurs(body, product) for product in target.get("products") or ())
+            for record in _chunk_results([row["id"]], plc_model=plc_model, task_type=task_type,
+                                         fact_kind="positioning", fact_target=target["target"]):
+                record["fact_dimensions"] = ["definition", "applicability", "hardware_distinction"]
+                record["positioning_context"] = copy.deepcopy(dict(target))
+                record["positioning_hardware_status"] = "source_scoped" if hardware_established else "unverified"
+                record["positioning_lookup_basis"] = "legacy_official_property_section"
+                results.append(record)
+    return results
 
 
 def authored_packet(record):
@@ -139,6 +221,8 @@ def authored_packet(record):
 
 
 def fact_record_coverage(record, *, limits=False):
+    if record.get("fact_kind") == "positioning" and record.get("positioning_hardware_status") == "unverified":
+        return False
     if record.get('fact_kind') == 'device' and record.get('device_definition_status') in {
             'unknown', 'unverified', 'conditions_missing', 'conflict'}:
         return False
@@ -185,9 +269,9 @@ def retrieval_coverage(query, records, *, plc_model, targets=None):
             return canonical_reference_device(value)
         return value.removeprefix('0X').removesuffix('H') if kind == 'error' else value
     for kind, key in (('instruction', 'instructions'), ('language', 'language_features'),
-                      ('device', 'devices'), ('error', 'errors')):
+                      ('device', 'devices'), ('error', 'errors'), ('positioning', 'positioning')):
         for raw in targets.get(key, []):
-            target = raw.get('opcode') if isinstance(raw, Mapping) else raw
+            target = (raw.get('opcode') or raw.get('target')) if isinstance(raw, Mapping) else raw
             selected = [row for row in records if row.get('fact_kind') == kind and
                         identity(kind, row.get('fact_target')) == identity(kind, target)]
             complete = any(fact_record_coverage(row, limits=limits) for row in selected)
@@ -209,16 +293,16 @@ def _declared_instruction_alias_targets(query, *, plc_model=None):
     """
     from knowledge.analysis_router import instruction_reference_text
     query = instruction_reference_text(query)
-    core, _path, connection, schema, _meta = _runtime()
+    _index, _path, connection, schema, _meta = _runtime()
     if connection is not None and _meta.get('corpus_kind') == 'authored_plc_facts_v1':
         from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
         targets = []
         for row in connection.execute('SELECT DISTINCT alias,opcode,alias_type,plc_models FROM fact_aliases ORDER BY alias,opcode'):
-            if plc_model and not core._scope_matches(row['plc_models'], plc_model):
+            if plc_model and not scope_matches(row['plc_models'], plc_model):
                 continue
             if row['alias_type'] == 'opcode' and DEFAULT_INSTRUCTION_REGISTRY.resolve_fact_form(row['alias']) is not None:
                 continue
-            if core._alias_occurs(query, row['alias']):
+            if alias_occurs(query, row['alias']):
                 targets.append({'opcode': row['opcode'], 'base_opcode': row['opcode'],
                     'target_resolution': 'declared_manual_alias', 'requested_alias': row['alias']})
         return targets
@@ -229,8 +313,8 @@ def _declared_instruction_alias_targets(query, *, plc_model=None):
     if not {"alias", "alias_type", "instruction_id"}.issubset(aliases["columns"]) or not {"id", "opcode"}.issubset(instructions["columns"]):
         return []
     rows = connection.execute(
-        f"SELECT DISTINCT a.alias,i.opcode,a.alias_type FROM {core._quote_identifier(aliases['name'])} a "
-        f"JOIN {core._quote_identifier(instructions['name'])} i ON i.id=a.instruction_id "
+        f"SELECT DISTINCT a.alias,i.opcode,a.alias_type FROM {index_access.quote_identifier(aliases['name'])} a "
+        f"JOIN {index_access.quote_identifier(instructions['name'])} i ON i.id=a.instruction_id "
         "WHERE a.alias_type IN ('zh_alias','opcode') ORDER BY a.alias,i.opcode"
     )
     targets = []
@@ -244,7 +328,7 @@ def _declared_instruction_alias_targets(query, *, plc_model=None):
                 continue
             if not re.search(r"(?<![A-Za-z0-9_.$])" + re.escape(alias) + r"(?![A-Za-z0-9_.$])", query):
                 continue
-        if len(alias) < 2 or not core._alias_occurs(query, alias):
+        if len(alias) < 2 or not alias_occurs(query, alias):
             continue
         targets.append({"opcode": opcode, "base_opcode": opcode,
                         "target_resolution": "declared_manual_alias", "requested_alias": alias})
@@ -252,20 +336,20 @@ def _declared_instruction_alias_targets(query, *, plc_model=None):
 
 
 def _chunk_results(chunk_ids, *, plc_model, task_type, fact_kind, fact_target, augment_instruction=False):
-    core, path, connection, schema, meta = _runtime()
+    _index, path, connection, schema, meta = _runtime()
     if connection is None or schema is None or not chunk_ids:
         return []
     ordered_ids = list(dict.fromkeys(str(value) for value in chunk_ids if value is not None))
-    rows = core._fetch_chunks(connection, schema, [("id", value) for value in ordered_ids])
+    rows = index_access.fetch_chunks(connection, schema, [("id", value) for value in ordered_ids])
     results = []
     for chunk_id in ordered_ids:
         row = rows.get(("id", str(chunk_id)))
-        result = core._chunk_result(row, meta, path, plc_model, task_type)
+        result = chunk_result(row, meta, path, plc_model, task_type)
         if result is None:
             continue
-        original_text = str(core._row_value(row, core._TEXT_COLUMNS, result.get("text") or ""))
+        original_text = str(index_access.row_value(row, TEXT_COLUMNS, result.get("text") or ""))
         if augment_instruction:
-            result = core._augment_structured_instruction(connection, schema, result)
+            result = augment_structured_instruction(connection, schema, result)
             if result is None or result.get("manual_type") not in _OFFICIAL_INSTRUCTION_TYPES:
                 continue
         value = dict(result)
@@ -327,7 +411,7 @@ def resolve_instruction_contract(target, *, plc_model="FX3U"):
     return contract
 
 
-def _instruction_lane_prompt_lines(lanes):
+def instruction_lane_prompt_lines(lanes):
     """Render only current Agent-B decisions; full lane objects stay metadata."""
     lanes = lanes if isinstance(lanes, Mapping) else {}
     common = lanes.get("operand_semantics") or {}
@@ -462,7 +546,7 @@ def _attach_instruction_contract(record, target, *, plc_model):
     value.update(copy.deepcopy(lanes))
 
     body = str(value.get("text") or "")
-    details = "\n".join(_instruction_lane_prompt_lines(lanes))
+    details = "\n".join(instruction_lane_prompt_lines(lanes))
     if not details:
         return value
     if body.startswith("[STRUCTURED INSTRUCTION RECORD]"):
@@ -611,7 +695,7 @@ def _local_instruction_fact_record(target, *, plc_model, task_type):
     lines = [
         "[STRUCTURED LOCAL INSTRUCTION RECORD]",
         f"INSTRUCTION: {opcode}",
-        *_instruction_lane_prompt_lines(lanes),
+        *instruction_lane_prompt_lines(lanes),
     ]
     if isinstance(operands, (list, tuple)):
         lines.append("OPERANDS: " + " ".join(str(value) for value in operands))
@@ -661,26 +745,26 @@ def _instruction_section_records(opcode, *, plc_model, task_type):
     This is metadata lookup, never broad ranking or an alias substring match.
     The section remains verbatim; registry facts retain their own provenance.
     """
-    core, _path, connection, schema, _meta = _runtime()
+    _index, _path, connection, schema, _meta = _runtime()
     chunks = schema.get("chunks") if schema is not None else None
     if not connection or not chunks or not {"id", "section", "text", "manual_type"}.issubset(chunks["columns"]):
         return []
-    indexed = getattr(core._thread_state, "instruction_sections", None)
+    indexed = index_access.cached_value(connection, "instruction_sections")
     if indexed is None:
         indexed = []
         placeholders = ",".join("?" for _ in _OFFICIAL_INSTRUCTION_TYPES)
         for row in connection.execute(
-            f"SELECT * FROM {core._quote_identifier(chunks['name'])} WHERE manual_type IN ({placeholders})",
+            f"SELECT * FROM {index_access.quote_identifier(chunks['name'])} WHERE manual_type IN ({placeholders})",
             tuple(sorted(_OFFICIAL_INSTRUCTION_TYPES)),
         ):
             leaf = str(row["section"] or "").split(" > ")[-1]
-            indexed.append((row, core._instruction_heading_terms(leaf)))
-        core._thread_state.instruction_sections = indexed
+            indexed.append((row, instruction_heading_terms(leaf)))
+        index_access.cache_value(connection, "instruction_sections", indexed)
     records = []
     for row, names in indexed:
-        if opcode not in names or not core._row_in_scope(row, plc_model, task_type):
+        if opcode not in names or not row_in_scope(row, plc_model, task_type):
             continue
-        if not core._alias_occurs(str(row["text"] or ""), opcode):
+        if not alias_occurs(str(row["text"] or ""), opcode):
             continue
         for record in _chunk_results([row["id"]], plc_model=plc_model, task_type=task_type,
                                      fact_kind="instruction", fact_target=opcode):
@@ -698,7 +782,7 @@ def _instruction_contract_source_records(target, *, plc_model, task_type):
     that page adds candidate prose without certifying its operand purposes.
     """
     from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
-    core, _path, connection, schema, _meta = _runtime()
+    _index, _path, connection, schema, _meta = _runtime()
     form = DEFAULT_INSTRUCTION_REGISTRY.resolve_form(target.get("opcode"), cpu=plc_model)
     chunks = schema.get("chunks") if schema is not None else None
     if (form is None or form.spec.contract_coverage().get("operand_order") != "source_verified"
@@ -710,7 +794,7 @@ def _instruction_contract_source_records(target, *, plc_model, task_type):
         if not source.get("manual_id") or not source.get("revision") or not source.get("pdf_page"):
             continue
         ids = connection.execute(
-            f"SELECT id FROM {core._quote_identifier(chunks['name'])} "
+            f"SELECT id FROM {index_access.quote_identifier(chunks['name'])} "
             "WHERE manual_id=? AND revision=? AND pdf_page<=? AND pdf_page_end>=? ORDER BY id",
             (source["manual_id"], source["revision"], source["pdf_page"], source["pdf_page"]),
         ).fetchall()
@@ -737,7 +821,7 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
     from knowledge.fact_corpus import resolve
     from knowledge.source_authority import instruction_source_authority
 
-    core, _path, connection, schema, _meta = _runtime()
+    _index, _path, connection, schema, _meta = _runtime()
     authored = resolve("instruction", targets, plc_model=plc_model, task_type=task_type, connection=connection)
     if authored is not None:
         return authored
@@ -818,7 +902,7 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
             placeholders = ",".join("?" for _ in names)
             rows = connection.execute(
                 "SELECT * FROM {} WHERE opcode_norm IN ({}) AND chunk_id IS NOT NULL".format(
-                    core._quote_identifier(table["name"]), placeholders
+                    index_access.quote_identifier(table["name"]), placeholders
                 ),
                 tuple(value.casefold() for value in names),
             ).fetchall()
@@ -830,7 +914,7 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
         if table_available and source_by_id:
             placeholders = ",".join("?" for _ in source_by_id)
             rows.extend(connection.execute(
-                f"SELECT * FROM {core._quote_identifier(table['name'])} WHERE chunk_id IN ({placeholders})",
+                f"SELECT * FROM {index_access.quote_identifier(table['name'])} WHERE chunk_id IN ({placeholders})",
                 tuple(source_by_id),
             ).fetchall())
         inputs, input_seen = [], set()
@@ -956,7 +1040,7 @@ def _device_definition_ids(connection, schema, device, *, plc_model, task_type):
     such a mention over a declaration; use the original section unchanged.
     """
     from plc.device_identity import canonical_reference_device as canonical_device, reference_device_parts
-    core, _path, _connection, _schema, _meta = _runtime()
+    _index, _path, _connection, _schema, _meta = _runtime()
     chunks = schema.get("chunks")
     if not chunks or not {"id", "section", "manual_type", "text"}.issubset(chunks["columns"]):
         return []
@@ -966,10 +1050,10 @@ def _device_definition_ids(connection, schema, device, *, plc_model, task_type):
     prefix, number = parsed
     ids = []
     for row in connection.execute(
-        f"SELECT * FROM {core._quote_identifier(chunks['name'])} "
+        f"SELECT * FROM {index_access.quote_identifier(chunks['name'])} "
         "WHERE manual_type IN ('programming','positioning','structured_device','cpu_function','cpu_hardware')"
     ):
-        if not core._row_in_scope(row, plc_model, task_type):
+        if not row_in_scope(row, plc_model, task_type):
             continue
         if 'device_table_binding_status' in row.keys() and row['device_table_binding_status']=='cpu_columns_require_projection':
             continue
@@ -989,7 +1073,7 @@ def _device_definition_ids(connection, schema, device, *, plc_model, task_type):
             body = re.split(r"\n\[(?:PAGE|TABLE)\b", str(row["text"] or ""), maxsplit=1)[-1]
             # Continuation chunks can repeat a heading while containing only an
             # adjacent topic. The cited body must still contain this definition.
-            body_mentions = core._alias_occurs(body, device) or label.casefold() in body.casefold()
+            body_mentions = alias_occurs(body, device) or label.casefold() in body.casefold()
             if matches and body_mentions:
                 ids.append(row["id"])
                 break
@@ -1006,7 +1090,7 @@ def resolve_device_records(devices, *, plc_model="FX3U", task_type="analysis", q
     from knowledge.fact_corpus import resolve
     from plc.device_identity import canonical_reference_device as canonical_device
     from plc.device_definitions import device_definition_targets, resolve_device_definition
-    core, _path, connection, schema, _meta = _runtime()
+    _index, _path, connection, schema, _meta = _runtime()
     authored_targets = list(dict.fromkeys([*(devices or ()), *device_definition_targets(query, plc_model)]))
     authored = resolve("device", authored_targets, plc_model=plc_model, task_type=task_type, connection=connection)
     if authored is not None:
@@ -1042,13 +1126,13 @@ def resolve_device_records(devices, *, plc_model="FX3U", task_type="analysis", q
     ]))
     results, seen = [], set()
     chunks = schema.get("chunks")
-    if not schema.get('device_sections') and query and core._query_is_timer_preset(str(query)) and chunks and {"id", "manual_type", "section", "text"}.issubset(chunks["columns"]):
+    if not schema.get('device_sections') and query and query_is_timer_preset(str(query)) and chunks and {"id", "manual_type", "section", "text"}.issubset(chunks["columns"]):
         targets = [canonical_device(item) for item in requested_devices if re.fullmatch(r"T[0-9]+", item)] or ["T"]
         for row in connection.execute(
-            f"SELECT * FROM {core._quote_identifier(chunks['name'])} "
+            f"SELECT * FROM {index_access.quote_identifier(chunks['name'])} "
             "WHERE manual_type IN ('programming','structured_device') AND section LIKE '%Numbers of timers%'"
         ):
-            if not core._row_in_scope(row, plc_model, task_type) or not core._timer_range_evidence(row["text"], plc_model):
+            if not row_in_scope(row, plc_model, task_type) or not timer_range_evidence(row["text"], plc_model):
                 continue
             for target in targets:
                 if target != "T":
@@ -1062,7 +1146,7 @@ def resolve_device_records(devices, *, plc_model="FX3U", task_type="analysis", q
                     record["structured_fact_requested_target"] = target
                     seen.add((record["id"], target))
                     results.append(record)
-    if schema.get('device_sections') and query and core._query_is_timer_preset(str(query)) and not any(re.fullmatch(r'T[0-9]+',item) for item in requested_devices):
+    if schema.get('device_sections') and query and query_is_timer_preset(str(query)) and not any(re.fullmatch(r'T[0-9]+',item) for item in requested_devices):
         from knowledge.device_evidence import resolve_section_records
         properties=resolve_section_records(connection,schema,['T'],plc_model=plc_model)
         properties.sort(key=lambda row:row.get('table_binding_status')!='cpu_row_with_notes')
@@ -1110,7 +1194,7 @@ def resolve_device_records(devices, *, plc_model="FX3U", task_type="analysis", q
             # broad recall remains available for unresolved conditions below.
             continue
         definition_ids = _device_definition_ids(connection, schema, device, plc_model=plc_model, task_type=task_type)
-        family_question = not query or core._query_is_timer_preset(str(query)) or bool(re.search(
+        family_question = not query or query_is_timer_preset(str(query)) or bool(re.search(
             r'软元件|定义|作用|用途|保持|锁存|时间基准|时基|分辨率|地址范围|分区|'
             r'\b(?:definition|purpose|retentive|latch|EEPROM|time\s*base|resolution)\b',str(query),re.I))
         if not definition_ids and family_question:
@@ -1129,10 +1213,10 @@ def resolve_device_records(devices, *, plc_model="FX3U", task_type="analysis", q
         ids = definition_ids
         if not ids and table_available:
             rows = connection.execute(
-                f"SELECT * FROM {core._quote_identifier(table['name'])} WHERE device_norm=? AND chunk_id IS NOT NULL ORDER BY occurrences DESC,id",
+                f"SELECT * FROM {index_access.quote_identifier(table['name'])} WHERE device_norm=? AND chunk_id IS NOT NULL ORDER BY occurrences DESC,id",
                 (device.casefold(),),
             ).fetchall()
-            ids = [row["chunk_id"] for row in rows if "plc_models" not in row.keys() or core._scope_matches(row["plc_models"], plc_model)]
+            ids = [row["chunk_id"] for row in rows if "plc_models" not in row.keys() or scope_matches(row["plc_models"], plc_model)]
         candidates = _chunk_results(ids, plc_model=plc_model, task_type=task_type, fact_kind="device", fact_target=device)
         candidates = project_device_source_records(candidates,plc_model=plc_model)
         candidates.sort(key=lambda item: (-int(item.get("manual_priority") or 0), int(item.get("pdf_page") or 0), str(item.get("id") or "")))
@@ -1171,7 +1255,7 @@ def resolve_device_records(devices, *, plc_model="FX3U", task_type="analysis", q
 def resolve_device_family_records(families, *, plc_model="FX3U", task_type="analysis"):
     from knowledge.fact_corpus import resolve
     from knowledge.device_evidence import resolve_section_records
-    core, _, connection, schema, _ = _runtime()
+    _index, _, connection, schema, _ = _runtime()
     authored = resolve("device_family", families, plc_model=plc_model, task_type=task_type, connection=connection)
     if authored is not None:
         return authored
@@ -1198,7 +1282,7 @@ def _process_definition_records(target, *, plc_model, task_type):
     Addresses come from the eligible manual page, never from a family default
     or an experiment oracle. Return whole source blocks, including caveats.
     """
-    core, _path, connection, schema, _meta = _runtime()
+    _index, _path, connection, schema, _meta = _runtime()
     chunks = schema.get('chunks') if schema else None
     if not connection or not chunks or not {'id', 'section', 'text', 'manual_type'}.issubset(chunks['columns']):
         return []
@@ -1209,13 +1293,13 @@ def _process_definition_records(target, *, plc_model, task_type):
     if purpose is None:
         return []
     rows = connection.execute(
-        f"SELECT * FROM {core._quote_identifier(chunks['name'])} "
+        f"SELECT * FROM {index_access.quote_identifier(chunks['name'])} "
         "WHERE manual_type IN ('programming','structured_device','cpu_function','cpu_hardware') "
         "AND (section LIKE '%relay%' OR section LIKE '%clock%' OR section LIKE '%initial pulse%')"
     )
     ids = []
     for row in rows:
-        if not core._row_in_scope(row, plc_model, task_type):
+        if not row_in_scope(row, plc_model, task_type):
             continue
         section = str(row['section'] or '')
         if not re.search(r'special.{0,24}relay|initial pulse|single operation pulse|internal clock|clock devices', section, re.I):
@@ -1236,7 +1320,7 @@ def resolve_process_records(needs, *, plc_model="FX3U", task_type="generate"):
     program is not its operating definition. Preserve original source blocks.
     """
     from knowledge.fact_corpus import resolve
-    _core, _, authored_connection, _, authored_meta = _runtime()
+    __index, _, authored_connection, _, authored_meta = _runtime()
     if authored_meta.get('corpus_kind') == 'authored_plc_facts_v1':
         results = []
         for need in needs or ():
@@ -1273,7 +1357,7 @@ def resolve_process_records(needs, *, plc_model="FX3U", task_type="generate"):
             'fact_kind': 'process', 'structured_fact_kind': 'process', 'fact_target': target,
             'structured_fact_target': target, 'source_record': copy.deepcopy(source), 'process_fact_need': copy.deepcopy(need),
             'process_lookup_basis': 'shared_source_checked_runtime', 'fact_dimensions': [need.get('dimension', 'definition')]})
-    core, _path, connection, schema, _meta = _runtime()
+    _index, _path, connection, schema, _meta = _runtime()
     if connection is None or schema is None:
         return runtime_records
     chunks = schema.get("chunks")
@@ -1315,20 +1399,20 @@ def resolve_process_records(needs, *, plc_model="FX3U", task_type="generate"):
             ordering = ",".join(key for key in ("manual_priority DESC", "pdf_page", "id")
                                 if key.split()[0] in chunks["columns"])
             rows = connection.execute(
-                f"SELECT * FROM {core._quote_identifier(chunks['name'])} "
+                f"SELECT * FROM {index_access.quote_identifier(chunks['name'])} "
                 "WHERE manual_type IN ('programming','structured_device') "
                 f"AND text LIKE ? ORDER BY {ordering}",
                 (f"%{family}%",),
             )
             for row in rows:
-                if not core._row_in_scope(row, plc_model, task_type):
+                if not row_in_scope(row, plc_model, task_type):
                     continue
                 text = str(row["text"] or "")
                 # The source section must include the actual operation, not just
                 # a cross-reference or a device-number list.
                 if "Functions and operation examples" not in text:
                     continue
-                if target == "TIMER" and not (core._timer_range_evidence(text, plc_model)
+                if target == "TIMER" and not (timer_range_evidence(text, plc_model)
                                                 and "General type" in text and "reset" in text):
                     continue
                 if target == "COUNTER" and not ("16-bit up counter" in text and "RST" in text):
@@ -1352,7 +1436,7 @@ def resolve_process_records(needs, *, plc_model="FX3U", task_type="generate"):
 def resolve_error_records(codes, *, plc_model="FX3U", task_type="debug"):
     """Resolve explicit error codes through ``error_records`` only."""
     from knowledge.fact_corpus import resolve
-    core, _path, connection, schema, _meta = _runtime()
+    _index, _path, connection, schema, _meta = _runtime()
     authored = resolve("error", codes, plc_model=plc_model, task_type=task_type, connection=connection)
     if authored is not None:
         return authored
@@ -1373,7 +1457,7 @@ def resolve_error_records(codes, *, plc_model="FX3U", task_type="debug"):
         rows = connection.execute(
             "SELECT * FROM {} WHERE error_code_norm IN ({}) AND chunk_id IS NOT NULL "
             "ORDER BY pdf_page,table_index,row_index".format(
-                core._quote_identifier(table["name"]), placeholders
+                index_access.quote_identifier(table["name"]), placeholders
             ),
             tuple(value.casefold() for value in variants),
         ).fetchall()
@@ -1425,6 +1509,7 @@ def resolve_structured_records(targets, *, plc_model="FX3U", task_type="analysis
     """Resolve all supplied exact targets without invoking the broad retriever."""
     targets = targets if isinstance(targets, Mapping) else {}
     return [
+        *resolve_positioning_records(targets.get("positioning"), plc_model=plc_model, task_type=task_type),
         *resolve_instruction_records(
             targets.get("instructions") or (),
             plc_model=plc_model,
@@ -1508,6 +1593,7 @@ __all__ = [
     "resolve_instruction_contract",
     "resolve_instruction_records",
     "resolve_instruction_step_width",
+    "resolve_positioning_records",
     "compact_structured_fact_record",
     "resolve_structured_records",
     "structured_fact_targets",

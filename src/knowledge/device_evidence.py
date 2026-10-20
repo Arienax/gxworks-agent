@@ -6,6 +6,10 @@ source-verified individual definition through this module.
 """
 from __future__ import annotations
 
+from knowledge.scope import (
+    scope_matches,
+)
+
 import json
 import re
 from collections import defaultdict
@@ -42,8 +46,8 @@ _MODEL_HEADING = re.compile(r'(?m)(?:^|\n)\s*\d+[.)]\s*(?:In\s+)?((?:FX\s*[0-9A-
 
 def family_targets(query):
     """Recognize explicitly requested families, including authored name aliases."""
-    from knowledge.analysis_router import _device_reference_text
-    text = _device_reference_text(str(query or ''))
+    from knowledge.analysis_router import device_reference_text
+    text = device_reference_text(str(query or ''))
     found, spans = [], []
     aliases = [(alias, family) for family, values in FAMILY_ALIASES.items() for alias in values]
     for alias, family in sorted(aliases, key=lambda row: -len(row[0])):
@@ -403,7 +407,6 @@ def address_relevance(text, address):
 
 def resolve_section_records(connection, schema, targets, *, plc_model):
     """Deliver bounded complete references from the shared derived index."""
-    from knowledge import core
     from plc.device_identity import reference_device_parts
     table=schema.get('device_sections')
     if not table:return []
@@ -412,7 +415,7 @@ def resolve_section_records(connection, schema, targets, *, plc_model):
         parsed=reference_device_parts(target)
         family=parsed[0] if parsed else str(target).upper()
         rows=connection.execute('SELECT * FROM device_sections WHERE family=?',(family,)).fetchall()
-        eligible=[row for row in rows if core._scope_matches(row['plc_models'],plc_model)]
+        eligible=[row for row in rows if scope_matches(row['plc_models'],plc_model)]
         # CPU-labelled rows precede generic operating examples. Actual ranges
         # can enrich an address question without certifying that address.
         eligible.sort(key=lambda row:(
@@ -475,7 +478,6 @@ def project_source_record(connection, schema, record, *, plc_model):
     Broad RRF keeps its original rank and source identity. This only projects
     the selected source; it adds no semantic score or device permission.
     """
-    from knowledge import core
     if record.get('table_binding_status')!='cpu_columns_require_projection':return record
     if not schema.get('device_sections'):return None
     first=record.get('pdf_page')
@@ -487,7 +489,7 @@ def project_source_record(connection, schema, record, *, plc_model):
     if source:first,last=source['pdf_page'],source['pdf_page_end']
     rows=connection.execute("SELECT * FROM device_sections WHERE manual_id=? AND pdf_page BETWEEN ? AND ? AND table_binding_status='cpu_column_with_notes' ORDER BY pdf_page,id",
                             (record.get('manual_id'),first,last)).fetchall()
-    selected=[row for row in rows if core._scope_matches(row['plc_models'],plc_model)]
+    selected=[row for row in rows if scope_matches(row['plc_models'],plc_model)]
     if not selected:return None
     seen=set();parts=[];evidence=[];models=set()
     for row in selected:

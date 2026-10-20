@@ -103,7 +103,7 @@ def instruction_reference_text(text):
     return re.sub(r"(?<![A-Za-z0-9_])(?:ST|RUN|STOP)(?![A-Za-z0-9_])", mask, text, flags=re.I)
 
 
-def _device_reference_text(text):
+def device_reference_text(text):
     """Mask CPU mentions only in model context, preserving device references."""
     from plc.target_support import target_cpu_names
     names = sorted(target_cpu_names(), key=len, reverse=True)
@@ -229,7 +229,7 @@ def route_analysis_request(user_request, confirmed_context=None, *, analysis_mod
         topics.append("pump")
     return AnalysisRoute(
         mode, reason, tuple(topics), families, tuple(opcodes),
-        tuple(dict.fromkeys(device_tokens(_device_reference_text(text)))), text,
+        tuple(dict.fromkeys(device_tokens(device_reference_text(text)))), text,
     )
 
 

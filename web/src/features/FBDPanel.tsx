@@ -5,179 +5,13 @@ import type { Proposal } from "../api/client";
 import { Button } from "../components/ui";
 import "./fbd.css";
 
-type Port = {
-  name: string;
-  x: number;
-  y: number;
-  formal_name?: string;
-  side?: string;
-  data_type?: string;
-};
-type Node = {
-  id: string;
-  source_offset?: number;
-  prototype_offset?: number;
-  template: string;
-  symbol: string;
-  x: number;
-  y: number;
-  width?: number;
-  height?: number;
-  ports?: Port[];
-};
-type Wire = {
-  source_offset?: number;
-  start?: number[];
-  end?: number[];
-  from?: string;
-  to?: string;
-  via?: number[][];
-};
-type Label = {
-  name: string;
-  data_type?: string;
-  kind?: string;
-  class_name?: string;
-  initial_value?: string;
-  device?: string;
-  iec_address?: string;
-  comment?: string;
-};
-type DeclarationEdit = { upserts?: Label[]; renames?: Record<string, string>; remove?: string[] };
-export type FBDModel = {
-  schema_version: number;
-  program: string;
-  canvas_height?: number;
-  nodes: Node[];
-  wires: Wire[];
-  labels?: Record<string, Label[]>;
-  declaration_edits?: Record<string, DeclarationEdit>;
-  unknown_record_count?: number;
-  issues?: { code: string; message: string }[];
-  cpu?: string;
-};
-type CatalogNode = {
-  template: string;
-  kind: string;
-  symbol: string;
-  width: number;
-  height: number;
-  ports: Port[];
-};
-type DraftPreview = { svg: string; model: FBDModel; gx_compile: string };
-type NativeRecord = {
-  id: string;
-  created_at: string;
-  operator: string;
-  tool_version: string;
-  outcome: string;
-  report: string;
-  source_gxw_sha256: string;
-  binding_current: boolean;
-  native_gxw?: {
-    filename: string;
-    sha256: string;
-    integrity_verified: boolean;
-    matches_source_bytes: boolean;
-    selected_program_matches: boolean;
-  };
-};
-type NativeEvidence = {
-  source_gxw_sha256: string;
-  automatic_verification: string;
-  records: NativeRecord[];
-};
-type NativeCheck = {
-  mode: "native";
-  snapshot: { project_id: string; version_id: string; requested_program: string; cpu: string };
-  native_version: string;
-  cpu: string;
-  adapter: { status: string; message: string };
-  selection: {
-    status: string;
-    selected_sources: string[];
-    empty_task: boolean;
-    tasks: { resource: string; task: string; programs: string[] }[];
-  };
-  compilation: {
-    completed: boolean;
-    acceptance: string;
-    diagnostics_complete?: boolean;
-    diagnostics?: { kind: number }[];
-    source_context?: { status: string };
-    declaration_context?: { status: string; global_and_structure?: { status: string } };
-    source_diagnostics?: NativeDiagnostic[];
-  };
-  publication: { completed: boolean };
-  owned_check_inputs: { correspondence: string };
-  published_resources: { correspondence: string };
-  public_check: { status: string };
-  raw_backend_check: { status: string };
-  public_diagnostic_conversion?: {
-    status: string;
-    completed: boolean;
-    current_source: string;
-    origin?: string;
-    converted_report_count?: number;
-    original_report_count?: number;
-  };
-  diagnostic_recheck?: { trigger_code?: number };
-  diagnostic_projection: {
-    status: string;
-    failures: { code?: number }[];
-    source_diagnostics: NativeDiagnostic[];
-    empty_public_list_means_no_errors?: boolean;
-  };
-  current_source_check: string;
-  current_raw_source_check: string;
-  native_source_locations: { status: string };
-  native_instance_locations: { status: string };
-  save: { completed: boolean };
-  reopen: { status: string };
-};
-type NativeDiagnostic = {
-  original: { code: number; kind: number; step: number; arguments: { text: string }[] };
-  source_projection: {
-    status: string;
-    source?: {
-      library?: string;
-      pou?: string;
-      declaration_owner?: string;
-      network?: number;
-      zero_based_line?: number;
-      text?: string;
-      declaration?: { name: string; data_type: string };
-      child?: {
-        kind: string;
-        name: string;
-        number: number | null;
-        registrations: { action_number: number }[];
-      };
-    };
-    instance_resolution?: string;
-    instruction_position?: {
-      status: string;
-      position?: { native_step: number; op: string; args: string[] };
-    };
-    instance_projection?: { status: string; instance?: string; task?: string };
-  };
-  graph_projection: {
-    status: string;
-    source?: {
-      instance?: string;
-      formal?: string;
-      port_name?: string;
-      side?: string;
-      pou?: string;
-      network?: number;
-      symbol?: string;
-    };
-    caller?: { pou: string; network: number; symbol?: string };
-    object?: { symbol: string };
-    cell?: { id: string; x: number; y: number };
-    candidates?: { id: string; x: number; y: number }[];
-  };
-};
+import type { ApiSchema } from "../api/client";
+export type FBDModel = ApiSchema["FBDModel"];
+type CatalogNode = ApiSchema["CatalogNode"];
+type DraftPreview = ApiSchema["FBDDraftPreview"];
+type NativeEvidence = ApiSchema["NativeEvidence"];
+
+type NativeCheck = ApiSchema["NativeCheck"];
 
 const templateLabel = (key: string, t: (s: string) => string) => {
   const labels: Record<string, string> = {
@@ -293,15 +127,12 @@ export function NativeValidationPanel({
     setError("");
     checkRequest.current ??= key();
     try {
-      const response = await api<{
-        is_error: boolean;
-        data: { data: NativeCheck; error?: { message: string } };
-      }>(`${route}/check`, "POST", {
+      const response = await api<ApiSchema["NativeValidationToolResult"]>(`${route}/check`, "POST", {
         request_id: checkRequest.current,
         program,
       });
       checkRequest.current = null;
-      if (response.is_error)
+      if (response.is_error || !response.data.data)
         throw new Error(response.data.error?.message || t("原生检查未返回完整结果。"));
       const result = response.data.data;
       if (
@@ -358,9 +189,9 @@ export function NativeValidationPanel({
     ? [
         ...new Set([
           ...check.diagnostic_projection.failures.flatMap((item) =>
-            item.code === undefined ? [] : [item.code],
+            item.code == null ? [] : [item.code],
           ),
-          ...(check.diagnostic_recheck?.trigger_code === undefined
+          ...(check.diagnostic_recheck?.trigger_code == null
             ? []
             : [check.diagnostic_recheck.trigger_code]),
         ]),
@@ -491,7 +322,7 @@ export function NativeValidationPanel({
                           </>
                         )}
                       {diagnostic.source_projection.status === "source-resolved" &&
-                        diagnostic.source_projection.source?.zero_based_line !== undefined && (
+                        diagnostic.source_projection.source?.zero_based_line != null && (
                           <>
                             <br />
                             {t("源码行")} {diagnostic.source_projection.source.zero_based_line + 1}
@@ -789,7 +620,7 @@ export function FBDImport({
         reader.readAsDataURL(file);
       });
       const value = { filename: file.name, data_base64: encoded };
-      const info = await api<{ programs: string[] }>("/fbd/inspect", "POST", value);
+      const info = await api<ApiSchema["FBDInspection"]>("/fbd/inspect", "POST", value);
       if (!info.programs.length) throw new Error(t("工程中没有可读取的 Program.pou。"));
       setUpload(value);
       setPrograms(info.programs);
@@ -869,26 +700,7 @@ export function FBDImport({
 }
 
 type ScopeMode = "existing_task" | "new_task" | "new_resource";
-type TaskScopes = {
-  status: string;
-  resources: string[];
-  tasks: { resource: string; task: string; programs: { name: string; line: number }[] }[];
-  message?: string;
-};
-export type EditorView = {
-  model: FBDModel;
-  catalog: CatalogNode[];
-  programs: string[];
-  task_scopes?: TaskScopes;
-  source_svg: string;
-  presentation: {
-    tables: string[];
-    rows: Record<string, Label[]>;
-    nodes: { id: string; symbol_editable: boolean; ports: Port[] }[];
-    endpoints: { value: string; label: string; point: number[] }[];
-  };
-  gx_compile: string;
-};
+export type EditorView = ApiSchema["FBDEditorView"];
 
 export function FBDPanel({
   value,
@@ -1233,7 +1045,7 @@ export function FBDPanel({
           {vid && !preview && (
             <Button
               disabled={disabled || dirty || editor.task_scopes?.status !== "available"}
-              title={editor.task_scopes?.message}
+              title={editor.task_scopes?.message ?? undefined}
               onClick={() => openCreation("program")}
             >
               <Plus size={14} />

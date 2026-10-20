@@ -5,29 +5,16 @@ import { Button } from "../components/ui";
 import { NativeValidationPanel } from "./FBDPanel";
 import "./sfc.css";
 
-type Binding = { status: string; step_reference?: number; action_number?: number; transition_number?: number;
-  child?: string; registrations?: { qualifier: number; zoom: string }[] };
-type Cell = { id: string; x: number; y: number; type: number; result: number; role: string; binding: Binding };
-type Symbol = { cell: string; kind: string; ports: ("down" | "up" | "right" | "left")[]; reference?: number; initial?: boolean };
-type Topology = { status: string; symbols: Symbol[];
-  segments: { source: string; target: string; direction: string; style: string }[];
-  jumps: { source: string; step_reference: number; targets: string[]; status: string }[];
-  issues: { cell?: string; reason: string }[] };
-type Child = { kind: string; name: string; number: number | null;
-  records: { kind: string; op?: string; args?: string[]; raw_hex: string }[] };
-export type SFCModel = { program: string; cpu: string; codepage: number;
-  graph: { position_resolution: string; edit_profile?: string | null; width?: number; height?: number; cells?: Cell[]; topology?: Topology;
-    write_symbols?: { kind: string; number?: number; x?: number; y?: number; start?: number; end?: number }[] | null;
-    records: { kind: string; references: number[] }[] };
-  actions: { name: string; number: number; registrations: { zoom: string; qualifier: number }[] }[];
-  children: Child[]; issues: (string | { message?: string; code?: string })[] };
+import type { ApiSchema } from "../api/client";
+export type SFCModel = ApiSchema["SFCModel"];
+
 type ActionEdit = { step_reference: number; action_number: number };
 type JumpEdit = { kind: "jump"; x: number; y: number; before_step_reference: number; target_step_reference: number };
 type SwapEdit = { kind: "swap_steps"; left_step_reference: number; right_step_reference: number };
 type GraphEdit = ActionEdit | JumpEdit | SwapEdit;
 const isActionEdit = (edit: GraphEdit): edit is ActionEdit => !("kind" in edit);
 const isJumpEdit = (edit: GraphEdit): edit is JumpEdit => "kind" in edit && edit.kind === "jump";
-type Preview = { program: SFCModel; validation: { native_save: string }; diff: { has_changes: boolean } };
+type Preview = ApiSchema["SFCPreviewResource"];
 
 export function SFCPanel({ value, pid, vid, readOnly, preview, onProposal, t }: {
   value: SFCModel | null; pid: string; vid: string; readOnly: boolean; preview: boolean;
@@ -169,7 +156,7 @@ export function SFCPanel({ value, pid, vid, readOnly, preview, onProposal, t }: 
               left_step_reference: selectedStep, right_step_reference: Number(e.target.value) }]); }}>
             <option value="">{t("选择步骤")}</option>
             {swapSteps.filter(symbol => symbol.number !== selectedStep).map(symbol =>
-              <option key={symbol.number} value={symbol.number}>S{symbol.number}</option>)}
+              <option key={symbol.number} value={symbol.number ?? ""}>S{symbol.number}</option>)}
           </select></label>}
         {sourceJump && sourceJumpCell && <label>{t("跳转目标")}<select aria-label={t("跳转目标")}
           disabled={locked || !editable}
@@ -177,7 +164,7 @@ export function SFCPanel({ value, pid, vid, readOnly, preview, onProposal, t }: 
           onChange={e => changeJump(Number(e.target.value))}>
           {!targetSteps.some(cell => cell.binding.step_reference === sourceJump.step_reference) &&
             <option value={sourceJump.step_reference} disabled>S{sourceJump.step_reference} · {t("未解析")}</option>}
-          {targetSteps.map(cell => <option key={cell.id} value={cell.binding.step_reference}>S{cell.binding.step_reference}</option>)}
+          {targetSteps.map(cell => <option key={cell.id} value={cell.binding.step_reference ?? ""}>S{cell.binding.step_reference}</option>)}
         </select></label>}
         <h3>{t("所选子程序")}</h3>
         {!children.length && <p className="muted">{t("选择步骤或转换条件查看源码。")}</p>}

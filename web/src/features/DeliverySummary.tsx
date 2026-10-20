@@ -1,4 +1,5 @@
 import { lazy, Suspense, useState } from "react";
+import type { ApiSchema } from "../api/client";
 import type { ReactNode } from "react";
 import { useResource } from "../lifecycle/useResource";
 import { Button } from "../components/ui";
@@ -56,7 +57,7 @@ function DeliveryMarkdown({ text }: { text: string }) {
 }
 
 export function DeliverySummary({pid,vid,t,refreshKey,readOnly}:{pid:string;vid:string;t:(s:string)=>string;refreshKey:number;readOnly:boolean}) {
-  const {value,error}=useResource<{markdown:string}>(`/projects/${pid}/versions/${vid}/delivery`,refreshKey);
+  const {value,error}=useResource<ApiSchema["DeliverySummary"]>(`/projects/${pid}/versions/${vid}/delivery`,refreshKey);
   const markdown=value?.markdown||"";
   const [showHardware,setShowHardware]=useState(false);
   return <div className="document-view"><div className="content-heading"><h2>{t("工程交付摘要")}</h2><Button disabled={!markdown} onClick={()=>{const url=URL.createObjectURL(new Blob([markdown],{type:"text/markdown;charset=utf-8"}));const a=document.createElement("a");a.href=url;a.download=`${pid}-${vid}-handoff.md`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}}>{t("下载摘要")}</Button></div>

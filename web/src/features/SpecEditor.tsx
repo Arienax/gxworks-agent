@@ -1,12 +1,11 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Plus, Check } from "lucide-react";
 import { api } from "../api/client";
-import type { Spec, Json } from "../api/client";
+import type { Spec, ApiSchema } from "../api/client";
 import { Button } from "../components/ui";
 import { ChoiceInput } from "../components/ChoiceInput";
 
-type SpecPresentation = { operation_intents: { effects: string[]; parameters: string[]; enable: string; execution: string; required_state: string[] }[];
-  behavior_constraints: { source?: string; accept?: string; enable?: string }[] };
+type SpecPresentation = ApiSchema["SpecPresentationResource"];
 
 export function SpecEditor({
   value,
@@ -72,19 +71,19 @@ export function SpecEditor({
     if (index !== null && sourceRow) patch({ ...source, io_table: source.io_table?.map((row, i) => i === index ? { ...row, address: address ?? "" } : row) });
     setIOEditing(index); setIOPending(true); setIOError("");
     try {
-      const row = await api<Record<string, Json>>("/spec/io-row", "POST", { row: sourceRow || null, address: address ?? null });
+      const row = await api<ApiSchema["IORow"]>("/spec/io-row", "POST", { row: sourceRow || null, address: address ?? null });
       if (ioRequest.current !== requestId || !current.current) return;
       const latest = current.current;
       patch({ ...latest, io_table: index === null ? [...(latest.io_table || []), row] : (latest.io_table || []).map((item, i) => i === index ? { ...item, address: row.address, kind: row.kind } : item) });
     } catch (error) { if (ioRequest.current === requestId) setIOError(error instanceof Error ? error.message : String(error)); }
     finally { if (ioRequest.current === requestId) setIOPending(false); }
   }
-  const approachId = (a?: Record<string, Json>) => String(a?.approach_id || a?.id || "");
+  const approachId = (a?: ApiSchema["SpecificationApproach"] | null) => String(a?.approach_id || a?.id || "");
   const rows = draft.io_table || [];
   const parameters = draft.parameters || [];
-  const operationIntents = Array.isArray(draft.operation_intents) ? draft.operation_intents.filter((v): v is Record<string, Json> => !!v && typeof v === "object" && !Array.isArray(v)) : [];
+  const operationIntents = draft.operation_intents || [];
   const confirmedIntentIds = Array.isArray(draft.confirmed_operation_intent_ids) ? draft.confirmed_operation_intent_ids.map(String) : [];
-  const behaviors = Array.isArray(draft.behavior_constraints) ? draft.behavior_constraints.filter((v): v is Record<string, Json> => !!v && typeof v === "object" && !Array.isArray(v)) : [];
+  const behaviors = draft.behavior_constraints || [];
   const confirmedBehaviorIds = Array.isArray(draft.confirmed_behavior_ids) ? draft.confirmed_behavior_ids.map(String) : [];
   const rawPlan = draft.selected_approach?.construction_plan;
   const plan = rawPlan && typeof rawPlan === "object" && !Array.isArray(rawPlan) ? rawPlan : {};

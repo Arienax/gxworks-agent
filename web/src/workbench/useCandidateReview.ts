@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Job, Json, Proposal, Session } from "../api/client";
+import type { Job, Proposal, Session, PreviewDocument, ApiSchema, GenerationPreview, ProposalPreview } from "../api/client";
 import { activeJob, api, key } from "../api/client";
 import type { useGenerationResult } from "../features/GenerationResult";
 import type { Navigation, Setter, Translate } from "./types";
@@ -20,7 +20,7 @@ export function useCandidateReview(options: Options) {
   const { pid, vid, version, loading, setVid, reloadProjectSilently } = workspace;
   const { jobs, jobId, setJobId, setJobs, setProposals, jobsPolling } = feed;
   const [selectedProposal, setSelectedProposal] = useState<Proposal | null>(null);
-  const [preview, setPreview] = useState<Record<string, Json> | null>(null);
+  const [preview, setPreview] = useState<PreviewDocument | null>(null);
   const [diagnosticJobId, setDiagnosticJobId] = useState("");
   const [versionDrawing, setVersionDrawing] = useState<{ key: string; svg: string } | null>(null);
   const [refreshingDrawing, setRefreshingDrawing] = useState(false);
@@ -135,7 +135,7 @@ export function useCandidateReview(options: Options) {
       // A manual retry reads the persisted result again rather than relying on
       // SSE, list polling, or an obsolete React state snapshot.
       const output = reread
-        ? await api<Record<string, Json>>(`/jobs/${generationResult.id}/output`)
+        ? await api<ApiSchema["JobOutput"]>(`/jobs/${generationResult.id}/output`)
         : generationResult.value;
       if (epoch !== workspace.capture()) return;
       const blocked = output?.status === "contract_mismatch" || generationResult.blocked;
@@ -143,7 +143,7 @@ export function useCandidateReview(options: Options) {
         typeof output?.proposal_id === "string" ? output.proposal_id : generationResult.proposalId;
       if (blocked) {
         const request = ++previewEpoch.current;
-        const loaded = await api<Record<string, Json>>(
+        const loaded = await api<GenerationPreview>(
           `/jobs/${generationResult.id}/preview?theme=${previewTheme}`,
         );
         if (epoch !== workspace.capture() || request !== previewEpoch.current) return;
@@ -183,7 +183,7 @@ export function useCandidateReview(options: Options) {
   async function redrawVersion(versionId = vid, previewTheme = theme) {
     const epoch = workspace.capture();
     const request = ++previewEpoch.current;
-    const drawing = await api<Record<string, Json>>(
+    const drawing = await api<ApiSchema["VersionPreview"]>(
       `/projects/${pid}/versions/${versionId}/preview?theme=${previewTheme}`,
     );
     if (epoch !== workspace.capture() || request !== previewEpoch.current) return;
@@ -240,7 +240,7 @@ export function useCandidateReview(options: Options) {
     }
     const epoch = workspace.capture();
     const request = ++previewEpoch.current;
-    const loaded = await api<Record<string, Json>>(
+    const loaded = await api<ProposalPreview>(
       `/proposals/${value.id}/preview?theme=${previewTheme}`,
     );
     if (

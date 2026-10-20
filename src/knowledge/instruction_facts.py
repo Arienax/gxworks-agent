@@ -6,6 +6,17 @@ The existing index remains read-only and owns model/source applicability.
 """
 from __future__ import annotations
 
+from knowledge import index_access
+
+from knowledge.index_access import (
+    CHUNK_ID_COLUMNS,
+    SECTION_COLUMNS,
+    TEXT_COLUMNS,
+)
+from knowledge.record_projection import (
+    chunk_result,
+)
+
 import copy
 import hashlib
 import json
@@ -310,29 +321,28 @@ def _related_units(seed, plc_model, task_type):
     Older indexes need no migration. Without a stable manual+section identity we
     return nothing, rather than guessing a page window or crossing revisions.
     """
-    from knowledge import core
     manual_id, section = seed.get("manual_id"), seed.get("section")
     if not manual_id or not section:
         return []
-    path = core._index_path()
-    identity = core._index_identity(path)
+    path = index_access.index_path()
+    identity = index_access.index_identity(path)
     if identity[0] == "missing":
         return []
     try:
-        connection = core._connection(path, identity)
-        schema = core._schema(connection)
+        connection = index_access.connection(path, identity)
+        schema = index_access.schema(connection)
         table = schema.get("chunks") or {}
         columns = table.get("columns", ())
-        section_column = core._first_column(columns, core._SECTION_COLUMNS)
-        id_column = core._first_column(columns, core._CHUNK_ID_COLUMNS)
+        section_column = index_access.first_column(columns, SECTION_COLUMNS)
+        id_column = index_access.first_column(columns, CHUNK_ID_COLUMNS)
         if "manual_id" not in columns or not section_column or not id_column:
             return []
-        quote = core._quote_identifier
+        quote = index_access.quote_identifier
         conditions = [f"{quote(section_column)}=?"]
         args = [manual_id, section]
         # Only actual index relationships are followed. There is no implicit
         # 'next page belongs to the same instruction' rule.
-        parent_column = core._first_column(columns, ("parent_chunk_id", "parent_id"))
+        parent_column = index_access.first_column(columns, ("parent_chunk_id", "parent_id"))
         if parent_column:
             conditions.append(f"{quote(parent_column)}=?")
             args.append(seed.get("id"))
@@ -340,19 +350,19 @@ def _related_units(seed, plc_model, task_type):
                f"WHERE manual_id=? AND ({' OR '.join(conditions)}) ORDER BY rowid LIMIT 24")
         rows = connection.execute(sql, args).fetchall()
         if parent_column:
-            original = core._fetch_chunks(connection, schema, [("id", seed.get("id"))])
+            original = index_access.fetch_chunks(connection, schema, [("id", seed.get("id"))])
             row = original.get(("id", str(seed.get("id"))))
             parent = row[parent_column] if row is not None else None
             if parent:
-                rows.extend(core._fetch_chunks(connection, schema, [("id", parent)]).values())
+                rows.extend(index_access.fetch_chunks(connection, schema, [("id", parent)]).values())
         results = []
         for row in rows:
-            value = core._chunk_result(row, {}, path, plc_model, task_type)
+            value = chunk_result(row, {}, path, plc_model, task_type)
             if not value or value.get("manual_id") != manual_id or value.get("manual_type") not in _OFFICIAL:
                 continue
             if str(value.get("revision") or "") != str(seed.get("revision") or ""):
                 continue
-            value["manual_text"] = str(core._row_value(row, core._TEXT_COLUMNS, value["text"]))
+            value["manual_text"] = str(index_access.row_value(row, TEXT_COLUMNS, value["text"]))
             results.append(value)
         return results
     except (OSError, sqlite3.Error, TypeError, ValueError, KeyError, IndexError):
@@ -595,7 +605,7 @@ def _render_units(result, selected, *, bindings=(), conflicts=(), structured_own
     structured_prefix = _model_structured_prefix(text)
     value = copy.deepcopy(result)
     if bindings or conflicts:
-        from knowledge.structured_facts import _instruction_lane_prompt_lines
+        from knowledge.structured_facts import instruction_lane_prompt_lines
         from plc.instruction_semantics import attach_operand_usage
         owner = structured_owner or result
         lanes = {key: copy.deepcopy(owner.get(key) or {}) for key in (
@@ -605,7 +615,7 @@ def _render_units(result, selected, *, bindings=(), conflicts=(), structured_own
             owner.get("operand_slots") or [], bindings, conflicts=conflicts,
         )
         value.update(lanes)
-        rendered_lanes = "\n".join(_instruction_lane_prompt_lines(lanes))
+        rendered_lanes = "\n".join(instruction_lane_prompt_lines(lanes))
         if structured_prefix:
             structured_prefix = "\n".join(
                 line for line in structured_prefix.splitlines()
@@ -643,20 +653,19 @@ def _completion_sources(seed, plc_model, task_type):
     then fetched through the exact structured-device index; BM25/dense ranking is
     never used to decide what a completion flag means.
     """
-    from knowledge import core
     from knowledge.structured_facts import resolve_device_records
 
-    path = core._index_path()
-    identity = core._index_identity(path)
+    path = index_access.index_path()
+    identity = index_access.index_identity(path)
     if identity[0] == "missing":
         return []
     try:
-        connection = core._connection(path, identity)
-        table = core._schema(connection).get("instructions", {})
+        connection = index_access.connection(path, identity)
+        table = index_access.schema(connection).get("instructions", {})
         if not {"chunk_id", "completion_flags_json"} <= set(table.get("columns", ())):
             return []
         record = connection.execute(
-            "SELECT completion_flags_json FROM " + core._quote_identifier(table["name"]) + " WHERE chunk_id=? LIMIT 1",
+            "SELECT completion_flags_json FROM " + index_access.quote_identifier(table["name"]) + " WHERE chunk_id=? LIMIT 1",
             (seed.get("id"),)).fetchone()
         flags = json.loads(record[0] or "[]") if record else []
     except (OSError, sqlite3.Error, ValueError, TypeError):

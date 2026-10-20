@@ -24,6 +24,8 @@ def _instruction_identity(value):
 def _target_identity(kind, value):
     if kind == "instruction":
         return _instruction_identity(value)
+    if kind == "positioning" and isinstance(value, Mapping):
+        return str(value.get("target") or "").strip().upper(), None
     return str(value or "").strip().upper(), None
 
 
@@ -38,6 +40,7 @@ def fact_requirements(targets, *, instruction_questions=None):
         ("device_family", "device_families", (_DEFAULT_DIMENSION,)),
         ("error", "errors", (_DEFAULT_DIMENSION,)),
         ("language", "language_features", (_DEFAULT_DIMENSION,)),
+        ("positioning", "positioning", (_DEFAULT_DIMENSION,)),
     ):
         for raw_target in targets.get(key) or ():
             target, instance = _target_identity(kind, raw_target)
@@ -85,6 +88,10 @@ def _record_descriptor(record, included):
         "content_sha256": str(record.get("content_sha256") or text_sha256(record.get("text", ""))),
         "included": str(record["id"]) in included,
     }
+    # Default prompt blocks omit source identifiers. Keep the exact technical
+    # projection so delivery can still be reconciled after prompt assembly.
+    from shared.model_context import technical_knowledge_text
+    descriptor["model_text"] = str(record.get("model_text") or technical_knowledge_text(record))
     if isinstance(record.get("fact_group_members"), Mapping):
         descriptor["fact_group_members"] = copy.deepcopy(record["fact_group_members"])
     instance = record.get("instruction_instance")

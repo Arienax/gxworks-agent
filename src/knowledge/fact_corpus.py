@@ -6,6 +6,14 @@ dependants; presentation text can be discarded without changing typed values.
 """
 from __future__ import annotations
 
+from knowledge import index_access
+
+from knowledge.record_projection import (
+    MAX_TOP_K,
+    chunk_result,
+    select_ranked,
+)
+
 import copy
 import json
 import math
@@ -115,12 +123,11 @@ def project_definition(entry, *, value_projection=None):
 
 
 def runtime_connection():
-    from knowledge import core
-    path = core._index_path()
+    path = index_access.index_path()
     if path is None:
         return None
-    connection = core._connection(path, core._index_identity(path))
-    meta = core._load_meta(connection, core._schema(connection))
+    connection = index_access.connection(path, index_access.index_identity(path))
+    meta = index_access.load_meta(connection, index_access.schema(connection))
     if meta.get('corpus_kind') == CORPUS_KIND:
         from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
         version = meta.get('fact_bundle_version')
@@ -152,7 +159,6 @@ def resolve(kind, targets, *, plc_model, task_type="analysis", connection=_DEFAU
         expected = getattr(DEFAULT_INSTRUCTION_REGISTRY, 'fact_bundle_version', None)
         if expected and (marker[0] != expected or not DEFAULT_INSTRUCTION_REGISTRY.fact_bundle_current()):
             raise ValueError('Runtime knowledge and Core fact bundles differ; reload the checking context')
-    from knowledge import core
     result = []
     from gxworks2.project_profiles import native_project_profile
     profile = native_project_profile(plc_model)
@@ -170,11 +176,11 @@ def resolve(kind, targets, *, plc_model, task_type="analysis", connection=_DEFAU
             "ORDER BY CASE WHEN f.id LIKE 'definition:%' OR f.id LIKE 'function:definition:%' THEN 0 ELSE 1 END,f.id",
             (kind, name, *members)).fetchall()
         for row in rows:
-            projected = core._chunk_result(row, {"corpus_kind": CORPUS_KIND}, core._index_path(), plc_model, task_type)
+            projected = chunk_result(row, {"corpus_kind": CORPUS_KIND}, index_access.index_path(), plc_model, task_type)
             if projected is not None:
                 projected.update(json.loads(row["payload_json"]).get("metadata", {}))
                 result.append(projected)
-    return core._select_ranked(result, core._MAX_TOP_K)
+    return select_ranked(result, MAX_TOP_K)
 
 
 def is_authored_record(row):
