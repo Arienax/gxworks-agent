@@ -182,7 +182,41 @@ def native_reset_plan(devices: Sequence[str], initial_values: Mapping[str, Any],
                       for address in normalized], "initial": initial}
 
 
+def native_simulator_profile(plc_model: str = "FX3U") -> dict[str, Any]:
+    """Select one source-bound native CPU; no family fallback or physical route."""
+    from plc.runtime_semantics import _control_facts
+    from gxworks2.project_profiles import native_project_profile
+    from copy import deepcopy
+    profile = native_project_profile(plc_model)
+    definitions = _control_facts()['native_simulator']
+    target = definitions['targets'].get(profile.cpu) if profile else None
+    if target is None:
+        raise DevicePolicyError('No source-checked native simulator profile for ' + str(plc_model))
+    return deepcopy({**target, **definitions['monitors'][target['monitor']],
+        'cpu_menu': profile.cpu, 'unit_type': definitions['unit_type'],
+        'target_simulator': definitions['target_simulator']})
+
+
+def native_simulator_read_plan(addresses, plc_model="FX3U", *, maximum=256):
+    """Add only exact, read-only monitor addresses to existing device policy."""
+    if not isinstance(addresses, (list, tuple)) or not 1 <= len(addresses) <= maximum:
+        raise DevicePolicyError('Invalid native simulator observation addresses')
+    profile = native_simulator_profile(plc_model)
+    result = []
+    for value in addresses:
+        address = str(value).strip().upper()
+        if address in profile['read_devices']:
+            result.append({'key': address, 'device': address})
+        else:
+            result.extend(native_read_plan([value], plc_model))
+    return result
+
+
 def simulator_run_monitor(plc_model: str = "FX3U") -> tuple[str, int]:
-    if normalize_plc_model(plc_model) != "FX3U":
-        raise DevicePolicyError("The native simulator route currently supports FX3U only")
-    return "M8000", 1
+    profile = native_simulator_profile(plc_model)
+    return profile['device'], profile['value']
+
+
+def simulator_cpu_is_running(value, plc_model="FX3U") -> bool:
+    profile = native_simulator_profile(plc_model)
+    return type(value) is int and value & profile['mask'] == profile['value']

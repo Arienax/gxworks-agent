@@ -78,6 +78,10 @@ namespace PlcAi.GxSimulator2Gateway
         private dynamic _control;
         private string _activeProgId = "";
         private string _targetBinding = "";
+        private int _requestedCpuType = CpuFx3UC;
+        private int _requestedModelCode = 0xF3;
+        private int _observedCpuType = 0;
+        private string _observedCpuName = "";
 
         public string TargetBinding { get { return _targetBinding; } }
 
@@ -130,10 +134,14 @@ namespace PlcAi.GxSimulator2Gateway
             return "";
         }
 
-        public IDictionary<string, object> Connect()
+        public IDictionary<string, object> Connect(int expectedCpuType, int expectedModelCode)
         {
+            if (expectedCpuType < 1 || expectedCpuType > 65535 || expectedModelCode < 1 || expectedModelCode > 65535)
+                throw new ArgumentException("invalid_simulator_cpu_type");
             if (Connected)
             {
+                if (expectedCpuType != _requestedCpuType || expectedModelCode != _requestedModelCode)
+                    throw new GatewayException(409, "SIMULATOR_TARGET_MISMATCH", "The open simulator belongs to another CPU target.");
                 return RouteDetails();
             }
             string progId = FindAvailableProgId();
@@ -152,14 +160,14 @@ namespace PlcAi.GxSimulator2Gateway
                 Type type = Type.GetTypeFromProgID(progId, true);
                 candidate = Activator.CreateInstance(type);
                 dynamic control = candidate;
-                control.ActCpuType = CpuFx3UC;
+                control.ActCpuType = expectedCpuType;
                 control.ActUnitType = UnitSimulator2;
                 control.ActTargetSimulator = TargetSimulatorForFxCpu;
 
                 int unitType = Convert.ToInt32(control.ActUnitType, CultureInfo.InvariantCulture);
                 int cpuType = Convert.ToInt32(control.ActCpuType, CultureInfo.InvariantCulture);
                 int target = Convert.ToInt32(control.ActTargetSimulator, CultureInfo.InvariantCulture);
-                if (unitType != UnitSimulator2 || cpuType != CpuFx3UC || target != TargetSimulatorForFxCpu)
+                if (unitType != UnitSimulator2 || cpuType != expectedCpuType || target != TargetSimulatorForFxCpu)
                 {
                     throw new GatewayException(
                         500,
@@ -177,7 +185,21 @@ namespace PlcAi.GxSimulator2Gateway
                         "MX Component could not open GX Simulator2 (" + FormatMxCode(result) + ")."
                     );
                 }
+                string observedName;
+                int observedType;
+                result = Convert.ToInt32(control.GetCpuType(out observedName, out observedType), CultureInfo.InvariantCulture);
+                if (result != 0 || observedType != expectedModelCode)
+                {
+                    control.Close();
+                    throw new GatewayException(409, "SIMULATOR_TARGET_MISMATCH",
+                        "Simulator CPU does not match the Core-selected model code (expected=" + expectedModelCode
+                        + ", observed=" + observedType + ", code=" + FormatMxCode(result) + ").");
+                }
                 _control = control;
+                _requestedCpuType = expectedCpuType;
+                _requestedModelCode = expectedModelCode;
+                _observedCpuType = observedType;
+                _observedCpuName = observedName;
                 _activeProgId = progId;
                 _targetBinding = Guid.NewGuid().ToString("N");
                 candidate = null;
@@ -207,7 +229,9 @@ namespace PlcAi.GxSimulator2Gateway
             result["simulator_only"] = true;
             result["route"] = "GX Simulator2";
             result["unit_type"] = UnitSimulator2;
-            result["cpu_type"] = CpuFx3UC;
+            result["cpu_type"] = _requestedCpuType;
+            result["observed_cpu_type"] = _observedCpuType;
+            result["observed_cpu_name"] = _observedCpuName;
             result["target_simulator"] = TargetSimulatorForFxCpu;
             result["prog_id"] = _activeProgId;
             result["connected"] = Connected;
@@ -253,19 +277,30 @@ namespace PlcAi.GxSimulator2Gateway
                 throw new GatewayException(502, code, "MX Component CPU operation failed (" + FormatMxCode(result) + ").");
         }
 
-        public IDictionary<string, object> ResetCpu(List<DeviceCall> clear, List<DeviceCall> initial)
+        public IDictionary<string, object> ResetCpu(List<DeviceCall> clear, List<DeviceCall> initial, string initialPhase)
         {
+            if (initialPhase != "before_reset" && initialPhase != "after_reset")
+                throw new ArgumentException("invalid_reset_initial_phase");
             EnsureConnected();
             // Both complete plans have been checked by the request parser before
             // the FIRST side effect. Python owns which devices/values they contain.
             CpuStatus(1, "MX_CPU_STOP_FAILED");
             Thread.Sleep(100);
-            WriteCalls(clear, "MX_DEVICE_CLEAR_FAILED");
-            WriteCalls(initial, "MX_INITIALIZE_FAILED");
+            if (initialPhase == "before_reset")
+            {
+                WriteCalls(clear, "MX_DEVICE_CLEAR_FAILED");
+                WriteCalls(initial, "MX_INITIALIZE_FAILED");
+            }
             // Native ordering is essential: Simulator2 can resume scanning during
             // RESET itself. Initial values must be applied BEFORE that native call.
             CpuStatus(3, "MX_CPU_RESET_FAILED");
             Thread.Sleep(100);
+            if (initialPhase == "after_reset")
+            {
+                CpuStatus(1, "MX_CPU_STOP_FAILED");
+                WriteCalls(clear, "MX_DEVICE_CLEAR_FAILED");
+                WriteCalls(initial, "MX_INITIALIZE_FAILED");
+            }
             CpuStatus(0, "MX_CPU_RUN_FAILED");
             List<string> cleared = new List<string>();
             Dictionary<string, int> initialized = new Dictionary<string, int>();
@@ -276,7 +311,7 @@ namespace PlcAi.GxSimulator2Gateway
             return new Dictionary<string, object>
             {
                 { "reset", true }, { "cleared_devices", cleared.ToArray() },
-                { "initial_values", initialized }
+                { "initial_values", initialized }, { "initial_phase", initialPhase }
             };
         }
 
@@ -285,6 +320,9 @@ namespace PlcAi.GxSimulator2Gateway
             object current = _control;
             _control = null;
             _activeProgId = "";
+            _targetBinding = "";
+            _observedCpuType = 0;
+            _observedCpuName = "";
             if (current == null)
             {
                 return;
@@ -451,7 +489,8 @@ namespace PlcAi.GxSimulator2Gateway
                     { "device_write", true },
                     { "cpu_reset", true },
                     { "scan_monitor", true },
-                    { "native_device_plan", true }
+                    { "native_device_plan", true },
+                    { "target_cpu_binding", true }, { "model_code_binding", true }, { "reset_initial_phase", true }
                 };
                 health["simulator_only"] = true;
                 health["route"] = "GX Simulator2";
@@ -481,7 +520,17 @@ namespace PlcAi.GxSimulator2Gateway
             }
             if (request.Method == "POST" && request.Path == "/connect")
             {
-                return new Dictionary<string, object>(_mx.Connect());
+                Dictionary<string, object> payload = ParseObject(request.Body);
+                int cpuType = 0x208; // Compatibility for the original FX3U client.
+                int modelCode = 0xF3;
+                if (payload.Count != 0)
+                {
+                    NativeRequest.Fields(payload, "protocol_version", "cpu_type", "model_code");
+                    NativeRequest.Version(payload, 3);
+                    cpuType = NativeRequest.Integer(payload["cpu_type"]);
+                    modelCode = NativeRequest.Integer(payload["model_code"]);
+                }
+                return new Dictionary<string, object>(_mx.Connect(cpuType, modelCode));
             }
             if (request.Method == "POST" && request.Path == "/disconnect")
             {
@@ -508,11 +557,17 @@ namespace PlcAi.GxSimulator2Gateway
             if (request.Method == "POST" && request.Path == "/cpu/reset")
             {
                 Dictionary<string, object> payload = ParseObject(request.Body);
-                NativeRequest.Fields(payload, "protocol_version", "clear", "initial");
+                string phase = "before_reset";
+                if (payload.ContainsKey("initial_phase"))
+                {
+                    NativeRequest.Fields(payload, "protocol_version", "clear", "initial", "initial_phase");
+                    phase = payload["initial_phase"] as string;
+                }
+                else NativeRequest.Fields(payload, "protocol_version", "clear", "initial");
                 NativeRequest.Version(payload, 3);
                 List<DeviceCall> clear = NativeRequest.Devices(payload["clear"], true, 256, true);
                 List<DeviceCall> initial = NativeRequest.Devices(payload["initial"], true, 256, true);
-                return new Dictionary<string, object>(_mx.ResetCpu(clear, initial));
+                return new Dictionary<string, object>(_mx.ResetCpu(clear, initial, phase));
             }
             if (request.Method == "POST" && request.Path == "/shutdown")
             {

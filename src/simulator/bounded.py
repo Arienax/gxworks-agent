@@ -83,14 +83,16 @@ def _leaf(value, memory, bits=16, signed=True, plc_model='FX3U'):
 
 class ScanMachine:
     """An explicit state for one finite trace; no default-zero memory."""
-    def __init__(self, ladder, *, plc_model, initial, execution_context, previous_inputs=None, previous_enables=None, groups=(), instructions=None, applications=None, timer_started_at_ms=None):
+    def __init__(self, ladder, *, plc_model, initial, execution_context, previous_inputs=None, previous_enables=None, groups=(), instructions=None, applications=None, timer_started_at_ms=None, execution_budget=None):
         self.ladder, self.model = ladder, plc_model
+        self.execution_context = copy.deepcopy(execution_context or {})
         self.memory = {canonical_reference_device(k): copy.deepcopy(v) for k, v in initial.items()}
         self.previous = {canonical_reference_device(k): v for k, v in (previous_inputs or {}).items()}
         self.previous_enables = copy.deepcopy(previous_enables or {})
         self.facts = control_runtime_facts(plc_model)
         self.first = first_scan_fact(plc_model, execution_context)
         self.gaps, self.writes = [], []
+        self.constraint_violations = []
         self.scan_index = 0
         self.groups = {r['id']: ({r['output']} if r['kind'] == 'event' else {
             decimal_region_address(e['target']['device'], e['target'].get('offset', 0))
@@ -98,9 +100,14 @@ class ScanMachine:
         self.instructions = instructions if instructions is not None else [
             [(instruction, analyze_instruction_access(instruction['op'], instruction['args'], plc_model=plc_model))
              for instruction in lower_rung_instructions(rung)] for rung in ladder.get('rungs', [])]
+        from plc.instruction_constraints import instruction_program_accesses
+        self.execution_context.setdefault('program_accesses', instruction_program_accesses(ladder, plc_model=plc_model))
         self.applications = applications if applications is not None else {}
         self.timer_starts = copy.deepcopy(timer_started_at_ms or {})
         self.timestamp_ms = None
+        from simulator.st_execution import ExecutionBudget
+        self.execution_budget = execution_budget or ExecutionBudget()
+        self._st_executions = {}
 
     def bit(self, address):
         address = canonical_reference_device(address)
@@ -132,7 +139,55 @@ class ScanMachine:
         if row not in self.gaps:
             self.gaps.append(row)
 
-    def _application(self, op, args, enabled, location, prior):
+    def _check_constraints(self, op, args, *, parameter_values=None, phase='input'):
+        from plc.instruction_constraints import check_instruction_constraints, require_constraints, numeric_operand_type
+        form = DEFAULT_INSTRUCTION_REGISTRY.resolve_form(op, cpu=self.model)
+        values = {**dict(parameter_values or {}), '$OPERANDS': list(args)}
+        if form:
+            for index, name in enumerate(form.spec.native_operand_order):
+                if (index not in form.spec.read_indexes and not (phase == 'result' and index in form.spec.write_indexes)
+                        or index >= len(args)):
+                    continue
+                try:
+                    value_type = numeric_operand_type(form.spec, index)
+                    if name in values and not (phase == 'result' and index in form.spec.write_indexes):
+                        number = values[name]
+                    elif value_type and value_type.kind == 'int':
+                        number = _leaf(args[index], self.memory, value_type.bits, value_type.signed, plc_model=self.model)
+                        if re.fullmatch(r'H[0-9A-F]+', str(args[index]), re.I):
+                            number = value_type.decode_bits(number) if number < 2 ** value_type.bits else None
+                    elif re.fullmatch(r'K[+-]?\d+', str(args[index]), re.I):
+                        number = int(str(args[index])[1:])
+                    else:
+                        number = None
+                except (UnknownInstructionSemantics, ValueError, TypeError, OverflowError):
+                    number = None
+                values[name.upper()] = values['$' + str(index)] = number
+            if phase == 'result' and len(form.spec.write_indexes) == 1:
+                values['RESULT'] = values.get('$' + str(form.spec.write_indexes[0]))
+        values.setdefault('EN', True)
+        require_constraints(check_instruction_constraints(op, values, plc_model=self.model,
+            language='st' if parameter_values is not None else 'ladder', phase=phase,
+            version=self.execution_context.get('software_version'), context={**self.execution_context,
+                'hardware': self.execution_context.get('hardware') or self.execution_context.get('hardware_profile', {}),
+                'consume_step': self.execution_budget.charge,
+                'memory_reader': lambda base, offset: _leaf(decimal_region_address(base, offset), self.memory, plc_model=self.model)}))
+
+    def _application(self, op, args, enabled, location, prior, *, parameter_values=None, writer=None):
+        if enabled is True:
+            self._check_constraints(op, args, parameter_values=parameter_values)
+        if parameter_values is not None:
+            transfer_bits = self.facts.get('transfers', {}).get(op) or (16 if op == 'MOV' and 'MOV' in self.facts.get('control', {}).get('forms', []) else None)
+            if transfer_bits:
+                behavior = {'behavior': 'expression_write', 'outputs': [{'target': {'parameter': 'D', 'offset': 0, 'kind': 'word'},
+                    'expression': {'op': 'parameter', 'name': 'S', 'type': {'kind': 'int', 'bits': transfer_bits, 'signed': True}}}]}
+                source_values = {name.upper(): value for name, value in parameter_values.items()}
+                source_value = source_values['S'] if 'S' in source_values else _leaf(args[0], self.memory, transfer_bits, True, plc_model=self.model)
+                result = execute_behavior(behavior, {'S': source_value, 'D': args[1]}, memory=self.memory,
+                    state=self.memory, enabled=enabled, previous_enabled=prior, trigger='level', disabled='retain')
+                for (base, offset), value in result['writes'].items():
+                    writer(base, offset, value, location, 'word', transfer_bits)
+                return
         if op in self.applications and isinstance(self.applications[op], str):
             raise UnknownInstructionSemantics(self.applications[op])
         form = DEFAULT_INSTRUCTION_REGISTRY.resolve_form(op, cpu=self.model)
@@ -169,8 +224,9 @@ class ScanMachine:
             destinations.update(behavior.get(k) for k in ('destination', 'region', 'source') if behavior.get(k))
             for name, value in zip(form.spec.native_operand_order, args):
                 value_type = types.get(name, {})
-                parameters[name] = value if name in destinations or value_type.get('kind') == 'opaque' else _leaf(
-                    value, self.memory, value_type.get('bits', 16), value_type.get('signed', True), plc_model=self.model)
+                parameters[name] = (parameter_values[name] if parameter_values is not None and name in parameter_values and name not in destinations else
+                    value if name in destinations or value_type.get('kind') == 'opaque' else _leaf(
+                    value, self.memory, value_type.get('bits', 16), value_type.get('signed', True), plc_model=self.model))
             trigger = 'rising' if form.pulse or form.spec.execution_form in {'pulse', 'single', 'pulse_single', 'single_pulse'} else 'level'
             memory = self.memory
             grouped = {name: value for name, value in parameters.items() if name in destinations
@@ -184,16 +240,23 @@ class ScanMachine:
                 definition = next((o for o in behavior.get('outputs', []) if parameters.get(o['target']['parameter']) == base and o['target'].get('offset', 0) == offset), None)
                 kind = definition['target']['kind'] if definition else 'word'
                 bits = Expression.from_mapping(definition['expression']).value_type.bits if definition and kind != 'bit' else 16
-                self.write(base if offset == 0 else decimal_region_address(base, offset), value, location, kind, bits or 16)
+                if writer:
+                    writer(base, offset, value, location, kind, bits or 16)
+                else:
+                    self.write(base if offset == 0 else decimal_region_address(base, offset), value, location, kind, bits or 16)
             if result.get('external_contract'):
                 raise UnknownInstructionSemantics('external_action_not_executed')
+            self._check_constraints(op, args, parameter_values=parameter_values, phase='result')
             return
         self.applications[op] = 'effect_fact_unavailable:'+op
         raise UnknownInstructionSemantics(self.applications[op])
 
     def scan(self, frame, *, first_scan=False):
         self.writes = []
+        self.execution_budget.begin_scan()
+        self.execution_context['initial_scan'] = bool(first_scan)
         group_snapshots = {}
+        self._st_group_snapshots = group_snapshots
         self.memory.update({canonical_reference_device(k): v for k, v in frame.get('inputs', {}).items()})
         for device in self.facts.get('always_on', []):
             self.memory[device] = True
@@ -218,6 +281,7 @@ class ScanMachine:
                             if not rung.get('header_element') and not rung.get('shared_inputs')
                             and not branch.get('inputs')}
             for step, (instruction, access) in enumerate(self.instructions[rung_index]):
+                self.execution_context['current_instruction'] = (rung_index, instruction.get('path'))
                 op, args = instruction['op'], instruction['args']
                 if instruction.get('path') in root_outputs:
                     accumulator = True
@@ -232,6 +296,25 @@ class ScanMachine:
                     if not self.facts.get('control') and not (op.startswith('ST_') or op in
                             {'LD','LDI','AND','ANI','OR','ORI','ORB','ANB','MPS','MRD','MPP','END','NOP',*self.facts.get('transfers',{})}):
                         raise UnknownInstructionSemantics('cpu_control_form_unverified:' + op)
+                    if op == 'ST_PROGRAM':
+                        from simulator.st_execution import STExecution
+                        identity = id(instruction)
+                        execution = self._st_executions.get(identity)
+                        if execution is None:
+                            execution = self._st_executions[identity] = STExecution(self, instruction)
+                        try:
+                            execution.run()
+                        except (ValueError, ArithmeticError, UnknownInstructionSemantics) as error:
+                            constraint = getattr(error, 'constraint_report', None)
+                            if constraint and constraint['status'] == 'failed':
+                                self.constraint_violations.append({'location': location, 'scan': self.scan_index,
+                                                                  'constraint': constraint})
+                            # Unknown control/call scope cannot preserve stale
+                            # output values and manufacture a behavior result.
+                            for key in set(self.memory) | set(instruction.get('devices', [])):
+                                self.memory[key] = None
+                            self.gap(str(error), location)
+                        continue
                     if op.startswith('ST_'):
                         if op == 'ST_IF':
                             st_stack.append([accumulator, False])
@@ -399,6 +482,7 @@ class ScanMachine:
                         continue
                     transfer_bits = self.facts.get('transfers', {}).get(op)
                     if transfer_bits or op == 'MOV' and 'MOV' in self.facts.get('control', {}).get('forms', []):
+                        self._check_constraints(op, args)
                         bits = transfer_bits or 16
                         # The same formal expression/effect interpreter is used
                         # for the shared source-scoped MOV control subset.
@@ -410,6 +494,10 @@ class ScanMachine:
                         continue
                     self._application(op, args, accumulator, location, prior)
                 except (UnknownInstructionSemantics, ValueError, KeyError, IndexError) as error:
+                    constraint = getattr(error, 'constraint_report', None)
+                    if constraint and constraint['status'] == 'failed':
+                        self.constraint_violations.append({'location': location, 'scan': self.scan_index,
+                                                          'constraint': constraint})
                     self.gap(str(error), location)
                     if op.startswith(('LD', 'AND', 'OR')):
                         accumulator = None
@@ -526,7 +614,8 @@ def check_bounded_traces(program, spec, traces, *, version_binding=None, max_tra
     if isinstance(program.get('st_code'), str):
         from plc.st_validation import bounded_st_instructions
         try:
-            st_instructions = bounded_st_instructions(program['st_code'], plc_model=model, confirmed_spec=spec)
+            st_instructions = bounded_st_instructions(program['st_code'], plc_model=model, confirmed_spec=spec,
+                                                     project_context=program.get('project_context'))
         except (ValueError, RecursionError) as error:
             st_reason = str(error)
         ladder = {'rungs':[{'rung_id':1,'branches':[]}]}
@@ -559,6 +648,9 @@ def check_bounded_traces(program, spec, traces, *, version_binding=None, max_tra
     if st_instructions is not None:
         instructions = [st_instructions]
     applications, unsupported_index = {}, {}
+    constraint_violations = []
+    from simulator.st_execution import ExecutionBudget
+    execution_budget = ExecutionBudget()
     groups = [(False, traces), (True, frozen_time_traces)]
     for frozen_time, source in groups:
         for index, trace in enumerate(source):
@@ -574,7 +666,7 @@ def check_bounded_traces(program, spec, traces, *, version_binding=None, max_tra
                                   execution_context=trace.get('execution_context', context),
                                   previous_inputs=trace.get('previous_inputs'), previous_enables=trace.get('previous_enables'),
                                   groups=[r for r in rows if r['kind'] in {'event', 'transition_group'}], instructions=instructions,
-                                  applications=applications,timer_started_at_ms=trace.get('timer_started_at_ms'))
+                                  applications=applications,timer_started_at_ms=trace.get('timer_started_at_ms'), execution_budget=execution_budget)
             explicit = trace.get('expectations', [])
             try:
                 if not isinstance(explicit, list) or len(explicit) > 128:
@@ -683,6 +775,8 @@ def check_bounded_traces(program, spec, traces, *, version_binding=None, max_tra
                     unsupported_index[key] = entry
                     unsupported.append(entry)
                 unsupported_index[key]['observations'] += 1
+            constraint_violations.extend({**row, 'trace_id': trace.get('id', index), 'program_version': binding}
+                                         for row in machine.constraint_violations)
     for check in checks.values():
         if check['violations']:
             check['status'] = 'violated'
@@ -699,9 +793,10 @@ def check_bounded_traces(program, spec, traces, *, version_binding=None, max_tra
                 check['unverified_witnesses'] = check['violations']
                 check['violations'] = []
     statuses = {c['status'] for c in checks.values()}
-    status = 'violated' if 'violated' in statuses else 'unverified' if not checks or 'unverified' in statuses else 'no_violation_found_in_tested_scope'
+    status = 'violated' if 'violated' in statuses or constraint_violations else 'unverified' if not checks or 'unverified' in statuses else 'no_violation_found_in_tested_scope'
     return {'schema_version': 1, 'stage': 'Core_bounded_scan_check', 'status': status, 'program_version': binding,
             'checks': list(checks.values()), 'violations': [v for c in checks.values() for v in c['violations']],
+            'constraint_violations': constraint_violations,
             'coverage': {'traces_tested': tested, 'maximum_scans': maximum_scans, 'automatic_trace_limit': min(max_traces, MAX_TRACES),
                          'scan_limit': min(max_scans, MAX_SCANS), 'budget_exhausted': truncated, 'frozen_time_traces': len(frozen_time_traces)},
             'unsupported_or_missing': unsupported, 'checker_exceptions': exceptions,

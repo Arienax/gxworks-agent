@@ -339,24 +339,30 @@ def verify_active_labels(prepared, observed):
 
 
 def _label_delete_atoms(text, *, body):
-    """Inspect only the existing bounded ST grammar, without strings/comments."""
-    from plc.st_validation import _Parser, STParseError
+    """Use the shared frontend and retain the direct-reference delete boundary."""
+    from plc.st_frontend import parse_body, STParseError
+    from plc.st_semantics import literal_value
     try:
-        parser = _Parser(text)
-        syntax = parser.body() if body else parser.expression()
+        unit = parse_body(text if body else '__label_delete_probe := (' + text + ');')
+        if unit.declarations or unit.types or not body and len(unit.body) != 1:
+            raise GXWFormatError('Label deletion requires direct body/expression syntax')
+        syntax = unit.body if body else unit.body[0][2]
     except STParseError as error:
         raise GXWFormatError('Label deletion requires fully covered direct ST syntax: ' + str(error)) from error
-    if parser.token.text:
-        raise GXWFormatError('Label deletion cannot prove absence through incomplete source syntax')
     atoms = []
     def visit(value):
         if not isinstance(value, (tuple, list)):
             return
         if isinstance(value, tuple) and value:
-            if value[0] in ('call', 'invoke'):
+            if value[0] in ('call', 'invoke', 'member', 'index'):
                 raise GXWFormatError('Label deletion does not cover ST calls or indirect access')
             if value[0] == 'atom':
                 text = value[1]
+                try:
+                    if literal_value(text) is not None:
+                        return
+                except ValueError as error:
+                    raise GXWFormatError('Label deletion encountered an unresolved source literal') from error
                 if text and (text[0].isalpha() or text[0] == '_') and text.upper() not in ('TRUE', 'FALSE'):
                     atoms.append(text)
                 return
@@ -1197,6 +1203,12 @@ def _verify_saved_preservation(baseline, saved, context, old, new, *, native_com
                 operation = 'edited_source_save'
             elif before[prefix_a] == 193:
                 operation = 'edited_st_source_save'
+        elif (header_identity is not None and native_compiled
+                and before[prefix_a] == after[prefix_b] == 193):
+            # The actual current build can update only the save metadata of an
+            # unchanged ST source. Body, declarations and every opaque field
+            # are still checked independently below and against active pages.
+            operation = 'compiled_st_source_save'
         normalized, changed = normalize_visible_save_header(before[:prefix_a], after[:prefix_b], cpu=old[0]['cpu'],
             native_compiled=native_compiled, native_identity=header_identity, operation=operation)
         if changed is not None:
@@ -1347,9 +1359,27 @@ def verify_active_saved_context(saved, context, baseline, *, compilation=None):
     previous_ranges = read_project_system_variables(old[1][before_name])['ranges']
     configuration = state['configuration']
     range_initializations = []
-    if ranges['P'] != previous_ranges['P'] and state['graphs']:
-        initialization = native_fbd_pointer_initialization(old[1][before_name], 208,
-            native_identity=state['identity'])
+    if ranges['P'] != previous_ranges['P'] and (state['graphs'] or state['st'] and native_compiled):
+        if state['graphs']:
+            initialization = native_fbd_pointer_initialization(old[1][before_name], 208,
+                native_identity=state['identity'])
+            source_language = 'fbd'
+        else:
+            # A bound successful ST build can materialize an unset P range.
+            # Use this current native grid as the independent value source;
+            # no per-CPU default or candidate-supplied range is substituted.
+            from .native_locale import native_language
+            observed = read_native_allocation_grids(configuration.get('grid_rows'),
+                native_ui_language=native_language(state['identity']))
+            pointers = [row['cells'] for row in observed['grid_rows']['allocation']
+                        if row['cells'][2]['value'] == 'P']
+            initialization = None
+            if (previous_ranges['P'] == (0xffffffff, 0xffffffff) and len(pointers) == 1
+                    and all(cell['value'].isdecimal() for cell in pointers[0][5:8])):
+                low, high, count = [int(cell['value']) for cell in pointers[0][5:8]]
+                if 0 <= low <= high < 0xffffffff and count == high - low + 1:
+                    initialization = {'before': [-1, -1], 'after': [low, high]}
+            source_language = 'st'
         if initialization is not None and ranges['P'] == tuple(initialization['after']):
             from .native_locale import native_language, ui_text
             language = native_language(state['identity'])
@@ -1366,7 +1396,7 @@ def verify_active_saved_context(saved, context, baseline, *, compilation=None):
                     and all(cell['state'] & ~0x6 == 0 for cell in pointers[0][5:8])):
                 previous_ranges['P'] = tuple(initialization['after'])
                 range_initializations.append(dict(device='P', before=initialization['before'],
-                    after=initialization['after'], origin='current_native_fbd_pointer_default_materialized',
+                    after=initialization['after'], origin='current_native_'+source_language+'_pointer_default_materialized',
                     cpu_menu=state['identity']['cpu_menu'], native_ui_language=language))
     if configuration['status'] != 'available' or any(
             list(pair) != (configuration['ranges'][device] if device in ('D', 'M') else list(previous_ranges[device]))

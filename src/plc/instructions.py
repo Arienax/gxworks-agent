@@ -600,6 +600,7 @@ class InstructionRegistry:
         The inventory also includes manual-only and unsupported entries. Those
         remain inspectable inventory records, without registering them as calls.
         """
+        before = path.stat()
         if path.suffix == ".gz":
             import gzip
             payload = json.loads(gzip.decompress(path.read_bytes()).decode("utf-8"))
@@ -637,11 +638,56 @@ class InstructionRegistry:
             pending[key] = replace(form.spec, definition_facts=facts,
                                    source_materials=tuple(copy.deepcopy(materials)),
                                    uninterpreted_content=tuple(copy.deepcopy(uninterpreted)))
+        features = {}
+        for feature in payload.get('language_facts', []):
+            target = feature.get('target')
+            if not isinstance(target, str) or not target or target in features:
+                raise ValueError('Invalid or duplicate language feature')
+            for fact in feature.get('facts', []):
+                group = InstructionFactGroup.from_mapping(fact)
+                if group.scope.get('forms') != [target] or group.scope.get('languages') != ['st']:
+                    raise ValueError('Language fact needs its exact feature/language scope')
+            features[target] = copy.deepcopy(feature)
+        after = path.stat()
+        if (before.st_mtime_ns, before.st_size) != (after.st_mtime_ns, after.st_size):
+            raise ValueError('Fact definitions changed while loading')
         self._cpu_contracts.update(pending)
         self.definition_inventory = tuple(inventory)
         self._definition_owners = {(e.get('vendor', 'mitsubishi').lower(), e['opcode'].upper(), e['target_model'].upper()): e
                                    for e in inventory}
         self.definition_documents = {d['id']: copy.deepcopy(d) for d in payload.get('documents', [])}
+        self.language_facts = tuple(features.values())
+        self._language_features = features
+        self.fact_bundle_version = payload.get('fact_bundle_version')
+        self._fact_resource = (path.resolve(), after.st_mtime_ns, after.st_size)
+
+    def fact_bundle_current(self):
+        bound = getattr(self, '_fact_resource', None)
+        if bound is None:
+            return True  # An explicitly constructed synthetic Registry.
+        try:
+            current = bound[0].stat()
+            return (current.st_mtime_ns, current.st_size) == bound[1:]
+        except OSError:
+            return False
+
+    def language_feature(self, target):
+        """The same source-owned feature used by ST and exact retrieval."""
+        feature = getattr(self, '_language_features', {}).get(target)
+        return copy.deepcopy(feature) if feature is not None else None
+
+    def resolve_fact_form(self, mnemonic, *, cpu=None):
+        """Identify a catalogue owner without admitting a callable instruction."""
+        form = self.resolve_form(mnemonic, cpu=cpu)
+        if form is not None:
+            return form
+        token = str(mnemonic or '').strip().upper()
+        owners = getattr(self, '_definition_owners', {})
+        if any(opcode == token and (cpu is None or model == str(cpu).upper())
+               for (_, opcode, model) in owners):
+            from types import SimpleNamespace
+            return SimpleNamespace(opcode=token, base_mnemonic=token)
+        return None
 
     def definition_entry(self, opcode, *, cpu, vendor='mitsubishi'):
         """Inspect an exact compiled owner without admitting it as a call."""

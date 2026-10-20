@@ -550,13 +550,18 @@ def _parse_k_value(value):
     return int(match.group(1)) if match else None
 
 
-def _validate_instruction_boundaries(spec, operands, path, plc_model="FX3U"):
+def _validate_instruction_boundaries(spec, operands, path, plc_model="FX3U", *, language='ladder', opcode=None):
     """Enforce source-verified operand boundaries from the instruction contract."""
 
     if spec is None:
         return
     coverage = spec.contract_coverage()
     if coverage.get("numeric_and_memory_boundaries") != "source_verified":
+        from plc.instruction_constraints import check_instruction_constraints, literal_operand_values
+        report = check_instruction_constraints(opcode or spec.mnemonic, literal_operand_values(spec, operands),
+                                               plc_model=plc_model, language=language)
+        if report['status'] == 'failed':
+            _fail(path, next(f['message'] for f in report['findings'] if f['severity'] == 'error'))
         return
 
     for rule in spec.disjoint_bit_ranges:
@@ -627,6 +632,11 @@ def _validate_instruction_boundaries(spec, operands, path, plc_model="FX3U"):
             f"{path}.operands[{rule.operand_index}]",
             f"{spec.mnemonic} {rule.label} constant must be {limit}{unit}",
         )
+    from plc.instruction_constraints import check_instruction_constraints, literal_operand_values
+    report = check_instruction_constraints(opcode or spec.mnemonic, literal_operand_values(spec, operands),
+                                           plc_model=plc_model, language=language)
+    if report['status'] == 'failed':
+        _fail(path, next(f['message'] for f in report['findings'] if f['severity'] == 'error'))
 
 def _validate_comments(comments, path, plc_model="FX3U"):
     _require_dict(comments, path)
@@ -861,7 +871,7 @@ def _validate_element(
             return
 
         model = normalize_plc_model(plc_model)
-        _validate_instruction_boundaries(spec, operands, path, plc_model)
+        _validate_instruction_boundaries(spec, operands, path, plc_model, opcode=opcode)
         _validate_source_operand_types(spec, operands, path, plc_model)
         for operand_idx, operand in enumerate(operands):
             if not isinstance(operand, str):
@@ -1890,8 +1900,9 @@ def validate_st_json(data, plc_model="FX3U"):
     except ValueError as error:
         raise PLCJsonValidationError(f"$.plc_model: {error}") from error
     _require_dict(data, "$")
-    if set(data) != {"st_code"}:
-        _fail("$", 'top level must contain only "st_code"')
-    if not isinstance(data["st_code"], str) or not data["st_code"].strip():
-        _fail("$.st_code", "expected non-empty string")
+    from plc.st_candidate import validate_shape
+    try:
+        validate_shape(data)
+    except ValueError as error:
+        _fail("$", str(error))
     return data

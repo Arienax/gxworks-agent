@@ -696,6 +696,10 @@ _LIVE_FBD_POINTER_DEFAULTS = {
 
 
 def native_fbd_pointer_initialization(metadata: bytes, program_kind: int, *, native_identity=None):
+    return _native_pointer_initialization(metadata, program_kind, native_identity=native_identity)
+
+
+def _native_pointer_initialization(metadata: bytes, program_kind: int, *, native_identity=None):
     """Missing P default observed separately in five GX Works2 1.635 L menus.
 
     Original GUI compilation, original Workspace setter/save and cold compile

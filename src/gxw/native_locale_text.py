@@ -6,6 +6,9 @@ Static vocabulary does not grant model/language runtime acceptance.
 LANGUAGES = ('zh-CN', 'en', 'ja')
 
 TEXT = {'options_project': ('工程', 'Project', 'プロジェクト'),
+ 'monitor_online_menu': ('在线(O)', 'Online', 'オンライン(O)'),
+ 'monitor_submenu': ('监视(M)', 'Monitor', 'モニタ(M)'),
+ 'monitor_stop_all': ('监视停止(全窗口)(S)', 'Stop Monitoring (All Windows)', 'モニタ停止(全ウィンドウ)(S)'),
  'options_common_setting': ('通用设置', 'Common Setting', '共通設定'),
  'series_q': ('QCPU(Q模式)', 'QCPU (Q mode)', 'QCPU(Qモード)'),
  'task_open_registration': ('打开任务登录(&T)', 'Open &Task Setting', 'タスク登録を開く(&T)'),

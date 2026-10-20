@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 import time
 import urllib.error
 import urllib.parse
@@ -13,7 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Sequence
 
-from plc.device_policy import native_read_plan, native_write_plan, native_reset_plan, simulator_run_monitor
+from plc.device_policy import (native_read_plan, native_write_plan, native_reset_plan, simulator_run_monitor,
+                              native_simulator_profile, native_simulator_read_plan, simulator_cpu_is_running)
 
 
 DEFAULT_GATEWAY_URL = "http://127.0.0.1:17831"
@@ -135,21 +135,43 @@ def _registry_progid_exists(name: str) -> bool:
 def _running_processes() -> Sequence[str]:
     if os.name != "nt":
         return []
-    try:
-        output = subprocess.run(
-            ["tasklist", "/FO", "CSV", "/NH"],
-            capture_output=True,
-            text=True,
-            errors="replace",
-            timeout=5,
-            check=False,
-        ).stdout
-    except (OSError, subprocess.TimeoutExpired):
-        return []
+    import ctypes
+    from ctypes import wintypes
+
+    class ProcessEntry(ctypes.Structure):
+        _fields_ = [
+            ('dwSize', wintypes.DWORD), ('cntUsage', wintypes.DWORD),
+            ('th32ProcessID', wintypes.DWORD), ('th32DefaultHeapID', ctypes.c_size_t),
+            ('th32ModuleID', wintypes.DWORD), ('cntThreads', wintypes.DWORD),
+            ('th32ParentProcessID', wintypes.DWORD), ('pcPriClassBase', wintypes.LONG),
+            ('dwFlags', wintypes.DWORD), ('szExeFile', wintypes.WCHAR * 260),
+        ]
+
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    kernel.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
+    kernel.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+    for name in ('Process32FirstW', 'Process32NextW'):
+        function = getattr(kernel, name)
+        function.argtypes = [wintypes.HANDLE, ctypes.POINTER(ProcessEntry)]
+        function.restype = wintypes.BOOL
+    kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel.CloseHandle.restype = wintypes.BOOL
+    snapshot = kernel.CreateToolhelp32Snapshot(0x2, 0)  # TH32CS_SNAPPROCESS
+    if snapshot in (None, ctypes.c_void_p(-1).value):
+        raise ctypes.WinError(ctypes.get_last_error())
+    entry = ProcessEntry()
+    entry.dwSize = ctypes.sizeof(entry)
     names = []
-    for line in (output or "").splitlines():
-        if line.startswith('"'):
-            names.append(line.split('",', 1)[0].strip('"').casefold())
+    try:
+        found = kernel.Process32FirstW(snapshot, ctypes.byref(entry))
+        while found:
+            names.append(entry.szExeFile.casefold())
+            found = kernel.Process32NextW(snapshot, ctypes.byref(entry))
+        error = ctypes.get_last_error()
+        if error != 18:  # ERROR_NO_MORE_FILES, not a failed inventory.
+            raise ctypes.WinError(error)
+    finally:
+        kernel.CloseHandle(snapshot)
     return names
 
 
@@ -243,6 +265,8 @@ class GXSimulatorGatewayClient:
     # zero-valued runtime evidence for devices they do not emulate.
     supports_scan_monitor: bool = False
     supports_cpu_reset: bool = False
+    supports_reset_initial_phase: bool = False
+    plc_model: str = "FX3U"
 
     def __post_init__(self):
         self.base_url = str(self.base_url or DEFAULT_GATEWAY_URL).rstrip("/")
@@ -323,9 +347,11 @@ class GXSimulatorGatewayClient:
         capabilities = raw_capabilities if isinstance(raw_capabilities, Mapping) else {}
         self.supports_scan_monitor = bool(capabilities.get("scan_monitor"))
         self.supports_cpu_reset = bool(capabilities.get("cpu_reset"))
+        self.supports_reset_initial_phase = bool(capabilities.get('reset_initial_phase'))
         return result
 
     def connect(self) -> Dict[str, Any]:
+        target = native_simulator_profile(self.plc_model)
         health = self.health()
         if not health.get("simulator_only"):
             raise GatewayUnavailableError(
@@ -334,8 +360,26 @@ class GXSimulatorGatewayClient:
         compatible, reason = gateway_compatibility(health)
         if not compatible:
             raise GatewayProtocolError(reason)
-        result = self._request("POST", "/connect", {})
+        capabilities = health.get('capabilities', {})
+        bound = (bool(capabilities.get('target_cpu_binding')) if isinstance(capabilities, Mapping)
+                 else 'target_cpu_binding' in capabilities if isinstance(capabilities, (list, tuple)) else False)
+        if not bound and target['cpu_menu'] != 'FX3U/FX3UC':
+            raise GatewayProtocolError('The simulator gateway cannot attest the selected CPU; rebuild the local adapter.')
+        model_bound = (bool(capabilities.get('model_code_binding')) if isinstance(capabilities, Mapping)
+                       else 'model_code_binding' in capabilities if isinstance(capabilities, (list, tuple)) else False)
+        if bound and not model_bound:
+            raise GatewayProtocolError('The simulator gateway must distinguish ActCpuType from the returned model code.')
+        payload = {'protocol_version': GATEWAY_PROTOCOL_VERSION, 'cpu_type': target['cpu_type'],
+                   'model_code': target['model_code']} if bound else {}
+        result = self._request("POST", "/connect", payload)
         self.connected = True
+        if bound and (result.get('cpu_type') != target['cpu_type']
+                      or result.get('observed_cpu_type') != target['model_code']
+                      or result.get('unit_type') != target['unit_type']
+                      or result.get('target_simulator') != target['target_simulator']):
+            self.disconnect()
+            raise GatewayOperationError('Simulator CPU or route differs from the selected target',
+                                        code='SIMULATOR_TARGET_MISMATCH')
         return result
 
     def disconnect(self) -> None:
@@ -356,7 +400,7 @@ class GXSimulatorGatewayClient:
     def read_many(self, addresses: Sequence[str]) -> Dict[str, Any]:
         if not self.connected:
             raise RuntimeError("GX Simulator2 gateway is not connected")
-        return self._read_plan(native_read_plan(list(addresses)))
+        return self._read_plan(native_simulator_read_plan(list(addresses), self.plc_model))
 
     def read_bound(self, plan, target_binding):
         """Observe an already-connected, attested target without opening/writing."""
@@ -383,7 +427,7 @@ class GXSimulatorGatewayClient:
     def write_many(self, values: Mapping[str, Any]) -> None:
         if not self.connected:
             raise RuntimeError("GX Simulator2 gateway is not connected")
-        plan = native_write_plan(values)
+        plan = native_write_plan(values, self.plc_model)
         self._request("POST", "/devices/write",
             {"protocol_version": GATEWAY_PROTOCOL_VERSION, "devices": plan})
 
@@ -395,9 +439,16 @@ class GXSimulatorGatewayClient:
         if not self.connected:
             raise RuntimeError("GX Simulator2 gateway is not connected")
         # Validate ALL addresses/values before any remote STOP or other mutation.
-        plan = native_reset_plan(list(devices), initial_values if initial_values is not None else {})
-        monitor, expected = simulator_run_monitor()
-        monitor_plan = native_read_plan([monitor])
+        plan = native_reset_plan(list(devices), initial_values if initial_values is not None else {}, self.plc_model)
+        profile = native_simulator_profile(self.plc_model)
+        # Legacy FX gateways retain their measured ordering. Other reset
+        # orders require the explicit adapter capability before any STOP.
+        if self.supports_reset_initial_phase:
+            plan['initial_phase'] = profile['reset_initial_phase']
+        elif profile['reset_initial_phase'] != 'before_reset':
+            raise GatewayProtocolError('The simulator gateway cannot apply inputs after RESET for the selected target.')
+        monitor, _expected = simulator_run_monitor(self.plc_model)
+        monitor_plan = native_simulator_read_plan([monitor], self.plc_model)
         deadline = time.monotonic() + self.reset_timeout
         result = self._request("POST", "/cpu/reset",
             {"protocol_version": GATEWAY_PROTOCOL_VERSION, **plan}, timeout=self.reset_timeout)
@@ -414,7 +465,7 @@ class GXSimulatorGatewayClient:
                 if error.code != "MX_READ_FAILED":
                     raise
             else:
-                if values.get(monitor) == expected:
+                if simulator_cpu_is_running(values.get(monitor), self.plc_model):
                     return {**result, "cpu_run": True, "run_monitor": values[monitor]}
             time.sleep(min(0.05, max(0.0, deadline - time.monotonic())))
         raise GatewayOperationError("Simulator2 CPU did not return to RUN after reset",

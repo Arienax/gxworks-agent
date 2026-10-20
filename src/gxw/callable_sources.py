@@ -580,6 +580,13 @@ class ProjectCallableSources:
         return {'source_stream': stream, 'definition_offset': definition['offset'],
                 'inputs': inputs, 'outputs': outputs}
 
+    def st_interface(self, name, kind='FUNCTION_BLOCK'):
+        """The same source formals without graphical port/mask restrictions."""
+        stream, definition = self.definition(name, kind)
+        inputs, outputs = interface(definition, resolve_type=lambda text: None)
+        return {'source_stream': stream, 'definition_offset': definition['offset'],
+                'inputs': inputs, 'outputs': outputs, 'return_type': definition.get('return_type_raw')}
+
     def callable(self, node, *, bind_instance=True):
         ins, outs = sorted_ports(node)
         name = node.type_name if node.kind == NodeKind.FUNCTION_BLOCK else node.symbol

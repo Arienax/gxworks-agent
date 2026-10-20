@@ -1,6 +1,32 @@
 {
   "schema_version": 1,
   "scope": "Source-checked control subset; no native execution certification. Entries enable only the named CPU and execution conditions.",
+  "native_simulator": {
+    "sources": [{"manual_number": "SH082395ENG", "revision": "J", "sections": ["9.2", "10.11", "GetCpuType"], "sdk": "MX Component ACT/Include/ActDefine.cs"},
+      {"manual_number": "SH080008", "revision": "AB", "section": "11.1 Model name read", "pdf_page": 169},
+      {"manual_number": "JY997D45801", "revision": "H", "section": "7.6.3", "pdf_page": 90}],
+    "unit_type": 48,
+    "target_simulator": 0,
+    "targets": {
+      "FX3U/FX3UC": {"cpu_type": 520, "model_code": 243, "monitor": "fx_run"},
+      "FX3G/FX3GC": {"cpu_type": 521, "model_code": 244, "monitor": "fx_run"},
+      "FX3S": {"cpu_type": 522, "model_code": 245, "monitor": "fx_run"},
+      "Q00U": {"cpu_type": 129, "model_code": 609, "monitor": "ql_run"},
+      "Q03UDV": {"cpu_type": 209, "model_code": 870, "monitor": "ql_run"},
+      "Q06UDEH": {"cpu_type": 146, "model_code": 618, "monitor": "ql_run"},
+      "L02/L02-P": {"cpu_type": 161, "model_code": 1345, "monitor": "ql_run"},
+      "L06/L06-P": {"cpu_type": 165, "model_code": 1348, "monitor": "ql_run"},
+      "L26/L26-P": {"cpu_type": 164, "model_code": 1349, "monitor": "ql_run"}
+    },
+    "monitors": {
+      "fx_run": {"device": "M8000", "mask": 1, "value": 1, "reset_initial_phase": "before_reset",
+        "read_devices": {"M8000": "bit", "M8067": "bit", "D8067": "word"},
+        "sources": [{"manual_number": "JY997D16601", "revision": "R", "section": "Special auxiliary relays and special data registers"}]},
+      "ql_run": {"device": "SD203", "mask": 15, "value": 0, "reset_initial_phase": "after_reset",
+        "read_devices": {"SD203": "word", "SM0": "bit", "SD0": "word"},
+        "sources": [{"manual_number": "SH080483ENG", "revision": "BC", "pdf_page": 546}, {"manual_number": "SH080890ENG", "revision": "AJ", "pdf_page": 372}]}
+    }
+  },
   "reviewed_groups": [
     {
       "models": ["FX1S", "FX1N", "FX2N", "FX3S", "FX2C"],

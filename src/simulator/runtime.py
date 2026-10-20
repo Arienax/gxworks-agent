@@ -14,6 +14,7 @@ import subprocess
 import time
 import urllib.parse
 import weakref
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -27,6 +28,54 @@ from .gateway import (
 
 class SimulatorRuntimeError(RuntimeError):
     pass
+
+
+def _loopback_listener_present(base_url):
+    """Observe a numeric IPv4 listener without a slow refused TCP connect.
+
+    Unknown or unsupported inventory falls back to the authenticated health
+    request. A busy endpoint is never treated as absent or terminated.
+    """
+    if os.name != 'nt':
+        return None
+    parsed = urllib.parse.urlsplit(base_url)
+    if parsed.hostname != '127.0.0.1':
+        return None
+    import ctypes
+    from ctypes import wintypes
+
+    class TcpRow(ctypes.Structure):
+        _fields_ = [('state', wintypes.DWORD), ('local_address', wintypes.DWORD),
+                   ('local_port', wintypes.DWORD), ('remote_address', wintypes.DWORD),
+                   ('remote_port', wintypes.DWORD)]
+
+    try:
+        api = ctypes.WinDLL('iphlpapi').GetTcpTable
+        api.argtypes = [ctypes.c_void_p, ctypes.POINTER(wintypes.DWORD), wintypes.BOOL]
+        api.restype = wintypes.DWORD
+        size = wintypes.DWORD()
+        result = api(None, ctypes.byref(size), False)
+        if result != 122:  # ERROR_INSUFFICIENT_BUFFER
+            return None
+        for _ in range(3):
+            buffer = ctypes.create_string_buffer(size.value)
+            result = api(buffer, ctypes.byref(size), False)
+            if result == 122:  # Connections can change while the table is read.
+                continue
+            if result != 0 or size.value < ctypes.sizeof(wintypes.DWORD):
+                return None
+            count = wintypes.DWORD.from_buffer(buffer).value
+            offset = ctypes.sizeof(wintypes.DWORD)
+            if count > (len(buffer) - offset) // ctypes.sizeof(TcpRow):
+                return None
+            rows = ctypes.cast(ctypes.addressof(buffer) + offset, ctypes.POINTER(TcpRow))
+            return any(row.state == 2  # MIB_TCP_STATE_LISTEN
+                       and socket.ntohs(row.local_port & 0xffff) == (parsed.port or 80)
+                       and row.local_address in (0, socket.htonl(0x7f000001))
+                       for row in (rows[index] for index in range(count)))
+    except (OSError, AttributeError):
+        return None
+    return None
 
 
 def _gateway_candidates():
@@ -52,7 +101,10 @@ def _gateway_candidates():
 class SimulatorGatewayRuntime:
     """Own at most one gateway process and expose a configured client."""
 
-    def __init__(self, *, base_url: Optional[str] = None, executable=None):
+    def __init__(self, *, base_url: Optional[str] = None, executable=None, plc_model="FX3U"):
+        from plc.device_policy import native_simulator_profile
+        self.plc_model = str(plc_model)
+        native_simulator_profile(self.plc_model)
         self.base_url = str(
             base_url
             or os.environ.get("GX_SIMULATOR_GATEWAY_URL")
@@ -82,6 +134,7 @@ class SimulatorGatewayRuntime:
             token=self._configured_token(),
             timeout=float(timeout),
             reset_timeout=float(reset_timeout),
+            plc_model=self.plc_model,
         )
         self._clients.append(weakref.ref(client))
         return client
@@ -129,6 +182,8 @@ class SimulatorGatewayRuntime:
         return result
 
     def health(self) -> Optional[Dict[str, Any]]:
+        if _loopback_listener_present(self.base_url) is False:
+            return None
         try:
             result = self.client(timeout=1.0).health()
         except GatewayOperationError as error:
@@ -227,8 +282,31 @@ class SimulatorGatewayRuntime:
         self.close()
         raise SimulatorRuntimeError("等待 GX Simulator2 网关启动超时。")
 
-    def probe_simulator(self, *, timeout=2.0) -> Dict[str, Any]:
-        """Prove the simulator route is connected and the FX CPU is in RUN."""
+    @contextmanager
+    def startup_probe(self):
+        """Share one attested MX connection during a controlled startup only."""
+        connection = {}
+        try:
+            yield lambda **kwargs: self.probe_simulator(_connection=connection, **kwargs)
+        finally:
+            self._close_probe_connection(connection)
+
+    @staticmethod
+    def _close_probe_connection(connection):
+        client = connection.pop('client', None)
+        connection.clear()
+        if client is not None:
+            try:
+                client.disconnect()
+            except Exception:
+                pass
+
+    def probe_simulator(self, *, timeout=2.0, _connection=None, read_run=True) -> Dict[str, Any]:
+        """Prove the selected simulator CPU and its source-defined RUN state."""
+        from plc.device_policy import (native_simulator_read_plan, simulator_run_monitor,
+                                       simulator_cpu_is_running)
+
+        connection = {} if _connection is None else _connection
 
         health = self.ensure_gateway()
         if not health.get("mx_component_available"):
@@ -237,21 +315,47 @@ class SimulatorGatewayRuntime:
                 "health": health,
                 "error": "未检测到与网关位数匹配的 MX Component ActProgType。",
             }
-        client = self.client(timeout=timeout)
+        from simulator.gateway import detect_simulator_environment
+        environment = detect_simulator_environment()
+        cpu_processes = [name for name in environment.get('simulator_processes', [])
+                         if 'simmanager' not in str(name).casefold()]
+        if not cpu_processes:
+            # The manager window is not an executing simulator CPU. In this
+            # state Open can block in the vendor connection setup; an
+            # observational probe must not attempt to start or configure it.
+            self._close_probe_connection(connection)
+            return dict(ready=False, connected=False, cpu_run=False, health=health,
+                        environment=environment, error='尚未启动仿真 CPU；未调用 MX Component Open。')
         try:
-            details = client.connect()
-            run_value = client.read_many(["M8000"]).get("M8000")
-            cpu_run = int(run_value or 0) == 1
+            client = connection.get('client')
+            if client is None:
+                client = self.client(timeout=timeout)
+                connection['client'] = client
+                connection['details'] = client.connect()
+            details = connection['details']
+            if not read_run:
+                return dict(ready=False, connected=True, cpu_run=None, health=health,
+                            connection=details, error='等待原生程序传送完成后检查 RUN。')
+            monitor, _expected = simulator_run_monitor(self.plc_model)
+            binding = details.get('target_binding')
+            if binding:
+                run_value = client.read_bound(
+                    native_simulator_read_plan([monitor], self.plc_model), binding).get(monitor)
+            else:
+                run_value = client.read_many([monitor]).get(monitor)
+            cpu_run = simulator_cpu_is_running(run_value, self.plc_model)
             return {
                 "ready": cpu_run,
                 "connected": True,
                 "cpu_run": cpu_run,
                 "run_monitor": run_value,
+                "run_monitor_device": monitor,
                 "health": health,
                 "connection": details,
-                "error": "" if cpu_run else "GX Simulator2 已连接，但 FX CPU 尚未进入 RUN。",
+                "error": "" if cpu_run else "GX Simulator2 已连接，但选定 CPU 尚未进入 RUN。",
             }
         except Exception as error:
+            self._close_probe_connection(connection)
             return {
                 "ready": False,
                 "connected": False,
@@ -260,10 +364,10 @@ class SimulatorGatewayRuntime:
                 "error": str(error),
             }
         finally:
-            try:
-                client.disconnect()
-            except Exception:
-                pass
+            # Older FX-only gateways cannot attest reuse across observations.
+            # Public probes retain their original open/read/close lifetime.
+            if _connection is None or not connection.get('details', {}).get('target_binding'):
+                self._close_probe_connection(connection)
 
     def disconnect(self) -> None:
         try:

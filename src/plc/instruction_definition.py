@@ -8,6 +8,7 @@ independent claims.
 from __future__ import annotations
 
 import copy
+import re
 from dataclasses import dataclass
 from typing import Any, Mapping
 
@@ -50,12 +51,16 @@ class ValueType:
         count = raw.get("count", 0)
         if type(bits) is not int or type(signed) is not bool or type(count) is not int:
             raise DefinitionError("Invalid finite-width type")
-        if kind not in {"bool", "int", "vector", "opaque"}:
+        if kind not in {"bool", "int", "real", "string", "vector", "opaque"}:
             raise DefinitionError("Unknown value type")
         if kind == "bool" and (bits not in (0, 1) or signed):
             raise DefinitionError("Boolean type must be one unsigned bit")
         if kind == "int" and bits not in {8, 16, 32, 64}:
             raise DefinitionError("Integer width must be explicit")
+        if kind == "real" and (bits not in {32, 64} or signed):
+            raise DefinitionError("REAL width must be explicit")
+        if kind == "string" and (bits or signed):
+            raise DefinitionError("STRING has no integer representation")
         element = None
         if kind == "vector":
             if not 1 <= count <= 512 or bits or signed:
@@ -76,7 +81,7 @@ class ValueType:
 
     def as_mapping(self):
         result = {"kind": self.kind}
-        if self.kind in {"bool", "int"}:
+        if self.kind in {"bool", "int", "real"}:
             result.update(bits=self.bits, signed=self.signed)
         if self.unit:
             result["unit"] = self.unit
@@ -93,6 +98,22 @@ class ValueType:
         return (-(1 << (self.bits - 1)), (1 << (self.bits - 1)) - 1) if self.signed else (0, (1 << self.bits) - 1)
 
     def decode_bits(self, value):
+        if self.kind == "real":
+            import math
+            import struct
+            if type(value) not in {int, float} or not math.isfinite(value):
+                raise DefinitionError("REAL must be finite")
+            try:
+                result = struct.unpack('<f', struct.pack('<f', value))[0] if self.bits == 32 else float(value)
+            except (OverflowError, struct.error) as error:
+                raise DefinitionError("REAL exceeds its representation") from error
+            if not math.isfinite(result):
+                raise DefinitionError("REAL exceeds its representation")
+            return result
+        if self.kind == "string":
+            if not isinstance(value, str):
+                raise DefinitionError("STRING value required")
+            return value
         if self.kind == "bool":
             if type(value) is bool:
                 return value
@@ -110,6 +131,26 @@ class ValueType:
             raise DefinitionError("Input exceeds its finite representation")
         raw = value & ((1 << self.bits) - 1)
         return raw - (1 << self.bits) if self.signed and raw >= (1 << (self.bits - 1)) else raw
+
+    @classmethod
+    def from_iec(cls, name):
+        """Shared scalar types for declarations, ST and instruction expressions."""
+        token = name.strip().upper()
+        if token == 'BOOL':
+            return cls.from_mapping({'kind': 'bool'})
+        if token in {'REAL', 'LREAL'}:
+            return cls.from_mapping({'kind': 'real', 'bits': 32 if token == 'REAL' else 64})
+        if re.fullmatch(r'(W?STRING)(?:\s*[\[(]\s*\d+\s*[\])])?', token):
+            return cls.from_mapping({'kind': 'string', 'encoding': 'utf16' if token.startswith('W') else 'binary'})
+        integers = {'SINT': (8, True), 'USINT': (8, False), 'BYTE': (8, False),
+                    'INT': (16, True), 'UINT': (16, False), 'WORD': (16, False),
+                    'DINT': (32, True), 'UDINT': (32, False), 'DWORD': (32, False),
+                    'LINT': (64, True), 'ULINT': (64, False), 'LWORD': (64, False), 'TIME': (32, True)}
+        if token not in integers:
+            raise DefinitionError('Unbound IEC scalar type: ' + name)
+        bits, signed = integers[token]
+        return cls.from_mapping({'kind': 'int', 'bits': bits, 'signed': signed,
+                                 **({'unit': 'ms'} if token == 'TIME' else {})})
 
 
 _COMPARISONS = frozenset({"eq", "ne", "gt", "ge", "lt", "le"})
@@ -164,7 +205,7 @@ class Expression:
         elif op in _COMPARISONS:
             if len(args) != 2 or args[0].value_type != args[1].value_type or value_type.kind != "bool":
                 raise DefinitionError("Comparison needs equal input types and a boolean result")
-            if args[0].value_type.kind not in {"int", "bool", "vector"}:
+            if args[0].value_type.kind not in {"int", "real", "bool", "vector"}:
                 raise UnknownInstructionSemantics("Opaque values cannot be compared")
             if op not in {"eq", "ne"} and args[0].value_type.kind == "bool":
                 raise DefinitionError("Ordered boolean comparison is unsupported")
@@ -298,6 +339,7 @@ class InstructionFactGroup:
     members: tuple[str, ...] = ()
     scope: Mapping[str, Any] | None = None
     verification: str = "not_performed"
+    conditions: tuple[Any, ...] = ()
 
     @classmethod
     def from_mapping(cls, raw):
@@ -328,14 +370,23 @@ class InstructionFactGroup:
             raise DefinitionError("Invalid source verification receipt")
         if status == "source_verified" and verification != "source_checked":
             raise DefinitionError("Source-verified fact needs its own review receipt")
+        conditions = raw.get("conditions", [])
+        if not isinstance(conditions, (list, tuple)) or len(conditions) > 64:
+            raise DefinitionError("Invalid fact conditions")
+        if any(not isinstance(condition, (str, Mapping)) for condition in conditions):
+            raise DefinitionError("Invalid fact condition")
         return cls(identity, dimension, copy.deepcopy(dict(value)), status, tuple(copy.deepcopy(sources)),
-                   tuple(dependencies), tuple(members), copy.deepcopy(dict(scope)), verification)
+                   tuple(dependencies), tuple(members), copy.deepcopy(dict(scope)), verification,
+                   tuple(copy.deepcopy(conditions)))
 
     def as_mapping(self):
-        return {"id": self.id, "dimension": self.dimension, "value": copy.deepcopy(dict(self.value)),
+        result = {"id": self.id, "dimension": self.dimension, "value": copy.deepcopy(dict(self.value)),
                 "status": self.status, "sources": copy.deepcopy(list(self.sources)),
                 "depends_on": list(self.depends_on), "members": list(self.members),
                 "scope": copy.deepcopy(dict(self.scope or {})), "verification": self.verification}
+        if self.conditions:
+            result["conditions"] = copy.deepcopy(list(self.conditions))
+        return result
 
     def applies_to(self, *, opcode, model, language="ladder", version=None):
         scope = self.scope or {}
@@ -345,7 +396,8 @@ class InstructionFactGroup:
         return True
 
 
-def select_fact_dependencies(groups, requested_ids, *, opcode, model, language="ladder", version=None):
+def select_fact_dependencies(groups, requested_ids, *, opcode, model, language="ladder", version=None,
+                             allow_unknown_scope=False):
     """Return complete dependency closures and explicit gaps, without a budget cut."""
     by_id = {}
     for raw in groups:
@@ -367,8 +419,13 @@ def select_fact_dependencies(groups, requested_ids, *, opcode, model, language="
             gaps.append({"root": root, "fact_id": identity, "reason": "missing_dependency"})
             return False
         if not group.applies_to(opcode=opcode, model=model, language=language, version=version):
-            gaps.append({"root": root, "fact_id": identity, "reason": "inapplicable_dependency"})
-            return False
+            supplied = {'forms': opcode, 'models': model, 'languages': language, 'versions': version}
+            known_mismatch = any(value is not None and group.scope.get(key) and value not in group.scope[key]
+                                 for key, value in supplied.items())
+            if not allow_unknown_scope or known_mismatch:
+                gaps.append({"root": root, "fact_id": identity, "reason": "inapplicable_dependency"})
+                return False
+            gaps.append({"root": root, "fact_id": identity, "reason": "scope_context_missing"})
         if group.status in {"unknown", "conflict", "not_applicable"}:
             gaps.append({"root": root, "fact_id": identity, "reason": group.status})
             return False
@@ -396,10 +453,10 @@ def select_fact_dependencies(groups, requested_ids, *, opcode, model, language="
             for key in set(selected) - before:
                 del selected[key]
     return {"groups": [g.as_mapping() for g in selected.values()], "bundles": bundles, "gaps": gaps,
-            "source_verification_complete": bool(selected) and all(g.status == "source_verified" for g in selected.values())}
+            "source_verification_complete": bool(selected) and not gaps and all(g.status == "source_verified" for g in selected.values())}
 
 
-def materialize_instruction_definition(target, *, plc_model, lanes, registry=None):
+def materialize_instruction_definition(target, *, plc_model, lanes, registry=None, language=None, version=None):
     """One resolved definition projects existing independently owned lanes.
 
     Existing signature, purpose, boundary and runtime information is preserved;
@@ -415,7 +472,7 @@ def materialize_instruction_definition(target, *, plc_model, lanes, registry=Non
     spec = form.spec if form is not None else None
     inventory = registry.definition_entry(opcode, cpu=model) or {}
     applicability = copy.deepcopy(lanes.get("target_applicability") or {})
-    groups = [f.as_mapping() for f in spec.definition_facts if f.applies_to(opcode=opcode, model=model)] if spec else []
+    groups = [f.as_mapping() for f in spec.definition_facts] if spec else []
     if not groups:
         groups = [InstructionFactGroup.from_mapping(f).as_mapping() for f in inventory.get('facts', [])]
     parameters = copy.deepcopy(lanes.get("operand_slots") or [])
@@ -436,7 +493,8 @@ def materialize_instruction_definition(target, *, plc_model, lanes, registry=Non
             bindings.append({"position": value["position"], "fact": {
                 "facet": value["facet"], "value": value["value"], "status": group["status"],
                 "sources": copy.deepcopy(group["sources"]),
-                **({"conditions": copy.deepcopy(value["conditions"])} if value.get("conditions") else {}),
+                **({'conditions': copy.deepcopy([*group.get('conditions', []), *value.get('conditions', [])])}
+                   if group.get('conditions') or value.get('conditions') else {}),
             }})
     if bindings:
         from plc.instruction_semantics import attach_operand_usage
@@ -485,6 +543,7 @@ def materialize_instruction_definition(target, *, plc_model, lanes, registry=Non
         "inventory_gaps": copy.deepcopy(inventory.get('gaps', [])),
         "semantic_completeness": "not_established",
         "verification_scope": "per_fact_exact_cpu_and_form",
+        "language": language, "version": version,
     }
 
 
@@ -508,21 +567,27 @@ def instruction_task_view(definition, *, questions=None):
             # retention, resource or constraint dependencies. Compare the
             # complete semantic closure; status/source identity stays separate.
             dependency = select_fact_dependencies(groups, [group['id']], opcode=definition['opcode'],
-                                                  model=definition['target_model'])
+                                                  model=definition['target_model'],
+                                                  language=definition.get('language'), version=definition.get('version'),
+                                                  allow_unknown_scope=True)
             if dependency['gaps']:
                 continue
             def semantic_value(value):
                 return {k: v for k, v in value.items() if k not in {'text', 'representation'}}
             import json
             signature = (signature, tuple(sorted(json.dumps({'dimension': g['dimension'],
-                'value': semantic_value(g['value']), 'scope': g['scope'], 'members': g['members']},
+                'value': semantic_value(g['value']), 'scope': g['scope'], 'members': g['members'],
+                'conditions': g.get('conditions', []),
+                'source_conditions': [{key: source[key] for key in ('conditions', 'applicability') if key in source}
+                                      for source in g.get('sources', []) if source.get('conditions') or source.get('applicability')]},
                 sort_keys=True, ensure_ascii=False) for g in dependency['groups'])))
             if signature in preferred:
                 alternatives[group['id']] = preferred[signature]
             else:
                 preferred[signature] = group['id']
     roots = [identity for identity in roots if identity not in alternatives]
-    closure = select_fact_dependencies(groups, roots, opcode=definition['opcode'], model=definition['target_model'])
+    closure = select_fact_dependencies(groups, roots, opcode=definition['opcode'], model=definition['target_model'],
+                                       language=definition.get('language'), version=definition.get('version'), allow_unknown_scope=True)
     return {**closure, "opcode": definition['opcode'], "target_model": definition['target_model'],
             "requirements": [{"kind": "instruction", "target": definition['opcode'],
                               "dimension": "definition." + identity, "members": by_id[identity].get('members', []),

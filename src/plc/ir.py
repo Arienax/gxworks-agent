@@ -693,7 +693,6 @@ def build_plc_ir(
         config=normalized_analysis_config,
         plc_model=plc_model,
     )
-
     normalized_name = str(program_name or "MAIN").strip() or "MAIN"
     payload: Dict[str, Any] = {
         "kind": IR_KIND,

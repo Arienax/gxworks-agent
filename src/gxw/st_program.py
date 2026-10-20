@@ -74,6 +74,8 @@ def project_context_snapshot(raw, source_name=None):
         if kind == 'program' and len(entry['task_bindings']) > 1:
             raise GXWFormatError('current ordinary Program has ambiguous task membership: ' + document.owner_name)
         if kind in ('function_block', 'function'):
+            if kind == 'function':
+                entry['return_type'] = document.owner_return_type if document.owner_return_type not in (None, "@'VOID'") else ''
             try:
                 entry.update(interface_status='available', interface=sources.fixed_interface(
                     document.owner_name, 'FUNCTION' if kind == 'function' else 'FUNCTION_BLOCK'))
@@ -86,10 +88,13 @@ def project_context_snapshot(raw, source_name=None):
                          st_text=source.text)
             if source.diagnostic:
                 entry['source_diagnostic'] = source.diagnostic
-        elif language == 'fbd':
+        elif language in ('fbd', 'ladder'):
             from .object_model import read_project_context
+            from .execution import project_execution_source
             try:
-                entry.update(source_status='available', model=read_project_context(raw, logical).object_model())
+                graph_context = read_project_context(raw, logical)
+                entry.update(source_status='available', model=graph_context.object_model(),
+                             execution_source=project_execution_source(graph_context))
             except GXWFormatError as error:
                 entry.update(source_status='unavailable', source_diagnostic=str(error))
         else:

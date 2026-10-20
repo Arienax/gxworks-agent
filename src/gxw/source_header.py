@@ -93,6 +93,15 @@ def _visible_header_save_policy(cpu, native_identity, operation):
         raise GXWFormatError('visible save changed an unverified native header')
     menu = profile.cpu
     language = native_identity.get('native_ui_language')
+    if (operation in ('edited_st_source_save', 'compiled_st_source_save') and language in ('zh-CN', 'en', 'ja')
+            and type(native_identity.get('project_codepage')) is int):
+        # This common ST source envelope describes a pending compilation, not
+        # a CPU capability. The caller must bind the successful current build,
+        # compare the actual body/declarations and preserve every other byte.
+        # Rebuilding an unchanged ST body can refresh the same save timestamp;
+        # it needs the identical current-build proof, not an edited-body test.
+        return dict(compiled_clear=True, initial_timestamp=False, before_flags=(0, 1),
+                    after_flags=(0,), compilation_required=True)
     if menu == 'FX3U/FX3UC' and language == 'zh-CN' and operation in (
             'source_save', 'task_append', 'edited_source_save', 'edited_st_source_save', 'compiled_task_save'):
         return dict(compiled_clear=True, initial_timestamp=True, before_flags=(0, 1))
@@ -131,7 +140,9 @@ def normalize_visible_save_header(before: bytes, after: bytes, *, cpu: str, nati
     initialized timestamps with pending 1 -> 1 only for a changed retained FBD
     payload. Separately observed CP932 changed-FBD and task saves require a
     current compile receipt before clearing pending 1 -> 0. A changed final
-    timestamp must always be valid.
+    timestamp must always be valid. A currently compiled ST source may refresh
+    that timestamp without changing its body; the same exact envelope and
+    bound successful compilation are required.
     """
     from datetime import datetime
     if type(native_compiled) is not bool:
