@@ -95,19 +95,13 @@ def live_read_scope(context, command, observed_tables=()):
 
 
 def _table_column_identities(table):
-    """Bind actual CSV captions to Core semantics without rewriting raw rows."""
-    from .native_locale import canonical_label_columns, native_language
-    columns = table['csv_columns']
-    canonical = canonical_label_columns(columns, language=native_language(table['source_binding']['identity']))
-    if table.get('canonical_csv_columns', canonical) != canonical:
-        raise GXWFormatError('Saved label comparison has inconsistent localized column metadata')
-    return dict(zip(columns, canonical, strict=True))
+    from gxworks2.ui_observations import label_column_identities
+    return label_column_identities(table)
 
 
 def _allocation_configuration_profile(configuration, cpu):
     """Bind normalized fields to one actually observed native control schema."""
-    from .project_metadata import (native_allocation_controls, project_allocation_profile,
-                                   read_native_allocation_grids)
+    from .project_metadata import project_allocation_profile
     names = {'allocation_profile', 'control_profile'}
     if not names.intersection(configuration):
         return {}  # Existing FX fixtures carry the original coverage contract.
@@ -116,36 +110,8 @@ def _allocation_configuration_profile(configuration, cpu):
             or configuration['allocation_profile'] != profile['allocation_profile']
             or not profile['program_supported']):
         raise GXWFormatError('Live allocation fields have a different exact CPU profile')
-    controls = native_allocation_controls(configuration['control_profile'])
-    if configuration['control_profile'] == 'device_range_grid':
-        from .native_locale import native_language
-        if configuration.get('coverage') != 'observed_D_M_grid' or not isinstance(configuration.get('identity'), dict):
-            raise GXWFormatError('Live grid allocation requires its current bound native observation')
-        parsed = read_native_allocation_grids(configuration.get('grid_rows'),
-            native_ui_language=native_language(configuration['identity']))
-        if (configuration.get('raw_fields') != parsed['raw_fields'] or configuration.get('ranges') != parsed['ranges']
-                or configuration.get('parameter_ranges', parsed['parameter_ranges']) != parsed['parameter_ranges']):
-            raise GXWFormatError('Live allocation field bindings differ from the actual native grid rows')
-        return {key: configuration[key] for key in names}
-    if configuration.get('coverage') != 'observed_D_M_controls':
-        raise GXWFormatError('Live allocation control schema has no current native observation')
-    fields, ranges = configuration.get('raw_fields'), configuration.get('ranges')
-    if not isinstance(fields, dict) or set(fields) != {'D', 'M'} or not isinstance(ranges, dict) or set(ranges) != set(fields):
-        raise GXWFormatError('Live allocation requires exactly the observed D/M range fields')
-    for device, expected in controls['devices'].items():
-        rows = fields[device]
-        if (not isinstance(rows, list) or len(rows) != 2
-                or any(not isinstance(row, dict) for row in rows)
-                or [row.get('control_id') for row in rows] != [expected['start_id'], expected['end_id']]
-                or any(type(row.get('enabled')) is not bool or not isinstance(row.get('text'), str) for row in rows)):
-            raise GXWFormatError('Live allocation field IDs differ from the observed native resource schema')
-        numeric = ([int(row['text']) for row in rows]
-                   if all(re.fullmatch('[0-9]+', row['text']) for row in rows) else None)
-        if ranges[device] != numeric:
-            raise GXWFormatError('Live allocation numeric range differs from actual native field text')
-        if configuration.get('status') == 'available' and (
-                numeric is None or not 0 <= numeric[0] <= numeric[1] < 2**31):
-            raise GXWFormatError('Available native allocation fields require ordered integer range values')
+    from gxworks2.ui_observations import validate_allocation_observation
+    validate_allocation_observation(configuration)
     return {key: configuration[key] for key in names}
 
 
@@ -315,7 +281,7 @@ def verify_active_labels(prepared, observed):
     if before and (before['csv_columns'] != observed['csv_columns'] or _table_column_identities(before) != columns):
         raise GXWFormatError('Native declaration readback changed the observed CSV field schema')
     native_columns = {canonical: column for column, canonical in columns.items()}
-    if not {'类', '标签名', '数据类型', '常量', '注释'} <= native_columns.keys():
+    if not {'class', 'name', 'data_type', 'constant', 'comment'} <= native_columns.keys():
         raise GXWFormatError('Native declaration readback has no complete declaration column schema')
     old = {row['name'].casefold(): row['raw_fields'] for row in (before or {}).get('declarations', [])}
     actual = observed['declarations']
@@ -324,10 +290,10 @@ def verify_active_labels(prepared, observed):
     classes = {code: name for name, code in CLASS_CODES.items()}
     for row in _visible_st_declaration_rows(prepared['plan']['rows']):
         fields = {column: old.get(row['name'].casefold(), {}).get(column, '') for column in observed['csv_columns']}
-        updates = {'类': classes[row['class_code']], '标签名': row['name'], '数据类型': row['data_type'],
-                   '常量': row['csv_constant'], '注释': row['comment']}
+        updates = {'class': classes[row['class_code']], 'name': row['name'], 'data_type': row['data_type'],
+                   'constant': row['csv_constant'], 'comment': row['comment']}
         fields.update({native_columns[key]: value for key, value in updates.items()})
-        for column, key in (('软元件', 'device'), ('地址', 'iec_address')):
+        for column, key in (('device', 'device'), ('iec_address', 'iec_address')):
             if column in native_columns:
                 fields[native_columns[column]] = row.get(key, '')
         expected.append(fields)
@@ -417,7 +383,7 @@ def _verify_label_delete_unused(sources, context, logical, name):
                     check(_label_delete_atoms(node['name'], body=False), caller, location)
                 else:
                     raise GXWFormatError('Label deletion does not cover this current native node kind in ' + location)
-    safe_columns = {'类', '标签名', '数据类型', '常量', '软元件', '地址', '注释', '备注'}
+    safe_columns = {'class', 'name', 'data_type', 'constant', 'device', 'iec_address', 'comment', 'remark'}
     for table in context['tables']:
         columns = _table_column_identities(table)
         if (table.get('status') != 'available'
@@ -463,14 +429,14 @@ def prepare_active_label_delete(baseline, context, command):
     base, bounds = _type_parts(target['data_type'])
     columns = _table_column_identities(table)
     fields = {canonical: target['raw_fields'].get(column) for column, canonical in columns.items()}
-    if (not {'软元件', '地址'} <= set(columns.values())
+    if (not {'device', 'iec_address'} <= set(columns.values())
             or target.get('class_status') != 'resolved' or target.get('class_code') != CLASS_CODES['VAR']
             or target.get('kind') != 'variable' or target.get('type_status') != 'resolved'
             or base not in ('BOOL', 'INT') or bounds or target.get('device') or target.get('iec_address')
-            or any(fields.get(column) for column in ('软元件', '地址'))
-            or fields.get('类') != 'VAR'
-            or fields.get('标签名') != target['name']
-            or fields.get('数据类型') != target['data_type']
+            or any(fields.get(column) for column in ('device', 'iec_address'))
+            or fields.get('class') != 'VAR'
+            or fields.get('name') != target['name']
+            or fields.get('data_type') != target['data_type']
             or target.get('csv_constant')):
         raise GXWFormatError('Label deletion supports only unmapped ordinary scalar Program VAR BOOL/INT')
     sources = active_callable_sources(baseline, context['tables'], owner=table['owner'],
@@ -901,8 +867,8 @@ def prepare_live_command(baseline, context, command, *, device_profile):
         if before.get('coverage') == 'verified_D_M_controls_only' and config['cpu'] != 'FX3U/FX3UC':
             raise GXWFormatError('Live allocation requires an explicit exact CPU native control profile')
         grid = before.get('control_profile') == 'device_range_grid'
-        if any((field['state'] & 0x41 if grid else not field.get('enabled'))
-               for device in options['system_variable_ranges'] for field in before.get('raw_fields', {}).get(device, [])):
+        from gxworks2.ui_observations import allocation_fields_editable
+        if not allocation_fields_editable(before, options['system_variable_ranges']):
             raise GXWFormatError('Live allocation range field is not enabled in the current native dialog')
         edits = validate_project_allocation_ranges(options['system_variable_ranges'], cpu=config['cpu'], known_devices={'D', 'M'})
         if any(pair == (0xffffffff, 0xffffffff) for pair in edits.values()):
@@ -1093,7 +1059,7 @@ def _verify_saved_tables(saved_context, tables):
     saved = saved_context[3]
     pou_documents = {document.owner_name: document for document in saved.declarations.values()
                      if document.scope == 'local' and document.logical_name.endswith('.lh')}
-    basic_columns = {'类', '标签名', '数据类型', '常量', '软元件', '地址', '注释'}
+    basic_columns = {'class', 'name', 'data_type', 'constant', 'device', 'iec_address', 'comment'}
     unobserved = 0
     for table in tables:
         column_identities = _table_column_identities(table)
@@ -1368,36 +1334,19 @@ def verify_active_saved_context(saved, context, baseline, *, compilation=None):
             # A bound successful ST build can materialize an unset P range.
             # Use this current native grid as the independent value source;
             # no per-CPU default or candidate-supplied range is substituted.
-            from .native_locale import native_language
-            observed = read_native_allocation_grids(configuration.get('grid_rows'),
-                native_ui_language=native_language(state['identity']))
-            pointers = [row['cells'] for row in observed['grid_rows']['allocation']
-                        if row['cells'][2]['value'] == 'P']
-            initialization = None
-            if (previous_ranges['P'] == (0xffffffff, 0xffffffff) and len(pointers) == 1
-                    and all(cell['value'].isdecimal() for cell in pointers[0][5:8])):
-                low, high, count = [int(cell['value']) for cell in pointers[0][5:8]]
-                if 0 <= low <= high < 0xffffffff and count == high - low + 1:
-                    initialization = {'before': [-1, -1], 'after': [low, high]}
+            from gxworks2.ui_observations import observed_pointer_range
+            pointer_range = observed_pointer_range(configuration, state['identity'])
+            initialization = ({'before': [-1, -1], 'after': pointer_range}
+                              if previous_ranges['P'] == (0xffffffff, 0xffffffff) and pointer_range is not None else None)
             source_language = 'st'
         if initialization is not None and ranges['P'] == tuple(initialization['after']):
-            from .native_locale import native_language, ui_text
-            language = native_language(state['identity'])
-            # Re-validate the complete current native grid before using its P
-            # row. Neither a template nor the newly saved bytes prove the UI.
-            observed = read_native_allocation_grids(configuration.get('grid_rows'),
-                native_ui_language=language)
-            pointers = [row['cells'] for row in observed['grid_rows']['allocation']
-                        if row['cells'][2]['value'] == 'P']
-            if (len(pointers) == 1 and pointers[0][0]['value'] == ui_text('allocation_grid_var', language)
-                    and [cell['value'] for cell in pointers[0][5:7]] ==
-                        [str(value) for value in initialization['after']]
-                    and pointers[0][7]['value'] == str(initialization['after'][1] - initialization['after'][0] + 1)
-                    and all(cell['state'] & ~0x6 == 0 for cell in pointers[0][5:8])):
+            from gxworks2.ui_observations import observed_pointer_range
+            from .native_locale import native_language
+            if observed_pointer_range(configuration, state['identity']) == initialization['after']:
                 previous_ranges['P'] = tuple(initialization['after'])
                 range_initializations.append(dict(device='P', before=initialization['before'],
                     after=initialization['after'], origin='current_native_'+source_language+'_pointer_default_materialized',
-                    cpu_menu=state['identity']['cpu_menu'], native_ui_language=language))
+                    cpu_menu=state['identity']['cpu_menu'], native_ui_language=native_language(state['identity'])))
     if configuration['status'] != 'available' or any(
             list(pair) != (configuration['ranges'][device] if device in ('D', 'M') else list(previous_ranges[device]))
             for device, pair in ranges.items()):

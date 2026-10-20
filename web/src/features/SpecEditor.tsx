@@ -5,31 +5,8 @@ import type { Spec, Json } from "../api/client";
 import { Button } from "../components/ui";
 import { ChoiceInput } from "../components/ChoiceInput";
 
-function describeExpression(value: Json | undefined, depth = 0): string {
-  if (!value || typeof value !== "object" || Array.isArray(value) || depth > 24) return "待核对";
-  const args = Array.isArray(value.args) ? value.args.map((a) => describeExpression(a, depth + 1)) : [];
-  if (value.op === "constant") return String(value.value);
-  if (["device", "parameter", "state"].includes(String(value.op))) {
-    const type = value.type && typeof value.type === "object" && !Array.isArray(value.type) ? value.type : {};
-    return String(value.name) + (type.kind === "int" ? `（${type.signed ? "有符号" : "无符号"}${type.bits}位）` : "");
-  }
-  const operators: Record<string, string> = { gt: "大于", ge: "大于等于", lt: "小于", le: "小于等于", eq: "等于", ne: "不等于", add: "+", sub: "−", mul: "×", div: "÷", and: "且", or: "或", xor: "异或", bit_and: "按位与", bit_or: "按位或", bit_xor: "按位异或", shift_left: "左移", shift_right: "右移" };
-  if (value.op === "vector") return `[${args.join("，")}]`;
-  if (value.op === "not") return `非（${args[0]}）`;
-  if (value.op === "bit_not") return `按位取反（${args[0]}）`;
-  if (operators[String(value.op)]) return `（${args.join(` ${operators[String(value.op)]} `)}）`;
-  return "待核对";
-}
-
-function describeEffect(value: Json): string {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return "待核对";
-  const target = value.target && typeof value.target === "object" && !Array.isArray(value.target) ? value.target : {};
-  const address = String(target.device || "未指定结果地址") + (target.offset ? `（偏移 ${target.offset}）` : "");
-  if (value.kind === "external_action") return `外部设备调用，读出结果保存到 ${address}`;
-  if (value.kind === "range_copy") return `${describeExpression(value.source)} 起始的 ${describeExpression(value.count)} 个元素复制到 ${address}`;
-  if (value.kind === "range_shift") return `${address} 起始的 ${describeExpression(value.count)} 个元素${value.direction === "left" ? "左移" : "右移"} ${describeExpression(value.shift)} 位，由 ${describeExpression(value.source)} 补入`;
-  return `${address} = ${describeExpression(value.value)}`;
-}
+type SpecPresentation = { operation_intents: { effects: string[]; parameters: string[]; enable: string; execution: string; required_state: string[] }[];
+  behavior_constraints: { source?: string; accept?: string; enable?: string }[] };
 
 export function SpecEditor({
   value,
@@ -47,6 +24,19 @@ export function SpecEditor({
   issues: { path: string; message: string }[];
 }) {
   const [draft, setDraft] = useState<Spec | null>(value);
+  const [presentation, setPresentation] = useState<{ source: Spec; value: SpecPresentation } | null>(null);
+  const [presentationError, setPresentationError] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    setPresentationError("");
+    if (draft && ((Array.isArray(draft.operation_intents) && draft.operation_intents.length) || (Array.isArray(draft.behavior_constraints) && draft.behavior_constraints.length))) {
+      api<SpecPresentation>("/spec/presentation", "POST", { spec: draft }).then(value => {
+        if (!cancelled) setPresentation({ source: draft, value });
+      }).catch(error => { if (!cancelled) setPresentationError(error instanceof Error ? error.message : String(error)); });
+    }
+    return () => { cancelled = true; };
+  }, [draft]);
+  const description = presentation?.source === draft ? presentation.value : null;
   const [raw, setRaw] = useState("");
   const [parseError, setParseError] = useState(false);
   const [ioPending, setIOPending] = useState(false), [ioError, setIOError] = useState("");
@@ -135,38 +125,34 @@ export function SpecEditor({
         <summary>{t("原始需求")}</summary>
         <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{JSON.stringify(draft.intent_context, null, 2)}</pre>
       </details>}
+      {presentationError && <p className="error-text" role="alert">{presentationError}</p>}
       {operationIntents.length > 0 && <fieldset>
         <legend>{t("核对指令效果")}</legend>
-        {operationIntents.map((intent) => <label key={String(intent.id)}>
+        {operationIntents.map((intent, index) => <label key={String(intent.id)}>
           <input type="checkbox" checked={intent.status === "confirmed" || confirmedIntentIds.includes(String(intent.id))}
             disabled={intent.status === "confirmed"}
             onChange={(e) => patch({ ...draft, confirmed_operation_intent_ids: e.target.checked
               ? [...confirmedIntentIds, String(intent.id)] : confirmedIntentIds.filter((id) => id !== String(intent.id)) })} />
           <span>{String(intent.label || intent.id)}
-            {Array.isArray(intent.effects) && intent.effects.map((effect, i) => <small key={i}>{describeEffect(effect)}</small>)}
-            {intent.parameters && typeof intent.parameters === "object" && !Array.isArray(intent.parameters) &&
-              Object.entries(intent.parameters).map(([name, value]) => <small key={name}>{name} = {describeExpression(value)}</small>)}
-            <small>{t("使能条件")}：{describeExpression(intent.enable)}</small>
-            <small>{intent.execution && typeof intent.execution === "object" && !Array.isArray(intent.execution) && intent.execution.trigger === "rising"
-              ? t("条件从断开变为成立时执行") : t("条件成立期间执行")}</small>
-            {intent.execution && typeof intent.execution === "object" && !Array.isArray(intent.execution) &&
-              intent.execution.required_state && typeof intent.execution.required_state === "object" && !Array.isArray(intent.execution.required_state) &&
-              Object.entries(intent.execution.required_state).map(([name, state]) => <small key={name}>
-                {t("必要状态")}：{name} = {typeof state === "boolean" ? (state ? "ON" : "OFF") : String(state)}</small>)}
+            {description?.operation_intents[index]?.effects.map((text, i) => <small key={i}>{text}</small>)}
+            {description?.operation_intents[index]?.parameters.map((text, i) => <small key={i}>{text}</small>)}
+            <small>{t("使能条件")}：{description?.operation_intents[index]?.enable || t("正在加载…")}</small>
+            <small>{t(description?.operation_intents[index]?.execution || "正在加载…")}</small>
+            {description?.operation_intents[index]?.required_state.map((text, i) => <small key={i}>{t("必要状态")}：{text}</small>)}
           </span>
         </label>)}
       </fieldset>}
       {behaviors.length > 0 && <fieldset>
         <legend>{t("核对行为关系")}</legend>
-        {behaviors.map((relation) => <label key={String(relation.id)}>
+        {behaviors.map((relation, index) => <label key={String(relation.id)}>
           <input type="checkbox" checked={relation.status === "confirmed" || confirmedBehaviorIds.includes(String(relation.id))}
             disabled={relation.status === "confirmed"}
             onChange={(e) => patch({ ...draft, confirmed_behavior_ids: e.target.checked
               ? [...confirmedBehaviorIds, String(relation.id)] : confirmedBehaviorIds.filter((id) => id !== String(relation.id)) })} />
           <span>{String(relation.label || relation.id)}
-            {relation.source && <small>{t("源信号")}：{describeExpression(relation.source)}</small>}
-            {relation.accept && <small>{t("接受条件")}：{describeExpression(relation.accept)}</small>}
-            {relation.enable && <small>{t("执行条件")}：{describeExpression(relation.enable)}</small>}
+            {relation.source && <small>{t("源信号")}：{description?.behavior_constraints[index]?.source || t("正在加载…")}</small>}
+            {relation.accept && <small>{t("接受条件")}：{description?.behavior_constraints[index]?.accept || t("正在加载…")}</small>}
+            {relation.enable && <small>{t("执行条件")}：{description?.behavior_constraints[index]?.enable || t("正在加载…")}</small>}
             {relation.provenance && typeof relation.provenance === "object" && !Array.isArray(relation.provenance) &&
               Array.isArray(relation.provenance.evidence) && relation.provenance.evidence.map((e, i) => <small key={i}>{String(e)}</small>)}
           </span>

@@ -27,6 +27,22 @@ def _construction_delivery():
     return 'instantiate'
 
 
+def direct_response_parts(value):
+    """Unwrap the supported Direct envelope and validate generator notes."""
+    if set(value) == {"result"} and isinstance(value["result"], dict):
+        value = value["result"]
+    if value.get("status") == "needs_input":
+        raise CompactProtocolError("Direct 响应必须包含程序；模型返回了旧 needs_input 格式。")
+    notes = {key: value.get(key, []) for key in ("decisions", "open_items")}
+    for key, items in notes.items():
+        if not isinstance(items, list) or any(not isinstance(item, str) for item in items):
+            raise CompactProtocolError(f"{key} 必须为字符串数组。")
+    program = value.get("program", {k: v for k, v in value.items() if k not in notes})
+    if not isinstance(program, dict):
+        raise CompactProtocolError("Direct program 必须为对象。")
+    return program, notes
+
+
 def prepare_model_candidate(value, projected, plc_model, *, construction_delivery=None):
     """One shared first-candidate boundary for production and measurements."""
     # The engineering projection intentionally omits the CPU. The runtime owns
@@ -210,16 +226,7 @@ def generate_direct_ladder(user_requirement, plc_model="FX3U", *, confirmed_spec
     # can reject their schema. This callback does not publish a candidate.
     if on_candidate:
         on_candidate(response.message.content, copy.deepcopy(context.confirmed_spec))
-    value = _json_object(response.message.content)
-    if set(value) == {"result"} and isinstance(value["result"], dict):
-        value = value["result"]
-    if value.get("status") == "needs_input":
-        raise CompactProtocolError("Direct 响应必须包含程序；模型返回了旧 needs_input 格式。")
-    notes = {key: value.get(key, []) for key in ("decisions", "open_items")}
-    for key, items in notes.items():
-        if not isinstance(items, list) or any(not isinstance(item, str) for item in items):
-            raise CompactProtocolError(f"{key} 必须为字符串数组。")
-    program = value.get("program", {k: v for k, v in value.items() if k not in notes})
+    program, notes = direct_response_parts(_json_object(response.message.content))
     prepared = prepare_model_candidate(program, context.confirmed_spec, model)
     handoff["generator_notes"] = {"source": "generator", **copy.deepcopy(notes)}
     for key in ("operation_binding", "construction_binding", "confirmed_predicate_binding"):

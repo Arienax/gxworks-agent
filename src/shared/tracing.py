@@ -9,15 +9,13 @@ from pathlib import Path
 import re
 import threading
 
+from shared.records import valid_record_id as _safe_id
+from shared.privacy import credential_field
+
 _MAX_FILE = 8 * 1024 * 1024
 _MAX_STRING = 2 * 1024 * 1024
 _LOCK = threading.RLock()
 
-_SENSITIVE_FIELDS = {
-    "api_key", "apikey", "password", "secret", "access_token", "refresh_token",
-    "authorization", "credential", "credentials", "provider_configuration",
-    "operator_token", "agent_token", "token", "cookie", "set_cookie", "proxy_authorization",
-}
 _BLOB_FIELDS = {"data_base64", "fbd_baseline", "image_base64"}
 _KEY_PATTERN = re.compile(r"(?<![A-Za-z0-9])sk-[A-Za-z0-9._-]{8,}", re.I)
 _BEARER_PATTERN = re.compile(r"(?i)(bearer\s+)[A-Za-z0-9._~+/=-]{8,}")
@@ -26,10 +24,6 @@ _QUERY_PATTERN = re.compile(r"(?i)([?&](?:token|api_key|apikey|access_token)=)[^
 
 def _now():
     return datetime.now(timezone.utc).isoformat()
-
-
-def _safe_id(value):
-    return isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", value)
 
 
 def _redact_text(value):
@@ -44,7 +38,7 @@ def _redact_text(value):
 def sanitize(value, *, key=None, depth=0):
     """Keep engineering/user text while excluding credentials and large binaries."""
     name = str(key or "").strip().lower().lstrip("_").replace("-", "_")
-    if name in _SENSITIVE_FIELDS or name.endswith("_api_key") or name.endswith("_password"):
+    if credential_field(name):
         return "<redacted>"
     if depth > 24:
         return "<diagnostic-depth-limit>"

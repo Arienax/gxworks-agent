@@ -8,10 +8,12 @@ import re
 from pathlib import Path
 from typing import Any, Mapping
 
-from storage.session import SessionStore
+from application.session import ProjectSession
 from agent_runtime.messages import ToolCall
 from agent_runtime.runtime import build_default_tool_runtime, public_tool_result_data
+from shared.records import contained as checked_contained, record_id as checked_record_id
 from shared.public_results import public_result_field
+from shared.privacy import credential_field, filesystem_field, redact_paths
 from .workspace import artifact_relative_path
 
 
@@ -20,16 +22,12 @@ class ProjectError(ValueError):
 
 
 def record_id(value: str) -> str:
-    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", value):
-        raise ProjectError("Invalid resource ID")
-    return value
+    return checked_record_id(value, message="Invalid resource ID", error_type=ProjectError)
 
 
 def contained(path: Path, root: Path) -> Path:
-    path, root = path.resolve(), root.resolve()
-    if path == root or root not in path.parents:
-        raise ProjectError("Resource escapes its storage directory")
-    return path
+    return checked_contained(path, root, allow_root=False,
+                             message="Resource escapes its storage directory", error_type=ProjectError)
 
 
 def public(value: Any) -> Any:
@@ -37,19 +35,19 @@ def public(value: Any) -> Any:
     if isinstance(value, Mapping):
         from application.capability_context import public_discovery
         return {str(k): public_discovery(v) if k == "capability_discovery" else public(v) for k, v in value.items()
-                if public_result_field(k) and not str(k).lower().endswith(("_path", "_dir", "_file")) and not any(
-                    token in str(k).lower() for token in ("api_key", "apikey", "token", "credential", "password", "secret", "staging_dir"))}
+                if public_result_field(k) and not filesystem_field(k)
+                and not credential_field(k, fragments=True, any_token=True) and "staging_dir" not in str(k).lower()}
     if isinstance(value, (list, tuple)):
         return [public(v) for v in value]
     if isinstance(value, str):
-        return re.sub(r"(?:[A-Za-z]:[\\/]|\\\\|/(?:Users|home|tmp|var|etc)/)[^\s\"<>|]*", "[private path]", value)
+        return redact_paths(value)
     return copy.deepcopy(value)
 
 
 class ProjectService:
     def __init__(self, workspace: Path):
         self.workspace = Path(workspace).expanduser().resolve()
-        self.store = SessionStore(base_dir=self.workspace, create=False)
+        self.store = ProjectSession(base_dir=self.workspace, create=False)
         self.runtime = build_default_tool_runtime()
         from application.program_inspection import ProgramInspectionService
         self.inspection = ProgramInspectionService()
@@ -120,7 +118,7 @@ class ProjectService:
         try:
             relative = artifact_relative_path(artifacts[artifact_id])
         except ValueError:
-            raise ProjectError("Invalid artifact manifest") from None
+            raise ProjectError("Invalid artifact manifest: resource escapes its storage directory or uses an unsupported path") from None
         root = self.store.version_dir(project_id, version_id)
         path = contained(root / relative, root)
         if path.suffix.lower() not in (".svg", ".st", ".txt", ".json", ".csv", ".html", ".md", ".png", ".pdf", ".gxw"):
@@ -197,9 +195,13 @@ class ProjectService:
         selected = version_id or project.get("active_version_id")
         version = self.raw_version(project_id, selected) if selected else None
         program = self.program(project_id, selected) if version and version.get("target_mode") == "ladder" else None
-        fbd_baseline = self.artifact(project_id, selected, 'gxw').read_bytes() if version and version.get('target_mode') == 'fbd' else None
+        if version and version.get("target_mode") == "ladder" and program is None:
+            raise ProjectError("Selected ladder version has no readable program.")
         native_snapshot = self.artifact(project_id, selected, 'gxw').read_bytes() if version and 'gxw' in (version.get('artifacts') or {}) else None
-        st_text = self.artifact(project_id, selected, 'st').read_text(encoding='utf-8') if version and version.get('target_mode') == 'st' else None
+        fbd_baseline = native_snapshot if version and version.get('target_mode') == 'fbd' else None
+        if version and version.get('target_mode') == 'fbd' and native_snapshot is None:
+            raise ProjectError('Selected FBD version has no GXW artifact.')
+        st_text = self.artifact(project_id, selected, 'st').read_text(encoding='utf-8') if version and version.get('target_mode') == 'st' and 'st' in (version.get('artifacts') or {}) else None
         sfc_graph = self.sfc_graph(project_id, selected) if version and version.get('target_mode') == 'sfc' else None
         if self.raw_project(project_id) != project:
             raise ProjectError("Project changed during read; retry")
@@ -328,7 +330,7 @@ class ProjectService:
                 path = contained(root / relative, root)
                 if path.suffix.lower() != ".json" or not path.is_file():
                     raise ProjectError("Simulator evidence file is missing or invalid")
-        # SessionStore already explicitly uses persist_legacy=False here.
+        # ProjectSession reads compatibility views without persisting them.
         result = self.store.load_simulator_run(project_id, version_id, run_id)
         if result is None:
             raise KeyError("Run evidence not found")
@@ -338,3 +340,8 @@ class ProjectService:
 def media_type(path: Path) -> str:
     return {".st": "text/plain", ".md": "text/plain", ".json": "application/json",
             ".svg": "image/svg+xml"}.get(path.suffix.lower(), mimetypes.guess_type(path.name)[0] or "application/octet-stream")
+
+
+def public_spec_hash(spec):
+    from plc.ir import canonical_sha256
+    return canonical_sha256(spec) if spec is not None else None

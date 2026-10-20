@@ -80,59 +80,14 @@ _VFD_CONTROL_OPTIONS = (
     "RS485通讯（Modbus）",
     "高速脉冲频率给定（需晶体管输出及变频器支持）",
 )
-_DEVICE_LIMITS = {
-    "FX3U": {
-        "X": 0o367,
-        "Y": 0o367,
-        "M": 8511,
-        "T": 511,
-        "C": 255,
-        "S": 4095,
-        "D": 8511,
-        "V": 7,
-        "Z": 7,
-    },
-    "FX5U": {
-        # FX5U X/Y use decimal device numbers. 1777 is the documented
-        # device-number ceiling; the actually installed I/O is normally less.
-        "X": 1777,
-        "Y": 1777,
-        "M": 7679,
-        "T": 1023,
-        "C": 1023,
-        "S": 4095,
-        "D": 7999,
-    },
-}
+# Specification IO kinds deliberately expose a smaller namespace than source operands.
+from plc.device_profiles import DEVICE_LIMITS, RESERVED_SPECIAL_DEVICE_RANGES
 
-# FX3U special relay numbers explicitly marked reserved/unavailable in the
-# bundled device reference. Keeping this table here makes validate_spec_draft
-# deterministic and side-effect free.
-_FX3U_RESERVED_M_RANGES = (
-    (8010, 8010),
-    (8023, 8023),
-    (8080, 8089),
-    (8100, 8103),
-    (8112, 8120),
-    (8140, 8149),
-    (8256, 8259),
-    (8300, 8303),
-    (8305, 8305),
-    (8307, 8315),
-    (8317, 8317),
-    (8319, 8327),
-    (8335, 8335),
-    (8337, 8337),
-    (8339, 8339),
-    (8396, 8397),
-    (8399, 8400),
-    (8406, 8408),
-    (8410, 8420),
-    (8430, 8437),
-    (8439, 8448),
-    (8450, 8459),
-    (8468, 8511),
-)
+_DEVICE_LIMITS = {
+    'FX3U': DEVICE_LIMITS['FX3U'],
+    'FX5U': {kind: DEVICE_LIMITS['FX5U'][kind] for kind in ('X', 'Y', 'M', 'T', 'C', 'S', 'D')},
+}
+_FX3U_RESERVED_M_RANGES = RESERVED_SPECIAL_DEVICE_RANGES['FX3U']['M']
 
 
 def _validation_issue(code, message, path, **details):

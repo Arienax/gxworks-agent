@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from shared.privacy import credential_field
+
 import copy
 import json
 import uuid
@@ -34,9 +36,7 @@ _JOB_FIELDS = ("id", "kind", "status", "created_at", "updated_at", "cancel_reque
 
 def _check_snapshot(value):
     if isinstance(value, dict):
-        forbidden = {"api_key", "apikey", "password", "secret", "access_token", "refresh_token",
-                     "credentials", "provider_configuration", "authorization", "credential"}
-        if any(str(key).lower().lstrip("_") in forbidden for key in value):
+        if any(credential_field(key) for key in value):
             raise ValueError("Credentials must not be persisted in job snapshots")
         for child in value.values():
             _check_snapshot(child)
@@ -117,16 +117,31 @@ class JobManager:
 
     def _save(self, record):
         self.lock.require_acquired()
-        atomic_json(contained(self.directory / (record_id(record["id"]) + ".json"), self.directory), record)
+        revision = int(record.get("revision") or 0) + 1
+        atomic_json(contained(self.directory / (record_id(record["id"]) + ".json"), self.directory),
+                    {**record, "revision": revision})
+        record["revision"] = revision
 
     @staticmethod
     def _public(record):
         snapshot = record.get("snapshot", {})
-        return public_payload({**{key: record.get(key) for key in _JOB_FIELDS},
+        result = public_payload({**{key: record.get(key) for key in _JOB_FIELDS},
                                "model_usage": record.get("model_usage", snapshot.get("model", {})),
                                "project_id": snapshot.get("project_id"),
                                "version_id": snapshot.get("version_id") or snapshot.get("base_version_id")},
                               native_live=record.get('kind') == 'execution')
+        if type(record.get('revision')) is int:
+            result['revision'] = record['revision']
+        return result
+
+    def record(self, job_id):
+        """Copied internal record for application workflows; never a transport projection."""
+        with self._record_lock:
+            return copy.deepcopy(self._load(job_id))
+
+    @staticmethod
+    def public_record(record):
+        return JobManager._public(record)
 
     def get(self, job_id):
         with self._record_lock:
@@ -277,11 +292,11 @@ class JobManager:
 
         version_id = None
         try:
-            from storage.session import SessionStore
+            from application.session import ProjectSession
 
             with self.lock.thread_lock:
                 self.lock.require_acquired()
-                store = SessionStore(base_dir=self.lock.workspace, create=False)
+                store = ProjectSession(base_dir=self.lock.workspace, create=False)
                 current = store.get_project(project_id)
                 if not isinstance(current, dict):
                     return None
@@ -340,9 +355,9 @@ class JobManager:
             diagnostics.exception_record(save_error)
             if version_id is not None:
                 try:
-                    from storage.session import SessionStore
+                    from application.session import ProjectSession
                     with self.lock.thread_lock:
-                        store = SessionStore(base_dir=self.lock.workspace, create=False)
+                        store = ProjectSession(base_dir=self.lock.workspace, create=False)
                         if store.get_version(project_id, version_id) is None:
                             store.discard_version(project_id, version_id)
                 except Exception:

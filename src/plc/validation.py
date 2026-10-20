@@ -1,5 +1,7 @@
 import json
 import re
+from plc.ladder_facts import (TIMER_CYCLIC_INTENT_RE, flatten_inputs as _flatten_input_elements,
+    timer_descriptive_text as _timer_descriptive_text, same_scan_toggle_findings, always_on_inputs)
 
 from plc.instructions import (
     DEFAULT_INSTRUCTION_REGISTRY,
@@ -10,52 +12,12 @@ from plc.instructions import (
 from plc.generation_contract import APP_INSTR_OPCODE_PATTERN, MAX_LABEL_LEN
 
 
-def _source_device_profiles():
-    from shared.paths import resource_path
-    models = json.loads(resource_path("plc_models.json").read_text(encoding="utf-8"))
-    return {cpu: model["validation"] for cpu, model in models.items()
-            if isinstance(model, dict) and model.get("validation", {}).get("status") == "source_subset"}
+from plc.device_profiles import (
+    SOURCE_DEVICE_PROFILES, SUPPORTED_PLC_MODELS, DEVICE_LIMITS,
+    READ_ONLY_SPECIAL_DEVICE_NUMBERS, READ_ONLY_SPECIAL_DEVICE_RANGES,
+    RESERVED_SPECIAL_DEVICE_RANGES,
+)
 
-
-SOURCE_DEVICE_PROFILES = _source_device_profiles()
-SUPPORTED_PLC_MODELS = {"FX3U", "FX5U", *SOURCE_DEVICE_PROFILES}
-
-# These are software limits, not a promise that every address is physically
-# installed.  X/Y on FX5U are configuration-dependent, so only their decimal
-# syntax is enforced here.  SM/SD 8000-series compatibility devices are valid
-# on FX5U even though the native special-device range is also exposed at 0-2047.
-DEVICE_LIMITS = {
-    "FX3U": {
-        "X": 0o367,
-        "Y": 0o367,
-        "M": 8511,
-        "D": 8511,
-        "T": 511,
-        "C": 255,
-        "S": 4095,
-        # FX3U index registers. V0-V7 are 16-bit index registers; Z0-Z7
-        # are accepted as index registers and may also be used as ordinary
-        # word operands. Indexed operands such as D100Z0 are validated below.
-        "V": 7,
-        "Z": 7,
-    },
-    "FX5U": {
-        # The physical allocation remains configuration-dependent. 1777 is
-        # the decimal device-number ceiling used by the confirmed-spec and
-        # C++ hardware contracts; accepting the namespace here is not a claim
-        # that a particular installed rack exposes every point.
-        "X": 1777,
-        "Y": 1777,
-        "M": 7679,
-        "SM": 8999,
-        "D": 7999,
-        "SD": 8999,
-        "T": 1023,
-        "C": 1023,
-        "S": 4095,
-    },
-}
-DEVICE_LIMITS.update({cpu: p["device_limits"] for cpu, p in SOURCE_DEVICE_PROFILES.items()})
 
 DEVICE_ADDRESS_RE = re.compile(
     r"^(ZR|SM|SD|SB|SW|X|Y|M|D|T|C|S|L|F|B|W|R|V|Z)([0-9A-F]+)(?:\.([0-9A-F]+))?$", re.IGNORECASE
@@ -72,102 +34,6 @@ DEVICE_TOKEN_RE = re.compile(
     r"(?<![A-Z0-9_])(?:SM|SD|X|Y|M|D|T|C|S|V|Z)\d+(?![A-Z0-9_])",
     re.IGNORECASE,
 )
-
-
-# CPU-owned special relays may be read as contacts, but the user program must
-# not drive them.  Keep the profiles model-specific: FX3U uses M8000-series
-# devices, while FX5U uses native/compatible SM devices.  The FX3U entries
-# cover the read-only flags documented by the bundled model reference; the
-# additional positioning-axis entries inherit the documented Y0 meaning for
-# Y1-Y3 (M835x-M837x).
-READ_ONLY_SPECIAL_DEVICE_NUMBERS = {
-    "FX3U": {
-        "M": frozenset(
-            {
-                8018, 8019, 8020, 8021, 8022, 8029,
-                8041, 8042, 8046, 8048,
-                8060, 8061, 8063, 8064, 8065, 8066, 8067,
-                8072, 8073,
-                8105, 8107, 8109,
-                # M8123 is deliberately excluded: the RS receive-complete
-                # flag is cleared by the user program after processing.
-                8121, 8124, 8126, 8127,
-                8131, 8133, 8138, 8139,
-                8304, 8306,
-                8316, 8318, 8328, 8329,
-                8340, 8348, 8350, 8358, 8360, 8368, 8370, 8378,
-                # M8403/M8423 are likewise program-reset receive-complete
-                # flags for RS2, not immutable status contacts.
-                8401, 8404, 8405,
-                8421, 8424, 8425, 8426, 8427,
-            }
-        ),
-    },
-    "FX5U": {
-        "SM": frozenset(
-            {
-                # Native iQ-F status devices.
-                0, 1, 51, 53, 56,
-                400, 401, 402, 403,
-                409, 410, 411, 412, 413, 414,
-                # FX-compatible aliases documented by the model profile.
-                8000, 8001, 8002, 8003,
-                8011, 8012, 8013, 8014,
-                8029, 8340, 8348,
-            }
-        ),
-    },
-}
-
-READ_ONLY_SPECIAL_DEVICE_RANGES = {
-    "FX3U": {
-        "M": (
-            (8000, 8009),
-            (8011, 8014),
-            (8151, 8154),
-            (8156, 8159),
-            (8183, 8191),
-            (8246, 8255),
-            (8330, 8334),
-        ),
-    },
-    "FX5U": {},
-}
-
-# FX3U M8000-M8511 is a CPU-owned special-device area.  Numbers that the
-# bundled Mitsubishi reference marks as reserved/unavailable are invalid for
-# both reads and writes, not merely read-only.  Keep this aligned with the
-# confirmed-spec validator so a draft cannot pass one layer and fail another.
-RESERVED_SPECIAL_DEVICE_RANGES = {
-    "FX3U": {
-        "M": (
-            (8010, 8010),
-            (8023, 8023),
-            (8080, 8089),
-            (8100, 8103),
-            (8112, 8120),
-            (8140, 8149),
-            (8256, 8259),
-            (8300, 8303),
-            (8305, 8305),
-            (8307, 8315),
-            (8317, 8317),
-            (8319, 8327),
-            (8335, 8335),
-            (8337, 8337),
-            (8339, 8339),
-            (8396, 8397),
-            (8399, 8400),
-            (8406, 8408),
-            (8410, 8420),
-            (8430, 8437),
-            (8439, 8448),
-            (8450, 8459),
-            (8468, 8511),
-        ),
-    },
-    "FX5U": {},
-}
 
 
 # Instruction semantics are no longer duplicated here.  These compatibility
@@ -209,11 +75,7 @@ VALID_OUTPUT_TYPES = {
     "COIL", "PLS", "PLF", "TIMER", "COUNTER", "APP_INSTR", "BLOCK_OUTPUT",
 }
 
-TIMER_CYCLIC_INTENT_RE = re.compile(
-    r"闪烁|闪灯|周期|循环闪|振荡|时钟|方波|脉冲发生|"
-    r"blink|flash|oscillat|clock|square\s*wave|toggle",
-    re.IGNORECASE,
-)
+
 
 # FX3U positioning values documented as signed 32-bit register pairs.
 # The first address is the low word and the following address is the high word.
@@ -1118,46 +980,10 @@ def _validate_instruction_completion_placement(rungs, plc_model="FX3U"):
                     "shared enable contacts; move common contacts to shared_inputs",
                 )
 
-def _flatten_input_elements(elements):
-    for element in elements or []:
-        if not isinstance(element, dict):
-            continue
-        if element.get("type") == "parallel_block":
-            for branch in element.get("branches", []) or []:
-                yield from _flatten_input_elements(branch)
-        else:
-            yield element
 
 
-def _timer_descriptive_text(data, timer_address):
-    comments = data.get("device_comments") or {}
-    parts = [str(comments.get(timer_address, ""))]
-    for rung in data.get("rungs", []) or []:
-        rung_mentions_timer = False
-        local_parts = [str(rung.get("debug_note", "") or "")]
-        shared_inputs = list(rung.get("shared_inputs", []) or [])
-        for branch in rung.get("branches", []) or []:
-            input_elements = list(
-                _flatten_input_elements(
-                    shared_inputs + list(branch.get("inputs", []) or [])
-                )
-            )
-            if any(
-                str(item.get("address", "")).strip().upper() == timer_address
-                for item in input_elements
-            ):
-                rung_mentions_timer = True
-            local_parts.extend(str(item.get("label", "") or "") for item in input_elements)
-            for output in branch.get("outputs", []) or []:
-                output_address = str(output.get("address", "")).strip().upper()
-                if output_address == timer_address:
-                    rung_mentions_timer = True
-                local_parts.append(str(output.get("label", "") or ""))
-                if output_address:
-                    local_parts.append(str(comments.get(output_address, "")))
-        if rung_mentions_timer:
-            parts.extend(local_parts)
-    return " ".join(parts)
+
+
 
 
 def _validate_timer_semantics(data, plc_model="FX3U"):
@@ -1174,13 +1000,7 @@ def _validate_timer_semantics(data, plc_model="FX3U"):
                     shared_inputs + list(branch.get("inputs", []) or [])
                 )
             )
-            solely_run_enabled = (
-                len(effective_inputs) == 1
-                and str(effective_inputs[0].get("type", "")).upper() == "NO"
-                and str(effective_inputs[0].get("address", "")).strip().upper()
-                == always_on
-            )
-            if not solely_run_enabled:
+            if not always_on_inputs(effective_inputs, {always_on}):
                 continue
             for output_idx, output in enumerate(branch.get("outputs", []) or []):
                 if str(output.get("type", "")).upper() != "TIMER":
@@ -1206,61 +1026,12 @@ def _validate_timer_semantics(data, plc_model="FX3U"):
 
 
 def _validate_same_scan_set_reset_toggle(rungs):
-    """Reject ALT emulation whose SET immediately enables its sibling RST."""
-
-    for rung_idx, rung in enumerate(rungs or []):
-        shared_inputs = list(_flatten_input_elements(rung.get("shared_inputs", []) or []))
-        has_shared_edge = any(
-            str(item.get("type", "")).upper() in {"P", "RISING", "F", "FALLING"}
-            for item in shared_inputs
-        )
-        toggle_text = str(rung.get("debug_note", "") or "")
-        guarded_sets = {}
-        guarded_resets = {}
-        for branch_idx, branch in enumerate(rung.get("branches", []) or []):
-            branch_inputs = list(_flatten_input_elements(branch.get("inputs", []) or []))
-            toggle_text += " " + " ".join(
-                str(item.get("label", "") or "") for item in branch_inputs
-            )
-            guards = {
-                (
-                    str(item.get("type", "")).upper(),
-                    str(item.get("address", "")).strip().upper(),
-                )
-                for item in branch_inputs
-            }
-            for output_idx, output in enumerate(branch.get("outputs", []) or []):
-                toggle_text += " " + str(output.get("label", "") or "")
-                if str(output.get("type", "")).upper() != "APP_INSTR":
-                    continue
-                opcode = str(output.get("opcode", "")).upper()
-                operands = output.get("operands", []) or []
-                if opcode not in {"SET", "RST"} or not operands:
-                    continue
-                address = str(operands[0]).strip().upper()
-                entry = (branch_idx, output_idx)
-                if opcode == "SET" and ("NC", address) in guards:
-                    guarded_sets[address] = entry
-                if opcode == "RST" and ("NO", address) in guards:
-                    guarded_resets[address] = entry
-        toggle_intent = bool(
-            re.search(
-                r"翻转|交替|切换|toggle|alternate|\bALT\b",
-                toggle_text,
-                re.IGNORECASE,
-            )
-        )
-        for address in sorted(set(guarded_sets).intersection(guarded_resets)):
-            if not (has_shared_edge or toggle_intent):
-                continue
-            branch_idx, output_idx = guarded_sets[address]
-            _fail(
-                f"$.rungs[{rung_idx}].branches[{branch_idx}].outputs[{output_idx}]",
-                f"same-rung complementary SET/RST branches do not safely toggle {address}; "
-                "SET changes the bit before the sibling branch is scanned, so both actions "
-                "can execute on one edge. Use a two-phase state/timer design or a supported "
-                "toggle instruction instead",
-            )
+    for finding in same_scan_toggle_findings(rungs):
+        _fail(finding['path'],
+              f"same-rung complementary SET/RST branches do not safely toggle {finding['address']}; "
+              "SET changes the bit before the sibling branch is scanned, so both actions "
+              "can execute on one edge. Use a two-phase state/timer design or a supported "
+              "toggle instruction instead")
 
 
 def _validate_unique_coils(rungs):
@@ -1654,10 +1425,11 @@ def find_unverified_app_instructions(data):
     return findings
 
 
-def _validate_ladder_syntax(data, plc_model, *, partial=False, require_catalogued_instructions=True):
-    """Run the existing walker without requiring a complete target profile."""
+def _validate_ladder_structure(data, plc_model, *, partial=False, syntax_only=False, require_catalogued_instructions=True):
+    """Validate shape and available target rules in one traversal."""
     from plc.target_support import normalize_target_cpu
     model = normalize_target_cpu(plc_model)
+    syntax_only = syntax_only or model not in SUPPORTED_PLC_MODELS
     _require_dict(data, '$')
     allowed = {'mode','device_comments','rungs','delete_rung_ids'} if partial else {'device_comments','rungs'}
     if set(data)-allowed:
@@ -1673,18 +1445,26 @@ def _validate_ladder_syntax(data, plc_model, *, partial=False, require_catalogue
         _fail('$', f'missing top-level fields: {sorted(allowed-set(data))}')
     comments = data.get('device_comments',{})
     _require_dict(comments, '$.device_comments')
-    for address,comment in comments.items():
-        _validate_operand_token(address, '$.device_comments')
-        _check_text_length(comment, f'$.device_comments.{address}')
+    if syntax_only:
+        for address, comment in comments.items():
+            _validate_operand_token(address, "$.device_comments")
+            _check_text_length(comment, f"$.device_comments.{address}")
+    else:
+        _validate_comments(comments, "$.device_comments", model)
     rungs = data.get('rungs',[])
     _require_list(rungs,'$.rungs')
     seen = set()
     for index,rung in enumerate(rungs):
         _validate_rung(rung,f'$.rungs[{index}]',model,
-            require_catalogued_instructions=require_catalogued_instructions,syntax_only=True)
+            require_catalogued_instructions=require_catalogued_instructions,syntax_only=syntax_only)
         if rung['rung_id'] in seen:
             _fail(f'$.rungs[{index}].rung_id',f"duplicate rung_id {rung['rung_id']}")
         seen.add(rung['rung_id'])
+
+
+def _validate_ladder_syntax(data, plc_model, *, partial=False, require_catalogued_instructions=True):
+    _validate_ladder_structure(data, plc_model, partial=partial, syntax_only=True,
+                              require_catalogued_instructions=require_catalogued_instructions)
 
 
 def validate_ladder_candidate_structure(
@@ -1704,31 +1484,9 @@ def validate_ladder_candidate_structure(
     encodings, device/address syntax and ranges, instruction catalogue/arity,
     writable targets, and unique rung identifiers.
     """
-    _validate_ladder_syntax(data,plc_model,require_catalogued_instructions=require_catalogued_instructions)
-    plc_model = normalize_plc_model(plc_model)
-    _require_dict(data, "$" )
-    allowed = {"device_comments", "rungs"}
-    extra = set(data) - allowed
-    missing = allowed - set(data)
-    if extra:
-        _fail("$", f"unexpected top-level fields: {sorted(extra)}")
-    if missing:
-        _fail("$", f"missing top-level fields: {sorted(missing)}")
-
-    _validate_comments(data["device_comments"], "$.device_comments", plc_model)
-    _require_list(data["rungs"], "$.rungs")
-    seen_ids = set()
-    for idx, rung in enumerate(data["rungs"]):
-        _validate_rung(
-            rung,
-            f"$.rungs[{idx}]",
-            plc_model,
-            require_catalogued_instructions=require_catalogued_instructions,
-        )
-        rung_id = rung["rung_id"]
-        if rung_id in seen_ids:
-            _fail(f"$.rungs[{idx}].rung_id", f"duplicate rung_id {rung_id}")
-        seen_ids.add(rung_id)
+    _validate_ladder_structure(data, plc_model, partial=False,
+                              require_catalogued_instructions=require_catalogued_instructions)
+    normalize_plc_model(plc_model)
     return data
 
 
@@ -1739,37 +1497,9 @@ def validate_ladder_partial_structure(
     require_catalogued_instructions=True,
 ):
     """Validate a partial edit without semantic/style policy checks."""
-    _validate_ladder_syntax(data,plc_model,partial=True,require_catalogued_instructions=require_catalogued_instructions)
-    plc_model = normalize_plc_model(plc_model)
-    _require_dict(data, "$" )
-    allowed = {"mode", "device_comments", "rungs", "delete_rung_ids"}
-    extra = set(data) - allowed
-    if extra:
-        _fail("$", f"unexpected top-level fields: {sorted(extra)}")
-    if data.get("mode") != "partial":
-        _fail("$.mode", 'expected "partial"')
-    _validate_comments(
-        data.get("device_comments", {}), "$.device_comments", plc_model
-    )
-    rungs = data.get("rungs", [])
-    _require_list(rungs, "$.rungs")
-    seen_ids = set()
-    for idx, rung in enumerate(rungs):
-        _validate_rung(
-            rung,
-            f"$.rungs[{idx}]",
-            plc_model,
-            require_catalogued_instructions=require_catalogued_instructions,
-        )
-        rung_id = rung["rung_id"]
-        if rung_id in seen_ids:
-            _fail(f"$.rungs[{idx}].rung_id", f"duplicate rung_id {rung_id}")
-        seen_ids.add(rung_id)
-    delete_ids = data.get("delete_rung_ids", [])
-    _require_list(delete_ids, "$.delete_rung_ids")
-    for idx, rung_id in enumerate(delete_ids):
-        if not isinstance(rung_id, int):
-            _fail(f"$.delete_rung_ids[{idx}]", "expected integer")
+    _validate_ladder_structure(data, plc_model, partial=True,
+                              require_catalogued_instructions=require_catalogued_instructions)
+    normalize_plc_model(plc_model)
     return data
 
 
@@ -1780,16 +1510,8 @@ def validate_ladder_full(
     *,
     require_catalogued_instructions=True,
 ):
-    _require_dict(data, "$")
-    allowed = {"device_comments", "rungs"}
-    extra = set(data) - allowed
-    missing = allowed - set(data)
-    if extra:
-        _fail("$", f"unexpected top-level fields: {sorted(extra)}")
-    if missing:
-        _fail("$", f"missing top-level fields: {sorted(missing)}")
-
-    _validate_ladder_syntax(data,plc_model,require_catalogued_instructions=require_catalogued_instructions)
+    _validate_ladder_structure(data, plc_model,
+                              require_catalogued_instructions=require_catalogued_instructions)
     _validate_unique_coils(data["rungs"])
     from plc.device_definitions import ladder_device_findings
     for finding in ladder_device_findings(data, plc_model,
@@ -1798,21 +1520,6 @@ def validate_ladder_full(
             _fail('$.rungs', finding['message'])
     plc_model = normalize_plc_model(plc_model)
 
-    _validate_comments(data["device_comments"], "$.device_comments", plc_model)
-    _require_list(data["rungs"], "$.rungs")
-
-    seen_ids = set()
-    for idx, rung in enumerate(data["rungs"]):
-        _validate_rung(
-            rung,
-            f"$.rungs[{idx}]",
-            plc_model,
-            require_catalogued_instructions=require_catalogued_instructions,
-        )
-        rung_id = rung["rung_id"]
-        if rung_id in seen_ids:
-            _fail(f"$.rungs[{idx}].rung_id", f"duplicate rung_id {rung_id}")
-        seen_ids.add(rung_id)
     _validate_timer_semantics(data, plc_model)
     _validate_same_scan_set_reset_toggle(data["rungs"])
     _validate_instruction_completion_placement(data["rungs"], plc_model)
@@ -1859,35 +1566,9 @@ def validate_ladder_partial(
     *,
     require_catalogued_instructions=True,
 ):
-    _validate_ladder_syntax(data,plc_model,partial=True,require_catalogued_instructions=require_catalogued_instructions)
-    plc_model = normalize_plc_model(plc_model)
-    _require_dict(data, "$")
-    allowed = {"mode", "device_comments", "rungs", "delete_rung_ids"}
-    extra = set(data) - allowed
-    if extra:
-        _fail("$", f"unexpected top-level fields: {sorted(extra)}")
-    if data.get("mode") != "partial":
-        _fail("$.mode", 'expected "partial"')
-
-    _validate_comments(
-        data.get("device_comments", {}), "$.device_comments", plc_model
-    )
-    rungs = data.get("rungs", [])
-    _require_list(rungs, "$.rungs")
-    for idx, rung in enumerate(rungs):
-        _validate_rung(
-            rung,
-            f"$.rungs[{idx}]",
-            plc_model,
-            require_catalogued_instructions=require_catalogued_instructions,
-        )
-    _validate_unique_coils(rungs)
-
-    delete_ids = data.get("delete_rung_ids", [])
-    _require_list(delete_ids, "$.delete_rung_ids")
-    for idx, rung_id in enumerate(delete_ids):
-        if not isinstance(rung_id, int):
-            _fail(f"$.delete_rung_ids[{idx}]", "expected integer")
+    validate_ladder_partial_structure(data, plc_model,
+                                      require_catalogued_instructions=require_catalogued_instructions)
+    _validate_unique_coils(data.get("rungs", []))
     return data
 
 

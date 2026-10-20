@@ -7,19 +7,13 @@ Engineering documents and extension maps retain their complete JSON content.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from shared.privacy import private_field
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, RootModel, model_validator
 
 
 JsonObject = dict[str, JsonValue]
-_PRIVATE_FIELDS = frozenset({
-    "apikey", "api_key", "access_token", "refresh_token", "authorization",
-    "credential", "credentials", "credentialtarget", "credential_target",
-    "password", "secret", "token", "accesstoken", "refreshtoken",
-    "operator_token", "agent_token", "gateway_token",
-    "private_payload", "provider_configuration", "provider_instance",
-})
 
 
 def _require_public(value):
@@ -34,7 +28,7 @@ def _require_public(value):
     if isinstance(value, Mapping):
         for key, nested in value.items():
             key = str(key)
-            if key.startswith("_") or key.casefold() in _PRIVATE_FIELDS:
+            if private_field(key):
                 # Do not include a rejected key/value in the diagnostic message.
                 raise ValueError("Private data cannot be returned as an HTTP resource")
             _require_public(nested)
@@ -219,6 +213,7 @@ class JobErrorDetails(PublicResource):
     violations: list[ResponseViolation] = Field(default_factory=list, max_length=16)
     violation_count: int = Field(ge=0, le=1000000)
     truncated: bool
+    repairable: bool = False
     stage: Literal["generation_validation"] | None = None
     attempt_count: int | None = Field(default=None, ge=0, le=3)
     max_attempts: int | None = Field(default=None, ge=0, le=3)
@@ -226,6 +221,7 @@ class JobErrorDetails(PublicResource):
 
 
 class Job(PublicResource):
+    revision: int | None = Field(default=None, ge=1)
     id: str
     kind: str
     status: str
@@ -276,6 +272,7 @@ class JobOutput(ExtensibleResource):
 
 
 class Proposal(PublicResource):
+    revision: int | None = Field(default=None, ge=1)
     execution_job_id: str | None = None
     id: str
     action: str

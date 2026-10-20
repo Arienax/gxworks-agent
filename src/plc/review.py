@@ -9,6 +9,9 @@ import json
 import re
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
+from plc.ladder_facts import (TIMER_CYCLIC_INTENT_RE as CYCLIC_TIMER_RE,
+    flatten_inputs as _flatten_review_inputs, timer_descriptive_text,
+    same_scan_toggle_findings, edge_only_inputs, always_on_inputs)
 from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
 from plc.validation import normalize_plc_model, parse_device_address
 
@@ -65,11 +68,7 @@ TERMINAL_STATE_RE = re.compile(
     r"结束|完成|终止|待机|等待人工|故障|报警|end|done|complete|terminal|fault|alarm",
     re.IGNORECASE,
 )
-CYCLIC_TIMER_RE = re.compile(
-    r"闪烁|闪灯|周期|循环闪|振荡|时钟|方波|脉冲发生|"
-    r"blink|flash|oscillat|clock|square\s*wave|toggle",
-    re.IGNORECASE,
-)
+
 CATEGORY_LABELS = {
     "model_compatibility": "型号与地址兼容",
     "confirmed_io": "确认 I/O 一致性",
@@ -615,114 +614,42 @@ def _review_state_machine(data, plc_model):
     return findings
 
 
-def _flatten_review_inputs(elements):
-    for element in elements or []:
-        if not isinstance(element, dict):
-            continue
-        if element.get("type") == "parallel_block":
-            for branch in element.get("branches", []) or []:
-                yield from _flatten_review_inputs(branch)
-        else:
-            yield element
+
 
 
 def _review_same_scan_set_reset_toggle(rungs):
     findings = []
-    for rung_idx, rung in enumerate(rungs or []):
-        shared_inputs = list(_flatten_review_inputs(rung.get("shared_inputs", []) or []))
-        has_shared_edge = any(
-            str(item.get("type", "")).upper() in {"P", "RISING", "F", "FALLING"}
-            for item in shared_inputs
-        )
-        toggle_text = str(rung.get("debug_note", "") or "")
-        guarded_sets = {}
-        guarded_resets = {}
-        for branch_idx, branch in enumerate(rung.get("branches", []) or []):
-            branch_inputs = list(_flatten_review_inputs(branch.get("inputs", []) or []))
-            toggle_text += " " + " ".join(
-                str(item.get("label", "") or "") for item in branch_inputs
-            )
-            guards = {
-                (
-                    str(item.get("type", "")).upper(),
-                    str(item.get("address", "")).upper(),
-                )
-                for item in branch_inputs
-            }
-            for output_idx, output in enumerate(branch.get("outputs", []) or []):
-                toggle_text += " " + str(output.get("label", "") or "")
-                if str(output.get("type", "")).upper() != "APP_INSTR":
-                    continue
-                opcode = str(output.get("opcode", "")).upper()
-                operands = output.get("operands", []) or []
-                if opcode not in {"SET", "RST"} or not operands:
-                    continue
-                address = str(operands[0]).upper()
-                entry = {
-                    "rung_id": rung.get("rung_id"),
-                    "path": f"$.rungs[{rung_idx}].branches[{branch_idx}].outputs[{output_idx}]",
-                }
-                if opcode == "SET" and ("NC", address) in guards:
-                    guarded_sets[address] = entry
-                if opcode == "RST" and ("NO", address) in guards:
-                    guarded_resets[address] = entry
-        toggle_intent = bool(
-            re.search(
-                r"翻转|交替|切换|toggle|alternate|\bALT\b",
-                toggle_text,
-                re.IGNORECASE,
+    for finding in same_scan_toggle_findings(rungs):
+        address = finding['address']
+        evidence = [finding['path'], finding['reset_path']]
+        findings.append(
+            ReviewFinding(
+                severity="error",
+                category="set_reset_toggle",
+                address=address,
+                json_path=evidence[0],
+                rung_ids=[finding["rung_id"]]
+                if isinstance(finding["rung_id"], int)
+                else [],
+                message=(
+                    f"{address} 在同一触发下用互补触点分别 SET/RST；SET 后后续"
+                    "分支可能立即看到新值并在同一扫描 RST，不能可靠翻转。"
+                ),
+                suggestion=(
+                    "改为两个相位各自拥有定时器/状态转换，或使用当前型号和"
+                    "校验器明确支持的翻转指令。"
+                ),
+                evidence=evidence,
             )
         )
-        for address in sorted(set(guarded_sets).intersection(guarded_resets)):
-            if not (has_shared_edge or toggle_intent):
-                continue
-            evidence = [guarded_sets[address]["path"], guarded_resets[address]["path"]]
-            findings.append(
-                ReviewFinding(
-                    severity="error",
-                    category="set_reset_toggle",
-                    address=address,
-                    json_path=evidence[0],
-                    rung_ids=[rung.get("rung_id")]
-                    if isinstance(rung.get("rung_id"), int)
-                    else [],
-                    message=(
-                        f"{address} 在同一触发下用互补触点分别 SET/RST；SET 后后续"
-                        "分支可能立即看到新值并在同一扫描 RST，不能可靠翻转。"
-                    ),
-                    suggestion=(
-                        "改为两个相位各自拥有定时器/状态转换，或使用当前型号和"
-                        "校验器明确支持的翻转指令。"
-                    ),
-                    evidence=evidence,
-                )
-            )
     return findings
 
 
+
+
+
 def _timer_review_text(data, timer_address):
-    comments = data.get("device_comments", {}) or {}
-    parts = [str(comments.get(timer_address, ""))]
-    for rung in data.get("rungs", []) or []:
-        shared = list(rung.get("shared_inputs", []) or [])
-        for branch in rung.get("branches", []) or []:
-            inputs = list(
-                _flatten_review_inputs(shared + list(branch.get("inputs", []) or []))
-            )
-            outputs = list(branch.get("outputs", []) or [])
-            mentions = any(
-                str(item.get("address", "")).upper() == timer_address
-                for item in inputs + outputs
-            )
-            if not mentions:
-                continue
-            parts.append(str(rung.get("debug_note", "") or ""))
-            for item in inputs + outputs:
-                parts.append(str(item.get("label", "") or ""))
-                address = str(item.get("address", "")).upper()
-                if address:
-                    parts.append(str(comments.get(address, "")))
-    return " ".join(parts)
+    return timer_descriptive_text(data, timer_address, branch_scoped=True)
 
 
 def _review_timer_and_counter_paths(data):
@@ -744,17 +671,10 @@ def _review_timer_and_counter_paths(data):
                             "rung_id": rung.get("rung_id"),
                             "path": path,
                             "is_counter": is_counter,
-                            "edge_only": bool(input_elements) and all(
-                                str(item.get("type", "")).upper()
-                                in {"P", "RISING", "F", "FALLING"}
-                                for item in input_elements
-                            ),
+                            "edge_only": edge_only_inputs(input_elements),
                             "always_on_only": (
                                 rung.get("header_element") is None
-                                and len(input_elements) == 1
-                                and str(input_elements[0].get("type", "")).upper() == "NO"
-                                and str(input_elements[0].get("address", "")).upper()
-                                in {"M8000", "SM8000"}
+                                and always_on_inputs(input_elements, {"M8000", "SM8000"})
                             ),
                             "cyclic_intent": bool(
                                 CYCLIC_TIMER_RE.search(_timer_review_text(data, address))

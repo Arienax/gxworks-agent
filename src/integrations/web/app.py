@@ -23,7 +23,7 @@ from application.settings import ModelConfigurationRequiredError
 from .security import LocalSecurity
 from .mcp_routes import register_mcp_routes
 from . import responses as dto
-from .schemas import (Login, ProjectCreate, ProjectUpdate, ActivateVersion, SpecUpdate,
+from .schemas import (Login, ProjectCreate, ProjectUpdate, ActivateVersion, SpecUpdate, SpecIORowEdit, SpecPresentation,
                       JobCreate, GenerationRepair, ProposalDecision, ExecutionProposal, AgentCall,
                       SettingsUpdate, ApprovalSettingsUpdate, ModelProfileCreate, ModelKeyUpdate, ModelConnectionTest, ModelDiscoveryRequest, ModelVerificationRequest,
                       AttachmentUpload, SFCInput, SFCProposal, SFCPreview, FBDProposal, ModelRequestPreview)
@@ -122,6 +122,14 @@ def create_app(workspace, *, state_dir=None, read_only=False, origin="http://127
     def environment():
         from application.execution import read_environment
         return public(read_environment())
+
+    @app.post("/api/spec/presentation", response_model=dto.PublicObject)
+    def spec_presentation(command: SpecPresentation):
+        return service.spec_presentation(command.spec)
+
+    @app.post("/api/spec/io-row", response_model=dto.PublicObject)
+    def edit_spec_io_row(command: SpecIORowEdit):
+        return service.edit_spec_io_row(**command.model_dump())
 
     @app.get("/api/projects", response_model=dto.ProjectList, response_model_exclude_unset=True)
     def projects():

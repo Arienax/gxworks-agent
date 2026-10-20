@@ -62,7 +62,7 @@ test("only completed historical needs_input jobs expose clarification; failure e
   assert.match(markup, /<form>历史澄清<\/form>/);
 });
 
-test("Direct compact header failure exposes the explicit repair action", () => {
+test("generation repair button follows the server capability", () => {
   const path = new URL("../src/features/JobFailure.tsx", import.meta.url);
   const code = ts.transpileModule(readFileSync(path, "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
@@ -70,13 +70,13 @@ test("Direct compact header failure exposes the explicit repair action", () => {
   const module = { exports: {} }, require = createRequire(path);
   new Function("require", "module", "exports", code)(
     name => name === "../components/ui" ? { Button: props => createElement("button", props) } : require(name), module, module.exports);
-  for (const kind of ["generation", "direct_generation"]) {
+  for (const kind of ["generation", "direct_generation"]) for (const repairable of [true, false, undefined]) {
     const markup = renderToStaticMarkup(createElement(module.exports.JobFailure, {
       job: { kind, error_code: "generation_validation_failed", error_details: {
-        violations: [{ path: "content.r.1.h", reason: "invalid_ladder_structure" }],
+        repairable, violations: [{ path: "content.r.1.h", reason: "invalid_ladder_structure" }],
       } }, t: key => key, onRepair: () => {},
     }));
-    assert.match(markup, /<button[^>]*>让 AI 修复<\/button>/);
+    assert.equal(/<button[^>]*>让 AI 修复<\/button>/.test(markup), repairable === true);
     assert.match(markup, /content.r.1.h/);
   }
 });

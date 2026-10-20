@@ -31,18 +31,6 @@ const errorMessages: Record<string, string> = {
   generation_failed: "生成失败，请重试。",
 };
 
-function repairableGenerationFailure(job: Job) {
-  const rows = job.error_details?.violations || [];
-  if (rows.length !== 1) return false;
-  const violation = rows[0];
-  if (violation.reason === "invalid_json_object" || violation.reason === "invalid_shared_input") return true;
-  const leaf = violation.path.split(".").at(-1) || "";
-  if (violation.reason === "field_too_long")
-    return leaf === "label" || leaf === "debug_note" || leaf.startsWith("comment[");
-  return violation.reason === "invalid_ladder_structure" &&
-    (leaf === "branch_id" || leaf === "y_offset_level" || /^content\.r\.\d+\.h$/.test(violation.path));
-}
-
 function FailureMessage({ job, t }: { job: Job; t: (key: string) => string }) {
   if (!job.error_code) return null;
   if (job.error_code === "generation_validation_failed") return <div className="job-failure" role="alert">
@@ -71,7 +59,7 @@ export function JobFailure({ job, busy, onRepair, t }: {
   t: (key: string) => string;
 }) {
   if (!job.error_code) return null;
-  const repairable = (job.kind === "generation" || job.kind === "direct_generation") && job.error_code === "generation_validation_failed" && repairableGenerationFailure(job) && !!onRepair;
+  const repairable = (job.kind === "generation" || job.kind === "direct_generation") && job.error_code === "generation_validation_failed" && job.error_details?.repairable === true && !!onRepair;
   return <section>
     <FailureMessage job={job} t={t} />
     {repairable && <Button disabled={busy} onClick={onRepair}>{t("让 AI 修复")}</Button>}

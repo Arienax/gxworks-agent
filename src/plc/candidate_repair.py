@@ -174,3 +174,23 @@ class GenerationValidationError(GenerationError):
             "max_attempts": max_attempts, "stop_reason": stop_reason}
         super().__init__("梯形图候选未通过硬校验；未接受任何程序。" +
                          "; ".join(row["path"] + ": " + row["reason"] for row in rows))
+
+
+def repairable_generation_failure(details):
+    """Whether one bounded format defect admits the offered repair workflow."""
+    if not isinstance(details, dict) or details.get("truncated"):
+        return False
+    rows = details.get("violations") or []
+    if not isinstance(rows, (list, tuple)) or len(rows) != 1 or details.get("violation_count", len(rows)) != 1:
+        return False
+    row = rows[0]
+    if not isinstance(row, dict):
+        return False
+    reason, path = row.get("reason"), str(row.get("path") or "")
+    if reason in ("invalid_json_object", "invalid_shared_input"):
+        return True
+    leaf = path.rsplit(".", 1)[-1]
+    if reason == "field_too_long":
+        return leaf in ("label", "debug_note") or leaf.startswith("comment[")
+    return reason == "invalid_ladder_structure" and (
+        leaf in ("branch_id", "y_offset_level") or re.fullmatch(r"content\.r\.\d+\.h", path) is not None)

@@ -1,6 +1,9 @@
 """Operator model settings, with read-only legacy projection and private keys."""
 from __future__ import annotations
 
+from shared.privacy import provider_control_field
+
+
 import copy
 import json
 import math
@@ -23,15 +26,10 @@ from model_runtime.request_policy import public_contract_settings
 _SETTINGS_LOCK = threading.RLock()
 _PROFILE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 _PROFILE_FIELDS = {"id", "name", "model", "base_url", "contract", "user_settings", "capability_overrides"}
-_SENSITIVE_NAMES = {"key", "accesskey", "auth", "bearer", "token", "headers", "extraheaders", "cookie", "cookies", "authentication", "proxyauth"}
 
 
 def _sensitive(key):
-    if str(key).startswith("_"):
-        return True
-    key = re.sub(r"[^a-z0-9]", "", str(key).lower())
-    return key in _SENSITIVE_NAMES or key.endswith("token") or key in {"privatepayload", "providerconfiguration", "providerinstance"} or any(part in key for part in (
-        "apikey", "credential", "authorization", "password", "secret", "accesstoken", "refreshtoken", "bearertoken"))
+    return provider_control_field(key, private=True, token_suffix=True)
 
 
 def _safe_options(value, *, strict=False, depth=0):

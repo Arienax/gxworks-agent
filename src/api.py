@@ -1,4 +1,4 @@
-"""Stable source API. New implementation belongs to application.model_api."""
+"""Public model workflow entry points; history belongs to project sessions."""
 from application.model_api import (
     provider_scope,
     load_config,
@@ -6,7 +6,6 @@ from application.model_api import (
     reset_api_client,
     analyze_requirement,
     analyze_requirement_streaming,
-    save_confirmed_context,
     debug_ladder,
     debug_evidence_diagnosis,
     debug_evidence_patch,
@@ -17,17 +16,23 @@ from application.model_api import (
     repair_ladder_response,
     stream_model_response,
     generate_model_json,
-    call_deepseek_analyze_requirement,
-    call_deepseek_analyze_streaming,
-    call_deepseek_debug_ladder,
-    call_deepseek_debug_evidence_diagnosis,
-    call_deepseek_debug_evidence_patch,
-    call_deepseek_generate_simulator_test_suite,
-    call_deepseek_multi_agent_specialist,
-    call_deepseek_inspection,
-    call_deepseek_review_ladder,
-    call_deepseek_streaming,
-    call_deepseek_to_generate_json,
 )
 
-__all__ = ['provider_scope', 'load_config', 'reload_api_client', 'reset_api_client', 'analyze_requirement', 'analyze_requirement_streaming', 'save_confirmed_context', 'debug_ladder', 'debug_evidence_diagnosis', 'debug_evidence_patch', 'generate_simulator_test_suite', 'run_multi_agent_specialist', 'inspect_ladder', 'review_ladder', 'repair_ladder_response', 'stream_model_response', 'generate_model_json', 'call_deepseek_analyze_requirement', 'call_deepseek_analyze_streaming', 'call_deepseek_debug_ladder', 'call_deepseek_debug_evidence_diagnosis', 'call_deepseek_debug_evidence_patch', 'call_deepseek_generate_simulator_test_suite', 'call_deepseek_multi_agent_specialist', 'call_deepseek_inspection', 'call_deepseek_review_ladder', 'call_deepseek_streaming', 'call_deepseek_to_generate_json']
+__all__ = [
+    "provider_scope",
+    "load_config",
+    "reload_api_client",
+    "reset_api_client",
+    "analyze_requirement",
+    "analyze_requirement_streaming",
+    "debug_ladder",
+    "debug_evidence_diagnosis",
+    "debug_evidence_patch",
+    "generate_simulator_test_suite",
+    "run_multi_agent_specialist",
+    "inspect_ladder",
+    "review_ladder",
+    "repair_ladder_response",
+    "stream_model_response",
+    "generate_model_json",
+]

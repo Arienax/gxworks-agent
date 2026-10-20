@@ -1,7 +1,7 @@
 """Source-bound plans and saved-source verification for the offline workspace.
 
-PLC/declaration interpretation stays here. The native adapter only executes the
-prepared calls; successful save/readback does not establish compilation.
+PLC/declaration interpretation stays here. The native adapter selects vendor
+profiles and call sequences; successful save/readback does not establish compilation.
 """
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import struct
 
 from .declarations import BASIC_TYPES, LabelRecord, _type_parts, local_table_for, parse_declarations
 from .models import GXWFormatError
+from gxworks2.workspace_observations import task_configuration_values
 from .project_metadata import (current_rows, logical_mapping, project_resource_groups, project_source_groups,
                                read_project_text_context, read_resource_source, read_task_source, verify_task_source_append)
 from .project_writer import PreparedProjectWrite, ProjectWriteResult, binary_diff
@@ -394,13 +395,10 @@ def _verify_scope_tasks(rows, expected, groups):
         cfg = row.get('configuration')
         configurations.append(cfg is not None)
         if cfg is not None:
-            for field, offset in (('event_name', 1584), ('interval', 1592), ('priority', 1600)):
-                getter = cfg[field]
-                if (type(getter['interface_byte_offset']) is not int or getter['interface_byte_offset'] != offset
-                        or type(getter['hresult']) is not int or getter['hresult'] < 0
-                        or type(getter['code']) is not int or getter['code'] != 0
-                        or type(getter['value']) is not type(wanted[key][field]) or getter['value'] != wanted[key][field]):
-                    raise GXWFormatError('native scope task configuration differs from the current source')
+            values = task_configuration_values(cfg)
+            if any(type(values[field]) is not type(wanted[key][field]) or values[field] != wanted[key][field]
+                   for field in ('event_name', 'interval', 'priority')):
+                raise GXWFormatError('native scope task configuration differs from the current source')
         indexed[key] = row
     return indexed, configurations
 
@@ -587,14 +585,10 @@ def verify_native_program_task_binding(baseline: bytes, program: str, raw: bytes
             configuration = row.get('configuration')
             observed_configurations.append(configuration is not None)
             if configuration is not None:
-                for field, offset in (('event_name', 1584), ('interval', 1592), ('priority', 1600)):
-                    getter = configuration[field]
-                    if (type(getter['interface_byte_offset']) is not int or getter['interface_byte_offset'] != offset
-                            or type(getter['hresult']) is not int or getter['hresult'] < 0
-                            or type(getter['code']) is not int or getter['code'] != 0
-                            or type(getter['value']) is not type(expected_tasks[key][field])
-                            or getter['value'] != expected_tasks[key][field]):
-                        raise GXWFormatError('native task configuration differs from the current source')
+                values = task_configuration_values(configuration)
+                if any(type(values[field]) is not type(expected_tasks[key][field])
+                       or values[field] != expected_tasks[key][field] for field in ('event_name', 'interval', 'priority')):
+                    raise GXWFormatError('native task configuration differs from the current source')
             indexed[key] = row
         return indexed
 
@@ -947,7 +941,6 @@ def native_source_plan(prepared: PreparedProjectWrite, *, graph_edits=None) -> d
             if project['cpu'] in NATIVE_SFC_GRAPH_QL_CPUS:
                 if len(plan['graph_edits']) != 1 or plan['graph_edits'][0].get('kind') != 'rebuild':
                     raise GXWFormatError('Q/L SFC graph writes require an explicit complete symbol rebuild')
-                plan['graph_profile'] = {'family': 'q-l'}
         return plan
     # Editor rows retain their original byte span until serialization. Saved
     # record_id is an opaque value and can be shared; never use it as identity.

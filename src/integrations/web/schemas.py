@@ -33,6 +33,15 @@ class ActivateVersion(Command):
     expected_active_version_id: str | None
 
 
+class SpecIORowEdit(Command):
+    row: dict[str, Any] | None = None
+    address: str | None = None
+
+
+class SpecPresentation(Command):
+    spec: dict[str, Any]
+
+
 class SpecUpdate(Command):
     spec: dict[str, Any]
     expected_hash: str | None

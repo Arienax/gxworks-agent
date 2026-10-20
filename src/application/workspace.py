@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from shared.privacy import redact_paths
+
 import copy
 import hashlib
 import json
@@ -12,6 +14,8 @@ import tempfile
 import threading
 from pathlib import Path
 from typing import Any
+
+from shared.records import contained, record_id as checked_record_id
 
 
 class WorkspaceBusyError(RuntimeError):
@@ -28,16 +32,7 @@ _owners = set()
 
 
 def record_id(value: str, label: str = "record") -> str:
-    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", value):
-        raise ValueError("Invalid " + label + " ID")
-    return value
-
-
-def contained(path: Path, root: Path) -> Path:
-    path, root = Path(path).resolve(), Path(root).resolve()
-    if path != root and root not in path.parents:
-        raise ValueError("Artifact escapes its managed directory")
-    return path
+    return checked_record_id(value, message="Invalid " + label + " ID")
 
 
 def artifact_relative_path(value: str) -> Path:
@@ -197,9 +192,7 @@ def public_payload(value: Any, *, native_live: bool = False) -> Any:
         return [public_payload(item, native_live=native_live) for item in value]
     if isinstance(value, str):
         # Paths belong in managed artifact URLs, never in raw service responses.
-        if re.search(r"(?:[A-Za-z]:[\\/]|\\\\|/(?:Users|home|tmp|var|etc)/)", value):
-            return "[private path]"
-        return value
+        return redact_paths(value, whole=True)
     if value is None or isinstance(value, (bool, int, float)):
         return copy.deepcopy(value)
     return None

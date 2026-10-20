@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { LatestRead, reconcileById, startPolling } from "../src/lifecycle/requests.ts";
+import { LatestRead, equalValue, sameValue, reconcileById, startPolling } from "../src/lifecycle/requests.ts";
 
 const defer = () => { let resolve, reject; const promise = new Promise((ok, fail) => { resolve = ok; reject = fail; }); return { promise, resolve, reject }; };
 const tick = () => new Promise(resolve => setTimeout(resolve, 5));
@@ -71,4 +71,40 @@ test("failure recovers on next poll, but disposal suppresses errors and cancels 
   assert.deepEqual(errors, ["temporary failure"]);
   await new Promise(resolve => setTimeout(resolve, 20));
   assert.equal(requests.length, 2);
+});
+
+test("snapshot equality ignores object key order and never serializes records", () => {
+  const before = { id: "p1", nested: { status: "saved", count: 3 } };
+  const after = { nested: { count: 3, status: "saved" }, id: "p1" };
+  const stringify = JSON.stringify;
+  JSON.stringify = () => { throw new Error("whole-record serialization"); };
+  try {
+    assert.equal(sameValue(before, after), before);
+    assert.equal(equalValue({ value: null }, { value: "null" }), false);
+    assert.equal(equalValue([1, 2], [2, 1]), false);
+    assert.equal(equalValue({ value: 1 }, { other: 1 }), false);
+  } finally { JSON.stringify = stringify; }
+});
+
+test("snapshot comparison stops at shared immutable branches", () => {
+  const shared = Object.defineProperty({}, "unread", { enumerable: true,
+    get() { throw new Error("shared branch was traversed"); } });
+  assert.equal(equalValue({ shared, name: "saved" }, { shared, name: "saved" }), true);
+});
+
+
+test("revision polling reuses snapshots without reading nested payloads", async () => {
+  const { reconcileByRevision } = await import("../src/lifecycle/requests.ts");
+  const payload = Object.defineProperty({}, "never", { enumerable: true,
+    get() { throw Error("polled payload traversed"); } });
+  const previous = [{ id: "a", revision: 3, status: "running", result: payload }];
+  assert.equal(reconcileByRevision(previous, [{ ...previous[0], result: payload }]), previous);
+  const advanced = { ...previous[0], revision: 4, status: "completed" };
+  assert.equal(reconcileByRevision(previous, [advanced])[0], advanced);
+  const legacy = { id: "a", status: "completed", result: payload };
+  assert.equal(reconcileByRevision(previous, [legacy])[0], legacy);
+  const optimistic = [{ ...previous[0], revision: null, status: "completed" }];
+  assert.equal(reconcileByRevision(optimistic, previous)[0], previous[0]);
+  const linked = [{ ...previous[0], execution_job_id: "new-job" }];
+  assert.equal(reconcileByRevision(previous, linked)[0], linked[0]);
 });

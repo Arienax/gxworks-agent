@@ -1,3 +1,12 @@
+from application.analysis_response import (
+    _analysis_json_payload, _validate_fresh_analysis_content, _parse_analysis_response, request_analysis_response,
+)
+from application.model_response_schemas import (
+    _repair_baseline_tokens,
+    _constrain_native_repair_schema,
+    _native_field_patch_response_format,
+    _native_partial_repair_response_format,
+)
 from application.analysis_context import assemble_analysis_prompt
 
 import copy
@@ -5,7 +14,6 @@ import os
 import json
 import re
 import sys
-import warnings
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import replace
@@ -59,8 +67,6 @@ from application.analysis_results import (
     _normalize_analysis_result,
     validate_current_analysis_protocol,
 )
-
-
 
 
 _provider_session = ContextVar("workflow_provider_session", default=None)
@@ -179,7 +185,6 @@ def _request_model(
     )
 
 
-
 def current_provider():
     """Return the provider frozen for this workflow; never switch profiles mid-call."""
     return _workflow_provider()
@@ -252,177 +257,48 @@ def _resolve_plc_model(user_input="", confirmed_context=None, explicit_model=Non
     return _detect_plc_model(str(user_input or ""))
 
 
-
-
-
-
-
-
-def _analysis_json_payload(raw):
-    text = str(raw or "").strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1] if "\n" in text else ""
-    if text.endswith("```"):
-        text = text.rsplit("\n", 1)[0]
-    return json.loads(text.strip())
-
-
-def _validate_fresh_analysis_content(raw, *, contract_stage="bound", user_text="", plc_model="FX3U", confirmed_spec=None):
-    from application.analysis_results import prepare_analysis_payload, analysis_grounding_details
-    payload = _analysis_json_payload(raw)
-    payload = prepare_analysis_payload(payload, contract_stage=contract_stage, user_text=user_text,
-                                       confirmed_spec=confirmed_spec)
-    validate_current_analysis_protocol(payload)
-    details = analysis_grounding_details(payload, user_text, plc_model=plc_model, confirmed_spec=confirmed_spec)
-    if details:
-        raise AnalysisProtocolError([d["path"] + ": " + d["message"] for d in details], details=details)
-    return payload
-
-
-def _parse_analysis_response(raw, plc_model="FX3U", user_text="", confirmed_spec=None, *, contract_stage="bound"):
-    result = _validate_fresh_analysis_content(raw, contract_stage=contract_stage, user_text=user_text, plc_model=plc_model, confirmed_spec=confirmed_spec)
-    return _normalize_analysis_result(result, plc_model, user_text, confirmed_spec)
-
-
-def _request_analysis_response(messages, *, on_format_repair=None, contract_stage="bound", user_text="", plc_model="FX3U", confirmed_spec=None, allow_repair=True, **kwargs):
-    """One shared repair budget, private patch output, Core-validated assembly."""
-    from application.analysis_repair import (
-        SYNTAX_SYSTEM_PROMPT, apply_analysis_repair, assembled_response,
-        plan_analysis_repair, repair_messages,
-    )
-    from model_runtime.provider import ReasoningDelta, TextDelta, private_response_scope
-    if not user_text:
-        for message in reversed(messages):
-            role = message.get("role") if isinstance(message, dict) else ("user" if isinstance(message, UserMessage) else "")
-            if role == "user":
-                user_text = str(message.get("content") if isinstance(message, dict) else message.content)
-                break
-    callbacks = {name: kwargs.pop(name, None) for name in ("on_content_chunk", "on_reasoning_chunk", "on_event")}
-
-    def publish(response):
-        _validate_fresh_analysis_content(response.message.content, contract_stage=contract_stage, user_text=user_text,
-                                        plc_model=plc_model, confirmed_spec=confirmed_spec)
-        from model_runtime.responses import inspect_response
-        request = ModelRequest.from_messages(messages, response_contract=ANALYSIS_RESPONSE)
-        if request.enforce_response_language:
-            violations = inspect_response(response.message.content, request.response_language, ANALYSIS_RESPONSE,
-                                          source_texts=(user_text,))
-            if violations:
-                raise ResponseRejectedError(request, response.raw_attempts, violations)
-        # Provider deltas from both attempts remain private until Core accepts.
-        events = []
-        if response.message.reasoning:
-            events.append(ReasoningDelta(response.message.reasoning))
-        events.append(TextDelta(response.message.content))
-        if response.usage:
-            events.append(response.usage)
-        for event in events:
-            if callbacks["on_event"]:
-                callbacks["on_event"](event)
-            if isinstance(event, TextDelta) and callbacks["on_content_chunk"]:
-                callbacks["on_content_chunk"](event.text)
-            if isinstance(event, ReasoningDelta) and callbacks["on_reasoning_chunk"]:
-                callbacks["on_reasoning_chunk"](event.text)
-        return response
-
-    with provider_scope():
-        first_attempts = ()
-        plan = None
-
-        try:
-            first = _request_model(
-                messages, response_contract=ANALYSIS_RESPONSE, **kwargs
-            )
-        except ResponseRejectedError as rejected:
-            if not allow_repair:
-                raise
-            if [(v.path, v.reason) for v in rejected.violations] != [
-                ("content", "invalid_json_object")
-            ]:
-                raise
-            raw = rejected.raw_response.message.content.strip()
-            if raw.startswith("```") and raw.endswith("```") and "\n" in raw:
-                raw = raw.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-            if not raw.startswith("{"):
-                raise
-            try:
-                json.loads(raw)
-            except json.JSONDecodeError as syntax_error:
-                location = (
-                    f"line {syntax_error.lineno}, column {syntax_error.colno}"
-                )
-            else:
-                raise rejected
-            first_attempts = rejected.raw_attempts
-            repair_context = [{"role": "system", "content": SYNTAX_SYSTEM_PROMPT},
-                              UserMessage(json.dumps({"parser_error": location, "rejected_draft": rejected.raw_response.message.content}, ensure_ascii=False))]
-            repair_contract = ANALYSIS_RESPONSE
-        else:
-            first_attempts = first.raw_attempts
-            plan = plan_analysis_repair(_analysis_json_payload(first.message.content), user_text, plc_model=plc_model,
-                                        confirmed_spec=confirmed_spec, contract_stage=contract_stage)
-            if not plan["targets"]:
-                return publish(assembled_response(first, plan["base"], plan["receipt"]) if plan["receipt"]["local"] else first)
-            if not allow_repair:
-                try:
-                    return publish(assembled_response(first, plan["base"], plan["receipt"]))
-                except (AnalysisProtocolError, ResponseRejectedError) as error:
-                    error.raw_attempts = first.raw_attempts
-                    error.raw_response = first.message
-                    raise
-            repair_context = repair_messages(plan, user_text)
-            repair_contract = ANALYSIS_REPAIR_RESPONSE
-
-        if on_format_repair is not None:
-            on_format_repair()
-        audit_section("analysis_repair", "\n\n".join(str(m.get("content", "")) if isinstance(m, dict) else str(m.content) for m in repair_context),
-                      reason="analysis_local_repair", source="analysis_repair")
-        try:
-            with private_response_scope():
-                repaired = _request_model(
-                    repair_context,
-                    response_contract=repair_contract,
-                    **kwargs,
-                )
-        except ModelProviderError as error:
-            error.raw_attempts = (*first_attempts, *error.raw_attempts)
-            raise
-
-        combined_attempts = (*first_attempts, *repaired.raw_attempts)
-        repair_message = repaired.message
-        try:
-            if plan is not None:
-                payload, receipt = apply_analysis_repair(plan, _analysis_json_payload(repaired.message.content), user_text,
-                                                        plc_model=plc_model, confirmed_spec=confirmed_spec)
-                repaired = assembled_response(repaired, payload, receipt, combined_attempts)
-            else:
-                repaired = replace(repaired, raw_attempts=combined_attempts)
-            return publish(repaired)
-        except (AnalysisProtocolError, ResponseRejectedError) as error:
-            error.raw_attempts = combined_attempts
-            if isinstance(error, AnalysisProtocolError):
-                error.raw_response = repair_message
-            raise
-
-
+def _request_analysis_response(*args, **kwargs):
+    return request_analysis_response(*args, request_model=_request_model, provider_scope=provider_scope, **kwargs)
 
 
 @language_scoped
 def analyze_requirement(
-    user_requirement: str,
-    conversation_history=None,
-    confirmed_context=None,
-    confirmed_spec=None,
-    task_type=None,
-    image_attachments=None,
-    on_format_repair=None,
-    analysis_mode="direct",
+    user_requirement: str, conversation_history=None, confirmed_context=None,
+    confirmed_spec=None, task_type=None, image_attachments=None,
+    on_format_repair=None, analysis_mode="direct",
 ) -> dict:
-    """
-    Phase 1: analysis using the selected model settings.
-    Auto-detect PLC model from user input and inject special soft-element table.
-    Returns: dict or None
-    """
+    """Analyze a requirement using the same contract as the streaming entry."""
+    return _analyze_requirement(
+        user_requirement, conversation_history=conversation_history,
+        confirmed_context=confirmed_context, confirmed_spec=confirmed_spec,
+        image_attachments=image_attachments, on_format_repair=on_format_repair,
+        analysis_mode=analysis_mode,
+    )
+
+
+@language_scoped
+def analyze_requirement_streaming(
+    user_requirement: str, on_reasoning_chunk=None, on_content_chunk=None,
+    conversation_history=None, confirmed_context=None, confirmed_spec=None,
+    task_type=None, image_attachments=None, on_format_repair=None,
+    analysis_mode="direct", allow_repair=True,
+):
+    """Analyze a requirement with incremental reasoning and content callbacks."""
+    return _analyze_requirement(
+        user_requirement, conversation_history=conversation_history,
+        confirmed_context=confirmed_context, confirmed_spec=confirmed_spec,
+        image_attachments=image_attachments, on_format_repair=on_format_repair,
+        analysis_mode=analysis_mode, allow_repair=allow_repair, stream=True,
+        on_reasoning_chunk=on_reasoning_chunk, on_content_chunk=on_content_chunk,
+    )
+
+
+def _analyze_requirement(
+    user_requirement, *, conversation_history=None, confirmed_context=None,
+    confirmed_spec=None, image_attachments=None, on_format_repair=None,
+    analysis_mode="direct", allow_repair=True, stream=False,
+    on_reasoning_chunk=None, on_content_chunk=None,
+):
     confirmed_context = confirmed_spec if confirmed_spec is not None else confirmed_context
     model = _resolve_plc_model(user_requirement, confirmed_context)
     analysis_prompt = assemble_analysis_prompt(
@@ -452,17 +328,14 @@ def analyze_requirement(
             plc_model=model,
             confirmed_spec=confirmed_context,
             effort=None,
-            stream=False,
+            stream=stream,
+            allow_repair=allow_repair,
+            **({"max_retries": 0} if not allow_repair else {}),
+            on_reasoning_chunk=on_reasoning_chunk,
+            on_content_chunk=on_content_chunk,
             on_format_repair=on_format_repair,
         )
-        raw = response.message.content.strip()
-
-        # 清理 Markdown 包裹
-        if raw.startswith("```"):
-            raw = raw.split("\n", 1)[1]
-        if raw.endswith("```"):
-            raw = raw.rsplit("\n", 1)[0]
-        raw = raw.strip()
+        raw = _clean_json_response(response.message.content)
 
         result = _parse_analysis_response(raw, model, user_requirement, confirmed_context,
                                          contract_stage=analysis_prompt.contract_stage)
@@ -483,133 +356,10 @@ def analyze_requirement(
         return None
 
 
-@language_scoped
-def analyze_requirement_streaming(
-    user_requirement: str,
-    on_reasoning_chunk=None,
-    on_content_chunk=None,
-    conversation_history=None,
-    confirmed_context=None,
-    confirmed_spec=None,
-    task_type=None,
-    image_attachments=None,
-    on_format_repair=None,
-    analysis_mode="direct",
-    allow_repair=True,
-):
-    """
-    阶段1 流式版：分析用户需求，实时显示思考过程。
-
-    返回:
-      dict: 分析结果 JSON，失败时返回 None
-    """
-    confirmed_context = confirmed_spec if confirmed_spec is not None else confirmed_context
-    model = _resolve_plc_model(user_requirement, confirmed_context)
-    analysis_prompt = assemble_analysis_prompt(
-        user_requirement,
-        plc_model=model,
-        confirmed_context=confirmed_context,
-        analysis_mode=analysis_mode,
-        model_loader=_load_plc_models,
-        knowledge_builder=_build_knowledge_context,
-        resolve_opcode=DEFAULT_INSTRUCTION_REGISTRY.resolve_form,
-        audit=audit_section,
-    )
-    knowledge_ctx = analysis_prompt.knowledge_context
-    sys_prompt = analysis_prompt.system_prompt
-    print(f"阶段1(流式): 需求分析中... (PLC={model})")
-
-    messages = _build_clean_messages(conversation_history or [], sys_prompt)
-    messages.append(
-        _user_message_with_images(user_requirement, image_attachments)
-    )
-
-    try:
-        response = _request_analysis_response(
-            messages,
-            contract_stage=analysis_prompt.contract_stage,
-            user_text=user_requirement,
-            plc_model=model,
-            confirmed_spec=confirmed_context,
-            allow_repair=allow_repair,
-            **({"max_retries": 0} if not allow_repair else {}),
-            effort=None,
-            stream=True,
-            on_format_repair=on_format_repair,
-            on_reasoning_chunk=on_reasoning_chunk,
-            on_content_chunk=on_content_chunk,
-        )
-        full_content = response.message.content
-
-        # 解析返回的 JSON
-        raw = full_content.strip()
-        if raw.startswith("```"):
-            raw = raw.split("\n", 1)[1]
-        if raw.endswith("```"):
-            raw = raw.rsplit("\n", 1)[0]
-        raw = raw.strip()
-
-        result = _parse_analysis_response(raw, model, user_requirement, confirmed_context,
-                                         contract_stage=analysis_prompt.contract_stage)
-        if getattr(response, "repair_receipt", None):
-            result["analysis_repair_receipt"] = copy.deepcopy(response.repair_receipt)
-        # Application metadata, not a mode selected by the model response.
-        result["analysis_mode"] = "design" if analysis_prompt.route.include_design else "direct"
-        from application.analysis_results import attach_analysis_evidence
-        result = attach_analysis_evidence(result, knowledge_ctx, plc_model=model,
-                                          knowledge_builder=_build_knowledge_context)
-        print(f"阶段1 分析完成: {result.get('summary', '')[:80]}...")
-        return result
-
-    except (ModelProviderError, AnalysisProtocolError):
-        raise
-    except Exception as e:
-        print(f"阶段1 流式分析失败: {e}")
-        return None
-
-
-HISTORY_FILE = "chat_history.json"
-CONFIRMED_CONTEXT_FILE = "confirmed_requirements.json"
-
-
-def save_confirmed_context(context):
-    """Persist the latest user-confirmed specification for the current session."""
-    payload = {"context": str(context or "").strip()}
-    with open(CONFIRMED_CONTEXT_FILE, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
-
-
-def _load_confirmed_context():
-    if not os.path.exists(CONFIRMED_CONTEXT_FILE):
-        return ""
-    try:
-        with open(CONFIRMED_CONTEXT_FILE, "r", encoding="utf-8") as f:
-            payload = json.load(f)
-        return str(payload.get("context", "")).strip()
-    except (OSError, json.JSONDecodeError, AttributeError):
-        return ""
-
-
-def _load_history():
-    if os.path.exists(HISTORY_FILE):
-        try:
-            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except json.JSONDecodeError:
-            print("已重置为全新对话。")
-            return []
-    return []
-
-def _save_history(history):
-    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(history, f, ensure_ascii=False, indent=2)
-
 def _build_clean_messages(conversation_history, system_prompt):
     """构建发送给模型的消息列表，仅保留用户可见正文。"""
     from application.generation_wire import render_wire_messages
     return render_wire_messages(system_prompt, conversation_history)
-
-
 
 
 def _clean_json_response(raw):
@@ -638,7 +388,7 @@ def _prepare_api_call(
     on_generation_context=None,
 ):
     """
-    共用准备逻辑：加载历史、追加用户消息、保存、选取系统提示词、
+    共用准备逻辑：复制调用方历史、追加用户消息、选取系统提示词、
     构建清洗后的统一消息列表。
     返回 (messages, conversation_history, persist_history)
     """
@@ -646,8 +396,8 @@ def _prepare_api_call(
         conversation_history = []
     else:
         conversation_history = [dict(item) for item in conversation_history]
-    if persist_history is None:
-        persist_history = False
+    if persist_history:
+        raise ValueError("Model calls do not persist history; use the project application service.")
     if confirmed_spec is not None:
         confirmed_context = confirmed_spec
     normalized_task = str(task_type or review_mode or ("edit" if is_edit_mode else "generate")).strip().casefold()
@@ -659,8 +409,6 @@ def _prepare_api_call(
         # Recorded user intent is already part of the confirmed source envelope.
         conversation_history = []
     conversation_history.append({"role": "user", "content": user_requirement})
-    if persist_history:
-        _save_history(conversation_history)
 
     selected_model = _resolve_plc_model(
         user_requirement,
@@ -696,7 +444,7 @@ def _prepare_api_call(
             image_attachments,
         )
 
-    return messages_to_send, conversation_history, persist_history
+    return messages_to_send, conversation_history, False
 
 
 @language_scoped
@@ -793,10 +541,6 @@ def _normalize_debug_report(report):
         "needs_fix": _strict_bool(report.get("needs_fix", False)),
         "fix_instruction": str(report.get("fix_instruction", "")).strip(),
     }
-
-
-
-
 
 
 @language_scoped
@@ -924,8 +668,6 @@ def debug_evidence_patch(
     )
 
 
-
-
 @language_scoped
 def generate_simulator_test_suite(
     test_context,
@@ -952,8 +694,6 @@ def generate_simulator_test_suite(
         on_content_chunk=on_content_chunk,
         on_progress=on_progress,
     )
-
-
 
 
 @language_scoped
@@ -1040,8 +780,6 @@ def _int_list(value):
         except (TypeError, ValueError):
             continue
     return result
-
-
 
 
 @language_scoped
@@ -1151,198 +889,6 @@ def review_ladder(
         local_report,
         **kwargs,
     )
-
-
-
-
-
-
-
-def _repair_baseline_tokens(repair_payload):
-    """Collect immutable engineering tokens already present in the repair slice."""
-    result = {"addresses": set(), "operands": set(), "values": set(),
-              "expressions": set(), "app_instr_arities": set(),
-              "app_instr_instances": []}
-
-    def walk(value):
-        if isinstance(value, dict):
-            address = value.get("address")
-            if isinstance(address, str) and address.strip():
-                result["addresses"].add(address.strip().upper())
-            expression = value.get("expression")
-            if isinstance(expression, str) and expression.strip():
-                result["expressions"].add(expression.strip())
-            preset = value.get("value")
-            if isinstance(preset, str) and preset.strip():
-                result["values"].add(preset.strip())
-            operands = value.get("operands")
-            if isinstance(operands, list):
-                tokens = [str(item).strip() for item in operands if isinstance(item, str) and str(item).strip()]
-                result["operands"].update(tokens)
-                if value.get("type") == "APP_INSTR":
-                    result["app_instr_arities"].add(len(operands))
-                    opcode = str(value.get("opcode") or "").strip().upper()
-                    if opcode:
-                        instance = {"opcode": opcode, "operands": list(tokens)}
-                        if instance not in result["app_instr_instances"]:
-                            result["app_instr_instances"].append(instance)
-            for nested in value.values():
-                walk(nested)
-        elif isinstance(value, list):
-            for nested in value:
-                walk(nested)
-
-    walk(repair_payload.get("baseline_subset") or {})
-    result["addresses"].update(
-        str(item).strip().upper()
-        for item in (repair_payload.get("allowed_addresses") or [])
-        if str(item).strip()
-    )
-    return result
-
-
-def _constrain_native_repair_schema(schema, repair_payload, plc_model):
-    """Prevent a local repair from inventing devices/parameters outside its baseline."""
-    tokens = _repair_baseline_tokens(repair_payload)
-    addresses = sorted(tokens["addresses"])
-    operands = sorted(tokens["operands"])
-    values = sorted(tokens["values"])
-    expressions = sorted(tokens["expressions"])
-    arities = sorted(tokens["app_instr_arities"])
-    app_instr_instances = list(tokens["app_instr_instances"])
-    baseline_opcodes = sorted({item["opcode"] for item in app_instr_instances})
-
-    def visit(rule):
-        if isinstance(rule, list):
-            for child in rule:
-                visit(child)
-            return
-        if not isinstance(rule, dict):
-            return
-
-        properties = rule.get("properties")
-        if isinstance(properties, dict):
-            type_rule = properties.get("type")
-            type_values = set(type_rule.get("enum", [])) if isinstance(type_rule, dict) else set()
-            if "address" in properties and addresses:
-                properties["address"]["enum"] = addresses
-            if "expression" in properties and expressions:
-                properties["expression"]["enum"] = expressions
-            if "value" in properties and values:
-                properties["value"]["enum"] = values
-            if "APP_INSTR" in type_values:
-                opcode_rule = properties.get("opcode")
-                operand_rule = properties.get("operands")
-                if isinstance(opcode_rule, dict):
-                    # Structural repair is copy-only: the model may reuse only
-                    # APP_INSTR opcodes already present in baseline_subset.
-                    opcode_rule["enum"] = baseline_opcodes
-                if isinstance(operand_rule, dict):
-                    if operands:
-                        # ladder_v1_schema reuses the generic token rule for
-                        # TIMER/COUNTER values and APP_INSTR operands. Detach
-                        # the operand item rule before adding an enum so this
-                        # local repair constraint cannot mutate timer presets.
-                        operand_rule["items"] = dict(operand_rule.get("items") or {})
-                        operand_rule["items"]["enum"] = operands
-                    if len(arities) == 1:
-                        operand_rule["minItems"] = arities[0]
-                        operand_rule["maxItems"] = arities[0]
-            for child in properties.values():
-                visit(child)
-        for key in ("oneOf", "anyOf", "allOf"):
-            visit(rule.get(key))
-        visit(rule.get("items"))
-
-    visit(schema)
-    return schema
-
-
-def _native_field_patch_response_format(repair_payload):
-    target = repair_payload.get("target") if isinstance(repair_payload, dict) else None
-    if not isinstance(target, dict) or not isinstance(target.get("path"), str):
-        raise ValueError("field repair target is required")
-    value_schema = json.loads(json.dumps(target.get("value_schema") or {}))
-    if not value_schema:
-        raise ValueError("field repair value schema is required")
-    base_sha = str(repair_payload.get("base_sha256") or "")
-    schema = {
-        "type": "object",
-        "properties": {
-            "schema_version": {"type": "integer", "enum": [1]},
-            "mode": {"type": "string", "enum": ["field_patch"]},
-            "base_sha256": {"type": "string", "enum": [base_sha]},
-            "patches": {
-                "type": "array", "minItems": 1, "maxItems": 1,
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "path": {"type": "string", "enum": [target["path"]]},
-                        "value": value_schema,
-                    },
-                    "required": ["path", "value"],
-                    "additionalProperties": False,
-                },
-            },
-        },
-        "required": ["schema_version", "mode", "base_sha256", "patches"],
-        "additionalProperties": False,
-    }
-    return {"type": "json_schema", "json_schema": {
-        "name": "ladder_field_patch", "strict": True, "schema": schema,
-    }}
-
-
-def _native_partial_repair_response_format(repair_payload):
-    """Build the provider-enforced partial repair schema from the shared ladder contract."""
-    plc_model = str(repair_payload.get("plc_model") or "FX3U").strip().upper() or "FX3U"
-    combined = ladder_response_schema(allow_partial=True, plc_model=plc_model)
-    schema = combined["oneOf"][1]
-    schema["required"] = ["mode", "device_comments", "rungs", "delete_rung_ids"]
-    schema["properties"]["delete_rung_ids"]["maxItems"] = 0
-
-    allowed_rung_ids = sorted({
-        int(item) for item in (repair_payload.get("allowed_rung_ids") or [])
-        if not isinstance(item, bool)
-    })
-    rung_array = schema["properties"]["rungs"]
-    if allowed_rung_ids:
-        rung_array["minItems"] = 1
-        rung_array["maxItems"] = len(allowed_rung_ids)
-        rung_array["items"]["properties"]["rung_id"] = {
-            "type": "integer", "enum": allowed_rung_ids,
-        }
-        # Structural rung repair must not opportunistically rewrite comments.
-        schema["properties"]["device_comments"] = {
-            "type": "object", "properties": {}, "required": [],
-            "additionalProperties": False,
-        }
-        _constrain_native_repair_schema(schema, repair_payload, plc_model)
-    else:
-        rung_array["maxItems"] = 0
-        allowed_addresses = sorted({
-            str(item).strip().upper() for item in (repair_payload.get("allowed_addresses") or [])
-            if str(item).strip()
-        })
-        comment_properties = {
-            address: {"type": "string"}
-            for address in allowed_addresses
-        }
-        schema["properties"]["device_comments"] = {
-            "type": "object",
-            "properties": comment_properties,
-            "required": allowed_addresses,
-            "additionalProperties": False,
-        }
-
-    return {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "ladder_partial_repair",
-            "strict": True,
-            "schema": schema,
-        },
-    }
 
 
 @language_scoped
@@ -1516,8 +1062,6 @@ def stream_model_response(user_requirement, model_name, effort, target_mode,
         "content": full_content,
         "reasoning": full_reasoning
     })
-    if should_persist:
-        _save_history(conversation_history)
 
     return full_reasoning, full_content
 
@@ -1575,8 +1119,6 @@ def generate_model_json(user_requirement: str, model_name: str, effort: str,
             "role": "assistant",
             "content": assistant_message.content
         })
-        if should_persist:
-            _save_history(conversation_history)
 
         raw_content = assistant_message.content.strip()
         if raw_content.startswith("```"):
@@ -1592,57 +1134,3 @@ def generate_model_json(user_requirement: str, model_name: str, effort: str,
         if raise_errors:
             raise RuntimeError(f"API request failed: {e}") from e
         return ""
-
-
-def _deprecated_model_alias(name, target):
-    """Keep one-release source compatibility without retaining old parsing."""
-
-    def forward(*args, **kwargs):
-        warnings.warn(
-            f"api.{name} 已废弃；请改用 api.{target.__name__}。",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return target(*args, **kwargs)
-
-    forward.__name__ = name
-    forward.__doc__ = f"Deprecated forwarding alias for {target.__name__}."
-    forward.__deprecated__ = True
-    return forward
-
-
-# One-release source compatibility.  New application code uses only the
-# vendor-neutral names; these wrappers are removed in the next release.
-call_deepseek_analyze_requirement = _deprecated_model_alias(
-    "call_deepseek_analyze_requirement", analyze_requirement
-)
-call_deepseek_analyze_streaming = _deprecated_model_alias(
-    "call_deepseek_analyze_streaming", analyze_requirement_streaming
-)
-call_deepseek_debug_ladder = _deprecated_model_alias(
-    "call_deepseek_debug_ladder", debug_ladder
-)
-call_deepseek_debug_evidence_diagnosis = _deprecated_model_alias(
-    "call_deepseek_debug_evidence_diagnosis", debug_evidence_diagnosis
-)
-call_deepseek_debug_evidence_patch = _deprecated_model_alias(
-    "call_deepseek_debug_evidence_patch", debug_evidence_patch
-)
-call_deepseek_generate_simulator_test_suite = _deprecated_model_alias(
-    "call_deepseek_generate_simulator_test_suite", generate_simulator_test_suite
-)
-call_deepseek_multi_agent_specialist = _deprecated_model_alias(
-    "call_deepseek_multi_agent_specialist", run_multi_agent_specialist
-)
-call_deepseek_inspection = _deprecated_model_alias(
-    "call_deepseek_inspection", inspect_ladder
-)
-call_deepseek_review_ladder = _deprecated_model_alias(
-    "call_deepseek_review_ladder", review_ladder
-)
-call_deepseek_streaming = _deprecated_model_alias(
-    "call_deepseek_streaming", stream_model_response
-)
-call_deepseek_to_generate_json = _deprecated_model_alias(
-    "call_deepseek_to_generate_json", generate_model_json
-)

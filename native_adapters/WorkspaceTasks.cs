@@ -32,7 +32,9 @@ namespace PlcAi.NativeAdapter
             {
                 Check(operation, hr, code);
                 value = ReadBStr(text);
-                return new { hresult = hr, code = code, interface_byte_offset = offset, value = value };
+                string field = offset == 1584 ? "event_name" : offset == 1592 ? "interval" : null;
+                if (field == null) throw new InvalidOperationException("unobserved_task_setting");
+                return new { field = field, hresult = hr, code = code, interface_byte_offset = offset, value = value };
             }
             finally { if (text != IntPtr.Zero) Marshal.FreeBSTR(text); }
         }
@@ -61,7 +63,7 @@ namespace PlcAi.NativeAdapter
                     int priorityHr = Slot<IdIntegerCall>(workspace, 1600)(workspace, task, out priority, out code);
                     Check("Workspace.GetTaskPriority", priorityHr, code);
                     object configuration = new { event_name = eventFacts, interval = intervalFacts,
-                        priority = new { hresult = priorityHr, code = code, interface_byte_offset = 1600, value = priority } };
+                        priority = new { field = "priority", hresult = priorityHr, code = code, interface_byte_offset = 1600, value = priority } };
                     var rows = new List<TaskRow>(); var lines = new HashSet<int>();
                     foreach (ObjectId element in Children(task))
                     {

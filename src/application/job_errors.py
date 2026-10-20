@@ -101,6 +101,8 @@ def public_error_details(value):
             item = value.get(key, 0)
             return min(3, max(0, item)) if isinstance(item, int) and not isinstance(item, bool) else 0
         stop = value.get("stop_reason")
+        from plc.candidate_repair import repairable_generation_failure
+        result["repairable"] = repairable_generation_failure(value)
         result.update(stage="generation_validation", attempt_count=bounded_number("attempt_count"),
                       max_attempts=bounded_number("max_attempts"),
                       stop_reason=stop if stop in ("attempt_limit", "time_budget", "final_validation") else "attempt_limit")

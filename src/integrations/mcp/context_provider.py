@@ -1,14 +1,13 @@
-"""Headless context loading through the desktop's existing SessionStore."""
+"""Headless context loading through the shared application session."""
 
 from __future__ import annotations
 
-import json
-import re
 from pathlib import Path
 from typing import Protocol
 
 from agent_runtime.plc_tools import ToolContext, build_tool_context
-from storage.session import SessionStore
+from application.projects import ProjectService
+from shared.records import record_id
 
 
 class ContextUnavailableError(ValueError):
@@ -37,23 +36,11 @@ class StaticToolContextProvider:
             fbd_baseline=context.fbd_baseline,
             native_snapshot=context.native_snapshot,
             st_text=context.st_text,
+            sfc_graph=context.sfc_graph,
         )
 
     def get_context(self) -> ToolContext:
         return self._copy(self._context)
-
-
-def _record_id(value: str, label: str) -> str:
-    if not isinstance(value, str) or not re.fullmatch(
-        r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", value
-    ):
-        raise ContextUnavailableError(f"Invalid {label} ID.")
-    return value
-
-
-def _contained(path: Path, root: Path) -> None:
-    if not path.resolve().is_relative_to(root.resolve()):
-        raise ContextUnavailableError("Project artifact escapes its storage directory.")
 
 
 class SessionToolContextProvider:
@@ -67,82 +54,17 @@ class SessionToolContextProvider:
         self, workspace: Path, project_id: str, version_id: str | None = None
     ):
         self.workspace = Path(workspace).expanduser().resolve()
-        self.project_id = _record_id(project_id, "project")
+        self.project_id = record_id(project_id, message="Invalid project ID.", error_type=ContextUnavailableError)
         self.version_id = (
-            _record_id(version_id, "version") if version_id is not None else None
+            record_id(version_id, message="Invalid version ID.", error_type=ContextUnavailableError) if version_id is not None else None
         )
         if not (self.workspace / "projects").is_dir():
             raise ContextUnavailableError("Workspace must contain an existing projects directory.")
-        self._store = SessionStore(base_dir=self.workspace, create=False)
+        self.projects = ProjectService(self.workspace)
+        self._store = self.projects.store
 
     def get_context(self) -> ToolContext:
-        store = self._store
-        project_path = store.project_path(self.project_id)
-        _contained(project_path, self.workspace)
-        project = store.get_project(self.project_id)
-        if project is None or project.get("id") != self.project_id:
-            raise ContextUnavailableError("Configured project is missing or invalid.")
-        selected = self.version_id or project.get("active_version_id")
-        version = None
-        ladder = None
-        program_ir = None
-        fbd_baseline = None
-        native_snapshot = None
-        st_text = None
-        sfc_graph = None
-        if selected:
-            selected = _record_id(selected, "version")
-            version = next(
-                (item for item in project["versions"] if item.get("id") == selected),
-                None,
-            )
-            if version is None:
-                raise ContextUnavailableError("Configured version is missing from the project.")
-            version_dir = store.version_dir(self.project_id, selected)
-            _contained(version_dir, store.project_dir(self.project_id))
-            if version.get("target_mode") == "ladder":
-                artifacts = version.get("artifacts") or {}
-                if not isinstance(artifacts, dict):
-                    raise ContextUnavailableError("Invalid version artifacts.")
-                for key in ("ir", "json"):
-                    if artifacts.get(key):
-                        _contained(version_dir / str(artifacts[key]), version_dir)
-                program_ir = store.load_program_ir(
-                    self.project_id, selected, persist_legacy=False
-                )
-                ladder = store.load_ladder(
-                    self.project_id, selected, persist_legacy=False
-                )
-                if program_ir is None or ladder is None:
-                    raise ContextUnavailableError("Selected ladder version has no readable program.")
-            elif version.get('target_mode') == 'fbd':
-                from application.workspace import artifact_relative_path
-                artifacts = version.get('artifacts') or {}
-                if not isinstance(artifacts, dict) or not isinstance(artifacts.get('gxw'), str):
-                    raise ContextUnavailableError('Selected FBD version has no GXW artifact.')
-                try:
-                    path = version_dir / artifact_relative_path(artifacts['gxw'])
-                except ValueError as error:
-                    raise ContextUnavailableError('Invalid GXW artifact path.') from error
-                _contained(path, version_dir)
-                if not path.is_file():
-                    raise ContextUnavailableError('Selected FBD version has no readable GXW artifact.')
-                fbd_baseline = path.read_bytes()
-            from application.workspace import artifact_relative_path
-            for name in ('gxw', 'st') + (('write_report',) if version.get('target_mode') == 'sfc' else ()):
-                artifact = (version.get('artifacts') or {}).get(name)
-                if artifact:
-                    path = version_dir / artifact_relative_path(artifact)
-                    _contained(path, version_dir)
-                    if name == 'gxw':
-                        native_snapshot = path.read_bytes()
-                    elif version.get('target_mode') == 'st':
-                        st_text = path.read_text(encoding='utf-8')
-                    elif name == 'write_report' and version.get('target_mode') == 'sfc':
-                        sfc_graph = json.loads(path.read_bytes()).get('sfc_graph')
-        if store.get_project(self.project_id) != project:
-            raise ContextUnavailableError("Project changed while loading; retry the call.")
-        return build_tool_context(
-            project, version=version, ladder=ladder, program_ir=program_ir, fbd_baseline=fbd_baseline,
-            native_snapshot=native_snapshot, st_text=st_text, sfc_graph=sfc_graph,
-        )
+        try:
+            return self.projects.tool_context(self.project_id, self.version_id)
+        except (KeyError, ValueError, OSError) as error:
+            raise ContextUnavailableError(str(error)) from error

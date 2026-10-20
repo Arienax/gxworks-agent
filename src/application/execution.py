@@ -22,6 +22,8 @@ from concurrent.futures import Future
 from pathlib import Path
 from typing import Mapping
 
+from shared.records import record_id as checked_record_id, contained as checked_contained
+
 
 class ExecutionUnavailableError(RuntimeError):
     """No operation was started because its desktop environment is unavailable."""
@@ -166,16 +168,11 @@ def _mapping(value):
 
 
 def _record_id(value, label):
-    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", value):
-        raise ValueError("Invalid %s id." % label)
-    return value
+    return checked_record_id(value, message="Invalid %s id." % label)
 
 
 def _contained(path, root):
-    try:
-        Path(path).resolve().relative_to(Path(root).resolve())
-    except ValueError as error:
-        raise ValueError("Execution artifact escapes its managed directory.") from error
+    checked_contained(path, root, message="Execution artifact escapes its managed directory.")
 
 
 def _native_engineering_filename(projection):

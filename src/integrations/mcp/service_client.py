@@ -144,11 +144,12 @@ class ServiceMCPToolAdapter:
     """Translate the existing runtime schema and results; no PLC operations."""
 
     def __init__(self, client, project_id, version_id=None):
-        from .context_provider import _record_id
+        from shared.records import record_id
+        from .context_provider import ContextUnavailableError
 
         self.client = client
-        self.project_id = _record_id(project_id, "project")
-        self.version_id = _record_id(version_id, "version") if version_id is not None else None
+        self.project_id = record_id(project_id, message="Invalid project ID.", error_type=ContextUnavailableError)
+        self.version_id = record_id(version_id, message="Invalid version ID.", error_type=ContextUnavailableError) if version_id is not None else None
         self._session_id = uuid.uuid4().hex
         self._call_ids = {}
 

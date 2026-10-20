@@ -286,7 +286,8 @@ def _native_connections(cells, *, cpu):
         elif cell['result'] == 2:
             item.update(kind='transition', ports=['down', 'up'], reference=cell['number'])
         elif cell['result'] == 1 and (cell['type'] in (0, 6) if ql else cell['type'] in (4, 10, 20, 26)):
-            item.update(kind='step', ports=['down', 'up'], reference=cell['number'])
+            item.update(kind='step', ports=['down', 'up'], reference=cell['number'],
+                        initial=cell['type'] in (6, 10, 26))
         elif ql and cell['result'] == 1 and cell['type'] == 14 and cell['number'] == 999:
             item.update(kind='end', ports=['up'], reference=cell['number'])
         elif cell['result'] == 1 and cell['type'] == 15:

@@ -1258,6 +1258,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/spec/presentation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Spec Presentation */
+        post: operations["spec_presentation_api_spec_presentation_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1706,6 +1723,8 @@ export interface components {
             result?: {
                 [key: string]: components["schemas"]["JsonValue"];
             } | null;
+            /** Revision */
+            revision?: number | null;
             /** Status */
             status: string;
             /** Updated At */
@@ -1772,6 +1791,11 @@ export interface components {
             diagnostic_id?: string | null;
             /** Max Attempts */
             max_attempts?: number | null;
+            /**
+             * Repairable
+             * @default false
+             */
+            repairable: boolean;
             /**
              * Response Language
              * @enum {string}
@@ -2362,6 +2386,8 @@ export interface components {
             result?: {
                 [key: string]: components["schemas"]["JsonValue"];
             } | null;
+            /** Revision */
+            revision?: number | null;
             /** Status */
             status: string;
             /** Summary */
@@ -2712,6 +2738,13 @@ export interface components {
             row?: {
                 [key: string]: unknown;
             } | null;
+        };
+        /** SpecPresentation */
+        SpecPresentation: {
+            /** Spec */
+            spec: {
+                [key: string]: unknown;
+            };
         };
         /** SpecResult */
         SpecResult: {
@@ -5437,6 +5470,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SpecIORowEdit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicObject"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    spec_presentation_api_spec_presentation_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpecPresentation"];
             };
         };
         responses: {

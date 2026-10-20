@@ -4,6 +4,7 @@ The schema is deliberately small: scalar controls, conjunctions of membership
 conditions, conflicts and bounded JSON body paths. It is not an executable DSL.
 """
 from __future__ import annotations
+from shared.privacy import provider_control_field
 
 import copy
 import hashlib
@@ -29,9 +30,7 @@ MISSING = object()
 def identifier(value):
     if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]{0,63}", value):
         raise ValueError("Invalid capability or parameter identifier")
-    compact = re.sub(r"[^a-z0-9]", "", value.lower())
-    if value in {"prototype", "constructor"} or compact in {"key", "token", "auth", "headers", "cookie", "cookies"} or any(
-            part in compact for part in ("apikey", "credential", "authorization", "password", "secret", "accesstoken", "refreshtoken")):
+    if value in {"prototype", "constructor"} or provider_control_field(value):
         raise ValueError("Reserved identifier")
     return value
 
@@ -170,8 +169,7 @@ class ParameterDescriptor:
             raise ValueError("Invalid parameter wire location")
         for key in path:
             identifier(key)
-            compact = re.sub(r"[^a-z]", "", key.lower())
-            if key in RESERVED or any(v in compact for v in ("credential", "authorization", "apikey", "password", "secret")):
+            if key in RESERVED or provider_control_field(key):
                 raise ValueError("Parameter cannot own a protocol or credential field")
         if len(path) > 1 and path[0] == name:
             raise ValueError("A scalar parameter cannot shadow its own object path")

@@ -133,6 +133,12 @@ def _strict_ladder(candidate: str) -> tuple[dict[str, Any], dict[str, Any]]:
         if not isinstance(parsed, dict):
             last_error = ValueError("candidate must be one JSON object")
             continue
+        from application.generation_agent import direct_response_parts
+        try:
+            parsed, _notes = direct_response_parts(parsed)
+        except ValueError as error:
+            last_error = error
+            continue
         if isinstance(parsed.get("rungs"), list):
             try:
                 from application.compact_alias import expand_hybrid_compact_ladder

@@ -11,6 +11,7 @@ from __future__ import annotations
 import copy
 import json
 import re
+from plc.ladder_facts import edge_only_inputs
 from collections import Counter
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
@@ -522,11 +523,7 @@ def _timer_findings(networks: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any
             if not isinstance(branch, Mapping):
                 continue
             inputs = shared + list(_flatten_inputs(branch.get("inputs") or []))
-            edge_only = bool(inputs) and all(
-                str(item.get("type") or "").upper()
-                in {"P", "RISING", "F", "FALLING"}
-                for item in inputs
-            )
+            edge_only = edge_only_inputs(inputs)
             if not edge_only:
                 continue
             for output_index, output in enumerate(branch.get("outputs") or []):

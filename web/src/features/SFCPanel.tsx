@@ -8,7 +8,7 @@ import "./sfc.css";
 type Binding = { status: string; step_reference?: number; action_number?: number; transition_number?: number;
   child?: string; registrations?: { qualifier: number; zoom: string }[] };
 type Cell = { id: string; x: number; y: number; type: number; result: number; role: string; binding: Binding };
-type Symbol = { cell: string; kind: string; ports: ("down" | "up" | "right" | "left")[]; reference?: number };
+type Symbol = { cell: string; kind: string; ports: ("down" | "up" | "right" | "left")[]; reference?: number; initial?: boolean };
 type Topology = { status: string; symbols: Symbol[];
   segments: { source: string; target: string; direction: string; style: string }[];
   jumps: { source: string; step_reference: number; targets: string[]; status: string }[];
@@ -135,7 +135,7 @@ export function SFCPanel({ value, pid, vid, readOnly, preview, onProposal, t }: 
               : terminal ? symbol.kind === "jump" ? `${t("跳转")} S${symbol.reference}` : t("结束") : t("原生连接符")}
             onClick={() => setSelected(cell.id)} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelected(cell.id); } }}>
             {cell.role === "step" ? <><rect x="-45" y="-21" width="90" height="42" rx="3"/>
-              {(cell.type === 6 || cell.type === 10 || cell.type === 26) && <rect x="-40" y="-16" width="80" height="32" rx="2"/>}
+              {symbol?.initial === true && <rect x="-40" y="-16" width="80" height="32" rx="2"/>}
               <text textAnchor="middle" y="-2">S{cell.binding.step_reference}</text>
               <text className="sfc-action" textAnchor="middle" y="14">{t("动作")} {cell.binding.action_number}</text></>
               : cell.role === "transition" ? <><rect x="-22" y="-4" width="44" height="8"/><text x="29" y="5">T{cell.binding.transition_number}</text></>

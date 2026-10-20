@@ -1454,6 +1454,18 @@
             ],
             "title": "Result"
           },
+          "revision": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -1682,6 +1694,11 @@
               }
             ],
             "title": "Max Attempts"
+          },
+          "repairable": {
+            "default": false,
+            "title": "Repairable",
+            "type": "boolean"
           },
           "response_language": {
             "enum": [
@@ -3636,6 +3653,18 @@
             ],
             "title": "Result"
           },
+          "revision": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -4764,6 +4793,21 @@
           }
         },
         "title": "SpecIORowEdit",
+        "type": "object"
+      },
+      "SpecPresentation": {
+        "additionalProperties": false,
+        "properties": {
+          "spec": {
+            "additionalProperties": true,
+            "title": "Spec",
+            "type": "object"
+          }
+        },
+        "required": [
+          "spec"
+        ],
+        "title": "SpecPresentation",
         "type": "object"
       },
       "SpecResult": {
@@ -8871,6 +8915,44 @@
           }
         },
         "summary": "Edit Spec Io Row"
+      }
+    },
+    "/api/spec/presentation": {
+      "post": {
+        "operationId": "spec_presentation_api_spec_presentation_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpecPresentation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicObject"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Spec Presentation"
       }
     }
   }

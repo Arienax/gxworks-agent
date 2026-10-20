@@ -45,8 +45,19 @@ from .semantic import (
     build_semantic_model,
 )
 from .structured_pou import parse_structured_pou
-from .project_writer import ProjectWriteResult, build_gxw_project, write_gxw_project
 from .structured_writer import structured_from_ladder
+
+
+def __getattr__(name):
+    # Adapter observation modules import the model types before project writing
+    # is available. Resolve writer exports on demand to keep that import acyclic.
+    if name in {"ProjectWriteResult", "build_gxw_project", "write_gxw_project"}:
+        from importlib import import_module
+
+        value = getattr(import_module(".project_writer", __name__), name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def read_structured_program(*args, **kwargs):

@@ -49,6 +49,7 @@ def live_engineering_summary(result):
     if not isinstance(result, dict):
         return {'mode': 'live', 'status': 'unconfirmed', 'passed': False}
     from shared.public_results import public_result_field
+    from shared.privacy import credential_field, redact_paths
     fields = {'mode', 'session_id', 'project_id', 'base_version_id', 'version_id', 'session_status', 'status', 'passed', 'revision',
         'saved_revision', 'version_revision', 'version_matches_active_source', 'native_disk_save',
         'dirty', 'pending_commands', 'pause_requested', 'compile', 'assignments', 'save', 'steps',
@@ -65,13 +66,13 @@ def live_engineering_summary(result):
                         'document_handle', 'window_handle', 'process_started'}
                     and not key.lower().endswith(('_path', '_dir', '_file', 'handle', 'pointer'))
                     and not (key.lower().startswith('raw_') and key != 'raw_fields')
-                    and not any(part in key.lower() for part in ('api_key', 'apikey', 'credential', 'password', 'secret', 'access_token', 'refresh_token'))
+                    and not credential_field(key, fragments=True)
                     and not (key == 'address' and type(item) is int)
                     and not isinstance(item, (bytes, bytearray, memoryview))}
         if isinstance(value, (list, tuple)):
             return [public(item) for item in value if not isinstance(item, (bytes, bytearray, memoryview))]
         if isinstance(value, str):
-            return re.sub(r'(?:[A-Za-z]:[\\/]|\\\\|/(?:Users|home|tmp|var|etc)/)[^\s\"<>|]*', '[private path]', value)
+            return redact_paths(value)
         if value is None or isinstance(value, (bool, int, float)):
             return deepcopy(value)
         return None

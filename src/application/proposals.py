@@ -17,17 +17,6 @@ _PUBLIC = ("id", "action", "project_id", "base_version_id", "status", "created_a
            "updated_at", "summary", "result", "error_code")
 
 
-class _NoMigrationStore:
-    def __init__(self, store):
-        self.store = store
-
-    def __getattr__(self, name):
-        return getattr(self.store, name)
-
-    def load_program_ir(self, project_id, version_id, **kwargs):
-        return self.store.load_program_ir(project_id, version_id, persist_legacy=False)
-
-
 class ProposalService:
     def __init__(self, store, state_dir, writer_lock):
         self.store, self.lock = store, writer_lock
@@ -56,7 +45,10 @@ class ProposalService:
     def _save(self, record):
         self.lock.require_acquired()
         record["updated_at"] = utc_now()
-        atomic_json(contained(self.directory / (record_id(record["id"]) + ".json"), self.directory), record)
+        revision = int(record.get("revision") or 0) + 1
+        atomic_json(contained(self.directory / (record_id(record["id"]) + ".json"), self.directory),
+                    {**record, "revision": revision})
+        record["revision"] = revision
 
     @staticmethod
     def _public(record):
@@ -70,7 +62,22 @@ class ProposalService:
             mode = audit.get("mode")
             if mode is None or mode in {"ask", "auto", "full"}:
                 result.setdefault("summary", {})["approval"] = {"source": audit["source"], "mode": mode}
+        if type(record.get('revision')) is int:
+            result['revision'] = record['revision']
         return result
+
+    @staticmethod
+    def public_record(record):
+        return ProposalService._public(record)
+
+    def find_request(self, project_id, request_id):
+        """Find the original public receipt without exposing private records."""
+        with self.lock.thread_lock:
+            for path in self.directory.glob("*.json"):
+                record = self._load(path.stem)
+                if record.get("project_id") == project_id and record.get("request_id") == request_id:
+                    return self.public_record(record)
+        return None
 
     def get(self, proposal_id):
         with self.lock.thread_lock:
@@ -341,7 +348,7 @@ class ProposalService:
         payload = record["private_payload"]
         project_id, base_id = record["project_id"], record["base_version_id"]
         if "_candidate_ir" in payload and base_id:
-            version = accept_candidate_patch(_NoMigrationStore(self.store), payload)
+            version = accept_candidate_patch(self.store, payload)
             return {"version_id": version["id"], "status": 'saved_behavior_draft' if version.get('activation_blocked') else "accepted", "target_mode": "ladder"}
         version_id = None
         try:

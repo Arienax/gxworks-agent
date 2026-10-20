@@ -1083,6 +1083,7 @@ namespace PlcAi.NativeAdapter
             }
             Event(new { operation = "OwnedCheckInput", target = target.Words, stage = stage, mask = Marshal.ReadInt32(manager, 24),
                 manager = manager.ToString(), compiler_member_offset = 12, manager_records_offset = 32, rows = rows,
+                input_contract = new { schema_version = 1, kind = "structured", status = "verified" },
                 provenance = "original ProcessManager.ProgramCheck owned code copy; read-only; no interception" });
         }
         IntPtr ReadSfcBackend(IntPtr compiler)
@@ -1140,6 +1141,7 @@ namespace PlcAi.NativeAdapter
             Event(new { operation = "OwnedCheckInput", target = target.Words, stage = stage,
                 mask = Marshal.ReadInt32(manager, 24), manager = manager.ToString(), compiler_member_offset = 8,
                 manager_records_offset = 32, rows = rows,
+                input_contract = new { schema_version = 1, kind = "sfc", status = "verified" },
                 input_backend = new { module = "DZDataABS_Compiler.dll", version = NativeVersion,
                     progress_rva = 0x73e5, program_check_rva = 0x4810 },
                 provenance = "original ProcessManager.ProgramCheck owned code copy; read-only; no interception" });
