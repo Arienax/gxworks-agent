@@ -121,6 +121,12 @@ def runtime_connection():
         return None
     connection = core._connection(path, core._index_identity(path))
     meta = core._load_meta(connection, core._schema(connection))
+    if meta.get('corpus_kind') == CORPUS_KIND:
+        from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+        version = meta.get('fact_bundle_version')
+        expected = getattr(DEFAULT_INSTRUCTION_REGISTRY, 'fact_bundle_version', None)
+        if version and expected and (version != expected or not DEFAULT_INSTRUCTION_REGISTRY.fact_bundle_current()):
+            raise ValueError('Runtime knowledge and Core fact bundles differ; reload the checking context')
     return connection if meta.get("corpus_kind") == CORPUS_KIND else None
 
 
@@ -140,6 +146,12 @@ def resolve(kind, targets, *, plc_model, task_type="analysis", connection=_DEFAU
             return None
     if connection is None:
         return None  # Legacy research fixtures are separate from the runtime corpus.
+    marker = connection.execute("SELECT value FROM meta WHERE key='fact_bundle_version'").fetchone()
+    if marker:
+        from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+        expected = getattr(DEFAULT_INSTRUCTION_REGISTRY, 'fact_bundle_version', None)
+        if expected and (marker[0] != expected or not DEFAULT_INSTRUCTION_REGISTRY.fact_bundle_current()):
+            raise ValueError('Runtime knowledge and Core fact bundles differ; reload the checking context')
     from knowledge import core
     result = []
     from gxworks2.project_profiles import native_project_profile

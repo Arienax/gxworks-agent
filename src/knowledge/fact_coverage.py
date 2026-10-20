@@ -37,6 +37,7 @@ def fact_requirements(targets, *, instruction_questions=None):
         ("device", "devices", (_DEFAULT_DIMENSION,)),
         ("device_family", "device_families", (_DEFAULT_DIMENSION,)),
         ("error", "errors", (_DEFAULT_DIMENSION,)),
+        ("language", "language_features", (_DEFAULT_DIMENSION,)),
     ):
         for raw_target in targets.get(key) or ():
             target, instance = _target_identity(kind, raw_target)
@@ -72,6 +73,8 @@ def _record_descriptor(record, included):
         return None
     dimensions = record.get("fact_dimensions") or record.get("candidate_fact_categories") or ()
     dimensions = [str(value) for value in dimensions if str(value)] or [_DEFAULT_DIMENSION]
+    if kind == 'language' and _DEFAULT_DIMENSION not in dimensions:
+        dimensions.append(_DEFAULT_DIMENSION)
     aliases = [target]
     requested = str(record.get("structured_fact_requested_target") or "").strip().upper()
     if requested and requested not in aliases:

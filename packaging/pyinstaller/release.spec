@@ -2,7 +2,7 @@
 import os
 import sys
 from pathlib import Path
-from PyInstaller.utils.hooks import copy_metadata, get_package_paths
+from PyInstaller.utils.hooks import copy_metadata, get_package_paths, collect_submodules
 
 root = Path(SPECPATH).resolve().parents[1]
 sys.path.insert(0, str(root))
@@ -27,6 +27,7 @@ datas = [
 datas += runtime_knowledge_data(resources) + runtime_instruction_data(resources)
 datas += ([(str(root / 'web/dist'), 'web/dist')] if component == 'full' else runtime_viewer_data(root))
 datas += copy_metadata('haystack-ai')
+datas += copy_metadata('tree-sitter') + copy_metadata('tree-sitter-iec61131-3-st')
 for directory, executable in (
     ('workspace-adapter', 'PlcAi.WorkspaceSourceSave.exe'),
     ('native-active', 'PlcAi.ActiveDocument.exe'),
@@ -62,7 +63,7 @@ unused_components = [
 ]
 
 def freeze(entry, executable_name, *, web=False):
-    dynamic_imports = hiddenimports + (['uvicorn.logging', 'uvicorn.loops.asyncio',
+    dynamic_imports = hiddenimports + collect_submodules('tree_sitter') + collect_submodules('tree_sitter_iec61131_3_st') + (['uvicorn.logging', 'uvicorn.loops.asyncio',
         'uvicorn.protocols.http.h11_impl', 'uvicorn.lifespan.on'] if web else [])
     a = Analysis([str(root / 'scripts' / entry)], pathex=[str(root / 'src')],
         binaries=[], datas=datas, hiddenimports=dynamic_imports,

@@ -8,6 +8,7 @@ qualified GX Works2 skill concepts. It does not apply a second scoring layer.
 from __future__ import annotations
 
 from collections.abc import Mapping
+import re
 from shared.context_audit import audit_retrieval_fragment
 
 from knowledge.gxworks2_concepts import CONTEXT_RE as _GXW2_CONTEXT_RE, query_skill_concepts
@@ -63,7 +64,7 @@ def _fact_identity(kind, value):
     return str(value or "").strip().upper(), None
 
 
-def _covered_structured_kinds(targets, records):
+def _covered_structured_kinds(targets, records, *, limits=False):
     """Return fact kinds whose every explicit target has direct structured evidence."""
     targets = targets if isinstance(targets, Mapping) else {}
     records = [row for row in (records or ()) if isinstance(row, Mapping)]
@@ -73,6 +74,7 @@ def _covered_structured_kinds(targets, records):
         ("device", "devices"),
         ("error", "errors"),
         ("device_family", "device_families"),
+        ("language", "language_features"),
     ):
         requested = [
             _fact_identity(kind, value)
@@ -89,6 +91,10 @@ def _covered_structured_kinds(targets, records):
             ).strip().casefold()
             if row_kind != kind:
                 continue
+            if kind in {'instruction', 'language'}:
+                from knowledge.structured_facts import fact_record_coverage
+                if not fact_record_coverage(row, limits=limits):
+                    continue
             if kind == 'device' and row.get('device_definition_status') in {
                 'unknown', 'unverified', 'conditions_missing', 'conflict',
             }:
@@ -129,7 +135,7 @@ def _resolved_targets(targets, covered_kinds):
     """Only mask targets whose direct evidence actually satisfied the lookup."""
     return {key: targets.get(key, ()) if kind in covered_kinds else ()
             for kind, key in (("instruction", "instructions"), ("device", "devices"), ("error", "errors"),
-                              ("device_family", "device_families"))}
+                              ("device_family", "device_families"), ("language", "language_features"))}
 
 
 def _residual_fact_text(query, targets, covered_kinds):
@@ -138,7 +144,7 @@ def _residual_fact_text(query, targets, covered_kinds):
     resolved = _resolved_targets(targets, covered_kinds)
     residual = without_structured_targets(query, resolved)
     missing = []
-    for key in ('instructions', 'devices', 'errors', 'device_families'):
+    for key in ('instructions', 'devices', 'errors', 'device_families', 'language_features'):
         if resolved[key]:
             continue
         for target in targets.get(key, ()):
@@ -263,6 +269,7 @@ def retrieve_fact_aware_knowledge(
         resolve_error_records,
         resolve_instruction_records,
         resolve_device_family_records,
+        resolve_language_records,
         structured_fact_targets,
         without_structured_targets,
     )
@@ -291,6 +298,7 @@ def retrieve_fact_aware_knowledge(
 
     targets = structured_fact_targets(query, plc_model=plc_model)
     direct = [
+        *resolve_language_records(targets.get('language_features') or (), plc_model=plc_model, task_type=task),
         *resolve_instruction_records(
             targets.get("instructions") or (),
             plc_model=plc_model,
@@ -313,11 +321,14 @@ def retrieve_fact_aware_knowledge(
         compact_structured_fact_record(row)
         for row in filter_records(direct, lanes)
     ]
-    covered_kinds = _covered_structured_kinds(targets, direct)
+    limits = bool(re.search(r'限制|条件|范围|约束|\blimit|restrict|constraint|domain|range', str(query), re.I))
+    covered_kinds = _covered_structured_kinds(targets, direct, limits=limits)
     prefilters = _residual_prefilters(covered_kinds)
 
     resolved_targets = _resolved_targets(targets, covered_kinds)
     residual = _residual_fact_text(query, targets, covered_kinds)
+    diagnostic_only = (targets.get('diagnostic_namespace') == 'compiler' and
+                       not any(targets.get(key) for key in ('instructions', 'devices', 'language_features')))
     broad = retrieve_knowledge(
         residual,
         plc_model=plc_model,
@@ -325,7 +336,7 @@ def retrieve_fact_aware_knowledge(
         top_k=min(_core._MAX_TOP_K, max(12, normalized_top_k * 3)),
         source_lanes=lanes,
         **prefilters,
-    ) if plan["facts"] and residual.strip() else []
+    ) if plan["facts"] and residual.strip() and not diagnostic_only else []
     broad = filter_records(exclude_structured_target_hits(broad, resolved_targets), lanes)
     from knowledge.structured_facts import project_device_source_records
     broad = project_device_source_records(broad,plc_model=plc_model)
@@ -398,6 +409,7 @@ def build_knowledge_context(
     seen = set()
     delivered_sources = set()
     delivered_fact_sources = {}
+    delivered_typed = {}
 
     def select(results, slots):
         blocks, records = [], []
@@ -422,6 +434,7 @@ def build_knowledge_context(
                 manifest.setdefault("duplicate_source_ids", []).append(marker)
                 continue
             record = evidence_record(result)
+            delivered_typed[marker] = result
             block = format_knowledge_reference(result)
             record['model_text'] = block
             blocks.append(block)
@@ -440,6 +453,7 @@ def build_knowledge_context(
         structured_fact_targets, without_structured_targets,
         resolve_process_records,
         resolve_device_family_records,
+        resolve_language_records,
     )
 
     provided_structured = (
@@ -469,7 +483,8 @@ def build_knowledge_context(
     family_targets = list(exact_targets.get("device_families") or ())
     error_targets = list(exact_targets.get("errors") or ())
     process_targets = list(exact_targets.get("process") or ())
-    direct_results = []
+    direct_results = list(resolve_language_records(exact_targets.get('language_features') or (),
+                                                  plc_model=plc_model, task_type=task)) if plan['facts'] else []
     fact_report = None
     process_results = (filter_records(resolve_process_records(
         process_targets, plc_model=plc_model, task_type=task,
@@ -507,7 +522,8 @@ def build_knowledge_context(
     # kind actually produced eligible direct evidence. Unresolved direct lookup
     # leaves broad recall available rather than failing closed on missing data.
     eligible_direct_results = filter_records(direct_results, plan["source_lanes"])
-    covered_kinds = _covered_structured_kinds(exact_targets, eligible_direct_results)
+    covered_kinds = _covered_structured_kinds(exact_targets, eligible_direct_results,
+        limits=bool(re.search(r'限制|条件|范围|约束|\blimit|restrict|constraint|domain|range', str(query), re.I)))
     prefilters = _residual_prefilters(covered_kinds)
 
     # The broad retriever sees only the residual prose. Structured-owner rows
@@ -516,6 +532,9 @@ def build_knowledge_context(
     resolved_targets = _resolved_targets(exact_targets, covered_kinds)
     residual_query = _residual_fact_text(residual_source, exact_targets, covered_kinds)
     should_retrieve_residual = bool(plan["facts"] and residual_query.strip())
+    if exact_targets.get('diagnostic_namespace') == 'compiler' and not any(
+            exact_targets.get(key) for key in ('instructions', 'devices', 'language_features')):
+        should_retrieve_residual = False
     if should_retrieve_residual and task in {"generate", "edit"} and getattr(query, "precompiled", False):
         from knowledge.analysis_router import has_generation_fact_target
         should_retrieve_residual = has_generation_fact_target(residual_query)
@@ -538,6 +557,7 @@ def build_knowledge_context(
             "device_families": family_targets,
             "errors": error_targets,
             "process": process_targets,
+            "language_features": exact_targets.get('language_features', []),
         },
         "record_ids": [str(item.get("id")) for item in direct_results if item.get("id")],
         "direct_covered_kinds": sorted(covered_kinds),
@@ -592,6 +612,9 @@ def build_knowledge_context(
     # Facts precede optional design references.
     parts = [header, *fact_blocks, *design_blocks]
     manifest["records"] = [*fact_records, *design_records]
+    from knowledge.structured_facts import retrieval_coverage
+    manifest['retrieval_coverage'] = retrieval_coverage(query, list(delivered_typed.values()),
+                                                       plc_model=plc_model, targets=exact_targets)
     text = "\n\n".join(parts) if len(parts) > 1 else ""
     manifest.update(used_chars=len(text), context_sha256=text_sha256(text))
     manifest["used_tokens"] = estimate_tokens(text)

@@ -67,8 +67,12 @@ def atomic_json(path: Path, value: Any) -> None:
 
 
 def read_json(path: Path) -> dict:
-    with Path(path).open(encoding="utf-8") as stream:
-        value = json.load(stream)
+    from storage.session import SessionStore
+
+    missing = object()
+    value = SessionStore._read_json(path, missing)
+    if value is missing:
+        raise FileNotFoundError(path)
     if not isinstance(value, dict):
         raise ValueError("Invalid durable record")
     return value

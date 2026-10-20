@@ -45,6 +45,18 @@ export function useGenerationResult(job: Job | undefined, retry: number) {
     error: result.id === id ? result.error : undefined };
 }
 
+export function STVerification({ report, t }: { report: Json | undefined; t: (key: string) => string }) {
+  if (!report || typeof report !== 'object' || Array.isArray(report)) return null;
+  const layers = [['syntax', '语法检查'], ['semantic', '语义检查'],
+    ['native_compile', '原生编译'], ['behavior', '行为验证']] as const;
+  const labels: Record<string, string> = { passed: '通过', failed: '失败', unverified: '未验证' };
+  return <dl aria-label={t('ST 验证状态')}>
+    {layers.map(([key, label]) => <div key={key}>
+      <dt>{t(label)}</dt><dd>{t(labels[String(report[key])] || '未验证')}</dd>
+    </div>)}
+  </dl>;
+}
+
 export type GenerationResultState = ReturnType<typeof useGenerationResult>;
 
 export function GenerationResult({ result, busy, onOpen, onRetry, onRepair, onSpec, clarification, t }: {
@@ -98,7 +110,10 @@ export function GenerationResult({ result, busy, onOpen, onRetry, onRepair, onSp
       <Button disabled={busy} onClick={onOpen}>{t("查看程序")}</Button>{" "}
       {freshCsv}
     </> : result.proposalId ? <>
-      <Button disabled={busy} onClick={onOpen}>{t("查看旧草稿")}</Button>
+      {result.value?.status === 'awaiting_native_verification' ? <>
+        <p role="status">{t('工程方案已生成，等待原生验证。')}</p>
+        <Button disabled={busy} onClick={onOpen}>{t('查看工程方案')}</Button>
+      </> : <Button disabled={busy} onClick={onOpen}>{t("查看旧草稿")}</Button>}
     </> : result.loading ? <p role="status">{t("正在读取生成结果")}</p> : <>
       <p className="error-text" role="alert">{t("暂时无法读取结果，请重试。")}</p>
     </>}
@@ -112,6 +127,7 @@ export function GenerationResult({ result, busy, onOpen, onRetry, onRepair, onSp
         <ul>{items.filter((item): item is string => typeof item === "string").map((item, index) => <li key={index}>{item}</li>)}</ul>
       </details> : null;
     })}
+    <STVerification report={result.metadata?.semantic_validation} t={t} />
     <CapabilityReview metadata={result.metadata} t={t} />
     <Button disabled={busy} onClick={onRetry}>{t("重新读取结果")}</Button>
   </section>;

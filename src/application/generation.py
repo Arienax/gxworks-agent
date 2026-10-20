@@ -59,6 +59,8 @@ class GenerationRequest:
     direct_generation: bool = False
     user_fact_text: Optional[str] = None
     direct_user_facts: object = None
+    st_project_context: object = None
+    st_native_baseline: object = None
 
     def __post_init__(self):
         object.__setattr__(self, "effort", None)
@@ -222,6 +224,12 @@ class GenerationWorkflow:
                 self.user_input, is_edit_mode=is_edit_mode,
                 target_mode=self.target_mode, repair_mode=(self.repair_mode or self.format_repair),
             )
+            if self.target_mode == 'st' and self.st_project_context is not None:
+                from application.native_st import model_project_context
+                model_user_input += '\n\n# Actual GXW context\n' + json.dumps(model_project_context(self.st_project_context), ensure_ascii=False)
+                model_user_input += ('\nReturn ST candidate schema_version=2 with language=st, program={name,kind:program,body}, '
+                    'declaration_edits={upserts:[]}, task_binding={resource,task}. Use the actual identities above. '
+                    'Program body and declaration edits are separate. Do not invent a resource or task.')
             repair_call = self.target_mode == "ladder" and (self.repair_mode or self.format_repair)
             direct_facts = self.direct_generation or (repair_call and self.user_fact_text is not None)
             if repair_call and direct_facts:
@@ -557,6 +565,8 @@ class GenerationWorkflow:
                     return prepared_candidate["ladder"]
                 emit_parsing_progress(tr('正在解析模型输出：校验 ST 结构'))
                 validate_st_json(parsed, plc_model=self.plc_model)
+                if parsed.get('schema_version') == 2 and self.st_project_context is None:
+                    raise PLCJsonValidationError('ST candidate v2 requires an actual GXW project context')
                 return parsed
 
             validation_errors = (PLCJsonValidationError, PLCIRValidationError, json.JSONDecodeError)
@@ -720,7 +730,16 @@ class GenerationWorkflow:
                     },
                 }
 
-            st_text = parsed_json.get("st_code", "")
+            native_prepared = None
+            if parsed_json.get('schema_version') == 2:
+                from application.native_st import candidate_native_plan
+                if self.st_native_baseline is None:
+                    raise PLCJsonValidationError('ST native candidate has no version-bound GXW baseline')
+                native_prepared = candidate_native_plan(parsed_json, baseline=self.st_native_baseline,
+                    plc_model=self.plc_model, program_name=self.st_project_context.get('selected_source'),
+                    confirmed_spec=self.confirmed_context)
+                parsed_json = native_prepared['candidate']
+            st_text = parsed_json.get("st_code", parsed_json.get('program', {}).get('body', ''))
             if not st_text:
                 st_text = json_str
             self._emit("progress", {"stage": "parsed", "message": tr('模型输出已解析为 ST 候选')})
@@ -730,15 +749,27 @@ class GenerationWorkflow:
             from plc.st_validation import inspect_st_program
             st_validation = inspect_st_program(st_text, plc_model=self.plc_model,
                 hardware_context=(self.confirmed_context or {}).get('hardware_profile'),
-                confirmed_spec=self.confirmed_context)
+                confirmed_spec=self.confirmed_context, project_context=self.st_project_context)
+            if native_prepared:
+                st_validation = native_prepared['inspection']
+            if st_validation['status'] == 'failed':
+                raise PLCJsonValidationError('ST candidate failed local checks: ' + '; '.join(
+                    f['message'] for f in st_validation['findings'] if f['severity'] == 'error'))
+            st_artifacts = {'st': output_path.name}
+            if native_prepared:
+                candidate_path = self.output_dir / 'st_candidate.json'
+                candidate_path.write_text(json.dumps(parsed_json, ensure_ascii=False, indent=2), encoding='utf-8')
+                st_artifacts['st_candidate'] = candidate_path.name
             return {
                 "target_mode": "st",
                 "generation_handoff": generation_handoff,
-                "maintainability_review": review_maintainability(parsed_json, target_mode="st"),
+                "maintainability_review": review_maintainability({'st_code': st_text}, target_mode="st"),
                 "validation_profile": "generation_structural",
                 "width": 0,
                 "height": 0,
-                "artifacts": {"st": output_path.name},
+                "artifacts": st_artifacts,
+                'native_plan': native_prepared['plan'] if native_prepared else None,
+                'candidate_program_name': native_prepared['candidate']['program']['name'] if native_prepared else None,
                 "semantic_validation": st_validation,
                 "behavior_check": st_validation.get('behavior_check'),
                 "validation": {
@@ -747,6 +778,8 @@ class GenerationWorkflow:
                     "messages": [tr('ST 输出结构可解析'),
                         tr('ST 本地检查：') + st_validation["status"]],
                     "static": st_validation["status"],
+                    'syntax': st_validation['syntax'], 'semantic': st_validation['semantic'],
+                    'native_compile': st_validation['native_compile'], 'behavior': st_validation['behavior'],
                     "native": "unverified",
                     "requirements": st_validation['requirements'],
                 },

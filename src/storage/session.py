@@ -1,15 +1,43 @@
 import copy
 import json
+import logging
 import os
 import re
 import shutil
 import sys
+import threading
 import time
 import uuid
 from collections.abc import Mapping
 from dataclasses import asdict, is_dataclass
 from datetime import datetime, timezone
+from functools import wraps
 from pathlib import Path
+from weakref import WeakValueDictionary
+
+
+_logger = logging.getLogger(__name__)
+_record_locks = WeakValueDictionary()
+_record_locks_guard = threading.Lock()
+
+
+def _record_lock(path):
+    """Serialize local file access without blocking readers on native operations."""
+    key = os.path.normcase(str(Path(path).resolve()))
+    with _record_locks_guard:
+        lock = _record_locks.get(key)
+        if lock is None:
+            lock = threading.RLock()
+            _record_locks[key] = lock
+        return lock
+
+
+def _index_transaction(method):
+    @wraps(method)
+    def locked(self, *args, **kwargs):
+        with _record_lock(self.index_path):
+            return method(self, *args, **kwargs)
+    return locked
 
 
 def _utc_now():
@@ -134,19 +162,37 @@ class SessionStore:
         self.legacy_dir = Path(legacy_dir) if legacy_dir else Path.cwd()
         if create:
             self.projects_dir.mkdir(parents=True, exist_ok=True)
-            if not self.index_path.exists():
-                self._write_json(self.index_path, {"projects": [], "legacy_imported": False})
+            with _record_lock(self.index_path):
+                missing = object()
+                if self._read_json(self.index_path, missing) is missing:
+                    self._write_json(self.index_path, {"projects": [], "legacy_imported": False})
 
     @staticmethod
     def _read_json(path, default=None):
-        try:
-            with Path(path).open("r", encoding="utf-8") as f:
-                return json.load(f)
-        except (OSError, json.JSONDecodeError, TypeError):
-            return default
+        # Only absence means an optional record/default. A failed read must
+        # never become an empty index that a subsequent transaction can save.
+        with _record_lock(path):
+            for attempt in range(5):
+                try:
+                    with Path(path).open("r", encoding="utf-8") as f:
+                        return json.load(f)
+                except FileNotFoundError:
+                    return default
+                except (OSError, ValueError, TypeError) as error:
+                    if (isinstance(error, PermissionError)
+                            and getattr(error, "winerror", None) in {5, 32, 33} and attempt < 4):
+                        time.sleep(0.01 * 2 ** attempt)
+                        continue
+                    _logger.error("Cannot read durable JSON record %s", path, exc_info=True)
+                    raise
 
     @staticmethod
     def _write_json(path, payload):
+        with _record_lock(path):
+            SessionStore._write_json_locked(path, payload)
+
+    @staticmethod
+    def _write_json_locked(path, payload):
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         temp_path = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
@@ -173,9 +219,14 @@ class SessionStore:
                 pass
 
     def _load_index(self):
-        return self._read_json(
+        index = self._read_json(
             self.index_path, {"projects": [], "legacy_imported": False}
         )
+        if (not isinstance(index, dict) or not isinstance(index.get("projects"), list)
+                or any(not isinstance(value, str) for value in index["projects"])
+                or type(index.get("legacy_imported", False)) is not bool):
+            raise ValueError("Invalid project index; refusing to replace it")
+        return index
 
     def _save_index(self, index):
         self._write_json(self.index_path, index)
@@ -343,6 +394,7 @@ class SessionStore:
             projects, key=lambda item: item.get("updated_at", ""), reverse=True
         )
 
+    @_index_transaction
     def create_project(
         self,
         name="新项目",
@@ -352,6 +404,7 @@ class SessionStore:
         native_project_type=None,
         use_labels=None,
     ):
+        index = self._load_index()
         project_id = uuid.uuid4().hex[:12]
         now = _utc_now()
         project = {
@@ -373,15 +426,17 @@ class SessionStore:
             "active_version_id": None,
         }
         self.save_project(project)
-        index = self._load_index()
         index.setdefault("projects", []).append(project_id)
         self._save_index(index)
         return project
 
     def get_project(self, project_id):
-        project = self._read_json(self.project_path(project_id))
-        if not isinstance(project, dict):
+        missing = object()
+        project = self._read_json(self.project_path(project_id), missing)
+        if project is missing:
             return None
+        if not isinstance(project, dict):
+            raise ValueError("Invalid project record")
         return self._with_project_defaults(project)
 
     def save_project(self, project):
@@ -390,14 +445,15 @@ class SessionStore:
         self._write_json(self.project_path(project["id"]), project)
         return project
 
+    @_index_transaction
     def delete_project(self, project_id):
+        index = self._load_index()
         project_dir = self.project_dir(project_id).resolve()
         projects_root = self.projects_dir.resolve()
         if projects_root not in project_dir.parents:
             raise ValueError("Project path escaped the workspace root")
         if project_dir.exists():
             shutil.rmtree(project_dir)
-        index = self._load_index()
         index["projects"] = [
             item for item in index.get("projects", []) if item != project_id
         ]
@@ -1505,6 +1561,7 @@ class SessionStore:
             reverse=True,
         )
 
+    @_index_transaction
     def import_legacy_once(self):
         index = self._load_index()
         if index.get("legacy_imported"):

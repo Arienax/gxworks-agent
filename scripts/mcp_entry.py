@@ -18,4 +18,9 @@ from integrations.mcp.__main__ import main  # noqa: E402
 
 
 if __name__ == "__main__":
+    if sys.argv[1:] == ['--self-test-st']:
+        import json
+        from runtime_st_smoke import check_st_runtime
+        print(json.dumps(check_st_runtime()))
+        raise SystemExit(0)
     raise SystemExit(main())

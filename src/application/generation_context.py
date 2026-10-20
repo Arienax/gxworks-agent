@@ -41,9 +41,12 @@ ST_SYSTEM_PROMPT = """# Role
 - 定时器用 `OUT_T(条件, TCx, 设定值)`/TSx，计数器用 `OUT_C(条件, CCx, 设定值)`/CSx；普通定时器使能必须能变 FALSE，常 ON 不能形成周期。
 - 事件用边沿，持续条件用电平。运动、模拟量、通信、特殊软元件以本型号证据为准。
 - 参数遵守完整 st_signature；含 EN 时即使在 IF 内也保留首个 BOOL 参数，不能照搬 Ladder 操作数。
+- 首次生成就应用事实中的适用条件、输入域和结果范围；call_available=false 的资料不授予调用能力。保持需求的运算含义，不以取绝对值、截断或补零掩盖越界。
+- 字软元件参与比较时先明确有符号/无符号类型，使用已绑定的类型标签；新标签通过声明协议创建，不靠裸地址的隐式解释。保留用户要求的数值含义。
+- 编译警告必须按同一事实中的类型、输入域、精度和副作用规则处理；编译无错误不等于这些检查已经通过。幂运算采用当前 CPU 的实际计算规则，不能假设与宿主语言的幂运算相同。
 
 # Output
-只返回 `{\"st_code\":\"完整 ST 代码\"}`，不得输出 Markdown、分析过程或额外正文。"""
+没有 Actual GXW context 时只返回 `{\"st_code\":\"完整 ST 代码\"}`。提供该上下文时按其 ST candidate v2 契约输出，正文和声明分开，任务取自实际工程。不得输出 Markdown、分析过程或额外正文。"""
 
 LADDER_SYSTEM_PROMPT = """# Role
 你是三菱 PLC ladder_v1 JSON 生成器。把当前确认规格转换为所选 PLC 型号的梯形图 JSON。
@@ -522,7 +525,8 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
         from application.context_compiler import model_budget
         fact_requirement = user_requirement
         if target_mode == "st" and normalized_task == "generate" and isinstance(confirmed_context, dict):
-            fact_requirement = str(confirmed_context.get("summary") or user_requirement)
+            fact_requirement = '\n'.join(dict.fromkeys(str(value).strip() for value in
+                (confirmed_context.get("summary"), user_requirement) if value and str(value).strip()))
         from application.generation_support import repair_retrieval_scope
         scope = repair_retrieval_scope(user_requirement, current_version_json, plc_model=plc_model)
         scope_meta = {}

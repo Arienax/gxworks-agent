@@ -42,7 +42,7 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None):
     route = route_analysis_request(
         scoped_query,
         confirmed_context=None,
-        resolve_opcode=DEFAULT_INSTRUCTION_REGISTRY.resolve_form,
+        resolve_opcode=DEFAULT_INSTRUCTION_REGISTRY.resolve_fact_form,
     )
     instructions = instruction_fact_targets(query, spec)
     identified = {str(row.get("opcode") or "").upper() for row in instructions}
@@ -59,12 +59,50 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None):
         if target["opcode"] not in identified:
             instructions.append(target)
             identified.add(target["opcode"])
+    language_features = []
+    feature_scores = {}
+    query_metadata = getattr(query, 'metadata', {})
+    st_context = isinstance(query_metadata, Mapping) and str(query_metadata.get('target_mode', '')).casefold() == 'st'
+    for feature in getattr(DEFAULT_INSTRUCTION_REGISTRY, 'language_facts', ()):
+        for alias in feature.get('aliases', []):
+            if alias == '**':
+                matched = '**' in str(query) and (st_context or str(query).strip() == '**'
+                    or bool(re.search(r'\bST\b|幂|运算|\d\s*\*\*\s*\d', str(query), re.I)))
+            else:
+                matched = core._alias_occurs(str(query), alias)
+            if matched:
+                language_features.append(feature['target'])
+                feature_scores[feature['target']] = (feature['target'].count('.'), len(alias))
+                break
+    language_features.sort(key=lambda target: feature_scores[target], reverse=True)
+    remaining, selected_features = str(query), []
+    feature_by_target = {feature['target']: feature for feature in getattr(DEFAULT_INSTRUCTION_REGISTRY, 'language_facts', ())}
+    for target in language_features:
+        aliases = feature_by_target[target]['aliases']
+        if not any(alias in remaining if alias == '**' else core._alias_occurs(remaining, alias) for alias in aliases):
+            continue
+        selected_features.append(target)
+        for alias in sorted(aliases, key=len, reverse=True):
+            remaining = re.sub(re.escape(alias), ' ', remaining, flags=re.I)
+    language_features = selected_features
+    # Cxxxx is also a counter spelling. A compiler diagnostic request carries
+    # its own namespace; it must not retrieve a counter or incidental examples.
+    compiler_query = bool(re.search(r'编译|警告|compiler|compil(?:e|ation)|warning|GX\s*Works\s*2', str(query), re.I)
+                          and re.search(r'\bC[0-9A-F]{4,7}\b', str(query), re.I))
+    errors = list(dict.fromkeys(core._error_terms(str(query or ""))))
+    devices = list(dict.fromkeys(value.upper() for value in route.devices))
+    if compiler_query:
+        diagnostics = re.findall(r'\bC[0-9A-F]{4,7}\b', str(query).upper())
+        devices = [device for device in devices if device not in diagnostics]
+        errors = list(dict.fromkeys(diagnostics))
     return {
         "version": _VERSION,
         "instructions": copy.deepcopy(instructions),
-        "devices": list(dict.fromkeys(value.upper() for value in route.devices)),
+        "devices": devices,
         "device_families": family_targets(scoped_query),
-        "errors": list(dict.fromkeys(core._error_terms(str(query or "")))),
+        "errors": errors,
+        "language_features": language_features,
+        "diagnostic_namespace": 'compiler' if compiler_query else None,
         "process": generation_process_fact_needs(spec, plc_model=plc_model, requirement=route.query_text),
     }
 
@@ -80,6 +118,86 @@ def _runtime():
     schema = core._schema(connection)
     meta = core._load_meta(connection, schema)
     return core, path, connection, schema, meta
+
+
+def resolve_language_records(targets, *, plc_model, task_type='analysis'):
+    from knowledge.fact_corpus import resolve
+    return resolve('language', targets, plc_model=plc_model, task_type=task_type) or []
+
+
+def authored_packet(record):
+    """Read only this record's typed envelope, never interpret manual prose."""
+    for line in str(record.get('text', '')).splitlines():
+        if line.startswith('{'):
+            try:
+                packet = json.loads(line)
+            except ValueError:
+                continue
+            if packet.get('content_origin') == 'authored_fact':
+                return packet
+    return {}
+
+
+def fact_record_coverage(record, *, limits=False):
+    if record.get('fact_kind') == 'device' and record.get('device_definition_status') in {
+            'unknown', 'unverified', 'conditions_missing', 'conflict'}:
+        return False
+    packet = authored_packet(record)
+    if not packet:
+        return True  # Original evidence fixtures keep their existing boundary.
+    value = packet.get('value', {})
+    facts = value.get('facts', [])
+    if packet.get('kind') not in {'instruction', 'language'}:
+        return True
+    if not facts:
+        return False
+    required = [f for f in facts if f.get('dimension', '').startswith('constraints.')] if limits else facts
+    for related in value.get('related_instructions', []):
+        required.extend(f for f in related.get('facts', []) if f.get('dimension', '').startswith('constraints.'))
+    if not required:
+        return False if limits and packet.get('kind') == 'instruction' else True
+    by_id = {f['id']: f for f in facts}
+    for related in value.get('related_instructions', []):
+        by_id.update({f['id']: f for f in related.get('facts', [])})
+    visiting = set()
+    def complete(fact):
+        if fact['id'] in visiting or fact.get('status') in {'unknown', 'conflict', 'not_applicable'}:
+            return False
+        if limits and fact.get('dimension', '').startswith('constraints.') and fact.get('status') != 'source_verified':
+            return False
+        if fact.get('dimension') == 'constraints.source_qualifications':
+            return False
+        visiting.add(fact['id'])
+        okay = all(dependency in by_id and complete(by_id[dependency]) for dependency in fact.get('depends_on', []))
+        visiting.remove(fact['id'])
+        return okay
+    return all(complete(fact) for fact in required)
+
+
+def retrieval_coverage(query, records, *, plc_model, targets=None):
+    targets = targets or structured_fact_targets(query, plc_model=plc_model)
+    limits = bool(re.search(r'限制|条件|范围|约束|\blimit|restrict|constraint|domain|range', str(query), re.I))
+    requirements = []
+    def identity(kind, value):
+        value = str(value or '').upper()
+        if kind == 'device':
+            from plc.device_identity import canonical_reference_device
+            return canonical_reference_device(value)
+        return value.removeprefix('0X').removesuffix('H') if kind == 'error' else value
+    for kind, key in (('instruction', 'instructions'), ('language', 'language_features'),
+                      ('device', 'devices'), ('error', 'errors')):
+        for raw in targets.get(key, []):
+            target = raw.get('opcode') if isinstance(raw, Mapping) else raw
+            selected = [row for row in records if row.get('fact_kind') == kind and
+                        identity(kind, row.get('fact_target')) == identity(kind, target)]
+            complete = any(fact_record_coverage(row, limits=limits) for row in selected)
+            requirements.append({'kind': kind, 'target': target, 'identity_found': bool(selected),
+                                 'status': 'complete' if complete else 'incomplete' if selected else 'unresolved',
+                                 'reason': '' if complete else 'requested_facts_not_established' if selected else 'exact_fact_not_found'})
+    statuses = {row['status'] for row in requirements}
+    return {'status': 'unresolved' if not requirements or statuses == {'unresolved'} else
+            'complete' if statuses == {'complete'} else 'incomplete', 'targets': requirements,
+            'omitted_evidence_is_not_unsupported': True}
 
 
 def _declared_instruction_alias_targets(query, *, plc_model=None):
@@ -98,7 +216,7 @@ def _declared_instruction_alias_targets(query, *, plc_model=None):
         for row in connection.execute('SELECT DISTINCT alias,opcode,alias_type,plc_models FROM fact_aliases ORDER BY alias,opcode'):
             if plc_model and not core._scope_matches(row['plc_models'], plc_model):
                 continue
-            if row['alias_type'] == 'opcode' and DEFAULT_INSTRUCTION_REGISTRY.resolve_form(row['alias']) is not None:
+            if row['alias_type'] == 'opcode' and DEFAULT_INSTRUCTION_REGISTRY.resolve_fact_form(row['alias']) is not None:
                 continue
             if core._alias_occurs(query, row['alias']):
                 targets.append({'opcode': row['opcode'], 'base_opcode': row['opcode'],

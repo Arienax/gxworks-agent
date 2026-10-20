@@ -786,7 +786,8 @@ class WorkbenchService:
                     snapshot["user_fact_text"] = command["text"]
                     snapshot["direct_user_facts"] = project_direct_user_facts(
                         command["text"], project["plc_model"], project.get("confirmed_spec"))
-            if context.version and context.version.get("target_mode") == "fbd":
+            if context.version and (context.version.get("target_mode") == "fbd" or
+                    context.version.get('target_mode') == 'st' and context.native_snapshot is not None):
                 raw = self.projects.artifact(project_id, context.version_id, "gxw").read_bytes()
                 snapshot["fbd_baseline"] = base64.b64encode(raw).decode("ascii")
                 snapshot["fbd_program"] = context.version.get("program_name")
@@ -901,6 +902,11 @@ class WorkbenchService:
                 repair_baseline = snapshot.get("repair_baseline") if repair_mode else None
                 repair_plan = snapshot.get("repair_plan") if repair_mode else None
                 fresh_confirmed_generation = bool(snapshot.get("fresh_confirmed_generation"))
+                st_baseline, st_context = None, None
+                if project['target_mode'] == 'st' and snapshot.get('fbd_baseline'):
+                    from gxw.st_program import project_context_snapshot
+                    st_baseline = base64.b64decode(snapshot['fbd_baseline'])
+                    st_context = project_context_snapshot(st_baseline, (version or {}).get('program_name'))
                 if repair_mode:
                     previous_json = copy.deepcopy(repair_baseline)
                 elif format_repair or fresh_confirmed_generation:
@@ -928,12 +934,24 @@ class WorkbenchService:
                     image_attachments=images, model_name=snapshot.get("model", {}).get("model"),
                     response_language=language, construction_examples=snapshot.get("construction_examples"),
                     fresh_confirmed_generation=fresh_confirmed_generation,
-                    direct_generation=kind == "direct_generation")
+                    direct_generation=kind == "direct_generation",
+                    st_native_baseline=st_baseline, st_project_context=st_context)
                 metadata = GenerationWorkflow(request, out_dir, ctx.emit, GenerationDependencies(
                     provider=provider, check_cancelled=ctx.checkpoint, preserve_rejected_candidate=True
                 )).run()
             ctx.checkpoint()
             output = {"generation": metadata}
+            if metadata.get('native_plan') is not None:
+                # The model generated intentions. Existing native transactions
+                # own side effects and version activation after verification.
+                with self.lock.thread_lock:
+                    self._check_snapshot(snapshot)
+                    pending = dict(type='execute_native_engineering', project_id=project_id,
+                                   version_id=(version or {}).get('id'), plan=metadata['native_plan'],
+                                   st_program_name=metadata.get('candidate_program_name'), validation=metadata['validation'])
+                    proposal = self._pending_proposal(pending, ctx.job_id, base_version_id=(version or {}).get('id'))
+                output.update(proposal_id=proposal['id'], status='awaiting_native_verification')
+                return output
             if snapshot.get("generation_action"):
                 output["generation_action"] = snapshot["generation_action"]
             payload = {"project_id": project_id, "target_mode": metadata["target_mode"],
@@ -1170,9 +1188,10 @@ class WorkbenchService:
         def read_record(group, identifier):
             directory = contained(state_dir / group, state_dir)
             path = contained(directory / (identifier + '.json'), directory)
-            if not path.is_file():
-                raise KeyError(identifier)
-            record = read_json(path)
+            try:
+                record = read_json(path)
+            except FileNotFoundError:
+                raise KeyError(identifier) from None
             if record.get('id') != identifier:
                 raise ValueError('Invalid operation record')
             return record
@@ -1360,11 +1379,17 @@ class WorkbenchService:
             else:
                 from application.fbd import prepare_candidate
             candidate = prepare_candidate(directory, imported=raw, plc_model=cpu,
-                program_name=version.get('program_name'), summary='可见原生工程会话')
+                program_name=payload.get('st_program_name') or version.get('program_name'), summary='可见原生工程会话',
+                **(dict(confirmed_spec=self.store.get_project(project_id).get('confirmed_spec'),
+                        compile_status=summary['gx_compile_status'], native_receipt=receipt) if version['target_mode'] == 'st' else {}))
             validation = candidate['metadata']['validation']
             validation.update(native_save='passed', native_source_save_required=True,
                 gx_compile=summary['gx_compile_status'],
+                cold_reopen=next((r['status'] for r in summary['findings'] if r['kind'] == 'cold_reopen'), 'unverified'),
                 messages=['已核对同一原生会话保存的声明、实现、图形和配置；运行对应关系仍未验证。'])
+            if (candidate['metadata'].get('semantic_validation') or {}).get('behavior') == 'failed':
+                return {**summary, 'status': 'interrupted', 'passed': False,
+                        'validation': candidate['metadata']['semantic_validation'], 'message': '当前工程的行为检查发现反例，未激活候选版本。'}
             candidate['metadata']['generation_metadata'] = _native_generation_metadata(cpu, receipt, summary)
             saved = self.proposals.complete_native_candidate(approved_id, candidate)
         return {**summary, **saved, 'status': 'completed', 'base_version_id': base_id,
@@ -1396,15 +1421,20 @@ class WorkbenchService:
                 from application.native_st import prepare_candidate
             else:
                 from application.fbd import prepare_candidate
-            candidate = prepare_candidate(directory, imported=raw, plc_model=cpu,
-                program_name=version.get('program_name'), summary='持续原生工程阶段保存')
             current_compile = receipt.get('compile') or {}
             compile_status = (current_compile.get('status') if current_compile.get('revision') == receipt['data_revision']
                               else 'unverified')
+            candidate = prepare_candidate(directory, imported=raw, plc_model=cpu,
+                program_name=payload.get('st_program_name') or version.get('program_name'), summary='持续原生工程阶段保存',
+                **(dict(confirmed_spec=self.store.get_project(project_id).get('confirmed_spec'),
+                        compile_status=compile_status, native_receipt=receipt) if version['target_mode'] == 'st' else {}))
             candidate['metadata']['validation'].update(native_save='passed',
                 native_source_save_required=True, gx_compile=compile_status,
                 messages=['已核对本阶段保存与实际原生页面；编译和地址结果分别绑定其修订。'])
             candidate['metadata']['generation_metadata'] = _native_generation_metadata(cpu, receipt, summary)
+            if (candidate['metadata'].get('semantic_validation') or {}).get('behavior') == 'failed':
+                return {**summary, 'status': 'interrupted', 'passed': False,
+                        'validation': candidate['metadata']['semantic_validation'], 'message': '当前工程的行为检查发现反例，未激活候选版本。'}
             saved = self.proposals.complete_native_candidate(approved_id, candidate)
         self.execution.rebase_live_session(project_id, receipt['session_id'], base_id, saved['version_id'])
         summary.update(version_revision=receipt['data_revision'],

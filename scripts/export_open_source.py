@@ -24,6 +24,7 @@ ROOT_FILES = (
     "scripts/build_release.py", "scripts/build_web_package.ps1", "scripts/release_notices.py",
     "scripts/export_open_source.py",
     "scripts/release_smoke.py", "scripts/runtime_knowledge_resources.py",
+    "scripts/runtime_st_smoke.py",
     "packaging/pyinstaller/release.spec", "requirements/release.txt", "requirements/release-mcp.txt",
     "tools/build_workspace_adapter.ps1", "tools/build_active_document.ps1", "tools/build_hardware_reader.ps1",
     "tools/build_simulator_gateway.ps1",

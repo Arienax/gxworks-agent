@@ -597,7 +597,8 @@ def _engineering_native_schema():
 def _engineering_st_schema():
     commands = _engineering_authoring_commands(visible=False)
     commands = {key: commands[key] for key in ('create_st_program', 'edit_st_program')}
-    commands = {'import': _engineering_object({'data_base64': _engineering_text(),
+    commands = {'from_candidate': _engineering_object({'candidate': {'type': 'object'}}, ['candidate']),
+        'import': _engineering_object({'data_base64': _engineering_text(),
         'program': _engineering_text(maximum=512)}, ['data_base64', 'program']), **commands}
     variants = [_engineering_object({'operation': {'type': 'string', 'enum': [name]},
         **rule['properties'], 'summary': _engineering_text(empty=True)}, ['operation', *rule['required']])
@@ -1176,6 +1177,7 @@ def _get_current_program_info(
 
 def _search_plc_manual(context: ToolContext, arguments: Mapping[str, Any]) -> Dict[str, Any]:
     from knowledge.retriever import retrieve_fact_aware_knowledge
+    from knowledge.structured_facts import retrieval_coverage
     from knowledge.evidence import evidence_record
 
     query = str(arguments.get("query") or "").strip()
@@ -1221,12 +1223,14 @@ def _search_plc_manual(context: ToolContext, arguments: Mapping[str, Any]) -> Di
         results = [{**{key: copy.deepcopy(row[key]) for key in
                     ('fact_kind', 'fact_target', 'plc_models', 'instruction_opcode') if row.get(key)},
                     'text': technical_knowledge_text(row)} for row in results]
-        return {'query': query, 'plc_model': context.plc_model, 'count': len(results), 'results': results}
+        return {'query': query, 'plc_model': context.plc_model, 'count': len(results), 'results': results,
+                'coverage': retrieval_coverage(query, rows, plc_model=context.plc_model)}
     return {
         "query": query,
         "plc_model": context.plc_model,
         "count": len(results),
         "results": results,
+        "coverage": retrieval_coverage(query, rows, plc_model=context.plc_model),
         "evidence_delivery": {
             "policy": "relevance_complete_units",
             "top_k": top_k,
@@ -1240,9 +1244,17 @@ def _validate_current_program(
 ) -> Dict[str, Any]:
     if context.st_text is not None:
         from plc.st_validation import inspect_st_program
+        st_context, sources = None, None
+        if context.native_snapshot is not None:
+            from gxw.st_program import project_context_snapshot
+            from gxw.callable_sources import ProjectCallableSources
+            selected = (context.version or {}).get('program_name')
+            st_context = project_context_snapshot(context.native_snapshot, selected)
+            if selected:
+                sources = ProjectCallableSources.from_project(context.native_snapshot, selected)
         return {**inspect_st_program(context.st_text, plc_model=context.plc_model,
                     hardware_context=(_confirmed_spec(context) or {}).get('hardware_profile'),
-                    confirmed_spec=_confirmed_spec(context)),
+                    confirmed_spec=_confirmed_spec(context), project_context=st_context, callable_sources=sources),
                 "version_id": context.version_id}
     if not isinstance(context.ladder, Mapping):
         return {
@@ -1293,7 +1305,8 @@ def _validate_current_program(
     from plc.validation import SUPPORTED_PLC_MODELS
     profile_available = context.plc_model in SUPPORTED_PLC_MODELS
     conditions_unverified = any(
-        item.get('category') == 'device_applicability_unverified' for item in report.get('findings', []))
+        item.get('category') in {'device_applicability_unverified', 'instruction_constraints_unverified'} or
+        item.get('constraint_status') == 'unverified' for item in report.get('findings', []))
     available = report.get("status") != "unsupported"
     status = ('failed' if counts['error'] else 'unverified'
               if not profile_available or conditions_unverified or not available else 'passed')
@@ -1760,6 +1773,17 @@ def _create_st_candidate(context: ToolContext, arguments: Mapping[str, Any]) -> 
     from application.fbd import _native_candidate, decode_upload, pack_candidate
     from application.native_st import prepare_candidate
     operation = arguments['operation']
+    if operation == 'from_candidate':
+        from application.native_st import candidate_native_plan
+        baseline = context.native_snapshot or context.fbd_baseline
+        if baseline is None:
+            raise ValueError('ST candidate engineering requires a current saved GXW baseline')
+        prepared = candidate_native_plan(arguments['candidate'], baseline=baseline, plc_model=context.plc_model,
+                                         program_name=(context.version or {}).get('program_name'), confirmed_spec=_confirmed_spec(context))
+        result = _request_native_engineering(context, {'plan': prepared['plan']})
+        result['inspection'] = prepared['inspection']
+        result['pending_action'].update(st_program_name=prepared['candidate']['program']['name'], validation=prepared['inspection'])
+        return result
     authored = None
     if operation == 'import':
         raw, selected = decode_upload(arguments['data_base64']), arguments['program']
@@ -2105,7 +2129,7 @@ def build_default_tool_registry() -> ToolRegistry:
         {'type': 'object', 'properties': {'program': {'type': 'string'}, 'data_base64': {'type': 'string'}},
          'additionalProperties': False}, _read_st_project))
     registry.register(ToolDefinition('create_st_candidate',
-        '在当前保存 GXW 的隔离副本中创建或编辑普通 ST Program，或 import 已保存工程。create_st_program 使用 source_name/declarations/st_text，并显式指定已有 resource/task/scope_mode=existing_task；edit_st_program 用 source_name/st_text，可选 declarations。import 使用 read_st_project 返回的逻辑 program 和 data_base64。写入复用原生后台适配器及 Core 回读，不修改活动 IDE；候选经现有事务保存版本，编译和运行验证分别执行。',
+        '普通 ST Program 工程候选。from_candidate 接受 candidate v2（schema_version=2、language=st、program、declaration_edits.upserts、task_binding），绑定当前 GXW 的实际任务、声明及 CPU，检查后冻结原生创建/编辑、编译、保存与冷重开方案。也兼容 create_st_program、edit_st_program 和 import；后台写入仍使用隔离副本及 Core 回读。语法、语义、原生编译和行为状态分别记录；方案获准后沿共享原生事务交付，失败不激活版本。',
         _engineering_st_schema(),
         _create_st_candidate, confirmation_required=True))
     registry.register(ToolDefinition('read_sfc_project',

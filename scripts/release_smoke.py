@@ -85,6 +85,9 @@ def smoke_mcp(exe, scratch):
     from mcp.client.session import ClientSession
     from mcp.client.stdio import StdioServerParameters, stdio_client
     env = environment(scratch)
+    st = subprocess.run([str(exe), '--self-test-st'], cwd=scratch, env=env, capture_output=True, timeout=90)
+    assert st.returncode == 0, (st.stdout.decode(errors='replace'), st.stderr.decode(errors='replace'))
+    assert json.loads(st.stdout)['bounded_behavior'] == 'passed'
     result = subprocess.run([str(exe), "--help"], cwd=scratch, env=env, capture_output=True, timeout=30)
     assert result.returncode == 0 and not result.stdout and URL.encode() in result.stderr
     wrapper = subprocess.run([str(exe.with_suffix('.cmd')), "--help"], cwd=scratch,
@@ -134,7 +137,7 @@ def smoke_mcp(exe, scratch):
 
 def smoke_web(exe, scratch):
     env = environment(scratch)
-    for flag in ("--self-test-core", "--self-test-knowledge", "--self-test-settings", "--self-test-openai-sdk"):
+    for flag in ("--self-test-core", "--self-test-st", "--self-test-knowledge", "--self-test-settings", "--self-test-openai-sdk"):
         result = subprocess.run([str(exe), flag], cwd=scratch, env=env, capture_output=True, timeout=90)
         assert result.returncode == 0, (flag, result.stdout.decode(errors="replace"), result.stderr.decode(errors="replace"))
     with socket.socket() as listener:

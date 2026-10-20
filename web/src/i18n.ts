@@ -1,5 +1,9 @@
 export type Locale = "zh-CN" | "en" | "ja";
 const words: Record<string, [string, string]> = {
+  "ST 验证状态": ["ST verification", "ST検証状態"],
+  "语法检查": ["Syntax", "構文検査"],
+  "语义检查": ["Semantics", "意味検査"],
+  "行为验证": ["Behavior verification", "動作検証"],
   "在 GX Works2 中编辑工程": ["Edit the project in GX Works2", "GX Works2でプロジェクトを編集"],
   "建立全局标签表": ["Create a global label table", "グローバルラベル表を作成"],
   "写入全局声明": ["Write global declarations", "グローバル宣言を入力"],

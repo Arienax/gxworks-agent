@@ -187,6 +187,17 @@ def _static_findings(ladder, confirmed_spec, plc_model):
         semantic_requirements=semantic_requirements_from_spec(confirmed_spec),
     )
     findings = []
+    from plc.instruction_constraints import inspect_ladder_constraints
+    for report in inspect_ladder_constraints(ladder, plc_model=plc_model,
+            context={**(confirmed_spec or {}), 'project': (confirmed_spec or {}).get('project_context', {}),
+                     'hardware': (confirmed_spec or {}).get('hardware_profile', {})}):
+        for finding in report['findings']:
+            findings.append({'source': 'local', 'code': finding['code'],
+                'severity': 'error' if finding['severity'] == 'error' else 'info',
+                'category': 'instruction_constraints_' + report['status'],
+                'title': '指令约束检查', 'message': finding['message'],
+                'rung_ids': [report['rung_id']] if report.get('rung_id') else [],
+                'json_paths': [report['path']], 'evidence': [json.dumps(finding, ensure_ascii=False)], 'fixable': False})
     for item in (program.get("analysis") or {}).get("findings", []):
         if isinstance(item, Mapping):
             finding = dict(item, source="local")

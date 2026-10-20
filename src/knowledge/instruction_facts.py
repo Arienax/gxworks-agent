@@ -260,7 +260,7 @@ def instruction_fact_targets(query, confirmed_spec=None):
     required = contract.get("required_opcodes") or []
     route = route_analysis_request(
         query, confirmed_context=spec,
-        resolve_opcode=DEFAULT_INSTRUCTION_REGISTRY.resolve_form,
+        resolve_opcode=DEFAULT_INSTRUCTION_REGISTRY.resolve_fact_form,
     )
     requested = list(required) if isinstance(required, (list, tuple)) else []
     requested.extend(item.get('opcode') for item in spec.get('operation_intents', [])
@@ -271,7 +271,8 @@ def instruction_fact_targets(query, confirmed_spec=None):
         r"(?<!" + boundary + ")" + re.escape(op) + r"(?!" + boundary + ")", routing_text, re.I))
     # Preserve punctuation-bearing catalogue names; MOV is not a match for $MOV.
     for token in re.findall(r"(?<![A-Za-z0-9_.$@+<>!=\-])[$A-Za-z][A-Za-z0-9_.$@+<>!=\-]*", routing_text):
-        if re.search(r"[.$@+<>=!\-]", token) and DEFAULT_INSTRUCTION_REGISTRY.resolve_form(token) is not None:
+        if (not re.fullmatch(r'[A-Za-z$][A-Za-z0-9_$]*(?:\.[A-Za-z0-9_$]+)*', token)
+                and DEFAULT_INSTRUCTION_REGISTRY.resolve_fact_form(token) is not None):
             requested.append(token)
 
     seen_generic = set()

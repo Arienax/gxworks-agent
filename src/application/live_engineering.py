@@ -7,11 +7,25 @@ Native observations, stage saves and saved application versions stay distinct.
 from __future__ import annotations
 
 from copy import deepcopy
+from functools import wraps
 import json
 import re
 import threading
 
 from .native_engineering import _PRODUCT_FIELDS, _identity
+
+
+def _exclusive_operation(method):
+    """One native writer; status/pause never wait for a vendor call to return."""
+    @wraps(method)
+    def execute(self, *args, **kwargs):
+        if not self._operation_guard.acquire(blocking=False):
+            raise RuntimeError('A native session operation is already in progress')
+        try:
+            return method(self, *args, **kwargs)
+        finally:
+            self._operation_guard.release()
+    return execute
 
 
 class LiveCapabilityError(ValueError):
@@ -212,6 +226,7 @@ class LiveEngineeringSession:
         self._raw_identity = deepcopy(driver.inspect())
         self.progress, self._identity = progress, _identity(self._raw_identity, expected_cpu)
         self._guard, self._pause = threading.RLock(), threading.Event()
+        self._operation_guard = threading.Lock()
         self._context, self._pending, self._inflight = None, [], None
         self.revision, self.saved_revision, self.sequence = 0, 0, 0
         self.version_revision, self._pending_version_revision = 0, None
@@ -274,16 +289,20 @@ class LiveEngineeringSession:
 
     def _authorize_work(self, work):
         records = []
-        self._capability_authorization = {'status': 'not_required' if not work else 'checking', 'operations': records}
+        with self._guard:
+            self._capability_authorization = {'status': 'not_required' if not work else 'checking', 'operations': []}
         try:
             for command in work:
                 records.append(self._authorize_operation(command))
         except LiveCapabilityError as error:
             records.append(deepcopy(error.authorization))
-            self._capability_authorization['status'] = 'rejected'
+            with self._guard:
+                self._capability_authorization = {'status': 'rejected', 'operations': records}
             raise
         if records:
-            self._capability_authorization['status'] = ('experimental_allowed' if self._operation_authorizer is not None else 'verified')
+            with self._guard:
+                self._capability_authorization = {'status': 'experimental_allowed' if self._operation_authorizer is not None else 'verified',
+                                                  'operations': records}
 
     @staticmethod
     def _state(context):
@@ -353,14 +372,16 @@ class LiveEngineeringSession:
             return result
 
     def _changed(self):
-        self.revision += 1
-        self._compiled_save = None
-        self.compile = {'status': 'stale' if self.compile['status'] != 'not_run' else 'not_run',
-                        'revision': self.compile.get('revision'), 'execution': 'not_run'}
-        self.assignments = {'status': 'stale' if self.assignments['status'] != 'not_run' else 'not_run', 'rows': []}
-        self.save = {'status': 'stale' if self.save['status'] == 'passed' else 'not_run',
-                     'revision': self.save.get('revision')}
+        with self._guard:
+            self.revision += 1
+            self._compiled_save = None
+            self.compile = {'status': 'stale' if self.compile['status'] != 'not_run' else 'not_run',
+                            'revision': self.compile.get('revision'), 'execution': 'not_run'}
+            self.assignments = {'status': 'stale' if self.assignments['status'] != 'not_run' else 'not_run', 'rows': []}
+            self.save = {'status': 'stale' if self.save['status'] == 'passed' else 'not_run',
+                         'revision': self.save.get('revision')}
 
+    @_exclusive_operation
     def run(self, commands, controls=None):
         from gxw.live_context import prepare_live_command, verify_live_change
         controls = controls or {}
@@ -379,7 +400,8 @@ class LiveEngineeringSession:
             work = self._command_steps(commands)
         self._pause.clear()
         limit = 1 if controls.get('step_mode') else controls.get('max_steps', 256)
-        self.state, self.last_error = 'running', None
+        with self._guard:
+            self.state, self.last_error = 'running', None
         completed, saved_data, stage_context, stage_saves = 0, None, None, []
         try:
             self._check_identity()
@@ -394,14 +416,18 @@ class LiveEngineeringSession:
                 else:
                     from gxw.live_context import verify_active_saved_context
                     verify_active_saved_context(self.baseline, observed, self.baseline)
-                self._context = observed
-            self._pending = deepcopy(work)
+                with self._guard:
+                    self._context = observed
+            with self._guard:
+                self._pending = deepcopy(work)
             for index, command in enumerate(work):
                 if completed >= limit or self._pause.is_set():
-                    self.state = 'paused'
+                    with self._guard:
+                        self.state = 'paused'
                     break
                 operation = command['operation']
-                self.sequence += 1
+                with self._guard:
+                    self.sequence += 1
                 step = {'index': self.sequence, 'operation': operation, 'status': 'executing', 'revision': self.revision,
                         'target': {key: deepcopy(command[key]) for key in
                             ('source_name', 'scope', 'name', 'caller', 'instance', 'definition', 'actions', 'queries')
@@ -421,7 +447,8 @@ class LiveEngineeringSession:
                 else:
                     from gxw.live_context import verify_active_saved_context
                     verify_active_saved_context(self.baseline, before, self.baseline)
-                    self._context = deepcopy(before)
+                    with self._guard:
+                        self._context = deepcopy(before)
                 if hasattr(self.live, 'focus_target'):
                     focused = self.live.focus_target(command, before)
                     self._unchanged(before, focused)
@@ -436,37 +463,43 @@ class LiveEngineeringSession:
                 if operation == 'compile':
                     from gxw.live_context import live_compile_plan
                     native_compile_plan = live_compile_plan(self.baseline, self.revision)
-                self._inflight = {'command': deepcopy(command), 'prepared': prepared, 'before': before,
-                                  'step': deepcopy(step)}
+                with self._guard:
+                    self._inflight = {'command': deepcopy(command), 'prepared': prepared, 'before': before,
+                                      'step': deepcopy(step)}
                 observation = None
                 if operation == 'compile':
-                    self._compiled_save = None
-                    self.compile = dict(status='running', revision=self.revision, execution='not_run')
-                    if self.assignments['status'] != 'not_run':
-                        self.assignments = dict(status='stale', rows=[])
+                    with self._guard:
+                        self._compiled_save = None
+                        self.compile = dict(status='running', revision=self.revision, execution='not_run')
+                        if self.assignments['status'] != 'not_run':
+                            self.assignments = dict(status='stale', rows=[])
                     observation = self.driver.compile_current(native_compile_plan)
-                    self._inflight['observation'] = deepcopy(observation)
+                    with self._guard:
+                        self._inflight['observation'] = deepcopy(observation)
                     after = self.live.read_context()
                     from .native_engineering import compile_observation
                     self._unchanged(before, after)
-                    self.compile = compile_observation({**observation, 'source_unchanged': True},
+                    compilation = compile_observation({**observation, 'source_unchanged': True},
                         process_id=self._identity['process_id'], revision=self.revision, require_saved=False)
-                    self.compile['compile_run_id'] = observation.get('compile_run_id')
-                    self.compile['origin'] = 'current_native_compile_and_active_source'
-                    self.compile.update(identity=deepcopy(after['identity']), source_unchanged=True,
+                    compilation['compile_run_id'] = observation.get('compile_run_id')
+                    compilation['origin'] = 'current_native_compile_and_active_source'
+                    compilation.update(identity=deepcopy(after['identity']), source_unchanged=True,
                         public_checks_requested=observation.get('public_checks_requested'),
                         diagnostics=deepcopy(observation.get('diagnostics', {})))
-                    verification = deepcopy(self.compile)
+                    with self._guard:
+                        self.compile = compilation
+                    verification = deepcopy(compilation)
                     if hasattr(self.live, 'read_disk_change'):
                         native_saved = self.live.read_disk_change()
                         if native_saved is not None:
                             after['_revision'] = self.revision
                             disk_validation = self.live.acknowledge_native_save(native_saved, after, compilation=self.compile)
-                            self.saved_revision = self.revision
-                            self.native_disk_save = {'status': 'verified', 'revision': self.revision,
-                                'origin': 'native_compile', 'validation': disk_validation}
-                            self._compiled_save = dict(data=native_saved, revision=self.revision,
-                                compile_run_id=self.compile.get('compile_run_id'))
+                            with self._guard:
+                                self.saved_revision = self.revision
+                                self.native_disk_save = {'status': 'verified', 'revision': self.revision,
+                                    'origin': 'native_compile', 'validation': disk_validation}
+                                self._compiled_save = dict(data=native_saved, revision=self.revision,
+                                    compile_run_id=self.compile.get('compile_run_id'))
                     # Compiler errors are a result of this source revision;
                     # they do not undo prior successful native edits.
                 elif operation == 'show_assignments':
@@ -479,51 +512,58 @@ class LiveEngineeringSession:
                             identity=before['identity'])
                     observation = self.driver.read_assignments(command['queries'], revision=self.revision,
                         compilation=self.compile, allocation_context=allocation_context)
-                    self._inflight['observation'] = deepcopy(observation)
+                    with self._guard:
+                        self._inflight['observation'] = deepcopy(observation)
                     after = self.live.read_context()
                     self._unchanged(before, after)
-                    self.assignments = {**deepcopy(observation), 'revision': self.revision,
-                                        'compile_run_id': self.compile['compile_run_id']}
+                    with self._guard:
+                        self.assignments = {**deepcopy(observation), 'revision': self.revision,
+                                            'compile_run_id': self.compile['compile_run_id']}
                     verification = deepcopy(self.assignments)
                 elif operation == 'save':
                     from uuid import uuid4
                     save_operation_id = uuid4().hex
-                    self._inflight['save_operation_id'] = save_operation_id
+                    with self._guard:
+                        self._inflight['save_operation_id'] = save_operation_id
                     save_options = dict(operation_id=save_operation_id, compilation=self.compile)
                     if hasattr(self.live, 'read_target_context'):
                         save_options['_current_before'] = before
                     saved = self.live.stage_save(before, **save_options)
                     if (saved.get('operation_id') != save_operation_id or saved.get('save_dispatched') is not True):
                         raise ValueError('The stage save has no dispatch receipt for this operation')
-                    self._inflight['saved'] = saved
+                    with self._guard:
+                        self._inflight['saved'] = saved
                     saved_data = saved['data']
                     stage_context = deepcopy(before)
                     after = deepcopy(saved['_stage_context'])
                     self._unchanged(before, after)
                     if hasattr(self.live, 'read_disk_change') and self.live.read_disk_change() is not None:
                         raise ValueError('The native Save file changed during final readback; reconcile its original dispatch')
-                    self.saved_revision = self.revision
-                    self.native_disk_save = {'status': 'verified', 'revision': self.revision, 'origin': 'stage_save'}
-                    self.save = {'status': 'passed', 'revision': self.revision, 'operation_id': save_operation_id,
-                                 'validation': deepcopy(saved['validation'])}
-                    if self.compile.get('status') == 'passed' and self.compile.get('revision') == self.revision:
-                        self._compiled_save = dict(data=saved_data, revision=self.revision,
-                                                  compile_run_id=self.compile['compile_run_id'])
+                    with self._guard:
+                        self.saved_revision = self.revision
+                        self.native_disk_save = {'status': 'verified', 'revision': self.revision, 'origin': 'stage_save'}
+                        self.save = {'status': 'passed', 'revision': self.revision, 'operation_id': save_operation_id,
+                                     'validation': deepcopy(saved['validation'])}
+                        if self.compile.get('status') == 'passed' and self.compile.get('revision') == self.revision:
+                            self._compiled_save = dict(data=saved_data, revision=self.revision,
+                                                      compile_run_id=self.compile['compile_run_id'])
                     stage_saves.append({'revision': self.revision, 'sequence': self.sequence,
                                         'operation_id': save_operation_id,
                                         'validation': deepcopy(saved['validation'])})
                     verification = deepcopy(self.save)
                 elif operation == 'reopen':
                     self.driver.reopen()
-                    self._inflight['reopened'] = True
+                    with self._guard:
+                        self._inflight['reopened'] = True
                     after = self.live.read_context()
                     self._unchanged(before, after)
                     native_saved = self.live.read_disk_change() if hasattr(self.live, 'read_disk_change') else None
                     if native_saved is not None:
                         after['_revision'] = self.revision
                         validation = self.live.acknowledge_native_save(native_saved, after, compilation=self.compile)
-                        self.native_disk_save = dict(status='verified', revision=self.revision,
-                            origin='explicit_reopen', validation=validation)
+                        with self._guard:
+                            self.native_disk_save = dict(status='verified', revision=self.revision,
+                                origin='explicit_reopen', validation=validation)
                     verification = {'status': 'matched', 'reopen': 'same_process', 'revision': self.revision}
                 else:
                     observation = self.live.apply(command, prepared)
@@ -531,52 +571,59 @@ class LiveEngineeringSession:
                     verification = verify_live_change(before, after, command, prepared)
                     if verification.get('status') not in ('matched', 'verified'):
                         raise RuntimeError('The requested native edit has no confirmed Core readback')
-                    if self._meaning(before) != self._meaning(after):
-                        self._changed()
                 self._check_identity()
-                after['_revision'] = self.revision
-                self._context, self._inflight = after, None
-                self._pending = deepcopy(work[index+1:])
-                step.update(status='completed', revision=self.revision, verification=deepcopy(verification))
-                self.history.append(deepcopy(step))
+                changed = prepared is not None and self._meaning(before) != self._meaning(after)
+                with self._guard:
+                    if changed:
+                        self._changed()
+                    after['_revision'] = self.revision
+                    self._context, self._inflight = after, None
+                    self._pending = deepcopy(work[index+1:])
+                    step.update(status='completed', revision=self.revision, verification=deepcopy(verification))
+                    self.history.append(deepcopy(step))
                 if hasattr(self.live, 'show_completion'):
                     step['visible_completion'] = self.live.show_completion(command, prepared,
                         observation if operation != 'save' else verification)
-                    self.history[-1] = deepcopy(step)
+                    with self._guard:
+                        self.history[-1] = deepcopy(step)
                 completed += 1
                 self._emit(step)
                 dwell = controls.get('dwell_ms', 0) / 1000
                 if dwell:
                     self._pause.wait(dwell)
             else:
-                self.state = 'ready'
+                with self._guard:
+                    self.state = 'ready'
             executed = deepcopy(result['steps'])
             result.update(self.status(), passed=True, status='paused' if self._pending else 'completed',
                           executed_steps=executed, stage_saves=stage_saves)
             if saved_data is not None:
                 data_revision = stage_saves[-1]['revision']
-                self._pending_version_revision = data_revision
+                with self._guard:
+                    self._pending_version_revision = data_revision
                 result.update(data=saved_data, data_status='verified_stage_save', data_revision=data_revision,
                               _stage_context=stage_context, _stage_compile=deepcopy(saved.get('_stage_compile')))
         except Exception as error:
             # Never send an engineering action again to discover whether the
             # first one completed. Rebinding inspects the same current target.
-            self.state = 'unconfirmed' if self._inflight is not None else 'failed'
-            self.last_error = {'type': type(error).__name__, 'message': str(error)}
-            if isinstance(error, LiveCapabilityError):
-                self._capability_authorization['status'] = 'rejected'
-                self.last_error['capability_authorization'] = deepcopy(error.authorization)
-                if result['steps']:
-                    result['steps'][-1]['capability_authorization'] = deepcopy(error.authorization)
-            self._private_native_error = deepcopy(getattr(error, 'observation', None))
-            if result['steps'] and result['steps'][-1]['status'] == 'executing':
-                result['steps'][-1].update(status='unconfirmed' if self._inflight else 'failed',
-                                           message=str(error))
-                self.history.append(deepcopy(result['steps'][-1]))
+            with self._guard:
+                self.state = 'unconfirmed' if self._inflight is not None else 'failed'
+                self.last_error = {'type': type(error).__name__, 'message': str(error)}
+                if isinstance(error, LiveCapabilityError):
+                    self._capability_authorization['status'] = 'rejected'
+                    self.last_error['capability_authorization'] = deepcopy(error.authorization)
+                    if result['steps']:
+                        result['steps'][-1]['capability_authorization'] = deepcopy(error.authorization)
+                self._private_native_error = deepcopy(getattr(error, 'observation', None))
+                if result['steps'] and result['steps'][-1]['status'] == 'executing':
+                    result['steps'][-1].update(status='unconfirmed' if self._inflight else 'failed',
+                                               message=str(error))
+                    self.history.append(deepcopy(result['steps'][-1]))
             executed = deepcopy(result['steps'])
             result.update(self.status(), passed=False, executed_steps=executed, stage_saves=stage_saves)
         return result
 
+    @_exclusive_operation
     def rebind(self):
         pending = self.live.pending_operations()
         if any(row.get('status') == 'running' for row in pending):
@@ -585,6 +632,7 @@ class LiveEngineeringSession:
         current = self.live.rebind(self._raw_identity)
         current['_revision'] = self.revision
         recovered_data = None
+        applied = changed = False
         if self._inflight is not None:
             from gxw.live_context import verify_live_change
             inflight = self._inflight
@@ -609,25 +657,29 @@ class LiveEngineeringSession:
                             'current_context': self._state(current)}
                 verification = {'status': 'not_applied', 'replayed': False}
             else:
-                if self._meaning(current) != self._meaning(inflight['before']):
-                    self._changed()
-                if self._pending:
-                    self._pending.pop(0)
-            reconciled = {**inflight['step'], 'status': 'reconciled', 'revision': self.revision,
-                          'verification': verification, 'replayed': False}
-            if recovered_data is not None:
-                reconciled['status'] = 'completed'
-            self.history.append(reconciled)
-            self._inflight = None
+                applied = True
+                changed = self._meaning(current) != self._meaning(inflight['before'])
         elif self._context is not None:
             try:
                 self._unchanged(self._context, current)
             except ValueError:
                 return {**self.status(), 'status': 'unconfirmed', 'passed': False, 'replayed': False}
-        self._context, self.state, self.last_error = current, 'paused' if self._pending else 'ready', None
-        result = {**self.status(), 'passed': True, 'replayed': False}
+        with self._guard:
+            if self._inflight is not None:
+                if changed:
+                    self._changed()
+                if applied and self._pending:
+                    self._pending.pop(0)
+                reconciled = {**inflight['step'], 'status': 'completed' if recovered_data is not None else 'reconciled',
+                              'revision': self.revision, 'verification': verification, 'replayed': False}
+                self.history.append(reconciled)
+                self._inflight = None
+            current['_revision'] = self.revision
+            self._context, self.state, self.last_error = current, 'paused' if self._pending else 'ready', None
+            if recovered_data is not None:
+                self._pending_version_revision = self.revision
+            result = {**self.status(), 'passed': True, 'replayed': False}
         if recovered_data is not None:
-            self._pending_version_revision = self.revision
             result.update(data=recovered_data, data_status='verified_stage_save', data_revision=self.revision,
                 _stage_context=deepcopy(current), executed_steps=[deepcopy(reconciled)],
                 _stage_compile=deepcopy(self.compile),
@@ -649,25 +701,28 @@ class LiveEngineeringSession:
                 process_id=self._identity['process_id'], revision=self.revision, require_saved=False)
             if verified['status'] not in ('passed', 'failed'):
                 raise ValueError('The original native compile has not completed')
-            self.compile = {**verified, 'compile_run_id': observed['compile_run_id'],
-                            'origin': 'current_native_compile_and_active_source',
-                            'identity': deepcopy(current['identity']), 'source_unchanged': True,
-                            'public_checks_requested': observed.get('public_checks_requested'),
-                            'diagnostics': deepcopy(observed.get('diagnostics', {}))}
+            with self._guard:
+                self.compile = {**verified, 'compile_run_id': observed['compile_run_id'],
+                                'origin': 'current_native_compile_and_active_source',
+                                'identity': deepcopy(current['identity']), 'source_unchanged': True,
+                                'public_checks_requested': observed.get('public_checks_requested'),
+                                'diagnostics': deepcopy(observed.get('diagnostics', {}))}
             raw = self.live.read_disk_change()
             if raw is not None:
                 validation = self.live.acknowledge_native_save(raw, current, compilation=self.compile)
-                self.saved_revision = self.revision
-                self.native_disk_save = dict(status='verified', revision=self.revision,
-                    origin='native_compile', validation=validation)
-                self._compiled_save = dict(data=raw, revision=self.revision,
-                    compile_run_id=observed['compile_run_id'])
+                with self._guard:
+                    self.saved_revision = self.revision
+                    self.native_disk_save = dict(status='verified', revision=self.revision,
+                        origin='native_compile', validation=validation)
+                    self._compiled_save = dict(data=raw, revision=self.revision,
+                        compile_run_id=observed['compile_run_id'])
             return deepcopy(self.compile), None
         if operation == 'show_assignments':
             if not isinstance(observed, dict) or self.compile.get('revision') != self.revision:
                 raise ValueError('The interrupted address query has no bound observation')
-            self.assignments = {**deepcopy(observed), 'revision': self.revision,
-                                'compile_run_id': self.compile.get('compile_run_id')}
+            with self._guard:
+                self.assignments = {**deepcopy(observed), 'revision': self.revision,
+                                    'compile_run_id': self.compile.get('compile_run_id')}
             return deepcopy(self.assignments), None
         if operation == 'save':
             from gxw.live_context import verify_active_saved_context
@@ -690,12 +745,13 @@ class LiveEngineeringSession:
                 raise ValueError('The interrupted Save has no independently observed saved bytes')
             validation = verify_active_saved_context(raw, current, self.baseline, compilation=self.compile)
             self.live.acknowledge_native_save(raw, current, compilation=self.compile)
-            self.saved_revision = self.revision
-            self.native_disk_save = dict(status='verified', revision=self.revision, origin='reconciled_stage_save')
-            self.save = dict(status='passed', revision=self.revision, operation_id=operation_id, validation=validation)
-            if self.compile.get('status') == 'passed' and self.compile.get('revision') == self.revision:
-                self._compiled_save = dict(data=raw, revision=self.revision,
-                    compile_run_id=self.compile['compile_run_id'])
+            with self._guard:
+                self.saved_revision = self.revision
+                self.native_disk_save = dict(status='verified', revision=self.revision, origin='reconciled_stage_save')
+                self.save = dict(status='passed', revision=self.revision, operation_id=operation_id, validation=validation)
+                if self.compile.get('status') == 'passed' and self.compile.get('revision') == self.revision:
+                    self._compiled_save = dict(data=raw, revision=self.revision,
+                        compile_run_id=self.compile['compile_run_id'])
             return deepcopy(self.save), raw
         if operation == 'reopen' and inflight.get('reopened'):
             raw = self.live.read_disk_change()
@@ -704,11 +760,13 @@ class LiveEngineeringSession:
             return dict(status='matched', revision=self.revision, reopen='same_process'), None
         raise ValueError('The interrupted native operation has no completion receipt')
 
+    @_exclusive_operation
     def close(self):
         pending = self.live.pending_operations()
         if any(row.get('status') == 'running' for row in pending):
             raise RuntimeError('The original native child is still running; inspect it before ending the controller')
         self.live.close()
         self.driver.close()
-        self.closed, self.state = True, 'ended'
+        with self._guard:
+            self.closed, self.state = True, 'ended'
         return {**self.status(), 'passed': True}

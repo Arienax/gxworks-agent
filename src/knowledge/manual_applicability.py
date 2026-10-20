@@ -83,6 +83,13 @@ def source_instruction_symbols(text, outline=""):
     symbol = r"[A-Z][A-Z0-9_.$]*"
     declarations = []
     leaf = str(outline or "").split(" > ")[-1]
+    # Structured function chapters declare their callable form before '/'.
+    # Preserve the enable form as a separate identity, just as '(P)' forms.
+    heading = re.match(r'^\d+(?:\.\d+)+\s+([A-Z][A-Z0-9_]*)(\(_E\))?\s*/', leaf)
+    if heading:
+        declarations.append(heading[1])
+        if heading[2]:
+            declarations.append(heading[1] + '_E')
     # A numbered instruction section may name its literal form in parentheses.
     if re.match(r"^\d+(?:\.\d+)+\s", leaf):
         declarations.extend(re.findall(r"\((" + symbol + r"(?:\(P\))?)\)\s*$", leaf))
@@ -252,7 +259,8 @@ def apply_manual_scope(connection, spec, source, *, pdf_path=None, page_headers=
                 if header is not None:
                     add_header(outline, header, page_number)
                 page.flush_cache()
-    stats = {'headers': len(anchors), 'scoped_chunks': 0, 'conditional_chunks': 0, 'unknown_chunks': 0}
+    stats = {'headers': len(anchors), 'scoped_chunks': 0, 'conditional_chunks': 0, 'unknown_chunks': 0,
+             'applicability_layout': layout}
     for row in connection.execute('SELECT id,outline_path FROM chunks WHERE manual_id=?', (spec.id,)).fetchall():
         chunk_id, outline = row
         parents = [key for key in anchors if outline == key or outline.startswith(key + ' > ')]

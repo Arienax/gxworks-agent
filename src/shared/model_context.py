@@ -48,11 +48,48 @@ _REVIEW_STATES = frozenset({
 })
 
 
+def _technical_facts(groups):
+    """Keep prerequisite meaning while removing backend fact identities."""
+    by_id = {fact['id']: fact for fact in groups if fact.get('id')}
+    facts, unresolved, seen = [], [], set()
+    for fact in groups:
+        dimension = str(fact.get('dimension') or '')
+        if dimension == 'identity.source_model_mark':
+            continue
+        if fact.get('status') in {'unknown', 'conflict', 'not_applicable'}:
+            unresolved.append(dimension)
+            continue
+        item = {key: technical_value(fact[key]) for key in
+                ('dimension', 'value', 'scope', 'conditions', 'requires') if key in fact}
+        dependencies = []
+        for identity in fact.get('depends_on', ()):
+            dependency = by_id.get(identity)
+            if dependency is None:
+                unresolved.append('missing_prerequisite')
+                continue
+            value = dependency.get('value', {})
+            dependencies.append({'dimension': dependency.get('dimension'),
+                **{key: technical_value(value[key]) for key in ('phase', 'rule') if key in value}})
+        if dependencies:
+            item['requires'] = dependencies
+        identity = json.dumps(item, sort_keys=True, ensure_ascii=False)
+        if identity not in seen:
+            seen.add(identity)
+            facts.append(item)
+    return facts, list(dict.fromkeys(unresolved))
+
+
 def technical_value(value):
     """Detach structured technical values from automatically attached audits."""
     if isinstance(value, Mapping):
         result = {}
+        fact_groups = value.get('facts')
+        fact_container = isinstance(fact_groups, list) and all(isinstance(f, Mapping) and 'dimension' in f for f in fact_groups)
+        unresolved = []
         for key, item in value.items():
+            if key == 'facts' and fact_container:
+                result['facts'], unresolved = _technical_facts(item)
+                continue
             if key in {'verification', 'validation'} and isinstance(item, Mapping):
                 # Required native-save routing is an operational constraint,
                 # separate from the attached checks and their outcomes.
@@ -71,6 +108,8 @@ def technical_value(value):
                     result['additional_conditions'] = 'not_established'
                 continue
             result[key] = technical_value(item)
+        if unresolved:
+            result['unresolved_aspects'] = list(dict.fromkeys([*result.get('unresolved_aspects', []), *unresolved]))
         return result
     if isinstance(value, (list, tuple)):
         return [technical_value(item) for item in value]
@@ -82,23 +121,6 @@ def technical_fact_packet(packet):
     result = {key: technical_value(packet[key]) for key in ('kind', 'target', 'scope') if key in packet}
     raw = packet.get('value')
     value = technical_value(raw)
-    if isinstance(raw, Mapping) and isinstance(raw.get('facts'), list):
-        facts, unresolved, seen = [], [], set()
-        for fact in raw['facts']:
-            dimension = str(fact.get('dimension') or '')
-            if dimension == 'identity.source_model_mark':
-                continue  # A highlight observation is audit data, not CPU support.
-            if fact.get('status') in {'unknown', 'conflict', 'not_applicable'}:
-                unresolved.append(dimension)
-                continue
-            item = {key: technical_value(fact[key]) for key in ('dimension', 'value', 'scope', 'conditions') if key in fact}
-            identity = json.dumps(item, sort_keys=True, ensure_ascii=False)
-            if identity not in seen:
-                seen.add(identity)
-                facts.append(item)
-        value['facts'] = facts
-        if unresolved:
-            value['unresolved_aspects'] = list(dict.fromkeys(unresolved))
     if packet.get('content_origin') == 'original_case' and isinstance(value, Mapping):
         value = {key: value[key] for key in ('requirement', 'models', 'family', 'program') if key in value}
     result['value'] = value

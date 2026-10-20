@@ -56,17 +56,15 @@ class ProjectService:
 
     def raw_project(self, project_id: str) -> dict:
         record_id(project_id)
-        path = contained(self.store.project_path(project_id), self.workspace)
+        contained(self.store.project_path(project_id), self.workspace)
         project = self.store.get_project(project_id)
-        if not path.is_file() or not isinstance(project, dict) or project.get("id") != project_id:
+        if not isinstance(project, dict) or project.get("id") != project_id:
             raise KeyError("Project not found")
         return project
 
     def list_projects(self) -> list[dict]:
-        if not self.store.index_path.exists():
-            return []
         contained(self.store.index_path, self.workspace)
-        index = self.store._read_json(self.store.index_path, {})
+        index = self.store._load_index()
         result = []
         for project_id in index.get("projects", []):
             result.append(self.project(project_id, detail=False))

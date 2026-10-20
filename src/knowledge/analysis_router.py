@@ -251,6 +251,9 @@ def has_generation_fact_target(query):
     absent lookup targets mean empty evidence, not an unsupported program.
     """
     from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
-    route = route_analysis_request(query, resolve_opcode=DEFAULT_INSTRUCTION_REGISTRY.resolve_form)
-    return bool(route.opcodes or route.devices or route.topics
-                or _GENERATION_FACT_TOPIC.search(str(query or "")))
+    route = route_analysis_request(query, resolve_opcode=DEFAULT_INSTRUCTION_REGISTRY.resolve_fact_form)
+    if (route.opcodes or route.devices or route.topics
+            or _GENERATION_FACT_TOPIC.search(str(query or ""))):
+        return True
+    from knowledge.structured_facts import structured_fact_targets
+    return bool(structured_fact_targets(query).get('language_features'))
