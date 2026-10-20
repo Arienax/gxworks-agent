@@ -89,7 +89,7 @@ class ActiveDocumentAdapter:
         target = resolve(before, anchor)
         if target['network'] != before['active_network']:
             raise NativeEngineeringDriverError('目标网络当前未激活；尚未执行选择或修改。')
-        request = {'protocol_version': 1, 'operation': 'select_graph_element',
+        request = {'protocol_version': 2, 'operation': 'select_graph_element',
                    **{key: before['identity'][key] for key in ('process_id', 'window_handle', 'process_started', 'executable')},
                    'document_handle': before['document_handle'], 'document_title': driver._active_document().window_text(),
                    'view_handle': before['view_handle'], 'data_id': before['data_id'], 'target': target}
@@ -324,6 +324,15 @@ class ActiveDocumentAdapter:
         try:
             stdout, _ = child.communicate(json.dumps(request, ensure_ascii=False), timeout=self.timeout)
         except subprocess.TimeoutExpired as error:
+            if request.get('protocol_version') == 2 and request['operation'] == 'select_graph_element':
+                # V2 requires a kernel lease or an independent guardian. Stop
+                # the writer before recovery; never replay a partial selection.
+                child.kill()
+                child.communicate()
+                raise NativeEngineeringDriverError('活动文档选择超时，执行进程已停止；需重新读取目标状态。',
+                    observation={'status': 'unconfirmed', 'operation': request['operation'],
+                                 'child_process_id': child.pid, 'child_terminated': True,
+                                 'native_mutation_may_have_started': True}) from error
             # The child may be inside a bounded critical section that suspends
             # the owned GX UI. Killing it would bypass its finally/ResumeThread.
             # Keep its live handle and reader threads; no mutation is replayed.
@@ -357,7 +366,9 @@ class ActiveDocumentAdapter:
         try:
             result = json.loads(stdout.lstrip('\ufeff'))
         except (ValueError, TypeError):
-            raise NativeEngineeringDriverError('活动文档适配器未返回完整结果。') from None
+            raise NativeEngineeringDriverError('活动文档适配器未返回完整结果。', observation={
+                'status': 'unconfirmed' if request.get('operation') == 'select_graph_element' else 'failed',
+                'native_mutation_may_have_started': request.get('operation') == 'select_graph_element'}) from None
         if not isinstance(result, dict):
             raise NativeEngineeringDriverError('活动文档适配器返回了无效结果类型。')
         if (returncode or result.get('status') != 'observed'

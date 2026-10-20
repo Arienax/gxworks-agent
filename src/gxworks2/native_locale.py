@@ -42,7 +42,7 @@ def language_from_satellites(paths, executable):
     return next(iter(observed.values()))
 
 
-def inspect_native_language(process_id, executable):
+def _loaded_resource_paths(process_id):
     import pywintypes
     import win32api
     import win32process
@@ -62,7 +62,23 @@ def inspect_native_language(process_id, executable):
                     raise
     finally:
         handle.Close()
-    return language_from_satellites(paths, executable)
+    return paths
+
+
+def inspect_native_language(process_id, executable):
+    return language_from_satellites(_loaded_resource_paths(process_id), executable)
+
+
+def native_resource_path(process_id, executable, stem):
+    """Resolve a satellite actually loaded by the bound IDE, never a nearby DLL."""
+    paths = _loaded_resource_paths(process_id)
+    language = language_from_satellites(paths, executable)
+    codepage = {'en': 1252, 'ja': 932, 'zh-CN': 936}[language]
+    expected = Path(executable).resolve().parent / (stem + '_RC_' + str(codepage) + '.dll')
+    matches = {Path(path).resolve() for path in paths if str(Path(path).resolve()).casefold() == str(expected).casefold()}
+    if len(matches) != 1:
+        raise GXWFormatError('The bound IDE has no unique loaded native resource module')
+    return matches.pop()
 
 
 _CAPTIONS = {

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 from pathlib import Path
 import shutil
@@ -47,6 +48,11 @@ def _clean_native_temp(pid, token):
 
 
 def _run_native_adapter(executable, request, root, timeout, error_type):
+    # The outer process deadline also covers a COM call that never returns,
+    # where the adapter's bounded progress iterator cannot run another check.
+    timeout = 300.0 if timeout is None else float(timeout)
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise ValueError('Native workspace timeout must be finite and positive')
     token = request['owner_token']
     wire_request = workspace_business_request(request)
     if request['operation'] not in ('validate_project','export_library','read_sfc_graph'):
@@ -55,7 +61,7 @@ def _run_native_adapter(executable, request, root, timeout, error_type):
         gui = gui_application_save_plan((root/'input.gxw').read_bytes(), request['source'])
         if gui is not None:
             wire_request['change']['gui_application'] = b64encode(gui).decode('ascii')
-    deadline = None if timeout is None else time.monotonic() + timeout
+    deadline = time.monotonic() + timeout
     for attempt in range(3):
         try:
             process = subprocess.Popen([str(executable)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -66,7 +72,7 @@ def _run_native_adapter(executable, request, root, timeout, error_type):
         try:
             try:
                 stdout, _ = process.communicate(json.dumps(wire_request, ensure_ascii=False),
-                                                timeout=None if deadline is None else max(0, deadline - time.monotonic()))
+                                                timeout=max(0, deadline - time.monotonic()))
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.communicate()

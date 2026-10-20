@@ -23,8 +23,6 @@ namespace PlcAi.NativeAdapter
         [DllImport("kernel32.dll", SetLastError=true)] static extern bool WriteProcessMemory(IntPtr process, IntPtr address, byte[] buffer, UIntPtr size, out UIntPtr written);
         [DllImport("kernel32.dll", SetLastError=true)] static extern IntPtr OpenThread(uint access,bool inherit,uint thread);
         [DllImport("kernel32.dll")] static extern uint GetProcessIdOfThread(IntPtr thread);
-        [DllImport("kernel32.dll",SetLastError=true)] static extern uint SuspendThread(IntPtr thread);
-        [DllImport("kernel32.dll",SetLastError=true)] static extern uint ResumeThread(IntPtr thread);
         [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint pid);
         [DllImport("user32.dll")] static extern bool IsChild(IntPtr parent, IntPtr child);
         [DllImport("user32.dll")] static extern bool IsWindow(IntPtr window);
@@ -474,6 +472,7 @@ namespace PlcAi.NativeAdapter
         }
         static Dictionary<string,object> SelectElement(IDictionary<string,object> request)
         {
+            if ((int)request["protocol_version"] != 2) throw new ArgumentException("selection_requires_crash_safe_protocol_v2");
             var before=Snapshot(request);
             object rawTarget; var target=request.TryGetValue("target",out rawTarget)?rawTarget as IDictionary<string,object>:null;
             if(target==null || (target.Count!=3 && target.Count!=4) || !(target["network"] is int) || !(target["index"] is int)) throw new ArgumentException("invalid_selection_target");
@@ -505,16 +504,13 @@ namespace PlcAi.NativeAdapter
                     throw new InvalidOperationException("native_inline_editor_pending");
                 if(memory.U32(Convert.ToUInt32(modules["ed_fbd.dll"])+0x69454)!=0)
                     throw new InvalidOperationException("native_network_clipboard_pending");
-                IntPtr ui=OpenThread(0x42,false,Convert.ToUInt32(before["ui_thread"]));
+                IntPtr ui=OpenThread(0x62,false,Convert.ToUInt32(before["ui_thread"]));
                 if(ui==IntPtr.Zero) throw new InvalidOperationException("open_owned_ui_thread_failed");
-                bool suspended=false;
+                NativeUiLease lease=null;
                 try
                 {
                     if(GetProcessIdOfThread(ui)!=pid) throw new InvalidOperationException("ui_thread_owner_changed");
-                    uint previous=SuspendThread(ui);
-                    if(previous==0xffffffff) throw new InvalidOperationException("suspend_owned_ui_failed");
-                    suspended=true; OwnUiSuspendBalanced=false;
-                    if(previous!=0) throw new InvalidOperationException("owned_ui_was_already_suspended");
+                    lease=new NativeUiLease(ui,pid); OwnUiSuspendBalanced=false;
                     // No GUI messages while suspended. Re-derive the complete
                     // current membership and compare full records before writes.
                     VerifyCurrentMembership(memory,before,network);
@@ -524,6 +520,7 @@ namespace PlcAi.NativeAdapter
                         throw new InvalidOperationException("native_network_clipboard_changed_before_selection");
                     foreach(var element in elements)
                     {
+                        lease.Check();
                         uint address=Convert.ToUInt32(element["address"]); string original=(string)element["record"];
                         byte[] raw=memory.Read(address,original.Length/2);
                         if(Hex(raw)!=original || raw.Length<18 || raw[0x10]>1 || raw[0x11]>1)
@@ -534,12 +531,14 @@ namespace PlcAi.NativeAdapter
                     }
                     foreach(var change in changes)
                     {
+                        lease.Check();
                         MutationMayHaveStarted=true;
                         memory.SelectMarker(Convert.ToUInt32(change["address"]),(byte[])change["state"],(bool)change["selected"]);
                         SelectionWritesCompleted++;
                     }
                     foreach(var element in elements)
                     {
+                        lease.Check();
                         byte[] expected=new byte[((string)element["record"]).Length/2];
                         for(int i=0;i<expected.Length;i++) expected[i]=Convert.ToByte(((string)element["record"]).Substring(i*2,2),16);
                         expected[0x10]=expected[0x11]=Object.ReferenceEquals(element,selected)?(byte)1:(byte)0;
@@ -549,10 +548,11 @@ namespace PlcAi.NativeAdapter
                 }
                 finally
                 {
-                    uint resumed=1;
-                    if(suspended) { resumed=ResumeThread(ui); OwnUiSuspendBalanced=resumed!=0xffffffff; }
-                    CloseHandle(ui);
-                    if(suspended && (!OwnUiSuspendBalanced || resumed!=1)) throw new InvalidOperationException("owned_ui_suspend_balance_not_confirmed");
+                    try
+                    {
+                        if(lease!=null) { lease.Dispose(); OwnUiSuspendBalanced=lease.Balanced; }
+                    }
+                    finally { CloseHandle(ui); }
                 }
             }
             InvalidateRect(new IntPtr(view),IntPtr.Zero,true);
@@ -571,15 +571,17 @@ namespace PlcAi.NativeAdapter
             after["own_ui_suspend_balanced"]=OwnUiSuspendBalanced;
             return after;
         }
-        static int Main()
+        static int Main(string[] args)
         {
+            if(args.Length>0 && args[0]=="--selection-guardian") return NativeUiLease.RunGuardian(args);
             Console.InputEncoding=new UTF8Encoding(false); Console.OutputEncoding=new UTF8Encoding(false);
             var json=new JavaScriptSerializer { MaxJsonLength=32*1024*1024 };
             try
             {
                 string input=Console.In.ReadToEnd(); if(input.Length>65536) throw new ArgumentException("native_request_too_large");
                 var request=json.DeserializeObject(input) as IDictionary<string,object>;
-                if(request==null || !request.ContainsKey("protocol_version") || !(request["protocol_version"] is int) || (int)request["protocol_version"]!=1
+                if(request==null || !request.ContainsKey("protocol_version") || !(request["protocol_version"] is int)
+                    || ((int)request["protocol_version"]!=1 && (int)request["protocol_version"]!=2)
                     || (Text(request,"operation")!="read_active_graph" && Text(request,"operation")!="select_graph_element"
                         && Text(request,"operation")!="read_active_labels")) throw new ArgumentException("unsupported_active_document_request");
                 string operation=Text(request,"operation");

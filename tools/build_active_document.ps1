@@ -16,6 +16,7 @@ if (-not (Test-Path -LiteralPath $compiler)) { throw "A .NET Framework C# compil
 New-Item -ItemType Directory -Path $resolvedOutput -Force | Out-Null
 $executable = Join-Path $resolvedOutput "PlcAi.ActiveDocument.exe"
 & $compiler /nologo /target:exe /platform:x86 /optimize+ "/out:$executable" /reference:System.Web.Extensions.dll `
-    (Join-Path $repositoryRoot "native_adapters\ActiveDocument.cs")
+    (Join-Path $repositoryRoot "native_adapters\ActiveDocument.cs") `
+    (Join-Path $repositoryRoot "native_adapters\NativeUiLease.cs")
 if ($LASTEXITCODE -ne 0) { throw "Active-document adapter compilation failed with exit code $LASTEXITCODE." }
 Write-Output $executable

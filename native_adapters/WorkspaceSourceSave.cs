@@ -1141,9 +1141,17 @@ namespace PlcAi.NativeAdapter
             // the observed shutdown order, before freeing call-owned BSTRs.
             foreach (IntPtr value in new[] { operations, commInsidePointer, insidePointer, workspace, commPointer, navigatorPointer })
                 if (value != IntPtr.Zero && interfaces.Remove(value)) Marshal.Release(value);
-            for (int i = interfaces.Count - 1; i >= 0; i--) Marshal.Release(interfaces[i]);
-            foreach (IntPtr value in strings) Marshal.FreeBSTR(value);
-            if (initialized) CoUninitialize();
+            while (interfaces.Count > 0)
+            {
+                int last = interfaces.Count - 1; IntPtr value = interfaces[last];
+                interfaces.RemoveAt(last); Marshal.Release(value);
+            }
+            while (strings.Count > 0)
+            {
+                int last = strings.Count - 1; IntPtr value = strings[last];
+                strings.RemoveAt(last); Marshal.FreeBSTR(value);
+            }
+            if (initialized) { initialized = false; CoUninitialize(); }
         }
         [STAThread]
         static int Main()

@@ -27,6 +27,10 @@ class GXWorks2UIAutomation(ABC):
     def inspect_project(self, session):
         """Return current project/program state without changing GX Works2."""
 
+    def inspect_simulation_project(self, session):
+        """Inspect a program for simulation without granting CSV capabilities."""
+        return self.inspect_project(session)
+
     @abstractmethod
     def export_current_program(self, session, destination):
         """Export the program for an explicit read/export request."""
@@ -176,34 +180,119 @@ class PywinautoGXWorks2UIAutomation(GXWorks2UIAutomation):
         app = self._application(session)
         return app.window(handle=session.window_handle)
 
-    @staticmethod
-    def _unique_controls(window, **criteria):
-        seen = set()
-        result = []
-        for control in window.descendants(**criteria):
-            key = getattr(control.element_info, "handle", None) or (
-                control.window_text(),
-                getattr(control.element_info, "control_type", ""),
-            )
-            if key in seen:
-                continue
-            seen.add(key)
-            result.append(control)
-        return result
+    def _foreground_native_session(self, session):
+        """Activate the bound frame using native input queues, without a mouse."""
+        import win32gui
+        import win32process
+        from .finder import GXWorks2Finder
+        current = GXWorks2Finder().find_running(process_id=session.process_id)
+        keys = ('process_id', 'window_handle', 'process_started', 'executable', 'software_version')
+        if current is None or any(getattr(current, key) != getattr(session, key) for key in keys):
+            raise RuntimeError('仿真菜单的 GX Works2 进程身份已经改变。')
+        target = int(session.window_handle)
+        if win32gui.GetForegroundWindow() == target:
+            return
+        thread = ctypes.windll.kernel32.GetCurrentThreadId()
+        foreground = win32gui.GetForegroundWindow()
+        others = {win32process.GetWindowThreadProcessId(target)[0]}
+        if foreground:
+            others.add(win32process.GetWindowThreadProcessId(foreground)[0])
+        joined = []
+        try:
+            for other in others - {thread}:
+                if ctypes.windll.user32.AttachThreadInput(thread, other, True):
+                    joined.append(other)
+            if win32gui.IsIconic(target):
+                win32gui.ShowWindow(target, 9)
+            win32gui.BringWindowToTop(target)
+            # BringWindowToTop can already activate the frame. A redundant
+            # SetForegroundWindow can report access denied even then; the
+            # actual foreground HWND, checked below, is the acknowledgement.
+            if win32gui.GetForegroundWindow() != target:
+                ctypes.windll.user32.SetForegroundWindow(target)
+            if win32gui.GetForegroundWindow() != target:
+                try:
+                    self._main_window(session).set_focus()
+                except Exception:
+                    pass
+        finally:
+            for other in reversed(joined):
+                ctypes.windll.user32.AttachThreadInput(thread, other, False)
+        if win32gui.GetForegroundWindow() != target:
+            raise RuntimeError('尚未确认已绑定的 GX Works2 仿真菜单窗口位于前台。')
 
-    def _find_menu_item(self, window, pattern, enabled=None):
-        # Keep the separate legacy simulation-popup contract. The CSV and
-        # project operations do not call this UIA helper.
+    def _open_native_debug_menu(self, session, pattern):
+        self._foreground_native_session(session)
+        window = self._main_window(session)
+        popups = self._native_popup_menu_handles(window)
+        if len(popups) == 1 and pattern.search(self._native_window_title(popups[0])):
+            return
+        import win32gui
         from pywinauto import Desktop
 
-        popup = Desktop(backend="uia").window(handle=window.handle)
-        for control in self._unique_controls(popup, control_type="MenuItem"):
-            if not pattern.search(control.window_text().strip()):
-                continue
-            if enabled is not None and bool(control.is_enabled()) != bool(enabled):
-                continue
-            return control
-        return None
+        # Codejock's MenuBar is a native child HWND. Query only its direct
+        # menu items; no accelerator can leak into an editor or an IME.
+        bars = [handle for handle in self._native_descendants(session.window_handle)
+                if win32gui.IsWindowVisible(handle)
+                and win32gui.GetClassName(handle) == 'XTPToolBar'
+                and self._native_window_title(handle) == 'MenuBar']
+        if len(bars) != 1:
+            raise RuntimeError('当前工程的原生菜单栏不唯一或尚未显示。')
+        items = Desktop(backend='uia').window(handle=bars[0]).children(control_type='MenuItem')
+        matches = [item for item in items if pattern.search(item.window_text().strip())]
+        if len(matches) != 1 or not matches[0].is_enabled():
+            raise RuntimeError('当前原生菜单栏中没有唯一、已启用的调试菜单。')
+        matches[0].invoke()
+
+    def _cancel_native_menu(self, session):
+        import win32gui
+        win32gui.PostMessage(session.window_handle, 0x001F, 0, 0)  # WM_CANCELMODE
+
+    @staticmethod
+    def _native_popup_menu_handles(window):
+        """Locate only visible Codejock popups owned by this exact frame.
+
+        Enumerating native top-level HWNDs does not enter editor accessibility
+        providers. The same native popup class is used by engineering menus.
+        """
+        import win32gui
+        import win32process
+
+        frame = int(window.handle)
+        thread, process = win32process.GetWindowThreadProcessId(frame)
+        handles = []
+
+        def visit(handle, _):
+            if (win32gui.IsWindowVisible(handle)
+                    and win32gui.GetClassName(handle) == 'XTPPopupBar'
+                    and tuple(win32process.GetWindowThreadProcessId(handle)) == (thread, process)
+                    and win32gui.GetAncestor(handle, 3) == frame):  # GA_ROOTOWNER
+                handles.append(handle)
+
+        win32gui.EnumWindows(visit, None)
+        return handles
+
+    def _find_menu_item(self, window, pattern, enabled=None):
+        # Query the popup's direct items, never the engineering frame's tree.
+        # Editor providers can otherwise block every simulation language.
+        handles = self._native_popup_menu_handles(window)
+        if not handles:
+            return None
+        if len(handles) != 1:
+            raise RuntimeError('当前工程的原生弹出菜单不唯一。')
+        from pywinauto import Desktop
+
+        popup = Desktop(backend="uia").window(handle=handles[0])
+        matches = [control for control in popup.children(control_type="MenuItem")
+                   if pattern.search(control.window_text().strip())]
+        if len(matches) > 1:
+            raise RuntimeError('当前原生弹出菜单中的目标命令不唯一。')
+        if not matches:
+            return None
+        command, = matches
+        if enabled is not None and bool(command.is_enabled()) != bool(enabled):
+            return None
+        return command
 
     def _open_edit_menu(self, window):
         # The native Alt+E accelerator opens the Codejock popup, which has no
@@ -330,6 +419,36 @@ class PywinautoGXWorks2UIAutomation(GXWorks2UIAutomation):
             "program_writable": program_writable,
             "program_name": self.read_program_name,
         }
+
+    def inspect_simulation_project(self, session):
+        state = self.inspect_project(session)
+        if (not state.get("automation_available") or not state.get("project_open")
+                or state.get("program_ready")):
+            return state
+        from .native_locale import inspect_native_language, native_tree_path
+        from gxw.native_locale import program_title
+        language = inspect_native_language(session.process_id, session.executable)
+        titles = [title.strip() for title in self._child_window_titles(session)]
+        implementations = [kind for kind in ("st", "fbd")
+                           if program_title(self.read_program_name, implementation=kind,
+                                            language=language) in titles]
+        if len(implementations) != 1:
+            return state
+        trees = [tree for tree in self._main_window(session).descendants(class_name="SysTreeView32")
+                 if tree.control_id() == 12051]
+        if len(trees) != 1:
+            return state
+        path = native_tree_path(("程序部件", "程序", self.read_program_name, "程序本体"), language)
+        try:
+            source = trees[0].get_item(path, exact=True)
+        except (IndexError, RuntimeError):
+            return state
+        profile = self._current_native_project_profile(session)
+        if source is None or profile is None or not profile.program_supported:
+            return state
+        return {**state, "program_ready": True, "read_csv_available": False,
+                "program_language": implementations[0], "cpu_menu": profile.cpu,
+                "identity_basis": "native_program_tree_editor_and_status_bar"}
 
     def inspect_read_identity(self, session):
         """Confirm an actual program-tree source and native status-bar CPU."""
@@ -1488,6 +1607,7 @@ class PywinautoGXWorks2UIAutomation(GXWorks2UIAutomation):
         Never replace an already-open project or acknowledge its save prompt.
         """
         import win32api
+        from .native_locale import inspect_native_language, native_caption
 
         path = Path(path).resolve()
         profile = native_project_profile(cpu)
@@ -1500,11 +1620,13 @@ class PywinautoGXWorks2UIAutomation(GXWorks2UIAutomation):
             raise RuntimeError("自动新建工程尚未验证此 GX Works2 版本。")
         if self._native_dialog_handles(session):
             raise RuntimeError("GX Works2有未处理的对话框，无法自动准备工程。")
+        native_ui_language = inspect_native_language(session.process_id, session.executable)
         timings = {}
         started = time.monotonic()
         main = self._main_window(session)
         self._post_native_command(session, self.NEW_PROJECT_COMMAND)
-        dialog = self._wait_legacy_dialog(session, re.compile(r"^(?:新建|New)$", re.I))
+        dialog = self._wait_legacy_dialog(session, re.compile(
+            '^' + re.escape(native_caption('新建', native_ui_language)) + '$', re.I))
         # Original controls observed in GX Works2 1.635.0.1, not positions or
         # UIA ids. Read the actual menu values before selecting exact strings.
         series = dialog.child_window(control_id=10002, class_name="ComboBox")
@@ -1551,14 +1673,15 @@ class PywinautoGXWorks2UIAutomation(GXWorks2UIAutomation):
             progress("prepare_project", "MAIN已新建，正在首次保存GX工程…")
         started = time.monotonic()
         self._post_native_command(session, self.SAVE_PROJECT_COMMAND)
-        dialog = self._wait_legacy_dialog(session, re.compile(r"^(?:工程另存为|Save Project As)$", re.I))
+        dialog = self._wait_legacy_dialog(session, re.compile(
+            '^' + re.escape(native_caption('工程另存为', native_ui_language)) + '$', re.I))
         timings["open_save_dialog"] = round((time.monotonic() - started) * 1000, 3)
         started = time.monotonic()
         self._set_legacy_file_name(dialog, path)
         deadline = time.monotonic() + self.timeout
         notices = []
         while time.monotonic() < deadline:
-            notices.extend(self._acknowledge_known_save_notices(session))
+            notices.extend(self._acknowledge_known_save_notices(session, native_ui_language=native_ui_language))
             if path.is_file() and path.stat().st_size > 0 and path.name.casefold() in main.window_text().casefold():
                 if not self._native_dialog_handles(session):
                     timings["save_new_project"] = round((time.monotonic() - started) * 1000, 3)

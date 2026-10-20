@@ -7,6 +7,7 @@ it never replaces a live project with an offline Workspace export.
 from __future__ import annotations
 
 import csv
+from contextlib import nullcontext
 import io
 import os
 from pathlib import Path
@@ -503,6 +504,14 @@ def _compile_diagnostic_rows(rows, *, native_ui_language='zh-CN'):
     if len(headers) != 1:
         return None
     header = headers[0].get('cells', [])
+    selection_column = bool(header and header[0].get('name') == '.' and header[0].get('value') == '.')
+    if selection_column:
+        # GX Works2's floating ST output grid exposes a leading selection
+        # column. It is not a diagnostic field; all semantic columns still
+        # have to match the witnessed localized header exactly.
+        if header[0].get('role') != 29:
+            return None
+        header = header[1:]
     names = [cell.get('name') or '' for cell in header]
     if tuple(name for name in names if name) != titles:
         return None
@@ -518,6 +527,11 @@ def _compile_diagnostic_rows(rows, *, native_ui_language='zh-CN'):
                 or int(value) != len(result) + 1 or int(value) > 4096):
             raise NativeEngineeringDriverError('本次编译诊断没有连续且唯一的实际行号。')
         cells = row.get('cells', [])
+        if selection_column:
+            if (not cells or cells[0].get('name') != '.' or cells[0].get('role') != 29
+                    or cells[0].get('value') is not None and not isinstance(cells[0].get('value'), str)):
+                raise NativeEngineeringDriverError('本次编译诊断的选择列归属已改变。')
+            cells = cells[1:]
         if len(cells) != len(header):
             raise NativeEngineeringDriverError('本次编译诊断的实际列数已改变。')
         fields = {}
@@ -1210,7 +1224,6 @@ class NativeEngineeringDriver:
 
     def _navigate(self, paths, title_pattern):
         self._idle()
-        self._foreground()
         import win32gui
         import win32process
         result_windows = []
@@ -1246,8 +1259,18 @@ class NativeEngineeringDriver:
                 raise NativeEngineeringDriverError('原生工程对象路径不唯一。')
             return matches[0] if matches else None
         item = self._wait(tree_item, '原生工程对象路径尚未出现。')
+        document = self._active_document()
+        if re.search(title_pattern, document.window_text()):
+            # A bound active editor can be read without stealing desktop
+            # focus or reopening it (also while Simulator2 owns the desktop).
+            return document
+        self._foreground()
         self.ui._select_native_tree_item(trees[0], item)
-        self.ui._send_tree_enter(trees[0])
+        # Reading an already-open definition must not reopen its data object.
+        # Native Enter can reload the RichEdit asynchronously even when the
+        # caption and HWND are unchanged, invalidating the following read.
+        if not self.ui._activate_native_document(self.session, re.compile(title_pattern)):
+            self.ui._send_tree_enter(trees[0])
         fb_owner = None
         if (len(paths) == 1 and len(paths[0]) == 4 and tuple(paths[0][:2]) == ('程序部件', 'FB/FUN')
                 and paths[0][3] == '程序本体'):
@@ -1290,7 +1313,31 @@ class NativeEngineeringDriver:
     def _program_page(self, name, kind='program', language='fbd'):
         owner = '程序' if kind == 'program' else 'FB/FUN'
         pattern = '^' + re.escape(self._program_title(name, kind, language)) + r'\s*$'
-        return self._navigate([('程序部件', owner, name, '程序本体')], pattern)
+        document = self._navigate([('程序部件', owner, name, '程序本体')], pattern)
+        if language != 'st':
+            return document
+        # GX exposes the MDI title before finishing the RichEdit reload. Take
+        # the source observation only after that exact editor has settled.
+        # read_st still rejects any subsequent source or identity change.
+        stable = [None, None]
+        def ready():
+            current = self._active_document()
+            if current.handle != document.handle or not re.search(pattern, current.window_text()):
+                raise NativeEngineeringDriverError('ST 页面加载期间活动对象已改变。')
+            controls = [control for control in document.descendants(class_name='RichEdit20W')
+                        if control.control_id() == 100]
+            if len(controls) != 1:
+                stable[:] = [None, None]
+                return False
+            editor, = controls
+            observation = editor.handle, editor.window_text()
+            now = time.monotonic()
+            if observation != stable[0]:
+                stable[:] = [observation, now]
+                return False
+            return now - stable[1] >= .15
+        self._wait(ready, '指定 ST 编辑器尚未完成原生文本加载。')
+        return document
 
     def focus_graph_network(self, adapter, owner, kind, network):
         """Jump once within one currently observed native graph, without Save."""
@@ -1579,27 +1626,29 @@ class NativeEngineeringDriver:
         # The only transfer file is the requested import. Reading the current
         # table and checking the result never request a CSV export.
         self._transfers += 1
-        directory = (self.evidence_directory / f'labels-{self._transfers:03d}'
-                     if self.evidence_directory else Path(tempfile.mkdtemp(prefix='gxw-visible-labels-')))
-        directory.mkdir(parents=True, exist_ok=self.evidence_directory is None)
-        path = directory / 'change.csv'
-        path.write_bytes(replacement)
-        self._command(self.ui.READ_CSV_COMMAND)
-        self._file_name(self._dialog('从CSV文件读取'), path)
-        self._confirm('读取指定的文件内容。', 6)
-        ready_since = [None]
-        def ready():
-            if self._dialogs() or not self._window().is_enabled():
-                ready_since[0] = None
-                return False
-            if ready_since[0] is None:
-                ready_since[0] = time.monotonic()
-            return time.monotonic() - ready_since[0] >= .4
-        self._wait(ready, '原生标签导入仍有提示，未确认完整写入。')
-        self._labels_page(name, scope)
-        page = '全局标签表' if scope == 'global' else name + (' 结构体成员表' if scope == 'structure' else ' 局部标签表')
-        return self._visible(page,
-                             transfer_file=str(path))
+        transfer = (nullcontext(self.evidence_directory / f'labels-{self._transfers:03d}')
+                    if self.evidence_directory is not None
+                    else tempfile.TemporaryDirectory(prefix='gxw-visible-labels-'))
+        with transfer as directory:
+            directory = Path(directory)
+            directory.mkdir(parents=True, exist_ok=self.evidence_directory is None)
+            path = directory / 'change.csv'
+            path.write_bytes(replacement)
+            self._command(self.ui.READ_CSV_COMMAND)
+            self._file_name(self._dialog('从CSV文件读取'), path)
+            self._confirm('读取指定的文件内容。', 6)
+            ready_since = [None]
+            def ready():
+                if self._dialogs() or not self._window().is_enabled():
+                    ready_since[0] = None
+                    return False
+                if ready_since[0] is None:
+                    ready_since[0] = time.monotonic()
+                return time.monotonic() - ready_since[0] >= .4
+            self._wait(ready, '原生标签导入仍有提示，未确认完整写入。')
+            self._labels_page(name, scope)
+            page = '全局标签表' if scope == 'global' else name + (' 结构体成员表' if scope == 'structure' else ' 局部标签表')
+            return self._visible(page, transfer_file=str(path))
 
     def _delete_label(self, prepared):
         """Delete the one Core-approved cursor row through the native prompt."""
@@ -2812,6 +2861,21 @@ class NativeEngineeringDriver:
         reopened = self.read_saved_project()
         if reopened != saved:
             raise NativeEngineeringDriverError('重新打开期间工程文件发生变化，需要重新核对。')
+        from gxw.fb_authoring import st_program_snapshot
+        # Caption readiness precedes loading the ordinary ST text. Observe
+        # the saved bodies in their actual editors before returning a reopen
+        # receipt; never repair or fall back to the file on a mismatch.
+        from gxw.visible_engineering import normalized_st
+        for program in st_program_snapshot(saved)['programs']:
+            def loaded(program=program):
+                try:
+                    observed = self.read_st(program['name'])
+                except NativeEngineeringDriverError as error:
+                    if str(error) == 'ST 正文在读取期间发生变化。':
+                        return False
+                    raise
+                return normalized_st(observed['st_text']) == normalized_st(program['st_text'])
+            self._wait(loaded, '冷重开后的 ST 正文尚未与保存工程一致。')
         self._visible('保存工程冷重开', path=str(self.path), same_process=True)
         return reopened
 

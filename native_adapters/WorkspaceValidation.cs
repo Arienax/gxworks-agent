@@ -15,6 +15,47 @@ namespace PlcAi.NativeAdapter
     {
         internal Dictionary<string, object> Validation;
         readonly List<object> validationEvents = new List<object>();
+        const int MaxValidationEvents = 16000, MaxValidationReports = 4096;
+        const int MaxValidationCharacters = 8 * 1024 * 1024;
+        int validationCharacters, reportCharacters, reportCount;
+        readonly System.Web.Script.Serialization.JavaScriptSerializer validationSerializer =
+            new System.Web.Script.Serialization.JavaScriptSerializer { MaxJsonLength = MaxValidationCharacters };
+        sealed class ValidationLimitException : Exception
+        {
+            internal ValidationLimitException(string reason) : base(reason) {}
+        }
+        int ValidationSize(object value)
+        {
+            try
+            {
+                return validationSerializer.Serialize(value).Length;
+            }
+            catch (InvalidOperationException)
+            {
+                throw new ValidationLimitException("native_validation_record_size_exceeded");
+            }
+        }
+        static IEnumerable<int> ValidationPolls(int timeoutMilliseconds = 120000, int maximumPolls = 2400, int intervalMilliseconds = 50)
+        {
+            var elapsed = Stopwatch.StartNew();
+            for (int poll = 1; poll <= maximumPolls; poll++)
+            {
+                if (elapsed.ElapsedMilliseconds >= timeoutMilliseconds)
+                    throw new TimeoutException("native_validation_progress_timeout");
+                yield return poll;
+                Thread.Sleep(intervalMilliseconds);
+            }
+            throw new TimeoutException("native_validation_poll_limit_exceeded");
+        }
+        void RetainReport(Dictionary<string, object> report)
+        {
+            if (++reportCount > MaxValidationReports)
+                throw new ValidationLimitException("native_validation_report_limit_exceeded");
+            int size = ValidationSize(report);
+            if (size > MaxValidationCharacters - reportCharacters)
+                throw new ValidationLimitException("native_validation_report_size_exceeded");
+            reportCharacters += size;
+        }
         string validationRoot;
         int nativeCodePage;
         List<Dictionary<string, object>> nativeReferences;
@@ -159,6 +200,8 @@ namespace PlcAi.NativeAdapter
         int lastPublicCheckHResult, lastPublicCheckCode, lastPublicCheckPercent;
         void Event(object value)
         {
+            if (validationEvents.Count >= MaxValidationEvents)
+                throw new ValidationLimitException("native_validation_event_limit_exceeded");
             var item = value as Dictionary<string, object>;
             if (item == null)
             {
@@ -166,6 +209,10 @@ namespace PlcAi.NativeAdapter
                 foreach (var property in value.GetType().GetProperties()) item[property.Name] = property.GetValue(value, null);
             }
             item["check_pass"] = validationCheckPass;
+            int size = ValidationSize(item);
+            if (size > MaxValidationCharacters - validationCharacters)
+                throw new ValidationLimitException("native_validation_event_size_exceeded");
+            validationCharacters += size;
             validationEvents.Add(item);
         }
         IntPtr Module(string name, string version, string folder)
@@ -650,7 +697,11 @@ namespace PlcAi.NativeAdapter
                     provenance = "original converter on an owned report copy; original GetProgress completion is separate" });
                 if (!originalUnchanged) throw new InvalidOperationException("native_original_check_report_changed");
             }
-            finally { DisposePublicReports(output, 1, (int)original["poll"]); Marshal.FreeCoTaskMem(copy); }
+            finally
+            {
+                try { DisposePublicReports(output, 1, (int)original["poll"]); }
+                finally { Marshal.FreeCoTaskMem(copy); }
+            }
         }
         void DisposePublicReports(IntPtr reports, int count, int poll)
         {
@@ -695,18 +746,16 @@ namespace PlcAi.NativeAdapter
             if (Marshal.ReadIntPtr(Marshal.ReadIntPtr(compiler), 40) != IntPtr.Add(module, 0x13e2e))
                 throw new InvalidOperationException("native_public_progress_entry_differs");
             var all = new List<Dictionary<string, object>>(); rejected = false;
-            // The owning process controls its deadline. Consume a native task
-            // through its terminal result instead of imposing a second cutoff.
-            for (int poll = 1; ; poll++)
+            foreach (int poll in ValidationPolls())
             {
                 Application.DoEvents(); int percent = 0, count = 0, code = 0; IntPtr reports = IntPtr.Zero;
                 int hr = Slot<CompilerProgressCall>(compiler, progressSlot)(compiler, ref percent, ref count, ref reports, ref code);
-                Event(new { operation = "Progress", poll = poll, hresult = hr, code = code, percent = percent,
-                    count = count, report_interface = "public-compiler", progress_slot = progressSlot });
                 if (count < 0 || count > 10000 || (count > 0 && reports == IntPtr.Zero))
                     throw new InvalidOperationException("native_public_report_array_extent_invalid");
                 try
                 {
+                    Event(new { operation = "Progress", poll = poll, hresult = hr, code = code, percent = percent,
+                        count = count, report_interface = "public-compiler", progress_slot = progressSlot });
                     // A failed conversion can leave a partially filled, zeroed
                     // public array. Release it but do not interpret it as a
                     // complete diagnostic list, even at terminal progress.
@@ -730,15 +779,15 @@ namespace PlcAi.NativeAdapter
                             {"arguments",arguments}, {"poll",poll}, {"report_index",i},
                             {"report_interface","public-compiler"}, {"record_size",100} };
                         if ((int)item["kind"] == 2 || ((int)item["kind"] == 1 && (int)item["code"] == 0x20)) rejected = true;
-                        rows.Add(item); all.Add(item);
+                        RetainReport(item); rows.Add(item); all.Add(item);
                     }
                     Event(new { operation = "CompilePublicReports", poll = poll, percent = percent, reports = rows,
                         report_interface = "public-compiler", record_size = 100 });
                 }
                 finally { DisposePublicReports(reports, count, poll); }
                 if (percent == 100) return all;
-                Thread.Sleep(10);
             }
+            throw new TimeoutException("native_compile_progress_incomplete");
         }
         List<Dictionary<string, object>> PollPublicCheckReports(IntPtr compiler, ObjectId target, out bool rejected, bool sfc = false)
         {
@@ -749,17 +798,17 @@ namespace PlcAi.NativeAdapter
             Validation["public_adapter_projection"] = "original_public_get_progress";
             Event(new { operation = "ProgramCheckReportContext", target = target.Words, path = "original-public-get-progress" });
             ReadCheckInput(compiler, target, "submitted", sfc);
-            for (int poll = 1; ; poll++)
+            foreach (int poll in ValidationPolls())
             {
                 Application.DoEvents(); int percent = 0, count = 0, code = 0; IntPtr reports = IntPtr.Zero;
                 int hr = Slot<CompilerProgressCall>(compiler, 40)(compiler, ref percent, ref count, ref reports, ref code);
-                Event(new { operation = "ProgramCheckOriginalProgress", target = target.Words, poll = poll,
-                    hresult = hr, code = code, percent = percent, count = count,
-                    report_interface = "public-compiler", record_size = 100 });
                 if (count < 0 || count > 10000 || (count > 0 && reports == IntPtr.Zero))
                     throw new InvalidOperationException("native_public_check_report_array_extent_invalid");
                 try
                 {
+                    Event(new { operation = "ProgramCheckOriginalProgress", target = target.Words, poll = poll,
+                        hresult = hr, code = code, percent = percent, count = count,
+                        report_interface = "public-compiler", record_size = 100 });
                     lastPublicCheckHResult = hr; lastPublicCheckCode = code; lastPublicCheckPercent = percent;
                     Check("Compiler.OriginalPublicCheckProgress", hr, code);
                     if (percent < 0 || percent > 100) throw new InvalidOperationException("native_public_check_percent_invalid");
@@ -781,7 +830,7 @@ namespace PlcAi.NativeAdapter
                             {"arguments",arguments}, {"poll",poll}, {"report_index",i},
                             {"report_interface","public-compiler"}, {"record_size",100} };
                         if ((int)item["kind"] == 2) rejected = true;
-                        rows.Add(item); all.Add(item);
+                        RetainReport(item); rows.Add(item); all.Add(item);
                     }
                     Event(new { operation = "ProgramCheckOriginalReports", target = target.Words, poll = poll,
                         percent = percent, reports = rows, report_interface = "public-compiler", record_size = 100,
@@ -792,8 +841,8 @@ namespace PlcAi.NativeAdapter
                     ReadCheckInput(compiler, target, "completed", sfc);
                     return all;
                 }
-                Thread.Sleep(10);
             }
+            throw new TimeoutException("native_public_check_progress_incomplete");
         }
 
         List<Dictionary<string, object>> PollRawReports(IntPtr compiler, ObjectId target, bool checking, out bool rejected)
@@ -802,16 +851,17 @@ namespace PlcAi.NativeAdapter
             var all = new List<Dictionary<string, object>>(); rejected = false;
             if (checking) Event(new { operation = "ProgramCheckReportContext", target = target.Words, path = "owned-native-backend" });
             if (checking) ReadCheckInput(compiler, target, "submitted");
-            for (int poll = 1; ; poll++)
+            foreach (int poll in ValidationPolls())
             {
                 Application.DoEvents(); int percent = 0, count = 0, code = 0; IntPtr reports = IntPtr.Zero;
                 int hr = Slot<CompilerProgressCall>(backend, 44)(backend, ref percent, ref count, ref reports, ref code);
-                Event(new { operation = checking ? "ProgramCheckRawProgress" : "NativeReferenceProgress", poll = poll, hresult = hr, code = code, percent = percent, count = count });
-                Check(checking ? "Compiler.CheckProgress" : "Compiler.ReferenceProgress", hr, code);
                 if (count < 0 || count > 10000 || (count > 0 && reports == IntPtr.Zero)) throw new InvalidOperationException("native_report_array_extent_invalid");
                 var rows = new List<Dictionary<string, object>>();
                 try
                 {
+                    Event(new { operation = checking ? "ProgramCheckRawProgress" : "NativeReferenceProgress", poll = poll, hresult = hr, code = code, percent = percent, count = count });
+                    Check(checking ? "Compiler.CheckProgress" : "Compiler.ReferenceProgress", hr, code);
+                    if (percent < 0 || percent > 100) throw new InvalidOperationException("native_raw_progress_invalid");
                     for (int i = 0; i < count; i++)
                     {
                         IntPtr row = IntPtr.Add(reports, i * 68); var arguments = new List<object>();
@@ -833,7 +883,7 @@ namespace PlcAi.NativeAdapter
                             {"arguments",arguments}, {"poll",poll}, {"report_index",i} };
                         if ((int)item["kind"] == 2) rejected = true;
                         if (checking) ConvertPublicCheckReport(compiler, adapter, row, target, item);
-                        rows.Add(item); all.Add(item);
+                        RetainReport(item); rows.Add(item); all.Add(item);
                     }
                     Event(new { operation = checking ? "ProgramCheckRawReports" : "NativeReferenceRawReports", poll = poll, percent = percent, reports = rows });
                 }
@@ -843,8 +893,8 @@ namespace PlcAi.NativeAdapter
                     if (checking) ReadCheckInput(compiler, target, "completed");
                     return all;
                 }
-                Thread.Sleep(10);
             }
+            throw new TimeoutException("native_raw_progress_incomplete");
         }
         static string NullableBStr(IntPtr value) { return value == IntPtr.Zero ? null : ReadBStr(value); }
         void ReadReferences(IntPtr compiler, ObjectId project)
@@ -1098,11 +1148,12 @@ namespace PlcAi.NativeAdapter
         {
             int step = (int)report["step"]; if (step < 0) return;
             string resource = (string)((Dictionary<string, object>)report["name"])["text"];
-            IntPtr location = Marshal.AllocCoTaskMem(32); int code;
+            IntPtr location = Marshal.AllocCoTaskMem(32), resourceName = IntPtr.Zero; int code;
             try
             {
+                resourceName = Marshal.StringToBSTR(resource);
                 Marshal.Copy(new byte[32], 0, location, 32);
-                int hr = Slot<LocationCall>(compiler, 100)(compiler, new NativeCodeRange { Resource = BStr(resource), Start = step, Count = 1, Timestamp = 0 }, location, out code);
+                int hr = Slot<LocationCall>(compiler, 100)(compiler, new NativeCodeRange { Resource = resourceName, Start = step, Count = 1, Timestamp = 0 }, location, out code);
                 object decoded = null, identity = null, ranges = null;
                 if (hr == 0 && code == 0)
                 {
@@ -1129,6 +1180,7 @@ namespace PlcAi.NativeAdapter
                 // Q06UDV runtime-location replay
                 // completed after retaining them until this worker's exit.
                 Marshal.FreeCoTaskMem(location);
+                Marshal.FreeBSTR(resourceName);
             }
         }
         Dictionary<string, IntPtr> ResourceCompilerContexts(IntPtr compiler, ObjectId project, List<ObjectId> targets)
@@ -1439,9 +1491,13 @@ namespace PlcAi.NativeAdapter
                 bool global = query.ContainsKey("scope") && Text(query["scope"]) == "global";
                 int keyCount = global ? 1 : 2;
                 IntPtr keys = Marshal.AllocCoTaskMem(keyCount * 5), records = IntPtr.Zero;
-                IntPtr name = BStr(Text(query["name"])), source = global ? IntPtr.Zero : BStr(Text(query["source"])); int count = 0, code;
+                IntPtr name = IntPtr.Zero, source = IntPtr.Zero; int count = 0, code;
                 try
                 {
+                    // Query keys are scoped to this call, not the adapter's
+                    // retained BSTR pool. Exactly this finally owns them.
+                    name = Marshal.StringToBSTR(Text(query["name"]));
+                    if (!global) source = Marshal.StringToBSTR(Text(query["source"]));
                     Marshal.WriteByte(keys, 0, 1); Marshal.WriteIntPtr(keys, 1, name);
                     if (!global) { Marshal.WriteByte(keys, 5, 4); Marshal.WriteIntPtr(keys, 6, source); }
                     int hr = Slot<AssignmentReadCall>(compiler, 56)(compiler, keyCount, keys, out count, out records, out code);
@@ -1483,11 +1539,12 @@ namespace PlcAi.NativeAdapter
                         instance_ranges = (object)null, reason = "resource is absent from this compilation" } });
                     continue;
                 }
-                IntPtr location = Marshal.AllocCoTaskMem(32); int code;
+                IntPtr location = Marshal.AllocCoTaskMem(32), resourceName = IntPtr.Zero; int code;
                 try
                 {
+                    resourceName = Marshal.StringToBSTR(resource);
                     Marshal.Copy(new byte[32], 0, location, 32);
-                    int hr = Slot<LocationCall>(compiler, 100)(compiler, new NativeCodeRange { Resource = BStr(resource), Start = step, Count = 1, Timestamp = 0 }, location, out code);
+                    int hr = Slot<LocationCall>(compiler, 100)(compiler, new NativeCodeRange { Resource = resourceName, Start = step, Count = 1, Timestamp = 0 }, location, out code);
                     object decoded = null, identity = null, ranges = null;
                     if (hr == 0 && code == 0)
                     {
@@ -1506,7 +1563,7 @@ namespace PlcAi.NativeAdapter
                     Event(new { operation = "NativeRequestedCodeLocation", source_location = new { resource = resource, code_step = step,
                         hresult = hr, code = code, location = decoded, source_object = identity, instance_ranges = ranges } });
                 }
-                finally { Marshal.FreeCoTaskMem(location); } // Nested vendor fields stay in this bounded worker until exit.
+                finally { Marshal.FreeCoTaskMem(location); Marshal.FreeBSTR(resourceName); } // Nested vendor fields stay in this bounded worker until exit.
             }
         }
 
