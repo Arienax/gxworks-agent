@@ -309,7 +309,15 @@ def constant_expression(node, symbols=None, seen=(), *, numeric_evaluator=None):
         return None
     if node[0] == 'unary':
         value = constant_expression(node[2], symbols, seen, numeric_evaluator=numeric_evaluator)
-        return None if value is None else -value if node[1] == '-' else +value if node[1] == '+' else not value
+        if value is None:
+            return None
+        if node[1] == 'NOT':
+            if type(value) is bool:
+                return not value
+            value_type = expression_numeric_type(node[2], symbols,
+                reference=symbols.reference if symbols else lambda _: None)
+            return value_type.decode_bits((~value) & ((1 << value_type.bits) - 1))
+        return -value if node[1] == '-' else +value
     if node[0] == 'binary':
         left, right = (constant_expression(n, symbols, seen, numeric_evaluator=numeric_evaluator) for n in node[2:4])
         if left is None or right is None or type(left) not in {int, bool, float} or type(right) not in {int, bool, float}:
@@ -783,6 +791,9 @@ class Inspector(_DeviceInspector):
         if target[0] not in {'atom', 'index', 'member'}:
             self.finding('ST_WRITE_TARGET', 'Assignment requires a writable reference', offset=target[-1])
             return
+        if target[0] == 'atom' and literal_value(target[1]) is not None:
+            self.finding('ST_WRITE_TARGET', 'Assignment requires a label or device, not a literal', offset=target[-1])
+            return
         declaration = self.reference(target, write=not initializing)
         left, right = self.value_type(target), self.value_type(value)
         if target[0] == 'atom' and DEVICE_ADDRESS_RE.fullmatch(target[1]):
@@ -903,6 +914,22 @@ class Inspector(_DeviceInspector):
         return super().call(node)
 
     def declarations(self):
+        # Structure defaults allocate storage even without an explicit variable
+        # initializer. Check them before the executor materializes that storage.
+        for fields in self.symbols.types.values():
+            if not isinstance(fields, list):
+                continue
+            for field in fields:
+                if field.initial is None:
+                    continue
+                try:
+                    expected, actual = self.declaration_type(field), self.value_type(field.initial)
+                    if expected != actual and 'unknown' not in {expected, actual} and not {expected, actual} <= {'word', 'dword', 'real'}:
+                        self.finding('ST_TYPE', 'Structure default member type differs: ' + field.name,
+                                     offset=field.initial[-1])
+                    self.initializer(field.data_type, field.initial)
+                except ValueError as error:
+                    self.finding('ST_DECLARATION', str(error), offset=field.initial[-1])
         for declaration in [*self.symbols.globals.values(), *self.symbols.locals.values()]:
             try:
                 base, _ = self.symbols.parts(declaration.data_type)
