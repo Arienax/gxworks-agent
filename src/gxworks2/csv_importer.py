@@ -925,6 +925,9 @@ def _materialize_ordered_csv_version(
     plc_model: str,
     program_name: str,
     revision: int,
+    text_encoding: str | None = None,
+    storage_context: Any = None,
+    assume_default_allocation: bool = False,
 ) -> Dict[str, Any]:
     """Strict import of an export the older graphical model cannot represent.
 
@@ -947,7 +950,10 @@ def _materialize_ordered_csv_version(
         raise GXCSVImportError(
             "无法确认该GX程序的目标CPU：请指定CPU，或提供带PLC信息行的导出文件")
     snapshot = inspect_gxworks2_csv(program_csv_path, comment_csv_path,
-                                    plc_model=selected_model, program_name=program_name)
+                                    plc_model=selected_model, program_name=program_name,
+                                    storage_context=storage_context,
+                                    assume_default_allocation=assume_default_allocation,
+                                    text_encoding=text_encoding)
     program_ir = snapshot.get("program_ir")
     if program_ir is None:
         reasons = "；".join(str(item.get("reason") or "") for item in
@@ -995,13 +1001,18 @@ def _materialize_ordered_csv_version(
     svg_path.write_text(svg_text, encoding="utf-8")
 
     write_report = write_gxworks2_csv_from_source(
-        snapshot, roundtrip_program_path, roundtrip_comment_path, plc_model=selected_model)
+        snapshot, roundtrip_program_path, roundtrip_comment_path, plc_model=selected_model,
+        storage_context=storage_context, assume_default_allocation=assume_default_allocation,
+        text_encoding=text_encoding)
     verification = verify_gxworks2_csv_source(
         snapshot,
         program_csv_path=roundtrip_program_path,
         comment_csv_path=roundtrip_comment_path,
         source_program_csv_path=program_csv_path,
         source_comment_csv_path=comment_csv_path,
+        storage_context=storage_context,
+        assume_default_allocation=assume_default_allocation,
+        text_encoding=text_encoding,
     )
     if verification["status"] != "passed":
         raise GXCSVImportError(
@@ -1114,6 +1125,9 @@ def materialize_gxworks2_version(
     plc_model: str | None = None,
     program_name: str = "MAIN",
     revision: int = 1,
+    text_encoding: str | None = None,
+    storage_context: Any = None,
+    assume_default_allocation: bool = False,
 ) -> Dict[str, Any]:
     """Create one immutable application version from a native GX export.
 
@@ -1121,6 +1135,15 @@ def materialize_gxworks2_version(
     re-serialized artifacts. When the caller does not name it, the export's own
     ``PLC信息`` line does; an export that names no CPU is reported instead of
     being materialized as FX3U.
+
+    ``text_encoding``, ``storage_context`` and ``assume_default_allocation`` are
+    the project facts a width needs beyond the CPU: the code page a string operand
+    is encoded in, the saved D/W device allocation, and whether an unstated
+    allocation may be treated as the default. They reach the ordered-source import
+    unchanged, so the width state, the export plan and the verification of a
+    materialized version match the direct CSV API. This entry never re-derives
+    them; a version materialized without them reports exactly the gaps the API
+    reports.
     """
     if not str(plc_model or "").strip():
         named = read_plc_info_target(program_csv_path)
@@ -1137,7 +1160,9 @@ def materialize_gxworks2_version(
         # an invalid document keeps its original failure.
         ordered = _materialize_ordered_csv_version(
             program_csv_path, comment_csv_path, output_dir,
-            plc_model=plc_model, program_name=program_name, revision=revision)
+            plc_model=plc_model, program_name=program_name, revision=revision,
+            text_encoding=text_encoding, storage_context=storage_context,
+            assume_default_allocation=assume_default_allocation)
         return ordered
     from rendering.ladder_svg import AdvancedSVGLadder
     from gxworks2.csv_export import generate_gx_works2_csv
