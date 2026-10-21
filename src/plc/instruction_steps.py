@@ -177,6 +177,7 @@ class StepWidthCatalog:
         self.rule_opcodes = frozenset(op for rule in self.rules for op in rule["opcodes"])
         self.variable = frozenset(rules.get("variable_opcodes", ()))
         self.aliases = dict(rules.get("aliases", {}))
+        self.device_ranges = tuple(rules.get("device_ranges", ()))
         exact = {}
         for row in rules.get("exact_forms", ()):
             opcode = self.aliases.get(str(row["opcode"]).upper(), str(row["opcode"]).upper())
@@ -225,6 +226,12 @@ class StepWidthCatalog:
         if exact is not None:
             steps, evidence = exact
             return known(steps, "exact_native_form", evidence=(evidence,) if evidence else ())
+        ranged = self._device_range_steps(op, args, model)
+        if ranged is not None:
+            outcome, detail = ranged
+            if outcome is None:
+                return _unresolved(STATUS_NO_PROFILE, detail)
+            return known(outcome, "device_range", evidence=(detail,))
         if op in self.rule_opcodes:
             matches = [rule for rule in self.rules
                        if op in rule["opcodes"]
@@ -262,6 +269,38 @@ class StepWidthCatalog:
                                requirements=("operand_encoding",))
         return known(next(iter(sizes)), "native_observation",
                      evidence=tuple(entry[2] for entry in compatible))
+
+    def _device_range_steps(self, op: str, args: Sequence[str],
+                            model: str) -> Optional[Tuple[Optional[int], str]]:
+        """Device-index step table for one direct target, or ``None`` to fall through.
+
+        The stored width of a direct bit device depends on the index range of the
+        CPU series, not on the mnemonic alone. Returns ``(steps, evidence)``, or
+        ``(None, reason)`` when the table owns the form and the index is outside
+        every range it covers.
+        """
+        if len(args) != 1:
+            return None
+        match = re.fullmatch(r"([A-Z]+)([0-9]+)", args[0])
+        if match is None:
+            return None
+        device, index = match.group(1), int(match.group(2))
+        series = fx_series(model)
+        for entry in self.device_ranges:
+            if op not in entry["opcodes"] or device not in entry["devices"]:
+                continue
+            if not (model in entry.get("models", ())
+                    or (series is not None and series in entry.get("series", ()))):
+                continue
+            for span in entry["ranges"]:
+                if int(span["from"]) <= index <= int(span["to"]):
+                    return int(span["steps"]), str(entry["evidence"])
+            if entry.get("outside", "fall_through") == "gap":
+                covered = ", ".join(f"{span['from']}-{span['to']}" for span in entry["ranges"])
+                return None, (f"{device}{index} is outside the device-range step table for "
+                              f"{model} (covered: {covered})")
+            return None
+        return None
 
     def fixed_forms(self) -> Mapping[str, Tuple[int, int]]:
         """Inspectable catalogue coverage, excluding operand-dependent forms."""
@@ -315,6 +354,24 @@ def _in_fx_family(plc_model: Any) -> bool:
     """True for an FX menu identity: the FX width rules are shared family rules."""
     profile = _native_profile(str(plc_model or "").strip().upper())
     return bool(profile is not None and profile.series[0].startswith("FX"))
+
+
+#: FX series groups whose device-index step ranges differ. The group is a
+#: property of the CPU, not of the catalogue: an FX3 range split must not reach
+#: an FX2N whose M device encoding has a different width.
+_FX_SERIES_PREFIXES = (("FX3", "FX3"), ("FX2", "FX2"), ("FX1", "FX1"),
+                       ("FX0", "FX0"), ("FXU", "FX2"))
+
+
+def fx_series(plc_model: Any) -> Optional[str]:
+    """FX series group of one identity (``FX3``, ``FX2``, ``FX1``, ``FX0``)."""
+    identity = str(plc_model or "").strip().upper()
+    if not _in_fx_family(identity):
+        return None
+    for prefix, series in _FX_SERIES_PREFIXES:
+        if identity.startswith(prefix):
+            return series
+    return None
 
 
 def _resolve_member(member: str, opcode: Any, operands: Sequence[Any], context: Any) -> StepWidth:

@@ -2214,9 +2214,9 @@
           "RST"
         ],
         "arity": 1,
-        "operands": "Y[0-7]+|S[0-9]+|M(?:[0-9]{1,3}|[0-7][0-9]{3})",
+        "operands": "Y[0-7]+",
         "steps": 1,
-        "evidence": "native encoding observation"
+        "evidence": "native-conversion-ladder-mode.json cases 12,13; native CSV alignment OUT Y5. M and S targets depend on the device index and the CPU series, so they are resolved from device_ranges instead of from this rule."
       },
       {
         "opcodes": [
@@ -2272,6 +2272,101 @@
         ],
         "steps": 2,
         "evidence": "native encoding observation"
+      }
+    ],
+    "device_ranges": [
+      {
+        "devices": [
+          "S"
+        ],
+        "opcodes": [
+          "OUT",
+          "SET",
+          "RST"
+        ],
+        "series": [
+          "FX0",
+          "FX1",
+          "FX2",
+          "FX3"
+        ],
+        "outside": "gap",
+        "ranges": [
+          {
+            "from": 0,
+            "to": 4095,
+            "steps": 2
+          }
+        ],
+        "evidence": "Mitsubishi FX3U/FX3UC Programming Manual, Basic & Applied Instruction Edition (JY997D16601-R) section 7.16: OUT/SET/RST with a direct S0-S4095 target take 2 program steps; older FX series manuals describe the same two-step direct-S form. Confirmed by a complete native FX3U CSV sample (155 instructions, END at step 306) where the 16 direct-S coils take 2 steps while S contacts stay at one step."
+      },
+      {
+        "devices": [
+          "M"
+        ],
+        "opcodes": [
+          "LD",
+          "LDI",
+          "AND",
+          "ANI",
+          "OR",
+          "ORI",
+          "OUT",
+          "SET",
+          "RST"
+        ],
+        "series": [
+          "FX3"
+        ],
+        "outside": "fall_through",
+        "ranges": [
+          {
+            "from": 0,
+            "to": 1535,
+            "steps": 1
+          },
+          {
+            "from": 1536,
+            "to": 3583,
+            "steps": 2
+          },
+          {
+            "from": 3584,
+            "to": 7679,
+            "steps": 3
+          }
+        ],
+        "evidence": "FX3 series device-range step table for a direct M target: below M1536 one step, M1536-M3583 two steps, M3584-M7679 three steps; indexes above M7679 are special relays, which keep their own observed width."
+      },
+      {
+        "devices": [
+          "M"
+        ],
+        "opcodes": [
+          "LD",
+          "LDI",
+          "AND",
+          "ANI",
+          "OR",
+          "ORI",
+          "OUT",
+          "SET",
+          "RST"
+        ],
+        "series": [
+          "FX0",
+          "FX1",
+          "FX2"
+        ],
+        "outside": "fall_through",
+        "ranges": [
+          {
+            "from": 0,
+            "to": 4095,
+            "steps": 1
+          }
+        ],
+        "evidence": "FX1S/FX1N/FX2N direct M targets take one step in the older FX manuals, and the shared native observations (SET M10, RST M2, LD M0) agree for this form; the FX3 range split does not apply to these CPUs."
       }
     ]
   }
