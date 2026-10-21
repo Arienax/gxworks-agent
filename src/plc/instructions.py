@@ -1368,6 +1368,13 @@ def generation_app_instr_mnemonics(cpu=None):
             continue
         if model and not spec.supports_cpu(model):
             continue
+        if model:
+            # A form the compiled build did not admit as a call must not be offered
+            # to the generator either; the shared spec cannot answer this, because
+            # an empty CPU scope there means "not narrowed", not "admitted".
+            owner = DEFAULT_INSTRUCTION_REGISTRY.definition_entry(mnemonic, cpu=model)
+            if isinstance(owner, Mapping) and "call_available" in owner and not owner["call_available"]:
+                continue
         result.append(mnemonic)
     return tuple(sorted(result))
 

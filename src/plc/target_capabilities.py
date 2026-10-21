@@ -69,7 +69,7 @@ def _opcode(target):
     return str(target or "").strip().upper()
 
 
-def resolve_target_applicability(target, plc_model):
+def _generic_target_applicability(target, plc_model):
     from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
 
     opcode = _opcode(target)
@@ -154,6 +154,78 @@ def resolve_target_applicability(target, plc_model):
         **({"st_call": dict(spec.st_call), "call_contract": DEFAULT_INSTRUCTION_REGISTRY.describe_call(form.opcode, cpu=model), "source_notes": spec.notes,
             "contract_sources": [dict(s) for s in spec.contract_sources]} if spec.st_call else {}),
     }
+
+
+def owner_admission(opcode, model, *, registry=None):
+    """The exact compiled owner's admission record for one literal form and CPU.
+
+    The lookup is vendor, literal form and exact CPU only: a record for another
+    model or another form says nothing about this question.
+    """
+    if registry is None:
+        from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+        registry = DEFAULT_INSTRUCTION_REGISTRY
+    entry = registry.definition_entry(
+        str(opcode or "").strip().upper(),
+        cpu=str(model or "").strip().upper(),
+        vendor="mitsubishi",
+    )
+    if not isinstance(entry, Mapping) or "call_available" not in entry:
+        return None
+    return entry
+
+
+def apply_owner_admission(applicability, opcode, model, *, registry=None):
+    """Reconcile one availability answer with the exact owner's admission record.
+
+    ``call_available`` says whether the compiled build admitted this literal form on
+    this CPU as an instruction a program may call. It is a software admission state,
+    not a statement that the controller cannot execute the code. The shared spec
+    answers from its CPU scope, where an empty scope means "not narrowed" rather
+    than "admitted", so a non-callable owner would otherwise be reported available.
+
+    The direct applicability query, the top-level lane and the nested definition all
+    read this one projection. Missing records keep the previous answer: absence of an
+    admission record is not an explicit refusal.
+    """
+    entry = owner_admission(opcode, model, registry=registry)
+    if entry is None:
+        return applicability
+    admitted = bool(entry.get("call_available"))
+    available = bool(applicability.get("available"))
+    reasons = [str(gap) for gap in entry.get("gaps") or ()]
+    projected = dict(applicability)
+    record = {
+        "available": admitted,
+        "support_status": "definition_only" if not admitted else "callable",
+        "reasons": reasons,
+        "basis": {
+            "vendor": str(entry.get("vendor") or "mitsubishi"),
+            "opcode": entry.get("opcode"),
+            "target_model": entry.get("target_model"),
+        },
+    }
+    if not admitted:
+        if available:
+            # The generic definition could not express this admission state on its
+            # own; keep the admission conclusion and say where it came from.
+            record["generic_definition_available"] = True
+        projected["available"] = False
+        projected["support_status"] = record["support_status"]
+    elif not available:
+        # An admitted call the shared definition cannot describe is a disagreement
+        # to report, not a reason to restore availability from the owner alone.
+        record["inconsistent"] = True
+        record["reasons"] = reasons + ["owner_admits_call_without_runtime_form"]
+    projected["owner_admission"] = record
+    return projected
+
+
+def resolve_target_applicability(target, plc_model):
+    """Public applicability for one target, reconciled with its exact owner."""
+    applicability = _generic_target_applicability(target, plc_model)
+    return apply_owner_admission(
+        applicability, _opcode(target), str(plc_model or "").strip().upper())
 
 
 __all__ = ["resolve_target_applicability"]

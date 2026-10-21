@@ -472,6 +472,9 @@ def materialize_instruction_definition(target, *, plc_model, lanes, registry=Non
     spec = form.spec if form is not None else None
     inventory = registry.definition_entry(opcode, cpu=model) or {}
     applicability = copy.deepcopy(lanes.get("target_applicability") or {})
+    if "owner_admission" not in applicability:
+        from plc.target_capabilities import apply_owner_admission
+        applicability = apply_owner_admission(applicability, opcode, model, registry=registry)
     groups = [f.as_mapping() for f in spec.definition_facts] if spec else []
     if not groups:
         groups = [InstructionFactGroup.from_mapping(f).as_mapping() for f in inventory.get('facts', [])]
