@@ -242,15 +242,16 @@ class TokenListing:
             raise GXWFormatError("cannot export a complete CSV with opaque instructions/text")
         if any(getattr(record, "step", "") is None for record in self.records):
             raise GXWFormatError("cannot export absolute steps across an unknown instruction width")
-        from gxworks2.project_profiles import native_plc_info
+        from gxworks2.project_profiles import native_plc_info, native_project_profile
         identity = str(plc_model or "").strip().upper()
         if not identity:
             raise GXWFormatError("native CSV export needs the project CPU identity")
-        if identity not in ("FX3U", "FX3UC", "FX3U/FX3UC"):
-            # Only this menu target's CSV header has been observed. A concrete
-            # member resolves to it; another FX CPU must not borrow it.
-            raise GXWFormatError(
-                "native CSV export is only established for FX3U/FX3UC, not " + identity)
+        export_profile = native_project_profile(identity)
+        if export_profile is None or not export_profile.series[0].startswith("FX"):
+            # The column format is the FX statement list and the header names the
+            # saved CPU, so a target outside that family must not borrow it.
+            raise GXWFormatError("native CSV export is only established for an FX CPU, not "
+                                 + identity)
         plc_info = native_plc_info(identity)
         out = io.StringIO(newline="")
         writer = csv.writer(out, delimiter="\t", quoting=csv.QUOTE_ALL, lineterminator="\r\n")

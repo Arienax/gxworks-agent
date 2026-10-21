@@ -932,7 +932,10 @@ def _materialize_ordered_csv_version(
     from plc.timing import TIMING_ANALYSIS_SCHEMA_VERSION
     from rendering.ladder_svg import AdvancedSVGLadder
 
-    selected_model = str(plc_model or "FX3U").strip().upper()
+    selected_model = str(plc_model or "").strip().upper()
+    if not selected_model:
+        raise GXCSVImportError(
+            "无法确认该GX程序的目标CPU：请指定CPU，或提供带PLC信息行的导出文件")
     snapshot = inspect_gxworks2_csv(program_csv_path, comment_csv_path,
                                     plc_model=selected_model, program_name=program_name)
     program_ir = snapshot.get("program_ir")
@@ -1098,17 +1101,23 @@ def materialize_gxworks2_version(
     comment_csv_path: Any,
     output_dir: Any,
     *,
-    plc_model: str = "FX3U",
+    plc_model: str | None = None,
     program_name: str = "MAIN",
     revision: int = 1,
 ) -> Dict[str, Any]:
     """Create one immutable application version from a native GX export.
 
     ``plc_model`` is the saved CPU and decides the step widths written into the
-    re-serialized artifacts; product callers pass the project's CPU, and the
-    fallback export names its own target (``read_plc_info_target``). The default
-    remains for the FX3U callers that predate per-CPU step widths.
+    re-serialized artifacts. When the caller does not name it, the export's own
+    ``PLC信息`` line does; an export that names no CPU is reported instead of
+    being materialized as FX3U.
     """
+    if not str(plc_model or "").strip():
+        named = read_plc_info_target(program_csv_path)
+        if named is None:
+            raise GXCSVImportError(
+                "无法确认该GX程序的目标CPU：请指定CPU，或提供带PLC信息行的导出文件")
+        plc_model = named
 
     try:
         parsed = parse_gxworks2_csv(program_csv_path, comment_csv_path)
@@ -1129,7 +1138,10 @@ def materialize_gxworks2_version(
     from plc.st_renderer import ST_RENDERER_SCHEMA_VERSION, render_plc_ir_to_st, validate_st_traceability
     from plc.timing import TIMING_ANALYSIS_SCHEMA_VERSION
 
-    selected_model = str(plc_model or "FX3U").strip().upper()
+    selected_model = str(plc_model or "").strip().upper()
+    if not selected_model:
+        raise GXCSVImportError(
+            "无法确认该GX程序的目标CPU：请指定CPU，或提供带PLC信息行的导出文件")
     # Native GX exports are trusted as the source of spelling, not as proof of
     # semantics.  Catalogue misses are therefore preserved for round-trip but
     # remain unavailable to strict Agent generation/repair paths.
