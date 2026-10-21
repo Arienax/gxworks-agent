@@ -2399,6 +2399,12 @@
         "scope": "FX3"
       }
     ],
+    "observation_scopes": {
+      "default": {
+        "scope": "FAMILY",
+        "evidence": "native encoding observation"
+      }
+    },
     "device_ranges": [
       {
         "devices": [
