@@ -230,10 +230,12 @@ class StepWidthCatalog:
             return known(steps, "exact_native_form", evidence=(evidence,) if evidence else ())
         ranged = self._device_range_steps(op, args, model)
         if ranged is not None:
-            outcome, detail = ranged
-            if outcome is None:
-                return _unresolved(STATUS_NO_PROFILE, detail)
-            return known(outcome, "device_range", evidence=(detail,))
+            status, steps, detail = ranged
+            if status == "known":
+                return known(steps, "device_range", evidence=(detail,))
+            if status == "conflict":
+                return _unresolved(STATUS_CONFLICT, detail)
+            return _unresolved(STATUS_NO_PROFILE, detail)
         if op in self.rule_opcodes:
             matches = [rule for rule in self.rules
                        if op in rule["opcodes"]
@@ -267,7 +269,20 @@ class StepWidthCatalog:
         # Strings and indexed/bit-selected operands may change the encoding.
         # Ordinary constants, direct devices and K-digit groups are covered by the
         # observed fixed applied-instruction headers. Do not guess elsewhere.
-        ordinary = r"(?:[K][+-]?[0-9]+|H[0-9A-F]+|E[+-]?[0-9]+(?:\.[0-9]+)?(?:[Ee+-][+-]?[0-9]+)?|[A-Z]+[0-9]+|K[1-8][XYMS][0-9]+)"
+        # An index (Z/V) or a bit selector changes the operand *encoding* of an
+        # applied instruction, not the number of stored words it occupies: the
+        # native rows for D0Z0, K4M0Z0, D0.3 and the direct forms all carry the
+        # same applied-instruction width. Contact forms are answered by the rules
+        # above, where the index does widen the instruction.
+        # A device token: a code letter run, an optional network/U prefix, an index
+        # (single or double Z/V) and an optional bit selector. K-digit groups and
+        # buffer-memory (U0\G0) operands keep the same applied width as well.
+        device = r"[A-Z][A-Z0-9]*(?:\\[A-Z][A-Z0-9]*)?(?:[VZ]{1,2}[0-7])?(?:\.[0-9A-F])?"
+        ordinary = (r"(?:" + device
+                    + r"|K[+-]?[0-9]+(?:[VZ]{1,2}[0-7])?"
+                    r"|H[0-9A-F]+(?:[VZ]{1,2}[0-7])?"
+                    r"|E[+-]?[0-9]+(?:\.[0-9]+)?(?:[Ee+-][+-]?[0-9]+)?"
+                    r"|K[1-8]" + device + r")")
         if any(re.fullmatch(ordinary, arg) is None for arg in args):
             return _unresolved(STATUS_REQUIRES_CONTEXT,
                                "Operand encoding is outside the fixed-width profile",
@@ -322,36 +337,69 @@ class StepWidthCatalog:
         return None
 
     def _device_range_steps(self, op: str, args: Sequence[str],
-                            model: str) -> Optional[Tuple[Optional[int], str]]:
-        """Device-index step table for one direct target, or ``None`` to fall through.
+                            model: str):
+        """Device-index step tables for one operand, scanned without an order bias.
 
-        The stored width of a direct bit device depends on the index range of the
-        CPU series, not on the mnemonic alone. Returns ``(steps, evidence)``, or
-        ``(None, reason)`` when the table owns the form and the index is outside
-        every range it covers.
+        A form may need more than one table: a normal M target and a special M
+        target are two tables for the same mnemonic and device, and only one of
+        them can cover a given address. Every applicable table is therefore
+        scanned, and the first table that does not cover the address must not end
+        the search.
+
+        Returns ``("known", steps, evidence)``, ``("conflict", None, reason)``
+        for tables that disagree, ``("no_profile", None, reason)`` when every
+        applicable table owns the form and none covers the address, or ``None``
+        so that the other width rules can answer.
         """
-        if len(args) != 1:
-            return None
-        match = re.fullmatch(r"([A-Z]+)([0-9]+)", args[0])
-        if match is None:
-            return None
-        device, index = match.group(1), int(match.group(2))
         series = fx_series(model)
+        candidates = []
+        applicable = 0
+        open_ended = False
+        operand_text = ""
         for entry in self.device_ranges:
-            if op not in entry["opcodes"] or device not in entry["devices"]:
+            if op not in entry["opcodes"]:
+                continue
+            if len(args) != int(entry.get("arity", 1)):
                 continue
             if not (model in entry.get("models", ())
                     or (series is not None and series in entry.get("series", ()))):
                 continue
+            position = int(entry.get("operand_index", 0))
+            if position >= len(args):
+                continue
+            match = re.fullmatch(r"([A-Z]+)([0-9]+)", args[position])
+            if match is None or match.group(1) not in entry["devices"]:
+                continue
+            applicable += 1
+            index = int(match.group(2))
+            operand_text = args[position]
             for span in entry["ranges"]:
                 if int(span["from"]) <= index <= int(span["to"]):
-                    return int(span["steps"]), str(entry["evidence"])
-            if entry.get("outside", "fall_through") == "gap":
-                covered = ", ".join(f"{span['from']}-{span['to']}" for span in entry["ranges"])
-                return None, (f"{device}{index} is outside the device-range step table for "
-                              f"{model} (covered: {covered})")
+                    candidates.append((int(span["steps"]), str(entry["evidence"])))
+                    break
+            else:
+                if entry.get("outside", "fall_through") != "gap":
+                    open_ended = True
+        if not candidates:
+            if applicable and not open_ended:
+                covered = ", ".join(
+                    f"{'/'.join(entry['devices'])} {span['from']}-{span['to']}"
+                    for entry in self.device_ranges
+                    for span in entry.get("ranges", ())
+                    if op in entry["opcodes"]
+                    and (model in entry.get("models", ())
+                         or (series is not None and series in entry.get("series", ()))))
+                return ("no_profile", None,
+                        f"{op} {operand_text} is outside the device-range step table for "
+                        f"{model} (covered: {covered})")
             return None
-        return None
+        widths = sorted({steps for steps, _ in candidates})
+        if len(widths) > 1:
+            return ("conflict", None,
+                    f"Device-range tables disagree about {op} {operand_text} on {model}: "
+                    + "; ".join(evidence for _, evidence in candidates))
+        steps, evidence = candidates[0]
+        return ("known", steps, evidence)
 
     def fixed_forms(self) -> Mapping[str, Tuple[int, int]]:
         """Inspectable catalogue coverage, excluding operand-dependent forms."""

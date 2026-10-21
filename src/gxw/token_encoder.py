@@ -416,8 +416,9 @@ def _fx_header(op: str, args: tuple[str, ...], operands: tuple[bytes, ...], *,
     # preset and the variable-string payload extent. What stays here is the
     # encoded token shape this CPU stores: sharing the number is not permission
     # to accept a form the native encoder never produced.
-    width = instruction_step_width(op, args, plc_model=_fx_target(plc_model),
-                                   text_encoding=text_encoding).steps
+    shared = instruction_step_width(op, args, plc_model=_fx_target(plc_model),
+                                    text_encoding=text_encoding)
+    width = shared.steps
     if op == 'OUT' and len(args) == 2:
         counter = re.fullmatch(r'C([0-9]+)', args[0])
         if counter and int(counter[1]) >= 200:
@@ -429,18 +430,11 @@ def _fx_header(op: str, args: tuple[str, ...], operands: tuple[bytes, ...], *,
                      or (operands[0][1] == 0xee and operands[1][1] == 0xa8))):
             raise GXWFormatError('variable-string storage requires its measured word or text form')
     if width is None:
-        catalog = default_step_width_catalog()
-        key = ":".join(".".join(f"{code:02x}" for code in _shape(raw)) for raw in operands)
-        source_shapes = {'MC': 'd2:90', 'MCR': 'd2', 'NEXT': ''}
-        if source_shapes.get(op) == key:
-            return next(raw for raw in _fx_headers(profile)[op, len(args)])
-        observed = set(_profile_facts(profile)["header_forms"].get(op, {}).get(key, ())) | set(
-            _encoder_facts().get('additional_source_forms', {}).get('header_forms', {}).get(op, {}).get(key, ()))
-        if op not in catalog.variable and len(observed) == 1:
-            header = bytes.fromhex(next(iter(observed)))
-            if stored_header_width(header) is not None:
-                return header
-        raise GXWFormatError("stored step width is unobserved for this instruction/operand form")
+        # A width is never chosen here. The shared catalogue's gap is reported
+        # with its own reason so that MC, MCR and NEXT cannot fall back to a
+        # private guess that the Core query disagrees with.
+        raise GXWFormatError("stored step width is unobserved for this instruction/operand form: "
+                             + (shared.reason or "the shared catalogue has no width"))
     candidates = _fx_headers(profile).get((op, len(args)), ())
     if op == "OUT" and len(args) == 1:
         # 03 21 03 is a separately observed timer/counter fragment without
