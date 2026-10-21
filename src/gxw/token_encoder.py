@@ -401,7 +401,8 @@ def _fx_target(plc_model: str | None) -> str:
 
 def _fx_header(op: str, args: tuple[str, ...], operands: tuple[bytes, ...], *,
                plc_model: str | None, profile: str = 'fx3u',
-               allow_draft: bool = False) -> bytes:
+               allow_draft: bool = False,
+               text_encoding: str | None = None) -> bytes:
     from plc.instruction_constraints import fx_out_preset_error
     preset_error = fx_out_preset_error(op, args)
     if preset_error:
@@ -411,23 +412,22 @@ def _fx_header(op: str, args: tuple[str, ...], operands: tuple[bytes, ...], *,
             # source draft; it is not the ordinary two-operand OUT header.
             return bytes.fromhex('032103')
         raise GXWFormatError(preset_error)
-    width = instruction_step_width(op, args, plc_model=_fx_target(plc_model)).steps
+    # The width is the shared catalogue's answer, including the 32-bit counter
+    # preset and the variable-string payload extent. What stays here is the
+    # encoded token shape this CPU stores: sharing the number is not permission
+    # to accept a form the native encoder never produced.
+    width = instruction_step_width(op, args, plc_model=_fx_target(plc_model),
+                                   text_encoding=text_encoding).steps
     if op == 'OUT' and len(args) == 2:
         counter = re.fullmatch(r'C([0-9]+)', args[0])
         if counter and int(counter[1]) >= 200:
             if _shape(operands[0]) != (0xc5,) or _shape(operands[1]) not in {(0xe8,), (0xe9,), (0xa8,), (0xaf,)}:
                 raise GXWFormatError('32-bit counter preset storage requires its measured unmodified word form')
-            width = 5  # Independent ordinary/32-bit counter controls.
     if op in {'$MOV', '$MOVP'} and len(operands) == 2:
-        if len(_shape(operands[0])) == 1 and len(_shape(operands[1])) == 1:
-            # Native FX variable-string storage: one instruction word, two
-            # destination words, and two words per source character pair.
-            # Direct D -> D uses one such source pair. Native controls cover
-            # all 1..32 encoded-byte lengths, including multibyte text.
-            if operands[0][1] == 0xee and operands[1][1] == 0xa8:
-                width = 3 + 2 * ((len(operands[0]) - 2) // 2)
-            elif operands[0][1] == 0xa8 and operands[1][1] == 0xa8:
-                width = 5
+        if not (len(_shape(operands[0])) == 1 and len(_shape(operands[1])) == 1
+                and (operands[1][1] == 0xa8
+                     or (operands[0][1] == 0xee and operands[1][1] == 0xa8))):
+            raise GXWFormatError('variable-string storage requires its measured word or text form')
     if width is None:
         catalog = default_step_width_catalog()
         key = ":".join(".".join(f"{code:02x}" for code in _shape(raw)) for raw in operands)
@@ -575,7 +575,7 @@ def encode_instruction(op: str, args: Sequence[str | Mapping] = (), *, profile: 
         header = source.tokens[0].raw
     elif profile in _FX_PROFILES:
         header = _fx_header(op, arguments, operands, plc_model=plc_model, profile=profile,
-                            allow_draft=allow_draft)
+                            allow_draft=allow_draft, text_encoding=text_encoding)
     else:
         from .token_q_encoder import encode_q_header
         header = encode_q_header(op, arguments, operands, profile=profile, cpu=plc_model, source=source,

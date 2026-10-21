@@ -176,6 +176,7 @@ class StepWidthCatalog:
         self.rules = tuple(rules["rules"])
         self.rule_opcodes = frozenset(op for rule in self.rules for op in rule["opcodes"])
         self.variable = frozenset(rules.get("variable_opcodes", ()))
+        self.variable_forms = tuple(rules.get("variable_forms", ()))
         self.aliases = dict(rules.get("aliases", {}))
         self.device_ranges = tuple(rules.get("device_ranges", ()))
         exact = {}
@@ -197,7 +198,8 @@ class StepWidthCatalog:
             widths.setdefault(str(opcode).upper(), []).append((width, int(arity), header))
         self.observations = MappingProxyType({op: tuple(items) for op, items in widths.items()})
 
-    def resolve(self, opcode: Any, operands: Sequence[Any] = (), *, plc_model: str) -> StepWidth:
+    def resolve(self, opcode: Any, operands: Sequence[Any] = (), *, plc_model: str,
+                text_encoding: Optional[str] = None) -> StepWidth:
         """Resolve one width inside this catalogue's own CPU family."""
         model = str(plc_model or "").strip().upper()
         scope = "exact"
@@ -246,6 +248,9 @@ class StepWidthCatalog:
             return known(next(iter(widths)), "operand_rule",
                          evidence=tuple(rule["evidence"] for rule in matches))
         if op in self.variable:
+            form = self._variable_form_steps(op, args, text_encoding, known)
+            if form is not None:
+                return form
             return _unresolved(STATUS_REQUIRES_OPERANDS,
                                "Variable-width instruction needs an operand/encoding-specific rule",
                                requirements=("operands", "operand_encoding"))
@@ -269,6 +274,52 @@ class StepWidthCatalog:
                                requirements=("operand_encoding",))
         return known(next(iter(sizes)), "native_observation",
                      evidence=tuple(entry[2] for entry in compatible))
+
+    def _variable_form_steps(self, op: str, args: Sequence[str],
+                             text_encoding: Optional[str], known) -> Optional[StepWidth]:
+        """Variable-string storage for one FX form, or ``None`` when none matches.
+
+        The stored width is one instruction word, the destination words and two
+        words per source character pair, so the payload has to be measured in the
+        project code page. A missing code page is a stated requirement, not a
+        coverage gap and never a guess at the payload size.
+        """
+        for entry in self.variable_forms:
+            if op not in entry["opcodes"] or len(args) != int(entry["arity"]):
+                continue
+            if not re.fullmatch(r"[DW][0-9]+", args[1]):
+                continue
+            source = entry.get("source")
+            if source == "word":
+                if not re.fullmatch(r"[DW][0-9]+", args[0]):
+                    continue
+                steps_spec = entry["steps"]
+                return known(int(steps_spec["fixed"]), "variable_string_form",
+                             evidence=(entry["evidence"],))
+            if source != "text":
+                continue
+            text = args[0]
+            if len(text) < 2 or not (text.startswith('"') and text.endswith('"')):
+                continue
+            if not text_encoding:
+                return _unresolved(
+                    STATUS_REQUIRES_CONTEXT,
+                    "A variable-string width needs the project code page to measure its payload",
+                    requirements=("text_encoding",))
+            try:
+                size = len(text[1:-1].encode(text_encoding))
+            except (LookupError, UnicodeEncodeError) as exc:
+                return _unresolved(
+                    STATUS_REQUIRES_CONTEXT,
+                    f"The code page {text_encoding!r} cannot measure this payload: {exc}",
+                    requirements=("text_encoding",))
+            steps_spec = entry["steps"]
+            words = (size + 1) // 2
+            steps = int(steps_spec["base"]) + int(steps_spec["per_source_word"]) * words
+            return known(steps, "variable_string_form",
+                         evidence=(entry["evidence"],
+                                   f"payload {size} bytes in {text_encoding} ({words} source words)"))
+        return None
 
     def _device_range_steps(self, op: str, args: Sequence[str],
                             model: str) -> Optional[Tuple[Optional[int], str]]:
@@ -390,7 +441,8 @@ def _resolve_member(member: str, opcode: Any, operands: Sequence[Any], context: 
         return resolve_stored_steps(opcode, operands, cpu=member, context=context,
                                     assume_default_allocation=assume_default_allocation,
                                     text_encoding=text_encoding)
-    return default_step_width_catalog().resolve(opcode, operands, plc_model=member)
+    return default_step_width_catalog().resolve(opcode, operands, plc_model=member,
+                                                text_encoding=text_encoding)
 
 
 def instruction_step_width(opcode: Any, operands: Sequence[Any] = (), *,

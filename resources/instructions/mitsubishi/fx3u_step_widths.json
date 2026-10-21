@@ -2154,6 +2154,15 @@
     "rules": [
       {
         "opcodes": [
+          "OUT"
+        ],
+        "arity": 2,
+        "operands": "C2[0-9]{2} (?:K[+-]?[0-9]+|H[0-9A-F]+|D[0-9]+)",
+        "steps": 5,
+        "evidence": "native encoding observation"
+      },
+      {
+        "opcodes": [
           "LD",
           "LDI",
           "AND",
@@ -2261,6 +2270,35 @@
         "arity": 2,
         "operands": "T10Z0 K10",
         "steps": 4,
+        "evidence": "native encoding observation"
+      }
+    ],
+    "variable_forms": [
+      {
+        "opcodes": [
+          "$MOV",
+          "$MOVP"
+        ],
+        "arity": 2,
+        "source": "text",
+        "destination": "word",
+        "steps": {
+          "base": 3,
+          "per_source_word": 2
+        },
+        "evidence": "native encoding observation"
+      },
+      {
+        "opcodes": [
+          "$MOV",
+          "$MOVP"
+        ],
+        "arity": 2,
+        "source": "word",
+        "destination": "word",
+        "steps": {
+          "fixed": 5
+        },
         "evidence": "native encoding observation"
       }
     ],
