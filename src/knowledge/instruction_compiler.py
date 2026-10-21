@@ -27,6 +27,9 @@ from plc.instruction_semantics import arbitrate_operand_usage
 METHOD = 'instruction-material-compiler-v1'
 
 
+from knowledge.source_identity import (build_index_identity, source_reference_status)
+
+
 def instruction_heading_names(heading):
     """Literal instruction/function identities declared by a leaf heading."""
     leaf = str(heading or '').split(' > ')[-1]
@@ -470,7 +473,14 @@ def compile_instruction_definitions(index_path, source_catalog, registry, *, sou
                 gaps.append('native_parameter_order_not_established')
             if not any(f['dimension'].startswith('effects.') for f in facts):
                 gaps.append('effects_not_formalized')
+            build_source_ids = [str(value) for d, _ in ownership
+                                for value in d.get('source_ids') or ()]
+            index_identity = build_index_identity(index_path)
             entries.append({'vendor': 'mitsubishi', 'opcode': opcode, 'target_model': model,
+                            'build_source_ids': build_source_ids,
+                            'build_index_id': (index_identity or {}).get('build_index_id'),
+                            'source_reference_status': source_reference_status(
+                                build_source_ids, db=db, identity=index_identity),
                             'registry_member': opcode in known, 'call_available': admitted,
                             'support_status': 'existing_declared_scope' if admitted else 'definition_only',
                             'facts': facts, 'source_materials': materials, 'uninterpreted_content': unexplained,

@@ -890,8 +890,21 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
         if not materials:
             entry = DEFAULT_INSTRUCTION_REGISTRY.definition_entry(opcode, cpu=plc_model) or {}
             materials = entry.get('source_materials', [])
+        # Build references are only meaningful inside the index that produced them,
+        # so replaying them here requires the same verified index. Otherwise the
+        # compiled chapter cannot be re-materialised and the answer says so instead
+        # of looking the numbers up in an index where they mean something else.
+        from knowledge.source_identity import (REPLAY_AVAILABLE, runtime_replay_status)
+        definition_entry = (DEFAULT_INSTRUCTION_REGISTRY.definition_entry(
+            opcode, cpu=plc_model) or entry or {})
+        replay_status = runtime_replay_status(definition_entry, db=connection)
+        # A legacy artifact carries no build ids, so nothing cross-index is at risk and
+        # the section-scoped materials keep working. Once build ids exist, they must be
+        # verified and replayable in this runtime before the numbers are used.
+        replayable = (not definition_entry.get("build_source_ids")
+                      or replay_status == REPLAY_AVAILABLE)
         compiled = []
-        for material in materials:
+        for material in (materials if replayable else []):
             hits = _chunk_results(material['source_ids'], plc_model=plc_model, task_type=task_type,
                                   fact_kind='instruction', fact_target=opcode, augment_instruction=True)
             for hit in hits:
