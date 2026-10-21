@@ -22,6 +22,8 @@ REQUIRED = {
     "src/gxw/templates/provenance.json",
     "src/gxw/templates/q02-token-grammar.json",
     "src/gxw/templates/q03udv-token-grammar.json",
+    "src/gxw/templates/fx-token-encoder-forms.json",
+    "src/gxw/templates/q-token-encoder-forms.json",
     "resources/instructions/mitsubishi/common.json",
     "resources/instructions/mitsubishi/fx3u.json",
     "resources/instructions/mitsubishi/fx5u.json",

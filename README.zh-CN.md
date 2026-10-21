@@ -13,13 +13,33 @@
 
 <p align="center"><strong><a href="https://github.com/Arienax/gxworks-agent/releases/latest">下载发布包</a> · <a href="#mcp">MCP 与 Web</a> · <a href="https://github.com/Arienax/gxworks-agent/issues">问题反馈</a></strong></p>
 
-<p align="center"><a href="#quick-start">快速上手</a> · <a href="#ladder">Ladder</a> · <a href="#st">ST</a> · <a href="#fbd">FBD</a> · <a href="#native-session">原生会话</a> · <a href="#web">Web 工作台</a> · <a href="#diagnostics">诊断与验证</a></p>
+<p align="center"><a href="#quick-start">快速上手</a> · <a href="#offline-gxw">离线 GXW 编辑</a> · <a href="#ladder">Ladder</a> · <a href="#st">ST</a> · <a href="#fbd">FBD</a> · <a href="#native-session">原生会话</a> · <a href="#web">Web 工作台</a> · <a href="#diagnostics">诊断与验证</a></p>
 
 <p align="center"><strong>简体中文</strong> · <a href="README.md">English</a> · <a href="README.ja.md">日本語</a></p>
 
 GXWorks Agent 将三菱 PLC 的工程上下文、按 CPU 组织的指令事实、确定性静态校验与 GX Works2 原生操作封装为统一的工程工具链，支持 **Ladder（梯形图）**、**ST（结构化文本）**、**FBD（功能块图）** 以及已有 **SFC** 工程的受控编辑与诊断。
 
-你可以通过 **MCP** 将 42 个工程工具直接接入 Codex、Claude Desktop、Cursor 等客户端，复用客户端自身的模型完成规划、生成、原生会话编辑与验证，并保存带版本的工程产物；也可以启动可选的 **Web 工作台**，在浏览器中生成程序、审阅图形差异、运行仿真测试并按授权交付到 GX Works2。
+你可以通过 **MCP** 将工程工具直接接入 Codex、Claude Desktop、Cursor 等客户端，复用客户端自身的模型完成规划、生成、原生会话编辑与验证，并保存带版本的工程产物；也可以启动可选的 **Web 工作台**，在浏览器中生成程序、审阅图形差异、运行仿真测试并按授权交付到 GX Works2。
+
+<a name="offline-gxw"></a>
+
+## 已有 GXW 工程的离线读取与编辑
+
+对已覆盖格式的 `.gxw`，读取、编辑和保存均无需安装或启动 GX Works2。
+
+1. **Web**：将 `.gxw` 拖入主对话，或点击**导入 GXW** 选择文件，无需先建 Agent 工程。检查后，只有一个普通 Program 时自动选中；多个程序时选择目标，也可明确选择已有 FB 或 FUNCTION。
+2. **MCP**：先用 `inspect_gxw_project` 检查文件的 CPU、程序目录与格式能力，再用 `import_gxw_project` 进入共用的工程与版本流程。
+3. 描述修改要求，审阅预览与差异，保存为新版本。下载 `program.gxw` 后可重新导入继续编辑，原始输入文件保留。
+
+导入已有 Ladder 后自动绘制触点、线圈和分支；输出后继续判断及 `MPS/MRD/MPP` 按原顺序显示，源码指令表仍可查看。
+
+四种语言共用离线事务：Ladder 支持来源绑定的指令、浮点数、字符串和 P/I 标签编辑与移动，并保留 `MPS/MRD/MPP` 顺序及未改记录原字节；ST 联合编辑已有 Program、FB、FUNCTION 正文与声明，支持调整既有接口、参数顺序和返回类型并检查调用者；FBD 编辑对象、连接、网络、变量与已有 FB 定义的实例；SFC 编辑既有流程中的步骤、转换、动作、分支、汇合、跳转和子程序，并维护内部注册。声明项可增删、重排，实际 QCD 注释保留完整文本。
+
+导入后可切换「编辑的程序」继续处理同一工程的其他对象。MCP 的 `read_gxw_source` 返回所选源码的编辑模型；`edit_gxw_project` 按当前 `version_id` 联合提交多个源码、声明和注释修改，并逐程序预览差异。新入口默认 `save_policy="draft"`，允许保存带源码诊断的中间稿；`checked` 拒绝新增的已识别错误。旧入口省略保存策略时保留原行为。草稿的文件结构和存储引用仍须正确，保存不表示编译或运行通过。
+
+全部 FX/Q/L 型号目录参与文件能力判断，具体结果细化到 CPU、格式、对象和操作；编码能力与原生编译、运行验收分别返回。局部未知记录保持原字节，不妨碍其他可安全编辑的对象；依赖关系不明的修改返回具体对象和原因。此入口不新增工程级 POU、FB 定义、声明表、资源或任务，也不改变任务注册。
+
+源码或声明改变后，旧编译结果失效。保留的 `.res` 不能作为新源码的编译证据；原生编译仍是明确、独立的操作。兼容范围依据具体 CPU 和文件结构判断，不代表已认证所有 GX Works2 版本。
 
 <a name="ladder"></a>
 
@@ -38,7 +58,7 @@ GXWorks Agent 将三菱 PLC 的工程上下文、按 CPU 组织的指令事实�
 ST 工作流兼顾独立文本生成与 GXW 原生工程维护：
 
 - **Web 独立生成与审阅**：在工作台中分析需求、确认规格，结合所选 CPU 的指令上下文与 ST 调用签名生成 `program.st`，支持候选预览、版本间文本差异比对与产物保存。Ladder 工程也可从 PLC IR 导出可追溯的 ST。
-- **GXW 原生 ST 工程读写**：通过 `read_st_project` 读取已有 `.gxw` 中的普通 ST Program、局部声明与任务归属；使用 `create_st_candidate` 导入现有 ST 工程，或在指定资源与现有任务下新建、编辑普通 ST Program，并在持续原生会话中与 ST FB、FBD 图形协同修改和编译。
+- **GXW ST 工程编辑**：`read_st_project` 读取已有 Program、FB、FUNCTION 的正文、声明和归属；`create_st_candidate` 可离线编辑既有正文与声明。新建普通 ST Program 仍沿用显式资源、任务及原生操作流程；持续原生会话可独立完成与 FBD 的协同编辑和编译。
 
 本地 ST 检查器校验已支持的语法与语义并标出未覆盖构造；它是有界静态解析，不能替代 GX Works2 原生编译与 PLC 实机验证。
 
@@ -97,7 +117,7 @@ ST 工作流兼顾独立文本生成与 GXW 原生工程维护：
 | 工程与版本管理 | 按 CPU 和程序类型（Ladder / ST / FBD / SFC）创建或选择工程，维护需求与确认规格，审阅候选、对比版本差异并导出版本化产物。 |
 | 运行中 GX 只读快照 | 发现本机已打开的 GX Works2 会话，无需先建 Agent 工程即可导出临时只读快照（`source_ref`），按网络读取指令并执行静态检查。 |
 | 原生编译与源码级诊断 | 在隔离工作区对已保存的 `.gxw` 执行原生编译与代码检查，查询声明与 FB 实例成员的分配地址（`read_native_device_assignments`），比对已保存代码通道与新编译输出（`compare_native_compiled_code`），并将诊断或步号（`locate_native_code_steps`）定位到 ST 行、声明项、FBD 网络/对象或调用实例；位置存在歧义时保留 `unresolved`。 |
-| SFC 已有工程编辑 | 导入已有 SFC 工程，读取流程图与程序结构，编辑既有动作（Action）与转换（Transition）子程序，修改受支持步的动作编号和跳转目标，预览候选与版本差异；不支持从零新建完整 SFC 工程。 |
+| SFC 已有工程编辑 | 离线读取源码关系图，编辑步骤、转换、动作、分支、汇合、跳转及子程序，联合增删内部对象、声明与注册，预览差异并保存版本；不从零新建工程级 SFC POU。 |
 | 梯形图仿真与实时时间轴 | 配置绑定版本的测试方案、软元件激励与预期结果并运行仿真后端；或通过 `connect_simulator` 与 `start_simulator_trace` 对已连接 GX Simulator2 的类型化信号进行只读采样，在内置的 Web 时间轴查看器（`simulator.html`）中回放波形。采样不执行未授权写入，并显式保留程序对应关系的 `unverified` 状态。 |
 | PLC 只读监测 | 经操作员授权，通过已配置的 MX Component 逻辑站只读读取指定软元件并记录历史数值。权限绑定工程版本、地址范围与有效期且可随时撤销；此功能绝不向 PLC 写入。 |
 
@@ -118,7 +138,7 @@ ST 工作流兼顾独立文本生成与 GXW 原生工程维护：
 
 ### 独立 MCP 模式
 
-在客户端中添加 stdio 服务：命令填写解压目录中 `gxworks-agent-mcp.exe` 的完整路径，参数填写 `--local`。刷新连接后，先调用 `list_projects` 选择已有工程，或按实际 CPU 与程序类型创建新工程；若要直接分析本机已打开的 GX Works2 工程，可先调用 `list_gxworks2_sessions`。
+在客户端中添加 stdio 服务：命令填写解压目录中 `gxworks-agent-mcp.exe` 的完整路径，参数填写 `--local`。刷新连接后，先调用 `list_projects` 选择已有工程，或按实际 CPU 与程序类型创建新工程；已有文件可使用[离线 GXW 导入](#offline-gxw)。若要直接分析本机已打开的 GX Works2 工程，可先调用 `list_gxworks2_sessions`。
 
 你可以用下面这段提示词快速体验：
 
@@ -128,7 +148,7 @@ ST 工作流兼顾独立文本生成与 GXW 原生工程维护：
 
 ### Web 工作台模式
 
-运行 `Full` 解压目录中的 `start-web.cmd`，按提示选择工程工作区目录。新建工程后，在 **设置 → 模型 → 模型 API** 中配置模型服务即可生成程序；浏览已有工程、查看图形与导出产物无需调用模型。版本更新时，请将新压缩包解压到新目录，独立保存的工作区与个人设置会自动保留。
+运行 `Full` 解压目录中的 `start-web.cmd`，按提示选择工程工作区目录。可为新程序创建工程，或[导入已有 GXW](#offline-gxw)。需要 AI 生成或修改时，在 **设置 → 模型 → 模型 API** 中配置模型服务；浏览已有工程、检查文件、查看图形与导出产物无需调用模型。版本更新时，请将新压缩包解压到新目录，独立保存的工作区与个人设置会自动保留。
 
 ### 从源码运行
 
@@ -149,7 +169,7 @@ cd gxworks-agent
 
 成品包内置经整理的运行事实库与项目原创案例供 RAG 检索使用，不包含三菱原始手册 PDF 及原文索引。运行知识数据与源码仓库分离分发；从源码运行时，可将成品包内的 `knowledge/` 复制到 `resources/knowledge/`，并将 `resources/instructions/mitsubishi/` 复制到源码同名目录。
 
-原生保存、代码检查、GX 导入和仿真依赖本机安装相应的三菱软件；PLC 只读监测依赖 MX Component 及已配置的逻辑站。发布包不包含任何三菱商业软件。
+离线 GXW 文件操作无需安装三菱软件。原生保存、原生编译与代码检查、交付到 GX Works2 及原生仿真依赖本机安装相应的三菱软件；PLC 只读监测依赖 MX Component 及已配置的逻辑站。发布包不包含任何三菱商业软件。
 
 ## 设备投运前
 
