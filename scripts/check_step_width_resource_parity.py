@@ -37,11 +37,11 @@ PRIVATE_ONLY = (
 EVIDENCE_MARKER = "<evidence>"
 
 
-def _load_source(source: str) -> Dict[str, Any]:
+def _load_source(source: str, repo: str | None = None) -> Dict[str, Any]:
     """One resource document from a filesystem path or ``git:<revision>:<path>``."""
     if source.startswith("git:"):
         _, revision, path = source.split(":", 2)
-        raw = subprocess.check_output(["git", "show", f"{revision}:{path}"])
+        raw = subprocess.check_output(["git", "show", f"{revision}:{path}"], cwd=repo)
         return json.loads(raw.decode("utf-8"))
     return json.loads(Path(source).read_text(encoding="utf-8"))
 
@@ -112,10 +112,12 @@ def main(argv: List[str] | None = None) -> int:
                         help="development copy of the resource (default: the working file)")
     parser.add_argument("--public", default="git:HEAD:" + RESOURCE,
                         help="published copy, as a path or git:<revision>:<path>")
+    parser.add_argument("--repo", default=".",
+                        help="repository the git revision is read from")
     arguments = parser.parse_args(argv)
 
     local_document = _load_source(arguments.local)
-    public_document = _load_source(arguments.public)
+    public_document = _load_source(arguments.public, arguments.repo)
     problems = _differences(_normalise(local_document), _normalise(public_document))
 
     local_scopes = _scopes(local_document)
