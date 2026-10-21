@@ -1,5 +1,22 @@
 # Release changes
 
+## 0.3.3 — 2026-10-21
+
+- Existing GX Works2 projects can be read and written offline: inspect an
+  uploaded GXW or a local path, list its sources, then joint-edit Ladder, ST,
+  FBD and SFC changes against an explicit `version_id` before native import.
+- MCP exposes `inspect_gxw_project`, `read_gxw_source` and `edit_gxw_project`;
+  the Web workbench adds the GXW import flow and source-bound editing views.
+- ST source parsing reuses the shared tree-sitter frontend with the shared
+  constraint rules and bounded execution; uncovered constructs stay explicit.
+- The shared fact-rule chain, native ST plans and thread-safe session storage
+  are integrated. The native UI process lease and workspace validation
+  buffers are bounded, and interrupted actions stay pending for review.
+- Engineering contracts and native evidence are typed; workbench services are
+  split and native diagnostics indexed.
+- The Japanese text table loads on demand, reducing the initial Web bundle.
+- Updated English, Simplified Chinese and Japanese usage documentation.
+
 ## 0.3.2 — 2026-10-19
 
 - Direct generation returns a program with implementation notes and optional

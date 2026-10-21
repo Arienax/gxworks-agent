@@ -548,6 +548,7 @@
     "web/src/features/simulationTypes.ts",
     "web/src/features/simulator-timeline.css",
     "web/src/features/simulatorTimelineData.ts",
+    "web/src/i18n.ja.ts",
     "web/src/i18n.ts",
     "web/src/lifecycle/drafts.ts",
     "web/src/lifecycle/requests.ts",
