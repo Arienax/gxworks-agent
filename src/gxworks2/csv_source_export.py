@@ -68,19 +68,101 @@ def _step_source(value: Any) -> str:
     return chosen
 
 
+def target_state(snapshot: Mapping[str, Any], model: Any, *, plc_info: Any = None,
+                 step_source: str = "source") -> Dict[str, Any]:
+    """How the CPU being computed relates to the CPU the export states.
+
+    A computed target and a retained header may disagree in three ways, and each
+    one has a different answer: the same CPU (the header is reproduced as read),
+    an explicit conversion (the header is rebuilt from the new CPU and the source
+    CPU stays as provenance), or a conflict (a source-preserving write cannot
+    change the identity, and a header that contradicts the computed CPU must not
+    be written or accepted at all).
+    """
+    from gxworks2.project_profiles import native_plc_info, native_project_profile
+
+    source_model = str(snapshot.get("plc_model") or "").strip().upper() or None
+    source_info = str(snapshot.get("plc_info") or "").strip()
+    output_model = str(model or "").strip().upper() or None
+    converted = bool(source_model and output_model and source_model != output_model)
+    conflict = bool(converted and step_source == "source")
+
+    if plc_info is not None:
+        output_info = str(plc_info).strip()
+    elif converted and not conflict:
+        try:
+            output_info = native_plc_info(output_model)
+        except ValueError:
+            output_info = ""
+    else:
+        # Same CPU, or a refused conversion: keep the export's own header.
+        output_info = source_info
+
+    entry: Dict[str, Any] = {
+        "source_model": source_model,
+        "output_model": output_model,
+        "source_plc_info": source_info or None,
+        "output_plc_info": output_info or None,
+        "converted": converted,
+        "status": "same",
+        "reason": None,
+    }
+    if conflict:
+        entry.update(status="conflict",
+                     reason=("A source-preserving write keeps the export's own CPU: "
+                             f"{source_model} cannot be written as {output_model}; the "
+                             "written header still names the source CPU"))
+        return entry
+    if converted:
+        entry.update(status="converted",
+                     reason=f"Rebuilt the PLC信息 header for {output_model}; {source_model} stays as provenance")
+        return entry
+    if not output_info:
+        entry.update(status="unstated",
+                     reason="Neither the export nor the caller states a target CPU")
+        return entry
+    profile = native_project_profile(output_model) if output_model else None
+    if profile is None:
+        entry.update(status="unknown_target",
+                     reason=f"No native PLC信息 format for {output_model or '(no target)'}")
+        return entry
+    if profile.accepts_plc_info(output_info):
+        return entry
+    expected = native_plc_info(output_model)
+    entry.update(status="mismatch", expected=expected,
+                 reason=(f"The PLC信息 line {output_info!r} does not describe the target CPU "
+                         f"{output_model!r} ({expected!r})"))
+    return entry
+
+
 def step_width_plan(snapshot: Mapping[str, Any], *, plc_model: Any = None,
-                    step_source: Any = "source") -> Dict[str, Any]:
+                    step_source: Any = "source", plc_info: Any = None,
+                    storage_context: Any = None,
+                    assume_default_allocation: bool = False) -> Dict[str, Any]:
     """Expected step labels and width findings for one ordered snapshot.
 
     The plan is the single place that turns instructions into steps, so the
     writer and both verifiers cannot disagree.  A width the catalogue cannot
     resolve stays unknown: it is reported, never replaced by a one-step guess.
+
+    ``storage_context`` is the saved Q/L device allocation. Without it a D/W
+    form is reported as a context gap; ``assume_default_allocation`` is the
+    caller's explicit statement that no extended allocation exists.
     """
     model = str(plc_model or snapshot.get("plc_model") or "").strip().upper() or None
     chosen = _step_source(step_source)
+    target = target_state(snapshot, model, plc_info=plc_info, step_source=chosen)
     cursor = StepCursor()
     entries: List[Dict[str, Any]] = []
     findings: List[Dict[str, Any]] = []
+    if target["status"] in ("conflict", "mismatch"):
+        findings.append({"kind": "target_conflict", "status": target["status"],
+                         "plc_model": model, "rules": [],
+                         "reason": target["reason"],
+                         "source_model": target["source_model"],
+                         "output_model": target["output_model"],
+                         "source_plc_info": target["source_plc_info"],
+                         "output_plc_info": target["output_plc_info"]})
     for network in snapshot.get("raw_networks") or []:
         network_id = str(network.get("id") or "")
         instructions = [item for item in network.get("raw_instructions") or []
@@ -89,7 +171,9 @@ def step_width_plan(snapshot: Mapping[str, Any], *, plc_model: Any = None,
         for position, instruction in enumerate(instructions):
             opcode = str(instruction.get("op") or "").strip().upper()
             operands = [str(item) for item in instruction.get("args") or []]
-            width = instruction_step_width(opcode, operands, plc_model=model)
+            width = instruction_step_width(opcode, operands, plc_model=model,
+                                           context=storage_context,
+                                           assume_default_allocation=assume_default_allocation)
             source_step = source_steps[position]
             # The export's own per-instruction width is an observation; the
             # catalogue is the expectation being checked against it.
@@ -135,10 +219,11 @@ def step_width_plan(snapshot: Mapping[str, Any], *, plc_model: Any = None,
         "instruction_count": len(entries),
         "mismatch": sum(1 for item in findings if item["kind"] == "width_mismatch"),
         "unknown": sum(1 for item in findings if item["kind"] == "width_unknown"),
+        "target_conflict": sum(1 for item in findings if item["kind"] == "target_conflict"),
         "steps_complete": all(entry["step"].isdigit() for entry in entries),
     }
     return {"plc_model": model, "step_source": chosen, "entries": entries,
-            "findings": findings, "summary": summary,
+            "findings": findings, "summary": summary, "target": target,
             "next_step_label": cursor.label}
 
 
@@ -154,6 +239,8 @@ def write_gxworks2_csv_from_source(
     program_newline: str | None = None,
     comment_newline: str | None = None,
     step_source: str = "source",
+    storage_context: Any = None,
+    assume_default_allocation: bool = False,
 ) -> Dict[str, Any]:
     """Write one ordered snapshot back as native program and comment CSV files.
 
@@ -167,14 +254,21 @@ def write_gxworks2_csv_from_source(
     disagrees.  ``step_source="catalogue"`` renumbers an edited sequence from the
     shared Core width rules and keeps ``source_row``/``source_step`` as
     provenance only.
+
+    The ``PLC信息`` line is written from the planned target: an explicit CPU
+    conversion rebuilds it from the new CPU and keeps the source CPU as
+    provenance, while a source-preserving write that would change the identity is
+    reported as ``target_conflict`` rather than silently retargeted.
     """
-    plan = step_width_plan(snapshot, plc_model=plc_model, step_source=step_source)
+    plan = step_width_plan(snapshot, plc_model=plc_model, step_source=step_source,
+                           plc_info=plc_info, storage_context=storage_context,
+                           assume_default_allocation=assume_default_allocation)
     model = plan["plc_model"]
     program_path = Path(program_csv_path).expanduser()
     comment_path = Path(comment_csv_path).expanduser()
 
     document_title = str(title or snapshot.get("export_title") or snapshot.get("program_name") or "MAIN")
-    information = str(plc_info if plc_info is not None else (snapshot.get("plc_info") or ""))
+    information = str(plan["target"].get("output_plc_info") or "")
     if not information and model:
         # No source header to reproduce: state the project CPU instead of an
         # empty or borrowed FX3U line. Unknown targets stay empty and reported.
@@ -270,6 +364,9 @@ def write_gxworks2_csv_from_source(
                      or (snapshot.get("newlines") or {}).get("program") or "\r\n",
                      "comments": chosen_comment_newline},
         "binding": binding,
+        # ``target`` states how the computed CPU relates to the written header,
+        # so a converted or conflicting identity is visible in the report.
+        "target": plan["target"],
         # ``width_mismatch`` is a source observation that disagrees with the
         # catalogue; ``width_unknown`` means the catalogue cannot answer yet.
         # Neither one blocks the write: the report states what is known.
@@ -297,6 +394,8 @@ def verify_gxworks2_csv_source(
     plc_model: Any = None,
     step_source: str = "source",
     expect_source_unchanged: bool = True,
+    storage_context: Any = None,
+    assume_default_allocation: bool = False,
 ) -> Dict[str, Any]:
     """Check that a rewritten export still carries this snapshot.
 
@@ -315,7 +414,8 @@ def verify_gxworks2_csv_source(
 
     manager = CSVManager()
     plan = step_width_plan(snapshot, plc_model=plc_model or snapshot.get("plc_model"),
-                           step_source=step_source)
+                           step_source=step_source, storage_context=storage_context,
+                           assume_default_allocation=assume_default_allocation)
     checks: Dict[str, Dict[str, Any]] = {}
     mismatches: List[Dict[str, Any]] = []
 
@@ -341,6 +441,29 @@ def verify_gxworks2_csv_source(
     record("format", program_validation.valid and comment_validation.valid,
            program_errors=list(program_validation.errors),
            comment_errors=list(comment_validation.errors))
+
+    # The written header must describe the CPU the steps were computed for. An
+    # export whose header names another CPU is not a passing verification, even
+    # when every instruction and step below it matches.
+    written_info = str(program_validation.plc_info or "").strip()
+    target = plan["target"]
+    expected_info = str(target.get("output_plc_info") or "").strip()
+    target_ok = written_info == expected_info
+    model_ok = None
+    if target.get("output_model"):
+        from gxworks2.project_profiles import native_project_profile
+        profile = native_project_profile(target["output_model"])
+        model_ok = bool(profile is not None and written_info
+                        and profile.accepts_plc_info(written_info))
+        target_ok = target_ok and model_ok
+    record("target_identity", target_ok,
+           model=target.get("output_model"),
+           source_model=target.get("source_model"),
+           expected=expected_info or None,
+           actual=written_info or None,
+           accepts_header=model_ok,
+           target_status=target.get("status"),
+           reason=target.get("reason"))
 
     if source_program is not None and expect_source_unchanged:
         source_program_hash = manager.program_semantic_sha256(source_program)
@@ -454,6 +577,7 @@ def verify_gxworks2_csv_source(
         "instruction_count": len(expected),
         "comment_count": len(expected_comments),
         "step_source": plan["step_source"],
+        "target": plan["target"],
         "unbound_instructions": unbound,
         "width_findings": plan["findings"],
         "width_summary": plan["summary"],
@@ -469,5 +593,5 @@ def verify_gxworks2_csv_source(
     return result
 
 
-__all__ = ["step_width_plan", "verify_gxworks2_csv_source", "write_gxworks2_csv_from_source",
-           "STEP_SOURCES"]
+__all__ = ["step_width_plan", "target_state", "verify_gxworks2_csv_source",
+           "write_gxworks2_csv_from_source", "STEP_SOURCES"]

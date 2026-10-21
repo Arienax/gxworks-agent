@@ -169,6 +169,37 @@ def _document_newline(path: Path) -> str:
     return "\r\n" if b"\r\x00\n\x00" in raw else "\n"
 
 
+def target_diagnostics(plc_model: Any, plc_info: Any) -> Dict[str, Any]:
+    """Does the export's own ``PLC信息`` line describe the CPU being used?
+
+    The identity is read from the file, not assumed: an export for another CPU
+    must not be inspected, renumbered or written as if it were the requested one.
+    """
+    from gxworks2.project_profiles import native_plc_info, native_project_profile, plc_info_target
+
+    identity = str(plc_model or "").strip().upper()
+    text = str(plc_info or "").strip()
+    entry: Dict[str, Any] = {"plc_model": identity or None, "plc_info": text or None,
+                             "plc_info_target": plc_info_target(text) if text else None,
+                             "status": "unstated", "reason": None}
+    if not text:
+        entry["reason"] = "导出文件没有PLC信息行，目标CPU只来自调用方"
+        return entry
+    profile = native_project_profile(identity) if identity else None
+    if profile is None:
+        entry.update(status="unknown_target",
+                     reason=f"无法确认目标CPU {identity or '(空)'} 的PLC信息格式")
+        return entry
+    expected = native_plc_info(identity)
+    entry["expected"] = expected
+    if profile.accepts_plc_info(text):
+        entry["status"] = "matched"
+        return entry
+    entry.update(status="mismatch",
+                 reason=f"文件PLC信息为 {text!r}，与目标CPU {identity} 的 {expected!r} 不一致")
+    return entry
+
+
 def read_plc_info_target(program_csv_path: Any) -> Optional[str]:
     """The CPU the export names on its ``PLC信息`` line, if it names one.
 
@@ -809,9 +840,15 @@ def inspect_gxworks2_csv(program_csv_path, comment_csv_path, *, plc_model, progr
         step_width_status = "incomplete"
     else:
         step_width_status = "source_matches_catalogue"
+    # The export states its own CPU; using another one has to be reported, not
+    # quietly accepted, because every step width below depends on that choice.
+    target = target_diagnostics(plc_model, validation.plc_info)
+    if target["status"] == "mismatch":
+        step_width_status = "target_conflict"
     step_width = {"status": step_width_status, "summary": width_summary,
                   "findings": width_plan["findings"][:40],
-                  "truncated_findings": max(0, len(width_plan["findings"]) - 40)}
+                  "truncated_findings": max(0, len(width_plan["findings"]) - 40),
+                  "target": target}
 
     coverage = {
         "parse_status": parse_status,
@@ -827,6 +864,7 @@ def inspect_gxworks2_csv(program_csv_path, comment_csv_path, *, plc_model, progr
         "graph_preview_status": graph_preview_status,
         "graph_preview_failures": preview_failures,
         "unknown_instructions": unknown,
+        "target_status": target["status"],
         "step_width_status": step_width_status,
         "semantic_status": "unverified" if unknown or ir_status != "valid" else "static_only",
         "runtime_verified": False,
@@ -834,7 +872,7 @@ def inspect_gxworks2_csv(program_csv_path, comment_csv_path, *, plc_model, progr
     ladder = ({"device_comments": comments, "rungs": preview_rungs}
               if graph_preview_status == "complete" else None)
     return {"program_name": selected_program, "export_title": rows[0][0], "plc_info": validation.plc_info,
-            "comment_title": comment_title, "plc_model": plc_model,
+            "comment_title": comment_title, "plc_model": plc_model, "target": target,
             "newlines": {"program": _document_newline(program_path),
                          "comments": _document_newline(Path(comment_csv_path))},
             "raw_networks": networks, "device_comments": comments, "coverage": coverage,
