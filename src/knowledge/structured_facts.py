@@ -574,21 +574,17 @@ def resolve_instruction_step_width(target, *, plc_model=None, context=None,
                                   text_encoding=None, assume_default_allocation=False):
     """Resolve one instruction expected GX program width from the shared owner.
 
-    Exact opcode+operands use instruction_step_width for the real CPU. Opcode-only
-    targets expose a width only when the shared catalogue proves the mnemonic has
-    one fixed observed width for every member of that target; a Q/L target is
-    answered by the same stored-width algorithm with no operands, so a
-    zero-operand form resolves and every other form asks for its operands
-    instead of reporting missing coverage. Missing operands, missing project
-    context, a missing code page, an uncovered CPU and conflicting member
-    answers stay separate states: this layer never guesses operands, a CPU or a
-    one-step fallback, and a missing target is reported instead of assumed.
+    Exact opcode+operands use instruction_step_width for the real CPU; an
+    opcode-only target uses mnemonic_step_width, which asks the same Core rules
+    whether the mnemonic has a width of its own, needs its operands, or is
+    uncovered. Both questions keep the whole target identity, so a merged menu
+    option is never split into members here and its context still matches. Missing
+    operands, missing project context, a missing code page, an uncovered CPU and
+    conflicting member answers stay separate states: this layer never guesses
+    operands, a CPU or a one-step fallback, and a missing target is reported
+    instead of assumed.
     """
-    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
-    from plc.instruction_steps import (STATUS_NO_PROFILE, STATUS_REQUIRES_OPERANDS,
-                                       STATUS_UNKNOWN_CPU, _merge_members,
-                                       default_step_width_catalog, instruction_step_width,
-                                       target_family, target_identity_state)
+    from plc.instruction_steps import instruction_step_width
 
     model = str(plc_model or "").strip().upper()
     if isinstance(target, Mapping):
@@ -633,27 +629,16 @@ def resolve_instruction_step_width(target, *, plc_model=None, context=None,
             "members": [{"cpu": cpu, **member.as_dict()} for cpu, member in width.members],
         }
 
-    # The same full-identity validation Core uses: a merged spelling has to name a
-    # saved menu option, so FX3U/FX1S and a trailing slash are unknown here too.
-    members, identity_error = target_identity_state(model)
-    if members is None:
-        return {
-            "known": False,
-            "steps": None,
-            "status": STATUS_UNKNOWN_CPU,
-            "resolution": "unknown_cpu",
-            "source": "unknown",
-            "reason": identity_error or "A program step width needs the saved CPU identity",
-            "evidence": [],
-            "requirements": ["plc_model"],
-            "operands": [],
-            "plc_model": model or None,
-            "members": [],
-        }
+    # Opcode-only asks Core's second question: does this mnemonic have a width of
+    # its own, does it need its operands, or is it uncovered? Core keeps the full
+    # identity (a merged menu option is not split here), so this layer only
+    # converts the answer instead of re-deciding fixed widths or members itself.
+    from plc.instruction_steps import mnemonic_step_width
 
     try:
-        catalogue = default_step_width_catalog()
-        families = {member: target_family(member) for member in members}
+        width = mnemonic_step_width(opcode, plc_model=model or None, context=context,
+                                    assume_default_allocation=assume_default_allocation,
+                                    text_encoding=text_encoding)
     except (OSError, ValueError, KeyError, TypeError) as exc:
         return {
             "known": False,
@@ -668,153 +653,19 @@ def resolve_instruction_step_width(target, *, plc_model=None, context=None,
             "plc_model": model,
             "members": [],
         }
-
-    covered = [member for member in members if target_family(member) == "FX"]
-    fixed = catalogue.fixed_forms().get(opcode) if len(covered) == len(members) else None
-    if fixed is not None:
-        steps, arity = fixed
-        return {
-            "known": True,
-            "steps": int(steps),
-            "status": "known",
-            "resolution": "fixed_mnemonic",
-            "source": "native_observation",
-            "reason": "",
-            "evidence": [],
-            "requirements": [],
-            "operands": [],
-            "operand_arity": int(arity),
-            "plc_model": model,
-            "members": [],
-        }
-
-    unrecognised = [member for member in members if target_family(member) is None]
-    if unrecognised:
-        return {
-            "known": False,
-            "steps": None,
-            "status": "unknown_cpu",
-            "resolution": "unknown_cpu",
-            "source": "unknown",
-            "reason": "Unknown PLC target " + ", ".join(repr(item) for item in unrecognised),
-            "evidence": [],
-            "requirements": [],
-            "operands": [],
-            "plc_model": model,
-            "members": [],
-        }
-
-    unknown = [member for member in members if target_family(member) != "FX"]
-    if unknown and len(unknown) == len(members):
-        # Q/L is answered by the same stored-width algorithm the instance path
-        # uses: a zero-operand form resolves, every other form is an operand
-        # question. Reporting missing coverage here would be a false gap.
-        if not DEFAULT_INSTRUCTION_REGISTRY.is_known(opcode):
-            # An unknown mnemonic is missing coverage, not a missing operand.
-            return {
-                "known": False,
-                "steps": None,
-                "status": STATUS_NO_PROFILE,
-                "resolution": "uncovered",
-                "source": "unknown",
-                "reason": "No program step-width coverage for " + opcode
-                          + " on " + ", ".join(unknown) + " (opcode-only target)",
-                "evidence": [],
-                "requirements": [],
-                "operands": [],
-                "plc_model": model,
-                "members": [],
-            }
-        if not DEFAULT_INSTRUCTION_REGISTRY.is_known(opcode):
-            # An unknown mnemonic is missing coverage, not a missing operand.
-            return {
-                "known": False,
-                "steps": None,
-                "status": STATUS_NO_PROFILE,
-                "resolution": "uncovered",
-                "source": "unknown",
-                "reason": "No program step-width coverage for " + opcode
-                          + " on " + ", ".join(unknown) + " (opcode-only target)",
-                "evidence": [],
-                "requirements": [],
-                "operands": [],
-                "plc_model": model,
-                "members": [],
-            }
-        answers = [(member, instruction_step_width(opcode, [], plc_model=member,
-                                                   context=context,
-                                                   text_encoding=text_encoding,
-                                                   assume_default_allocation=assume_default_allocation))
-                   for member in unknown]
-        width = answers[0][1] if len(answers) == 1 else _merge_members(answers)
-        return {
-            "known": width.known,
-            "steps": width.steps,
-            "status": width.status,
-            "resolution": ("fixed_mnemonic" if width.known
-                           else _step_width_resolution(width.status)),
-            "source": width.source,
-            "reason": width.reason,
-            "evidence": list(width.evidence),
-            "requirements": list(width.requirements),
-            "operands": [],
-            "plc_model": model,
-            "members": [{"cpu": cpu, **member.as_dict()} for cpu, member in width.members],
-        }
-    if unknown:
-        # A mixed target cannot be answered from one family's rules.
-        return {
-            "known": False,
-            "steps": None,
-            "status": STATUS_NO_PROFILE,
-            "resolution": "uncovered",
-            "source": "unknown",
-            "reason": "No single program step-width family covers "
-                      + ", ".join(unknown) + " (opcode-only target)",
-            "evidence": [],
-            "requirements": [],
-            "operands": [],
-            "plc_model": model,
-            "members": [],
-        }
-
-    q_l = [member for member, family in families.items() if family in ("Q", "L")]
-    if not q_l and not (
-            opcode in catalogue.rule_opcodes or opcode in catalogue.variable
-            or opcode in catalogue.observations):
-        # Nothing in the shared catalogue mentions this mnemonic for an FX target:
-        # that is missing coverage, not a missing operand.
-        return {
-            "known": False,
-            "steps": None,
-            "status": STATUS_NO_PROFILE,
-            "resolution": "uncovered",
-            "source": "unknown",
-            "reason": "No program step-width coverage for " + opcode
-                      + " on " + "/".join(members),
-            "evidence": [],
-            "requirements": [],
-            "operands": [],
-            "plc_model": model,
-            "members": [],
-        }
-
-    reason = ("Operation-specific width needs the concrete operands for this CPU family"
-              if q_l else
-              "Opcode-only target is operand-dependent, variable-width, or lacks one "
-              "fixed observed width")
     return {
-        "known": False,
-        "steps": None,
-        "status": STATUS_REQUIRES_OPERANDS,
-        "resolution": "requires_operands",
-        "source": "unknown",
-        "reason": reason,
-        "evidence": [],
-        "requirements": ["operands"],
+        "known": width.known,
+        "steps": width.steps,
+        "status": width.status,
+        "resolution": ("fixed_mnemonic" if width.known
+                       else _step_width_resolution(width.status)),
+        "source": width.source,
+        "reason": width.reason,
+        "evidence": list(width.evidence),
+        "requirements": list(width.requirements),
         "operands": [],
-        "plc_model": model,
-        "members": [],
+        "plc_model": model or None,
+        "members": [{"cpu": cpu, **member.as_dict()} for cpu, member in width.members],
     }
 
 

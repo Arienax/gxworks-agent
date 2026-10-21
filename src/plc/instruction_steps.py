@@ -485,14 +485,82 @@ class StepWidthCatalog:
         steps, evidence = candidates[0]
         return ("known", steps, evidence)
 
-    def fixed_forms(self) -> Mapping[str, Tuple[int, int]]:
-        """Inspectable catalogue coverage, excluding operand-dependent forms."""
+    def observed_forms(self) -> Mapping[str, Tuple[int, int]]:
+        """Inspectable native observations, one signature per mnemonic.
+
+        This is a corpus view: it lists the mnemonics the native headers record
+        with a single width and arity, and excludes the forms another rule kind
+        owns. It says nothing about whether that width is fixed; whether a target
+        can answer without operands is what :meth:`mnemonic_width` decides.
+        """
+        governed = set(self.rule_opcodes) | set(self.variable) | set(self.aliases)
+        for entry in self.device_ranges:
+            governed.update(entry["opcodes"])
         result = {}
         for opcode, entries in self.observations.items():
             signatures = {(width, arity) for width, arity, _ in entries}
-            if len(signatures) == 1 and opcode not in self.rule_opcodes and opcode not in self.variable and opcode not in self.aliases:
+            if len(signatures) == 1 and opcode not in governed:
                 result[opcode] = next(iter(signatures))
         return MappingProxyType(result)
+
+    def mnemonic_width(self, opcode: Any, *, plc_model: str) -> StepWidth:
+        """Width of one mnemonic when its operands are not supplied.
+
+        Only an instruction that takes no operands has a width of its own: every
+        other stored width is a function of the operand encodings, so native
+        samples that happen to agree on one number do not make the mnemonic
+        fixed. Operand rules, device-range tables, exact operand forms and
+        variable forms answer "needs the operands" here, on the same target
+        scoping the instance query uses.
+        """
+        model = str(plc_model or "").strip().upper()
+        scope = "exact"
+        if model not in self.models:
+            if not _in_fx_family(model):
+                return _unresolved(STATUS_NO_PROFILE,
+                                   "No step-width catalogue for CPU "
+                                   + (model or "<missing target>"))
+            scope = "family"
+        op = str(opcode).strip().upper()
+        op = self.aliases.get(op, op)
+        owners = []
+        if any(op in rule["opcodes"] and _scope_applies(rule, model) for rule in self.rules):
+            owners.append("an operand-width rule")
+        if any(op in entry["opcodes"] and _scope_applies(entry, model)
+               for entry in self.device_ranges):
+            owners.append("a device-range step table")
+        if any(key[0] == op and _scope_applies(spec, model)
+               for key, (_steps, _evidence, spec) in self.exact_forms.items()):
+            owners.append("an exact operand form")
+        if any(op in entry["opcodes"] and _scope_applies(entry, model)
+               for entry in self.variable_forms):
+            owners.append("a variable-width form")
+        if owners:
+            return _unresolved(STATUS_REQUIRES_OPERANDS,
+                               f"{op} is covered by {owners[0]} on {model}: its stored "
+                               "width depends on the operands",
+                               requirements=("operands",))
+        observations = self.observations.get(op, ())
+        if not observations:
+            return _unresolved(STATUS_NO_PROFILE,
+                               "No program step-width coverage for " + op + " on " + model)
+        signatures = {(width, arity) for width, arity, _ in observations}
+        if len(signatures) != 1:
+            return _unresolved(STATUS_REQUIRES_OPERANDS,
+                               f"{op} stores several widths on {model}: the operands decide "
+                               "which one applies",
+                               requirements=("operands",))
+        steps, arity = next(iter(signatures))
+        if arity:
+            return _unresolved(STATUS_REQUIRES_OPERANDS,
+                               f"{op} only stores a width with its {arity} operand(s) known",
+                               requirements=("operands",))
+        items = (f"native stored header {observations[0][2]} for {op}: an instruction with "
+                 "no operands",)
+        if scope == "family":
+            items += (f"Shared FX instruction-width rule applied to {model}; verified on "
+                      f"{'/'.join(sorted(self.models))} manual evidence and native samples",)
+        return _known(int(steps), "native_observation", evidence=items, scope=scope)
 
 
 @lru_cache(maxsize=1)
@@ -623,6 +691,63 @@ def _resolve_member(member: str, opcode: Any, operands: Sequence[Any], context: 
                                     target_identity=identity or member)
     return default_step_width_catalog().resolve(opcode, operands, plc_model=member,
                                                 text_encoding=text_encoding)
+
+
+def mnemonic_step_width(opcode: Any, operands: Sequence[Any] = (),
+                        *, plc_model: Optional[str] = None, context: Any = None,
+                        assume_default_allocation: bool = False,
+                        text_encoding: Optional[str] = None) -> StepWidth:
+    """Width of one mnemonic when its operands are not supplied.
+
+    Core answers two width questions from one place: :func:`instruction_step_width`
+    takes the operands and computes that instance, and this one says whether the
+    mnemonic has a width of its own, needs its operands, or has no coverage. The
+    identity validation, the member handling and the rule kinds behind both are
+    the same, so a mnemonic cannot look fixed here and operand-dependent there, and
+    a merged menu option keeps its members and its saved allocation context.
+    """
+    members, identity_error = target_identity_state(plc_model)
+    if members is None:
+        return _unresolved(STATUS_UNKNOWN_CPU, identity_error or "",
+                           requirements=("plc_model",))
+    families: dict = {}
+    for member in members:
+        family = target_family(member)
+        if family is None:
+            return _unresolved(STATUS_UNKNOWN_CPU, "Unknown PLC target " + repr(member))
+        families[member] = family
+    op = str(opcode or "").strip().upper()
+    if not op:
+        return _unresolved(STATUS_NOT_APPLICABLE, "Instruction opcode is missing")
+    if len(set(families.values())) > 1:
+        return _unresolved(STATUS_NO_PROFILE,
+                           "No single program step-width family covers "
+                           + "/".join(families) + " (opcode-only target)")
+    if set(families.values()) == {"FX"}:
+        catalogue = default_step_width_catalog()
+        answers = [(member, catalogue.mnemonic_width(op, plc_model=member))
+                   for member in members]
+        return answers[0][1] if len(answers) == 1 else _merge_members(answers)
+    # Q/L: the same stored-width algorithm answers a zero-operand form, given the
+    # full target identity, so a merged menu option is not split into members here.
+    width = instruction_step_width(op, list(operands), plc_model=plc_model,
+                                   context=context,
+                                   assume_default_allocation=assume_default_allocation,
+                                   text_encoding=text_encoding)
+    if not width.known and not _registry_knows(op):
+        # A mnemonic the registry does not know is missing coverage here, not a
+        # missing operand: the stored-width algorithm cannot tell those apart.
+        return _unresolved(STATUS_NO_PROFILE,
+                           "No program step-width coverage for " + op + " on "
+                           + "/".join(families) + " (opcode-only target)")
+    return width
+
+
+def _registry_knows(opcode: str) -> bool:
+    """Whether the instruction registry knows this mnemonic at all."""
+    from .instructions import DEFAULT_INSTRUCTION_REGISTRY
+
+    return DEFAULT_INSTRUCTION_REGISTRY.is_known(opcode)
 
 
 def instruction_step_width(opcode: Any, operands: Sequence[Any] = (), *,
