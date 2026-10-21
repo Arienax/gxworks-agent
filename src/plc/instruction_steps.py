@@ -325,13 +325,10 @@ def _resolve_member(member: str, opcode: Any, operands: Sequence[Any], context: 
         return _unresolved(STATUS_NO_PROFILE,
                            "No program step-width coverage for FX5U; FX rules are not borrowed")
     if family in ("Q", "L"):
-        # The stored width of a Q/L instruction is a property of its encoded
-        # header, not of a mnemonic table; that algorithm lives in the GXW layer
-        # and is wired in separately. Until then the target is covered by no rule
-        # here, which is reported instead of borrowed from FX.
-        return _unresolved(STATUS_NO_PROFILE,
-                           "No program step-width coverage for " + member
-                           + "; Q/L stored widths come from their encoded header")
+        # The Q/L stored-width algorithms stay in the GXW layer that owns the
+        # native encodings; this delegation is the single implementation.
+        from gxw.step_rules_q import resolve_stored_steps
+        return resolve_stored_steps(opcode, operands, cpu=member, context=context)
     return default_step_width_catalog().resolve(opcode, operands, plc_model=member)
 
 
