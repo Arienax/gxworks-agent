@@ -26,6 +26,7 @@ def mcp_tool(schema):
                 annotations={"readOnlyHint": function["name"] in {
                     "get_current_project", "get_current_program_info", "read_network", "search_plc_manual",
                     "get_diagnostics", "validate_current_program", "list_gxworks2_sessions", "list_simulator_targets",
+                    "inspect_gxworks2_csv_files",
                     "read_native_device_assignments", "compare_native_compiled_code", "locate_native_code_steps",
                     "read_fbd_libraries",
                     "read_fbd_definition",

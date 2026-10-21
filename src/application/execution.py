@@ -379,15 +379,38 @@ class GXExecutionCoordinator:
                 sync["message"] = messages[sync["status"]]
                 result["message"] = sync["message"]
         if operation == "read_gx":
-            from gxworks2.csv_importer import materialize_gxworks2_version, parse_gxworks2_csv
+            from gxworks2.csv_importer import (GXCSVImportError, inspect_gxworks2_csv,
+                                               materialize_gxworks2_version, parse_gxworks2_csv,
+                                               read_plc_info_target)
             from plc.validation import find_unverified_app_instructions
 
             exported_program = Path(str(sync.get("exported_program_path") or ""))
             exported_comments = Path(str(sync.get("exported_comment_path") or ""))
             if not exported_program.is_file() or not exported_comments.is_file():
                 raise ValueError("GX snapshot is missing its exported CSV evidence.")
-            native = parse_gxworks2_csv(exported_program, exported_comments)
-            unverified = find_unverified_app_instructions(native.ladder)
+            # The export names its own CPU; only fall back to it when neither the
+            # stored version nor the project record states one.
+            snapshot_model = (version.get("plc_model") or project.get("plc_model")
+                              or read_plc_info_target(exported_program) or "")
+            if not snapshot_model:
+                raise ValueError(
+                    "无法确认该GX程序的目标CPU：工程记录与导出CSV均未给出型号，"
+                    "不能按其他型号推算步号。")
+            snapshot_program = (version.get("program_name")
+                                or (sync.get("details") or {}).get("program_name") or "MAIN")
+            try:
+                native = parse_gxworks2_csv(exported_program, exported_comments)
+            except GXCSVImportError as graph_error:
+                # An export the drawing model cannot represent is still an
+                # ordered statement list; read it instead of refusing the pull.
+                ordered = inspect_gxworks2_csv(exported_program, exported_comments,
+                                               plc_model=snapshot_model,
+                                               program_name=snapshot_program)
+                if ordered["coverage"].get("ir_status") != "valid":
+                    raise graph_error
+                unverified = ordered["coverage"].get("unknown_instructions") or []
+            else:
+                unverified = find_unverified_app_instructions(native.ladder)
             if unverified:
                 result.update(
                     status="unsupported", error_code="unverified_native_instruction",
@@ -401,8 +424,8 @@ class GXExecutionCoordinator:
             with tempfile.TemporaryDirectory(prefix="gx-read-candidate-") as directory:
                 metadata = materialize_gxworks2_version(
                     exported_program, exported_comments, directory,
-                    plc_model=version.get("plc_model") or project.get("plc_model") or "FX3U",
-                    program_name=version.get("program_name") or (sync.get("details") or {}).get("program_name") or "MAIN",
+                    plc_model=snapshot_model,
+                    program_name=snapshot_program,
                     revision=int(version.get("revision") or 0) + 1,
                 )
                 candidate = json.loads((Path(directory) / metadata["artifacts"]["ir"]).read_text(encoding="utf-8"))

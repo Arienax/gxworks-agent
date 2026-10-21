@@ -100,7 +100,8 @@ def _get_current_program_info(
                 "source_ref": source["source_ref"], "plc_model": source["plc_model"],
                 "program_name": source["program_name"], "coverage": source["coverage"],
                 "network_count": len(raw), "networks_truncated": len(raw) > 100,
-                "networks": [{key: value for key, value in row.items() if key != "raw_instructions"}
+                "networks": [{key: value for key, value in row.items()
+                              if key not in {"raw_instructions", "source_map", "statements"}}
                              | {"instruction_count": len(row["raw_instructions"])} for row in raw[:100]],
                 "devices": _device_summary(context.program_ir) if context.program_ir else {},
                 'device_comments': copy.deepcopy(source.get('device_comments', {})),
@@ -200,12 +201,8 @@ def _validate_current_program(
                     hardware_context=(_confirmed_spec(context) or {}).get('hardware_profile'),
                     confirmed_spec=_confirmed_spec(context), project_context=st_context, callable_sources=sources),
                 "version_id": context.version_id}
-    if not isinstance(context.ladder, Mapping):
-        return {
-            "available": False,
-            "valid": False,
-            "message": "当前没有可校验的梯形图版本。",
-        }
+    # The ordered instruction IR is authoritative; a drawing model may be absent
+    # when a rung cannot be drawn, and that must not disable the static checks.
     if context.program_ir is not None and (context.program_ir.get('source') or {}).get('format') in {
             'instruction_sequence_v1', 'instruction_sequence_v2'}:
         from plc.core import PLCCore
@@ -214,6 +211,12 @@ def _validate_current_program(
         return {**report, 'version_id': context.version_id, 'plc_model': context.plc_model,
                 'source_format': context.program_ir['source']['format'], 'native_compile': 'not_run',
                 'runtime_verified': False}
+    if not isinstance(context.ladder, Mapping):
+        return {
+            "available": False,
+            "valid": False,
+            "message": "当前没有可校验的梯形图版本。",
+        }
 
     from inspection.engine import run_local_inspection
 
@@ -289,8 +292,16 @@ def _read_network(context: ToolContext, arguments: Mapping[str, Any]) -> Dict[st
         if context.program_ir is None:
             return {"network": copy.deepcopy(raw), "coverage": "raw_instructions_only"}
         network = PLCCore().read_network(context.program_ir, arguments["network_id"])
-        return {"network": network, "raw_instructions": copy.deepcopy(raw["raw_instructions"]),
-                "coverage": copy.deepcopy(context.analysis_source["coverage"])}
+        payload = {"network": network, "raw_instructions": copy.deepcopy(raw["raw_instructions"]),
+                   "coverage": copy.deepcopy(context.analysis_source["coverage"])}
+        if raw.get("source_map"):
+            # CSV-sourced networks keep their original row/step binding here; the
+            # ordered IR itself carries execution order without native offsets.
+            payload["source_map"] = copy.deepcopy(raw["source_map"])
+        if raw.get("statements"):
+            # Interline statement rows that preceded the first instruction.
+            payload["statements"] = copy.deepcopy(raw["statements"])
+        return payload
     network = PLCCore().read_network(
         _require_program_ir(context),
         str(arguments.get("network_id") or ""),

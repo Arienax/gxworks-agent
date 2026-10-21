@@ -244,7 +244,7 @@ def read_ordered_program(project, program=None, *, revision=1):
             unknown.append(item)
         source_records.append(item)
     networks = []
-    for index, (note, rows) in enumerate(_split_networks(records), 1):
+    for index, (note, rows, _leading) in enumerate(_split_networks(records), 1):
         instructions = [{**row.as_ir(), 'step': row.step, 'source_row': row.source_row,
             'source_offset': source_records[row.source_row - 1]['source_offset'],
             'record_index': row.source_row - 1} for row in rows]

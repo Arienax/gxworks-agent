@@ -34,6 +34,7 @@ SAFE_TOOL_NAMES = (
     "inspect_gxw_project",
     "list_gxworks2_sessions",
     "read_gxworks2_snapshot",
+    "inspect_gxworks2_csv_files",
     "list_simulator_targets",
     "get_simulator_status",
     "read_simulator_devices",
@@ -60,6 +61,7 @@ READ_ONLY_TOOL_NAMES = frozenset({
     "read_sfc_project",
     "read_st_project",
     "list_gxworks2_sessions", "read_gxworks2_snapshot", "inspect_gxw_project",
+    "inspect_gxworks2_csv_files",
     "list_simulator_targets", "get_simulator_status", "read_simulator_devices",
     "connect_simulator", "prepare_simulator_scenario", "start_simulator_trace",
     "get_simulator_trace", "stop_simulator_trace",
@@ -72,7 +74,7 @@ SOURCE_TOOL_NAMES = frozenset({"get_current_program_info", "read_network", "get_
 
 
 DISCOVERY_TOOL_NAMES = frozenset({"get_current_project", "list_gxworks2_sessions",
-                                "inspect_gxw_project",
+                                "inspect_gxw_project", "inspect_gxworks2_csv_files",
                                 "read_gxworks2_snapshot", "list_simulator_targets",
                                 "get_simulator_status", "read_simulator_devices",
                                 "connect_simulator", "prepare_simulator_scenario", "start_simulator_trace",

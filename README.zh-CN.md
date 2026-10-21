@@ -101,7 +101,7 @@ ST 工作流兼顾独立文本生成与 GXW 原生工程维护：
 
 ## 工具链与架构分工
 
-- **工程上下文与现场快照发现**：既可按 CPU 和程序类型创建、选择版本化工程，也可在不建工程的前提下调用 `list_gxworks2_sessions` 与 `read_gxworks2_snapshot`，直接读取本机已打开 GX Works2 窗口的只读程序快照并按网络分析。
+- **工程上下文与现场快照发现**：既可按 CPU 和程序类型创建、选择版本化工程，也可在不建工程的前提下调用 `list_gxworks2_sessions` 与 `read_gxworks2_snapshot`，直接读取本机已打开 GX Works2 窗口的只读程序快照并按网络分析。未打开 GX Works2 时，`inspect_gxworks2_csv_files` 可凭一份程序 CSV、一份软元件注释 CSV 和显式 CPU 取得同类的只读 `source_ref`。
 - **CPU 作用域工程 RAG**：检索管线融合实体匹配、全文检索与 dense/LSA 向量检索。已知指令由结构化事实库提供精确操作数、步长与修饰规则，剩余检索补充手册依据与原创工程范例，并自动剔除重复上下文。
 - **确定性 Core 校验与版本化产物**：Python Core 持有 PLC 领域语义，统一负责 IR 构建、操作数与时序检查、FBD 拓扑与声明核对以及产物生成。本地结构通过、原生编译检查、仿真观察与 PLC 实机行为严格区分。
 - **受控的 GX Works2 交付**：按操作员配置的审批策略，将当前 Ladder 版本的 MAIN 与注释导入 GX Works2，或执行 FBD/ST 原生保存、编译与会话操作，返回绑定版本的操作回执。
