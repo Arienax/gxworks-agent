@@ -2600,18 +2600,50 @@
         ],
         "series": [
           "FX0",
-          "FX1",
+          "FX1"
+        ],
+        "outside": "fall_through",
+        "ranges": [
+          {
+            "from": 0,
+            "to": 1535,
+            "steps": 1
+          }
+        ],
+        "evidence": "FX programming manual JY997D16601-R section 7.16 device-range step table: the direct M contact/coil form stays at one step; GX Works2 1.635.0.1 limits the FX1S M space to M511 and FX1N to M1535, so the wider form is unreachable"
+      },
+      {
+        "devices": [
+          "M"
+        ],
+        "opcodes": [
+          "LD",
+          "LDI",
+          "AND",
+          "ANI",
+          "OR",
+          "ORI",
+          "OUT",
+          "SET",
+          "RST"
+        ],
+        "series": [
           "FX2"
         ],
         "outside": "fall_through",
         "ranges": [
           {
             "from": 0,
-            "to": 4095,
+            "to": 1535,
             "steps": 1
+          },
+          {
+            "from": 1536,
+            "to": 3071,
+            "steps": 2
           }
         ],
-        "evidence": "older FX manuals: direct M one step for FX0/FX1/FX2, no FX3 range split"
+        "evidence": "FX programming manual JY997D16601-R section 7.16 device-range step table with a native FX2N measurement in GX Works2 1.635.0.1: one step up to M1535, two steps from M1536 to M3071 (M2048 and M3071 measured); M3584 and above are outside the FX2N M space"
       },
       {
         "devices": [
