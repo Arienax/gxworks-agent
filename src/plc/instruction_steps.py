@@ -374,7 +374,8 @@ def fx_series(plc_model: Any) -> Optional[str]:
     return None
 
 
-def _resolve_member(member: str, opcode: Any, operands: Sequence[Any], context: Any) -> StepWidth:
+def _resolve_member(member: str, opcode: Any, operands: Sequence[Any], context: Any,
+                    assume_default_allocation: bool = False) -> StepWidth:
     family = target_family(member)
     if family is None:
         return _unresolved(STATUS_UNKNOWN_CPU, "Unknown PLC target " + repr(member))
@@ -385,18 +386,25 @@ def _resolve_member(member: str, opcode: Any, operands: Sequence[Any], context: 
         # The Q/L stored-width algorithms stay in the GXW layer that owns the
         # native encodings; this delegation is the single implementation.
         from gxw.step_rules_q import resolve_stored_steps
-        return resolve_stored_steps(opcode, operands, cpu=member, context=context)
+        return resolve_stored_steps(opcode, operands, cpu=member, context=context,
+                                    assume_default_allocation=assume_default_allocation)
     return default_step_width_catalog().resolve(opcode, operands, plc_model=member)
 
 
 def instruction_step_width(opcode: Any, operands: Sequence[Any] = (), *,
-                           plc_model: Any, context: Any = None) -> StepWidth:
+                           plc_model: Any, context: Any = None,
+                           assume_default_allocation: bool = False) -> StepWidth:
     """Shared, non-blocking expected-width API for generators and diagnostics.
 
     ``plc_model`` is the target actually being edited and is required: a missing
     target is reported, never replaced by FX3U. A merged menu option answers only
     when every member answers, and consistently: members that disagree are a
     conflict, and a member without coverage keeps the merged target unresolved.
+
+    ``context`` is the saved project allocation for a Q/L target. Without it a
+    D/W form answers ``requires_context`` instead of assuming an unextended
+    allocation; ``assume_default_allocation=True`` states that premise
+    explicitly and is recorded in the evidence.
     """
     if isinstance(plc_model, (list, tuple)):
         # An explicit member list is an internal convenience only.
@@ -409,8 +417,10 @@ def instruction_step_width(opcode: Any, operands: Sequence[Any] = (), *,
                            requirements=("plc_model",))
     try:
         if len(members) == 1:
-            return _resolve_member(members[0], opcode, operands, context)
-        results = tuple((member, _resolve_member(member, opcode, operands, context))
+            return _resolve_member(members[0], opcode, operands, context,
+                                   assume_default_allocation)
+        results = tuple((member, _resolve_member(member, opcode, operands, context,
+                                                 assume_default_allocation))
                         for member in members)
         return _merge_members(results)
     except (OSError, ValueError, KeyError, TypeError) as exc:

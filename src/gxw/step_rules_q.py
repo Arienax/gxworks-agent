@@ -16,6 +16,7 @@ program capacity; this module never turns one into the other.
 """
 from __future__ import annotations
 
+import re
 from typing import Any, Sequence
 
 from .models import GXWFormatError
@@ -63,9 +64,37 @@ def _status_for(error: GXWFormatError) -> tuple[str, tuple[str, ...]]:
     return "no_profile", ()
 
 
+#: Devices whose stored width depends on the saved allocation: D and W can be
+#: mapped onto the ZR extension, which changes the encoded operand width.
+_ALLOCATION_DEVICES = re.compile(r"^[DW]\d", re.IGNORECASE)
+
+
+def allocation_dependent_operands(operands: Sequence[Any]) -> tuple[str, ...]:
+    """Operands whose stored width depends on the saved D/W allocation."""
+    dependent = []
+    for value in operands or ():
+        text = str(value).strip()
+        if text.startswith('"'):
+            # A string literal is payload, not a device reference.
+            continue
+        if _ALLOCATION_DEVICES.match(text):
+            dependent.append(text)
+    return tuple(dependent)
+
+
 def resolve_stored_steps(opcode: Any, operands: Sequence[Any] = (), *, cpu: Any,
-                         context: Any = None, text_encoding: str | None = None):
-    """Return the expected stored width for one Q/L instruction instance."""
+                         context: Any = None, text_encoding: str | None = None,
+                         assume_default_allocation: bool = False):
+    """Return the expected stored width for one Q/L instruction instance.
+
+    ``context`` is the saved project allocation. Three states are distinguished:
+    unknown (``None``) answers ``requires_context`` for a D/W operand instead of
+    assuming an unextended allocation, an empty allocation answers from the
+    ordinary ranges, and a parsed allocation answers from its own ranges.
+    ``assume_default_allocation`` is the explicit opt-in for callers that have no
+    saved project and want the unextended result; the evidence states that
+    premise.
+    """
     from plc.instruction_steps import (STATUS_KNOWN, STATUS_UNKNOWN_CPU, StepWidth,
                                       _known, _unresolved)
 
@@ -84,6 +113,17 @@ def resolve_stored_steps(opcode: Any, operands: Sequence[Any] = (), *, cpu: Any,
                            requirements=("operands",))
     args = tuple(str(value).strip() for value in operands or ())
     mode = cpu_storage_mode(identity)
+    assumed_default = False
+    if context is None:
+        dependent = allocation_dependent_operands(args)
+        if dependent and not assume_default_allocation:
+            return _unresolved(
+                "requires_context",
+                (f"{identity} needs the saved device allocation for "
+                 f"{', '.join(dependent)}: a D/W range that is mapped onto the ZR "
+                 "extension changes the stored width"),
+                requirements=("storage_context",))
+        assumed_default = bool(dependent)
     try:
         encoded = tuple(
             encode_q_operand(value, op=name, index=index, profile=profile,
@@ -105,7 +145,11 @@ def resolve_stored_steps(opcode: Any, operands: Sequence[Any] = (), *, cpu: Any,
     # An implicit one-word header carries no width byte; say which form answered.
     evidence = (f"native Q/L stored header {header.hex()} for {identity} "
                 f"(mode {mode or 'common'}, profile {profile})",)
+    if assumed_default:
+        evidence = evidence + (f"assumed the default (unextended) allocation for "
+                               f"{', '.join(allocation_dependent_operands(args))}; the saved "
+                               "project allocation was not supplied",)
     return _known(int(width), "native_stored_width_algorithm", evidence=evidence)
 
 
-__all__ = ["resolve_stored_steps", "cpu_storage_mode"]
+__all__ = ["resolve_stored_steps", "cpu_storage_mode", "allocation_dependent_operands"]
