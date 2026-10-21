@@ -10,6 +10,9 @@ import { pickView } from "./viewProps";
 const NewProjectDialog = lazy(() =>
   import("../workbench/NewProjectDialog").then((module) => ({ default: module.NewProjectDialog })),
 );
+const GXWImportDialog = lazy(() =>
+  import("./GXWImportDialog").then((module) => ({ default: module.GXWImportDialog })),
+);
 const FBDImport = lazy(() =>
   import("../features/FBDPanel").then((module) => ({ default: module.FBDImport })),
 );
@@ -23,6 +26,7 @@ export function WorkbenchDialogs(props: Props) {
     environment,
     guarded,
     gxSend,
+    gxwImport,
     modal,
     pid,
     setGXSend,
@@ -37,6 +41,12 @@ export function WorkbenchDialogs(props: Props) {
 
   return (
     <>
+      {modal === "gxw-import" && (
+        <Suspense fallback={<p role="status">{t("正在读取…")}</p>}>
+          <GXWImportDialog open model={gxwImport}
+            enabled={canWrite || gxwImport.busy} t={t} />
+        </Suspense>
+      )}
       <Modal
         open={!!gxSend}
         onOpenChange={(open) => !open && setGXSend(null)}

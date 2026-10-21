@@ -1,10 +1,11 @@
 import {
   Paperclip,
+  FileUp,
   Send,
   Workflow,
   X
 } from "lucide-react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { activeJob } from "../api/client";
 import { Button } from "../components/ui";
 import { ConversationControls } from "../features/ConversationControls";
@@ -20,6 +21,8 @@ export const composerPanelFields = [
   "composerRoute",
   "editAction",
   "guarded",
+  "gxwImport",
+  "gxwSource",
   "hasSavedVersions",
   "intent",
   "jobs",
@@ -61,6 +64,8 @@ export function ComposerPanel(props: Props) {
     composerRoute,
     editAction,
     guarded,
+    gxwImport,
+    gxwSource,
     hasSavedVersions,
     intent,
     jobs,
@@ -92,8 +97,26 @@ export function ComposerPanel(props: Props) {
     workflow,
   } = props;
   const uploadRef = useRef<HTMLInputElement>(null);
+  const gxwRef = useRef<HTMLInputElement>(null);
+  const dragDepth = useRef(0);
+  const [dragging, setDragging] = useState(false);
   return (
     <>
+      {gxwSource.available && (
+        <label className="gxw-source-picker">
+          {t("编辑的程序")}
+          <select aria-label={t("编辑的程序")} value={gxwSource.selected}
+            disabled={!canWrite || gxwSource.loading || jobs.some(activeJob)}
+            onChange={(event) => gxwSource.select(event.target.value)}>
+            {(gxwSource.view?.programs || []).map((source) => (
+              <option key={source.source_name} value={source.source_name}>
+                {source.source_name} · {source.language?.toUpperCase()} · {source.unit_kind}
+              </option>
+            ))}
+          </select>
+          {gxwSource.loading && <small role="status">{t("正在读取…")}</small>}
+        </label>
+      )}
       {version?.target_mode === "ladder" && task === "edit" && editAction === "edit" && (
         <details className="scope-controls" open={scopeEnabled}>
           <summary>
@@ -139,7 +162,32 @@ export function ComposerPanel(props: Props) {
         </details>
       )}
       <div
-        className="composer"
+        className={`composer${dragging ? " gxw-dragging" : ""}`}
+        onDragOver={(event) => {
+          if (event.dataTransfer.types.includes("Files")) {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = canWrite ? "copy" : "none";
+          }
+        }}
+        onDragEnter={(event) => {
+          if (event.dataTransfer.types.includes("Files")) {
+            event.preventDefault();
+            dragDepth.current++;
+            if (canWrite) setDragging(true);
+          }
+        }}
+        onDragLeave={(event) => {
+          if (event.dataTransfer.types.includes("Files")) {
+            dragDepth.current = Math.max(0, dragDepth.current - 1);
+            if (!dragDepth.current) setDragging(false);
+          }
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          dragDepth.current = 0;
+          setDragging(false);
+          if (canWrite) void gxwImport.open(event.dataTransfer.files);
+        }}
         onKeyDown={(event) => {
           if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && canSubmit) {
             event.preventDefault();
@@ -203,7 +251,19 @@ export function ComposerPanel(props: Props) {
             ))}
           </div>
         )}
+        <p className="gxw-drop-hint">{t(dragging ? "松开以检查 GXW 工程" : "可将 GXW 工程拖到这里，或选择文件导入。")}</p>
         <div className="composer-actions">
+          <input ref={gxwRef} type="file" hidden accept=".gxw"
+            aria-label={t("选择 GXW 工程")}
+            onChange={(event) => {
+              const files = Array.from(event.target.files || []);
+              event.target.value = "";
+              void gxwImport.open(files);
+            }} />
+          <Button variant="ghost" disabled={!canWrite} aria-label={t("导入 GXW")}
+            onClick={() => gxwRef.current?.click()}>
+            <FileUp size={16} />{t("导入 GXW")}
+          </Button>
           <input
             ref={uploadRef}
             type="file"

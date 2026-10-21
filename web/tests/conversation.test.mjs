@@ -44,6 +44,15 @@ test("modification requires a baseline and an actual change request, including D
   }
 });
 
+test("an existing SFC version submits an edit through the shared generation route", () => {
+  const editing = route({ targetMode: "sfc", task: "edit", hasVersions: true });
+  assert.equal(editing.kind, "generation");
+  assert.equal(editing.available, true);
+  assert.equal(editing.generationAction, "edit");
+  assert.equal(editing.requiresText, true);
+  assert.equal(route({ targetMode: "sfc", task: "edit", hasVersions: false }).available, false);
+});
+
 test("full regeneration first obtains a specification and explicitly selects regeneration", () => {
   const editing = { task: "edit", editAction: "regenerate", hasVersions: true };
   assert.equal(route(editing).kind, "analysis");

@@ -30,12 +30,28 @@ export function DiffView({ value, t }: { value: unknown; t: (key: string) => str
     return <DataView value={value} />;
   const diff = value as Record<string, Json>;
   const changes = Array.isArray(diff.changes) ? (diff.changes as Record<string, Json>[]) : [];
-  const comments = Array.isArray(diff.device_comment_changes)
-    ? (diff.device_comment_changes as Record<string, Json>[])
-    : [];
+  const comments = Array.isArray(diff.comment_changes) && diff.comment_changes.length
+    ? (diff.comment_changes as Record<string, Json>[])
+    : Array.isArray(diff.device_comment_changes)
+      ? (diff.device_comment_changes as Record<string, Json>[]) : [];
+  const commentTables = comments.some((change) => typeof change.table === "string");
+  const sources = Array.isArray(diff.source_changes)
+    ? diff.source_changes as Record<string, Json>[] : [];
+  const commentText = (value: Json | undefined) => value === "" ? t("空注释") : String(value ?? "—");
   return (
     <div className="candidate-diff">
       <h3>{t("差异数据")}</h3>
+      {sources.length > 0 && (
+        <section>
+          <h4>{t("程序修改")}</h4>
+          {sources.map((source) => (
+            <details key={String(source.source_name)} open={sources.length === 1}>
+              <summary>{String(source.source_name)} · {String(source.language).toUpperCase()}</summary>
+              <pre>{String(source.unified_diff || "")}</pre>
+            </details>
+          ))}
+        </section>
+      )}
       {diff.kind === "fbd" ? (
         <>
           <p>
@@ -56,7 +72,7 @@ export function DiffView({ value, t }: { value: unknown; t: (key: string) => str
         <>
           {diff.has_changes === false ? (
             <p>{t("程序内容无变化")}</p>
-          ) : typeof diff.unified_diff === "string" ? (
+          ) : typeof diff.unified_diff === "string" && !changes.length ? (
             <pre>{diff.unified_diff}</pre>
           ) : (
             <>
@@ -84,29 +100,7 @@ export function DiffView({ value, t }: { value: unknown; t: (key: string) => str
                   </div>
                 </details>
               ))}
-              {comments.length > 0 && (
-                <details open>
-                  <summary>{t("软元件注释变化")}</summary>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>{t("地址")}</th>
-                        <th>{t("变更前")}</th>
-                        <th>{t("变更后")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {comments.map((change, i) => (
-                        <tr key={i}>
-                          <td className="mono">{String(change.address)}</td>
-                          <td>{String(change.before ?? "—")}</td>
-                          <td>{String(change.after ?? "—")}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </details>
-              )}
+              {typeof diff.unified_diff === "string" && <pre>{diff.unified_diff}</pre>}
               {diff.network_order_changed === true && (
                 <DataView
                   value={{
@@ -120,6 +114,30 @@ export function DiffView({ value, t }: { value: unknown; t: (key: string) => str
           )}
         </>
       )}
+      {comments.length > 0 && (
+        <details open>
+          <summary>{t("软元件注释变化")}</summary>
+          <table>
+            <thead><tr>
+              {commentTables && <th>{t("注释表")}</th>}
+              <th>{t("地址")}</th><th>{t("变更前")}</th><th>{t("变更后")}</th>
+            </tr></thead>
+            <tbody>{comments.map((change, i) => (
+              <tr key={i}>
+                {commentTables && <td>{String(change.table ?? "—")}</td>}
+                <td className="mono">{String(change.address ?? "—")}</td>
+                {change.reason ? <td colSpan={2}>{String(change.reason)}</td> : <>
+                  <td>{commentText(change.before)}</td><td>{commentText(change.after)}</td>
+                </>}
+              </tr>
+            ))}</tbody>
+          </table>
+        </details>
+      )}
+      {!!diff.declaration_changes && <details>
+        <summary>{t("声明表有变化")}</summary>
+        <DataView value={diff.declaration_changes} />
+      </details>}
     </div>
   );
 }

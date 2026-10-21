@@ -9,7 +9,7 @@ import type {
   TaskPurpose,
 } from "../features/conversationRouting";
 
-export function useComposer(pid: string, vid: string) {
+export function useComposer(pid: string, vid: string, t: (value: string) => string = (value) => value) {
   const [directAnswers, setDirectAnswers] = useState<Record<string, Record<string, string>>>({});
   const [ignoredClarification, setIgnoredClarification] = useState("");
   const activeProjectRef = useRef(pid);
@@ -50,6 +50,8 @@ export function useComposer(pid: string, vid: string) {
   }
   async function upload(files: FileList | null) {
     if (!files) return;
+    if (Array.from(files).some((file) => /\.gxw$/i.test(file.name)))
+      throw new Error(t("GXW 工程请使用“导入 GXW”，不能作为图片附件发送。"));
     for (const file of Array.from(files)) {
       const encoded = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();

@@ -14,10 +14,12 @@ type Options = {
   directReply: ReturnType<typeof clarificationSubmission>; currentJob?: Job;
   composerRoute: ReturnType<typeof conversationRoute>; locale: Locale; constructionExamples: boolean;
   freshConfirmedGeneration: boolean; clearSpecDirty: () => void; setPanel: Setter<string>; t: Translate
+  selectedGXWProgram?: string;
 };
 export function useJobCommands(options: Options) {
   const { workspace, feed, composer, intent, continuingDirect, directReply, currentJob,
-    composerRoute, locale, constructionExamples, freshConfirmedGeneration, clearSpecDirty, setPanel, t } = options;
+    composerRoute, locale, constructionExamples, freshConfirmedGeneration, clearSpecDirty, setPanel, t,
+    selectedGXWProgram } = options;
   const { project, pid, vid } = workspace;
   const { jobsPolling, setJobId, setJobs, setEvents } = feed;
   const { text, attachments, scopeEnabled, scopeNetworks, scopeAddresses, analysisMode,
@@ -48,6 +50,8 @@ export function useJobCommands(options: Options) {
         response_language: locale,
         attachment_ids: kind === "agent" ? [] : attachments.map((a) => a.attachment_id),
         ...(generationAction ? { generation_action: generationAction } : {}),
+        ...(kind === "generation" && generationAction === "edit" && selectedGXWProgram
+          ? { program: selectedGXWProgram } : {}),
         ...(kind === "direct_generation" && continuingDirect && currentJob
           ? { clarification_job_id: currentJob.id, clarification_answers: directReply.answers }
           : {}),

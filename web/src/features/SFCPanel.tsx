@@ -28,6 +28,7 @@ export function SFCPanel({ value, pid, vid, readOnly, preview, onProposal, t }: 
   useEffect(() => { epoch.current++; setSource(value); setCandidate(null); setEdits([]); setSelected(""); setError(""); setBusy(false); }, [value, pid, vid]);
   useEffect(() => () => { epoch.current++; }, []);
   const model = candidate?.program || source;
+  const sourceGraph = model?.graph.source_graph;
   const cells = model?.graph.cells || [];
   const topology = model?.graph.topology;
   const symbols = new Map((topology?.symbols || []).map(symbol => [symbol.cell, symbol]));
@@ -36,8 +37,9 @@ export function SFCPanel({ value, pid, vid, readOnly, preview, onProposal, t }: 
   const sourceJump = source?.graph.topology?.jumps.find(jump => jump.source === selected);
   const sourceJumpCell = source?.graph.cells?.find(cell => cell.id === selected);
   const targetSteps = (source?.graph.cells || []).filter(cell => cell.role === "step" && cell.binding.status === "source-resolved");
-  const names = picked?.role === "step" ? picked.binding.registrations?.map(item => item.zoom) || []
-    : picked?.binding.child ? [picked.binding.child] : [];
+  const pickedSource = sourceGraph?.nodes.find(node => `source/${node.id}` === selected);
+  const names = pickedSource?.child_names ?? (picked?.role === "step" ? picked.binding.registrations?.map(item => item.zoom) || []
+    : picked?.binding.child ? [picked.binding.child] : []);
   const children = (model?.children || []).filter(child => names.includes(child.name));
   const locked = readOnly || preview || busy;
   const editable = model?.graph.edit_profile === "fx-references";
@@ -68,7 +70,7 @@ export function SFCPanel({ value, pid, vid, readOnly, preview, onProposal, t }: 
     if (!source || locked || !edits.length) return;
     const current = ++epoch.current; setBusy(true); setError("");
     try {
-      const result = await api<Preview>("/sfc/preview", "POST", { project_id: pid, version_id: vid, program: source.program, graph_edits: edits });
+      const result = await api<Preview>("/sfc/preview", "POST", { project_id: pid, version_id: vid, program: source.program, graph_edits: edits, save_policy: "draft" });
       if (current === epoch.current) setCandidate(result);
     } catch (e) { if (current === epoch.current) setError(e instanceof Error ? e.message : String(e)); }
     finally { if (current === epoch.current) setBusy(false); }
@@ -78,7 +80,7 @@ export function SFCPanel({ value, pid, vid, readOnly, preview, onProposal, t }: 
     const current = ++epoch.current; setBusy(true); setError("");
     try {
       const proposal = await api<Proposal>("/sfc/proposals", "POST", { operation: "edit", project_id: pid, version_id: vid,
-        program: source.program, request_id: key(), graph_edits: edits });
+        program: source.program, request_id: key(), graph_edits: edits, save_policy: "draft" });
       if (current === epoch.current) await onProposal(proposal);
     } catch (e) { if (current === epoch.current) setError(e instanceof Error ? e.message : String(e)); }
     finally { if (current === epoch.current) setBusy(false); }
@@ -94,7 +96,7 @@ export function SFCPanel({ value, pid, vid, readOnly, preview, onProposal, t }: 
       {vid && !preview && <a className="button" href={artifactUrl(pid, vid, "gxw")}>{t("下载 GXW")}</a>}
     </header>
     {error && <p className="sfc-error" role="alert">{error}</p>}
-    {candidate && <p className="muted">{t("已通过原生保存回读；当前代码检查需对保存后的版本执行。")}</p>}
+    {candidate && <p className="muted">{t("已通过离线保存回读；原生编译与运行尚未验证。")}</p>}
     <div className="sfc-layout">
       <section className="sfc-canvas" aria-label={t("SFC 图形")}>
         {cells.length ? <svg role="img" aria-label={t("当前源码的原生格点")} viewBox={`0 0 ${(maxX + 1) * 128} ${(maxY + 1) * 64}`}>
@@ -135,7 +137,8 @@ export function SFCPanel({ value, pid, vid, readOnly, preview, onProposal, t }: 
                 })}</>
               : <><circle r="5"/><text className="sfc-action" textAnchor="middle" y="20">{t("未解析连接符")}</text></>}
           </g>; })}
-        </svg> : <p className="muted">{t("尚未取得当前图形的原生位置。源码引用如下。")}</p>}
+        </svg> : sourceGraph?.nodes.length ? <SourceGraph graph={sourceGraph} selected={selected} onSelect={setSelected} t={t}/>
+          : <p className="muted">{t("尚未取得当前图形的原生位置。源码引用如下。")}</p>}
         {!!topology?.issues.length && <p className="muted">{t("部分连接尚未解析。")}</p>}
       </section>
       <aside className="sfc-details">
@@ -176,6 +179,72 @@ export function SFCPanel({ value, pid, vid, readOnly, preview, onProposal, t }: 
     {model.issues.length > 0 && <details><summary>{t("未解析内容")}</summary><ul>{model.issues.map((item, i) => <li key={i}>{typeof item === "string" ? item : item.message || item.code}</li>)}</ul></details>}
     {vid && !preview && <NativeValidationPanel pid={pid} vid={vid} program={model.program} disabled={readOnly || busy || !!candidate || !!edits.length} t={t} onCell={setSelected}/>}
   </div>;
+}
+
+function SourceGraph({ graph, selected, onSelect, t }: {
+  graph: ApiSchema["SFCSourceGraph"]; selected: string; onSelect: (id: string) => void; t: (s: string) => string;
+}) {
+  const arrow = useId();
+  const ids = new Set(graph.nodes.map(node => node.id));
+  const incoming = new Set(graph.edges.map(edge => edge.target));
+  const outgoing = new Map<string, string[]>();
+  for (const edge of graph.edges) {
+    if (!ids.has(edge.source) || !ids.has(edge.target)) continue;
+    const targets = outgoing.get(edge.source) || [];
+    targets.push(edge.target); outgoing.set(edge.source, targets);
+  }
+  const depths = new Map<string, number>();
+  const queue: string[] = [];
+  for (const node of graph.nodes) if (!incoming.has(node.id)) { depths.set(node.id, 0); queue.push(node.id); }
+  let cursor = 0, nextDepth = 0;
+  for (const node of graph.nodes) {
+    if (!depths.has(node.id)) { depths.set(node.id, nextDepth); queue.push(node.id); }
+    while (cursor < queue.length) {
+      const id = queue[cursor++], depth = depths.get(id)!;
+      nextDepth = Math.max(nextDepth, depth + 1);
+      for (const target of outgoing.get(id) || []) if (!depths.has(target)) {
+        depths.set(target, depth + 1); queue.push(target);
+      }
+    }
+  }
+  const lanes = new Map<number, number>();
+  const positions = new Map(graph.nodes.map(node => {
+    const depth = depths.get(node.id)!, lane = lanes.get(depth) || 0;
+    lanes.set(depth, lane + 1);
+    return [node.id, [128 + lane * 144, 64 + depth * 80] as const];
+  }));
+  const width = Math.max(340, ...[...positions.values()].map(point => point[0] + 96));
+  const height = Math.max(220, ...[...positions.values()].map(point => point[1] + 64));
+  return <>
+    <p className="muted">{t("源码关系图，布局不代表原生编辑器位置。")}</p>
+    <svg role="img" aria-label={t("SFC 源码关系图")} viewBox={`0 0 ${width} ${height}`}>
+      <defs><marker id={arrow} viewBox="0 0 6 6" refX="5" refY="3" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L6 3 L0 6" fill="context-stroke"/></marker></defs>
+      {graph.edges.map((edge, index) => {
+        const from = positions.get(edge.source), to = positions.get(edge.target);
+        if (!from || !to) return null;
+        const forward = to[1] > from[1];
+        return <path key={index} className={edge.kind === "jump" ? "sfc-jump-connections" : "sfc-connections"}
+          d={forward ? `M${from[0]} ${from[1] + 22} V${(from[1] + to[1]) / 2} H${to[0]} V${to[1] - 24}`
+            : `M${from[0] - 46} ${from[1]} H${Math.min(from[0], to[0]) - 80} V${to[1]} H${to[0] - 48}`}
+          markerEnd={`url(#${arrow})`}/>;
+      })}
+      {graph.nodes.map(node => {
+        const point = positions.get(node.id)!;
+        const label = node.kind === "transition" ? `T${node.number}` : node.kind === "end" ? t("结束") : `S${node.number}`;
+        const id = `source/${node.id}`;
+        return <g key={node.id} transform={`translate(${point[0]},${point[1]})`}
+          className={selected === id ? "sfc-cell selected" : "sfc-cell"} role="button" tabIndex={0} aria-label={label}
+          onClick={() => onSelect(id)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelect(id); } }}>
+          {node.kind === "transition" ? <><rect x="-22" y="-4" width="44" height="8"/><text x="29" y="5">{label}</text></>
+            : <><rect x="-45" y="-21" width="90" height="42" rx="3"/>
+              {node.kind === "initial_step" && <rect x="-40" y="-16" width="80" height="32" rx="2"/>}
+              <text textAnchor="middle" y={node.action_number == null ? 5 : -2}>{label}</text>
+              {node.action_number != null && <text className="sfc-action" textAnchor="middle" y="14">{t("动作")} {node.action_number}</text>}</>}
+        </g>;
+      })}
+    </svg>
+    {graph.issues.length > 0 && <p className="muted">{t("部分连接尚未解析。")}</p>}
+  </>;
 }
 
 function SFCImport({ pid, vid, disabled, onProposal, t }: {

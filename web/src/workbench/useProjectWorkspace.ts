@@ -13,6 +13,7 @@ export function useProjectWorkspace(session: Session | null, setError: (message:
   const [projectListRevision, setProjectListRevision] = useState(0);
   const owner = useRef({ pid, epoch: 0 });
   const projectRead = useRef(new LatestRead());
+  const adoptedVersion = useRef<{ pid: string; vid: string } | null>(null);
   if (owner.current.pid !== pid) {
     owner.current = { pid, epoch: owner.current.epoch + 1 };
     projectRead.current.cancel();
@@ -25,16 +26,21 @@ export function useProjectWorkspace(session: Session | null, setError: (message:
   useEffect(() => {
     if (!session) { setProjects([]); return; }
     const controller = new AbortController();
+    const selectionOwner = owner.current;
     void api<{ projects: Project[] }>("/projects", "GET", undefined, { signal: controller.signal })
       .then(({ projects: value }) => {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || owner.current !== selectionOwner) return;
         setProjects((old) => reconcileById(old, value));
-        setPid((selected) => value.some((item) => item.id === selected) ? selected : value[0]?.id || "");
+        setPid((selected) => owner.current !== selectionOwner ? selected
+          : value.some((item) => item.id === selected) ? selected : value[0]?.id || "");
       })
       .catch((error: Error) => { if (!controller.signal.aborted) setError(error.message); });
     return () => controller.abort();
   }, [session, projectListRevision]);
-  useEffect(() => { setVid(""); }, [pid]);
+  useEffect(() => {
+    setVid(adoptedVersion.current?.pid === pid ? adoptedVersion.current.vid : "");
+    adoptedVersion.current = null;
+  }, [pid]);
   useEffect(() => {
     if (!pid || !session) { setProject(null); setLoading(false); return; }
     setLoading(true);
@@ -67,11 +73,24 @@ export function useProjectWorkspace(session: Session | null, setError: (message:
       throw error;
     }
   }
+  function adoptProject(fresh: Project, versionId: string | null) {
+    const selected = versionId || fresh.active_version_id || fresh.versions?.[0]?.id || "";
+    cancelRead();
+    if (owner.current.pid !== fresh.id) owner.current = { pid: fresh.id, epoch: owner.current.epoch + 1 };
+    adoptedVersion.current = fresh.id !== pid ? { pid: fresh.id, vid: selected } : null;
+    setProjects((old) => old.some((item) => item.id === fresh.id)
+      ? old.map((item) => item.id === fresh.id ? fresh : item) : [fresh, ...old]);
+    setProject(fresh);
+    setPid(fresh.id);
+    setVid(selected);
+    setLoading(false);
+    setProjectListRevision((value) => value + 1);
+  }
   const version = project?.id === pid ? project.versions?.find((item) => item.id === vid) : undefined;
   const hasSavedVersions = project?.id === pid && ((project.version_count || 0) > 0 || !!project.versions?.length);
   return {
     projects, project, setProject, pid, setPid, vid, setVid, loading, version,
-    hasSavedVersions, setProjectListRevision, reloadProjectSilently, capture, isCurrent, isProject, cancelRead
+    hasSavedVersions, setProjectListRevision, reloadProjectSilently, adoptProject, capture, isCurrent, isProject, cancelRead
   };
 }
 export type ProjectWorkspace = ReturnType<typeof useProjectWorkspace>;

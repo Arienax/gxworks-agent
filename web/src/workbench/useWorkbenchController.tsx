@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Json, Spec } from "../api/client";
+import type { Json, Spec, ProgramDocument } from "../api/client";
 import { activeJob, artifactUrl } from "../api/client";
 import { Badge } from "../components/ui";
 import { useGenerationResult } from "../features/GenerationResult";
@@ -21,6 +21,8 @@ import { useGXSend } from "./useGXSend";
 import { useInspectionSelection } from "./useInspectionSelection";
 import { useJobCommands } from "./useJobCommands";
 import { useProjectWorkspace } from "./useProjectWorkspace";
+import { useGXWImport } from "./useGXWImport";
+import { useGXWSource } from "./useGXWSource";
 import { useSpecificationDraft } from "./useSpecificationDraft";
 
 export function useWorkbenchController() {
@@ -58,7 +60,7 @@ export function useWorkbenchController() {
 
   const { rightWidth, setRightWidth, resizePanel } = usePanelResize();
 
-  const composer = useComposer(pid, vid);
+  const composer = useComposer(pid, vid, t);
 
   const {
     scopeEnabled,
@@ -87,6 +89,20 @@ export function useWorkbenchController() {
     directAnswers, setDirectAnswers, ignoredClarification, setIgnoredClarification, } = composer;
 
   const [modal, setModal] = useState("");
+  const gxwImport = useGXWImport({
+    enabled: !!session && !session.read_only && !busy && !loading,
+    onOpen: () => setModal("gxw-import"),
+    onClose: () => setModal(""),
+    onImported: (result) => {
+      clearPreview();
+      workspace.adoptProject(result.project, result.version_id);
+      setPanel("agent");
+      setTab(result.project.target_mode);
+      setRefresh((value) => value + 1);
+      setNotice(t("GXW 工程已导入。"));
+    },
+    t,
+  });
 
   const {
     approvalSettings,
@@ -104,7 +120,9 @@ export function useWorkbenchController() {
 
   const [outputRetry, setOutputRetry] = useState(0);
 
-  const { program, st } = useProgramDocument(pid, vid, version, session, setError);
+  const { program, st: savedST } = useProgramDocument(pid, vid, version, session, setError);
+  const gxwSource = useGXWSource(pid, vid, version, !!session, setError);
+  const st = gxwSource.view?.language === "st" ? String(gxwSource.view.model.st_text || "") : savedST;
 
   const displayedVersionStatus =
     version?.validation?.status === "candidate_ready"
@@ -180,7 +198,7 @@ export function useWorkbenchController() {
 
   const pendingCount = proposals.filter((p) => p.status === "pending").length;
 
-  const canWrite = !!session && !session.read_only && !busy && !loading;
+  const canWrite = !!session && !session.read_only && !busy && !loading && !gxwImport.busy;
 
   const canGenerate =
     !!project &&
@@ -194,6 +212,7 @@ export function useWorkbenchController() {
     !!pid &&
     project?.id === pid &&
     !jobs.some(activeJob) &&
+    !gxwSource.loading &&
     composerRoute.available &&
     (task !== "edit" || !!version) &&
     (intent !== "generation" || canGenerate) &&
@@ -224,7 +243,8 @@ export function useWorkbenchController() {
     proposeExecution,
   } = candidates;
 
-  const { submitJob, repairFailedGeneration } = useJobCommands({ workspace, feed, composer, intent, continuingDirect, directReply, currentJob, composerRoute, locale, constructionExamples, freshConfirmedGeneration, clearSpecDirty, setPanel, t });
+  const { submitJob, repairFailedGeneration } = useJobCommands({ workspace, feed, composer, intent, continuingDirect, directReply, currentJob, composerRoute, locale, constructionExamples, freshConfirmedGeneration, clearSpecDirty, setPanel, t,
+    selectedGXWProgram: gxwSource.available ? gxwSource.selected : undefined });
 
   const { gxSend, setGXSend, requestGXSend, confirmGXSend } = useGXSend({ workspace, feed, canWrite, preview, operations, clearPreview, setPanel, guarded, proposeExecution });
 
@@ -239,10 +259,11 @@ export function useWorkbenchController() {
   useEffect(() => { if (project?.id === pid) syncComposerRoute(project); }, [project, pid]);
 
   useEffect(() => {
-    if (version?.target_mode === "fbd") setTab("fbd");
-    else if (version?.target_mode === "sfc") setTab("sfc");
-    else if (project?.id === pid && !project.versions?.length && project.target_mode === "fbd") setTab("fbd");
+    if (version?.target_mode) setTab(version.target_mode);
+    else if (project?.id === pid && !project.versions?.length && project.target_mode) setTab(project.target_mode);
   }, [version?.id, version?.target_mode, project?.id, project?.target_mode]);
+  useEffect(() => { if (gxwSource.view) setTab(gxwSource.view.language); },
+    [pid, vid, gxwSource.view?.source_name, gxwSource.view?.language]);
 
   function retryOutput() {
     setOutputRetry((value) => value + 1);
@@ -268,7 +289,10 @@ export function useWorkbenchController() {
       void guarded(() => redrawVersion(vid, next));
   }
 
-  const visibleProgram = preview ? preview.program : program;
+  const visibleProgram = preview ? preview.program : gxwSource.view
+    ? gxwSource.view.language === "st" ? null : gxwSource.view.model as ProgramDocument : program;
+  const editorVersion = version && gxwSource.view
+    ? { ...version, target_mode: gxwSource.view.language, program_name: gxwSource.view.source_name } : version;
 
   const networks = Array.isArray(visibleProgram?.networks)
     ? (visibleProgram.networks as Record<string, Json>[])
@@ -281,12 +305,15 @@ export function useWorkbenchController() {
     () =>
       preview?.svg
         ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(String(preview.svg))}`
+        : !preview && gxwSource.view?.svg
+          ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(gxwSource.view.svg)}`
+        : !preview && gxwSource.view && gxwSource.view.source_name !== version?.program_name ? ""
         : !preview && freshVersionSvg
           ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(freshVersionSvg)}`
           : !preview && version?.artifacts?.find((a) => a.id === "svg" && a.available)
             ? artifactUrl(pid, vid, "svg") + `?theme=${theme}`
             : "",
-    [preview, freshVersionSvg, version?.id, pid, vid, theme],
+    [preview, freshVersionSvg, version?.id, pid, vid, theme, gxwSource.view],
   );
 
   const selectNetwork = useCallback(
@@ -321,7 +348,7 @@ export function useWorkbenchController() {
     vid,
     selectedProposal,
     preview,
-    version,
+    version: editorVersion,
     visibleProgram,
     showFBDProposal,
     svg,
@@ -391,6 +418,8 @@ export function useWorkbenchController() {
     generationResult,
     guarded,
     gxSend,
+    gxwImport,
+    gxwSource,
     hasSavedVersions,
     intent,
     jobId,

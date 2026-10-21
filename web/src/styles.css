@@ -1035,6 +1035,21 @@ pre {
 .composer:focus-within {
   border-color: var(--accent);
 }
+.composer.gxw-dragging {
+  border-color: var(--accent);
+  outline: 2px dashed var(--accent);
+  outline-offset: 3px;
+}
+.gxw-drop-hint {
+  margin: 0;
+  padding: 5px 12px 8px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.gxw-import .gxw-filename { margin: 0; overflow-wrap: anywhere; }
+.gxw-import-error { color: var(--bad, #d44); overflow-wrap: anywhere; }
+.gxw-import select { width: 100%; }
 .composer-mode {
   display: flex;
   align-items: center;

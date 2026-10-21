@@ -727,6 +727,11 @@ export function FBDPanel({
     [sourceKey, setSourceKey] = useState("");
   const [section, setSection] = useState("diagram"),
     [catalog, setCatalog] = useState<CatalogNode[]>([]);
+  const [templateSearch, setTemplateSearch] = useState("");
+  const visibleCatalog = useMemo(() => {
+    const query = templateSearch.trim().toLocaleLowerCase();
+    return catalog.filter((item) => !query || templateLabel(item.template, t).toLocaleLowerCase().includes(query)).slice(0, 80);
+  }, [catalog, templateSearch, t]);
   const [selectedTemplate, setSelectedTemplate] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -808,6 +813,7 @@ export function FBDPanel({
         project_id: pid,
         version_id: vid || null,
         model: JSON.parse(draftKey),
+        save_policy: "draft",
       })
         .then((value) => {
           if (active) setRendered({ identity: previewIdentity, value });
@@ -894,6 +900,7 @@ export function FBDPanel({
         version_id: vid || null,
         request_id: key(),
         model: draft,
+        save_policy: "draft",
       });
       if (generation.current === current) await onProposal(proposal);
     } catch (e) {
@@ -1174,6 +1181,7 @@ export function FBDPanel({
       <div className="fbd-sections">
         {[
           ["diagram", "图形"],
+          ["networks", "网络"],
           ["objects", "对象"],
           ["wires", "连接"],
           ["labels", "声明"],
@@ -1262,15 +1270,53 @@ export function FBDPanel({
             </div>
           )}
         </div>
+      ) : section === "networks" ? (
+        <div className="fbd-sheet">
+          <Button disabled={disabled} onClick={() => void edit({ action: "add_block" })}>
+            <Plus size={14} />{t("添加网络")}
+          </Button>
+          <table>
+            <thead><tr>{["网络", "标题", "注释", "高度", "顺序", ""].map((title) => <th key={title}>{t(title)}</th>)}</tr></thead>
+            <tbody>{(editor.presentation.blocks || []).map((block, index, all) => <tr key={`${block.source_offset ?? "new"}:${index}`}>
+              <td>{index + 1}</td>
+              {(["title", "comment", "canvas_height"] as const).map((field) => <td key={field}>
+                {field === "canvas_height" ? <input key={`${field}:${block[field]}`} disabled={disabled} defaultValue={block[field] ?? ""}
+                  type="number"
+                  aria-label={`${t("高度")} ${index + 1}`}
+                  onBlur={(event) => {
+                    const value = Number(event.target.value);
+                    if (value !== block[field]) void edit({ action: "update_block", index, field, value });
+                  }} /> : <textarea key={`${field}:${block[field]}`} disabled={disabled} defaultValue={block[field] ?? ""}
+                    aria-label={`${t(field === "title" ? "标题" : "注释")} ${index + 1}`} rows={2}
+                    onBlur={(event) => {
+                      if (event.target.value !== (block[field] ?? ""))
+                        void edit({ action: "update_block", index, field, value: event.target.value });
+                    }} />}
+              </td>)}
+              <td>
+                <Button disabled={disabled || index === 0} aria-label={`${t("上移")} ${index + 1}`}
+                  onClick={() => void edit({ action: "move_block", index, target: index - 1 })}>↑</Button>
+                <Button disabled={disabled || index + 1 === all.length} aria-label={`${t("下移")} ${index + 1}`}
+                  onClick={() => void edit({ action: "move_block", index, target: index + 1 })}>↓</Button>
+              </td>
+              <td><Button disabled={disabled} aria-label={`${t("删除网络")} ${index + 1}`}
+                onClick={() => void edit({ action: "delete_block", index })}><Trash2 size={14} /></Button></td>
+            </tr>)}</tbody>
+          </table>
+        </div>
       ) : section === "objects" ? (
         <div className="fbd-sheet">
           <div className="fbd-inline">
+            <input type="search" aria-label={t("搜索对象类型")} placeholder={t("搜索对象类型")}
+              value={templateSearch} onChange={(event) => setTemplateSearch(event.target.value)} />
             <select
               aria-label={t("对象类型")}
               value={selectedTemplate}
               onChange={(e) => setSelectedTemplate(e.target.value)}
             >
-              {catalog.map((c) => (
+              {!visibleCatalog.some((item) => item.template === selectedTemplate) && selectedTemplate &&
+                <option value={selectedTemplate}>{templateLabel(selectedTemplate, t)}</option>}
+              {visibleCatalog.map((c) => (
                 <option key={c.template} value={c.template}>
                   {templateLabel(c.template, t)}
                 </option>
@@ -1287,7 +1333,7 @@ export function FBDPanel({
           <table>
             <thead>
               <tr>
-                {["类型", "设备或实例名", "列", "行", "端口", ""].map((v, i) => (
+                {["类型", "设备或实例名", "网络", "列", "行", "端口", "尺寸", ""].map((v, i) => (
                   <th key={i}>{t(v)}</th>
                 ))}
               </tr>
@@ -1310,10 +1356,10 @@ export function FBDPanel({
                           })
                         }
                       >
-                        {!catalog.some((c) => c.template === node.template) && (
+                        {!visibleCatalog.some((c) => c.template === node.template) && (
                           <option>{node.template}</option>
                         )}
-                        {catalog.map((c) => (
+                        {visibleCatalog.map((c) => (
                           <option key={c.template} value={c.template}>
                             {templateLabel(c.template, t)}
                           </option>
@@ -1321,10 +1367,11 @@ export function FBDPanel({
                       </select>
                     </td>
                     <td>
-                      <input
+                      <textarea
                         key={`${node.id}:symbol:${node.symbol}`}
                         aria-label={`${t("设备或实例名")} ${i + 1}`}
                         disabled={disabled || !view?.symbol_editable}
+                        rows={1}
                         defaultValue={node.symbol}
                         onBlur={(e) => {
                           if (e.target.value !== node.symbol)
@@ -1336,6 +1383,12 @@ export function FBDPanel({
                             });
                         }}
                       />
+                    </td>
+                    <td>
+                      <select aria-label={`${t("网络")} ${i + 1}`} disabled={disabled} value={node.block ?? 0}
+                        onChange={(event) => void edit({ action: "update_node", id: node.id, field: "block", value: Number(event.target.value) })}>
+                        {(editor.presentation.blocks || []).map((_block, index) => <option key={index} value={index}>{index + 1}</option>)}
+                      </select>
                     </td>
                     {(["x", "y"] as const).map((coord) => (
                       <td key={coord}>
@@ -1362,6 +1415,19 @@ export function FBDPanel({
                       {view?.ports
                         .map((p) => (p.data_type ? `${p.name}: ${p.data_type}` : p.name))
                         .join(" · ")}
+                      {view?.callable && <Button disabled={disabled}
+                        onClick={() => void edit({ action: "refresh_callable", id: node.id })}>{t("更新调用端口")}</Button>}
+                    </td>
+                    <td>
+                      {(["width", "height"] as const).map((field) => <input key={`${node.id}:${field}:${JSON.stringify(node.resize)}:${JSON.stringify(node.port_layout)}`}
+                        className="fbd-number" type="number" disabled={disabled || !view?.resizable}
+                        aria-label={`${t(field === "width" ? "宽度" : "高度")} ${i + 1}`}
+                        defaultValue={node.resize?.[field] ?? node.port_layout?.[field] ?? node[field] ?? ""}
+                        onBlur={(event) => {
+                          const value = Number(event.target.value);
+                          if (value !== (node.resize?.[field] ?? node.port_layout?.[field] ?? node[field]))
+                            void edit({ action: "resize_node", id: node.id, ...node.resize, [field]: value });
+                        }} />)}
                     </td>
                     <td>
                       <Button
@@ -1412,6 +1478,9 @@ export function FBDPanel({
             <Button disabled={disabled} onClick={() => void edit({ action: "add_bus" })}>
               {t("添加左母线")}
             </Button>
+            <Button disabled={disabled} onClick={() => void edit({ action: "add_junction", point: [3, 2] })}>
+              {t("添加连接点")}
+            </Button>
           </div>
           <table>
             <thead>
@@ -1441,7 +1510,11 @@ export function FBDPanel({
                                 const value = [...w[field]!];
                                 const next = number(e.target.value);
                                 if (next !== value[coord])
-                                  void edit({
+                                  void edit(w.kind === "junction" ? {
+                                    action: "move_junction", index: i, point: [
+                                      ...(coord === 0 ? [next, value[1]] : [value[0], next]),
+                                    ],
+                                  } : {
                                     action: "update_wire",
                                     index: i,
                                     field,

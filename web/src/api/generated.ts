@@ -157,6 +157,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/gxw/edit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Gxw Edit */
+        post: operations["gxw_edit_api_gxw_edit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/gxw/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Gxw Import */
+        post: operations["gxw_import_api_gxw_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/gxw/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Gxw Inspect */
+        post: operations["gxw_inspect_api_gxw_inspect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/gxw/source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Gxw Source */
+        get: operations["gxw_source_api_gxw_source_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -1502,12 +1570,16 @@ export interface components {
         };
         /** DeclarationEdit */
         DeclarationEdit: {
+            /** Order */
+            order?: string[] | null;
             /** Remove */
             remove?: string[];
             /** Renames */
             renames?: {
                 [key: string]: string;
             };
+            /** Return Type */
+            return_type?: string | null;
             /** Upserts */
             upserts?: components["schemas"]["FBDLabel"][];
         };
@@ -1849,6 +1921,27 @@ export interface components {
         } & {
             [key: string]: components["schemas"]["JsonValue"];
         };
+        /** ExpectedSourceInstruction */
+        ExpectedSourceInstruction: {
+            /** Args */
+            args: (string | components["schemas"]["SourceOperand"])[];
+            /** Op */
+            op: string;
+            /** Raw Hex */
+            raw_hex?: string | null;
+        };
+        /** ExpectedSourceTextRecord */
+        ExpectedSourceTextRecord: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "statement" | "note";
+            /** Raw Hex */
+            raw_hex?: string | null;
+            /** Text */
+            text: string;
+        };
         /** Exploration */
         Exploration: {
             /** Address Targets */
@@ -1922,6 +2015,19 @@ export interface components {
         } & {
             [key: string]: components["schemas"]["JsonValue"];
         };
+        /** FBDBlock */
+        FBDBlock: {
+            /** Canvas Height */
+            canvas_height: number;
+            /** Comment */
+            comment?: string | null;
+            /** Index */
+            index?: number | null;
+            /** Source Offset */
+            source_offset?: number | null;
+            /** Title */
+            title?: string | null;
+        };
         /** FBDCatalog */
         FBDCatalog: {
             /** Cpu */
@@ -1980,9 +2086,17 @@ export interface components {
             before_object_count: number;
             /** Before Wire Count */
             before_wire_count: number;
+            /** Comment Changes */
+            comment_changes?: components["schemas"]["GXWCommentChange"][];
             compilation_save?: components["schemas"]["FBDCompilationSave"] | null;
+            /** Declaration Changes */
+            declaration_changes?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
             /** Declarations Changed */
             declarations_changed: boolean;
+            /** Definition Changed */
+            definition_changed?: boolean | null;
             definition_changes?: components["schemas"]["FBDDefinitionChanges"] | null;
             /** Has Changes */
             has_changes: boolean;
@@ -1992,6 +2106,8 @@ export interface components {
              */
             kind: "fbd";
             library_changes?: components["schemas"]["FBDLibraryChanges"] | null;
+            /** Source Changes */
+            source_changes?: components["schemas"]["GXWSourceChange"][];
             /** Unified Diff */
             unified_diff: string;
         };
@@ -2129,6 +2245,7 @@ export interface components {
             } | null;
             /** Name */
             name: string;
+            structure_array_addresses?: components["schemas"]["StructureArrayAddresses"] | null;
         } & {
             [key: string]: components["schemas"]["JsonValue"];
         };
@@ -2152,6 +2269,8 @@ export interface components {
         };
         /** FBDModel */
         FBDModel: {
+            /** Blocks */
+            blocks?: components["schemas"]["FBDBlock"][] | null;
             /** Canvas Height */
             canvas_height?: number | null;
             /** Cpu */
@@ -2185,6 +2304,8 @@ export interface components {
         };
         /** FBDNode */
         FBDNode: {
+            /** Block */
+            block?: number | null;
             /** Height */
             height?: number | null;
             /** Id */
@@ -2193,10 +2314,14 @@ export interface components {
             port_edits?: {
                 [key: string]: components["schemas"]["FBDPortEdit"];
             } | null;
+            port_layout?: components["schemas"]["FBDPortLayout"] | null;
             /** Ports */
             ports?: components["schemas"]["FBDPort"][] | null;
             /** Prototype Offset */
             prototype_offset?: number | null;
+            /** Refresh Interface */
+            refresh_interface?: boolean | null;
+            resize?: components["schemas"]["FBDNodeSize"] | null;
             /** Source Offset */
             source_offset?: number | null;
             /** Symbol */
@@ -2211,6 +2336,13 @@ export interface components {
             y: number;
         } & {
             [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** FBDNodeSize */
+        FBDNodeSize: {
+            /** Height */
+            height?: number | null;
+            /** Width */
+            width?: number | null;
         };
         /** FBDParameterCall */
         FBDParameterCall: {
@@ -2311,8 +2443,19 @@ export interface components {
             /** Negated */
             negated: boolean;
         };
+        /** FBDPortLayout */
+        FBDPortLayout: {
+            /** Height */
+            height: number;
+            /** Ports */
+            ports: components["schemas"]["FBDStoredPort"][];
+            /** Width */
+            width: number;
+        };
         /** FBDPresentation */
         FBDPresentation: {
+            /** Blocks */
+            blocks?: components["schemas"]["FBDBlock"][];
             /** Endpoints */
             endpoints: components["schemas"]["FBDEndpoint"][];
             /** Nodes */
@@ -2328,10 +2471,14 @@ export interface components {
         };
         /** FBDPresentationNode */
         FBDPresentationNode: {
+            /** Callable */
+            callable?: boolean | null;
             /** Id */
             id: string;
             /** Ports */
             ports: components["schemas"]["FBDPort"][];
+            /** Resizable */
+            resizable?: boolean | null;
             /** Symbol Editable */
             symbol_editable: boolean;
         } & {
@@ -2345,6 +2492,12 @@ export interface components {
             };
             /** Project Id */
             project_id: string;
+            /**
+             * Save Policy
+             * @default checked
+             * @enum {string}
+             */
+            save_policy: "draft" | "checked";
             /** Version Id */
             version_id?: string | null;
         };
@@ -2375,12 +2528,18 @@ export interface components {
         };
         /** FBDProposal */
         FBDProposal: {
+            /** Comment Table */
+            comment_table?: string | null;
             /** Data Base64 */
             data_base64?: string | null;
             /** Declarations */
             declarations?: {
                 [key: string]: unknown;
             }[] | null;
+            /** Device Comments */
+            device_comments?: {
+                [key: string]: string | null;
+            } | null;
             /** Library Name */
             library_name?: string | null;
             /** Members */
@@ -2397,7 +2556,7 @@ export interface components {
              * Operation
              * @enum {string}
              */
-            operation: "generate" | "edit" | "import" | "convert" | "create_fb" | "create_program" | "import_library" | "create_structure" | "create_st_fb" | "edit_st_fb" | "edit_global_labels" | "create_global_labels" | "edit_pou_labels" | "configure_project" | "remove_empty_program" | "compile";
+            operation: "generate" | "edit" | "import" | "convert" | "create_fb" | "create_program" | "import_library" | "create_structure" | "create_st_fb" | "edit_st_fb" | "edit_st_function" | "edit_st_source" | "edit_global_labels" | "create_global_labels" | "edit_pou_labels" | "configure_project" | "remove_empty_program" | "compile";
             /** Options */
             options?: {
                 [key: string]: unknown;
@@ -2406,10 +2565,16 @@ export interface components {
             program?: string | null;
             /** Project Id */
             project_id: string;
+            /** Remove Declarations */
+            remove_declarations?: string[] | null;
             /** Request Id */
             request_id: string;
             /** Resource */
             resource?: string | null;
+            /** Return Type */
+            return_type?: string | null;
+            /** Save Policy */
+            save_policy?: ("draft" | "checked") | null;
             /** Scope Mode */
             scope_mode?: ("existing_task" | "new_task" | "new_resource") | null;
             /** Source Name */
@@ -2430,12 +2595,25 @@ export interface components {
         } & {
             [key: string]: components["schemas"]["JsonValue"];
         };
+        /** FBDStoredPort */
+        FBDStoredPort: {
+            /** Flags */
+            flags: number;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+        };
         /** FBDWire */
         FBDWire: {
+            /** Block */
+            block?: number | null;
             /** End */
             end?: number[] | null;
             /** From */
             from?: string | null;
+            /** Kind */
+            kind?: ("wire" | "junction") | null;
             /** Source Offset */
             source_offset?: number | null;
             /** Start */
@@ -2467,6 +2645,303 @@ export interface components {
             title?: string | null;
         } & {
             [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** GXWCommentChange */
+        GXWCommentChange: {
+            /** Address */
+            address: string | null;
+            /** After */
+            after: string | null;
+            /** Before */
+            before: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Table */
+            table: string;
+        };
+        /** GXWEditCommand */
+        GXWEditCommand: {
+            /** Comment Table */
+            comment_table?: string | null;
+            /** Declaration Edits */
+            declaration_edits?: {
+                [key: string]: components["schemas"]["DeclarationEdit"];
+            } | null;
+            /** Device Comments */
+            device_comments?: {
+                [key: string]: string | null;
+            } | null;
+            /** Edits */
+            edits?: components["schemas"]["GXWSourceEdit"][];
+            /** Program */
+            program?: string | null;
+            /** Project Id */
+            project_id: string;
+            /** Request Id */
+            request_id: string;
+            /**
+             * Save Policy
+             * @default draft
+             * @enum {string}
+             */
+            save_policy: "draft" | "checked";
+            /**
+             * Summary
+             * @default 编辑 GXW 工程
+             */
+            summary: string;
+            /** Version Id */
+            version_id: string;
+        };
+        /** GXWFBDEdit */
+        GXWFBDEdit: {
+            /** Model */
+            model: {
+                [key: string]: unknown;
+            };
+            /**
+             * Operation
+             * @default edit
+             * @constant
+             */
+            operation: "edit";
+        };
+        /** GXWImportCommand */
+        GXWImportCommand: {
+            /** Data Base64 */
+            data_base64: string;
+            /** Filename */
+            filename?: string | null;
+            /** Program */
+            program?: string | null;
+            /** Project Id */
+            project_id?: string | null;
+            /** Request Id */
+            request_id: string;
+            /** Version Id */
+            version_id?: string | null;
+        };
+        /** GXWImportResult */
+        GXWImportResult: {
+            project: components["schemas"]["Project"];
+            /** Project Id */
+            project_id: string;
+            /** Proposal Id */
+            proposal_id: string;
+            /** Status */
+            status: string;
+            /** Version Id */
+            version_id: string | null;
+        };
+        /** GXWInspection */
+        GXWInspection: {
+            /** Codepage */
+            codepage: number;
+            /** Comment Tables */
+            comment_tables: {
+                [key: string]: components["schemas"]["JsonValue"];
+            }[];
+            /** Coverage */
+            coverage?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Cpu Menu */
+            cpu_menu: string;
+            /** Declaration Tables */
+            declaration_tables: {
+                [key: string]: components["schemas"]["JsonValue"];
+            }[];
+            /** Device Comments */
+            device_comments: {
+                [key: string]: string;
+            };
+            /** Integrity */
+            integrity: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /** Issues */
+            issues: {
+                [key: string]: components["schemas"]["JsonValue"];
+            }[];
+            /**
+             * Native Compile
+             * @constant
+             */
+            native_compile: "not_run";
+            /**
+             * Native Required
+             * @constant
+             */
+            native_required: false;
+            /** Networks */
+            networks?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            }[] | null;
+            /** Programs */
+            programs: components["schemas"]["GXWSourceSummary"][];
+            /**
+             * Runtime Verified
+             * @constant
+             */
+            runtime_verified: false;
+            selected_source: components["schemas"]["GXWSourceSummary"] | null;
+            /** Source Records */
+            source_records?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            }[] | null;
+            /**
+             * Write Backend
+             * @constant
+             */
+            write_backend: "offline";
+        };
+        /** GXWInspectionCommand */
+        GXWInspectionCommand: {
+            /** Data Base64 */
+            data_base64: string;
+            /** Filename */
+            filename?: string | null;
+            /** Program */
+            program?: string | null;
+        };
+        /** GXWLadderEdit */
+        GXWLadderEdit: {
+            /** Instruction Edits */
+            instruction_edits: components["schemas"]["SourceInstructionEdit"][];
+            /**
+             * Operation
+             * @default edit
+             * @constant
+             */
+            operation: "edit";
+        };
+        /** GXWSFCEdit */
+        GXWSFCEdit: {
+            /** Child Edits */
+            child_edits?: components["schemas"]["SFCChildEdit"][] | null;
+            /** Graph Edits */
+            graph_edits?: (components["schemas"]["SFCGraphEdit"] | components["schemas"]["SFCJumpEdit"] | components["schemas"]["SFCRebuildEdit"] | components["schemas"]["SFCStepSwap"] | components["schemas"]["SFCRenumberEdit"])[] | null;
+            /**
+             * Operation
+             * @default edit
+             * @constant
+             */
+            operation: "edit";
+        };
+        /** GXWSTEdit */
+        GXWSTEdit: {
+            /** Declarations */
+            declarations?: {
+                [key: string]: unknown;
+            }[] | null;
+            /**
+             * Operation
+             * @default edit
+             * @enum {string}
+             */
+            operation: "edit" | "edit_st_source" | "edit_st_program" | "edit_st_fb" | "edit_st_function";
+            /** Return Type */
+            return_type?: string | null;
+            /** St Text */
+            st_text?: string | null;
+        };
+        /** GXWSourceChange */
+        GXWSourceChange: {
+            /**
+             * Language
+             * @enum {string}
+             */
+            language: "ladder" | "st" | "fbd" | "sfc";
+            /** Source Name */
+            source_name: string;
+            /** Unified Diff */
+            unified_diff: string;
+            /** Unit Kind */
+            unit_kind: string;
+        };
+        /** GXWSourceEdit */
+        GXWSourceEdit: {
+            /** Command */
+            command: components["schemas"]["GXWLadderEdit"] | components["schemas"]["GXWSTEdit"] | components["schemas"]["GXWFBDEdit"] | components["schemas"]["GXWSFCEdit"];
+            /** Source Name */
+            source_name: string;
+        };
+        /** GXWSourceSummary */
+        GXWSourceSummary: {
+            /** Capabilities */
+            capabilities?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Language */
+            language: ("ladder" | "st" | "fbd" | "sfc") | null;
+            /** Name */
+            name: string;
+            /** Native Requirements */
+            native_requirements?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            }[] | null;
+            /** Offline Editable */
+            offline_editable: boolean;
+            /** Parse Status */
+            parse_status?: string | null;
+            /** Preserved Records */
+            preserved_records?: number | null;
+            /** Program Kind */
+            program_kind: number | null;
+            /** Readable */
+            readable: boolean;
+            /** Reason */
+            reason: string | null;
+            /** Source Name */
+            source_name: string;
+            /** Unit Kind */
+            unit_kind: string;
+        };
+        /** GXWSourceView */
+        GXWSourceView: {
+            /** Capabilities */
+            capabilities: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /** Declaration Tables */
+            declaration_tables: {
+                [key: string]: components["schemas"]["JsonValue"];
+            }[];
+            /**
+             * Language
+             * @enum {string}
+             */
+            language: "ladder" | "st" | "fbd" | "sfc";
+            /** Model */
+            model: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /**
+             * Native Required
+             * @constant
+             */
+            native_required: false;
+            /** Programs */
+            programs: components["schemas"]["GXWSourceSummary"][];
+            /** Project Id */
+            project_id: string;
+            /** Source Name */
+            source_name: string;
+            /** Source Records */
+            source_records?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            }[] | null;
+            /** Svg */
+            svg?: string | null;
+            /** Unit Kind */
+            unit_kind: string;
+            /** Version Id */
+            version_id: string;
+            /**
+             * Write Backend
+             * @constant
+             */
+            write_backend: "offline";
         };
         /** GenerationCatalog */
         GenerationCatalog: {
@@ -2872,8 +3347,22 @@ export interface components {
         Instruction: {
             /** Args */
             args?: string[];
+            /** Kind */
+            kind?: ("instruction" | "opaque" | "label" | "statement" | "note") | null;
             /** Op */
             op: string;
+            /** Raw Hex */
+            raw_hex?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Record Index */
+            record_index?: number | null;
+            /** Source Offset */
+            source_offset?: number | null;
+            /** Step */
+            step?: number | null;
+            /** Text */
+            text?: string | null;
         } & {
             [key: string]: components["schemas"]["JsonValue"];
         };
@@ -3016,6 +3505,8 @@ export interface components {
              * @enum {string}
              */
             kind: "analysis" | "generation" | "direct_generation" | "agent" | "review" | "test_plan" | "debug_plan" | "gx_read" | "gx_inspect";
+            /** Program */
+            program?: string | null;
             /** Project Id */
             project_id: string;
             /** Request Id */
@@ -3231,6 +3722,14 @@ export interface components {
             before_network_order: string[];
             /** Changes */
             changes: components["schemas"]["NetworkChange"][];
+            /** Comment Changes */
+            comment_changes?: components["schemas"]["GXWCommentChange"][];
+            /** Definition Changed */
+            definition_changed?: boolean | null;
+            /** Definition Changes */
+            definition_changes?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
             /** Deleted */
             deleted: string[];
             /** Device Comment Changes */
@@ -3249,14 +3748,20 @@ export interface components {
             /** Network Order Changed */
             network_order_changed: boolean;
             property_changes: components["schemas"]["ProgramPropertyChanges"];
+            /** Source Changes */
+            source_changes?: components["schemas"]["GXWSourceChange"][];
+            /** Unified Diff */
+            unified_diff?: string | null;
         };
         /** LadderRung */
         LadderRung: {
             /** Branches */
-            branches: components["schemas"]["LadderBranch"][];
+            branches?: components["schemas"]["LadderBranch"][];
             /** Debug Note */
             debug_note?: string | null;
             header_element?: components["schemas"]["LadderElement"] | null;
+            /** Ordered Instructions */
+            ordered_instructions?: components["schemas"]["Instruction"][] | null;
             /** Rung Id */
             rung_id?: number | null;
             /** Shared Inputs */
@@ -4935,28 +5440,37 @@ export interface components {
         /** ProgramFinding */
         ProgramFinding: {
             /** Addresses */
-            addresses: string[];
+            addresses?: string[];
             /** Category */
             category: string;
             /** Code */
             code: string;
-            /** Confidence */
+            /**
+             * Confidence
+             * @default unknown
+             */
             confidence: string;
             /** Evidence */
-            evidence: string[];
-            /** Fixable */
+            evidence?: string[];
+            /**
+             * Fixable
+             * @default false
+             */
             fixable: boolean;
             /** Json Paths */
-            json_paths: string[];
+            json_paths?: string[];
             /** Message */
             message: string;
             /** Network Refs */
-            network_refs: string[];
+            network_refs?: string[];
             /** Rung Ids */
             rung_ids: number[];
             /** Severity */
             severity: string;
-            /** Suggestion */
+            /**
+             * Suggestion
+             * @default
+             */
             suggestion: string;
         } & {
             [key: string]: components["schemas"]["JsonValue"];
@@ -4967,6 +5481,8 @@ export interface components {
             error: number;
             /** Info */
             info: number;
+            /** Unverified */
+            unverified?: number | null;
             /** Warning */
             warning: number;
         } & {
@@ -5808,6 +6324,16 @@ export interface components {
         } & {
             [key: string]: components["schemas"]["JsonValue"];
         };
+        /** SFCActionRegistration */
+        SFCActionRegistration: {
+            /**
+             * Qualifier
+             * @description Stored action qualifier. Core reports unverified qualifier semantics separately from source writeback.
+             */
+            qualifier: number;
+            /** Zoom */
+            zoom: string;
+        };
         /** SFCBinding */
         SFCBinding: {
             /** Action Number */
@@ -5872,15 +6398,31 @@ export interface components {
         };
         /** SFCChildEdit */
         SFCChildEdit: {
+            /** Instruction Edits */
+            instruction_edits?: components["schemas"]["SourceInstructionEdit"][] | null;
+            /** Instructions */
+            instructions?: (components["schemas"]["SourceInstruction"] | components["schemas"]["SourceTextRecord"])[] | null;
             /**
              * Kind
              * @enum {string}
              */
-            kind: "zoom" | "transition";
+            kind: "zoom" | "transition" | "action";
             /** Name */
             name: string;
+            /** New Name */
+            new_name?: string | null;
+            /** New Number */
+            new_number?: number | null;
+            /** Number */
+            number?: number | null;
+            /** Operation */
+            operation?: ("create" | "edit" | "replace" | "delete" | "rename" | "renumber" | "move_before") | null;
             /** Records Hex */
-            records_hex: string;
+            records_hex?: string | null;
+            /** Registrations */
+            registrations?: components["schemas"]["SFCActionRegistration"][] | null;
+            /** Target Name */
+            target_name?: string | null;
         };
         /** SFCChildRecord */
         SFCChildRecord: {
@@ -5888,6 +6430,10 @@ export interface components {
             args?: string[] | null;
             /** Kind */
             kind: string;
+            /** Native Requirements */
+            native_requirements?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
             /** Op */
             op?: string | null;
             /** Raw Hex */
@@ -5899,6 +6445,18 @@ export interface components {
         SFCDiff: {
             /** Base Version Id */
             base_version_id?: string | null;
+            /** Comment Changes */
+            comment_changes?: components["schemas"]["GXWCommentChange"][];
+            /** Declaration Changes */
+            declaration_changes?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Definition Changed */
+            definition_changed?: boolean | null;
+            /** Definition Changes */
+            definition_changes?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
             /** Has Changes */
             has_changes: boolean;
             /**
@@ -5908,6 +6466,8 @@ export interface components {
             kind: "sfc";
             /** Modified Children */
             modified_children: components["schemas"]["SFCModifiedChild"][];
+            /** Source Changes */
+            source_changes?: components["schemas"]["GXWSourceChange"][];
             /** Unified Diff */
             unified_diff: string;
         };
@@ -5935,6 +6495,7 @@ export interface components {
             position_resolution: string;
             /** Records */
             records: components["schemas"]["SFCGraphRecord"][];
+            source_graph?: components["schemas"]["SFCSourceGraph"] | null;
             topology?: components["schemas"]["SFCTopology"] | null;
             /** Width */
             width?: number | null;
@@ -5986,12 +6547,14 @@ export interface components {
              * @constant
              */
             kind: "jump";
+            /** Source Offset */
+            source_offset?: number | null;
             /** Target Step Reference */
             target_step_reference: number;
             /** X */
-            x: number;
+            x?: number | null;
             /** Y */
-            y: number;
+            y?: number | null;
         };
         /** SFCLineSymbol */
         SFCLineSymbol: {
@@ -6038,11 +6601,13 @@ export interface components {
         };
         /** SFCNodeSymbol */
         SFCNodeSymbol: {
+            /** Action Number */
+            action_number?: number | null;
             /**
              * Kind
              * @enum {string}
              */
-            kind: "initial_step" | "step" | "transition";
+            kind: "initial_step" | "step" | "transition" | "jump";
             /** Number */
             number: number;
             /** X */
@@ -6054,12 +6619,18 @@ export interface components {
         SFCPreview: {
             /** Child Edits */
             child_edits?: components["schemas"]["SFCChildEdit"][] | null;
+            /** Declaration Edits */
+            declaration_edits?: {
+                [key: string]: components["schemas"]["DeclarationEdit"];
+            } | null;
             /** Graph Edits */
-            graph_edits?: (components["schemas"]["SFCGraphEdit"] | components["schemas"]["SFCJumpEdit"] | components["schemas"]["SFCRebuildEdit"] | components["schemas"]["SFCStepSwap"])[] | null;
+            graph_edits?: (components["schemas"]["SFCGraphEdit"] | components["schemas"]["SFCJumpEdit"] | components["schemas"]["SFCRebuildEdit"] | components["schemas"]["SFCStepSwap"] | components["schemas"]["SFCRenumberEdit"])[] | null;
             /** Program */
             program?: string | null;
             /** Project Id */
             project_id: string;
+            /** Save Policy */
+            save_policy?: ("draft" | "checked") | null;
             /** Version Id */
             version_id: string;
         };
@@ -6099,10 +6670,20 @@ export interface components {
         SFCProposal: {
             /** Child Edits */
             child_edits?: components["schemas"]["SFCChildEdit"][] | null;
+            /** Comment Table */
+            comment_table?: string | null;
             /** Data Base64 */
             data_base64?: string | null;
+            /** Declaration Edits */
+            declaration_edits?: {
+                [key: string]: components["schemas"]["DeclarationEdit"];
+            } | null;
+            /** Device Comments */
+            device_comments?: {
+                [key: string]: string | null;
+            } | null;
             /** Graph Edits */
-            graph_edits?: (components["schemas"]["SFCGraphEdit"] | components["schemas"]["SFCJumpEdit"] | components["schemas"]["SFCRebuildEdit"] | components["schemas"]["SFCStepSwap"])[] | null;
+            graph_edits?: (components["schemas"]["SFCGraphEdit"] | components["schemas"]["SFCJumpEdit"] | components["schemas"]["SFCRebuildEdit"] | components["schemas"]["SFCStepSwap"] | components["schemas"]["SFCRenumberEdit"])[] | null;
             /**
              * Operation
              * @enum {string}
@@ -6114,6 +6695,8 @@ export interface components {
             project_id: string;
             /** Request Id */
             request_id: string;
+            /** Save Policy */
+            save_policy?: ("draft" | "checked") | null;
             /** Version Id */
             version_id?: string | null;
         };
@@ -6133,6 +6716,27 @@ export interface components {
             qualifier: number;
             /** Zoom */
             zoom: string;
+        };
+        /** SFCRenumberEdit */
+        SFCRenumberEdit: {
+            /** Actions */
+            actions?: components["schemas"]["SFCRenumberPair"][] | null;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "renumber";
+            /** Steps */
+            steps?: components["schemas"]["SFCRenumberPair"][] | null;
+            /** Transitions */
+            transitions?: components["schemas"]["SFCRenumberPair"][] | null;
+        };
+        /** SFCRenumberPair */
+        SFCRenumberPair: {
+            /** After */
+            after: number;
+            /** Before */
+            before: number;
         };
         /** SFCRequirement */
         SFCRequirement: {
@@ -6164,6 +6768,53 @@ export interface components {
             model: components["schemas"]["SFCModel"];
             /** Programs */
             programs: string[];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SFCSourceEdge */
+        SFCSourceEdge: {
+            /** Kind */
+            kind: string;
+            /** Source */
+            source: string;
+            /** Target */
+            target: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SFCSourceGraph */
+        SFCSourceGraph: {
+            /** Edges */
+            edges: components["schemas"]["SFCSourceEdge"][];
+            /** Issues */
+            issues: {
+                [key: string]: components["schemas"]["JsonValue"];
+            }[];
+            /** Linear Symbols */
+            linear_symbols?: components["schemas"]["SFCWriteSymbol"][] | null;
+            /** Nodes */
+            nodes: components["schemas"]["SFCSourceNode"][];
+            /** Position Resolution */
+            position_resolution: string;
+            /** Status */
+            status: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SFCSourceNode */
+        SFCSourceNode: {
+            /** Action Number */
+            action_number?: number | null;
+            /** Binding Status */
+            binding_status?: string | null;
+            /** Child Names */
+            child_names?: string[];
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Number */
+            number?: number | null;
         } & {
             [key: string]: components["schemas"]["JsonValue"];
         };
@@ -6236,6 +6887,8 @@ export interface components {
         };
         /** SFCWriteSymbol */
         SFCWriteSymbol: {
+            /** Action Number */
+            action_number?: number | null;
             /** End */
             end?: number | null;
             /** Kind */
@@ -6270,6 +6923,14 @@ export interface components {
             base_version_id?: string | null;
             /** Before */
             before: string;
+            /** Comment Changes */
+            comment_changes?: components["schemas"]["GXWCommentChange"][];
+            /** Definition Changed */
+            definition_changed?: boolean | null;
+            /** Definition Changes */
+            definition_changes?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
             /** Has Changes */
             has_changes: boolean;
             /**
@@ -6277,6 +6938,8 @@ export interface components {
              * @constant
              */
             kind: "st";
+            /** Source Changes */
+            source_changes?: components["schemas"]["GXWSourceChange"][];
             /** Unified Diff */
             unified_diff: string;
         };
@@ -6847,6 +7510,37 @@ export interface components {
         } & {
             [key: string]: components["schemas"]["JsonValue"];
         };
+        /** SourceEndBoundary */
+        SourceEndBoundary: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "end_boundary";
+        };
+        /** SourceInstruction */
+        SourceInstruction: {
+            /** Args */
+            args: (string | components["schemas"]["SourceOperand"])[];
+            /** Op */
+            op: string;
+        };
+        /** SourceInstructionEdit */
+        SourceInstructionEdit: {
+            /** Expected */
+            expected: components["schemas"]["ExpectedSourceInstruction"] | components["schemas"]["ExpectedSourceTextRecord"] | components["schemas"]["SourceEndBoundary"];
+            /** Instructions */
+            instructions?: (components["schemas"]["SourceInstruction"] | components["schemas"]["SourceTextRecord"])[];
+            /**
+             * Operation
+             * @enum {string}
+             */
+            operation: "replace" | "insert_before" | "delete" | "move_before";
+            /** Record Index */
+            record_index: number;
+            /** Target Record Index */
+            target_record_index?: number | null;
+        };
         /** SourceIssue */
         SourceIssue: {
             /** Code */
@@ -6855,6 +7549,13 @@ export interface components {
             message?: string | null;
         } & {
             [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SourceOperand */
+        SourceOperand: {
+            /** Text */
+            text: string;
+            /** Token Codes */
+            token_codes: string[];
         };
         /** SourceSnapshotEnvelope */
         SourceSnapshotEnvelope: {
@@ -6887,6 +7588,16 @@ export interface components {
             version_id?: string | null;
         } & {
             [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SourceTextRecord */
+        SourceTextRecord: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "statement" | "note";
+            /** Text */
+            text: string;
         };
         /** SpecIORowEdit */
         SpecIORowEdit: {
@@ -7123,6 +7834,22 @@ export interface components {
             value_kind?: string | null;
         } & {
             [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** StructureArrayAddresses */
+        StructureArrayAddresses: {
+            /** Bit Address */
+            bit_address: string;
+            /** Bit Offset */
+            bit_offset: string;
+            /** Word Address */
+            word_address: string;
+            /** Word Offset */
+            word_offset: string;
+            /**
+             * Word Use Bit
+             * @enum {integer}
+             */
+            word_use_bit: 0 | 1;
         };
         /** TaskProgram */
         TaskProgram: {
@@ -7402,6 +8129,8 @@ export interface components {
             parent_version_id?: string | null;
             /** Plc Model */
             plc_model?: string | null;
+            /** Program Name */
+            program_name?: string | null;
             /** Simulator Runs */
             simulator_runs?: {
                 [key: string]: components["schemas"]["JsonValue"];
@@ -7688,6 +8417,138 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Proposal"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    gxw_edit_api_gxw_edit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GXWEditCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Proposal"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    gxw_import_api_gxw_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GXWImportCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GXWImportResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    gxw_inspect_api_gxw_inspect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GXWInspectionCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GXWInspection"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    gxw_source_api_gxw_source_get: {
+        parameters: {
+            query: {
+                project_id: string;
+                version_id: string;
+                program?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GXWSourceView"];
                 };
             };
             /** @description Validation Error */

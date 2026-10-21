@@ -9,6 +9,7 @@ export const workbenchDialogsFields = [
   "freshConfirmedGeneration",
   "guarded",
   "gxSend",
+  "gxwImport",
   "locale",
   "modal",
   "pid",

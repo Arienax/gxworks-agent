@@ -748,6 +748,20 @@
       "DeclarationEdit": {
         "additionalProperties": false,
         "properties": {
+          "order": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order"
+          },
           "remove": {
             "items": {
               "type": "string"
@@ -761,6 +775,17 @@
             },
             "title": "Renames",
             "type": "object"
+          },
+          "return_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Type"
           },
           "upserts": {
             "items": {
@@ -1961,6 +1986,86 @@
         "title": "Expectation",
         "type": "object"
       },
+      "ExpectedSourceInstruction": {
+        "additionalProperties": false,
+        "properties": {
+          "args": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/components/schemas/SourceOperand"
+                }
+              ]
+            },
+            "maxItems": 8192,
+            "title": "Args",
+            "type": "array"
+          },
+          "op": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Op",
+            "type": "string"
+          },
+          "raw_hex": {
+            "anyOf": [
+              {
+                "maxLength": 16777216,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Hex"
+          }
+        },
+        "required": [
+          "op",
+          "args"
+        ],
+        "title": "ExpectedSourceInstruction",
+        "type": "object"
+      },
+      "ExpectedSourceTextRecord": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "statement",
+              "note"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "raw_hex": {
+            "anyOf": [
+              {
+                "maxLength": 16777216,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Hex"
+          },
+          "text": {
+            "maxLength": 4194304,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "text"
+        ],
+        "title": "ExpectedSourceTextRecord",
+        "type": "object"
+      },
       "Exploration": {
         "additionalProperties": false,
         "properties": {
@@ -2197,6 +2302,64 @@
         "title": "FBDAllocationDifference",
         "type": "object"
       },
+      "FBDBlock": {
+        "additionalProperties": false,
+        "properties": {
+          "canvas_height": {
+            "title": "Canvas Height",
+            "type": "integer"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index"
+          },
+          "source_offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Offset"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "canvas_height"
+        ],
+        "title": "FBDBlock",
+        "type": "object"
+      },
       "FBDCatalog": {
         "additionalProperties": {
           "$ref": "#/components/schemas/JsonValue"
@@ -2372,6 +2535,13 @@
             "title": "Before Wire Count",
             "type": "integer"
           },
+          "comment_changes": {
+            "items": {
+              "$ref": "#/components/schemas/GXWCommentChange"
+            },
+            "title": "Comment Changes",
+            "type": "array"
+          },
           "compilation_save": {
             "anyOf": [
               {
@@ -2382,9 +2552,34 @@
               }
             ]
           },
+          "declaration_changes": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declaration Changes"
+          },
           "declarations_changed": {
             "title": "Declarations Changed",
             "type": "boolean"
+          },
+          "definition_changed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Definition Changed"
           },
           "definition_changes": {
             "anyOf": [
@@ -2414,6 +2609,13 @@
                 "type": "null"
               }
             ]
+          },
+          "source_changes": {
+            "items": {
+              "$ref": "#/components/schemas/GXWSourceChange"
+            },
+            "title": "Source Changes",
+            "type": "array"
           },
           "unified_diff": {
             "title": "Unified Diff",
@@ -2865,6 +3067,16 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "structure_array_addresses": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StructureArrayAddresses"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -2938,6 +3150,20 @@
           "$ref": "#/components/schemas/JsonValue"
         },
         "properties": {
+          "blocks": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/FBDBlock"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocks"
+          },
           "canvas_height": {
             "anyOf": [
               {
@@ -3067,6 +3293,17 @@
           "$ref": "#/components/schemas/JsonValue"
         },
         "properties": {
+          "block": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Block"
+          },
           "height": {
             "anyOf": [
               {
@@ -3096,6 +3333,16 @@
             ],
             "title": "Port Edits"
           },
+          "port_layout": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FBDPortLayout"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "ports": {
             "anyOf": [
               {
@@ -3120,6 +3367,27 @@
               }
             ],
             "title": "Prototype Offset"
+          },
+          "refresh_interface": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Interface"
+          },
+          "resize": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FBDNodeSize"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "source_offset": {
             "anyOf": [
@@ -3168,6 +3436,35 @@
           "y"
         ],
         "title": "FBDNode",
+        "type": "object"
+      },
+      "FBDNodeSize": {
+        "additionalProperties": false,
+        "properties": {
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          }
+        },
+        "title": "FBDNodeSize",
         "type": "object"
       },
       "FBDParameterCall": {
@@ -3517,11 +3814,45 @@
         "title": "FBDPortEdit",
         "type": "object"
       },
+      "FBDPortLayout": {
+        "additionalProperties": false,
+        "properties": {
+          "height": {
+            "title": "Height",
+            "type": "integer"
+          },
+          "ports": {
+            "items": {
+              "$ref": "#/components/schemas/FBDStoredPort"
+            },
+            "title": "Ports",
+            "type": "array"
+          },
+          "width": {
+            "title": "Width",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "width",
+          "height",
+          "ports"
+        ],
+        "title": "FBDPortLayout",
+        "type": "object"
+      },
       "FBDPresentation": {
         "additionalProperties": {
           "$ref": "#/components/schemas/JsonValue"
         },
         "properties": {
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/FBDBlock"
+            },
+            "title": "Blocks",
+            "type": "array"
+          },
           "endpoints": {
             "items": {
               "$ref": "#/components/schemas/FBDEndpoint"
@@ -3568,6 +3899,17 @@
           "$ref": "#/components/schemas/JsonValue"
         },
         "properties": {
+          "callable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Callable"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -3578,6 +3920,17 @@
             },
             "title": "Ports",
             "type": "array"
+          },
+          "resizable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resizable"
           },
           "symbol_editable": {
             "title": "Symbol Editable",
@@ -3602,6 +3955,15 @@
           },
           "project_id": {
             "title": "Project Id",
+            "type": "string"
+          },
+          "save_policy": {
+            "default": "checked",
+            "enum": [
+              "draft",
+              "checked"
+            ],
+            "title": "Save Policy",
             "type": "string"
           },
           "version_id": {
@@ -3689,6 +4051,18 @@
       "FBDProposal": {
         "additionalProperties": false,
         "properties": {
+          "comment_table": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment Table"
+          },
           "data_base64": {
             "anyOf": [
               {
@@ -3716,6 +4090,27 @@
               }
             ],
             "title": "Declarations"
+          },
+          "device_comments": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Comments"
           },
           "library_name": {
             "anyOf": [
@@ -3783,6 +4178,8 @@
               "create_structure",
               "create_st_fb",
               "edit_st_fb",
+              "edit_st_function",
+              "edit_st_source",
               "edit_global_labels",
               "create_global_labels",
               "edit_pou_labels",
@@ -3821,6 +4218,21 @@
             "title": "Project Id",
             "type": "string"
           },
+          "remove_declarations": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 8192,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remove Declarations"
+          },
           "request_id": {
             "maxLength": 128,
             "minLength": 1,
@@ -3839,6 +4251,34 @@
               }
             ],
             "title": "Resource"
+          },
+          "return_type": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Type"
+          },
+          "save_policy": {
+            "anyOf": [
+              {
+                "enum": [
+                  "draft",
+                  "checked"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Save Policy"
           },
           "scope_mode": {
             "anyOf": [
@@ -3935,11 +4375,46 @@
         "title": "FBDStoredAllocationField",
         "type": "object"
       },
+      "FBDStoredPort": {
+        "additionalProperties": false,
+        "properties": {
+          "flags": {
+            "title": "Flags",
+            "type": "integer"
+          },
+          "x": {
+            "title": "X",
+            "type": "integer"
+          },
+          "y": {
+            "title": "Y",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "flags",
+          "x",
+          "y"
+        ],
+        "title": "FBDStoredPort",
+        "type": "object"
+      },
       "FBDWire": {
         "additionalProperties": {
           "$ref": "#/components/schemas/JsonValue"
         },
         "properties": {
+          "block": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Block"
+          },
           "end": {
             "anyOf": [
               {
@@ -3964,6 +4439,21 @@
               }
             ],
             "title": "From"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "wire",
+                  "junction"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
           },
           "source_offset": {
             "anyOf": [
@@ -4115,6 +4605,965 @@
           }
         },
         "title": "Finding",
+        "type": "object"
+      },
+      "GXWCommentChange": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "table": {
+            "title": "Table",
+            "type": "string"
+          }
+        },
+        "required": [
+          "address",
+          "before",
+          "after",
+          "table"
+        ],
+        "title": "GXWCommentChange",
+        "type": "object"
+      },
+      "GXWEditCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "comment_table": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment Table"
+          },
+          "declaration_edits": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/DeclarationEdit"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declaration Edits"
+          },
+          "device_comments": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Comments"
+          },
+          "edits": {
+            "items": {
+              "$ref": "#/components/schemas/GXWSourceEdit"
+            },
+            "maxItems": 8192,
+            "title": "Edits",
+            "type": "array"
+          },
+          "program": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Program"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "request_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Request Id",
+            "type": "string"
+          },
+          "save_policy": {
+            "default": "draft",
+            "enum": [
+              "draft",
+              "checked"
+            ],
+            "title": "Save Policy",
+            "type": "string"
+          },
+          "summary": {
+            "default": "编辑 GXW 工程",
+            "maxLength": 512,
+            "title": "Summary",
+            "type": "string"
+          },
+          "version_id": {
+            "title": "Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "version_id",
+          "request_id"
+        ],
+        "title": "GXWEditCommand",
+        "type": "object"
+      },
+      "GXWFBDEdit": {
+        "additionalProperties": false,
+        "properties": {
+          "model": {
+            "additionalProperties": true,
+            "title": "Model",
+            "type": "object"
+          },
+          "operation": {
+            "const": "edit",
+            "default": "edit",
+            "title": "Operation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model"
+        ],
+        "title": "GXWFBDEdit",
+        "type": "object"
+      },
+      "GXWImportCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "data_base64": {
+            "maxLength": 44040192,
+            "minLength": 1,
+            "title": "Data Base64",
+            "type": "string"
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename"
+          },
+          "program": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Program"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "request_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Request Id",
+            "type": "string"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          }
+        },
+        "required": [
+          "data_base64",
+          "request_id"
+        ],
+        "title": "GXWImportCommand",
+        "type": "object"
+      },
+      "GXWImportResult": {
+        "additionalProperties": false,
+        "properties": {
+          "project": {
+            "$ref": "#/components/schemas/Project"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "proposal_id": {
+            "title": "Proposal Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          }
+        },
+        "required": [
+          "status",
+          "project_id",
+          "version_id",
+          "proposal_id",
+          "project"
+        ],
+        "title": "GXWImportResult",
+        "type": "object"
+      },
+      "GXWInspection": {
+        "additionalProperties": false,
+        "properties": {
+          "codepage": {
+            "title": "Codepage",
+            "type": "integer"
+          },
+          "comment_tables": {
+            "items": {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/JsonValue"
+              },
+              "type": "object"
+            },
+            "title": "Comment Tables",
+            "type": "array"
+          },
+          "coverage": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage"
+          },
+          "cpu_menu": {
+            "title": "Cpu Menu",
+            "type": "string"
+          },
+          "declaration_tables": {
+            "items": {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/JsonValue"
+              },
+              "type": "object"
+            },
+            "title": "Declaration Tables",
+            "type": "array"
+          },
+          "device_comments": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Device Comments",
+            "type": "object"
+          },
+          "integrity": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Integrity",
+            "type": "object"
+          },
+          "issues": {
+            "items": {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/JsonValue"
+              },
+              "type": "object"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "native_compile": {
+            "const": "not_run",
+            "title": "Native Compile",
+            "type": "string"
+          },
+          "native_required": {
+            "const": false,
+            "title": "Native Required",
+            "type": "boolean"
+          },
+          "networks": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/JsonValue"
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Networks"
+          },
+          "programs": {
+            "items": {
+              "$ref": "#/components/schemas/GXWSourceSummary"
+            },
+            "title": "Programs",
+            "type": "array"
+          },
+          "runtime_verified": {
+            "const": false,
+            "title": "Runtime Verified",
+            "type": "boolean"
+          },
+          "selected_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GXWSourceSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_records": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/JsonValue"
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Records"
+          },
+          "write_backend": {
+            "const": "offline",
+            "title": "Write Backend",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cpu_menu",
+          "codepage",
+          "programs",
+          "selected_source",
+          "device_comments",
+          "comment_tables",
+          "declaration_tables",
+          "issues",
+          "write_backend",
+          "integrity",
+          "native_required",
+          "native_compile",
+          "runtime_verified"
+        ],
+        "title": "GXWInspection",
+        "type": "object"
+      },
+      "GXWInspectionCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "data_base64": {
+            "maxLength": 44040192,
+            "minLength": 1,
+            "title": "Data Base64",
+            "type": "string"
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename"
+          },
+          "program": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Program"
+          }
+        },
+        "required": [
+          "data_base64"
+        ],
+        "title": "GXWInspectionCommand",
+        "type": "object"
+      },
+      "GXWLadderEdit": {
+        "additionalProperties": false,
+        "properties": {
+          "instruction_edits": {
+            "items": {
+              "$ref": "#/components/schemas/SourceInstructionEdit"
+            },
+            "maxItems": 8192,
+            "title": "Instruction Edits",
+            "type": "array"
+          },
+          "operation": {
+            "const": "edit",
+            "default": "edit",
+            "title": "Operation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instruction_edits"
+        ],
+        "title": "GXWLadderEdit",
+        "type": "object"
+      },
+      "GXWSFCEdit": {
+        "additionalProperties": false,
+        "properties": {
+          "child_edits": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SFCChildEdit"
+                },
+                "maxItems": 8192,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Child Edits"
+          },
+          "graph_edits": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SFCGraphEdit"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SFCJumpEdit"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SFCRebuildEdit"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SFCStepSwap"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SFCRenumberEdit"
+                    }
+                  ]
+                },
+                "maxItems": 8192,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Graph Edits"
+          },
+          "operation": {
+            "const": "edit",
+            "default": "edit",
+            "title": "Operation",
+            "type": "string"
+          }
+        },
+        "title": "GXWSFCEdit",
+        "type": "object"
+      },
+      "GXWSTEdit": {
+        "additionalProperties": false,
+        "properties": {
+          "declarations": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "maxItems": 8192,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declarations"
+          },
+          "operation": {
+            "default": "edit",
+            "enum": [
+              "edit",
+              "edit_st_source",
+              "edit_st_program",
+              "edit_st_fb",
+              "edit_st_function"
+            ],
+            "title": "Operation",
+            "type": "string"
+          },
+          "return_type": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Type"
+          },
+          "st_text": {
+            "anyOf": [
+              {
+                "maxLength": 4194304,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "St Text"
+          }
+        },
+        "title": "GXWSTEdit",
+        "type": "object"
+      },
+      "GXWSourceChange": {
+        "additionalProperties": false,
+        "properties": {
+          "language": {
+            "enum": [
+              "ladder",
+              "st",
+              "fbd",
+              "sfc"
+            ],
+            "title": "Language",
+            "type": "string"
+          },
+          "source_name": {
+            "title": "Source Name",
+            "type": "string"
+          },
+          "unified_diff": {
+            "title": "Unified Diff",
+            "type": "string"
+          },
+          "unit_kind": {
+            "title": "Unit Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_name",
+          "language",
+          "unit_kind",
+          "unified_diff"
+        ],
+        "title": "GXWSourceChange",
+        "type": "object"
+      },
+      "GXWSourceEdit": {
+        "additionalProperties": false,
+        "properties": {
+          "command": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GXWLadderEdit"
+              },
+              {
+                "$ref": "#/components/schemas/GXWSTEdit"
+              },
+              {
+                "$ref": "#/components/schemas/GXWFBDEdit"
+              },
+              {
+                "$ref": "#/components/schemas/GXWSFCEdit"
+              }
+            ],
+            "title": "Command"
+          },
+          "source_name": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Source Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_name",
+          "command"
+        ],
+        "title": "GXWSourceEdit",
+        "type": "object"
+      },
+      "GXWSourceSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "capabilities": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capabilities"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ladder",
+                  "st",
+                  "fbd",
+                  "sfc"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "native_requirements": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/JsonValue"
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Native Requirements"
+          },
+          "offline_editable": {
+            "title": "Offline Editable",
+            "type": "boolean"
+          },
+          "parse_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parse Status"
+          },
+          "preserved_records": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preserved Records"
+          },
+          "program_kind": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Program Kind"
+          },
+          "readable": {
+            "title": "Readable",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "source_name": {
+            "title": "Source Name",
+            "type": "string"
+          },
+          "unit_kind": {
+            "title": "Unit Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_name",
+          "name",
+          "language",
+          "program_kind",
+          "unit_kind",
+          "readable",
+          "offline_editable",
+          "reason"
+        ],
+        "title": "GXWSourceSummary",
+        "type": "object"
+      },
+      "GXWSourceView": {
+        "additionalProperties": false,
+        "properties": {
+          "capabilities": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Capabilities",
+            "type": "object"
+          },
+          "declaration_tables": {
+            "items": {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/JsonValue"
+              },
+              "type": "object"
+            },
+            "title": "Declaration Tables",
+            "type": "array"
+          },
+          "language": {
+            "enum": [
+              "ladder",
+              "st",
+              "fbd",
+              "sfc"
+            ],
+            "title": "Language",
+            "type": "string"
+          },
+          "model": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Model",
+            "type": "object"
+          },
+          "native_required": {
+            "const": false,
+            "title": "Native Required",
+            "type": "boolean"
+          },
+          "programs": {
+            "items": {
+              "$ref": "#/components/schemas/GXWSourceSummary"
+            },
+            "title": "Programs",
+            "type": "array"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "source_name": {
+            "title": "Source Name",
+            "type": "string"
+          },
+          "source_records": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/JsonValue"
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Records"
+          },
+          "svg": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Svg"
+          },
+          "unit_kind": {
+            "title": "Unit Kind",
+            "type": "string"
+          },
+          "version_id": {
+            "title": "Version Id",
+            "type": "string"
+          },
+          "write_backend": {
+            "const": "offline",
+            "title": "Write Backend",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "version_id",
+          "source_name",
+          "language",
+          "unit_kind",
+          "model",
+          "programs",
+          "declaration_tables",
+          "capabilities",
+          "write_backend",
+          "native_required"
+        ],
+        "title": "GXWSourceView",
         "type": "object"
       },
       "GenerationCatalog": {
@@ -5410,9 +6859,93 @@
             "title": "Args",
             "type": "array"
           },
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "instruction",
+                  "opaque",
+                  "label",
+                  "statement",
+                  "note"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
           "op": {
             "title": "Op",
             "type": "string"
+          },
+          "raw_hex": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Hex"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "record_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Index"
+          },
+          "source_offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Offset"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
           }
         },
         "required": [
@@ -5916,6 +7449,19 @@
             ],
             "title": "Kind",
             "type": "string"
+          },
+          "program": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Program"
           },
           "project_id": {
             "title": "Project Id",
@@ -6701,6 +8247,38 @@
             "title": "Changes",
             "type": "array"
           },
+          "comment_changes": {
+            "items": {
+              "$ref": "#/components/schemas/GXWCommentChange"
+            },
+            "title": "Comment Changes",
+            "type": "array"
+          },
+          "definition_changed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Definition Changed"
+          },
+          "definition_changes": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Definition Changes"
+          },
           "deleted": {
             "items": {
               "type": "string"
@@ -6741,6 +8319,24 @@
           },
           "property_changes": {
             "$ref": "#/components/schemas/ProgramPropertyChanges"
+          },
+          "source_changes": {
+            "items": {
+              "$ref": "#/components/schemas/GXWSourceChange"
+            },
+            "title": "Source Changes",
+            "type": "array"
+          },
+          "unified_diff": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unified Diff"
           }
         },
         "required": [
@@ -6795,6 +8391,20 @@
               }
             ]
           },
+          "ordered_instructions": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Instruction"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ordered Instructions"
+          },
           "rung_id": {
             "anyOf": [
               {
@@ -6821,9 +8431,6 @@
             "title": "Shared Inputs"
           }
         },
-        "required": [
-          "branches"
-        ],
         "title": "LadderRung",
         "type": "object"
       },
@@ -13236,6 +14843,7 @@
             "type": "string"
           },
           "confidence": {
+            "default": "unknown",
             "title": "Confidence",
             "type": "string"
           },
@@ -13247,6 +14855,7 @@
             "type": "array"
           },
           "fixable": {
+            "default": false,
             "title": "Fixable",
             "type": "boolean"
           },
@@ -13280,6 +14889,7 @@
             "type": "string"
           },
           "suggestion": {
+            "default": "",
             "title": "Suggestion",
             "type": "string"
           }
@@ -13289,14 +14899,7 @@
           "category",
           "severity",
           "message",
-          "suggestion",
-          "addresses",
-          "network_refs",
-          "rung_ids",
-          "json_paths",
-          "evidence",
-          "confidence",
-          "fixable"
+          "rung_ids"
         ],
         "title": "ProgramFinding",
         "type": "object"
@@ -13313,6 +14916,17 @@
           "info": {
             "title": "Info",
             "type": "integer"
+          },
+          "unverified": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unverified"
           },
           "warning": {
             "title": "Warning",
@@ -16393,6 +18007,30 @@
         "title": "SFCAction",
         "type": "object"
       },
+      "SFCActionRegistration": {
+        "additionalProperties": false,
+        "properties": {
+          "qualifier": {
+            "description": "Stored action qualifier. Core reports unverified qualifier semantics separately from source writeback.",
+            "maximum": 4294967295.0,
+            "minimum": 0.0,
+            "title": "Qualifier",
+            "type": "integer"
+          },
+          "zoom": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Zoom",
+            "type": "string"
+          }
+        },
+        "required": [
+          "qualifier",
+          "zoom"
+        ],
+        "title": "SFCActionRegistration",
+        "type": "object"
+      },
       "SFCBinding": {
         "additionalProperties": {
           "$ref": "#/components/schemas/JsonValue"
@@ -16597,10 +18235,48 @@
       "SFCChildEdit": {
         "additionalProperties": false,
         "properties": {
+          "instruction_edits": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SourceInstructionEdit"
+                },
+                "maxItems": 8192,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instruction Edits"
+          },
+          "instructions": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SourceInstruction"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SourceTextRecord"
+                    }
+                  ]
+                },
+                "maxItems": 8192,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instructions"
+          },
           "kind": {
             "enum": [
               "zoom",
-              "transition"
+              "transition",
+              "action"
             ],
             "title": "Kind",
             "type": "string"
@@ -16611,16 +18287,109 @@
             "title": "Name",
             "type": "string"
           },
+          "new_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Name"
+          },
+          "new_number": {
+            "anyOf": [
+              {
+                "maximum": 65535.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Number"
+          },
+          "number": {
+            "anyOf": [
+              {
+                "maximum": 65535.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Number"
+          },
+          "operation": {
+            "anyOf": [
+              {
+                "enum": [
+                  "create",
+                  "edit",
+                  "replace",
+                  "delete",
+                  "rename",
+                  "renumber",
+                  "move_before"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operation"
+          },
           "records_hex": {
-            "maxLength": 16777216,
-            "title": "Records Hex",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 16777216,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Records Hex"
+          },
+          "registrations": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SFCActionRegistration"
+                },
+                "maxItems": 8192,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registrations"
+          },
+          "target_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Name"
           }
         },
         "required": [
           "kind",
-          "name",
-          "records_hex"
+          "name"
         ],
         "title": "SFCChildEdit",
         "type": "object"
@@ -16647,6 +18416,20 @@
           "kind": {
             "title": "Kind",
             "type": "string"
+          },
+          "native_requirements": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Native Requirements"
           },
           "op": {
             "anyOf": [
@@ -16685,6 +18468,52 @@
             ],
             "title": "Base Version Id"
           },
+          "comment_changes": {
+            "items": {
+              "$ref": "#/components/schemas/GXWCommentChange"
+            },
+            "title": "Comment Changes",
+            "type": "array"
+          },
+          "declaration_changes": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declaration Changes"
+          },
+          "definition_changed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Definition Changed"
+          },
+          "definition_changes": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Definition Changes"
+          },
           "has_changes": {
             "title": "Has Changes",
             "type": "boolean"
@@ -16699,6 +18528,13 @@
               "$ref": "#/components/schemas/SFCModifiedChild"
             },
             "title": "Modified Children",
+            "type": "array"
+          },
+          "source_changes": {
+            "items": {
+              "$ref": "#/components/schemas/GXWSourceChange"
+            },
+            "title": "Source Changes",
             "type": "array"
           },
           "unified_diff": {
@@ -16795,6 +18631,16 @@
             },
             "title": "Records",
             "type": "array"
+          },
+          "source_graph": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SFCSourceGraph"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "topology": {
             "anyOf": [
@@ -16953,6 +18799,18 @@
             "title": "Kind",
             "type": "string"
           },
+          "source_offset": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Offset"
+          },
           "target_step_reference": {
             "maximum": 65535.0,
             "minimum": 0.0,
@@ -16960,22 +18818,34 @@
             "type": "integer"
           },
           "x": {
-            "maximum": 65535.0,
-            "minimum": 0.0,
-            "title": "X",
-            "type": "integer"
+            "anyOf": [
+              {
+                "maximum": 65535.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
           },
           "y": {
-            "maximum": 65535.0,
-            "minimum": 0.0,
-            "title": "Y",
-            "type": "integer"
+            "anyOf": [
+              {
+                "maximum": 65535.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y"
           }
         },
         "required": [
           "kind",
-          "x",
-          "y",
           "before_step_reference",
           "target_step_reference"
         ],
@@ -17115,11 +18985,25 @@
       "SFCNodeSymbol": {
         "additionalProperties": false,
         "properties": {
+          "action_number": {
+            "anyOf": [
+              {
+                "maximum": 32767.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action Number"
+          },
           "kind": {
             "enum": [
               "initial_step",
               "step",
-              "transition"
+              "transition",
+              "jump"
             ],
             "title": "Kind",
             "type": "string"
@@ -17171,6 +19055,20 @@
             ],
             "title": "Child Edits"
           },
+          "declaration_edits": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/DeclarationEdit"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declaration Edits"
+          },
           "graph_edits": {
             "anyOf": [
               {
@@ -17187,6 +19085,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/SFCStepSwap"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SFCRenumberEdit"
                     }
                   ]
                 },
@@ -17216,6 +19117,21 @@
           "project_id": {
             "title": "Project Id",
             "type": "string"
+          },
+          "save_policy": {
+            "anyOf": [
+              {
+                "enum": [
+                  "draft",
+                  "checked"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Save Policy"
           },
           "version_id": {
             "title": "Version Id",
@@ -17381,6 +19297,18 @@
             ],
             "title": "Child Edits"
           },
+          "comment_table": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment Table"
+          },
           "data_base64": {
             "anyOf": [
               {
@@ -17392,6 +19320,41 @@
               }
             ],
             "title": "Data Base64"
+          },
+          "declaration_edits": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/DeclarationEdit"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declaration Edits"
+          },
+          "device_comments": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Comments"
           },
           "graph_edits": {
             "anyOf": [
@@ -17409,6 +19372,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/SFCStepSwap"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SFCRenumberEdit"
                     }
                   ]
                 },
@@ -17452,6 +19418,21 @@
             "minLength": 1,
             "title": "Request Id",
             "type": "string"
+          },
+          "save_policy": {
+            "anyOf": [
+              {
+                "enum": [
+                  "draft",
+                  "checked"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Save Policy"
           },
           "version_id": {
             "anyOf": [
@@ -17528,6 +19509,92 @@
           "zoom"
         ],
         "title": "SFCRegistration",
+        "type": "object"
+      },
+      "SFCRenumberEdit": {
+        "additionalProperties": false,
+        "properties": {
+          "actions": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SFCRenumberPair"
+                },
+                "maxItems": 8192,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actions"
+          },
+          "kind": {
+            "const": "renumber",
+            "title": "Kind",
+            "type": "string"
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SFCRenumberPair"
+                },
+                "maxItems": 8192,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Steps"
+          },
+          "transitions": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SFCRenumberPair"
+                },
+                "maxItems": 8192,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transitions"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "SFCRenumberEdit",
+        "type": "object"
+      },
+      "SFCRenumberPair": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "maximum": 32767.0,
+            "minimum": 0.0,
+            "title": "After",
+            "type": "integer"
+          },
+          "before": {
+            "maximum": 32767.0,
+            "minimum": 0.0,
+            "title": "Before",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "before",
+          "after"
+        ],
+        "title": "SFCRenumberPair",
         "type": "object"
       },
       "SFCRequirement": {
@@ -17607,6 +19674,155 @@
           "gx_compile"
         ],
         "title": "SFCSource",
+        "type": "object"
+      },
+      "SFCSourceEdge": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        },
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "target",
+          "kind"
+        ],
+        "title": "SFCSourceEdge",
+        "type": "object"
+      },
+      "SFCSourceGraph": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        },
+        "properties": {
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/SFCSourceEdge"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "issues": {
+            "items": {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/JsonValue"
+              },
+              "type": "object"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "linear_symbols": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SFCWriteSymbol"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linear Symbols"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/SFCSourceNode"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "position_resolution": {
+            "title": "Position Resolution",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "nodes",
+          "edges",
+          "position_resolution",
+          "issues"
+        ],
+        "title": "SFCSourceGraph",
+        "type": "object"
+      },
+      "SFCSourceNode": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        },
+        "properties": {
+          "action_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action Number"
+          },
+          "binding_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Binding Status"
+          },
+          "child_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Child Names",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Number"
+          }
+        },
+        "required": [
+          "id",
+          "kind"
+        ],
+        "title": "SFCSourceNode",
         "type": "object"
       },
       "SFCStep": {
@@ -17825,6 +20041,17 @@
           "$ref": "#/components/schemas/JsonValue"
         },
         "properties": {
+          "action_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action Number"
+          },
           "end": {
             "anyOf": [
               {
@@ -17937,6 +20164,38 @@
             "title": "Before",
             "type": "string"
           },
+          "comment_changes": {
+            "items": {
+              "$ref": "#/components/schemas/GXWCommentChange"
+            },
+            "title": "Comment Changes",
+            "type": "array"
+          },
+          "definition_changed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Definition Changed"
+          },
+          "definition_changes": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Definition Changes"
+          },
           "has_changes": {
             "title": "Has Changes",
             "type": "boolean"
@@ -17945,6 +20204,13 @@
             "const": "st",
             "title": "Kind",
             "type": "string"
+          },
+          "source_changes": {
+            "items": {
+              "$ref": "#/components/schemas/GXWSourceChange"
+            },
+            "title": "Source Changes",
+            "type": "array"
           },
           "unified_diff": {
             "title": "Unified Diff",
@@ -20048,6 +22314,121 @@
         "title": "SourceDefinition",
         "type": "object"
       },
+      "SourceEndBoundary": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "end_boundary",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "SourceEndBoundary",
+        "type": "object"
+      },
+      "SourceInstruction": {
+        "additionalProperties": false,
+        "properties": {
+          "args": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/components/schemas/SourceOperand"
+                }
+              ]
+            },
+            "maxItems": 8192,
+            "title": "Args",
+            "type": "array"
+          },
+          "op": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Op",
+            "type": "string"
+          }
+        },
+        "required": [
+          "op",
+          "args"
+        ],
+        "title": "SourceInstruction",
+        "type": "object"
+      },
+      "SourceInstructionEdit": {
+        "additionalProperties": false,
+        "properties": {
+          "expected": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExpectedSourceInstruction"
+              },
+              {
+                "$ref": "#/components/schemas/ExpectedSourceTextRecord"
+              },
+              {
+                "$ref": "#/components/schemas/SourceEndBoundary"
+              }
+            ],
+            "title": "Expected"
+          },
+          "instructions": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/SourceInstruction"
+                },
+                {
+                  "$ref": "#/components/schemas/SourceTextRecord"
+                }
+              ]
+            },
+            "maxItems": 8192,
+            "title": "Instructions",
+            "type": "array"
+          },
+          "operation": {
+            "enum": [
+              "replace",
+              "insert_before",
+              "delete",
+              "move_before"
+            ],
+            "title": "Operation",
+            "type": "string"
+          },
+          "record_index": {
+            "minimum": 0.0,
+            "title": "Record Index",
+            "type": "integer"
+          },
+          "target_record_index": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Record Index"
+          }
+        },
+        "required": [
+          "operation",
+          "record_index",
+          "expected"
+        ],
+        "title": "SourceInstructionEdit",
+        "type": "object"
+      },
       "SourceIssue": {
         "additionalProperties": {
           "$ref": "#/components/schemas/JsonValue"
@@ -20077,6 +22458,32 @@
           }
         },
         "title": "SourceIssue",
+        "type": "object"
+      },
+      "SourceOperand": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          },
+          "token_codes": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "minItems": 1,
+            "title": "Token Codes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "text",
+          "token_codes"
+        ],
+        "title": "SourceOperand",
         "type": "object"
       },
       "SourceSnapshotEnvelope": {
@@ -20219,6 +22626,30 @@
           }
         },
         "title": "SourceSnapshotToolData",
+        "type": "object"
+      },
+      "SourceTextRecord": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "statement",
+              "note"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 4194304,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "text"
+        ],
+        "title": "SourceTextRecord",
         "type": "object"
       },
       "SpecIORowEdit": {
@@ -21269,6 +23700,44 @@
         "title": "SpecificationParameter",
         "type": "object"
       },
+      "StructureArrayAddresses": {
+        "additionalProperties": false,
+        "properties": {
+          "bit_address": {
+            "title": "Bit Address",
+            "type": "string"
+          },
+          "bit_offset": {
+            "title": "Bit Offset",
+            "type": "string"
+          },
+          "word_address": {
+            "title": "Word Address",
+            "type": "string"
+          },
+          "word_offset": {
+            "title": "Word Offset",
+            "type": "string"
+          },
+          "word_use_bit": {
+            "enum": [
+              0,
+              1
+            ],
+            "title": "Word Use Bit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "word_address",
+          "word_offset",
+          "word_use_bit",
+          "bit_address",
+          "bit_offset"
+        ],
+        "title": "StructureArrayAddresses",
+        "type": "object"
+      },
       "TaskProgram": {
         "additionalProperties": false,
         "properties": {
@@ -22285,6 +24754,17 @@
             ],
             "title": "Plc Model"
           },
+          "program_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Program Name"
+          },
           "simulator_runs": {
             "anyOf": [
               {
@@ -22730,6 +25210,184 @@
           }
         },
         "summary": "Fbd Proposal"
+      }
+    },
+    "/api/gxw/edit": {
+      "post": {
+        "operationId": "gxw_edit_api_gxw_edit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GXWEditCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Proposal"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Gxw Edit"
+      }
+    },
+    "/api/gxw/import": {
+      "post": {
+        "operationId": "gxw_import_api_gxw_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GXWImportCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GXWImportResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Gxw Import"
+      }
+    },
+    "/api/gxw/inspect": {
+      "post": {
+        "operationId": "gxw_inspect_api_gxw_inspect_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GXWInspectionCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GXWInspection"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Gxw Inspect"
+      }
+    },
+    "/api/gxw/source": {
+      "get": {
+        "operationId": "gxw_source_api_gxw_source_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "program",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Program"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GXWSourceView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Gxw Source"
       }
     },
     "/api/health": {
