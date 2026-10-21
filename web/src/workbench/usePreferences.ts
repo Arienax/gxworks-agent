@@ -1,12 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Locale } from "../i18n";
-import { translate } from "../i18n";
+import { loadJapanese, translate } from "../i18n";
 
 export function usePreferences() {
   const [locale, setLocale] = useState<Locale>(
     () => (localStorage.getItem("gx.locale") as Locale) || "zh-CN",
   );
-  const t = useCallback((s: string) => translate(locale, s), [locale]);
+  const [japaneseRevision, setJapaneseRevision] = useState(0);
+  useEffect(() => {
+    if (locale !== "ja") return;
+    let active = true;
+    void loadJapanese().then(() => {
+      if (active) setJapaneseRevision((value) => value + 1);
+    });
+    return () => { active = false; };
+  }, [locale]);
+  const t = useCallback((s: string) => translate(locale, s), [locale, japaneseRevision]);
   const [constructionExamples, setConstructionExamples] = useState(
     () => localStorage.getItem("gx.developer.constructionExamples") === "1",
   );

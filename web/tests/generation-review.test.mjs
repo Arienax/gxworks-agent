@@ -6,7 +6,7 @@ import ts from "typescript";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { generationReview } from "../src/features/generationReview.ts";
-import { translate } from "../src/i18n.ts";
+import { loadJapanese, translate } from "../src/i18n.ts";
 import { clarificationQuestions } from "../src/features/clarificationAnswers.ts";
 
 function resultComponent(reactOverrides = {}) {
@@ -230,7 +230,9 @@ for (const [locale, labels] of [
   ["en", ["Create an ST program", "Edit an ST program", "Add to an existing task", "Connect ports", "Via", "Move diagram object", "Delete wire"]],
   ["ja", ["STプログラムを作成", "STプログラムを編集", "既存のタスクに追加", "ポートを接続", "経由", "図形を移動", "接続線を削除"]],
 ]) {
-  test(`native Program and graph previews use ${locale} labels while retaining source identities`, () => {
+  test(`native Program and graph previews use ${locale} labels while retaining source identities`, async () => {
+    // Japanese labels load on demand; the workbench requests the table on locale change.
+    if (locale === "ja") await loadJapanese();
     const markup = renderNativePlan([
       { operation: "create_st_program", source_name: "计算输出_ST", resource: "MAIN", task: "Task_01",
         scope_mode: "existing_task", declarations: [], st_text: "Result := 1;" },
