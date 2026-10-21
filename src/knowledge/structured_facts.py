@@ -570,19 +570,24 @@ def _step_width_resolution(status):
     }.get(status, "unresolved")
 
 
-def resolve_instruction_step_width(target, *, plc_model="FX3U", context=None):
+def resolve_instruction_step_width(target, *, plc_model=None, context=None,
+                                  text_encoding=None, assume_default_allocation=False):
     """Resolve one instruction expected GX program width from the shared owner.
 
     Exact opcode+operands use instruction_step_width for the real CPU. Opcode-only
     targets expose a width only when the shared catalogue proves the mnemonic has
-    one fixed observed width for every member of that target. Missing operands,
-    missing project context, an uncovered CPU and conflicting member answers stay
-    separate states: this layer never guesses operands, a CPU or a one-step
-    fallback.
+    one fixed observed width for every member of that target; a Q/L target is
+    answered by the same stored-width algorithm with no operands, so a
+    zero-operand form resolves and every other form asks for its operands
+    instead of reporting missing coverage. Missing operands, missing project
+    context, a missing code page, an uncovered CPU and conflicting member
+    answers stay separate states: this layer never guesses operands, a CPU or a
+    one-step fallback, and a missing target is reported instead of assumed.
     """
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
     from plc.instruction_steps import (STATUS_NO_PROFILE, STATUS_REQUIRES_OPERANDS,
-                                       default_step_width_catalog, instruction_step_width,
-                                       target_family, target_members)
+                                       _merge_members, default_step_width_catalog,
+                                       instruction_step_width, target_family, target_members)
 
     model = str(plc_model or "").strip().upper()
     if isinstance(target, Mapping):
@@ -610,7 +615,9 @@ def resolve_instruction_step_width(target, *, plc_model="FX3U", context=None):
         }
 
     if has_operands:
-        width = instruction_step_width(opcode, operands, plc_model=model or None, context=context)
+        width = instruction_step_width(opcode, operands, plc_model=model or None,
+                                       context=context, text_encoding=text_encoding,
+                                       assume_default_allocation=assume_default_allocation)
         return {
             "known": width.known,
             "steps": width.steps,
@@ -695,16 +702,71 @@ def resolve_instruction_step_width(target, *, plc_model="FX3U", context=None):
         }
 
     unknown = [member for member in members if target_family(member) != "FX"]
+    if unknown and len(unknown) == len(members):
+        # Q/L is answered by the same stored-width algorithm the instance path
+        # uses: a zero-operand form resolves, every other form is an operand
+        # question. Reporting missing coverage here would be a false gap.
+        if not DEFAULT_INSTRUCTION_REGISTRY.is_known(opcode):
+            # An unknown mnemonic is missing coverage, not a missing operand.
+            return {
+                "known": False,
+                "steps": None,
+                "status": STATUS_NO_PROFILE,
+                "resolution": "uncovered",
+                "source": "unknown",
+                "reason": "No program step-width coverage for " + opcode
+                          + " on " + ", ".join(unknown) + " (opcode-only target)",
+                "evidence": [],
+                "requirements": [],
+                "operands": [],
+                "plc_model": model,
+                "members": [],
+            }
+        if not DEFAULT_INSTRUCTION_REGISTRY.is_known(opcode):
+            # An unknown mnemonic is missing coverage, not a missing operand.
+            return {
+                "known": False,
+                "steps": None,
+                "status": STATUS_NO_PROFILE,
+                "resolution": "uncovered",
+                "source": "unknown",
+                "reason": "No program step-width coverage for " + opcode
+                          + " on " + ", ".join(unknown) + " (opcode-only target)",
+                "evidence": [],
+                "requirements": [],
+                "operands": [],
+                "plc_model": model,
+                "members": [],
+            }
+        answers = [(member, instruction_step_width(opcode, [], plc_model=member,
+                                                   context=context,
+                                                   text_encoding=text_encoding,
+                                                   assume_default_allocation=assume_default_allocation))
+                   for member in unknown]
+        width = answers[0][1] if len(answers) == 1 else _merge_members(answers)
+        return {
+            "known": width.known,
+            "steps": width.steps,
+            "status": width.status,
+            "resolution": ("fixed_mnemonic" if width.known
+                           else _step_width_resolution(width.status)),
+            "source": width.source,
+            "reason": width.reason,
+            "evidence": list(width.evidence),
+            "requirements": list(width.requirements),
+            "operands": [],
+            "plc_model": model,
+            "members": [{"cpu": cpu, **member.as_dict()} for cpu, member in width.members],
+        }
     if unknown:
-        # A known CPU without FX width coverage is a coverage gap, not an
-        # operand question and never evidence that the instruction is unsupported.
+        # A mixed target cannot be answered from one family's rules.
         return {
             "known": False,
             "steps": None,
             "status": STATUS_NO_PROFILE,
             "resolution": "uncovered",
             "source": "unknown",
-            "reason": "No program step-width coverage for "
+            "reason": "No single program step-width family covers "
                       + ", ".join(unknown) + " (opcode-only target)",
             "evidence": [],
             "requirements": [],

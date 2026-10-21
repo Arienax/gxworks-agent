@@ -851,14 +851,32 @@ def _pchk_width(header, operands):
     return (len(tokens[0]) - 2) // 2 + 2
 
 
+def _context_covers_cpu(context_cpu, cpu) -> bool:
+    """A context read for a merged menu option covers each of its members.
+
+    One saved project carries one allocation, and the menu option it was read
+    from names its members; the exact member a caller asks about is one of them.
+    """
+    context_text = str(context_cpu or "").strip().upper()
+    cpu_text = str(cpu or "").strip().upper()
+    if not context_text or not cpu_text:
+        return True
+    if context_text == cpu_text:
+        return True
+    members = {part.strip() for part in context_text.removesuffix("(REMOTEI/O)").split("/")
+               if part.strip()}
+    return cpu_text.removesuffix("(REMOTEI/O)") in members
+
+
 def encode_q_header(op, args, operands, *, profile='q03udv', cpu=None, source=None, storage_context=None):
     """Construct a stored header without treating a lexical profile as CPU admission."""
     if storage_context is not None:
         if not isinstance(storage_context, QStorageContext):
             raise GXWFormatError('invalid Q source storage context')
-        if cpu is not None and storage_context.cpu != str(cpu).strip().upper():
+        if cpu is not None and not _context_covers_cpu(storage_context.cpu, cpu):
             raise GXWFormatError('Q source storage context differs from the saved CPU')
-        cpu = storage_context.cpu
+        if cpu is None:
+            cpu = storage_context.cpu
     if source is not None and storage_context is None:
         before = tuple(b''.join(token.raw for token in value.tokens) for value in source.operands)
         old_header = encode_q_header(source.mnemonic, source.args, before, profile=profile, cpu=cpu)

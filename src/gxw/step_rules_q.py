@@ -45,6 +45,11 @@ _CONTEXT_MARKERS = (
     "storage context",
 )
 
+#: A string payload is stored in the project code page, so its width is unknown
+#: until that is supplied: a context gap with a named requirement, not a gap in
+#: the instruction coverage.
+_ENCODING_MARKERS = ("code page", "text encoding", "string needs its")
+
 
 def cpu_storage_mode(cpu: Any) -> str | None:
     """Observed CPU storage group, independent of the lexical profile."""
@@ -55,6 +60,8 @@ def cpu_storage_mode(cpu: Any) -> str | None:
 def _status_for(error: GXWFormatError) -> tuple[str, tuple[str, ...]]:
     text = str(error)
     lowered = text.lower()
+    if any(marker in lowered for marker in _ENCODING_MARKERS):
+        return "requires_context", ("text_encoding",)
     if any(marker in lowered for marker in _CONTEXT_MARKERS):
         return "requires_context", ("storage_context",)
     if any(marker in lowered for marker in _CONFLICT_MARKERS):
@@ -62,6 +69,23 @@ def _status_for(error: GXWFormatError) -> tuple[str, tuple[str, ...]]:
     if any(marker in lowered for marker in _NO_PROFILE_MARKERS):
         return "no_profile", ()
     return "no_profile", ()
+
+
+def context_cpu_mismatch(context: Any, identity: str) -> str | None:
+    """Reason when an allocation context was read for another CPU, else None.
+
+    A merged menu option accepts any of its own members: one saved project cannot
+    carry two allocations, and the context names the option it was read from.
+    """
+    context_cpu = str(getattr(context, "cpu", "") or "").strip().upper()
+    if not context_cpu:
+        return None
+    accepted = {context_cpu}
+    accepted.update(part.strip() for part in context_cpu.split("/") if part.strip())
+    if identity in accepted:
+        return None
+    return (f"Q source storage context differs from the saved CPU: the allocation "
+            f"was read for {context_cpu}, not {identity}")
 
 
 #: Devices whose stored width depends on the saved allocation: D and W can be
@@ -113,6 +137,11 @@ def resolve_stored_steps(opcode: Any, operands: Sequence[Any] = (), *, cpu: Any,
                            requirements=("operands",))
     args = tuple(str(value).strip() for value in operands or ())
     mode = cpu_storage_mode(identity)
+    if context is not None:
+        mismatch = context_cpu_mismatch(context, identity)
+        if mismatch is not None:
+            return _unresolved("requires_context", mismatch,
+                               requirements=("storage_context",))
     assumed_default = False
     if context is None:
         dependent = allocation_dependent_operands(args)
@@ -152,4 +181,5 @@ def resolve_stored_steps(opcode: Any, operands: Sequence[Any] = (), *, cpu: Any,
     return _known(int(width), "native_stored_width_algorithm", evidence=evidence)
 
 
-__all__ = ["resolve_stored_steps", "cpu_storage_mode", "allocation_dependent_operands"]
+__all__ = ["resolve_stored_steps", "cpu_storage_mode", "allocation_dependent_operands",
+           "context_cpu_mismatch"]
