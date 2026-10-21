@@ -39,7 +39,10 @@ def _render_single(program, sources=None):
              f'<rect width="{width}" height="{height}" fill="#ffffff"/>',
              f'<g transform="translate({margin} {margin})">']
     for w in program.wires:
-        parts.append(f'<path class="wire" d="M{w.start.x*unit},{w.start.y*unit} L{w.end.x*unit},{w.end.y*unit}"/>')
+        if w.record_class==3:
+            parts.append(f'<circle data-junction="true" cx="{w.start.x*unit}" cy="{w.start.y*unit}" r="4" fill="#58748e"/>')
+        else:
+            parts.append(f'<path class="wire" d="M{w.start.x*unit},{w.start.y*unit} L{w.end.x*unit},{w.end.y*unit}"/>')
     for n in program.nodes:
         x, y = n.bbox.left*unit, n.bbox.top*unit
         width, height = (n.bbox.right-n.bbox.left)*unit, (n.bbox.bottom-n.bbox.top)*unit
@@ -63,6 +66,12 @@ def _render_single(program, sources=None):
             if marker:
                 parts.append(f'<text x="{x+width/2}" y="{cy+5}" text-anchor="middle">{marker}</text>')
             parts.append(f'<text class="symbol" x="{x+width/2}" y="{cy-18}" text-anchor="middle">{escape(n.symbol)}</text>')
+        elif n.kind==NodeKind.UNKNOWN and n.kind_code==0x10:
+            parts.append(f'<rect class="node" x="{x}" y="{y}" width="{width}" height="{height}" rx="3"/>')
+            parts.append(f'<text xml:space="preserve" x="{x+5}" y="{y+18}">')
+            for index,line in enumerate(n.symbol.split('\n')):
+                parts.append(f'<tspan x="{x+5}" dy="{0 if index==0 else 18}">{escape(line)}</tspan>')
+            parts.append('</text>')
         elif n.kind in (NodeKind.INPUT, NodeKind.OUTPUT):
             point = n.port_point(0)
             source = n.kind == NodeKind.INPUT
@@ -71,9 +80,10 @@ def _render_single(program, sources=None):
             parts.append(f'<rect class="node" x="{x}" y="{y+unit}" width="{width}" height="{max(unit,height-unit)}" rx="3"/>')
             if n.type_name:
                 parts.append(f'<text class="symbol" x="{x+width/2}" y="{y+unit*.6}" text-anchor="middle">{escape(n.symbol)}</text>')
-            parts.append(f'<text x="{x+width/2}" y="{y+unit*1.45}" text-anchor="middle">{escape(n.type_name or n.symbol)}</text>')
+            label = n.type_name or n.symbol or ('RETURN' if n.kind==NodeKind.RETURN else '')
+            parts.append(f'<text x="{x+width/2}" y="{y+unit*1.45}" text-anchor="middle">{escape(label)}</text>')
             for index, (formal, port) in enumerate(zip(_ports(n, sources), n.ports)):
-                name = formal.get('formal_name', formal['name'])
+                name = formal.get('formal_name') or formal['name']
                 px, py = n.port_point(index).x*unit, n.port_point(index).y*unit
                 left = port.local_x == 0
                 parts.append(f'<text x="{px+(6 if left else -6)}" y="{py-5}" text-anchor="{"start" if left else "end"}">{escape(name)}</text>')

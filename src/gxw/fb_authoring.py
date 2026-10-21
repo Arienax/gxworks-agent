@@ -11,10 +11,33 @@ from .declarations import (BASIC_TYPES, CLASS_CODES, _type_parts, edit_declarati
                            parse_declarations)
 from .models import GXWFormatError
 from .native_write import workspace_body
-from .project_metadata import logical_mapping, read_project_text_context, project_source_groups
+from .project_metadata import project_stream_mapping, read_project_text_context, existing_source_groups
 from .project_writer import ProjectWriteResult
 from .source_header import source_payload_offset
 from .text_pou import parse_st_pou
+
+
+def normalize_declaration_address_pair(pair, *, cpu):
+    """The existing global-label MELSEC/IEC rule, shared by offline edits."""
+    from plc.device_policy import device_address
+    from plc.validation import parse_device_address
+    result = dict(pair)
+    if any(not isinstance(value, str) or '\0' in value for value in result.values()):
+        raise GXWFormatError('declaration address fields require text without NUL')
+    if result.get('device'):
+        address = device_address(result['device'], cpu)
+        family, number = parse_device_address(address, cpu)
+        if family in ('M', 'D') and re.fullmatch(r'[MD][0-9]+', address):
+            from .compiler_assignment import iec_device_address
+            expected = iec_device_address(family, number)
+            if result.get('iec_address') and result['iec_address'] != expected:
+                raise GXWFormatError('MELSEC and IEC declaration addresses disagree')
+            result['iec_address'] = expected
+        elif not result.get('iec_address'):
+            raise GXWFormatError('this device spelling requires an explicit IEC declaration address')
+    if result.get('iec_address') and not re.fullmatch(r'%[IQM][XBWDL][0-9]+(?:\.[0-9]+)?', result['iec_address'], re.I):
+        raise GXWFormatError('unsupported IEC declaration address')
+    return result
 
 
 def _global_snapshot(sources, logical):
@@ -24,7 +47,7 @@ def _global_snapshot(sources, logical):
         raise GXWFormatError('missing current global declaration table: ' + logical)
     rows = []
     for row in sorted(document.rows, key=lambda r:r.record_id):
-        item = dict(name=row.name, data_type=row.data_type, class_name={8:'VAR_GLOBAL',9:'VAR_GLOBAL_CONSTANT'}[row.class_code],
+        item = dict(name=row.name, data_type=row.data_type, class_name={8:'VAR_GLOBAL',9:'VAR_GLOBAL_CONSTANT'}.get(row.class_code,str(row.class_code)),
             kind=sources.declaration_kind(row), initial_value=row.initial_value, comment=row.comment,
             device=row.device, iec_address=row.iec_address)
         if row.unknown_u32 == 1:
@@ -104,20 +127,8 @@ def _global_plan(config, sources, command, caller):
         elif 'member_devices' in item:
             raise GXWFormatError('member mappings require a scalar structure')
         for pair in [item,*item.get('member_devices',{}).values()]:
-            if pair.get('device'):
-                address=device_address(pair['device'], device_profile)
-                from plc.validation import parse_device_address
-                family,number=parse_device_address(address,device_profile)
-                if family in ('M','D') and re.fullmatch(r'[MD][0-9]+',address):
-                    from .compiler_assignment import iec_device_address
-                    expected=iec_device_address(family,number)
-                    if pair.get('iec_address') and pair['iec_address']!=expected:
-                        raise GXWFormatError('MELSEC and IEC declaration addresses disagree')
-                    pair['iec_address']=expected
-                elif not pair.get('iec_address'):
-                    raise GXWFormatError('this device spelling requires an explicit IEC declaration address')
-            if pair.get('iec_address') and not re.fullmatch(r'%[IQM][XBWDL][0-9]+(?:\.[0-9]+)?',pair['iec_address'],re.I):
-                raise GXWFormatError('unsupported IEC declaration address')
+            pair.update(normalize_declaration_address_pair({key: pair.get(key, '') for key in ('device','iec_address')},
+                                                           cpu=device_profile))
         if any(not isinstance(v,str) or '\0' in v for k,v in item.items() if k!='member_devices'):
             raise GXWFormatError('global declaration fields require text without NUL')
         if old is not None: rows[rows.index(old)]=item
@@ -222,21 +233,22 @@ def _configuration_plan(config,streams,command,caller):
     return plan,original,expected,caller
 
 
-def _context(raw, *, require_fbd=True):
+def _context(raw, *, require_fbd=True, allow_source_gaps=False):
+    from .integrity import read_project_hdb
     outer = validate_cfb_streams(raw)
-    nested = validate_cfb_streams(outer['_hdb'])
-    mapping = logical_mapping(outer['projectdatalist.xml'])
+    nested = read_project_hdb(outer).payloads
+    mapping = project_stream_mapping(outer)
     streams = {name: nested[key] for name, key in mapping.items() if key in nested}
     configs = [read_project_text_context(value) for name, value in streams.items() if name.endswith('.prj')]
     if len(configs) != 1:
         raise GXWFormatError('definition authoring requires one project CPU configuration')
-    groups, issues = project_source_groups(outer['projectdatalist.xml'])
+    groups, issues = existing_source_groups(outer['projectdatalist.xml'], streams)
     callers = [name for name in groups if name in streams
                and streams[name][source_payload_offset(streams[name])] == 208]
     if not callers and not require_fbd:
         callers = [name for name in groups if name in streams
                    and streams[name][source_payload_offset(streams[name])] == 193]
-    if issues or not callers:
+    if (issues and not allow_source_gaps) or not callers:
         raise GXWFormatError('definition authoring requires a current FBD caller' if require_fbd
                              else 'definition authoring requires a current structured ST/FBD source')
     sources = ProjectCallableSources.from_project(raw, callers[0])
@@ -255,7 +267,7 @@ def _name(name, codepage):
 
 def _rows(document, sources=None):
     names = {value: key for key, value in CLASS_CODES.items()}
-    return [dict(name=row.name, data_type=row.data_type, class_name=names[row.class_code],
+    return [dict(name=row.name, data_type=row.data_type, class_name=names.get(row.class_code,str(row.class_code)),
                  initial_value=row.initial_value, comment=row.comment,
                  **({'kind': sources.declaration_kind(row)} if sources else {}))
             for row in sorted(document.rows, key=lambda row: (row.record_id, row.class_code))]

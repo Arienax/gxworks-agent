@@ -5,6 +5,7 @@ Graph references describe source bindings, not SFC execution semantics. Unknown
 storage modes, graph instructions and registration qualifiers remain explicit.
 """
 from __future__ import annotations
+from .project_metadata import project_stream_mapping
 
 from dataclasses import dataclass
 from copy import deepcopy
@@ -45,7 +46,7 @@ def native_sfc_graph_profile(cpu):
 
 
 def sfc_step_action_reference(record, *, cpu=None):
-    """Bind an explicit pair or the measured Q/L same-number source form.
+    """Bind an explicit pair or an observed same-number source form.
 
     The single operand is a step number. It selects the action registration
     with that number, rather than ReadSymbol's independent substep output.
@@ -56,7 +57,9 @@ def sfc_step_action_reference(record, *, cpu=None):
     references = record.get('references', [])
     if len(references) == 2:
         return tuple(references)
-    if len(references) == 1 and cpu in NATIVE_SFC_GRAPH_QL_CPUS:
+    # An original FX3U author project also stores the same-number form in an
+    # otherwise explicit-pair project. Select the stored form, not the CPU.
+    if len(references) == 1 and cpu in NATIVE_SFC_GRAPH_QL_CPUS | NATIVE_SFC_GRAPH_FX_CPUS:
         return references[0], references[0]
     return None
 
@@ -102,6 +105,11 @@ class SfcProjectContext:
                           'raw_hex': b''.join(t.raw for t in tokens).hex(), 'kind': 'opaque'}
                 if isinstance(item, TokenInstruction):
                     record.update(kind='instruction', op=item.mnemonic, args=list(item.args), step=item.step)
+                    if token_profile and not token_profile.startswith('fx'):
+                        from .token_q import q_instruction_requirements
+                        record['native_requirements'] = q_instruction_requirements(item.tokens[0].raw,
+                            profile=token_profile,
+                            operand_tokens=tuple(token.raw for operand in item.operands for token in operand.tokens))
                 elif isinstance(item, TokenText):
                     record.update(kind=item.role, text=item.text, step=item.step)
                 elif isinstance(item, TokenLabel):
@@ -120,6 +128,25 @@ class SfcProjectContext:
                  'position_resolution': 'not-established'}
         graph['edit_profile'] = ('fx-references' if self.project['cpu'] in NATIVE_SFC_GRAPH_FX_CPUS else
                                 'q-l-symbols' if self.project['cpu'] in NATIVE_SFC_GRAPH_QL_CPUS else None)
+        if graph['edit_profile'] is not None and self.source.graph_tokens is not None:
+            from .sfc_offline import decode_sfc_graph
+            graph['source_graph'] = decode_sfc_graph(self.source, cpu=self.project['cpu'])
+            for node in graph['source_graph']['nodes']:
+                node.update(child_names=[], binding_status='unresolved')
+                if node['kind'] in ('step', 'initial_step'):
+                    actions = [row for row in self.source.layout['actions'] if row['number'] == node['action_number']]
+                    steps = [row for row in graph['source_graph']['steps'] if row['step_reference'] == node['number']]
+                    if len(actions) == len(steps) == 1:
+                        names = [row['zoom'] for row in actions[0]['registrations']]
+                        if all(sum(child['kind'] == 'zoom' and child['name'] == name for child in children) == 1 for name in names):
+                            node.update(child_names=list(dict.fromkeys(names)), binding_status='source-resolved')
+                elif node['kind'] == 'transition':
+                    matches = [row for row in children if row['kind'] == 'transition' and row['number'] == node['number']]
+                    transitions = [row for row in graph['source_graph']['transitions'] if row['number'] == node['number']]
+                    if len(matches) == len(transitions) == 1:
+                        node.update(child_names=[matches[0]['name']], binding_status='source-resolved')
+                elif node['kind'] == 'end':
+                    node['binding_status'] = 'not-applicable'
         cells = self.native_graph(native_graph)
         if cells is not None:
             graph.update(position_resolution='native-source-bound', **cells)
@@ -328,13 +355,14 @@ def _native_connections(cells, *, cpu):
 def read_sfc_project_context(raw: bytes, program_name: str | None = None) -> SfcProjectContext:
     """Bind selected SFC source, labels and CPU to the same current GXW bytes."""
     from .container_writer import validate_cfb_streams
+    from .integrity import read_project_hdb
     from .declarations import parse_declarations
     from .project_metadata import logical_mapping, project_source_groups, read_project_text_context
 
     raw = bytes(raw)
     outer = validate_cfb_streams(raw)
-    mapping = logical_mapping(outer['projectdatalist.xml'])
-    nested = validate_cfb_streams(outer['_hdb'])
+    mapping = project_stream_mapping(outer)
+    nested = read_project_hdb(outer).payloads
     projects = [read_project_text_context(nested[key]) for name, key in mapping.items()
                 if name.endswith('.prj') and key in nested]
     if len(projects) != 1:
@@ -381,8 +409,8 @@ def _graph_references(program: TokenProgram) -> tuple[tuple[dict, ...], tuple[st
     # compiled FX3U/Q00J controls. They are not Q/FX ordinary ladder opcodes.
     steps = {"056c021705": 1, "056c020f05": 1, "056c041c05": 2, "056c041405": 2}
     transitions = {"056c020405", "056c021d05", "056c020505", "056c021f05", "056c020605", "056c022005",
-                   "056c020705", "056c020b05"}
-    jumps = {"0562020005", "0542020005", "0542010105"}
+                   "056c020705", "056c020b05", "056c020805"}
+    jumps = {"0562020005", "0542020005", "0542010105", "064202001106", "064201011106"}
     for group in groups:
         row = dict(offset=group[0].offset, raw_hex="".join(t.raw.hex() for t in group), kind="opaque")
         header = group[0].raw.hex()
@@ -444,7 +472,10 @@ def parse_sfc_pou(raw: bytes) -> SfcSource:
             gaps.append("ambiguous SFC " + role)
     for action in layout["actions"]:
         for registration in action["registrations"]:
-            if registration["qualifier"] != 0:
+            # Original Workspace setters for FX3U and Q00J save the same
+            # unsigned source word. Value 1 independently cold-reopens and
+            # compiles; that does not establish its PLC execution semantics.
+            if registration["qualifier"] not in (0, 1):
                 gaps.append("uninterpreted SFC action qualifier " + str(registration["qualifier"]))
             if zoom_names.count(registration["zoom"]) != 1:
                 gaps.append("unresolved SFC action program " + registration["zoom"])
@@ -593,3 +624,146 @@ def serialize_sfc_pou(source: SfcSource,
         cursor = child['tail_offset']
     parts.append(raw[cursor:])
     return b''.join(parts)
+
+
+def sfc_components(source: SfcSource) -> tuple[list[dict], list[dict]]:
+    """Read source-bound internal objects, including their exact body bytes."""
+    source = parse_sfc_pou(source.raw)
+    children = [dict(kind=row['kind'], name=row['name'], number=row['number'],
+                     body=source.raw[row['payload_offset']:row['tail_offset']], source_name=row['name'])
+                for row in source.layout['children']]
+    actions = [dict(name=row['name'], number=row['number'], registrations=deepcopy(row['registrations']),
+                    source_name=row['name']) for row in source.layout['actions']]
+    return children, actions
+
+
+def sfc_child_body(tokens: bytes, *, original: bytes | None = None) -> bytes:
+    """Frame an internal ladder body using the native empty-body envelope.
+
+    CreateZoomData controls for FX3U and Q00J independently returned the five
+    words (20, 1, 12, 0, -1). Existing headers are retained byte for byte.
+    """
+    tokens = bytes(tokens)
+    if len(tokens) > 8 * 1024 * 1024 - 20:
+        raise GXWFormatError('SFC child exceeds the native workspace body bound')
+    parse_token_fragment(tokens, 0, len(tokens))
+    if original is not None:
+        if len(original) < 20 or struct.unpack_from('<I', original)[0] != len(original):
+            raise GXWFormatError('invalid retained SFC child envelope')
+        prefix = original[4:20]
+    else:
+        prefix = struct.pack('<IIII', 1, 12, 0, 0xffffffff)
+    return struct.pack('<I', 20 + len(tokens)) + prefix + tokens
+
+
+def serialize_sfc_components(source: SfcSource, *, children: list[dict], actions: list[dict],
+                             graph: bytes | None = None) -> bytes:
+    """Write internal POU objects while preserving every unchanged record.
+
+    ``source_name`` binds retained objects to this snapshot; new objects omit
+    it. Counts, names, numbers and registration links use independently saved
+    native records. This never changes the engineering object's registration.
+    """
+    source = parse_sfc_pou(source.raw)
+    original_children, original_actions = sfc_components(source)
+    if (not isinstance(children, list) or not isinstance(actions, list)
+            or len(children) > 16384 or len(actions) > 8192):
+        raise GXWFormatError('SFC internal object counts exceed the source bound')
+
+    def word(value):
+        if type(value) is not int or not 0 <= value <= 0xffffffff:
+            raise GXWFormatError('SFC source field must be an unsigned integer')
+        return struct.pack('<I', value)
+
+    def text(value):
+        if not isinstance(value, str) or not value or '\0' in value or len(value) > 255:
+            raise GXWFormatError('SFC internal names must contain 1..255 non-NUL characters')
+        try:
+            body = value.encode('utf-16le') + b'\0\0'
+        except UnicodeError as error:
+            raise GXWFormatError('invalid SFC internal name') from error
+        return word(len(body) // 2) + body
+
+    def unique(rows, key, label):
+        values = [row[key] for row in rows]
+        if len(set(values)) != len(values):
+            raise GXWFormatError('ambiguous SFC ' + label)
+
+    for row in children:
+        if (not isinstance(row, dict) or set(row) - {'kind', 'name', 'number', 'body', 'source_name'}
+                or row.get('kind') not in ('zoom', 'transition') or not isinstance(row.get('body'), bytes)):
+            raise GXWFormatError('invalid SFC internal child')
+        text(row.get('name'))
+        sfc_child_body(row['body'][20:], original=row['body'])
+        if row['kind'] == 'transition':
+            word(row.get('number'))
+        elif row.get('number') is not None:
+            raise GXWFormatError('SFC zoom bodies have names rather than transition numbers')
+    zooms = [row for row in children if row['kind'] == 'zoom']
+    transitions = [row for row in children if row['kind'] == 'transition']
+    if len(zooms) > 8192 or len(transitions) > 8192:
+        raise GXWFormatError('SFC internal object counts exceed the source bound')
+    unique(zooms, 'name', 'zoom names')
+    unique(transitions, 'name', 'transition names')
+    unique(transitions, 'number', 'transition numbers')
+    zoom_names = {row['name'] for row in zooms}
+    for row in actions:
+        if (not isinstance(row, dict) or set(row) - {'name', 'number', 'registrations', 'source_name'}
+                or not isinstance(row.get('registrations'), list) or len(row['registrations']) > 8192):
+            raise GXWFormatError('invalid SFC action registration')
+        text(row.get('name')); word(row.get('number'))
+        for registration in row['registrations']:
+            if (not isinstance(registration, dict) or set(registration) != {'qualifier', 'zoom'}
+                    or registration.get('zoom') not in zoom_names):
+                raise GXWFormatError('unresolved SFC action program registration')
+            word(registration.get('qualifier'))
+    unique(actions, 'name', 'action names'); unique(actions, 'number', 'action numbers')
+
+    bound = set()
+
+    def retained(row, originals, layouts):
+        name = row.get('source_name')
+        if name is None:
+            return None
+        key = (row.get('kind', 'action'), name)
+        if key in bound:
+            raise GXWFormatError('SFC internal edits repeat a source object')
+        bound.add(key)
+        matches = [(old, layout) for old, layout in zip(originals, layouts)
+                   if old['name'] == name and old.get('kind') == row.get('kind')]
+        if len(matches) != 1:
+            raise GXWFormatError('SFC internal source object is missing or ambiguous')
+        old, layout = matches[0]
+        if {k: v for k, v in row.items() if k != 'source_name'} == {
+                k: v for k, v in old.items() if k != 'source_name'}:
+            return source.raw[layout['record_offset']:layout['record_offset'] + layout['record_size']]
+        return None
+
+    region = source.layout['graph']
+    body = graph if graph is not None else source.raw[region['offset']:region['offset'] + region['size']]
+    if not isinstance(body, bytes) or len(body) < 12 or struct.unpack_from('<I', body)[0] != len(body):
+        raise GXWFormatError('invalid SFC graph body')
+    pieces = [source.raw[:region['offset'] - 4], word(len(body)), body]
+    for rows, original_rows, layouts, action in (
+            (zooms, original_children, source.layout['children'], False),
+            (actions, original_actions, source.layout['actions'], True),
+            (transitions, original_children, source.layout['children'], False)):
+        pieces.append(word(len(rows)))
+        for row in rows:
+            raw = retained(row, original_rows, layouts)
+            if raw is not None:
+                pieces.append(raw); continue
+            pieces.append(text(row['name']))
+            if action:
+                pieces.extend((word(row['number']), word(len(row['registrations']))))
+                for registration in row['registrations']:
+                    pieces.extend((word(registration['qualifier']), text(registration['zoom'])))
+            else:
+                if row['kind'] == 'transition':
+                    pieces.append(word(row['number']))
+                pieces.extend((word(1), word(len(row['body'])), row['body']))
+            pieces.append(word(1))
+    pieces.append(source.raw[source.layout['tail_offset']:])
+    result = b''.join(pieces)
+    parse_sfc_pou(result)
+    return result

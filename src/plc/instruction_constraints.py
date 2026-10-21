@@ -18,6 +18,20 @@ from plc.instruction_definition import (
 UNKNOWN = object()
 
 
+def fx_out_preset_error(opcode, operands):
+    """Return the existing FX timer/counter source-arity error, if present.
+
+    OUT's registry shape also covers ordinary coils. The saved T/C source
+    form needs its separate preset, even when a draft retains its incomplete
+    one-operand record. This rule establishes no CPU instruction admission.
+    """
+    if (str(opcode).upper() == 'OUT' and len(operands) == 1
+            and isinstance(operands[0], str)
+            and re.fullmatch(r'[TC][0-9]+(?:[ZV][0-7])?', operands[0], re.I)):
+        return 'timer/counter OUT requires its observed preset operand'
+    return None
+
+
 def _stale_report(target):
     return {'status': 'unverified', 'target': target, 'checks': [], 'findings': [
         {'code': 'PLC_FACT_CONTEXT', 'severity': 'unverified',

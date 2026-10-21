@@ -275,6 +275,8 @@ def render_plc_ir_to_st(program: Mapping[str, Any]) -> str:
     if not is_plc_ir(program):
         raise STTranslationError("ST renderer requires canonical PLC IR")
     validate_plc_ir(program, validate_ladder=False)
+    if (program.get('source') or {}).get('format') in {'instruction_sequence_v1', 'instruction_sequence_v2'}:
+        raise STTranslationError('Ordered instruction sources have no established ST translation')
     lines = [
         "(* Generated deterministically from PLC IR. *)",
         f"(* Program: {_escape_comment(program.get('program_name', 'MAIN'))}; "

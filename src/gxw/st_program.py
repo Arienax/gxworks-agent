@@ -36,15 +36,17 @@ def _context_declaration_rows(document, sources):
     return rows
 
 
-def project_context_snapshot(raw, source_name=None):
+def project_context_snapshot(raw, source_name=None, *, include_graphs=True):
     """Read globals, local declarations, Program/FB sources and current tasks.
 
     Selection accepts an exact logical source or one unambiguous current owner.
     Unsupported source languages stay explicit; an unavailable source is never
     replaced by a blank template or another saved version.
+    Static draft checking can omit graph/execution projections while retaining
+    the same source ownership, declarations, types, task and option records.
     """
     from .project_metadata import read_project_compile_options, read_project_system_variables
-    config, streams, groups, sources, _ = _context(raw, require_fbd=False)
+    config, streams, groups, sources, _ = _context(raw, require_fbd=False, allow_source_gaps=not include_graphs)
     metadata_name, = [name for name in streams if name.endswith('.prj')]
     options = read_project_compile_options(streams[metadata_name])
     configuration = dict(name=metadata_name,
@@ -58,10 +60,15 @@ def project_context_snapshot(raw, source_name=None):
     pous, owners, issues = [], set(), deepcopy(sources.issues)
     for logical, group in groups.items():
         document = sources.declarations.get(group['labels'])
+        identity = (str(group.get('library', '')).casefold(), document.owner_name.casefold() if document and document.owner_name else '')
         if (logical not in streams or document is None or sources.source_groups.get(logical) != group
-                or not document.owner_name or document.owner_name.casefold() in owners):
-            raise GXWFormatError('current project context requires unique paired POU/declaration ownership')
-        owners.add(document.owner_name.casefold())
+                or not document.owner_name or identity in owners):
+            if include_graphs:
+                raise GXWFormatError('current project context requires unique paired POU/declaration ownership')
+            issues.append(dict(code='project_source_owner_gap', stream=logical,
+                message='current source/declaration ownership is unreadable or ambiguous'))
+            continue
+        owners.add(identity)
         kind = {0x1000000: 'program', 0x1000002: 'function_block', 0x1000003: 'function'}.get(
             document.owner_pou_type, 'unknown')
         language_code = streams[logical][source_payload_offset(streams[logical])]
@@ -88,6 +95,8 @@ def project_context_snapshot(raw, source_name=None):
                          st_text=source.text)
             if source.diagnostic:
                 entry['source_diagnostic'] = source.diagnostic
+        elif language in ('fbd', 'ladder') and not include_graphs:
+            entry.update(source_status='interface_only')
         elif language in ('fbd', 'ladder'):
             from .object_model import read_project_context
             from .execution import project_execution_source
@@ -195,11 +204,12 @@ def verify_background_st_program_save(baseline, command, saved, observation):
     # be read but is intentionally not accepted by the declaration editor.
     from .container_writer import validate_cfb_streams
     from .native_write import _saved_object_names
-    from .project_metadata import logical_mapping
+    from .project_metadata import project_stream_mapping
 
     def protected(data):
-        metadata = validate_cfb_streams(data)['projectdatalist.xml']
-        mapping = {name: key for name, key in logical_mapping(metadata).items()
+        outer = validate_cfb_streams(data)
+        metadata = outer['projectdatalist.xml']
+        mapping = {name: key for name, key in project_stream_mapping(outer).items()
                    if name.endswith(('.gh', '.lnl', '.lnb', '.lns', '.lng', '.lif', '.str'))}
         streams = _context(data, require_fbd=False)[1]
         if not mapping.keys() <= streams.keys():

@@ -107,6 +107,10 @@ class _Adapter:
             lambda m: view(re.match(r'.*', m.group().decode())).encode(), self.raw)
         projected = re.sub(rb'\bW?STRING\s*\[[0-9]+\]',
             lambda m: m.group().replace(b'[', b'(').replace(b']', b')'), projected, flags=re.I)
+        # The native declaration formatter spells stored class 10 VAR_RETAIN.
+        # The pinned grammar recognizes IEC's equal-length VAR RETAIN spelling;
+        # the original bytes still own declaration text and source positions.
+        projected = re.sub(rb'\bVAR_RETAIN\b', b'VAR RETAIN', projected, flags=re.I)
         try:
             import tree_sitter
             import tree_sitter_iec61131_3_st
@@ -296,7 +300,9 @@ class _Adapter:
         if any('CONSTANT' in q for q in qualifiers):
             class_name += '_CONSTANT'
         if any('RETAIN' in q for q in qualifiers):
-            raise STUncovered('RETAIN declaration policy is not mapped', self.span(block).start)
+            if class_name != 'VAR' or any('NON_RETAIN' in q for q in qualifiers):
+                raise STUncovered('RETAIN declaration combination is not mapped', self.span(block).start)
+            class_name = 'VAR_RETAIN'
         for node in block.named_children:
             if node.type == 'pragma':
                 raise STUncovered('Declaration pragma semantics are not mapped', self.span(node).start)

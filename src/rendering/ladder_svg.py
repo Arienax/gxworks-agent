@@ -132,6 +132,8 @@ class AdvancedSVGLadder:
 
     def _symbol_width(self, element):
         kind = element.get("type", "")
+        if kind == 'SOURCE_REFERENCE':
+            return 60
         if kind in self._SIMPLE_CONTACT_TYPES:
             return max(50, self.text_width(element.get("address", "")) + 10)
         if kind in {"COIL", "TIMER", "COUNTER"}:
@@ -150,10 +152,19 @@ class AdvancedSVGLadder:
         kind = element.get("type", "")
         address = str(element.get("address", ""))
         label = self._label(element)
-        self.shapes.append(f'<g class="ladder-element" data-type="{escape(kind, quote=True)}">')
+        source = (f' data-source-index="{element["_source_index"]}"'
+                  f' data-op="{escape(element.get("_source_op", ""), quote=True)}"'
+                  if '_source_index' in element else '')
+        self.shapes.append(f'<g class="ladder-element" data-type="{escape(kind, quote=True)}"{source}>')
         self.shapes.append(f'<title>{escape((address or self._box_text(element)) + (": " + label if label else ""))}</title>')
         half = self._symbol_width(element) / 2
-        if kind in self._SIMPLE_CONTACT_TYPES:
+        if kind == 'SOURCE_REFERENCE':
+            self.shapes.append(f'<circle cx="{x}" cy="{y}" r="20" fill="{self.palette["background"]}" '
+                               f'stroke="{self.palette["annotation"]}" stroke-width="1.5" />')
+            self.draw_text(x, y + 4, self._box_text(element), size=11,
+                           color=self.palette['annotation'])
+            self.draw_line(x + 20, y, x + half, y, width=1.5)
+        elif kind in self._SIMPLE_CONTACT_TYPES:
             self.draw_line(x - half, y, x - 12, y, width=1.5)
             self.draw_line(x + 12, y, x + half, y, width=1.5)
             self.draw_line(x - 12, y - 15, x - 12, y + 15, width=2.5)
@@ -282,6 +293,8 @@ class AdvancedSVGLadder:
         self.device_comments = {} if isinstance(parsed, list) else parsed.get("device_comments", {})
         self.shapes, self.rung_bounds, self.rung_bounds_by_display = [], {}, {}
         self._continuation = self._label_id = 0
+        if any('ordered_instructions' in rung for rung in rungs):
+            return self._ordered_source(rungs, highlight_rung_ids=highlight_rung_ids)
         self.rung_display_map = build_rung_display_map(parsed)
         self.rung_display_to_raw = dict(self.rung_display_map["display_to_raw"])
         self.rung_raw_to_display = dict(self.rung_display_map["raw_to_display"])
@@ -351,3 +364,143 @@ class AdvancedSVGLadder:
         return (f'<svg width="{self.width}" height="{self.height}" xmlns="http://www.w3.org/2000/svg">'
                 f'<rect x="0" y="0" width="{self.width}" height="{self.height}" fill="{self.palette["background"]}"/>'
                 + "\n".join(self.shapes) + "\n</svg>")
+
+    def _ordered_source(self, rungs, *, highlight_rung_ids=None):
+        """Draw source junctions directly; outputs never consume a condition."""
+        from plc.ordered_source import project_ordered_graph
+        plans = [project_ordered_graph(rung) for rung in rungs]
+        elements = [self._source_output(event) for plan in plans for event in plan
+                    if event['kind'] in {'output', 'end'}]
+        elements += [atom for plan in plans for event in plan if event['kind'] == 'expression'
+                     for atom in self._source_elements(event['expression'])]
+        self.width = max(self._minimum_width, 1100,
+                         max((self._slot_width(row) for row in elements), default=0) + 540)
+        self.rung_display_map = build_rung_display_map({'rungs': rungs})
+        self.rung_display_to_raw = dict(self.rung_display_map['display_to_raw'])
+        self.rung_raw_to_display = dict(self.rung_display_map['raw_to_display'])
+        self.rung_display_to_path = dict(self.rung_display_map['display_to_path'])
+        left, edge, next_y = 60, self.width - 60, 80
+        highlighted = {str(value) for value in highlight_rung_ids or []}
+        for index, (rung, plan) in enumerate(zip(rungs, plans), 1):
+            top = next_y - 40
+            start_shape = len(self.shapes)
+            self.shapes.append(f'<g class="source-network" data-network="{index}">')
+            self.shapes.append('<metadata>' + escape(json.dumps(rung.get('ordered_instructions', []),
+                                                              ensure_ascii=False)) + '</metadata>')
+            self.draw_text(25, next_y + 5, str(index), weight='bold')
+            note = str(rung.get('debug_note') or '')
+            if note:
+                lines = self._wrap_text(note, edge - left - 20, 12)
+                self.draw_text(left + 10, next_y - 20, '\n'.join(lines), anchor='start', size=12,
+                               color=self.palette['annotation'])
+                next_y += max(0, len(lines) - 1) * 15
+            points, last = {}, None
+            for event in plan:
+                kind = event['kind']
+                if kind == 'expression':
+                    expression, anchor = event['expression'], event['anchor']
+                    parts = self._source_elements(expression)
+                    leading = parts[0] if parts and parts[0]['type'] == 'SOURCE_REFERENCE' else None
+                    if leading and leading['_anchor'] in points:
+                        x, old_y, old_bottom = points[leading['_anchor']]
+                        y = max(next_y, old_y)
+                        self.draw_line(x, old_y, x, y, width=1.5)
+                        parts = parts[1:]
+                    else:
+                        x, y = left, next_y
+                    x, y, bottom, _ = self._series(parts, (x, y, y + 45, 0), left=left, edge=edge)
+                    self.shapes.append(f'<g class="source-junction" data-anchor="{anchor}" data-x="{x}" data-y="{y}">')
+                    self.shapes.append(f'<circle cx="{x}" cy="{y}" r="3" fill="{self.palette["annotation"]}" />')
+                    self.draw_text(x + 7, y + 15, 'A' + str(anchor), size=9, anchor='start',
+                                   color=self.palette['annotation'])
+                    self.shapes.append('</g>')
+                    points[anchor] = (x, y, bottom)
+                    next_y = max(next_y, bottom + 40)
+                    last = ('expression', anchor)
+                elif kind in {'output', 'end'}:
+                    anchor = event.get('anchor')
+                    if kind == 'end':
+                        x, y, bottom = left, next_y, next_y + 45
+                    else:
+                        x, old_y, old_bottom = points[anchor]
+                        y = old_y if last == ('expression', anchor) else max(next_y, old_y + 85)
+                        self.draw_line(x, old_y, x, y, width=1.5)
+                        bottom = max(y + 45, old_bottom)
+                    bottom = self._outputs([self._source_output(event)], (x, y, bottom, 0), left=left, edge=edge)
+                    next_y = max(next_y, bottom + 40)
+                    last = ('output', anchor)
+                elif kind == 'stack':
+                    anchor = event['anchor']
+                    x, old_y, bottom = points[anchor]
+                    y = old_y if event['op'] == 'MPS' else max(next_y, old_y + 85)
+                    self.draw_line(x, old_y, x, y, width=1.5)
+                    self.shapes.append(f'<g class="source-stack" data-source-index="{event["source_index"]}" '
+                                       f'data-op="{event["op"]}" data-anchor="{anchor}">')
+                    self.draw_text(x + 8, y - 8, event['op'], anchor='start', size=10,
+                                   color=self.palette['annotation'])
+                    self.shapes.append('</g>')
+                    points[anchor] = (x, y, max(bottom, y + 45))
+                    if event['op'] != 'MPS':
+                        next_y = y
+                    last = ('expression', anchor)
+                elif kind in {'barrier', 'annotation'}:
+                    text = ('Unresolved source: ' if kind == 'barrier' else '') + event['text']
+                    self.draw_text(left + 10, next_y, '\n'.join(self._wrap_text(text, edge - left - 20)),
+                                   anchor='start', size=11, color=self.palette['annotation'])
+                    next_y += max(1, len(self._wrap_text(text, edge - left - 20))) * 15 + 35
+                    last = None
+            bottom = max([next_y - 15, *(point[2] for point in points.values())])
+            bounds = {'top': top, 'height': bottom - top + 20, 'display_number': index,
+                      'raw_rung_id': rung.get('rung_id'), 'json_path': f'$.rungs[{index-1}]'}
+            self.rung_bounds[rung.get('rung_id')] = bounds
+            self.rung_bounds_by_display[index] = bounds
+            if str(rung.get('rung_id')) in highlighted:
+                self.shapes.insert(start_shape, f'<rect x="{left+4}" y="{top}" width="{edge-left-8}" '
+                                   f'height="{bounds["height"]}" rx="6" fill="#cca700" fill-opacity="0.14" '
+                                   'stroke="#cca700" stroke-width="2" />')
+            self.shapes.append('</g>')
+            next_y = bottom + 85
+        self.height = max(120, next_y)
+        drawing, self.shapes = self.shapes, []
+        self.draw_line(left, 20, left, self.height - 20, width=3.5)
+        self.draw_line(edge, 20, edge, self.height - 20, width=3.5)
+        return (f'<svg width="{self.width}" height="{self.height}" xmlns="http://www.w3.org/2000/svg" '
+                'data-source-format="ordered-ladder">'
+                f'<rect width="{self.width}" height="{self.height}" fill="{self.palette["background"]}"/>'
+                + '\n'.join(self.shapes + drawing) + '</svg>')
+
+    def _source_elements(self, value):
+        kind = value['kind']
+        if kind == 'true':
+            return []
+        if kind == 'unknown':
+            return [{'type': 'BLOCK_INPUT', 'expression': '?'}]
+        if kind == 'reference':
+            return [{'type': 'SOURCE_REFERENCE', 'expression': 'A' + str(value['anchor']), '_anchor': value['anchor']}]
+        if kind == 'and':
+            return [item for child in value['children'] for item in self._source_elements(child)]
+        if kind == 'or':
+            return [{'type': 'parallel_block', 'branches': [self._source_elements(child) for child in value['children']]}]
+        if kind in {'invert', 'edge'}:
+            return [*self._source_elements(value['child']), {'type': 'BLOCK_INPUT', 'expression': value['op'],
+                    '_source_index': value['source_index'], '_source_op': value['op']}]
+        op, args = value['op'], value['args']
+        simple = {'LD': 'NO', 'AND': 'NO', 'OR': 'NO', 'LDI': 'NC', 'ANI': 'NC', 'ORI': 'NC',
+                  'LDP': 'P', 'ANDP': 'P', 'ORP': 'P', 'LDF': 'F', 'ANDF': 'F', 'ORF': 'F'}
+        element = ({'type': simple[op], 'address': args[0]} if op in simple and len(args) == 1 else
+                   {'type': 'BLOCK_INPUT', 'expression': ' '.join([re.sub(r'^(?:AND|LD|OR)', '', op), *args])})
+        if 'address' not in element:
+            element['label'] = '\n'.join(arg + ': ' + self.device_comments[arg] for arg in args if arg in self.device_comments)
+        return [{**element, '_source_index': value['source_index'], '_source_op': op}]
+
+    def _source_output(self, row):
+        op, args = row['op'], row['args']
+        if op == 'OUT' and args and len(args) == 1:
+            element = {'type': 'COIL', 'address': args[0]}
+        elif op == 'OUT' and len(args) == 2 and re.match(r'^[TC]\d', args[0]):
+            element = {'type': 'TIMER' if args[0].startswith('T') else 'COUNTER',
+                       'address': args[0], 'value': args[1]}
+        else:
+            element = {'type': 'APP_INSTR', 'opcode': op, 'operands': args}
+            element['label'] = '\n'.join(arg + ': ' + self.device_comments[arg] for arg in args if arg in self.device_comments)
+        return {**element, '_source_index': row['source_index'], '_source_op': op}

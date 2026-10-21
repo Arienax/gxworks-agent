@@ -33,6 +33,67 @@ OBSERVED_TRAILER_SIZE = 24
 OBSERVED_STRUCTURED_TRAILERS = frozenset((bytes(24), struct.pack('<I', 2) + bytes(20)))
 
 
+def structured_block_text(header: bytes) -> tuple[str, str]:
+    """Read the two native counted UTF-16 network strings."""
+    if structured_block_header_end(header, 0, len(header)) != len(header):
+        raise GXWFormatError('incomplete structured block header')
+    cursor, values = 4, []
+    for _ in range(2):
+        count = _u32(header, cursor)
+        stop = cursor + 4 + count * 2
+        try:
+            value = header[cursor+4:stop-2].decode('utf-16le')
+        except UnicodeError as error:
+            raise GXWFormatError('invalid structured block UTF-16 text') from error
+        if '\0' in value:
+            raise GXWFormatError('embedded NUL in structured block text')
+        values.append(value)
+        cursor = stop
+    return tuple(values)
+
+
+def edit_structured_block_text(header: bytes, *, title=None, comment=None) -> bytes:
+    old = structured_block_text(header)
+    fields = []
+    cursor = 4
+    for index, value in enumerate((title, comment)):
+        count = _u32(header, cursor)
+        stop = cursor + 4 + count * 2
+        if value is None or value == old[index]:
+            fields.append(header[cursor:stop])
+        else:
+            if not isinstance(value, str) or '\0' in value:
+                raise GXWFormatError('structured block text must be a string without NUL')
+            try:
+                encoded = (value+'\0').encode('utf-16le')
+            except UnicodeError as error:
+                raise GXWFormatError('invalid structured block UTF-16 text') from error
+            fields.append(struct.pack('<I',len(encoded)//2)+encoded)
+        cursor = stop
+    return header[:4] + b''.join(fields) + header[-8:]
+
+
+def structured_block_header_end(data: bytes, start: int, end: int) -> int:
+    """Bound the two saved network strings before its height/record count.
+
+    Network labels and comments are counted UTF-16 strings, just as an empty
+    network has two one-character NUL strings. Their bytes are retained in the
+    block header; they are not records or a fixed-size 24-byte prefix.
+    """
+    cursor = start + 4
+    for _ in range(2):
+        if cursor + 4 > end:
+            raise GXWFormatError('structured block string count is truncated')
+        count = _u32(data, cursor)
+        stop = cursor + 4 + count * 2
+        if count < 1 or stop > end - 8 or data[stop - 2:stop] != b'\0\0':
+            raise GXWFormatError('unbounded structured block header string')
+        cursor = stop
+    if cursor + 8 > end:
+        raise GXWFormatError('structured block height/count is truncated')
+    return cursor + 8
+
+
 def _u16(data: bytes, offset: int) -> int:
     if offset + 2 > len(data):
         raise GXWFormatError(f"truncated uint16 at 0x{offset:X}")
@@ -77,6 +138,8 @@ def _parse_node(record: bytes, absolute_offset: int) -> StructuredNode:
 
     kind_code = _u32(record, 8)
     symbol, cursor = _parse_node_string(record, 12, absolute_offset, "symbol")
+    if '\0' in symbol:
+        raise GXWFormatError(f'embedded NUL in structured node symbol at 0x{absolute_offset:X}')
     type_name = None
     object_flag = None
     reserved = None
@@ -84,6 +147,8 @@ def _parse_node(record: bytes, absolute_offset: int) -> StructuredNode:
         # Samples 72-75: instance string, type string, bbox, port count/ports.
         # There are no ordinary-node flag/reserved fields in this record form.
         type_name, cursor = _parse_node_string(record, cursor, absolute_offset, "FB type")
+        if '\0' in type_name:
+            raise GXWFormatError(f'embedded NUL in structured FB type at 0x{absolute_offset:X}')
     else:
         object_flag = _u32(record, cursor)
         cursor += 4
@@ -156,6 +221,12 @@ def _parse_wire(record: bytes, absolute_offset: int) -> StructuredWire:
     unknown4 = _u32(record, 20)
     start_x, start_y, end_x, end_y = struct.unpack_from("<IIII", record, 24)
     suffix = _u32(record, 40)
+    record_class=_u32(record,4)
+    if record_class not in (2,3):
+        raise GXWFormatError('unsupported structured line record class')
+    if record_class==3 and ((start_x,start_y)!=(end_x,end_y)
+            or (unknown0,unknown1,unknown2,unknown3,unknown4,suffix)!=(0,1,0,1,0,0)):
+        raise GXWFormatError('uncovered FIXPOINT layout')
     return StructuredWire(
         offset=absolute_offset,
         record_length=len(record),
@@ -164,6 +235,7 @@ def _parse_wire(record: bytes, absolute_offset: int) -> StructuredWire:
         prefix_fields=(unknown0, unknown1, unknown2, unknown3, unknown4),
         suffix=suffix,
         raw=record,
+        record_class=record_class,
     )
 
 
@@ -176,11 +248,11 @@ def parse_structured_pou(
 ) -> StructuredProgram:
     """Parse the observed GX Works2 Structured Ladder/FBD Program.pou format.
 
-    The parser is deliberately strict about the controlled-sample invariants so
-    unsupported layouts fail closed instead of being silently mis-decoded.
+    Block and record boundaries are always checked against their saved sizes.
     The explicit inspection option preserves an undecodable *bounded record* as
-    opaque. It never relaxes block boundaries or trailer checks. Writers retain
-    the strict default; this option is not permission to regenerate that record.
+    opaque. It also retains an unrecognized fixed 24-byte suffix without
+    interpreting its options. Neither mode relaxes block/record boundaries;
+    preservation is not permission to regenerate an opaque record or suffix.
     """
 
     if len(data) < STRUCTURED_RECORDS_OFFSET + OBSERVED_TRAILER_SIZE:
@@ -188,10 +260,17 @@ def parse_structured_pou(
             "Program.pou is too short for the observed structured layout"
         )
 
-    block_count = _u32(data, BLOCK_COUNT_OFFSET)
-    if not 1 <= block_count <= (len(data) - PROGRAM_PREFIX_SIZE - OBSERVED_TRAILER_SIZE) // BLOCK_HEADER_SIZE:
+    from .source_header import source_payload_offset
+    payload = source_payload_offset(data)
+    if data[payload] != 208:
+        raise GXWFormatError('outside observed structured source language')
+    prefix_size = payload + 17
+    if len(data) < prefix_size + BLOCK_HEADER_SIZE + OBSERVED_TRAILER_SIZE:
+        raise GXWFormatError('structured source body is truncated')
+    block_count = _u32(data, payload + 13)
+    if not 1 <= block_count <= (len(data) - prefix_size - OBSERVED_TRAILER_SIZE) // BLOCK_HEADER_SIZE:
         raise GXWFormatError("invalid or unsupported structured block count")
-    cursor = PROGRAM_PREFIX_SIZE
+    cursor = prefix_size
     nodes: List[StructuredNode] = []
     wires: List[StructuredWire] = []
     unknown: List[UnknownRecord] = []
@@ -202,12 +281,13 @@ def parse_structured_pou(
             raise GXWFormatError("structured block header is truncated")
         size = _u32(data, start)
         end = start + size
-        count = _u32(data, start + 20)
         if size < BLOCK_HEADER_SIZE or end > len(data) - OBSERVED_TRAILER_SIZE:
             raise GXWFormatError("invalid structured block byte length")
-        if count > (size - BLOCK_HEADER_SIZE) // 8:
+        header_end = structured_block_header_end(data, start, end)
+        count = _u32(data, header_end - 4)
+        if count > (end - header_end) // 8:
             raise GXWFormatError("structured block record count exceeds capacity")
-        cursor += BLOCK_HEADER_SIZE
+        cursor = header_end
         offsets = []
         for record_index in range(count):
             if cursor + 8 > end:
@@ -220,7 +300,7 @@ def parse_structured_pou(
             try:
                 if record_class == 1:
                     nodes.append(_parse_node(record, cursor))
-                elif record_class == 2:
+                elif record_class in (2,3):
                     wires.append(_parse_wire(record, cursor))
                 else:
                     unknown.append(UnknownRecord(cursor, record_length, record_class, record))
@@ -232,11 +312,12 @@ def parse_structured_pou(
             cursor += record_length
         if cursor != end:
             raise GXWFormatError(f"unconsumed bytes inside block {block_index}")
-        blocks.append(StructuredBlock(start, size, _u32(data, start + 16), tuple(offsets),
-                                      data[start:start + BLOCK_HEADER_SIZE]))
+        blocks.append(StructuredBlock(start, size, _u32(data, header_end - 8), tuple(offsets),
+                                      data[start:header_end]))
 
     trailer = data[cursor:]
-    if trailer not in OBSERVED_STRUCTURED_TRAILERS:
+    if len(trailer) != OBSERVED_TRAILER_SIZE or (
+            not preserve_unsupported_records and trailer not in OBSERVED_STRUCTURED_TRAILERS):
         raise GXWFormatError(
             "unsupported Program.pou trailer; expected an observed 24-byte trailer after records"
         )

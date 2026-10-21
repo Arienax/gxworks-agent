@@ -33,7 +33,7 @@ def editor_catalog(context=None):
     return {'nodes': context.catalog(), 'generation_plc_models': list(fbd_generation_models()),
             'unsupported_generation_plc_models': unsupported_fbd_models(),
             'empty_model': context.empty_model(), 'program': context.program.logical_name,
-            'programs': context.programs, 'schema_version': 2, 'cpu': context.sources.cpu,
+            'programs': list(context.fbd_programs), 'schema_version': 2, 'cpu': context.sources.cpu,
             'task_scopes': context.task_scopes(), 'parameter_schema': deepcopy(FBD_PARAMETER_MODEL_SCHEMA),
             'parameter_model': fbd_topology_from_context(context),
             'project_configuration': dict(source_name=metadata,system_variable_ranges={key:list(value)
@@ -54,7 +54,32 @@ def declaration_rows(model, table):
         row.update(next((item for item in upserts if item["name"] == row["name"]), {}))
     names = {row["name"] for row in rows}
     rows.extend(deepcopy(row) for row in upserts if row["name"] not in names)
+    if 'order' in edit:
+        by_name = {row['name']:row for row in rows}
+        order = edit['order']
+        if len(order) != len(rows) or len(set(order)) != len(order) or set(order) != set(by_name):
+            raise GXWFormatError('declaration order must contain each current row exactly once')
+        rows = [by_name[name] for name in order]
     return rows
+
+
+def _node_capabilities(node, *, source=None, sources=None):
+    """Use the same object boundary for editor buttons and edit commands."""
+    key=node['template']
+    if source is not None and source.kind==NodeKind.UNKNOWN and source.kind_code!=0x10:
+        return dict(resizable=False,callable=False)
+    is_call=isinstance(key,str) and key.startswith(('function:','function_block:'))
+    is_comment=key=='comment' or key=='unknown' and source is not None and source.kind_code==0x10
+    refresh=False
+    if is_call and sources is not None:
+        from .object_model import source_node_template
+        try:
+            source_node_template(key,sources)
+        except GXWFormatError:
+            pass
+        else:
+            refresh=True
+    return dict(resizable=is_call or is_comment,callable=refresh)
 
 
 def presentation(model, *, templates=None, context=None):
@@ -71,7 +96,24 @@ def presentation(model, *, templates=None, context=None):
         spec = catalog.get(node["template"], {})
         ports = node.get("ports", spec.get("ports", []))
         source = source_nodes.get(node.get('source_offset'))
-        if sources and source and node['template'].startswith(('function:', 'function_block:')):
+        if node.get('port_layout'):
+            layout=node['port_layout']
+            # The writer owns validation. This projection displays the exact
+            # explicit connector identities while an interface is incomplete.
+            ports=[dict(name=str(index),x=port['x'],y=port['y'],
+                        side='in' if port['x']==0 else 'out',data_type=None,
+                        negated=bool(port['flags']&8)) for index,port in enumerate(layout['ports'])]
+            if context:
+                from .object_model import build_object_program,_ports
+                probe=deepcopy(model);probe['wires']=[]
+                built=build_object_program(context.program,probe,sources=sources,save_policy='draft')
+                index=next(i for i,item in enumerate(model['nodes']) if item['id']==node['id'])
+                ports=_ports(built.nodes[index],sources,bind_instance=False)
+        elif sources and node.get('refresh_interface'):
+            from .object_model import source_node_template, _ports
+            template = source_node_template(node['template'], sources)
+            ports = _ports(template, sources, bind_instance=False)
+        elif sources and source and node['template'].startswith(('function:', 'function_block:')):
             try:
                 if (node['template'].startswith('function_block:') and source.kind == NodeKind.FUNCTION_BLOCK
                         and _key(source) != node['template']):
@@ -81,14 +123,54 @@ def presentation(model, *, templates=None, context=None):
                     ports = sources.callable(replace(source, symbol=node['symbol']))['ports']
             except GXWFormatError:
                 pass  # Keep unbound source ports visible with the source gap.
+        if node.get('resize') and ports:
+            old_width = (source.bbox.right-source.bbox.left if source is not None and not node.get('refresh_interface')
+                         else spec.get('width',max(port['x'] for port in ports)))
+            width = node['resize'].get('width',old_width)
+            ports = [{**port, 'x':width if port['x']==old_width else port['x']} for port in ports]
         ports = [{**port, **node.get('port_edits', {}).get(port['name'], {})} for port in ports]
-        nodes.append({"id": node["id"], "symbol_editable": not node['template'].startswith('function:'), "ports": ports})
+        nodes.append({"id": node["id"], "symbol_editable": not node['template'].startswith('function:') and node['template']!='return',
+                      "ports": ports, **_node_capabilities(node,source=source,sources=sources)})
         for port in ports:
             endpoints.append({"value": f'{node["id"]}.{port["name"]}',
                               "label": f'{node["symbol"]} · {port["name"]} ({node["id"]})',
                               "point": [node["x"] + port["x"], node["y"] + port["y"]]})
+    from .structured_pou import structured_block_text
+    original_blocks = {block.offset:block for block in context.program.blocks} if context else {}
+    block_rows = []
+    for index, spec in enumerate(_draft_blocks(model, context)):
+        original = original_blocks.get(spec.get('source_offset'))
+        title,comment = structured_block_text(original.raw_header) if original is not None else ('','')
+        block_rows.append({**spec, 'index':index,'title':spec.get('title',title),
+                           'comment':spec.get('comment',comment)})
     return {"tables": tables, "rows": {table: declaration_rows(model, table) for table in tables},
-            "nodes": nodes, "endpoints": endpoints}
+            "nodes": nodes, "endpoints": endpoints, 'blocks':block_rows}
+
+
+def _draft_blocks(model, context):
+    if 'blocks' in model:
+        return model['blocks']
+    original = context.program.blocks[0] if context else None
+    return [dict(source_offset=original.offset if original else None,
+                 canvas_height=model.get('canvas_height',12))]
+
+
+def _block_index(value, blocks, *, insertion=False):
+    if type(value) is not int or not 0 <= value < len(blocks)+int(insertion):
+        raise GXWFormatError('select an existing network index')
+    return value
+
+
+def _remap_blocks(model, mapping):
+    for collection in ('nodes','wires'):
+        retained=[]
+        for record in model[collection]:
+            old=record.get('block',0)
+            if old in mapping:
+                record['block']=mapping[old]
+                retained.append(record)
+        model[collection]=retained
+    model['canvas_height']=sum(row['canvas_height'] for row in model['blocks'])
 
 
 def _patch(model, table):
@@ -172,13 +254,70 @@ def edit_draft(value, command=None, *, templates=None, context=None):
     if templates is None and context:
         templates = context.catalog(declaration_edits=model.get('declaration_edits'))
     catalog = {item["template"]: item for item in (templates if templates is not None else catalog_description())}
-    if action == "add_node":
+    if action in ('add_block','update_block','delete_block','move_block'):
+        blocks = model.setdefault('blocks',deepcopy(_draft_blocks(model,context)))
+        if action == 'add_block':
+            index = _block_index(command.get('index',len(blocks)),blocks,insertion=True)
+            blocks.insert(index,dict(source_offset=None,canvas_height=command.get('canvas_height',12),
+                title=command.get('title',''),comment=command.get('comment','')))
+            _remap_blocks(model,{old:old+(old>=index) for old in range(len(blocks)-1)})
+        else:
+            index = _block_index(command['index'],blocks)
+            if action == 'update_block':
+                field=command['field']
+                if field not in ('title','comment','canvas_height'):
+                    raise GXWFormatError('unsupported network field')
+                blocks[index][field]=command['value']
+            elif action == 'delete_block':
+                blocks.pop(index)
+                _remap_blocks(model,{old:old-(old>index) for old in range(len(blocks)+1) if old!=index})
+                if not blocks:
+                    blocks.append(dict(source_offset=None,canvas_height=12,title='',comment=''))
+            else:
+                target=_block_index(command['target'],blocks)
+                order=list(range(len(blocks)));order.insert(target,order.pop(index))
+                model['blocks']=[blocks[old] for old in order]
+                _remap_blocks(model,{old:new for new,old in enumerate(order)})
+        model['canvas_height']=sum(row['canvas_height'] for row in model['blocks'])
+    elif action in ('resize_node','refresh_callable','set_arity','set_port_layout'):
+        node=next((item for item in model['nodes'] if item['id']==command['id']),None)
+        if node is None:
+            raise GXWFormatError('select a callable node')
+        source=next((item for item in context.program.nodes if item.offset==node.get('source_offset')),None) if context else None
+        capabilities=_node_capabilities(node,source=source,
+            sources=context.draft_sources(model.get('declaration_edits')) if context else None)
+        if action=='resize_node' and not capabilities['resizable']:
+            raise GXWFormatError('select a resizable callable or comment')
+        if action=='refresh_callable' and not capabilities['callable']:
+            raise GXWFormatError('current source cannot rebuild this callable interface')
+        if action in ('set_arity','set_port_layout') and not node['template'].startswith(('function:','function_block:')):
+            raise GXWFormatError('select a callable node')
+        if action=='set_port_layout':
+            node['port_layout']=deepcopy(command['value'])
+            node.pop('resize',None);node.pop('refresh_interface',None)
+        elif action=='resize_node':
+            node['resize']={key:command[key] for key in ('width','height') if key in command}
+        else:
+            if action=='set_arity':
+                import re
+                arity=command.get('arity')
+                if type(arity) is not int or not 1<=arity<=256 or not node['template'].startswith('function:'):
+                    raise GXWFormatError('function arity must be between 1 and 256')
+                node['template']=re.sub(r'-[1-9][0-9]*$','',node['template'])+'-'+str(arity)
+                node['symbol']=node['template'].split(':',1)[1]
+            node['refresh_interface']=True
+            node.pop('port_layout',None)
+            for field in ('ports','width','height','prototype_offset'):
+                node.pop(field,None)
+    elif action == "add_node":
         spec = catalog.get(command["template"])
         if not spec:
             raise GXWFormatError("no verified native ABI template")
         number = len(model["nodes"]) + 1
         symbol = spec["symbol"] or (f"FB_{number}" if spec["kind"] == "function_block"
                                    else "Y0" if spec["kind"] in {"coil", "output"} else "X0")
+        if spec['kind']=='return':
+            symbol=''
         node = {"id": "node_" + uuid4().hex, "template": spec["template"], "symbol": symbol,
                 "x": 3, "y": 2 + len(model["nodes"]) * 5}
         if spec.get('prototype_offset') is not None:
@@ -197,7 +336,9 @@ def edit_draft(value, command=None, *, templates=None, context=None):
                               if not any(wire.get(end, "").startswith(prefix) for end in ("from", "to"))]
         else:
             field, new = command["field"], command["value"]
-            if field in {"x", "y"}:
+            if field in {"x", "y", "block"}:
+                if field=='block':
+                    _block_index(new,_draft_blocks(model,context))
                 node[field] = new
             elif field == "template":
                 if new not in catalog:
@@ -229,7 +370,7 @@ def edit_draft(value, command=None, *, templates=None, context=None):
                             item = {'name':row.name};upserts.append(item)
                         item.update(data_type=new.split(':',1)[1],kind='function_block')
             elif field == "symbol":
-                if node['template'].startswith('function:'):
+                if node['template'].startswith('function:') or node['template']=='return':
                     raise GXWFormatError("select a native function template to change a function")
                 old_symbol = node['symbol']
                 if node['template'].startswith('function_block:') and old_symbol != new:
@@ -266,20 +407,51 @@ def edit_draft(value, command=None, *, templates=None, context=None):
             raise GXWFormatError("select two existing, distinct endpoints")
         a, b = endpoints[source], endpoints[target]
         wire = {"from": source, "to": target}
+        owners={node['id']:node.get('block',0) for node in model['nodes']}
+        source_block=owners[source.split('.',1)[0]]
+        if source_block!=owners[target.split('.',1)[0]]:
+            raise GXWFormatError('wire endpoints cannot cross network boundaries')
+        if model.get('blocks'):
+            wire['block']=source_block
         if a[0] != b[0] and a[1] != b[1]:
             mid = (a[0] + b[0]) // 2
             wire["via"] = [[mid, a[1]], [mid, b[1]]]
         model["wires"].append(wire)
     elif action == "add_bus":
-        model["wires"].append({"start": [1, 0], "end": [1, model.get("canvas_height") or 12]})
+        index=_block_index(command.get('block',0),_draft_blocks(model,context))
+        wire={"start": [1, 0], "end": [1, _draft_blocks(model,context)[index]['canvas_height']]}
+        if model.get('blocks'):wire['block']=index
+        model['wires'].append(wire)
+    elif action in ('add_junction','move_junction'):
+        from .object_model import _point
+        point=_point(command['point'])
+        position=[point.x,point.y]
+        if action=='add_junction':
+            block=_block_index(command.get('block',0),_draft_blocks(model,context))
+            wire=dict(kind='junction',start=position,end=list(position))
+            if model.get('blocks'):wire['block']=block
+            model['wires'].append(wire)
+        else:
+            index=command['index']
+            if type(index) is not int or not 0<=index<len(model['wires']):
+                raise GXWFormatError('select an existing junction index')
+            wire=model['wires'][index]
+            if wire.get('kind')!='junction':
+                raise GXWFormatError('move_junction requires a junction record')
+            wire.update(start=position,end=list(position))
     elif action in {"update_wire", "delete_wire"}:
         index = command["index"]
+        if type(index) is not int or not 0<=index<len(model['wires']):
+            raise GXWFormatError('select an existing wire index')
         if action == "delete_wire":
             model["wires"].pop(index)
         else:
             field, new = command["field"], command["value"]
-            if field not in {"start", "end", "via"}:
+            if field not in {"start", "end", "via", "block"}:
                 raise GXWFormatError("unsupported wire edit")
+            if model['wires'][index].get('kind')=='junction' and field!='block':
+                raise GXWFormatError('use move_junction to change its single point')
+            if field=='block':_block_index(new,_draft_blocks(model,context))
             if field == "via" and isinstance(new, str):
                 import re
                 parts = [part.strip() for part in new.split(";")] if new.strip() else []
@@ -287,6 +459,17 @@ def edit_draft(value, command=None, *, templates=None, context=None):
                     raise GXWFormatError("折点请填写 x,y; x,y 格式的非负整数坐标。")
                 new = [[int(part) for part in point.split(",")] for point in parts]
             model["wires"][index][field] = new
+    elif action in ('reorder_labels','set_return_type'):
+        table=command['table']
+        patch=_patch(model,table)
+        if action=='reorder_labels':
+            order=command['order'];names=[row['name'] for row in declaration_rows(model,table)]
+            if not isinstance(order,list) or len(order)!=len(names) or len(set(order))!=len(order) or set(order)!=set(names):
+                raise GXWFormatError('declaration order must contain each current row exactly once')
+            patch['order']=list(order)
+        else:
+            patch['return_type']=command['value']
+        if context:context.draft_sources(model.get('declaration_edits'))
     elif action in {"add_label", "update_label", "delete_label"}:
         table = command["table"]
         patch = _patch(model, table)
@@ -298,6 +481,8 @@ def edit_draft(value, command=None, *, templates=None, context=None):
                 number += 1
             patch.setdefault("upserts", []).append({"name": f"label_{number}", "data_type": "BOOL",
                 "kind": "variable", "class_name": "VAR_GLOBAL" if table.endswith(".gh") else "VAR"})
+            if 'order' in patch:
+                patch['order'].append(f'label_{number}')
         else:
             name = command["name"]
             if not any(row["name"] == name for row in rows):
@@ -311,6 +496,8 @@ def edit_draft(value, command=None, *, templates=None, context=None):
                     patch.setdefault("remove", []).append(source["name"])
                     patch.get("renames", {}).pop(source["name"], None)
                 patch["upserts"] = [row for row in upserts if row["name"] != name]
+                if 'order' in patch:
+                    patch['order'].remove(name)
             else:
                 field, new = command["field"], command["value"]
                 if field not in {"name", "data_type", "kind", "class_name", "initial_value", "device", "iec_address", "comment"} or not isinstance(new, str):
@@ -321,6 +508,8 @@ def edit_draft(value, command=None, *, templates=None, context=None):
                         patch.setdefault("renames", {})[source["name"]] = new
                     if item:
                         item["name"] = new
+                    if 'order' in patch:
+                        patch['order'] = [new if old==name else old for old in patch['order']]
                     # The graph and its source declaration are one edit. Direct
                     # terminals and instance/member references keep their binding.
                     current_local = previous_sources.local_table if previous_sources else model['program'].removesuffix('.Program.pou') + '.Labels.lh'

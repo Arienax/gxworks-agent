@@ -5,6 +5,7 @@ import base64
 from collections import defaultdict
 from dataclasses import dataclass, field
 from copy import deepcopy
+from typing import Mapping
 from functools import lru_cache
 import hashlib
 import struct
@@ -132,17 +133,30 @@ def mark_observed_source_compile_pending(raw: bytes, *, logical_name: str) -> by
     Callers must bind this payload to the intended project stream and update
     its history/integrity metadata through their existing container writer.
     """
-    prefix = bytes.fromhex("01000000000001000000000001000a00000000000200000001000000010000000000")
     raw = bytes(raw)
-    if (not logical_name.endswith((".pou", ".lh", ".gh"))
-            or len(raw) < 54 or not raw.startswith(prefix)):
+    from .source_header import source_payload_offset
+    try:
+        payload = source_payload_offset(raw)
+    except GXWFormatError as error:
+        raise GXWFormatError('outside observed source compile-status header') from error
+    fixed_prefixes = (
+        bytes.fromhex('01000a00000000000200000001000000010000000000'),
+        bytes.fromhex('00000000000000000200000001000000010000000000'),
+    )
+    if (not logical_name.endswith((".pou", ".lh", ".gh", ".lnb", ".lnl"))
+            or raw[payload - 42:payload - 20] not in fixed_prefixes):
         raise GXWFormatError("outside observed source compile-status header")
-    marker = struct.unpack_from("<I", raw, 50)[0]
+    # Independent native setters with nonempty descriptions establish this
+    # same final word of the bounded common header; descriptions stay raw.
+    # An independent Q13UDV ordinary/library source + labels setter/save/cold
+    # control establishes the all-zero version prefix with this same word.
+    offset = payload - 4
+    marker = struct.unpack_from("<I", raw, offset)[0]
     if marker not in (0, 1):
         raise GXWFormatError("unsupported source compile-status marker; preserve it unchanged")
     if marker == 1:
         return raw
-    return raw[:50] + struct.pack("<I", 1) + raw[54:]
+    return raw[:offset] + struct.pack("<I", 1) + raw[offset + 4:]
 
 
 def read_project_text_context(raw: bytes) -> dict:
@@ -202,9 +216,10 @@ _GUI_RANGE_NAMES = {name: ('10T' if name == 'T10' else name)
 def _project_allocation_records(raw: bytes) -> tuple[str, bytes, bytes | None]:
     """Read one current saved allocation source, without constructing a POU."""
     from .container_writer import validate_cfb_streams
+    from .integrity import read_project_hdb
     outer = validate_cfb_streams(raw)
-    nested = validate_cfb_streams(outer['_hdb'])
-    mapping = logical_mapping(outer['projectdatalist.xml'])
+    nested = read_project_hdb(outer).payloads
+    mapping = project_stream_mapping(outer)
     streams = {name: nested[key] for name, key in mapping.items() if key in nested}
     names = [name for name in streams if name.endswith('.prj')]
     if len(names) != 1:
@@ -460,7 +475,7 @@ def gui_application_save_plan(raw: bytes, source: dict) -> bytes | None:
     from .container_writer import validate_cfb_streams
     outer = validate_cfb_streams(raw)
     nested = validate_cfb_streams(outer['_hdb'])
-    mapping = logical_mapping(outer['projectdatalist.xml'])
+    mapping = project_stream_mapping(outer)
     streams = {name:nested[key] for name,key in mapping.items() if key in nested}
     metadata = [value for name,value in streams.items() if name.endswith('.prj')]
     if len(metadata)!=1 or read_project_text_context(metadata[0])['cpu']!='FX3U/FX3UC':
@@ -728,6 +743,30 @@ def project_resource_groups(raw: bytes) -> tuple[dict[str, dict], list[dict]]:
     return result, issues
 
 
+def existing_source_groups(metadata: bytes, streams: Mapping[str, bytes]) -> tuple[dict, list]:
+    """Bind editable project and user-library sources to existing declarations.
+
+    Library folder numbers are local to their namespace. Reuse the native
+    directory roles already used by the callable resolver rather than pairing
+    streams by their display name or suffix alone.
+    """
+    groups, issues = {}, []
+    for folder_type in (7, 8):
+        current, gaps = project_source_groups(metadata, folder_type=folder_type)
+        groups.update(current)
+        issues.extend(gaps)
+    from .callable_sources import _user_library_owners
+    owners, gaps, _descriptors = _user_library_owners(metadata, streams)
+    issues.extend(gaps)
+    for labels, owner in owners.items():
+        logical = owner['source_program']
+        if logical in groups:
+            raise GXWFormatError('ambiguous project/library source ownership: ' + logical)
+        groups[logical] = {'labels': labels, 'library': owner['library'],
+                           'owner_name': owner['name'], 'folder': None}
+    return groups, issues
+
+
 def logical_mapping(raw: bytes) -> dict[str, str]:
     rows, _ = current_rows(raw, "DSPROJECTDATA", "D_Projectdata")
     result = {}
@@ -744,6 +783,39 @@ def logical_mapping(raw: bytes) -> dict[str, str]:
         if name in result or stream in result.values():
             raise GXWFormatError("ambiguous current project name/stream mapping")
         result[name] = stream
+    return result
+
+
+def project_stream_mapping(outer) -> dict[str, str]:
+    """Resolve directory identities through the current history storage IDs.
+
+    D_Projectdata.iID identifies the engineering object; D_History.iID names
+    its physical _hdb stream. They coincide in many files but diverge after
+    native history/project compaction. Join on iProjectdataID, never on array
+    position or source contents. Historical names may remain after a rename.
+    """
+    if not isinstance(outer, Mapping):
+        values = {'projectdatalist.xml': outer.read_stream('projectdatalist.xml')}
+        if outer.find_streams('history.xml'):
+            values['history.xml'] = outer.read_stream('history.xml')
+        outer = values
+    directory = logical_mapping(outer['projectdatalist.xml'])
+    if 'history.xml' not in outer:
+        return directory
+    rows, _ = current_rows(outer['history.xml'], 'DSHISTORY', 'D_History')
+    storage = {}
+    for row in rows:
+        fields = {key: value.text.strip() for key, value in row.fields().items()}
+        identity = fields.get('iProjectdataID')
+        physical = fields.get('iID', identity)
+        if not identity or not physical:
+            raise GXWFormatError('current history row lacks project/storage identity')
+        if identity in storage:
+            raise GXWFormatError('ambiguous current project/history storage identity: ' + identity)
+        storage[identity] = physical
+    result = {name: storage.get(identity, identity) for name, identity in directory.items()}
+    if len(set(result.values())) != len(result):
+        raise GXWFormatError('ambiguous current physical project stream identity')
     return result
 
 
@@ -765,7 +837,8 @@ def synchronize_history(raw: bytes, replacements: dict, *, current_mapping: dict
         matches = []
         for row in rows:
             fields = row.fields()
-            if fields.get("iProjectdataID") and fields["iProjectdataID"].text.strip() == stream:
+            identity = fields.get('iID') or fields.get('iProjectdataID')
+            if identity is not None and identity.text.strip() == stream:
                 matches.append(fields)
         if len(matches) != 1:
             raise GXWFormatError(f"expected one current history row for {logical}; found {len(matches)}")
@@ -776,7 +849,7 @@ def synchronize_history(raw: bytes, replacements: dict, *, current_mapping: dict
                             and list(current_mapping.values()).count(stream) == 1
                             and history_name and history_name not in current_mapping
                             and any(logical.endswith(suffix) and history_name.endswith(suffix)
-                                    for suffix in (".pou", ".lh")))
+                                    for suffix in (".pou", ".lh", ".lnb", ".lnl")))
             if not source_alias:
                 raise GXWFormatError(f"history name/ID mismatch for {logical}")
             preserved.append({"object": logical, "stream": stream, "field": "szProjectdataName",

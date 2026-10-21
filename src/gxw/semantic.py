@@ -496,12 +496,16 @@ def _infer_function_port_roles(
     enable_out_candidates = []
     for index, port in enumerate(node.ports):
         point = node.port_point(index)
-        if port.port_kind_code == 3 and point.x == node.bbox.left:
+        # Negation is an independent connector bit. Constant-only inputs have
+        # bit 0x04 as well as the ordinary input direction code; neither changes
+        # the connector's role or its net (FMOV and negated author controls).
+        flags = port.port_kind_code & ~8
+        if flags in (3, 7) and point.x == node.bbox.left:
             roles[index] = SemanticPortRole.DATA_IN
             incoming_candidates.append(index)
-        elif port.port_kind_code == 2 and point.x == node.bbox.right:
+        elif flags == 2 and point.x == node.bbox.right:
             roles[index] = SemanticPortRole.DATA_OUT
-        elif port.port_kind_code == 0 and point.x == node.bbox.right:
+        elif flags == 0 and point.x == node.bbox.right:
             roles[index] = SemanticPortRole.ENABLE_OUT
             enable_out_candidates.append(index)
         else:

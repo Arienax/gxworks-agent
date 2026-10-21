@@ -22,12 +22,21 @@ from .structured_pou import (
     RECORD_COUNT_OFFSET,
     STRUCTURED_RECORDS_OFFSET,
     OBSERVED_STRUCTURED_TRAILERS,
+    _parse_node,
     parse_structured_pou,
+    structured_block_header_end,
 )
 
 
 SIZE_LIKE_A_OFFSET = 0x37
 SIZE_LIKE_B_OFFSET = 0x3B
+
+# Original authored Q13UDV/Q06UDV/FX2N/FX3U sources retain these option-only
+# suffixes through differing network layouts. Unknown suffixes remain readable
+# and byte-identical on a no-op, but cannot authorize a changed source body.
+_PRESERVED_SOURCE_TRAILERS = OBSERVED_STRUCTURED_TRAILERS | frozenset(
+    struct.pack('<6I', first, 0, 0, 0, 0, last)
+    for first, last in ((0, 1), (1, 0), (1, 1)))
 
 
 def _u32(data: bytes, offset: int) -> int:
@@ -39,7 +48,10 @@ def _u32(data: bytes, offset: int) -> int:
 def _serialize_node_string(value: str, *, field_name: str) -> bytes:
     if "\x00" in value:
         raise GXWFormatError(f"embedded NUL is unsupported in structured-node {field_name}")
-    encoded = (value + "\x00").encode("utf-16le")
+    try:
+        encoded = (value + "\x00").encode("utf-16le")
+    except UnicodeEncodeError as error:
+        raise GXWFormatError(f'invalid UTF-16 structured-node {field_name}') from error
     char_count = len(encoded) // 2
     return struct.pack("<I", char_count) + encoded
 
@@ -53,9 +65,29 @@ def serialize_structured_node(node: StructuredNode) -> bytes:
     ``node.record_length`` so variable-length symbol edits are supported.
     """
 
+    # Preserve each unchanged counted string from the source. Some imported
+    # records use a bounded string without its optional final NUL; rebuilding a
+    # neighbouring field must not silently canonicalize that spelling.
+    original_strings = {}
+    raw = node.raw
+    if len(raw) >= 12 and (_u32(raw, 0), _u32(raw, 4)) == (len(raw), 1):
+        original = _parse_node(raw, node.offset)
+        if original.kind_code == node.kind_code:
+            cursor = 12
+            for name, value in [('symbol', original.symbol), *(
+                    [('FB type', original.type_name)] if original.kind_code == 2 else [])]:
+                end = cursor + 4 + _u32(raw, cursor) * 2
+                original_strings[name] = (value, raw[cursor:end])
+                cursor = end
+
+    def string(value, field_name):
+        source = original_strings.get(field_name)
+        return source[1] if source is not None and source[0] == value else _serialize_node_string(
+            value, field_name=field_name)
+
     body = bytearray()
     body.extend(struct.pack("<II", 1, node.kind_code))
-    body.extend(_serialize_node_string(node.symbol, field_name="symbol"))
+    body.extend(string(node.symbol, 'symbol'))
 
     if node.kind_code == 0x02:
         if node.type_name is None:
@@ -64,7 +96,7 @@ def serialize_structured_node(node: StructuredNode) -> bytes:
             raise GXWFormatError(
                 "function-block node unexpectedly contains ordinary-node flag fields"
             )
-        body.extend(_serialize_node_string(node.type_name, field_name="FB type"))
+        body.extend(string(node.type_name, 'FB type'))
     else:
         if node.object_flag is None or node.reserved is None:
             raise GXWFormatError(
@@ -109,12 +141,17 @@ def serialize_structured_wire(wire: StructuredWire) -> bytes:
         raise GXWFormatError(
             f"cannot serialize unsupported structured wire length {wire.record_length}"
         )
+    if wire.record_class not in (2,3):
+        raise GXWFormatError('unsupported structured line class')
+    if wire.record_class==3 and (wire.start!=wire.end or wire.prefix_fields!=(0,1,0,1,0)
+                                or wire.suffix!=0):
+        raise GXWFormatError('FIXPOINT requires one coincident start/end point')
 
     unknown0, unknown1, unknown2, unknown3, unknown4 = wire.prefix_fields
     return struct.pack(
         "<IIIIHHIIIIII",
         44,
-        2,
+        wire.record_class,
         unknown0,
         unknown1,
         unknown2,
@@ -128,7 +165,7 @@ def serialize_structured_wire(wire: StructuredWire) -> bytes:
     )
 
 
-def _validate_source_header(program: StructuredProgram) -> None:
+def _validate_source_header(program: StructuredProgram) -> StructuredProgram:
     """Validate the immutable raw source behind a possibly mutated model.
 
     Structural mutations intentionally change ``record_count`` and ``body_size`` on
@@ -141,21 +178,24 @@ def _validate_source_header(program: StructuredProgram) -> None:
     if len(raw) < STRUCTURED_RECORDS_OFFSET:
         raise GXWFormatError("StructuredProgram raw source is shorter than its header")
 
-    parse_structured_pou(raw, logical_name=program.logical_name, source_path=program.source_path,
-                         preserve_unsupported_records=True)
+    source = parse_structured_pou(raw, logical_name=program.logical_name, source_path=program.source_path,
+                                  preserve_unsupported_records=True)
 
     # This relation is strongly repeated across the controlled Structured
     # Ladder/FBD corpus. The writer intentionally fails closed rather than
     # inventing values for a project variant where the invariant does not hold.
-    expected_size_like = len(raw) - 83
-    for offset in (SIZE_LIKE_A_OFFSET, SIZE_LIKE_B_OFFSET):
+    from .source_header import source_payload_offset
+    payload = source_payload_offset(raw)
+    expected_size_like = len(raw) - payload - 29
+    for offset in (payload + 1, payload + 5):
         actual = _u32(raw, offset)
         if actual != expected_size_like:
             raise GXWFormatError(
                 "unsupported Structured Program header invariant: "
-                f"0x{offset:X}=0x{actual:X}, expected len-83 "
+                f"0x{offset:X}=0x{actual:X}, expected body size "
                 f"(0x{expected_size_like:X})"
             )
+    return source
 
 
 def serialize_structured_pou(
@@ -165,15 +205,17 @@ def serialize_structured_pou(
 ) -> bytes:
     """Serialize the currently verified Structured Ladder/FBD Program.pou model.
 
-    Unknown record classes are preserved byte-for-byte. Known node and wire records
-    are rebuilt from parsed fields. The original header is retained except for the
+    Unknown records and unchanged fields are preserved byte-for-byte. The
+    original header is retained except for the
     verified size/count/height fields that must follow the rebuilt body.
 
     With an unmodified parsed program this function is expected to produce a
     byte-perfect round trip for the controlled corpus.
     """
 
-    _validate_source_header(program)
+    source = _validate_source_header(program)
+    if program.trailer != source.trailer:
+        raise GXWFormatError('structured source trailer is immutable opaque data')
 
     containers = []
     total_records = 0
@@ -192,24 +234,28 @@ def serialize_structured_pou(
                 serialized_records.append(record.raw)
             else:
                 raise GXWFormatError(f"unsupported structured record: {type(record).__name__}")
-        if len(block.raw_header) != 24:
-            raise GXWFormatError("block requires a preserved 24-byte native header")
+        if structured_block_header_end(block.raw_header, 0, len(block.raw_header)) != len(block.raw_header):
+            raise GXWFormatError('block requires a complete preserved native header')
+        from .structured_pou import structured_block_text
+        structured_block_text(block.raw_header)
         body = b"".join(serialized_records)
         header = bytearray(block.raw_header)
-        struct.pack_into("<I", header, 0, 24 + len(body))
-        struct.pack_into("<I", header, 16, block.canvas_height)
-        struct.pack_into("<I", header, 20, len(serialized_records))
+        struct.pack_into("<I", header, 0, len(header) + len(body))
+        struct.pack_into("<I", header, len(header) - 8, block.canvas_height)
+        struct.pack_into("<I", header, len(header) - 4, len(serialized_records))
         containers.append(bytes(header) + body)
         total_records += len(serialized_records)
-    if program.trailer not in OBSERVED_STRUCTURED_TRAILERS:
-        raise GXWFormatError("writer only supports the observed 24-byte native trailers")
-    header = bytearray(program.raw[:PROGRAM_PREFIX_SIZE])
+    from .source_header import source_payload_offset
+    payload = source_payload_offset(program.raw)
+    header = bytearray(program.raw[:payload + 17])
     body = b"".join(containers) + program.trailer
-    size_like = len(header) + len(body) - 83
-    struct.pack_into("<I", header, SIZE_LIKE_A_OFFSET, size_like)
-    struct.pack_into("<I", header, SIZE_LIKE_B_OFFSET, size_like)
-    struct.pack_into("<I", header, BLOCK_COUNT_OFFSET, len(containers))
+    size_like = len(header) + len(body) - payload - 29
+    struct.pack_into("<I", header, payload + 1, size_like)
+    struct.pack_into("<I", header, payload + 5, size_like)
+    struct.pack_into("<I", header, payload + 13, len(containers))
     result = bytes(header) + body
+    if result != program.raw and source.trailer not in _PRESERVED_SOURCE_TRAILERS:
+        raise GXWFormatError('unrecognized structured suffix options permit inspection and exact no-op only')
     if verify:
         reparsed = parse_structured_pou(result, logical_name=program.logical_name, source_path=program.source_path,
                                         preserve_unsupported_records=True)

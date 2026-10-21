@@ -89,7 +89,7 @@ def project_capabilities(version=None):
     target = DEFAULT_TARGET_SUPPORT.target((version or {}).get("plc_model") or DEFAULT_PLC_MODEL)
     result = {"project_type": target.get("family", "unknown").lower(), "body_form": mode,
             "representations": ["ladder_svg", "st", "ir"] if ladder else ["fbd", "svg", "gxw"] if fbd else ["sfc", "gxw"] if sfc else ["st"],
-            "operations": {"view": True, "generate": mode in ("ladder", "st", "fbd"),
+            "operations": {"view": True, "generate": mode in ("ladder", "st", "fbd") or sfc and bool((version or {}).get('artifacts')),
                            "diagnose": ladder, "patch": ladder, "gx_import": ladder or fbd,
                            "simulation": ladder, "gx_compile": False, "fbd_edit": fbd, "gx_inspect": not fbd,
                            "fbd_convert": ladder, "sfc_edit": sfc},
@@ -97,6 +97,8 @@ def project_capabilities(version=None):
             "structured_semantics": "verified_native_templates" if fbd else "source_records_only" if sfc else "experimental_read_only"}
 
     result["creation"] = project_creation_options()
+    if ((version or {}).get('validation') or {}).get('source_format') in {'instruction_sequence_v1', 'instruction_sequence_v2'}:
+        result['representations'] = ['ordered_instructions', 'ladder_svg', 'ir', 'gxw']
     result["target_support"] = target
     if target.get("program_supported") is False:
         for operation in ("generate", "diagnose", "patch", "gx_import", "simulation", "fbd_edit", "fbd_convert", "sfc_edit"):

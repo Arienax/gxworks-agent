@@ -1,5 +1,6 @@
 """Reproducible GXW experiments and source-level round-trip comparisons."""
 from __future__ import annotations
+from .project_metadata import project_stream_mapping
 
 from collections import Counter
 from dataclasses import asdict
@@ -10,7 +11,7 @@ from pathlib import Path
 from .connectivity import build_connectivity_graph
 from .container import CompoundFile
 from .decoder import read_structured_program
-from .models import NodeKind, StructuredProgram
+from .models import NodeKind, StructuredProgram, UnknownRecord
 from .project_metadata import logical_mapping
 from .project_writer import binary_diff, build_gxw_project, record_manifest, sha256, write_new_file
 from .semantic import build_semantic_model
@@ -61,9 +62,11 @@ def canonical_program(program: StructuredProgram) -> dict:
                "nodes": sorted(keys[r.offset] for r in records if hasattr(r, "symbol")),
                "wires": sorted(sorted([[r.start.x, r.start.y], [r.end.x, r.end.y]])
                                for r in records if hasattr(r, "start")),
-               "unknown_records": [r.raw.hex() for r in records if hasattr(r, "record_class")]}
+               "unknown_records": [r.raw.hex() for r in records if isinstance(r,UnknownRecord)]}
               for block, records in groups]
-    return {"blocks": blocks, "devices": sorted([[k[0], k[1], k[2], count] for k, count in counts.items()], key=repr),
+    return {"blocks": blocks, 'junctions':sorted((membership[w.offset],w.start.x,w.start.y)
+            for w in program.wires if w.record_class==3),
+            "devices": sorted([[k[0], k[1], k[2], count] for k, count in counts.items()], key=repr),
             "topology": sorted(topology, key=repr), "wires": wires,
             "semantic_graph": sorted(semantic_nodes, key=lambda n: n["key"]),
             "unknown_records": [r.raw.hex() for r in program.unknown_records]}
@@ -103,8 +106,8 @@ def field_diff(left, right, path="") -> list:
 
 def compare_projects(before: bytes, after: bytes) -> dict:
     a, b = CompoundFile(before), CompoundFile(after)
-    ma = logical_mapping(a.read_stream("projectdatalist.xml"))
-    mb = logical_mapping(b.read_stream("projectdatalist.xml"))
+    ma = project_stream_mapping(a)
+    mb = project_stream_mapping(b)
     ha, hb = CompoundFile(a.read_stream("_hdb")), CompoundFile(b.read_stream("_hdb"))
     logical_diffs, programs = {}, {}
     for name in sorted(ma.keys() | mb.keys()):

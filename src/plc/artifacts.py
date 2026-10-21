@@ -38,6 +38,10 @@ def render_candidate_artifacts(
     comment_csv = output_dir / "comments.csv"
     ladder_path.write_text(ladder_text, encoding="utf-8")
     ir_path.write_text(json.dumps(program, ensure_ascii=False, indent=2), encoding="utf-8")
+    from plc.ordered_source import is_ordered_ladder
+    if is_ordered_ladder(ladder):
+        svg_path.write_text(AdvancedSVGLadder().generate_ladder(ladder_text), encoding='utf-8')
+        return {'json': ladder_path.name, 'ir': ir_path.name, 'svg': svg_path.name}
     st_text = render_plc_ir_to_st(program)
     validate_st_traceability(program, st_text)
     st_path.write_text(st_text, encoding="utf-8")

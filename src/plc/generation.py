@@ -334,6 +334,11 @@ def render_generation_artifacts(program, output_dir):
     from gxworks2.csv_export import generate_gx_works2_csv
     from plc.st_renderer import render_plc_ir_to_st, validate_st_traceability
 
+    if (program.get('source') or {}).get('format') in {'instruction_sequence_v1', 'instruction_sequence_v2'}:
+        from plc.artifacts import render_candidate_artifacts
+        return {'artifacts': render_candidate_artifacts(program, output_dir, validate_ladder=False),
+                'width': 1100, 'height': 0, 'st_translation': 'unavailable'}
+
     validate_plc_ir(program, validate_ladder=False)
     directory = Path(output_dir)
     directory.mkdir(parents=True, exist_ok=True)

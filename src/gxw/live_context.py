@@ -1039,7 +1039,7 @@ def _saved_graph_state(program, *, owner, kind):
     from .object_model import _key
     networks = []
     for index, (_, records) in enumerate(program.block_records()):
-        nodes, wires = [], []
+        nodes, wires, junctions = [], [], []
         for record in records:
             if isinstance(record, StructuredNode):
                 nodes.append(dict(index=len(nodes), template=_key(record),
@@ -1048,8 +1048,11 @@ def _saved_graph_state(program, *, owner, kind):
                     x=record.bbox.left, y=record.bbox.top, width=record.bbox.right-record.bbox.left,
                     height=record.bbox.bottom-record.bbox.top))
             elif isinstance(record, StructuredWire):
-                wires.append(dict(index=len(wires), start=[record.start.x, record.start.y], end=[record.end.x, record.end.y]))
-        networks.append(dict(index=index, nodes=nodes, wires=wires, junctions=[]))
+                if record.record_class == 3:
+                    junctions.append(dict(index=len(junctions), x=record.start.x, y=record.start.y))
+                else:
+                    wires.append(dict(index=len(wires), start=[record.start.x, record.start.y], end=[record.end.x, record.end.y]))
+        networks.append(dict(index=index, nodes=nodes, wires=wires, junctions=junctions))
     return dict(owner=owner, owner_kind=kind, networks=networks)
 
 
@@ -1133,7 +1136,7 @@ def _verify_saved_ports(saved_context, observation, baseline, tables, identity):
 def _verify_saved_preservation(baseline, saved, context, old, new, *, native_compiled=False):
     from .container_writer import validate_cfb_streams
     from .native_write import _saved_object_names
-    from .project_metadata import logical_mapping, read_task_source
+    from .project_metadata import project_stream_mapping, read_task_source
     from .source_header import normalize_visible_save_header, source_payload_offset
     from .text_pou import parse_st_pou, serialize_st_pou
     from .structured_pou_writer import SIZE_LIKE_A_OFFSET, SIZE_LIKE_B_OFFSET
@@ -1144,8 +1147,9 @@ def _verify_saved_preservation(baseline, saved, context, old, new, *, native_com
     # Existing role mapping permits the measured first-save library rename;
     # every retained library and readonly structure payload must remain exact.
     def protected(raw, parsed):
-        metadata = validate_cfb_streams(raw)['projectdatalist.xml']
-        mapping = {name: key for name, key in logical_mapping(metadata).items()
+        outer = validate_cfb_streams(raw)
+        metadata = outer['projectdatalist.xml']
+        mapping = {name: key for name, key in project_stream_mapping(outer).items()
                    if name.endswith(('.lnl', '.lnb', '.lns', '.lng', '.lif', '.str'))}
         return metadata, mapping, {name: parsed[1][name] for name in mapping}
     a, am, av = protected(baseline, old)

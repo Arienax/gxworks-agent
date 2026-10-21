@@ -75,6 +75,13 @@ def _device_tokens(value: Any) -> List[str]:
     text = str(value or "").upper()
     text = re.sub(r'"(?:\$\.|[^"\n])*"|\'(?:\$\.|[^\'\n])*\'', '', text)
     result: List[str] = []
+    from plc.ordered_source import indexed_literal_register, buffer_memory_reference
+    buffer = buffer_memory_reference(text)
+    if buffer:
+        return [value for value in buffer.values() if value]
+    literal_index = indexed_literal_register(text)
+    if literal_index:
+        result.append(literal_index)
     for match in _DEVICE_TOKEN_RE.finditer(text):
         if match.group("base"):
             result.append(match.group("base").upper())
@@ -185,6 +192,10 @@ def _input_opcode(element: Mapping[str, Any], *, first: bool, parallel: bool = F
 
 def lower_rung_instructions(rung: Mapping[str, Any]) -> List[Dict[str, Any]]:
     """Lower one graphical rung to deterministic GX-style instructions."""
+
+    if 'ordered_instructions' in rung:
+        return [{**copy.deepcopy(row), 'path': f'ordered_instructions[{index}]'}
+                for index, row in enumerate(rung['ordered_instructions'])]
 
     instructions: List[Dict[str, Any]] = []
 
@@ -390,6 +401,24 @@ def _instruction_access(
                         read_write_indexes.add(scoped.native_operand_order.index(parameter))
     for index, operand in enumerate(operands or []):
         text = str(operand or "").strip().upper()
+        from plc.ordered_source import indexed_literal_register, buffer_memory_reference
+        buffer = buffer_memory_reference(text)
+        if buffer:
+            if buffer['index']:
+                reads.add(buffer['index'])
+            if index in write_indexes:
+                writes.add(buffer['base'])
+                if index in read_write_indexes:
+                    reads.add(buffer['base'])
+            else:
+                reads.add(buffer['base'])
+            continue
+        literal_index = indexed_literal_register(text)
+        if literal_index:
+            # The integer is not a writable device. Only its index register
+            # is a dependency; its runtime value remains source-unverified.
+            reads.add(literal_index)
+            continue
         indexed = _INDEXED_DEVICE_RE.fullmatch(text)
         if indexed:
             base = indexed.group("base").upper()
@@ -472,6 +501,14 @@ def analyze_rung_access(
 ) -> Tuple[List[str], List[str]]:
     reads: Set[str] = set()
     writes: Set[str] = set()
+    if 'ordered_instructions' in rung:
+        for row in rung['ordered_instructions']:
+            if row.get('kind', 'instruction') != 'instruction':
+                continue
+            local_reads, local_writes = _instruction_access(row['op'], row['args'], plc_model=plc_model)
+            reads.update(local_reads)
+            writes.update(local_writes)
+        return sorted(reads, key=_device_sort_key), sorted(writes, key=_device_sort_key)
     condition_elements: List[Mapping[str, Any]] = []
     header = rung.get("header_element")
     if isinstance(header, Mapping):
@@ -638,7 +675,14 @@ def build_plc_ir(
     } | set(normalized_io)
     devices: Dict[str, Dict[str, Any]] = {}
     for address in sorted(all_addresses, key=_device_sort_key):
-        prefix = _DEVICE_RE.fullmatch(address).group(1).upper()
+        match = _DEVICE_RE.fullmatch(address)
+        if match:
+            prefix = match.group(1).upper()
+        else:
+            from plc.ordered_source import buffer_memory_reference
+            if not buffer_memory_reference(address):
+                raise PLCIRValidationError('unresolved source access identity: ' + address)
+            prefix = 'U_G'
         read_by = readers.get(address, [])
         written_by = writers.get(address, [])
         if read_by and written_by:
@@ -693,6 +737,13 @@ def build_plc_ir(
         config=normalized_analysis_config,
         plc_model=plc_model,
     )
+    from plc.ordered_source import source_coverage_findings, ordered_source_format
+    source_findings = source_coverage_findings(networks, plc_model=plc_model)
+    if source_findings:
+        static_analysis['findings'].extend(source_findings)
+        for finding in source_findings:
+            severity = finding['severity']
+            static_analysis['counts'][severity] = static_analysis['counts'].get(severity, 0) + 1
     normalized_name = str(program_name or "MAIN").strip() or "MAIN"
     payload: Dict[str, Any] = {
         "kind": IR_KIND,
@@ -707,7 +758,7 @@ def build_plc_ir(
         "analysis": static_analysis,
         "io_map": normalized_io,
         "source": {
-            "format": "ladder_v1",
+            "format": ordered_source_format(rungs) if any('ordered_instructions' in rung for rung in rungs) else "ladder_v1",
             "ladder_sha256": canonical_sha256(
                 {"device_comments": normalized_comments, "rungs": rungs}
             ),
@@ -806,6 +857,10 @@ def validate_plc_ir(
         raise PLCIRValidationError("io_map must be an object")
     ladder = ir_to_ladder(program)
     source = program.get("source", {}) or {}
+    if source.get('format') == 'instruction_sequence_v2':
+        records = [row for network in networks for row in network['ladder'].get('ordered_instructions', [])]
+        if [row.get('record_index') for row in records] != list(range(len(records))):
+            raise PLCIRValidationError('ordered source records must retain their complete original order')
     expected_hash = str(source.get("ladder_sha256", "") or "")
     if expected_hash and expected_hash != canonical_sha256(ladder):
         raise PLCIRValidationError("source.ladder_sha256 does not match IR contents")
@@ -823,6 +878,10 @@ def validate_plc_ir(
         "networks", "devices", "timing", "logic", "analysis", "io_map", "source"
     ):
         if program.get(field) != rebuilt.get(field):
+            if field == 'analysis' and source.get('format') in {'instruction_sequence_v1', 'instruction_sequence_v2'}:
+                from plc.ordered_source import source_analysis_equivalent
+                if source_analysis_equivalent(program.get(field), rebuilt.get(field)):
+                    continue
             raise PLCIRValidationError(f"{field} is stale or inconsistent")
     if validate_ladder:
         from plc.validation import validate_ladder_full

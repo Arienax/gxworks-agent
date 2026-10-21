@@ -4,6 +4,7 @@ Libraries travel through the vendor's library format. Caller programs, tasks
 and project globals are never taken from the donor project.
 """
 from __future__ import annotations
+from .project_metadata import project_stream_mapping
 
 from copy import deepcopy
 
@@ -17,7 +18,7 @@ from .project_metadata import logical_mapping, read_project_text_context
 def _project(raw):
     outer = validate_cfb_streams(raw)
     payloads = validate_cfb_streams(outer['_hdb'])
-    streams = {name: payloads[key] for name, key in logical_mapping(outer['projectdatalist.xml']).items()
+    streams = {name: payloads[key] for name, key in project_stream_mapping(outer).items()
                if key in payloads}
     configs = [read_project_text_context(value) for name, value in streams.items() if name.endswith('.prj')]
     if len(configs) != 1:

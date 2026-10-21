@@ -183,7 +183,10 @@ class PLCCore:
         from plc.validation import ValidationProfileUnavailableError
 
         try:
-            validate_plc_ir(program, confirmed_spec=confirmed_spec)
+            ordered = (program.get('source') or {}).get('format') in {
+                'instruction_sequence_v1', 'instruction_sequence_v2'}
+            validate_plc_ir(program, confirmed_spec=confirmed_spec,
+                            require_catalogued_instructions=not ordered)
         except ValidationProfileUnavailableError as error:
             from plc.device_definitions import ladder_device_findings
             known = ladder_device_findings(ir_to_ladder(program), (program.get('plc') or {}).get('cpu'),
@@ -205,7 +208,9 @@ class PLCCore:
                 'findings': [*diagnostics.get('findings', []), *known]}
             return {'valid': False, 'status': 'unverified', **diagnostics}
         return {
-            "valid": int((diagnostics.get("counts") or {}).get("error", 0)) == 0,
+            "valid": int((diagnostics.get("counts") or {}).get("error", 0)) == 0
+                     and not (diagnostics.get('counts') or {}).get('unverified'),
+            **({'status': 'unverified'} if (diagnostics.get('counts') or {}).get('unverified') else {}),
             **diagnostics,
         }
 

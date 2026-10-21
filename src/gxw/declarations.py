@@ -9,6 +9,7 @@ from dataclasses import dataclass, field, replace
 import math
 import re
 import struct
+from collections.abc import Mapping
 
 from .models import GXWFormatError
 from .source_header import source_payload_offset
@@ -20,7 +21,7 @@ BASIC_TYPES = {"BOOL": (1, "FALSE"), "INT": (2, "0"), "DINT": (3, "0"),
                "TIME": (7, "T#0s"), "STRING": (8, "''")}
 CLASS_CODES = {"VAR": 1, "VAR_CONSTANT": 2, "VAR_INPUT": 3, "VAR_OUTPUT": 4,
                "VAR_IN_OUT": 5, "VAR_GLOBAL": 8, "VAR_GLOBAL_CONSTANT": 9,
-               "VAR_INPUT_CONSTANT": 11, "VAR_IN_EXT": 12}
+               "VAR_RETAIN": 10, "VAR_INPUT_CONSTANT": 11, "VAR_IN_EXT": 12}
 _ARRAY_TYPE = re.compile(r"ARRAY\s*\[([^]]+)\]\s+OF\s+(.+)", re.I)
 
 
@@ -248,12 +249,12 @@ def parse_declarations(raw: bytes, *, logical_name: str, source_kind: int | None
             # Original global16 creation saves zero type caches. Q06UDV
             # establishes scalar storage; Q04UDV establishes rank1 arrays.
             # L02 project FB creation also saves a zero cache for scalar
-            # IN_OUT structure locals. The declared type and storage mode
-            # remain independent of these caches.
+            # structure locals. An independently saved class 5->3 edit and
+            # cold typed getter preserve that same member-address extension.
             created_structure = False
             created_scope = (scope == "global" and values[2] == CLASS_CODES["VAR_GLOBAL"]
                 or logical_name.endswith(".lh") and scope == "local" and pou_type == 0x1000002
-                and values[2] == CLASS_CODES["VAR_IN_OUT"] and values[5] == 1)
+                and values[2] in (CLASS_CODES["VAR_INPUT"], CLASS_CODES["VAR_IN_OUT"]) and values[5] == 1)
             if (created_scope
                     and values[10] == values[11] == 0 and values[12] == ""):
                 try:
@@ -266,11 +267,12 @@ def parse_declarations(raw: bytes, *, logical_name: str, source_kind: int | None
             # Original SaveUserLibrary/CreateUserLibrary on the authored
             # Motion library retains each scalar IN_OUT address extension
             # while replacing its type cache with 100 and clearing the cached
-            # reference. Preserve that imported .lnl record; the current
+            # reference. The independent L02 class 5->3 Save/cold control keeps
+            # these bytes unchanged. Preserve that imported .lnl record; the current
             # library structure still owns type resolution and edit support.
             imported_structure = False
             if (logical_name.endswith(".lnl") and scope == "local"
-                    and pou_type == 0x1000002 and values[2] == CLASS_CODES["VAR_IN_OUT"]
+                    and pou_type == 0x1000002 and values[2] in (CLASS_CODES["VAR_INPUT"], CLASS_CODES["VAR_IN_OUT"])
                     and values[5] == 1 and values[10] == 0 and values[11] == 100
                     and values[12] == ""):
                 try:
@@ -341,8 +343,89 @@ def _is_array_bound_edit(old_type, new_type, new_bounds):
     return len(old_bounds) == len(new_bounds)
 
 
-def edit_declarations(document: DeclarationDocument, *, upserts=(), renames=None, remove=(),
-                      native_fbd_locals=False) -> DeclarationDocument:
+_UNCHANGED = object()
+
+
+def structure_address_fields(row: LabelRecord, *, members=None):
+    """Expose only the independently framed scalar/array address records."""
+    reader = _Reader(row.value_extension)
+    if row.unknown_u32 == 1:
+        count = reader.uint()
+        pairs = [dict(device=reader.string(), iec_address=reader.string()) for _ in range(count)]
+        if reader.offset != len(row.value_extension):
+            raise GXWFormatError('unframed scalar structure member addresses')
+        if members is None:
+            return pairs
+        names = [member.name if hasattr(member, 'name') else member for member in members]
+        if len(names) != count or len(set(name.casefold() for name in names)) != count:
+            raise GXWFormatError('structure member address extent differs from its bound type')
+        return dict(zip(names, pairs, strict=True))
+    if row.unknown_u32 == 2:
+        result = dict(word_address=reader.string(), word_offset=reader.string(), word_use_bit=reader.uint(),
+                      bit_address=reader.string(), bit_offset=reader.string())
+        if reader.offset != len(row.value_extension) or result['word_use_bit'] not in (0, 1):
+            raise GXWFormatError('unframed structure array addresses')
+        return result
+    raise GXWFormatError('declaration has no known structure address storage')
+
+
+def _edit_structure_addresses(row, item, structure_members):
+    base, bounds = _type_parts(row.data_type)
+    layout = (structure_members or {}).get(base.casefold())
+    if 'member_devices' in item:
+        if row.unknown_u32 != 1 or layout is None:
+            raise GXWFormatError('member_devices requires a scalar structure and current member identities')
+        pairs = structure_address_fields(row, members=layout)
+        supplied = item['member_devices']
+        if not isinstance(supplied, Mapping):
+            raise GXWFormatError('member_devices requires member-address mappings')
+        canonical = {name.casefold(): name for name in pairs}
+        seen = set()
+        for name, value in supplied.items():
+            if not isinstance(name, str) or name.casefold() not in canonical or name.casefold() in seen:
+                raise GXWFormatError('missing or ambiguous current structure member: ' + str(name))
+            seen.add(name.casefold())
+            name = canonical[name.casefold()]
+            value = dict(device=value) if isinstance(value, str) else value
+            if not isinstance(value, Mapping) or set(value) - {'device', 'iec_address'}:
+                raise GXWFormatError('structure member address requires device/iec_address')
+            pairs[name].update(value)
+        extension = struct.pack('<I', len(pairs)) + b''.join(
+            _string(pair['device']) + _string(pair['iec_address']) for pair in pairs.values())
+        row = replace(row, value_extension=extension)
+    if 'structure_array_addresses' in item:
+        if row.unknown_u32 != 2 or len(bounds) != 1:
+            raise GXWFormatError('structure_array_addresses requires known rank-one structure array storage')
+        values = structure_address_fields(row)
+        supplied = item['structure_array_addresses']
+        if not isinstance(supplied, Mapping) or set(supplied) - set(values):
+            raise GXWFormatError('invalid structure array address fields')
+        values.update(supplied)
+        if type(values['word_use_bit']) not in (bool, int) or values['word_use_bit'] not in (0, 1):
+            raise GXWFormatError('structure array word_use_bit requires zero or one')
+        for key in ('word_offset', 'bit_offset'):
+            if not isinstance(values[key], str) or values[key] and not re.fullmatch(r'[0-9]+', values[key]):
+                raise GXWFormatError('structure array offsets require decimal text')
+        extension = (_string(values['word_address']) + _string(values['word_offset'])
+            + struct.pack('<I', values['word_use_bit']) + _string(values['bit_address']) + _string(values['bit_offset']))
+        row = replace(row, value_extension=extension)
+    return row
+
+
+def _edit_return_type(document, value):
+    if document.scope != 'local' or document.owner_pou_type != 0x1000003 or not isinstance(value, str):
+        raise GXWFormatError('return_type edits require an existing FUNCTION owner and text')
+    reader = _Reader(document.header, source_payload_offset(document.header))
+    reader.string(); reader.uint(); reader.uint(); reader.string()
+    start = reader.offset
+    reader.string()
+    header = document.header[:start] + _string(value) + document.header[reader.offset:]
+    return replace(document, header=header, count_offset=document.count_offset + len(header) - len(document.header),
+                   owner_return_type=value or None)
+
+
+def edit_declarations(document: DeclarationDocument, *, upserts=(), renames=None, remove=(), order=None,
+                      return_type=_UNCHANGED, native_fbd_locals=False, structure_members=None) -> DeclarationDocument:
     """Apply declarations by name; untouched rows retain all source fields.
 
     Each upsert has name/data_type plus optional kind=function_block/structure, class_name,
@@ -357,13 +440,14 @@ def edit_declarations(document: DeclarationDocument, *, upserts=(), renames=None
             or renames is not None and not isinstance(renames, dict)
             or any(not isinstance(n, str) for n in remove)
             or any(not isinstance(n, str) for n in (renames or {}))
-            or any(not isinstance(item, dict) or any(not isinstance(v, str) for v in item.values()) for item in upserts)):
+            or any(not isinstance(item, dict) or any(not isinstance(v, str) for k, v in item.items()
+                   if k not in ('member_devices', 'structure_array_addresses')) for item in upserts)):
         raise GXWFormatError("declaration edits require string-valued rows, renames and names")
     rows = list(document.rows)
     touched = {n.casefold() for n in remove} | {n.casefold() for n in (renames or {})}
     touched.update(item.get("name", "").casefold() for item in upserts)
-    if any(r.value_extension and r.name.casefold() in touched for r in rows):
-        raise GXWFormatError("structure address extensions are read-only")
+    if any(r.value_extension and r.unknown_u32 not in (1, 2) and r.name.casefold() in touched for r in rows):
+        raise GXWFormatError("unknown structure address extensions are read-only")
     names = [r.name.casefold() for r in rows]
     if len(set(names)) != len(names):
         raise GXWFormatError("ambiguous declaration names")
@@ -372,20 +456,29 @@ def edit_declarations(document: DeclarationDocument, *, upserts=(), renames=None
     # workspace, several newly created BOOL rows legitimately retain zero.
     next_id = max(ids, default=0) + 1
     renames = renames or {}
+    rename_map = {}
     for old, new in renames.items():
         if not isinstance(new, str) or not re.fullmatch(r"[^\W\d]\w*", new, re.UNICODE):
             raise GXWFormatError("invalid declaration name")
-        hits = [i for i, row in enumerate(rows) if row.name.casefold() == old.casefold()]
+        hits = [row for row in rows if row.name.casefold() == old.casefold()]
         if len(hits) != 1:
             raise GXWFormatError(f"declaration not found: {old}")
-        rows[hits[0]] = replace(rows[hits[0]], name=new)
+        if old.casefold() in rename_map:
+            raise GXWFormatError('ambiguous declaration rename source')
+        rename_map[old.casefold()] = new
     for name in remove:
         hits = [r for r in rows if r.name.casefold() == name.casefold()]
         if len(hits) != 1:
             raise GXWFormatError(f"declaration not found: {name}")
+        if name.casefold() in rename_map:
+            raise GXWFormatError('conflicting declaration rename and removal')
         rows.remove(hits[0])
+    rows = [replace(row, name=rename_map[row.name.casefold()]) if row.name.casefold() in rename_map else row for row in rows]
+    if len({row.name.casefold() for row in rows}) != len(rows):
+        raise GXWFormatError('duplicate declaration name after renames')
     for item in upserts:
-        allowed = {"name", "data_type", "kind", "class_name", "initial_value", "device", "iec_address", "comment"}
+        allowed = {"name", "data_type", "kind", "class_name", "initial_value", "device", "iec_address", "comment",
+                   "member_devices", "structure_array_addresses"}
         if set(item) - allowed:
             raise GXWFormatError("unknown declaration edit fields")
         name = item.get("name", "")
@@ -426,7 +519,8 @@ def edit_declarations(document: DeclarationDocument, *, upserts=(), renames=None
                               and class_code == CLASS_CODES['VAR'])
                 local_inout = (document.owner_pou_type == 0x1000002
                                and class_code == CLASS_CODES['VAR_IN_OUT'])
-                if document.scope != 'local' or not (local_root or local_inout) or len(bounds) > 1:
+                global_root = document.scope == 'global' and class_code == CLASS_CODES['VAR_GLOBAL']
+                if not (global_root or document.scope == 'local' and (local_root or local_inout)) or len(bounds) > 1:
                     raise GXWFormatError('structure creation requires a local Program/FB VAR or FB IN_OUT declaration')
                 code, initial, reference = 0, "", ""
             else:
@@ -458,6 +552,28 @@ def edit_declarations(document: DeclarationDocument, *, upserts=(), renames=None
                       initial_value=item.get("initial_value", initial if type_changed else row.initial_value),
                       type_code=code, type_reference=reference, array_marker=array_marker,
                       **{k: item[k] for k in ("device", "iec_address", "comment") if k in item})
+        if type_changed and kind != 'structure' and row.value_extension:
+            row = replace(row, unknown_u32=0, value_extension=b'')
+        if type_changed and kind == 'structure' and document.scope == 'global':
+            if class_code != CLASS_CODES['VAR_GLOBAL']:
+                raise GXWFormatError('structure address storage requires VAR_GLOBAL')
+            base, bounds = _type_parts(data_type)
+            layout = (structure_members or {}).get(base.casefold())
+            if old is not None and old.unknown_u32 == (2 if bounds else 1) and old.data_type == data_type:
+                row = replace(row, unknown_u32=old.unknown_u32, value_extension=old.value_extension,
+                              type_code=old.type_code, type_reference=old.type_reference, array_marker=old.array_marker)
+            elif bounds:
+                if 'structure_array_addresses' not in item:
+                    raise GXWFormatError('new structure arrays require explicit current address parameters')
+                row = replace(row, unknown_u32=2, value_extension=_string('') * 2 + struct.pack('<I', 0) + _string('') * 2,
+                              type_code=0, array_marker=0, type_reference='', initial_value='')
+            else:
+                if layout is None:
+                    raise GXWFormatError('new scalar structures require current member identities')
+                row = replace(row, unknown_u32=1, value_extension=struct.pack('<I', len(layout)) + _string('') * (2 * len(layout)),
+                              type_code=0, array_marker=0, type_reference='', initial_value='')
+        row = _edit_structure_addresses(row, item, structure_members) if (
+            'member_devices' in item or 'structure_array_addresses' in item) else row
         if hits:
             rows[hits[0]] = row
         else:
@@ -466,7 +582,19 @@ def edit_declarations(document: DeclarationDocument, *, upserts=(), renames=None
     final_names = [r.name.casefold() for r in rows]
     if len(set(final_names)) != len(final_names):
         raise GXWFormatError("duplicate/invalid declaration name after edits")
+    if order is not None:
+        if (not isinstance(order, (list, tuple)) or any(not isinstance(name, str) for name in order)
+                or len(order) != len(rows) or len(set(name.casefold() for name in order)) != len(rows)
+                or set(name.casefold() for name in order) != set(final_names)):
+            raise GXWFormatError('declaration order must identify every resulting row exactly once')
+        if [name.casefold() for name in order] != [row.name.casefold() for row in sorted(rows, key=lambda row: row.record_id)]:
+            selected = {row.name.casefold(): row for row in rows}
+            # Native Get/SetVariableLine and independent ordered/swapped controls
+            # establish this number as declaration order, never row identity.
+            rows = [replace(selected[name.casefold()], record_id=index) for index, name in enumerate(order, 1)]
     result = replace(document, rows=tuple(rows))
+    if return_type is not _UNCHANGED:
+        result = _edit_return_type(result, return_type)
     parse_declarations(serialize_declarations(result), logical_name=document.logical_name,
                        source_kind=240 if document.owner_sfc_block_number is not None else None)
     return result

@@ -4,6 +4,7 @@ PLC/declaration interpretation stays here. The native adapter selects vendor
 profiles and call sequences; successful save/readback does not establish compilation.
 """
 from __future__ import annotations
+from .project_metadata import project_stream_mapping
 
 import base64
 from dataclasses import fields
@@ -136,7 +137,7 @@ def _native_project_source_inventory(raw: bytes) -> tuple[dict, list[dict]]:
     """The current paired local source inventory shared by native edit plans."""
     from .native_diagnostics import _native_validation_sources
     outer = validate_cfb_streams(raw)
-    mapping = logical_mapping(outer['projectdatalist.xml'])
+    mapping = project_stream_mapping(outer)
     nested = validate_cfb_streams(outer['_hdb'])
     groups, issues = project_source_groups(outer['projectdatalist.xml'])
     if issues:
@@ -171,9 +172,10 @@ def native_source_creation_plan(raw: bytes, name: str, *, pou_kind='function_blo
 
 
 def _native_scope_inventory(raw: bytes) -> tuple[dict, list[dict]]:
+    from .integrity import read_project_hdb
     outer = validate_cfb_streams(raw)
-    mapping = logical_mapping(outer['projectdatalist.xml'])
-    nested = validate_cfb_streams(outer['_hdb'])
+    mapping = project_stream_mapping(outer)
+    nested = read_project_hdb(outer).payloads
     resources, issues = project_resource_groups(outer['projectdatalist.xml'])
     if issues:
         raise GXWFormatError('native scope operation requires current unambiguous resource/task ownership')
@@ -263,7 +265,7 @@ def native_program_task_plan(raw: bytes, program: str, *, resource: str, task: s
     """
     project, programs = _native_project_source_inventory(raw)
     outer = validate_cfb_streams(raw)
-    mapping = logical_mapping(outer['projectdatalist.xml'])
+    mapping = project_stream_mapping(outer)
     nested = validate_cfb_streams(outer['_hdb'])
     sources, _ = project_source_groups(outer['projectdatalist.xml'])
     resources, tasks = _native_scope_inventory(raw)
@@ -409,7 +411,7 @@ def verify_native_scope_creation(baseline: bytes, name: str, raw: bytes, observa
     from .compiler_debug import compiler_debug_search_map_permutation
     plan = native_scope_creation_plan(baseline, name, scope_kind=scope_kind, resource=resource)
     containers = [validate_cfb_streams(value) for value in (baseline, raw)]
-    before, after = [{logical: nested[stream] for logical, stream in logical_mapping(container['projectdatalist.xml']).items()
+    before, after = [{logical: nested[stream] for logical, stream in project_stream_mapping(container).items()
                       if stream in nested} for container in containers for nested in [validate_cfb_streams(container['_hdb'])]]
     groups, issues = project_source_groups(containers[1]['projectdatalist.xml'])
     saved_resources, saved_tasks = _native_scope_inventory(raw)
@@ -527,7 +529,7 @@ def verify_native_program_task_binding(baseline: bytes, program: str, raw: bytes
 
     plan = native_program_task_plan(baseline, program, resource=resource, task=task)
     containers = [validate_cfb_streams(value) for value in (baseline, raw)]
-    mappings = [logical_mapping(value['projectdatalist.xml']) for value in containers]
+    mappings = [project_stream_mapping(value) for value in containers]
     payloads = [validate_cfb_streams(value['_hdb']) for value in containers]
     before, after = [{name: nested[stream] for name, stream in mapping.items() if stream in nested}
                      for mapping, nested in zip(mappings, payloads)]
@@ -696,7 +698,7 @@ def verify_native_source_creation(baseline: bytes, name: str, raw: bytes, observ
     except (KeyError, TypeError, ValueError) as error:
         raise GXWFormatError('native creation result is not bound to the selected new POU') from error
     outer = validate_cfb_streams(raw)
-    mapping = logical_mapping(outer['projectdatalist.xml'])
+    mapping = project_stream_mapping(outer)
     nested = validate_cfb_streams(outer['_hdb'])
     groups, issues = project_source_groups(outer['projectdatalist.xml'])
     if issues:
@@ -719,7 +721,7 @@ def verify_native_source_creation(baseline: bytes, name: str, raw: bytes, observ
             or context.program.nodes or context.object_model()['issues']):
         raise GXWFormatError('saved native constructor is not an empty current FBD source')
     previous = validate_cfb_streams(baseline)
-    previous_mapping = logical_mapping(previous['projectdatalist.xml'])
+    previous_mapping = project_stream_mapping(previous)
     previous_nested = validate_cfb_streams(previous['_hdb'])
     previous_groups, _ = project_source_groups(previous['projectdatalist.xml'])
     native_existing = {}
@@ -923,7 +925,7 @@ def native_source_plan(prepared: PreparedProjectWrite, *, graph_edits=None) -> d
                 'before_children': children(before, old_layout), 'after_children': children(after, new_layout)}
         if project['cpu'] == 'FX3U/FX3UC':
             from .native_diagnostics import sfc_child_source_scope
-            scope = sfc_child_source_scope(before)
+            scope = sfc_child_source_scope(before, cpu=project['cpu'])
             retained = {row['name'] for row in scope['children']
                         if row['type'] == 68 and row['role'] == 'retained'}
             actions = [{'number': row['number'], 'action_name': row['name'],
@@ -1272,7 +1274,7 @@ def verify_native_save(prepared: PreparedProjectWrite, raw: bytes, observation: 
     """Verify the requested edit and report other changes made by native save."""
     plan = native_source_plan(prepared, graph_edits=graph_edits)
     outer = validate_cfb_streams(raw)
-    mapping = logical_mapping(outer['projectdatalist.xml'])
+    mapping = project_stream_mapping(outer)
     nested = validate_cfb_streams(outer['_hdb'])
     logical = next(iter(prepared.programs))
     sfc = plan.get('program_kind') == 240

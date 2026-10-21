@@ -316,6 +316,20 @@ def _walk_inputs(elements: Sequence[Mapping[str, Any]], base_path: str):
 
 
 def _rung_inputs(rung: Mapping[str, Any]):
+    if 'ordered_instructions' in rung:
+        from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+        for index, instruction in enumerate(rung['ordered_instructions']):
+            if instruction.get('kind', 'instruction') != 'instruction':
+                continue
+            op, args = instruction['op'], instruction['args']
+            if op in {'MPS', 'MRD', 'MPP', 'ANB', 'ORB'} or not op.startswith(('LD', 'AND', 'OR')):
+                continue
+            spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(op)
+            canonical = str(getattr(spec, 'canonical_op', '') or '')
+            kind = 'P' if 'RISING_EDGE' in canonical else 'F' if 'FALLING_EDGE' in canonical else 'NO'
+            yield {'type': kind, 'address': args[0] if len(args) == 1 else '',
+                   'expression': ' '.join((op, *args))}, f'ordered_instructions[{index}]'
+        return
     header = rung.get("header_element")
     if isinstance(header, Mapping):
         yield header, "header_element"
@@ -451,6 +465,8 @@ def _network_execution(network: Mapping[str, Any], plc_model: str) -> Dict[str, 
         "execution_context": execution_context,
         "semantics": semantics,
         "triggers": triggers,
+        **({'condition_evaluation': 'in instruction order; triggers do not form a shared network gate'}
+           if 'ordered_instructions' in rung else {}),
     }
 
 

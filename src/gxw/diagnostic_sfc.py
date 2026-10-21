@@ -17,12 +17,12 @@ from gxw.diagnostic_bindings import (
 )
 
 
-def bind_native_sfc_child_snapshots(program_raw, *, owner_id, stage, reads, snapshots):
+def bind_native_sfc_child_snapshots(program_raw, *, owner_id, stage, reads, snapshots, cpu=None):
     """Bind all stored SFC child identities to this phase's original getters."""
     from .models import GXWFormatError
     try:
         expected = _native_validation_sfc_children(program_raw)
-        scope = sfc_child_source_scope(program_raw)
+        scope = sfc_child_source_scope(program_raw, cpu=cpu)
     except GXWFormatError:
         return {'status': 'unresolved', 'stage': stage, 'children': [], 'reason': 'SFC child framing is not established'}
     owner = _id(owner_id)
@@ -72,7 +72,7 @@ def bind_native_sfc_child_snapshots(program_raw, *, owner_id, stage, reads, snap
 
 
 def bind_native_source_chain(programs, required_sources, *, project_id, native_version,
-                             selections, reads, snapshots):
+                             selections, reads, snapshots, cpu=None):
     """Require current original bodies for every callee and caller in a chain.
 
     Equal compiled code, names or coordinates cannot bind source offsets. Use
@@ -126,7 +126,7 @@ def bind_native_source_chain(programs, required_sources, *, project_id, native_v
         if source_kind == 240:
             child_binding = bind_native_sfc_child_snapshots(raw, owner_id=identity['source']['pou_id'],
                 stage=selected.get('stage'), reads=[row for _, row in children_by_owner.get(
-                    (_id(identity['source']['pou_id']), selected.get('stage')), ())], snapshots=snapshots)
+                    (_id(identity['source']['pou_id']), selected.get('stage')), ())], snapshots=snapshots, cpu=cpu)
             binding = {**binding, 'pou_id': identity['source']['pou_id'], 'sfc_children': child_binding,
                        **({'graph_status': binding['status']} if child_binding.get('missing') else {}),
                        'status': binding['status'] if child_binding['status'] == 'current' else child_binding['status']}
@@ -181,7 +181,7 @@ def bind_native_sfc_referenced_check(programs, *, project_id, native_version, ev
                 for _, row in selections_by_name.get(name, ())) != 1 for name in programs):
             return {**unresolved, 'reason': 'original SFC source selection is missing or duplicated'}
         binding = bind_native_source_chain(programs, list(programs), project_id=project_id, native_version=native_version,
-            selections=scoped, reads=scoped, snapshots=snapshots)
+            selections=scoped, reads=scoped, snapshots=snapshots, cpu=cpu)
         phase_sources, phase_ids = [], []
         for source in binding['sources']:
             children = source.get('sfc_children') or {}

@@ -1,5 +1,6 @@
 """Source inventory and native check planning."""
 from __future__ import annotations
+from .project_metadata import project_stream_mapping
 from gxw.diagnostic_scope import (
     NATIVE_SOURCE_CAPACITY,
 )
@@ -7,13 +8,14 @@ from gxw.diagnostic_scope import (
 
 def _native_validation_sources(raw):
     from .container_writer import validate_cfb_streams
+    from .integrity import read_project_hdb
     from .project_metadata import logical_mapping, project_source_groups, read_project_text_context
     from .declarations import local_table_for, parse_declarations
     from .source_header import source_payload_offset
     from .models import GXWFormatError
     outer = validate_cfb_streams(raw)
-    mapping = logical_mapping(outer['projectdatalist.xml'])
-    nested = validate_cfb_streams(outer['_hdb'])
+    mapping = project_stream_mapping(outer)
+    nested = read_project_hdb(outer).payloads
     metadata = [nested[key] for name, key in mapping.items() if name.endswith('.prj')]
     if len(metadata) != 1:
         raise GXWFormatError('native validation requires one project configuration')
@@ -55,7 +57,14 @@ def _native_validation_source_body(raw):
         return raw[graph['offset']:graph['offset'] + graph['size']]
     if raw[source_payload_offset(raw)] == 1:
         from .token_pou import frame_token_pou
-        frame_token_pou(raw)
+        from .models import GXWFormatError
+        source = frame_token_pou(raw)
+        # The native body includes its self-sized 20-byte prefix. The source
+        # envelope's independently observed 20/24-byte tail is not body data.
+        start = source.body_offset - 20
+        if source.body_end - start > 8 * 1024 * 1024:
+            raise GXWFormatError('native ladder source body exceeds the bounded workspace extent')
+        return source.raw[start:source.body_end]
     from .native_write import workspace_body
     return workspace_body(raw)
 
@@ -106,13 +115,14 @@ def _native_validation_library_sources(raw):
     """Reuse current library ownership; never resolve a POU by bare name."""
     from .callable_sources import _user_library_owners
     from .container_writer import validate_cfb_streams
+    from .integrity import read_project_hdb
     from .declarations import parse_declarations
     from .models import GXWFormatError
     from .project_metadata import logical_mapping
     from .source_header import source_payload_offset
     outer = validate_cfb_streams(raw)
-    mapping = logical_mapping(outer['projectdatalist.xml'])
-    nested = validate_cfb_streams(outer['_hdb'])
+    mapping = project_stream_mapping(outer)
+    nested = read_project_hdb(outer).payloads
     streams = {name: nested[key] for name, key in mapping.items() if key in nested}
     owners, issues, _ = _user_library_owners(outer['projectdatalist.xml'], streams)
     if issues:
@@ -171,6 +181,7 @@ def native_validation_source_plan(raw, *, include_logical_names=False):
 
 def _native_assignment_sources(raw, *, include_globals=True):
     from .container_writer import validate_cfb_streams
+    from .integrity import read_project_hdb
     from .declarations import parse_declarations
     from .project_metadata import logical_mapping
     _, programs = _native_validation_sources(raw)
@@ -178,8 +189,8 @@ def _native_assignment_sources(raw, *, include_globals=True):
     if not include_globals:
         return local, {}
     outer = validate_cfb_streams(raw)
-    mapping = logical_mapping(outer['projectdatalist.xml'])
-    nested = validate_cfb_streams(outer['_hdb'])
+    mapping = project_stream_mapping(outer)
+    nested = read_project_hdb(outer).payloads
     return (local,
             {name: parse_declarations(nested[key], logical_name=name) for name, key in mapping.items()
              if name.endswith(('.gh', '.lng')) and key in nested})
@@ -285,7 +296,7 @@ def native_import_selection(raw, imported_hdb):
     from .container_writer import validate_cfb_streams
     from .project_metadata import logical_mapping
     outer = validate_cfb_streams(raw)
-    mapping = logical_mapping(outer['projectdatalist.xml'])
+    mapping = project_stream_mapping(outer)
     before, actual = validate_cfb_streams(outer['_hdb']), validate_cfb_streams(imported_hdb)
     sources, outer_only = [], []
     for name, key in mapping.items():

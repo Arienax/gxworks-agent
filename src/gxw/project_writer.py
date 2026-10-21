@@ -4,6 +4,7 @@ Inputs are source-bound StructuredProgram and DeclarationDocument models.
 Compiler output, timestamps, and unknown source fields remain untouched.
 """
 from __future__ import annotations
+from .project_metadata import project_stream_mapping
 
 from dataclasses import dataclass
 import hashlib
@@ -104,20 +105,14 @@ class PreparedProjectWrite:
     def requires_native_save(self):
         if not any(old != new for _, old, new in self.replacements.values()):
             return False
-        if any(isinstance(program, StructuredTextSource) for program in self.programs.values()):
-            # Workspace exports can legitimately omit Project.gd2. An ST body
-            # edit still needs the original native save, regardless of envelope.
+        from .integrity import inspect_project_integrity
+        capability = inspect_project_integrity(self.outer)
+        if not capability['supported']:
             return True
-        if self.outer.get('Project.gd2'):
+        if not capability['size_changes_supported'] and any(
+                len(old) != len(new) for _, old, new in self.replacements.values()):
             return True
-        # An imported native export may omit Project.gd2 and still need the
-        # original workspace to persist its missing FBD allocation defaults.
-        from .project_metadata import native_fbd_pointer_initialization
-        from .source_header import source_payload_offset
-        metadata = [self.nested[key] for name, key in self.mapping.items() if name.endswith('.prj')]
-        return len(metadata) == 1 and any(native_fbd_pointer_initialization(
-            metadata[0], program.raw[source_payload_offset(program.raw)]) is not None
-            for program in self.programs.values())
+        return False
 
 
 def _declaration_manifest(document):
@@ -187,15 +182,16 @@ def prepare_project_write(baseline: bytes, programs: StructuredProgram | Mapping
     for name in ("_hdb", "projectdatalist.xml", "history.xml"):
         if name not in outer_payloads:
             raise GXWFormatError(f"required GXW stream is missing: {name}")
-    mapping = logical_mapping(outer_payloads["projectdatalist.xml"])
+    mapping = project_stream_mapping(outer_payloads)
     hdb = outer_payloads["_hdb"]
-    nested_payloads = validate_cfb_streams(hdb)
+    from .integrity import read_project_hdb
+    nested_payloads = read_project_hdb(outer_payloads).payloads
     if sync_fb_declarations:
         declarations = _bind_function_blocks(programs, declarations, mapping, nested_payloads,
                                              project_source_groups(outer_payloads['projectdatalist.xml'])[0])
     replacements, objects = {}, []
     for logical, model in programs.items():
-        if logical != model.logical_name or not logical.endswith(".pou"):
+        if logical != model.logical_name or not logical.endswith((".pou", ".lnb")):
             raise GXWFormatError("model/key must name the same Program.pou")
         if logical not in mapping or mapping[logical] not in nested_payloads:
             raise GXWFormatError(f"unresolved Program.pou: {logical}")
@@ -249,10 +245,13 @@ def prepare_st_project_write(baseline: bytes, logical_name: str, source: Structu
     outer = validate_cfb_streams(baseline)
     if not all(name in outer for name in ('_hdb', 'projectdatalist.xml', 'history.xml')):
         raise GXWFormatError('ST edit requires an existing native GX Works2 project')
-    mapping = logical_mapping(outer['projectdatalist.xml'])
-    nested = validate_cfb_streams(outer['_hdb'])
-    groups, issues = project_source_groups(outer['projectdatalist.xml'])
-    if (issues or logical_name not in groups or logical_name not in mapping
+    mapping = project_stream_mapping(outer)
+    from .integrity import read_project_hdb
+    nested = read_project_hdb(outer).payloads
+    from .project_metadata import existing_source_groups
+    streams = {name: nested[key] for name, key in mapping.items() if key in nested}
+    groups, issues = existing_source_groups(outer['projectdatalist.xml'], streams)
+    if (logical_name not in groups or logical_name not in mapping
             or mapping[logical_name] not in nested):
         raise GXWFormatError('ST edit requires a registered unambiguous source and local table')
     local = groups[logical_name]['labels']
@@ -280,8 +279,9 @@ def prepare_sfc_project_write(baseline: bytes, logical_name: str, source: SfcSou
     outer = validate_cfb_streams(baseline)
     if not all(name in outer for name in ('_hdb', 'projectdatalist.xml', 'history.xml', 'Project.gd2')):
         raise GXWFormatError('SFC edit requires an existing native GX Works2 project')
-    mapping = logical_mapping(outer['projectdatalist.xml'])
-    nested = validate_cfb_streams(outer['_hdb'])
+    mapping = project_stream_mapping(outer)
+    from .integrity import read_project_hdb
+    nested = read_project_hdb(outer).payloads
     groups, issues = project_source_groups(outer['projectdatalist.xml'], folder_type=8)
     if (logical_name not in groups or logical_name not in mapping
             or mapping[logical_name] not in nested):
@@ -301,50 +301,100 @@ def prepare_sfc_project_write(baseline: bytes, logical_name: str, source: SfcSou
           'preserved_source_group_gaps': issues}])
 
 
-def write_prepared_project(prepared: PreparedProjectWrite) -> ProjectWriteResult:
-    """Write the generic container only when its save envelope permits it."""
-    baseline, outer_payloads, nested_payloads = prepared.baseline, prepared.outer, prepared.nested
-    mapping, replacements, objects = prepared.mapping, prepared.replacements, prepared.objects
-    hdb = outer_payloads['_hdb']
-    if prepared.requires_native_save:
-        # The observed native envelope has save metadata outside the nested
-        # CFB sectors. The generic allocator cannot preserve/update that state.
-        # Return no invalid file; the original workspace must save source edits.
-        raise GXWFormatError('this project requires a native workspace save for changed sources or declarations')
-    history, metadata, preserved = synchronize_history(outer_payloads["history.xml"], replacements, current_mapping=mapping)
-    allocations = []
+def write_prepared_project(prepared: PreparedProjectWrite, *, device_comments=None, comment_table=None) -> ProjectWriteResult:
+    """Save the prepared edits through the common offline transaction."""
+    if prepared.outer != validate_cfb_streams(prepared.baseline):
+        raise GXWFormatError('stale or foreign prepared outer context')
+    return write_project_replacements(prepared.baseline, prepared.replacements,
+                                      objects=prepared.objects, device_comments=device_comments, comment_table=comment_table)
+
+
+def write_project_replacements(baseline: bytes, replacements: Mapping[str, tuple[str, bytes, bytes]],
+                               *, objects=None, invalidate=True, device_comments=None, comment_table=None) -> ProjectWriteResult:
+    """One offline transaction for existing source, declaration and comment streams.
+
+    Existing format integrity fields are rebuilt only after all sources/history
+    are final. No native module or compiler is involved in this save operation.
+    """
+    from .integrity import read_project_hdb, replace_hdb_streams, rebuild_project_integrity
+    from .project_metadata import (mark_observed_source_compile_pending, read_project_system_variables,
+                                   native_fbd_pointer_initialization)
+    import struct
+    baseline = bytes(baseline)
+    outer_payloads = validate_cfb_streams(baseline)
+    envelope = read_project_hdb(outer_payloads)
+    mapping = project_stream_mapping(outer_payloads)
+    nested_payloads = envelope.payloads
+    replacements = dict(replacements)
+    if device_comments is not None:
+        from .offline_project import read_offline_project, prepare_comment_replacements
+        comments = prepare_comment_replacements(read_offline_project(baseline), device_comments, comment_table)
+        if set(comments) & set(replacements):
+            raise GXWFormatError('conflicting comment stream replacements')
+        replacements.update(comments)
     for logical, (stream, old, new) in replacements.items():
-        if old == new:
-            continue
-        hdb, mode = replace_project_stream(hdb, stream, new)
-        allocations.append({"layer": "nested", "object": logical, "stream": stream, "mode": mode})
+        if mapping.get(logical) != stream or nested_payloads.get(stream) != old:
+            raise GXWFormatError('stale or foreign stream replacement: ' + logical)
+        if invalidate and old != new and logical.endswith(('.pou', '.lh', '.gh', '.lnb', '.lnl')):
+            new = mark_observed_source_compile_pending(new, logical_name=logical)
+        replacements[logical] = (stream, old, bytes(new))
+    # The five independently measured L FBD sources need this missing range.
+    # Keep explicit/partial configuration and all other CPUs byte-identical.
+    from .source_header import source_payload_offset
+    metadata = [(name, stream) for name, stream in mapping.items() if name.endswith('.prj')]
+    changed_fbd = invalidate and any(old != new and name.endswith('.pou') and
+                      old[source_payload_offset(old)] == 208
+                      for name, (_stream, old, new) in replacements.items())
+    if changed_fbd and len(metadata) == 1:
+        name, stream = metadata[0]
+        original = nested_payloads[stream]
+        update = native_fbd_pointer_initialization(original, 208)
+        if update is not None:
+            offset = read_project_system_variables(original)['offset'] + 64
+            value = bytearray(original)
+            struct.pack_into('<II', value, offset, *update['after'])
+            replacements[name] = (stream, original, bytes(value))
+    changed = {name: row for name, row in replacements.items() if row[1] != row[2]}
+    if not changed:
+        return ProjectWriteResult(baseline, {'schema_version': 1, 'operation': 'offline_source_save',
+            'write_backend': 'offline', 'compile_state': 'unchanged',
+            'objects': list(objects or []), 'metadata_changes': [], 'allocations': [],
+            'validation': {'parser': 'passed', 'all_stream_payloads': 'passed', 'offline_write': 'passed',
+                           'compile_state': 'unchanged', 'native_save': 'not_run', 'gxworks_compile': 'not_run'}})
+    replacements = changed
+    history, metadata, preserved = synchronize_history(outer_payloads["history.xml"], replacements, current_mapping=mapping)
+    hdb, allocations = replace_hdb_streams(envelope, {stream: new for stream, old, new in replacements.values()})
     expected_nested = dict(nested_payloads)
     expected_nested.update({stream: new for stream, old, new in replacements.values()})
-    if validate_cfb_streams(hdb) != expected_nested:
-        raise GXWFormatError("nested stream preservation/replacement check failed")
+    expected_outer = rebuild_project_integrity(envelope, dict(outer_payloads, **{'history.xml': history}), hdb)
     result = baseline
-    for name, new in (("_hdb", hdb), ("history.xml", history)):
+    for name, new in expected_outer.items():
         if new == outer_payloads[name]:
             continue
         result, mode = replace_project_stream(result, name, new)
         allocations.append({"layer": "outer", "stream": name, "mode": mode})
-    expected_outer = dict(outer_payloads, _hdb=hdb)
-    expected_outer["history.xml"] = history
     if validate_cfb_streams(result) != expected_outer:
         raise GXWFormatError("outer stream preservation/replacement check failed")
+    if read_project_hdb(expected_outer).payloads != expected_nested:
+        raise GXWFormatError('nested stream preservation/replacement check failed')
     # Verify the metadata updater is stable against the newly serialized source.
     current = {name: (stream, new, new) for name, (stream, old, new) in replacements.items()}
     if synchronize_history(history, current, current_mapping=mapping)[0] != history:
         raise GXWFormatError("post-write history consistency failed")
     return ProjectWriteResult(result, {
         "schema_version": 1, "baseline_sha256": sha256(baseline), "output_sha256": sha256(result),
-        "old_length": len(baseline), "new_length": len(result), "objects": objects,
+        "old_length": len(baseline), "new_length": len(result), "objects": list(objects or []),
+        'operation': 'offline_source_save', 'write_backend': 'offline', 'compile_state': 'stale',
+        'invalidated_results': {'scope': 'project_version', 'compilation': 'stale',
+                                'addresses': 'stale', 'diagnostics': 'stale'},
+        'modified_objects': list(replacements),
         "metadata_changes": metadata, "preserved_metadata": preserved, "allocations": allocations,
         "validation": {"parser": "passed", "all_stream_payloads": "passed",
+                       'offline_write': 'passed', 'native_save': 'not_run', 'compile_state': 'stale',
+                       'compiled_resources': 'preserved; not evidence of the changed source',
                        "gxworks_open": "not_run", "gxworks_compile": "not_run", "gxworks_save_reload": "not_run"},
-        "limitations": ["Template-backed supported StructuredProgram layouts only",
-                        "Compiler state preserved; GX Works2 compilation is a separate required gate",
-                        "Declaration edits use existing local/global tables; adding new POUs or table streams is unsupported"]})
+        "limitations": ["Existing registered source and declaration tables only",
+                        "GX Works2 compilation is a separate operation"]})
 
 
 def build_gxw_project(baseline: bytes, programs: StructuredProgram | Mapping[str, StructuredProgram] | None = None,

@@ -5,16 +5,17 @@ and exact write scope; it does not claim PLC execution safety or compile .res.
 """
 from __future__ import annotations
 
+from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass
+import re
 import struct
 
-from .container import CompoundFile
 from .lossless import sha256, _replace_token_program
 from .models import GXWFormatError
-from .project_metadata import logical_mapping
 from .project_writer import ProjectWriteResult
-from .token_listing import decode_token_listing, decode_token_program, TokenInstruction, TokenGap, TokenText
-from .token_pou import parse_token_region
+from .token_listing import decode_token_listing, decode_token_program, TokenInstruction, TokenGap, TokenLabel, TokenText
+from .token_pou import parse_token_region, parse_token_fragment
 
 
 @dataclass(frozen=True)
@@ -36,6 +37,124 @@ class TokenRecordSplice:
     replacement_raw: bytes
 
 
+@dataclass(frozen=True)
+class PreparedTokenRecords:
+    """Source-bound record bytes prepared independently of a project writer."""
+    body: bytes
+    records: tuple[bytes, ...]
+
+
+def edit_token_records(listing, edits, *, text_encoding, plc_model=None,
+                       storage_context=None, allow_end_boundary=False,
+                       allow_draft=False) -> PreparedTokenRecords:
+    """Apply one batch in original coordinates without a semantic/native check.
+
+    Ladder POU bodies and SFC internal subprograms share the same record
+    editing rules. Storage binding, terminal END and neighboring boundaries
+    remain mandatory even when the caller saves a semantic draft.
+    """
+    from .token_encoder import encode_instruction, encode_text_record
+
+    if not isinstance(edits, list) or type(allow_end_boundary) is not bool or type(allow_draft) is not bool:
+        raise GXWFormatError('instruction edits must be an array with an explicit boundary policy')
+    can_append = allow_end_boundary and not any(
+        isinstance(record, TokenInstruction) and record.mnemonic == 'END' for record in listing.records)
+    plans, moves = {}, {}
+    for edit in edits:
+        if (not isinstance(edit, Mapping) or set(edit) - {'operation', 'record_index', 'expected', 'instructions', 'target_record_index'}
+                or edit.get('operation') not in {'replace', 'insert_before', 'delete', 'move_before'}
+                or type(edit.get('record_index')) is not int):
+            raise GXWFormatError('instruction edit requires operation and original record_index')
+        index = edit['record_index']
+        boundary = edit['operation'] == 'insert_before' and can_append and index == len(listing.records)
+        if index in plans or not (0 <= index < len(listing.records) or boundary):
+            raise GXWFormatError('duplicate or out-of-range instruction edit')
+        source = None if boundary else listing.records[index]
+        if not boundary and (not isinstance(source, (TokenInstruction, TokenLabel, TokenText)) or (
+                isinstance(source, TokenInstruction) and source.mnemonic == 'END' and edit['operation'] != 'insert_before')):
+            raise GXWFormatError('source edit cannot replace opaque records or END')
+        identity = ({'op': source.text, 'args': []} if isinstance(source, TokenLabel) else
+                    {'kind': source.role, 'text': source.text} if isinstance(source, TokenText) else
+                    {'kind': 'end_boundary'} if boundary else
+                    {'op': source.mnemonic, 'args': list(source.args)})
+        expected = edit.get('expected')
+        fields = dict(expected) if isinstance(expected, Mapping) else None
+        if fields is not None and 'raw_hex' in fields:
+            original = '' if boundary else b''.join(token.raw for token in source.tokens).hex()
+            if fields.pop('raw_hex') != original:
+                raise GXWFormatError('source edit raw_hex does not match the original record')
+        if fields != identity:
+            raise GXWFormatError('instruction edit must match the complete current opcode and operands')
+        rows = edit.get('instructions', [])
+        if edit['operation'] == 'move_before':
+            target = edit.get('target_record_index')
+            if (type(target) is not int or not (0 <= target < len(listing.records) or can_append and target == len(listing.records))
+                    or target == index or rows):
+                raise GXWFormatError('source move requires a distinct original target_record_index and no instructions')
+            moves.setdefault(target, []).append(index)
+            plans[index] = ('move_before', ())
+            continue
+        if 'target_record_index' in edit:
+            raise GXWFormatError('target_record_index is only valid for move_before')
+        if (not isinstance(rows, list) or edit['operation'] != 'delete' and not rows
+                or edit['operation'] == 'delete' and rows):
+            raise GXWFormatError('instruction edit has invalid replacement sequence')
+        chunks = []
+        for row in rows:
+            # A replacement sequence can retain the old instruction among
+            # newly added records. Bind every compatible row to that source
+            # so an unchanged float/string never travels through its display.
+            bound = source if edit['operation'] == 'replace' else None
+            if isinstance(row, Mapping) and set(row) == {'kind', 'text'}:
+                chunks.append(encode_text_record(row['kind'], row['text'], text_encoding=text_encoding,
+                    profile=listing.profile,
+                    source_record=bound if isinstance(bound, TokenText) else None))
+            else:
+                if not isinstance(row, Mapping) or set(row) != {'op', 'args'} or row['op'] == 'END':
+                    raise GXWFormatError('replacement instruction requires op/args and cannot contain END')
+                chunks.append(encode_instruction(row['op'], row['args'], profile=listing.profile,
+                    text_encoding=text_encoding, plc_model=plc_model, storage_context=storage_context,
+                    allow_draft=allow_draft,
+                    source_instruction=bound if isinstance(bound, TokenInstruction) or (
+                        isinstance(bound, TokenLabel) and isinstance(row['op'], str)
+                        and re.fullmatch(r'[PI][0-9]+', row['op'])) else None))
+        plans[index] = (edit['operation'], tuple(chunks))
+    if any(target in plans and plans[target][0] != 'insert_before' for target in moves):
+        raise GXWFormatError('source move target is also deleted, replaced or moved')
+    chunks = []
+    for index, record in enumerate(listing.records):
+        for moved in moves.get(index, []):
+            chunks.append(b''.join(token.raw for token in listing.records[moved].tokens))
+        operation, replacement = plans.get(index, (None, ()))
+        chunks.extend(replacement)
+        if operation in (None, 'insert_before'):
+            chunks.append(b''.join(token.raw for token in record.tokens))
+    for moved in moves.get(len(listing.records), []):
+        chunks.append(b''.join(token.raw for token in listing.records[moved].tokens))
+    if len(listing.records) in plans:
+        chunks.extend(plans[len(listing.records)][1])
+    body = b''.join(chunks)
+    reread = decode_token_program(parse_token_fragment(body, 0, len(body)),
+                                  profile=listing.profile, text_encoding=text_encoding)
+    if len(reread.records) != len(chunks) or any(
+            b''.join(token.raw for token in record.tokens) != chunk
+            for record, chunk in zip(reread.records, chunks)):
+        raise GXWFormatError('source edit changes a neighboring record binding')
+    old_labels = Counter(record.text for record in listing.records if isinstance(record, TokenLabel))
+    new_labels = Counter(record.text for record in reread.records if isinstance(record, TokenLabel))
+    if any(count > 1 and count > old_labels[name] for name, count in new_labels.items()):
+        raise GXWFormatError('instruction edits introduce a duplicate source label')
+    old_ends = [index for index, record in enumerate(listing.records)
+                if isinstance(record, TokenInstruction) and record.mnemonic == 'END']
+    new_ends = [index for index, record in enumerate(reread.records)
+                if isinstance(record, TokenInstruction) and record.mnemonic == 'END']
+    if old_ends and old_ends != [len(listing.records) - 1]:
+        raise GXWFormatError('source does not have one bound terminal END')
+    if new_ends != ([len(reread.records) - 1] if old_ends else []):
+        raise GXWFormatError('modified instruction source failed terminal END binding')
+    return PreparedTokenRecords(body, tuple(chunks))
+
+
 def splice_token_records(source: bytes, *, expected_sha256: str, logical_name: str,
                          edits: tuple[TokenRecordSplice, ...],
                          text_encoding: str | None = None) -> ProjectWriteResult:
@@ -53,11 +172,12 @@ def splice_token_records(source: bytes, *, expected_sha256: str, logical_name: s
         raise GXWFormatError("record splices require nonnegative integer offsets")
     if len({edit.offset for edit in edits}) != len(edits):
         raise GXWFormatError("multiple splices at one source boundary are ambiguous")
-    outer = CompoundFile(source)
-    mapping = logical_mapping(outer.read_stream("projectdatalist.xml"))
+    from .offline_project import read_offline_project
+    project = read_offline_project(source)
+    mapping = project.mapping
     if not logical_name.endswith(".Program.pou") or logical_name not in mapping:
         raise GXWFormatError("unresolved record splice program")
-    raw = CompoundFile(outer.read_stream("_hdb")).read_stream(mapping[logical_name])
+    raw = project.streams[logical_name]
     before = decode_token_listing(raw, text_encoding=text_encoding)
     ends = [i for i, r in enumerate(before.records) if isinstance(r, TokenInstruction) and r.mnemonic == "END"]
     if ends != [len(before.records) - 1]:
@@ -101,13 +221,18 @@ def splice_token_records(source: bytes, *, expected_sha256: str, logical_name: s
     for index in range(cursor, len(before.records)):
         chunks.append(b"".join(t.raw for t in before.records[index].tokens))
         origins.append(index)
-    updated = bytearray(raw[:79] + b"".join(chunks) + raw[-24:])
-    struct.pack_into("<II", updated, 55, len(updated) - 83, len(updated) - 83)
+    frame = before.source
+    size_offset = frame.body_offset - 24
+    updated = bytearray(raw[:frame.body_offset] + b"".join(chunks) + raw[frame.body_end:])
+    size = struct.unpack_from('<I', raw, size_offset)[0] + len(updated) - len(raw)
+    struct.pack_into("<II", updated, size_offset, size, size)
     updated = bytes(updated)
     after = decode_token_listing(updated, text_encoding=text_encoding)
     if len(after.records) != len(chunks) or any(b"".join(t.raw for t in r.tokens) != chunk for r, chunk in zip(after.records, chunks)):
         raise GXWFormatError("record splice rebound neighboring tokens")
-    if (raw[:55] != updated[:55] or raw[63:79] != updated[63:79] or raw[-24:] != updated[-24:]
+    if (raw[:size_offset] != updated[:size_offset]
+            or raw[size_offset + 8:frame.body_offset] != updated[size_offset + 8:frame.body_offset]
+            or raw[frame.body_end:] != updated[len(updated) - len(raw[frame.body_end:]):]
             or after.reconstruct() != updated):
         raise GXWFormatError("record splice modified the envelope outside the size fields")
     preserved = [{"source_record": origin, "old_offset": before.records[origin].tokens[0].offset,
@@ -145,11 +270,12 @@ def patch_token_instructions(source: bytes, *, expected_sha256: str, logical_nam
         raise GXWFormatError("instruction offsets must be nonnegative integers")
     if not edits or len({edit.offset for edit in edits}) != len(edits):
         raise GXWFormatError("instruction edits must be nonempty and have distinct offsets")
-    outer = CompoundFile(source)
-    mapping = logical_mapping(outer.read_stream("projectdatalist.xml"))
+    from .offline_project import read_offline_project
+    project = read_offline_project(source)
+    mapping = project.mapping
     if not logical_name.endswith(".Program.pou") or logical_name not in mapping:
         raise GXWFormatError("unresolved instruction patch program")
-    raw = CompoundFile(outer.read_stream("_hdb")).read_stream(mapping[logical_name])
+    raw = project.streams[logical_name]
     before = decode_token_listing(raw, text_encoding=text_encoding)
     edits_by_offset = {edit.offset: edit for edit in edits}
     replacements, changes = {}, []
@@ -175,8 +301,11 @@ def patch_token_instructions(source: bytes, *, expected_sha256: str, logical_nam
     if len(replacements) != len(edits):
         raise GXWFormatError("an edit does not point at a complete decoded instruction")
     chunks = [replacements.get(i, b"".join(t.raw for t in record.tokens)) for i, record in enumerate(before.records)]
-    updated = bytearray(raw[:79] + b"".join(chunks) + raw[-24:])
-    struct.pack_into("<II", updated, 55, len(updated) - 83, len(updated) - 83)
+    frame = before.source
+    size_offset = frame.body_offset - 24
+    updated = bytearray(raw[:frame.body_offset] + b"".join(chunks) + raw[frame.body_end:])
+    size = struct.unpack_from('<I', raw, size_offset)[0] + len(updated) - len(raw)
+    struct.pack_into("<II", updated, size_offset, size, size)
     updated = bytes(updated)
     after = decode_token_listing(updated, text_encoding=text_encoding)
     if len(after.records) != len(before.records):
@@ -186,7 +315,9 @@ def patch_token_instructions(source: bytes, *, expected_sha256: str, logical_nam
             raise GXWFormatError("instruction replacement rebound surrounding tokens")
         if index in replacements and not isinstance(record, TokenInstruction):
             raise GXWFormatError("replacement is not understood in its final context")
-    if (raw[:55] != updated[:55] or raw[63:79] != updated[63:79] or raw[-24:] != updated[-24:]
+    if (raw[:size_offset] != updated[:size_offset]
+            or raw[size_offset + 8:frame.body_offset] != updated[size_offset + 8:frame.body_offset]
+            or raw[frame.body_end:] != updated[len(updated) - len(raw[frame.body_end:]):]
             or after.reconstruct() != updated):
         raise GXWFormatError("instruction patch modified envelope bytes outside the two size fields")
     result = _replace_token_program(source, logical_name, raw, updated)

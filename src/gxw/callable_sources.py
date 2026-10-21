@@ -10,18 +10,46 @@ from functools import lru_cache
 import re
 
 from .container_writer import validate_cfb_streams
+from .integrity import read_project_hdb
 from .declarations import (BASIC_TYPES, CLASS_CODES, _type_parts, local_table_for,
                            parse_declarations, parse_structure_declarations, resolve_label)
 from .library_sources import decode_library_archive, parse_library_source, parse_library_declarations
 from .models import GXWFormatError, NodeKind
-from .project_metadata import (current_rows, logical_mapping, read_project_text_context,
-                               read_project_compile_options, project_source_groups)
+from .project_metadata import (current_rows, project_stream_mapping, read_project_text_context,
+                               read_project_compile_options, project_source_groups, existing_source_groups)
 from .semantic import (FunctionBlockCategory, FunctionBlockPortSpec, FunctionBlockSpec,
                        SemanticPortRole)
 
 
 CLASS = {'VAR': 1, 'VAR CONSTANT': 2, 'VAR_INPUT': 3, 'VAR_OUTPUT': 4,
          'VAR_IN_OUT': 5, 'VAR_INPUT CONSTANT': 11, 'VAR_IN_EXT': 12}
+
+
+def read_project_declarations(streams, *, source_groups=None, overrides=None):
+    """Read independent declaration tables without hiding usable source graphs.
+
+    A foreign/unsupported table remains a stream in the saved project. It does
+    not become an empty declaration table, and its missing names cannot supply
+    an interface or authorize edits that depend on that scope.
+    """
+    documents, issues = {}, []
+    owners = {group['labels']: name for name, group in (source_groups or {}).items()}
+    for name, value in streams.items():
+        if not name.endswith(('.lh', '.gh', '.lnl')):
+            continue
+        if name in (overrides or {}):
+            documents[name] = overrides[name]
+            continue
+        try:
+            from .source_header import source_payload_offset
+            source = streams.get(owners.get(name))
+            kind = source[source_payload_offset(source)] if source is not None else None
+            documents[name] = parse_declarations(value, logical_name=name,
+                source_kind=240 if kind == 240 else None)
+        except GXWFormatError as error:
+            issues.append({'code': 'declaration_source_gap', 'stream': name, 'message': str(error)})
+    documents.update(overrides or {})
+    return documents, issues
 
 # SECTION selectors from the native Workspace CPU-name table. These select
 # source declarations only; they do not share compiler/address behavior or
@@ -58,7 +86,7 @@ def type_mask(text):
     raise GXWFormatError('formal type outside observed coarse native masks: ' + text)
 
 
-def interface(definition, input_count=None, *, resolve_type=None):
+def interface(definition, input_count=None, *, resolve_type=None, graphical=False):
     if definition.get('source_kind') == 'project_labels':
         # The original compiler frontend orders project declarations by their
         # saved number, independently of displayed row order and live IDs.
@@ -86,6 +114,15 @@ def interface(definition, input_count=None, *, resolve_type=None):
                 raise GXWFormatError('source declaration class outside observed interfaces')
             rows.append(dict(name=r['name'], class_code=CLASS[r['source_class']],
                              declared_type=r['data_type_raw'], source_offset=r['offset']))
+    document = definition.get('declarations')
+    if (graphical and document is not None and document.owner_pou_status is not None
+            and document.owner_pou_status & 4):
+        # Native ReadCallableFormals synthesizes this pair from the POU option
+        # bit, before enumerating declarations. It is absent from the saved
+        # label rows; counting rows alone drops the first input/output pair.
+        if not any(row['name'].upper() in ('EN', 'ENO') for row in rows):
+            rows = [dict(name='EN', class_code=3, declared_type='BOOL', source_offset=None),
+                    dict(name='ENO', class_code=4, declared_type='BOOL', source_offset=None), *rows]
     inputs = [r for r in rows if r['class_code'] in (3, 11, 12)]
     outputs = [r for r in rows if r['class_code'] == 4]
     inouts = [r for r in rows if r['class_code'] == 5]
@@ -102,12 +139,15 @@ def interface(definition, input_count=None, *, resolve_type=None):
         if input_count is None:
             raise GXWFormatError('extensible source interface requires an explicit input count')
         fixed = [r for r in inputs if r['class_code'] != 12]
-        if len(expanded) != 1 or fixed != en:
+        if len(expanded) != 1:
             raise GXWFormatError('unobserved mixed extensible inputs')
-        repeat = input_count - len(inouts) - len(en)
+        repeat = input_count - len(inouts) - len(fixed)
         if not 1 <= repeat <= 256:
             raise GXWFormatError('extensible input arity outside observed bound')
-        inputs = en + expanded * repeat
+        # MUX has a fixed selector before VAR_IN_EXT; ADD has only the repeated
+        # input (or an EN prefix). Expand the declaration at its actual slot.
+        inputs = [formal for row in inputs for formal in
+                  ([row] * repeat if row['class_code'] == 12 else [row])]
     inputs += inouts
     return_type = definition['return_type_raw']
     if return_type is not None and return_type != "@'VOID'":
@@ -124,7 +164,9 @@ def interface(definition, input_count=None, *, resolve_type=None):
 def sorted_ports(node):
     """Bind observed callable ports by side and ordinate; retain source indexes."""
     width, height = node.bbox.right-node.bbox.left, node.bbox.bottom-node.bbox.top
-    input_flags = (3,) if node.kind_code == 1 else (1,)
+    # Bit 0x04 marks a function's constant-only input. Original FMOV nodes
+    # retain code 7 for the CPU-selected VAR_INPUT CONSTANT formal ``n``.
+    input_flags = (3, 7) if node.kind_code == 1 else (1,)
     output_flags = (0, 2) if node.kind_code == 1 else (0,)
     inputs, outputs = [], []
     for i, p in enumerate(node.ports):
@@ -334,23 +376,18 @@ class ProjectCallableSources:
     @classmethod
     def from_project(cls, raw, program_name, declarations=None):
         outer = validate_cfb_streams(raw)
-        mapping = logical_mapping(outer['projectdatalist.xml'])
-        payloads = validate_cfb_streams(outer['_hdb'])
+        mapping = project_stream_mapping(outer)
+        payloads = read_project_hdb(outer).payloads
         streams = {name: payloads[key] for name, key in mapping.items() if key in payloads}
         contexts = [read_project_text_context(value) for name, value in streams.items() if name.endswith('.prj')]
         if len(contexts) != 1:
             raise GXWFormatError('one project CPU context is required for source library selection')
-        if declarations is None:
-            declarations = {name: parse_declarations(value, logical_name=name)
-                            for name, value in streams.items() if name.endswith(('.lh', '.gh', '.lnl'))}
-        else:
-            # Supplied draft declarations override the matching current bytes.
-            # Library formals still belong to this project snapshot.
-            declarations = {**{name: parse_declarations(value, logical_name=name)
-                for name, value in streams.items() if name.endswith('.lnl')}, **declarations}
         libraries, issues = {}, []
-        source_groups, source_issues = project_source_groups(outer['projectdatalist.xml'])
+        source_groups, source_issues = existing_source_groups(outer['projectdatalist.xml'], streams)
         issues.extend(source_issues)
+        declarations, declaration_issues = read_project_declarations(streams,
+            source_groups=source_groups, overrides=declarations)
+        issues.extend(declaration_issues)
         for program in list(source_groups):
             try:
                 if program not in streams or local_table_for(declarations, program, source_groups) is None:
@@ -386,6 +423,9 @@ class ProjectCallableSources:
                      library_structures=structures, project_structure_names=project_types,
                      project_structures=project_structures)
         result.issues[:0] = issues
+        result.declaration_gaps = {issue['stream'] for issue in declaration_issues}
+        result.declaration_owners = {group['labels']: name for name, group in
+                                    source_groups.items()}
         return result
 
     def with_declarations(self, declarations):
@@ -398,6 +438,10 @@ class ProjectCallableSources:
         return result
 
     def label(self, symbol):
+        for stream in getattr(self, 'declaration_gaps', ()):
+            owner = getattr(self, 'declaration_owners', {}).get(stream)
+            if stream.endswith('.gh') or owner == self.program_name:
+                raise GXWFormatError('current label scope contains an unreadable declaration table: ' + stream)
         local = self.local_table
         if self.source_groups is not None and local is None:
             return None
@@ -412,8 +456,11 @@ class ProjectCallableSources:
         if row.type_code == 15:
             return 'function_block'
         if row.type_code == 0:
-            matches = self.catalog.get(row.data_type.casefold(), [])
-            if len(matches) == 1 and matches[0][1]['kind'] == 'FUNCTION_BLOCK':
+            try:
+                self.definition(row.data_type,'FUNCTION_BLOCK')
+            except GXWFormatError:
+                pass
+            else:
                 return 'function_block'
         try:
             base, _ = _type_parts(row.data_type)
@@ -425,7 +472,22 @@ class ProjectCallableSources:
         return 'variable'
 
     def definition(self, name, kind):
+        namespace = (self.source_groups or {}).get(self.program_name, {}).get('library')
+        def local_matches(values):
+            local=[entry for entry in values if namespace and entry[1].get('library')==namespace]
+            return local or values
         matches = self.catalog.get(name.casefold(), [])
+        if not matches and kind == 'FUNCTION':
+            base = re.sub(r'-[1-9][0-9]*$', '', name)
+            candidates = local_matches(self.catalog.get(base.casefold(), []))
+            if len(candidates) == 1:
+                definition = candidates[0][1]
+                rows = (definition['declarations'].rows if definition.get('source_kind') == 'project_labels'
+                        else parse_library_declarations(definition)['rows'])
+                if any((row.class_code == 12 if hasattr(row, 'class_code') else
+                        row['source_class'] == 'VAR_IN_EXT') for row in rows):
+                    matches = candidates
+        matches=local_matches(matches)
         if len(matches) != 1:
             raise GXWFormatError('missing or ambiguous CPU-selected source callable: ' + name)
         stream, definition = matches[0]
@@ -436,8 +498,11 @@ class ProjectCallableSources:
     def structure(self, name, *, library=None):
         """Resolve one current type owner; a name alone is not a source."""
         key = name.casefold()
+        namespace=(self.source_groups or {}).get(self.program_name,{}).get('library')
         if library is not None:
             candidates = self.library_structures.get((library.casefold(), key), ())
+        elif namespace and (namespace.casefold(),key) in self.library_structures:
+            candidates=self.library_structures[(namespace.casefold(),key)]
         elif key in self.project_structure_names:
             candidates = self.project_structures.get(key, ())
         else:
@@ -570,13 +635,26 @@ class ProjectCallableSources:
             return None
 
     def _interface(self, definition, input_count=None):
-        return interface(definition, input_count, resolve_type=lambda text: self._formal_type(definition, text))
+        return interface(definition, input_count, resolve_type=lambda text: self._formal_type(definition, text),
+                         graphical=True)
 
     def fixed_interface(self, name, kind='FUNCTION_BLOCK'):
         stream, definition = self.definition(name, kind)
-        inputs, outputs = self._interface(definition)
-        if not 1 <= max(len(inputs), len(outputs)) <= 256:
-            raise GXWFormatError('source interface has no bounded observed graphic ports')
+        count = None
+        suffix = re.fullmatch(re.escape(definition['name']) + r'-([1-9][0-9]*)', name, re.I)
+        if suffix:
+            # The suffix counts repeated data inputs, not EN or a fixed MUX
+            # selector. Ask the shared interface for one repeat first.
+            rows = (definition['declarations'].rows if definition.get('source_kind') == 'project_labels'
+                    else parse_library_declarations(definition)['rows'])
+            classes = [row.class_code if hasattr(row, 'class_code') else CLASS[row['source_class']] for row in rows]
+            count = sum(code in (3, 11, 5) for code in classes) + int(suffix[1])
+            doc = definition.get('declarations')
+            if doc is not None and doc.owner_pou_status is not None and doc.owner_pou_status & 4:
+                count += 1
+        inputs, outputs = self._interface(definition, count)
+        if max(len(inputs),len(outputs)) > 256:
+            raise GXWFormatError('source interface exceeds the bounded graphic ports')
         return {'source_stream': stream, 'definition_offset': definition['offset'],
                 'inputs': inputs, 'outputs': outputs}
 
@@ -590,33 +668,34 @@ class ProjectCallableSources:
     def callable(self, node, *, bind_instance=True):
         ins, outs = sorted_ports(node)
         name = node.type_name if node.kind == NodeKind.FUNCTION_BLOCK else node.symbol
+        if node.kind == NodeKind.FUNCTION and name.startswith('@'):
+            # SC_EDIT's independent operator descriptor table gives three
+            # fixed binary forms; the other native operators serialize their
+            # repeated input count in the suffix.
+            fixed = {'@SUB':2,'@DIV':2,'@NE':2}
+            repeated = re.fullmatch(r'@(AND|OR|XOR|ADD|MUL|GT|GE|EQ|LE|LT)-([1-9][0-9]*)',name,re.I)
+            expected = fixed.get(name.upper(),int(repeated[2]) if repeated else None)
+            if expected is not None and (len(ins)!=expected or len(outs)!=1):
+                raise GXWFormatError('intrinsic operator interface differs from its serialized arity')
+            # Serialized intrinsic operators have anonymous native formals,
+            # rather than a .lif definition. Preserve their numeric connector
+            # identity and encoded direction; do not invent library names or
+            # assign a concrete overloaded data type from a connected device.
+            return {'source_stream': None, 'definition_offset': None,
+                'binding': 'serialized_operator', 'ports': [dict(name=str(index),
+                    formal_name=None, side='in' if index in ins else 'out', data_type=None,
+                    class_code=None, occurrence=1, x=port.local_x, y=port.local_y,
+                    negated=bool(port.port_kind_code & 8)) for index, port in enumerate(node.ports)]}
         if bind_instance and node.kind == NodeKind.FUNCTION_BLOCK:
             binding = self.label(node.symbol)
             row = binding[1] if binding else None
             # Native type changes retain the prior reference. Newly created
             # declarations can retain code 0 and an empty reference through
             # cold compilation. Bind their declared type, retaining both fields.
-            if not row or row.type_code not in (0, 15) or row.data_type != name:
+            if not row or row.type_code not in (0, 15) or row.data_type.casefold()!=name.casefold():
                 raise GXWFormatError('FB instance requires a matching source label type: ' + node.symbol)
-        matches = self.catalog.get(name.casefold(), [])
-        if not matches and node.kind == NodeKind.FUNCTION:
-            base = re.sub(r'-[1-9][0-9]*$', '', name)
-            candidates = self.catalog.get(base.casefold(), [])
-            if len(candidates) == 1:
-                definition = candidates[0][1]
-                if definition.get('source_kind') == 'project_labels':
-                    extensible = any(row.class_code == 12 for row in definition['declarations'].rows)
-                else:
-                    extensible = any(row['source_class'] == 'VAR_IN_EXT'
-                        for row in parse_library_declarations(definition)['rows'])
-                if extensible:
-                    matches = candidates
-        if len(matches) != 1:
-            raise GXWFormatError('missing or ambiguous CPU-selected source callable: ' + name)
-        stream, definition = matches[0]
         expected_kind = 'FUNCTION_BLOCK' if node.kind == NodeKind.FUNCTION_BLOCK else 'FUNCTION'
-        if definition['kind'] != expected_kind:
-            raise GXWFormatError('graph kind differs from source definition')
+        stream, definition = self.definition(name, expected_kind)
         inputs, outputs = self._interface(definition, len(ins))
         if len(outputs) != len(outs):
             raise GXWFormatError('source formal interface differs from graph output count')
@@ -626,6 +705,8 @@ class ProjectCallableSources:
             occurrences = Counter()
             repeats = Counter(row['name'] for row in formals)
             for index, formal in zip(indexes, formals):
+                if node.ports[index].port_kind_code & 4 and formal['class_code'] != 11:
+                    raise GXWFormatError('constant-only port differs from its current source formal')
                 formal_name = formal['name']
                 occurrences[formal_name] += 1
                 endpoint = formal_name
@@ -639,6 +720,22 @@ class ProjectCallableSources:
                     'occurrence': occurrences[formal_name], 'x': port.local_x, 'y': port.local_y,
                     'negated': bool(port.port_kind_code & 8)}
         return {'source_stream': stream, 'definition_offset': definition['offset'], 'ports': ports}
+
+    def source_prototype(self, node, *, bind_instance=True):
+        """Bind a cloneable complete source box to its current interface.
+
+        Graphical EN/ENO options belong to the source interface; they do not
+        need a special numeric-port cloning exception.  Validate the complete
+        backing record before authorizing a clone so an opaque cache tail or
+        another record class can never acquire construction permission.
+        """
+        from .structured_pou import _parse_node
+        if (len(node.raw) < 12 or int.from_bytes(node.raw[:4], 'little') != len(node.raw)
+                or node.raw[4:8] != b'\x01\0\0\0'):
+            raise GXWFormatError('callable prototype requires a complete node record')
+        _parse_node(node.raw, node.offset)
+        binding = self.callable(node, bind_instance=bind_instance)
+        return {'binding':'resolved', **binding}
 
     def semantic_specs(self, program):
         """Per-instance geometry avoids assigning one fixed layout to a type."""

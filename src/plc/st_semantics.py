@@ -1,5 +1,6 @@
 """ST semantic binding over the existing GXW and PLC fact owners."""
 from __future__ import annotations
+from dataclasses import replace
 import re
 from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
 from plc.validation import (DEVICE_ADDRESS_RE, PLCJsonValidationError, is_bit_device,
@@ -122,6 +123,16 @@ class Symbols:
     def __init__(self, unit=None, *, parsed=None, project_context=None, callable_sources=None):
         self.unit = unit or Unit('__BODY__', 'program')
         self.context = project_context or {}
+        selected = [pou for pou in self.context.get('pous', [])
+                    if pou.get('program') == self.context.get('selected_source') and pou.get('kind') == 'function']
+        if self.unit.name == '__BODY__' and self.unit.kind == 'program' and len(selected) == 1:
+            # A saved FUNCTION stores only its implementation in the C1 source.
+            # Its return slot is owned by the paired declaration header, rather
+            # than a synthetic Program wrapper used by the body parser.
+            source, = selected
+            return_type = source.get('return_type')
+            self.unit = replace(self.unit, name=source['name'], kind='function',
+                return_type=return_type if return_type not in (None, "@'VOID'") else '')
         self.callable_sources = callable_sources
         self.locals, self.globals, self.pous, self.errors = {}, {}, {}, []
         self.types = dict(parsed.types if parsed else self.unit.types)
@@ -275,6 +286,10 @@ class Symbols:
 
     def callable(self, name):
         declaration = self.lookup(name)
+        if declaration is not None and declaration.class_name == 'RETURN':
+            # The implicit result slot shares its FUNCTION's spelling but is
+            # never a function-block instance when that spelling is called.
+            declaration = None
         definition = self.pous.get((declaration.data_type if declaration else name).upper())
         if definition is None and self.callable_sources is not None:
             target = declaration.data_type if declaration else name
@@ -914,6 +929,10 @@ class Inspector(_DeviceInspector):
                     self.finding('ST_INITIALIZER_COVERAGE', 'Declaration initializer is not mapped: ' + declaration.name, severity='unverified')
                 if declaration.class_name == 'VAR_TEMP':
                     self.finding('ST_DECLARATION_COVERAGE', 'GX temporary storage lifetime needs native evidence', severity='unverified')
+                if declaration.class_name == 'VAR_RETAIN':
+                    self.finding('ST_RETAIN_COVERAGE',
+                        'Retained declaration storage is recognized; initialization, reset and power-cycle behavior need separate evidence',
+                        severity='unverified')
             except ValueError as error:
                 self.finding('ST_DECLARATION', str(error))
 

@@ -1,5 +1,6 @@
 """Declaration owners, source contexts and reference binding."""
 from __future__ import annotations
+from .project_metadata import project_stream_mapping
 from collections import Counter, defaultdict
 from .diagnostic_events import EventIndex
 from gxworks2.workspace_observations import EvidenceOrigin, evidence_origin_bound
@@ -46,12 +47,13 @@ def _native_validation_declaration_owners(raw):
     """Reuse current label/type documents and their native directory owners."""
     from .callable_sources import _user_library_owners, _user_library_structures
     from .container_writer import validate_cfb_streams
+    from .integrity import read_project_hdb
     from .declarations import parse_declarations
     from .models import GXWFormatError
     from .project_metadata import current_rows, logical_mapping
     outer = validate_cfb_streams(raw)
-    mapping = logical_mapping(outer['projectdatalist.xml'])
-    nested = validate_cfb_streams(outer['_hdb'])
+    mapping = project_stream_mapping(outer)
+    nested = read_project_hdb(outer).payloads
     streams = {name: nested[key] for name, key in mapping.items() if key in nested}
     sources = []
     for row in current_rows(outer['projectdatalist.xml'], 'DSPROJECTDATA', 'D_Projectdata')[0]:

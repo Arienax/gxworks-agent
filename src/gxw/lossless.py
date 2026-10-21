@@ -5,6 +5,7 @@ Unknown bytes, allocation slack, directory metadata and unsupported streams live
 in the immutable source. Byte preservation is distinct from native validity.
 """
 from __future__ import annotations
+from .project_metadata import project_stream_mapping
 
 from dataclasses import dataclass
 import hashlib
@@ -219,10 +220,10 @@ def inspect_program(raw: bytes, *, logical_name: str = "<Program.pou>",
     if token_profile == "fx":
         try:
             program = parse_token_pou(raw)
-            regions = [RawRegion(0, raw[:79], "program-prefix")]
+            regions = [RawRegion(0, raw[:program.body_offset], "program-prefix")]
             regions.extend(RawRegion(t.offset, t.raw, "token", "opaque-preserved" if
                                      t.annotation()["kind"] == "opaque" else "partially-decoded") for t in program.tokens)
-            regions.append(RawRegion(len(raw) - 24, raw[-24:], "trailer"))
+            regions.append(RawRegion(program.body_end, raw[program.body_end:], "trailer"))
             return ProgramImage(bytes(raw), "ladder-token", tuple(regions), program)
         except GXWFormatError as exc:
             diagnostics.append("ladder-token: " + str(exc))
@@ -295,7 +296,7 @@ def inspect_project(raw: bytes) -> ProjectImage:
     inventory(outer, "outer")
     mapping = {}
     try:
-        mapping = logical_mapping(outer.read_stream("projectdatalist.xml"))
+        mapping = project_stream_mapping(outer)
     except (ValueError, KeyError, IndexError) as exc:
         diagnostics.append("mapping: " + str(exc))
     try:
@@ -329,7 +330,7 @@ def patch_structured_symbol_equal_size(source: bytes, *, expected_sha256: str,
     if len(old_text) != len(new_text):
         raise GXWFormatError("lossless patch requires equal UTF-16 byte length")
     outer_payloads = validate_cfb_streams(source)
-    mapping = logical_mapping(outer_payloads["projectdatalist.xml"])
+    mapping = project_stream_mapping(outer_payloads)
     if logical_name not in mapping:
         raise GXWFormatError("unresolved patch program")
     stream = mapping[logical_name]
@@ -373,7 +374,7 @@ def patch_token_constant(source: bytes, *, expected_sha256: str,
     if type(old_value) is not int or type(new_value) is not int:
         raise GXWFormatError("constant values must be integers")
     outer = CompoundFile(source)
-    mapping = logical_mapping(outer.read_stream("projectdatalist.xml"))
+    mapping = project_stream_mapping(outer)
     if logical_name not in mapping or not logical_name.endswith(".Program.pou"):
         raise GXWFormatError("unresolved token program")
     raw = CompoundFile(outer.read_stream("_hdb")).read_stream(mapping[logical_name])
@@ -405,7 +406,10 @@ def patch_token_constant(source: bytes, *, expected_sha256: str,
         size = len(value) + 3
         replacement = bytes((size, token.raw[1])) + value + bytes((size,))
         updated = bytearray(raw[:token_offset] + replacement + raw[token_offset + len(token.raw):])
-        struct.pack_into("<II", updated, 55, len(updated) - 83, len(updated) - 83)
+        frame = parse_token_pou(raw)
+        offset = frame.body_offset - 24
+        size = struct.unpack_from('<I', raw, offset)[0] + len(updated) - len(raw)
+        struct.pack_into("<II", updated, offset, size, size)
         updated = bytes(updated)
         before_tokens, after_tokens = parse_token_pou(raw).tokens, parse_token_pou(updated).tokens
         index = next(i for i, t in enumerate(before_tokens) if t.offset == token_offset)
@@ -421,37 +425,33 @@ def patch_token_constant(source: bytes, *, expected_sha256: str,
 
 
 def _replace_token_program(source: bytes, logical_name: str, raw: bytes, new: bytes) -> ProjectWriteResult:
-    """Use the established allocator for resized token source, preserving other payloads."""
+    """Replace raw records without interpreting their source-header state.
+
+    This byte-level primitive also serves opaque research/control payloads.
+    Product source saving uses the common transaction with invalidation enabled.
+    """
+    from .project_writer import write_project_replacements
     outer = validate_cfb_streams(source)
-    mapping = logical_mapping(outer["projectdatalist.xml"])
+    mapping = project_stream_mapping(outer)
     stream = mapping[logical_name]
-    nested = validate_cfb_streams(outer["_hdb"])
-    if nested[stream] != raw:
-        raise GXWFormatError("token program source changed")
-    history, metadata, preserved = synchronize_history(outer["history.xml"], {logical_name: (stream, raw, new)},
-                                                       current_mapping=mapping)
-    hdb, inner_mode = replace_project_stream(outer["_hdb"], stream, new)
-    result, outer_mode = replace_project_stream(source, "_hdb", hdb)
-    result, history_mode = replace_project_stream(result, "history.xml", history)
-    if validate_cfb_streams(hdb) != dict(nested, **{stream: new}):
-        raise GXWFormatError("resized token program changed an unrelated nested payload")
-    if validate_cfb_streams(result) != dict(outer, _hdb=hdb, **{"history.xml": history}):
-        raise GXWFormatError("resized token program changed an unrelated outer payload")
-    return ProjectWriteResult(result, {
-        "schema_version": 1, "baseline_sha256": sha256(source), "output_sha256": sha256(result),
-        "object": logical_name, "old_length": len(raw), "new_length": len(new),
-        "metadata_changes": metadata, "preserved_metadata": preserved,
-        "allocations": {"program": inner_mode, "outer": outer_mode, "history": history_mode},
-        "validation": {"all_other_token_bytes": "caller must verify its intended replacement scope",
-                       "all_other_stream_payloads": "byte-identical", "native_compile": "not_run"},
-    })
+    saved = write_project_replacements(source, {logical_name: (stream, raw, new)}, invalidate=False)
+    modes = {(row['layer'], row['stream']): row['mode'] for row in saved.report['allocations']}
+    return ProjectWriteResult(saved.data, {**saved.report, 'object': logical_name,
+        'old_length': len(raw), 'new_length': len(new),
+        'allocation_records': saved.report['allocations'],
+        'allocations': {'program': modes.get(('nested', stream), 'existing_allocation'),
+                        'outer': modes.get(('outer', '_hdb'), 'existing_allocation'),
+                        'history': modes.get(('outer', 'history.xml'), 'existing_allocation')},
+        'validation': {**saved.report['validation'],
+            'all_other_token_bytes': 'caller verifies the intended replacement scope',
+            'all_other_stream_payloads': 'byte-identical', 'native_compile': 'not_run'}})
 
 
 def _patch_program_range_equal_size(source: bytes, logical_name: str, start: int,
                                   old_text: bytes, new_text: bytes) -> ProjectWriteResult:
     """Shared physical patch engine; callers establish the semantic target."""
     outer_payloads = validate_cfb_streams(source)
-    mapping = logical_mapping(outer_payloads["projectdatalist.xml"])
+    mapping = project_stream_mapping(outer_payloads)
     stream = mapping[logical_name]
     hdb = outer_payloads["_hdb"]
     nested_payloads = validate_cfb_streams(hdb)

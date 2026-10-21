@@ -9,16 +9,26 @@ source and compiled .res can duplicate this body.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import math
 import struct
 
 from .models import GXWFormatError
+from .template_data import template_bytes
 from plc.instruction_steps import native_lexical_overrides, native_token_encodings
 
 
 # Exact observations from the native converter. A subset also has full native
 # project/CSV checks. This is binary grammar, not PLC execution support.
 _NATIVE_ENCODINGS = native_token_encodings()
+# Independent author sources in the FX2N and FX1S corpus include these
+# ordinary MC/MCR/NEXT forms. Keep their stored grammar identities separate
+# from CPU instruction admission and execution semantics.
+_SOURCE_ENCODINGS = {**json.loads(template_bytes('fx-token-encoder-forms.json')).get(
+    'additional_source_forms', {}).get('headers', {}),
+    '0202': ('NOP', 0), '042c0304': ('MC', 2), '04300204': ('MCR', 1),
+    '056a010105': ('NEXT', 0)}
+_NATIVE_ENCODINGS = {**_NATIVE_ENCODINGS, **_SOURCE_ENCODINGS}
 
 
 def _opcode_family_key(raw: bytes) -> tuple[int, ...] | None:
@@ -65,11 +75,16 @@ def observed_native_arity(raw: bytes) -> int | None:
     return item[1] if item else None
 
 
+def observed_source_encodings() -> dict[str, tuple[str, int]]:
+    """Additional whole-source witnesses needed by the source constructor."""
+    return dict(_SOURCE_ENCODINGS)
+
+
 # Exact observed spellings only. In particular do not infer application opcodes
 # from FNC arithmetic, or the unobserved pulse/width variants of basic opcodes.
 _OPCODES = native_lexical_overrides()
-_DEVICES = {0x90: "M", 0x98: "S", 0x9C: "X", 0x9D: "Y", 0xA8: "D", 0xAF: "R", 0xC2: "T", 0xC5: "C",
-            0xCC: "Z", 0xCD: "V", 0xD0: "P", 0xD1: "I"}
+_DEVICES = {0x90: "M", 0x98: "S", 0x9C: "X", 0x9D: "Y", 0xA8: "D", 0xAB: "G", 0xAF: "R", 0xC2: "T", 0xC5: "C",
+            0xCC: "Z", 0xCD: "V", 0xD0: "P", 0xD1: "I", 0xD2: "N"}
 
 
 @dataclass(frozen=True)
@@ -86,7 +101,7 @@ class LadderToken:
         if self.raw in (b"\x03\x3c\x03", b"\x04\x3c\x02\x04"):
             return {"kind": "label-header"}
         code, value = self.raw[1], self.raw[2:-1]
-        if code in (0x80, 0x82) and len(self.raw) >= 4 and self.raw[2] == 0:
+        if code in (0x80, 0x82) and len(self.raw) >= 4 and self.raw[2] in (0, 1):
             return {"kind": "text", "role": "statement" if code == 0x80 else "note",
                     "payload_hex": self.raw[3:-1].hex()}
         # Only widths observed by the controlled corpus. A longer token with a
@@ -113,8 +128,10 @@ class LadderToken:
         if code == 0xEE and 1 <= len(value) <= 32:
             return {"kind": "operand", "constant_type": "string", "payload_hex": value.hex()}
         if len(value) == 1:
-            role = {0xF0: "index_z", 0xF1: "digit_group", 0xF2: "bit_select", 0xF4: "index_v"}.get(code)
-            bounds = {"index_z": (0, 7), "index_v": (0, 7), "digit_group": (1, 8), "bit_select": (0, 15)}
+            role = {0xF0: "index_z", 0xF1: "digit_group", 0xF2: "bit_select", 0xF4: "index_v",
+                    0xF8: "module_prefix"}.get(code)
+            bounds = {"index_z": (0, 7), "index_v": (0, 7), "digit_group": (1, 8),
+                      "bit_select": (0, 15), "module_prefix": (0, 7)}
             if role and bounds[role][0] <= value[0] <= bounds[role][1]:
                 return {"kind": "operand-modifier", "role": role, "numeric_value": value[0]}
         return {"kind": "opaque", "type_byte": code}
@@ -139,6 +156,15 @@ class TokenProgram:
         return self.raw[:self.body_offset] + b"".join(token.raw for token in self.tokens) + self.raw[self.body_end:]
 
 
+def _token_payload_offset(raw):
+    # Preserve the historical standalone zero-header framing fixture. Product
+    # source writes require the independently observed common save header.
+    if raw[:54] == bytes(54):
+        return 54
+    from .source_header import source_payload_offset
+    return source_payload_offset(raw)
+
+
 def parse_token_pou(raw: bytes) -> TokenProgram:
     """Recognize the observed envelope; never search past a broken boundary.
 
@@ -150,9 +176,12 @@ def parse_token_pou(raw: bytes) -> TokenProgram:
     raw = bytes(raw)
     if len(raw) < 106:
         raise GXWFormatError("unsupported token Program.pou envelope/trailer")
-    if struct.unpack_from("<II", raw, 55) != (len(raw) - 83,) * 2:
+    payload = _token_payload_offset(raw)
+    if len(raw) < payload + 52:
+        raise GXWFormatError('token source body is truncated')
+    if struct.unpack_from("<II", raw, payload + 1) != (len(raw) - payload - 29,) * 2:
         raise GXWFormatError("unsupported token Program.pou size fields")
-    return parse_token_region(raw, 79, len(raw) - 103)
+    return parse_token_region(raw, payload + 25, len(raw) - payload - 49)
 
 
 def frame_token_pou(raw: bytes) -> TokenProgram:
@@ -167,22 +196,23 @@ def frame_token_pou(raw: bytes) -> TokenProgram:
     to an FX lexical decoder without separate CPU/format evidence.
     """
     raw = bytes(raw)
-    if len(raw) < 99 or raw[54] != 1:
+    payload = _token_payload_offset(raw)
+    if len(raw) < payload + 45 or raw[payload] != 1:
         raise GXWFormatError("outside observed ladder-token source envelope")
-    size, repeated = struct.unpack_from("<II", raw, 55)
+    size, repeated = struct.unpack_from("<II", raw, payload + 1)
     if size != repeated or size < 20:
         raise GXWFormatError("ladder-token source size fields disagree")
     # The older real FX3U MAIN..pou also stores zero in the first DWORD;
     # its full source body matches native compiler output byte-for-byte.
     # Preserve that value instead of normalizing the otherwise identical frame.
-    if raw[63:79] not in (bytes.fromhex("010000000c00000000000000ffffffff"),
+    if raw[payload + 9:payload + 25] not in (bytes.fromhex("010000000c00000000000000ffffffff"),
                          bytes.fromhex("000000000c00000000000000ffffffff")):
         raise GXWFormatError("unsupported ladder-token source prefix")
     body_length = size - 20
-    end = 79 + body_length
+    end = payload + 25 + body_length
     if end > len(raw) or len(raw) - end not in (20, 24):
         raise GXWFormatError("unsupported ladder-token source trailer")
-    return parse_token_fragment(raw, 79, body_length)
+    return parse_token_fragment(raw, payload + 25, body_length)
 
 
 def parse_token_region(raw: bytes, offset: int, length: int) -> TokenProgram:

@@ -519,7 +519,8 @@ def _validate_operand_token(value, path):
         _fail(path, f'invalid operand token {value!r}')
 
 
-def _validate_source_operand_types(spec, operands, path, plc_model):
+def _validate_source_operand_types(spec, operands, path, plc_model, *, allow_indexed_literals=False,
+                                   allow_buffer_references=False):
     """Validate only dimensions actually reviewed for this CPU/form."""
     if spec is None or "operand_types" not in spec.verified_fields:
         return
@@ -527,6 +528,19 @@ def _validate_source_operand_types(spec, operands, path, plc_model):
         operand_path = f"{path}.operands[{index}]"
         if not isinstance(value, str):
             _fail(operand_path, "Instruction operands must be strings")
+        if allow_buffer_references and definition.data_type in {'word', 'dword'}:
+            from plc.ordered_source import buffer_memory_reference
+            if buffer_memory_reference(value):
+                # The source keeps its hardware-qualified address and explicit
+                # unverified finding. No ordinary-device access is certified.
+                continue
+        if (allow_indexed_literals and definition.role not in {'write', 'read_write'}
+                and definition.data_type in {'word', 'dword'}):
+            from plc.ordered_source import indexed_literal_register
+            if indexed_literal_register(value):
+                # Preserved ordered source reports this value as unverified;
+                # lexical storage acceptance is not a numeric/type proof.
+                continue
         parsed = parse_device_address(value, plc_model)
         from plc.device_identity import canonical_reference_device
         if definition.allowed_devices and canonical_reference_device(value.upper()) not in definition.allowed_devices:
@@ -1445,7 +1459,13 @@ def _validate_ladder_structure(data, plc_model, *, partial=False, syntax_only=Fa
         _fail('$', f'missing top-level fields: {sorted(allowed-set(data))}')
     comments = data.get('device_comments',{})
     _require_dict(comments, '$.device_comments')
-    if syntax_only:
+    from plc.ordered_source import is_ordered_ladder
+    if is_ordered_ladder(data):
+        for address, comment in comments.items():
+            _validate_operand_token(address, '$.device_comments')
+            if not isinstance(comment, str) or '\0' in comment:
+                _fail('$.device_comments', 'source comments must be text without NUL')
+    elif syntax_only:
         for address, comment in comments.items():
             _validate_operand_token(address, "$.device_comments")
             _check_text_length(comment, f"$.device_comments.{address}")
@@ -1455,8 +1475,13 @@ def _validate_ladder_structure(data, plc_model, *, partial=False, syntax_only=Fa
     _require_list(rungs,'$.rungs')
     seen = set()
     for index,rung in enumerate(rungs):
-        _validate_rung(rung,f'$.rungs[{index}]',model,
-            require_catalogued_instructions=require_catalogued_instructions,syntax_only=syntax_only)
+        if isinstance(rung, dict) and 'ordered_instructions' in rung:
+            from plc.ordered_source import validate_ordered_rung
+            validate_ordered_rung(rung, plc_model=model,
+                require_catalogued=require_catalogued_instructions, syntax_only=syntax_only)
+        else:
+            _validate_rung(rung,f'$.rungs[{index}]',model,
+                require_catalogued_instructions=require_catalogued_instructions,syntax_only=syntax_only)
         if rung['rung_id'] in seen:
             _fail(f'$.rungs[{index}].rung_id',f"duplicate rung_id {rung['rung_id']}")
         seen.add(rung['rung_id'])

@@ -88,16 +88,33 @@ def _segment(start, end):
 
 
 def _on(point, start, end):
+    if tuple(start)==tuple(end):
+        return tuple(point)==tuple(start)
     axis, fixed, low, high = _segment(start, end)
     return (point[1] == fixed and low <= point[0] <= high if axis == 'h'
             else point[0] == fixed and low <= point[1] <= high)
+
+
+def _wire_segment(wire):
+    if wire.record_class==3:
+        return ('p',wire.start.x,wire.start.y,wire.start.y)
+    return _segment((wire.start.x,wire.start.y),(wire.end.x,wire.end.y))
+
+
+def _handle_segment(wire):
+    if wire.get('kind')=='junction':
+        if wire['start']!=wire['end']:
+            raise GXWFormatError('junction handle requires one coincident point')
+        x,y=wire['start']
+        return ('p',x,y,y)
+    return _segment(wire['start'],wire['end'])
 
 
 def _geometry(wires):
     """Exact conductive intervals, allowing only collinear native subdivision."""
     grouped = defaultdict(list)
     for wire in wires:
-        axis, fixed, low, high = _segment((wire.start.x, wire.start.y), (wire.end.x, wire.end.y))
+        axis, fixed, low, high = _wire_segment(wire)
         grouped[(axis, fixed)].append((low, high))
     result = []
     for (axis, fixed), intervals in sorted(grouped.items()):
@@ -122,11 +139,13 @@ def _snapshot(program, node_ids):
     membership = _membership(program)
     graph = build_connectivity_graph(program)
     wires = {wire.offset: wire for wire in program.wires}
-    wire_keys = [(membership[w.offset], _segment((w.start.x, w.start.y), (w.end.x, w.end.y))) for w in program.wires]
+    wire_keys = [(membership[w.offset], _wire_segment(w)) for w in program.wires]
     if len(wire_keys) != len(set(wire_keys)):
         raise GXWFormatError('duplicate wire geometry has ambiguous native identity')
-    header = bytearray(program.raw[:PROGRAM_PREFIX_SIZE])
-    for offset in (SIZE_LIKE_A_OFFSET, SIZE_LIKE_B_OFFSET):
+    from .source_header import source_payload_offset
+    payload = source_payload_offset(program.raw)
+    header = bytearray(program.raw[:payload + 17])
+    for offset in (payload + 1, payload + 5):
         header[offset:offset + 4] = b'\0' * 4
     nodes = {node_ids[node.offset]: {'block': membership[node.offset],
              'record': serialize_structured_node(node).hex()} for node in program.nodes}
@@ -140,7 +159,7 @@ def _snapshot(program, node_ids):
                      'geometry': _geometry([wires[offset] for offset in net.wire_offsets])})
     nets.sort(key=lambda row: (row['block'], row['ports'], row['geometry']))
     return {'nodes': nodes, 'nets': nets, 'trailer': program.trailer.hex(), 'header': header.hex(),
-        'blocks': [{'height': block.canvas_height, 'opaque_header': block.raw_header[4:16].hex(),
+        'blocks': [{'height': block.canvas_height, 'opaque_header': block.raw_header[4:-8].hex(),
                     'unknown': [r.raw.hex() for r in records if r in program.unknown_records]}
                    for block, records in program.block_records()]}
 
@@ -169,9 +188,10 @@ def _checkpoint(program, node_ids, protected, contracts):
 def _port_descriptors(context, node, *, device_profile=None):
     if node.kind in (NodeKind.FUNCTION, NodeKind.FUNCTION_BLOCK):
         return context.sources.callable(node)['ports']
-    if node.kind in (NodeKind.INPUT, NodeKind.OUTPUT):
+    if node.kind in (NodeKind.INPUT, NodeKind.OUTPUT,NodeKind.INOUT):
         data_type = _terminal_type(node.symbol, context.sources, device_profile or context.sources.cpu)
-        return [{**row, 'side': 'out' if node.kind == NodeKind.INPUT else 'in', 'data_type': data_type}
+        return [{**row, 'side': ({'IN':'in','OUT':'out'}[row['name']] if node.kind==NodeKind.INOUT
+                 else 'out' if node.kind==NodeKind.INPUT else 'in'), 'data_type': data_type}
                 for row in _ports(node, context.sources)]
     raise GXWFormatError('changed data nets require source-resolved callable or terminal ports')
 
@@ -216,17 +236,19 @@ def _node_anchor(context, identity, node, *, device_profile=None):
 
 def _wire_anchor(context, identity, expected):
     membership = _membership(context.program)
-    wanted = _segment(expected['start'], expected['end'])
+    wanted = _handle_segment(expected)
     candidates = [w for w in context.program.wires if membership[w.offset] == expected['block']
-                  and _segment((w.start.x, w.start.y), (w.end.x, w.end.y)) == wanted]
-    if not candidates:
+                  and _wire_segment(w) == wanted]
+    if not candidates and wanted[0]!='p':
         axis, fixed, low, high = wanted
         candidates = [w for w in context.program.wires if membership[w.offset] == expected['block']
             and (lambda s: s[:2] == (axis, fixed) and low <= s[2] < s[3] <= high)(
-                _segment((w.start.x, w.start.y), (w.end.x, w.end.y)))]
+                _wire_segment(w))]
         if _geometry(candidates) != [list(wanted)]:
             raise GXWFormatError('wire no longer has a distinct native segment: ' + identity)
-    keys = [_segment((w.start.x, w.start.y), (w.end.x, w.end.y)) for w in candidates]
+    if not candidates:
+        raise GXWFormatError('junction no longer has a distinct native point: '+identity)
+    keys = [_wire_segment(w) for w in candidates]
     if len(keys) != len(set(keys)):
         raise GXWFormatError('wire selection is ambiguous: ' + identity)
     return {'wire': identity, 'block': expected['block'], 'start': deepcopy(expected['start']), 'end': deepcopy(expected['end']),
@@ -262,9 +284,17 @@ def _verify_state(raw, prepared, snapshot):
         raise GXWFormatError('visible graph edit changed an unrelated wire record')
     for contract in snapshot['wire_fields']:
         axis, fixed, low, high = contract['geometry']
+        if axis=='p':
+            if not any(membership[wire.offset]==contract['block'] and wire.record_class==3
+                       and list(_wire_segment(wire))==contract['geometry']
+                       and list(wire.prefix_fields)==contract['prefix']
+                       and wire.suffix==contract['suffix'] and wire.record_length==contract['length']
+                       for wire in context.program.wires):
+                raise GXWFormatError('visible graph edit changed retained junction fields')
+            continue
         coverage = []
         for wire in context.program.wires:
-            geometry = _segment((wire.start.x, wire.start.y), (wire.end.x, wire.end.y))
+            geometry = _wire_segment(wire)
             if (membership[wire.offset] != contract['block'] or list(wire.prefix_fields) != contract['prefix']
                     or wire.suffix != contract['suffix'] or wire.record_length != contract['length']
                     or geometry[:2] != (axis, fixed)):
@@ -306,7 +336,7 @@ def _endpoint(context, program, nodes, handles, endpoint, *, side, device_profil
                 or not _on(point, wire['start'], wire['end'])):
             raise GXWFormatError('wire tap must lie on the selected current wire')
         matching = [w for w in program.wires if membership[w.offset] == wire['block']
-                    and _segment((w.start.x, w.start.y), (w.end.x, w.end.y)) == _segment(wire['start'], wire['end'])]
+                    and _wire_segment(w) == _handle_segment(wire)]
         if len(matching) != 1:
             raise GXWFormatError('wire tap source is ambiguous')
         net = build_connectivity_graph(program).net_for_wire(matching[0].offset)
@@ -355,8 +385,7 @@ def prepare_graph_edit(raw, command, *, device_profile=None):
     membership = _membership(context.program)
     protected = {wire.offset: {'block': membership[wire.offset], 'record': wire.raw.hex()}
                  for wire in context.program.wires}
-    contracts = {wire.offset: {'block': membership[wire.offset], 'geometry': list(_segment(
-                    (wire.start.x, wire.start.y), (wire.end.x, wire.end.y))),
+    contracts = {wire.offset: {'block': membership[wire.offset], 'geometry': list(_wire_segment(wire)),
                 'prefix': list(wire.prefix_fields), 'suffix': wire.suffix, 'length': wire.record_length}
                  for wire in context.program.wires}
     initial = _checkpoint(context.program, node_ids, protected, contracts)
@@ -381,8 +410,8 @@ def prepare_graph_edit(raw, command, *, device_profile=None):
         removed_wires = set()
         if kind in ('rebind_terminal', 'delete_terminal', 'move_node'):
             node = current_nodes.get(action['node']) if isinstance(action['node'], str) else None
-            allowed = ((NodeKind.INPUT, NodeKind.OUTPUT, NodeKind.FUNCTION, NodeKind.FUNCTION_BLOCK)
-                       if kind == 'move_node' else (NodeKind.INPUT, NodeKind.OUTPUT))
+            allowed = ((NodeKind.INPUT, NodeKind.OUTPUT,NodeKind.INOUT, NodeKind.FUNCTION, NodeKind.FUNCTION_BLOCK)
+                       if kind == 'move_node' else (NodeKind.INPUT, NodeKind.OUTPUT,NodeKind.INOUT))
             if node is None or node.kind not in allowed:
                 raise GXWFormatError(kind + ' requires an existing ' +
                                      ('data node' if kind == 'move_node' else 'terminal node'))
@@ -447,7 +476,7 @@ def prepare_graph_edit(raw, command, *, device_profile=None):
                 segment = _segment(a, b)
                 if max(a[1], b[1]) > list(program.block_records())[block][0].canvas_height:
                     raise GXWFormatError('wire path exceeds the current block canvas')
-                if any(_segment(row['start'], row['end']) == segment and row['block'] == block for row in handles.values()):
+                if any(_handle_segment(row) == segment and row['block'] == block for row in handles.values()):
                     raise GXWFormatError('duplicate visible wire segment')
                 axis, fixed, low, high = segment
                 for node in program.nodes:

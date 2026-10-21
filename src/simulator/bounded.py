@@ -293,6 +293,11 @@ class ScanMachine:
                     if identity not in group_snapshots and targets.intersection(possible_writes) and (accumulator is not False or op == 'OUT'):
                         group_snapshots[identity] = copy.deepcopy(self.memory)
                 try:
+                    record_kind = instruction.get('kind', 'instruction')
+                    if record_kind in {'statement', 'note'}:
+                        continue
+                    if record_kind != 'instruction':
+                        raise UnknownInstructionSemantics('source_record_' + record_kind + '_unverified')
                     if not self.facts.get('control') and not (op.startswith('ST_') or op in
                             {'LD','LDI','AND','ANI','OR','ORI','ORB','ANB','MPS','MRD','MPP','END','NOP',*self.facts.get('transfers',{})}):
                         raise UnknownInstructionSemantics('cpu_control_form_unverified:' + op)
@@ -499,6 +504,14 @@ class ScanMachine:
                         self.constraint_violations.append({'location': location, 'scan': self.scan_index,
                                                           'constraint': constraint})
                     self.gap(str(error), location)
+                    if instruction.get('kind') in {'opaque', 'label'}:
+                        # The remaining control flow and write scope are not
+                        # known. A suffix executed against unchanged memory
+                        # would manufacture conclusions about this source.
+                        self.memory = {key: None for key in self.memory}
+                        self.scan_index += 1
+                        return {'before': before, 'after': copy.deepcopy(self.memory),
+                                'writes': copy.deepcopy(self.writes), 'group_snapshots': group_snapshots}
                     if op.startswith(('LD', 'AND', 'OR')):
                         accumulator = None
                     else:

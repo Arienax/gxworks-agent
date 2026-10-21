@@ -17,18 +17,26 @@ class NodeKind(str, Enum):
     CONTACT_NC = "contact_nc"
     CONTACT_RISING = "contact_rising"
     CONTACT_FALLING = "contact_falling"
+    CONTACT_RISING_NEGATED = "contact_rising_negated"
+    CONTACT_FALLING_NEGATED = "contact_falling_negated"
     COIL = "coil"
     COIL_NEGATED = "coil_negated"
     COIL_SET = "coil_set"
     COIL_RESET = "coil_reset"
     INPUT = "input"
     OUTPUT = "output"
+    INOUT = "inout"
+    JUMP = "jump"
+    RETURN = "return"
     UNKNOWN = "unknown"
 
 
 CONTACT_NODE_KINDS = frozenset({
     NodeKind.CONTACT, NodeKind.CONTACT_NC,
     NodeKind.CONTACT_RISING, NodeKind.CONTACT_FALLING,
+})
+GRAPH_CONTACT_NODE_KINDS = CONTACT_NODE_KINDS | frozenset({
+    NodeKind.CONTACT_RISING_NEGATED, NodeKind.CONTACT_FALLING_NEGATED,
 })
 COIL_NODE_KINDS = frozenset({
     NodeKind.COIL, NodeKind.COIL_NEGATED, NodeKind.COIL_SET, NodeKind.COIL_RESET,
@@ -45,10 +53,15 @@ def node_kind_from_code(kind_code: int) -> NodeKind:
         0x06: NodeKind.COIL_NEGATED,
         0x07: NodeKind.COIL_SET,
         0x08: NodeKind.COIL_RESET,
+        0x09: NodeKind.JUMP,
+        0x0A: NodeKind.RETURN,
         0x0D: NodeKind.INPUT,
         0x0E: NodeKind.OUTPUT,
+        0x0F: NodeKind.INOUT,
         0x11: NodeKind.CONTACT_RISING,
         0x12: NodeKind.CONTACT_FALLING,
+        0x13: NodeKind.CONTACT_RISING_NEGATED,
+        0x14: NodeKind.CONTACT_FALLING_NEGATED,
     }.get(kind_code, NodeKind.UNKNOWN)
 
 
@@ -130,6 +143,7 @@ class StructuredWire:
     prefix_fields: Tuple[int, int, int, int, int]
     suffix: int
     raw: bytes = field(repr=False)
+    record_class: int = 2
 
 
 @dataclass(frozen=True)

@@ -146,7 +146,8 @@ def _diagnostic_graphs(
                         needed = [callee, graph['caller']['pou']]
                         needed.extend(row['native_reference']['source'] for row in graph.get('call_chain', []))
                         chain = bind_native_source_chain(all_programs, needed, project_id=project,
-                            native_version=observation['native_version'], selections=events, reads=events, snapshots=snapshots)
+                            native_version=observation['native_version'], selections=events, reads=events,
+                            snapshots=snapshots, cpu=context['cpu'])
                         graph['source_chain'] = chain
                         if chain['status'] != 'current':
                             graph.update(status='unresolved', reason='an original caller or callee body is not current')
@@ -173,7 +174,8 @@ def _diagnostic_graphs(
                             connectivity=graph_connectivity[pou], instance=(instance['task'], instance['instance']))
                     needed = list(dict.fromkeys([pou, *([graph['caller']['pou']] if 'caller' in graph else [])]))
                     graph['source_chain'] = bind_native_source_chain(programs, needed, project_id=project,
-                        native_version=observation['native_version'], selections=events, reads=events, snapshots=snapshots)
+                        native_version=observation['native_version'], selections=events, reads=events,
+                        snapshots=snapshots, cpu=context['cpu'])
                     if graph['source_chain']['status'] != 'current':
                         graph.update(status='unresolved', reason='original FBD source body is not current')
                 else:
@@ -471,7 +473,8 @@ def _project_native_validation(raw, observation, snapshots, *, event_index=None)
     programs = {row['name']: row['raw'] for row in sources}
     all_programs = {**programs, **{(row['library'], row['name']): row['raw'] for row in library_sources}}
     source_bodies = bind_native_source_chain(all_programs, list(all_programs), project_id=project,
-        native_version=observation['native_version'], selections=events, reads=events, snapshots=snapshots)
+        native_version=observation['native_version'], selections=events, reads=events,
+        snapshots=snapshots, cpu=context['cpu'])
     imported = {'status': 'unresolved', 'streams': [], 'reason': 'original imported HDB is missing'}
     if isinstance(snapshots.get('imported-hdb.bin'), bytes):
         try:

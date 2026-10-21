@@ -74,6 +74,44 @@ class TokenOperand:
     tokens: tuple[LadderToken, ...]
     text: str
 
+    def storage_form(self) -> dict:
+        """Keep lexical text and token identities separate for an edit.
+
+        Several Q/L source forms have the same display spelling. The codes
+        select an existing grammar form; callers never supply replacement
+        bytes or override an instruction's role/width checks.
+        """
+        return {'text': self.text, 'token_codes': [f'{token.raw[1]:02x}' for token in self.tokens]}
+
+    def components(self, *, profile: str) -> list[dict]:
+        """Expose existing lexical roles without making UI interpret codes."""
+        if profile.startswith('fx'):
+            return [token.annotation() for token in self.tokens]
+        from .token_q import _catalog
+        catalog = _catalog(profile)['operands']
+        roles = {0xf0: 'index_z', 0xf6: 'double_index_z', 0xf1: 'digit_group',
+                 0xf2: 'bit_select', 0xf3: 'indirect', 0xf8: 'module_prefix',
+                 0xf9: 'network_prefix', 0xfc: 'block_prefix',
+                 0xfd: 'extended_prefix', 0xfe: 'extended_prefix', 0xff: 'extended_prefix'}
+        result = []
+        for token in self.tokens:
+            code = token.raw[1]
+            if code in roles:
+                result.append({'kind': 'operand-modifier', 'role': roles[code],
+                               'numeric_value': int.from_bytes(token.raw[2:-1], 'little')})
+            elif code in (0xdf, 0xee):
+                result.append({'kind': 'operand', 'role': 'label' if code == 0xdf else 'string'})
+            else:
+                descriptor = catalog.get(f'{code:02x}')
+                if descriptor is None:
+                    result.append({'kind': 'opaque'})
+                elif code < 0xe3:
+                    result.append({'kind': 'operand', 'device_type': descriptor[0],
+                                   'numeric_value': int.from_bytes(token.raw[2:-1], 'little')})
+                else:
+                    result.append({'kind': 'operand', 'constant_type': descriptor[0]})
+        return result
+
 
 def _operand_groups(tokens: tuple[LadderToken, ...], text_encoding: str | None) -> tuple[TokenOperand, ...]:
     groups, start = [], 0
@@ -87,10 +125,15 @@ def _operand_groups(tokens: tuple[LadderToken, ...], text_encoding: str | None) 
         roles = tuple(m["role"] for m in modifiers)
         prefix = item.get("device_type")
         if roles not in ((), ("index_z",), ("index_v",), ("digit_group",),
-                         ("digit_group", "index_z"), ("digit_group", "index_v"), ("bit_select",)):
+                         ("digit_group", "index_z"), ("digit_group", "index_v"), ("bit_select",),
+                         ("module_prefix",), ("module_prefix", "index_z"), ("module_prefix", "index_v")):
             raise GXWFormatError("unobserved operand modifier sequence")
-        if any(r.startswith("index_") for r in roles) and prefix not in ("M", "X", "Y", "S", "D", "R", "T", "C"):
+        if (any(r.startswith("index_") for r in roles)
+                and prefix not in ("M", "X", "Y", "S", "D", "R", "T", "C", "G")
+                and item.get('constant_type') not in ('K', 'H')):
             raise GXWFormatError("unobserved indexed base type")
+        if 'module_prefix' in roles and prefix != 'G':
+            raise GXWFormatError('FX module prefix requires its buffer-memory operand')
         if "digit_group" in roles and prefix not in ("M", "X", "Y", "S"):
             raise GXWFormatError("unobserved digit group base type")
         if "bit_select" in roles and prefix != "D":
@@ -102,6 +145,8 @@ def _operand_groups(tokens: tuple[LadderToken, ...], text_encoding: str | None) 
                 text = "K" + str(value) + text
             elif role == "bit_select":
                 text += "." + format(value, "X")
+            elif role == 'module_prefix':
+                text = 'U' + str(value) + '\\' + text
             else:
                 text += ("Z" if role == "index_z" else "V") + str(value)
         groups.append(TokenOperand(tokens[start:end + 1], text))
@@ -224,7 +269,7 @@ def decode_token_listing(raw: bytes, *, text_encoding: str | None = None,
     Unknown instruction widths make later absolute steps unknown. Known records
     following a gap remain inspectable, but complete CSV/IR export is refused.
     """
-    if profile not in ("fx", "fx3u", "fx1s", "fx3g", "q02", "q03udv", "l02"):
+    if profile not in ("fx", "fx3u", "fx1s", "fx3g", "q02", "q03udv", "l02", "q", "l"):
         raise GXWFormatError("unsupported token profile: " + profile)
     program = parse_token_pou(raw) if profile == "fx" else frame_token_pou(raw)
     return decode_token_program(program, text_encoding=text_encoding, profile=profile)
@@ -233,7 +278,7 @@ def decode_token_listing(raw: bytes, *, text_encoding: str | None = None,
 def decode_token_program(program: TokenProgram, *, text_encoding: str | None = None,
                          profile: str = "fx") -> TokenListing:
     """Project an explicitly framed region; its caller establishes CPU context."""
-    if profile in ("q02", "q03udv", "l02"):
+    if profile in ("q02", "q03udv", "l02", "q", "l"):
         return _decode_q_token_program(program, text_encoding=text_encoding, profile=profile)
     if profile not in ("fx", "fx3u", "fx1s", "fx3g"):
         raise GXWFormatError("unsupported token profile: " + profile)
@@ -319,7 +364,7 @@ def _decode_q_token_program(program: TokenProgram, *, text_encoding: str | None,
                 records.append(TokenText(tokens, "statement" if raw[1] == 0x80 else "note", text, step))
             else:
                 width = 1 if len(raw) <= 3 else raw[2]
-                if not 1 <= width <= 127:
+                if not 1 <= width <= 127 and raw != b'\x05\x62\x00\x01\x05':
                     raise GXWFormatError("nonpositive signed Q stored step width")
                 if len(raw) in (3, 4) and raw[1] == 0x3c:
                     if len(tokens) != 2 or tokens[1].raw[1] not in (0xd0, 0xd1):
