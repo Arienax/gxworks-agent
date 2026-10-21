@@ -1,16 +1,25 @@
-"""Source-backed FX program widths. This is storage metadata, not validation.
+"""Source-backed program widths for every target the project already knows.
 
-All generated step labels use this module. Native token headers are observations
-of stored widths: readers must preserve them, including positive but incorrect
-widths, rather than silently replacing them with a calculated width.
+This is storage metadata, not validation and not a statement about which CPUs the
+project supports. All generated step labels use this module. Native token headers
+are observations of stored widths: readers preserve them, including positive but
+incorrect widths, rather than silently replacing them with a calculated width.
 
-The shared catalogue supplies exact native mnemonic forms (including D/P)
-and the operand-dependent basic-instruction rules in the same resource. Unknown
-widths are None, never a guessed one-step instruction or a generation gate.
+Target identity follows the existing native CPU catalogue, including merged menu
+options such as ``FX3U/FX3UC`` or ``L02/L02-P``: a merged target answers only when
+every member answers, and consistently. FX rules live in the shared resource. Q/L
+widths reuse the stored-width algorithms in :mod:`gxw.step_rules_q` through a
+lazy delegation, so each CPU family has exactly one implementation and Core holds
+no second copy of a formula.
+
+A width is never guessed. An unresolved form reports why: missing operands,
+missing project context, no coverage for that CPU, conflicting member answers, or
+unavailable metadata. ``None`` never becomes a one-step instruction and never
+blocks generation by itself.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 import json
 import os
@@ -22,6 +31,24 @@ from typing import Any, Mapping, Optional, Sequence, Tuple
 
 
 NATIVE_CATALOG = "fx3u_step_widths.json"
+
+#: Resolution states. None of them changes the project's model range, and none of
+#: them means "this CPU does not support the instruction".
+STATUS_KNOWN = "known"
+STATUS_REQUIRES_OPERANDS = "requires_operands"
+STATUS_REQUIRES_CONTEXT = "requires_context"
+STATUS_NO_PROFILE = "no_profile"
+STATUS_CONFLICT = "conflict"
+STATUS_METADATA_UNAVAILABLE = "metadata_unavailable"
+STATUS_UNKNOWN_CPU = "unknown_cpu"
+STATUS_NOT_APPLICABLE = "not_applicable"
+
+#: How unresolved member answers merge, most fundamental first.
+_UNRESOLVED_PRIORITY = (
+    STATUS_NO_PROFILE, STATUS_CONFLICT, STATUS_METADATA_UNAVAILABLE,
+    STATUS_UNKNOWN_CPU, STATUS_REQUIRES_CONTEXT, STATUS_REQUIRES_OPERANDS,
+    STATUS_NOT_APPLICABLE,
+)
 
 
 def _catalog_directories() -> Tuple[Path, ...]:
@@ -84,14 +111,47 @@ def stored_header_width(raw: bytes) -> Optional[int]:
 
 @dataclass(frozen=True)
 class StepWidth:
+    """One expected program width, with the reason it is (un)resolved."""
+
     steps: Optional[int]
     source: str
     reason: str = ""
     evidence: Tuple[str, ...] = ()
+    status: str = ""
+    requirements: Tuple[str, ...] = ()
+    #: "exact" when the rule was verified for this CPU, "family" when it is a
+    #: shared family rule whose evidence names the CPUs it was verified on.
+    scope: str = "exact"
+    # Per-member answers for a merged target such as FX3U/FX3UC or L02/L02-P.
+    members: Tuple[Tuple[str, "StepWidth"], ...] = field(default=(), repr=False)
+
+    def __post_init__(self):
+        if not self.status:
+            object.__setattr__(self, "status",
+                               STATUS_KNOWN if self.steps is not None else STATUS_NO_PROFILE)
 
     @property
     def known(self) -> bool:
         return self.steps is not None
+
+    def as_dict(self) -> dict:
+        return {"steps": self.steps, "status": self.status, "source": self.source,
+                "scope": self.scope, "reason": self.reason,
+                "requirements": list(self.requirements), "evidence": list(self.evidence),
+                "members": [{"cpu": cpu, **value.as_dict()} for cpu, value in self.members]}
+
+
+def _known(steps: int, source: str, *, evidence: Sequence[str] = (), scope: str = "exact",
+           members: Sequence[Tuple[str, "StepWidth"]] = ()) -> StepWidth:
+    return StepWidth(int(steps), source, evidence=tuple(evidence), status=STATUS_KNOWN,
+                     scope=scope, members=tuple(members))
+
+
+def _unresolved(status: str, reason: str, *, source: str = "unknown",
+                requirements: Sequence[str] = (),
+                members: Sequence[Tuple[str, "StepWidth"]] = ()) -> StepWidth:
+    return StepWidth(None, source, reason=reason, status=status,
+                     requirements=tuple(requirements), members=tuple(members))
 
 
 def _operand_text(value: Any) -> str:
@@ -107,8 +167,8 @@ class StepWidthCatalog:
     """Derive fixed widths from exact native spellings; apply explicit rules.
 
     No blanket 'D + name'/'name + P' heuristics. No formula based only on arity.
-    A single observed width is usable for the ordinary operand form, not proof
-    of every string/index/bit-selection encoding or CPU instruction support.
+    A single observed width is usable for the ordinary operand form, not proof of
+    every string/index/bit-selection encoding or CPU instruction support.
     """
 
     def __init__(self, encodings: Mapping[str, Sequence[Any]], rules: Mapping[str, Any]):
@@ -136,10 +196,27 @@ class StepWidthCatalog:
             widths.setdefault(str(opcode).upper(), []).append((width, int(arity), header))
         self.observations = MappingProxyType({op: tuple(items) for op, items in widths.items()})
 
-    def resolve(self, opcode: Any, operands: Sequence[Any] = (), *, plc_model: str = "FX3U") -> StepWidth:
-        model = str(plc_model or "FX3U").strip().upper()
+    def resolve(self, opcode: Any, operands: Sequence[Any] = (), *, plc_model: str) -> StepWidth:
+        """Resolve one width inside this catalogue's own CPU family."""
+        model = str(plc_model or "").strip().upper()
+        scope = "exact"
         if model not in self.models:
-            return StepWidth(None, "unknown", "No step-width catalogue for CPU " + model)
+            if not _in_fx_family(model):
+                return _unresolved(STATUS_NO_PROFILE,
+                                   "No step-width catalogue for CPU " + (model or "<missing target>"))
+            # These are shared FX instruction-width rules, not an FX3U
+            # substitution: the real identity is threaded through, and the answer
+            # names the CPUs the evidence came from. A real export that disagrees
+            # is still reported as a mismatch, never hidden.
+            scope = "family"
+
+        def known(steps: int, source: str, *, evidence: Sequence[str] = ()) -> StepWidth:
+            items = tuple(evidence)
+            if scope == "family":
+                items += (f"Shared FX instruction-width rule applied to {model}; verified on "
+                          f"{'/'.join(sorted(self.models))} manual evidence and native samples",)
+            return _known(steps, source, evidence=items, scope=scope)
+
         op = str(opcode).strip().upper()
         op = self.aliases.get(op, op)
         args = tuple(_operand_text(value) for value in operands)
@@ -147,36 +224,44 @@ class StepWidthCatalog:
         exact = self.exact_forms.get((op, args))
         if exact is not None:
             steps, evidence = exact
-            return StepWidth(steps, "exact_native_form", evidence=(evidence,) if evidence else ())
+            return known(steps, "exact_native_form", evidence=(evidence,) if evidence else ())
         if op in self.rule_opcodes:
             matches = [rule for rule in self.rules
                        if op in rule["opcodes"]
                        and len(args) == rule["arity"]
                        and re.fullmatch(rule["operands"], joined)]
             if not matches:
-                return StepWidth(None, "unknown", "Operand-dependent width has no matching rule")
+                return _unresolved(STATUS_NO_PROFILE,
+                                   "Operand-dependent width has no matching rule")
             widths = {rule["steps"] for rule in matches}
             if len(widths) != 1 or None in widths:
-                return StepWidth(None, "unknown", "Ambiguous or unresolved operand-width rule")
-            return StepWidth(next(iter(widths)), "operand_rule", evidence=tuple(rule["evidence"] for rule in matches))
+                return _unresolved(STATUS_CONFLICT, "Ambiguous or unresolved operand-width rule")
+            return known(next(iter(widths)), "operand_rule",
+                         evidence=tuple(rule["evidence"] for rule in matches))
         if op in self.variable:
-            return StepWidth(None, "unknown", "Variable-width instruction needs an operand/encoding-specific rule")
+            return _unresolved(STATUS_REQUIRES_OPERANDS,
+                               "Variable-width instruction needs an operand/encoding-specific rule",
+                               requirements=("operands", "operand_encoding"))
         observations = self.observations.get(op, ())
         if not observations:
-            return StepWidth(None, "unknown", "No native step-width observation for " + op)
-        # Stored width is not an operand count. A binary-arity mismatch must not
-        # be made to look like a known size, but never rejects the user's program.
+            return _unresolved(STATUS_NO_PROFILE, "No native step-width observation for " + op)
+        # Stored width is not an operand count. A binary-arity mismatch must not be
+        # made to look like a known size, but never rejects the user's program.
         compatible = [entry for entry in observations if entry[1] == len(args)]
         sizes = {entry[0] for entry in compatible}
         if len(sizes) != 1:
-            return StepWidth(None, "unknown", "Native widths are missing or ambiguous for this operand form")
+            return _unresolved(STATUS_CONFLICT,
+                               "Native widths are missing or ambiguous for this operand form")
         # Strings and indexed/bit-selected operands may change the encoding.
-        # Ordinary constants, direct devices and K-digit groups are covered by
-        # the observed fixed applied-instruction headers. Do not guess elsewhere.
+        # Ordinary constants, direct devices and K-digit groups are covered by the
+        # observed fixed applied-instruction headers. Do not guess elsewhere.
         ordinary = r"(?:[K][+-]?[0-9]+|H[0-9A-F]+|E[+-]?[0-9]+(?:\.[0-9]+)?(?:[Ee+-][+-]?[0-9]+)?|[A-Z]+[0-9]+|K[1-8][XYMS][0-9]+)"
         if any(re.fullmatch(ordinary, arg) is None for arg in args):
-            return StepWidth(None, "unknown", "Operand encoding is outside the fixed-width profile")
-        return StepWidth(next(iter(sizes)), "native_observation", evidence=tuple(entry[2] for entry in compatible))
+            return _unresolved(STATUS_REQUIRES_CONTEXT,
+                               "Operand encoding is outside the fixed-width profile",
+                               requirements=("operand_encoding",))
+        return known(next(iter(sizes)), "native_observation",
+                     evidence=tuple(entry[2] for entry in compatible))
 
     def fixed_forms(self) -> Mapping[str, Tuple[int, int]]:
         """Inspectable catalogue coverage, excluding operand-dependent forms."""
@@ -193,14 +278,118 @@ def default_step_width_catalog() -> StepWidthCatalog:
     return StepWidthCatalog(native_token_encodings(True), _read_resource(NATIVE_CATALOG)["step_width_profile"])
 
 
-def instruction_step_width(opcode: Any, operands: Sequence[Any] = (), *, plc_model: str = "FX3U") -> StepWidth:
-    """Shared, non-blocking expected-width API for generators and diagnostics."""
+def target_members(plc_model: Any) -> Tuple[str, ...]:
+    """Concrete members of one target identity, including merged menu options."""
+    text = str(plc_model or "").strip().upper()
+    text = text.removesuffix("(REMOTEI/O)")
+    return tuple(part for part in (piece.strip() for piece in text.split("/")) if part)
+
+
+@lru_cache(maxsize=256)
+def _native_profile(plc_model: str):
+    from gxworks2.project_profiles import native_project_profile
+    return native_project_profile(plc_model)
+
+
+def target_family(plc_model: Any) -> Optional[str]:
+    """Existing native CPU family for one identity; never narrows the model range."""
+    identity = str(plc_model or "").strip().upper()
+    profile = _native_profile(identity)
+    if profile is not None:
+        series = profile.series[0]
+        if series.startswith("FX"):
+            return "FX"
+        if series.startswith("QCPU"):
+            return "Q"
+        if series.startswith("L"):
+            return "L"
+        return None
+    if identity == "FX5U":
+        # Existing Core target; not a GX Works2 native creation option, and it has
+        # no program-width coverage of its own yet.
+        return "FX5U"
+    return None
+
+
+def _in_fx_family(plc_model: Any) -> bool:
+    """True for an FX menu identity: the FX width rules are shared family rules."""
+    profile = _native_profile(str(plc_model or "").strip().upper())
+    return bool(profile is not None and profile.series[0].startswith("FX"))
+
+
+def _resolve_member(member: str, opcode: Any, operands: Sequence[Any], context: Any) -> StepWidth:
+    family = target_family(member)
+    if family is None:
+        return _unresolved(STATUS_UNKNOWN_CPU, "Unknown PLC target " + repr(member))
+    if family == "FX5U":
+        return _unresolved(STATUS_NO_PROFILE,
+                           "No program step-width coverage for FX5U; FX rules are not borrowed")
+    if family in ("Q", "L"):
+        # The stored width of a Q/L instruction is a property of its encoded
+        # header, not of a mnemonic table; that algorithm lives in the GXW layer
+        # and is wired in separately. Until then the target is covered by no rule
+        # here, which is reported instead of borrowed from FX.
+        return _unresolved(STATUS_NO_PROFILE,
+                           "No program step-width coverage for " + member
+                           + "; Q/L stored widths come from their encoded header")
+    return default_step_width_catalog().resolve(opcode, operands, plc_model=member)
+
+
+def instruction_step_width(opcode: Any, operands: Sequence[Any] = (), *,
+                           plc_model: Any, context: Any = None) -> StepWidth:
+    """Shared, non-blocking expected-width API for generators and diagnostics.
+
+    ``plc_model`` is the target actually being edited and is required: a missing
+    target is reported, never replaced by FX3U. A merged menu option answers only
+    when every member answers, and consistently: members that disagree are a
+    conflict, and a member without coverage keeps the merged target unresolved.
+    """
+    if isinstance(plc_model, (list, tuple)):
+        # An explicit member list is an internal convenience only.
+        members = tuple(str(part).strip().upper() for part in plc_model if str(part).strip())
+    else:
+        members = target_members(plc_model)
+    if not members:
+        return _unresolved(STATUS_UNKNOWN_CPU,
+                           "A stored step width needs the saved CPU identity",
+                           requirements=("plc_model",))
     try:
-        return default_step_width_catalog().resolve(opcode, operands, plc_model=plc_model)
+        if len(members) == 1:
+            return _resolve_member(members[0], opcode, operands, context)
+        results = tuple((member, _resolve_member(member, opcode, operands, context))
+                        for member in members)
+        return _merge_members(results)
     except (OSError, ValueError, KeyError, TypeError) as exc:
-        # A missing/incompatible resource is reported, not silently replaced by
-        # an incorrect width and not turned into a hidden model retry.
-        return StepWidth(None, "unknown", "Step-width metadata unavailable: " + str(exc))
+        # A missing/incompatible resource is reported, not silently replaced by an
+        # incorrect width and not turned into a hidden model retry.
+        return _unresolved(STATUS_METADATA_UNAVAILABLE,
+                           "Step-width metadata unavailable: " + str(exc))
+
+
+def _merge_members(results: Sequence[Tuple[str, StepWidth]]) -> StepWidth:
+    unresolved = [(member, width) for member, width in results if not width.known]
+    if not unresolved:
+        widths = {width.steps for _member, width in results}
+        if len(widths) == 1:
+            return _known(next(iter(widths)), "merged_members",
+                          evidence=tuple(item for _member, width in results
+                                         for item in width.evidence)[:8],
+                          scope="family" if any(width.scope == "family" for _m, width in results)
+                          else "exact",
+                          members=results)
+        return _unresolved(STATUS_CONFLICT,
+                           "Merged target members disagree; name the exact CPU",
+                           members=results)
+    statuses = {width.status for _member, width in unresolved}
+    status = next((candidate for candidate in _UNRESOLVED_PRIORITY if candidate in statuses),
+                  STATUS_NO_PROFILE)
+    reason = "; ".join(f"{member}: {width.reason}" for member, width in unresolved)
+    if len(statuses) == 1 and status in (STATUS_REQUIRES_CONTEXT, STATUS_REQUIRES_OPERANDS):
+        requirements = tuple(dict.fromkeys(requirement
+                                          for _member, width in unresolved
+                                          for requirement in width.requirements))
+        return _unresolved(status, reason, requirements=requirements, members=results)
+    return _unresolved(status, reason, members=results)
 
 
 @dataclass
@@ -217,4 +406,8 @@ class StepCursor:
 
 
 __all__ = ["StepWidth", "StepWidthCatalog", "StepCursor", "instruction_step_width",
-           "default_step_width_catalog", "native_token_encodings", "native_lexical_overrides", "stored_header_width"]
+           "default_step_width_catalog", "native_token_encodings", "native_lexical_overrides",
+           "stored_header_width", "target_members", "target_family",
+           "STATUS_KNOWN", "STATUS_REQUIRES_OPERANDS", "STATUS_REQUIRES_CONTEXT",
+           "STATUS_NO_PROFILE", "STATUS_CONFLICT", "STATUS_METADATA_UNAVAILABLE",
+           "STATUS_UNKNOWN_CPU", "STATUS_NOT_APPLICABLE"]

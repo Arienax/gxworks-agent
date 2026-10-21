@@ -74,3 +74,33 @@ def native_project_profile(cpu):
 def can_prepare_program_project(cpu):
     profile = native_project_profile(cpu)
     return bool(profile and profile.program_supported)
+
+
+def native_plc_info(cpu):
+    """Exact native CSV PLC-info value for one menu target.
+
+    Merged menu options keep their observed identity, and a concrete member
+    resolves to the menu option that owns it, so an FX3UC project exports the
+    same ``FXCPU FX3U/FX3UC`` header GX Works2 writes. Unknown, Developer and
+    FX5U names raise instead of borrowing an FX header.
+    """
+    profile = native_project_profile(cpu)
+    if profile is None:
+        raise ValueError("no native GX Works2 CSV PLC-info for " + repr(str(cpu or "")))
+    return f"{profile.series[0]} {profile.cpu}"
+
+
+def plc_info_target(value):
+    """The menu target a native CSV PLC-info value states, or ``None``.
+
+    The reverse of :func:`native_plc_info`. An export names its own CPU, so a
+    reader uses that identity instead of assuming one; the generic
+    ``三菱 GX Works2 兼容`` value names no CPU and stays unrecognised.
+    """
+    text = str(value or "").strip()
+    if not text or text == "三菱 GX Works2 兼容":
+        return None
+    for profile in NATIVE_PROJECT_PROFILES:
+        if profile.accepts_plc_info(text):
+            return profile.cpu
+    return None

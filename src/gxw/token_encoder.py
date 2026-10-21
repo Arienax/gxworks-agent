@@ -386,7 +386,21 @@ def _literal(text: str, codes: set[int], *, profile: str,
     return _integer(code, value, 32 if code in (0xe9, 0xeb) else 16, signed=signed)
 
 
-def _fx_header(op: str, args: tuple[str, ...], operands: tuple[bytes, ...], *, profile: str = 'fx3u',
+def _fx_target(plc_model: str | None) -> str:
+    """The stored CPU identity, never a silent FX3U substitution.
+
+    FX widths depend on the concrete CPU identity, so an absent target is absent
+    context: report it instead of computing an FX3U width for a project whose CPU
+    was not supplied.
+    """
+    identity = str(plc_model or '').strip()
+    if not identity:
+        raise GXWFormatError('FX stored step width needs the saved CPU identity')
+    return identity
+
+
+def _fx_header(op: str, args: tuple[str, ...], operands: tuple[bytes, ...], *,
+               plc_model: str | None, profile: str = 'fx3u',
                allow_draft: bool = False) -> bytes:
     from plc.instruction_constraints import fx_out_preset_error
     preset_error = fx_out_preset_error(op, args)
@@ -397,7 +411,7 @@ def _fx_header(op: str, args: tuple[str, ...], operands: tuple[bytes, ...], *, p
             # source draft; it is not the ordinary two-operand OUT header.
             return bytes.fromhex('032103')
         raise GXWFormatError(preset_error)
-    width = instruction_step_width(op, args, plc_model="FX3U").steps
+    width = instruction_step_width(op, args, plc_model=_fx_target(plc_model)).steps
     if op == 'OUT' and len(args) == 2:
         counter = re.fullmatch(r'C([0-9]+)', args[0])
         if counter and int(counter[1]) >= 200:
@@ -456,8 +470,9 @@ def _preserve_header(source: TokenInstruction, op: str, args: tuple[str, ...],
            for old, new in zip(source.operands, operands)):
         return False
     if profile in _FX_PROFILES:
-        before = instruction_step_width(op, source.args, plc_model="FX3U").steps
-        after = instruction_step_width(op, args, plc_model="FX3U").steps
+        cpu = _fx_target(plc_model)
+        before = instruction_step_width(op, source.args, plc_model=cpu).steps
+        after = instruction_step_width(op, args, plc_model=cpu).steps
         if before is not None and after is not None:
             return before == after
         catalog = default_step_width_catalog()
@@ -559,7 +574,8 @@ def encode_instruction(op: str, args: Sequence[str | Mapping] = (), *, profile: 
                                               plc_model=plc_model, storage_context=storage_context):
         header = source.tokens[0].raw
     elif profile in _FX_PROFILES:
-        header = _fx_header(op, arguments, operands, profile=profile, allow_draft=allow_draft)
+        header = _fx_header(op, arguments, operands, plc_model=plc_model, profile=profile,
+                            allow_draft=allow_draft)
     else:
         from .token_q_encoder import encode_q_header
         header = encode_q_header(op, arguments, operands, profile=profile, cpu=plc_model, source=source,

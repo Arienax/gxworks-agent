@@ -228,19 +228,33 @@ class TokenListing:
             raise GXWFormatError("flat instruction IR cannot discard labels; inspect the full records")
         return [{"op": r.mnemonic, "args": list(r.args)} for r in self.instructions]
 
-    def csv_bytes(self, *, title="MAIN") -> bytes:
+    def csv_bytes(self, *, title="MAIN", plc_model: str | None = None) -> bytes:
         """Export an inspection listing in the observed native CSV column format.
 
         Refuse a lossy export: opaque instructions and undecoded text must be
-        resolved or retained in the listing. Does not write a GXW or a PLC.
+        resolved or retained in the listing, and absolute steps need every stored
+        width. The PLC-info line comes from the project CPU, never from a
+        hardcoded FX3U header. Does not write a GXW or a PLC.
         """
         if self.profile not in ("fx", "fx3u"):
             raise GXWFormatError("native CSV export is only established for the FX profile")
         if self.gaps or any(isinstance(r, TokenText) and r.text is None for r in self.records):
             raise GXWFormatError("cannot export a complete CSV with opaque instructions/text")
+        if any(getattr(record, "step", "") is None for record in self.records):
+            raise GXWFormatError("cannot export absolute steps across an unknown instruction width")
+        from gxworks2.project_profiles import native_plc_info
+        identity = str(plc_model or "").strip().upper()
+        if not identity:
+            raise GXWFormatError("native CSV export needs the project CPU identity")
+        if identity not in ("FX3U", "FX3UC", "FX3U/FX3UC"):
+            # Only this menu target's CSV header has been observed. A concrete
+            # member resolves to it; another FX CPU must not borrow it.
+            raise GXWFormatError(
+                "native CSV export is only established for FX3U/FX3UC, not " + identity)
+        plc_info = native_plc_info(identity)
         out = io.StringIO(newline="")
         writer = csv.writer(out, delimiter="\t", quoting=csv.QUOTE_ALL, lineterminator="\r\n")
-        writer.writerows([[title], ["PLC信息:", "FXCPU FX3U/FX3UC"],
+        writer.writerows([[title], ["PLC信息:", plc_info],
                           ["步号", "行间声明", "指令", "I/O(软元件)", "空白栏", "PI声明", "注解"]])
         for record in self.records:
             if isinstance(record, TokenInstruction):
