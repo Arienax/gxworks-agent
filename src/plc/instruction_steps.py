@@ -368,6 +368,20 @@ def default_step_width_catalog() -> StepWidthCatalog:
     return StepWidthCatalog(native_token_encodings(True), _read_resource(NATIVE_CATALOG)["step_width_profile"])
 
 
+@lru_cache(maxsize=1)
+def known_menu_identities() -> frozenset:
+    """Every saved CPU menu option, with and without a Remote/O suffix."""
+    from gxworks2.project_profiles import NATIVE_PROJECT_PROFILES
+    names = set()
+    for profile in NATIVE_PROJECT_PROFILES:
+        text = str(profile.cpu).strip().upper()
+        names.add(text)
+        names.add(text.removesuffix("(REMOTEI/O)"))
+    # Existing Core target without a GX Works2 creation option.
+    names.add("FX5U")
+    return frozenset(name for name in names if name)
+
+
 def target_members(plc_model: Any) -> Tuple[str, ...]:
     """Concrete members of one target identity, including merged menu options."""
     text = str(plc_model or "").strip().upper()
@@ -463,11 +477,21 @@ def instruction_step_width(opcode: Any, operands: Sequence[Any] = (), *,
     code page a string payload is stored in; without it such a form answers
     ``requires_context`` for ``text_encoding``.
     """
+    merged_text = "" if isinstance(plc_model, (list, tuple)) else str(plc_model or "").strip().upper()
     if isinstance(plc_model, (list, tuple)):
         # An explicit member list is an internal convenience only.
         members = tuple(str(part).strip().upper() for part in plc_model if str(part).strip())
     else:
         members = target_members(plc_model)
+    if len(members) > 1 or (merged_text.endswith("/") and members):
+        # A merged identity is a menu option, not an arbitrary pair: a spelling
+        # such as FX3U/FX1S or a trailing slash names no saved CPU.
+        merged = "/".join(members)
+        if merged_text not in known_menu_identities() and merged not in known_menu_identities():
+            return _unresolved(STATUS_UNKNOWN_CPU,
+                               f"Unsupported merged CPU identity {merged_text or merged!r}: "
+                               "it is not a saved CPU menu option",
+                               requirements=("plc_model",))
     if not members:
         return _unresolved(STATUS_UNKNOWN_CPU,
                            "A stored step width needs the saved CPU identity",

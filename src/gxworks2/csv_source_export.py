@@ -163,24 +163,36 @@ def step_width_plan(snapshot: Mapping[str, Any], *, plc_model: Any = None,
                          "output_model": target["output_model"],
                          "source_plc_info": target["source_plc_info"],
                          "output_plc_info": target["output_plc_info"]})
+    # The export's own per-instruction width is an observation, and steps are
+    # sequential across the whole program: the next instruction may open the next
+    # network, so the observation is taken from document order rather than from
+    # the network that carries the instruction.
+    observed_pairs = []
+    for network in snapshot.get("raw_networks") or []:
+        for instruction in network.get("raw_instructions") or []:
+            if str(instruction.get("op") or "").strip():
+                observed_pairs.append(str(instruction.get("step") or "").strip())
+    observed_widths = []
+    for position, source_step in enumerate(observed_pairs):
+        following = observed_pairs[position + 1] if position + 1 < len(observed_pairs) else ""
+        if source_step.isdigit() and following.isdigit():
+            observed_widths.append(int(following) - int(source_step))
+        else:
+            observed_widths.append(None)
+    cursor_index = 0
     for network in snapshot.get("raw_networks") or []:
         network_id = str(network.get("id") or "")
         instructions = [item for item in network.get("raw_instructions") or []
                         if str(item.get("op") or "").strip()]
-        source_steps = [str(item.get("step") or "").strip() for item in instructions]
         for position, instruction in enumerate(instructions):
             opcode = str(instruction.get("op") or "").strip().upper()
             operands = [str(item) for item in instruction.get("args") or []]
             width = instruction_step_width(opcode, operands, plc_model=model,
                                            context=storage_context,
                                            assume_default_allocation=assume_default_allocation)
-            source_step = source_steps[position]
-            # The export's own per-instruction width is an observation; the
-            # catalogue is the expectation being checked against it.
-            native_width = None
-            if (position + 1 < len(source_steps) and source_step.isdigit()
-                    and source_steps[position + 1].isdigit()):
-                native_width = int(source_steps[position + 1]) - int(source_step)
+            source_step = observed_pairs[cursor_index]
+            native_width = observed_widths[cursor_index]
+            cursor_index += 1
             step = (cursor.label if chosen == "catalogue"
                     else (source_step if source_step.isdigit() else cursor.label))
             entries.append({"network_id": network_id, "instruction_index": position,

@@ -51,6 +51,14 @@ _CONTEXT_MARKERS = (
 _ENCODING_MARKERS = ("code page", "text encoding", "string needs its")
 
 
+def _normalised_operand(value: Any) -> str:
+    """One operand with device/literal case folded, string payloads untouched."""
+    text = str(value).strip()
+    if text.startswith('"'):
+        return text
+    return text.upper()
+
+
 def cpu_storage_mode(cpu: Any) -> str | None:
     """Observed CPU storage group, independent of the lexical profile."""
     from .token_q_encoder import TABLES
@@ -119,8 +127,8 @@ def resolve_stored_steps(opcode: Any, operands: Sequence[Any] = (), *, cpu: Any,
     saved project and want the unextended result; the evidence states that
     premise.
     """
-    from plc.instruction_steps import (STATUS_KNOWN, STATUS_UNKNOWN_CPU, StepWidth,
-                                      _known, _unresolved)
+    from plc.instruction_steps import (STATUS_KNOWN, STATUS_NO_PROFILE,
+                                      STATUS_UNKNOWN_CPU, StepWidth, _known, _unresolved)
 
     identity = str(cpu or "").strip().upper()
     if not identity:
@@ -130,12 +138,18 @@ def resolve_stored_steps(opcode: Any, operands: Sequence[Any] = (), *, cpu: Any,
     try:
         profile = source_token_profile(identity)
     except GXWFormatError as error:
+        if "parameter" in str(error).lower():
+            # The CPU is known, but it carries parameter files instead of a
+            # program: that is a coverage statement, not an unknown target.
+            return _unresolved(STATUS_NO_PROFILE, str(error))
         return _unresolved(STATUS_UNKNOWN_CPU, str(error))
-    name = str(opcode or "").strip()
+    name = str(opcode or "").strip().upper()
     if not name:
         return _unresolved("requires_operands", "Instruction opcode is missing",
                            requirements=("operands",))
-    args = tuple(str(value).strip() for value in operands or ())
+    # A Q/L operand is a device reference or a literal; its case is spelling, not
+    # storage. A quoted string keeps its case because it is payload.
+    args = tuple(_normalised_operand(value) for value in operands or ())
     mode = cpu_storage_mode(identity)
     if context is not None:
         mismatch = context_cpu_mismatch(context, identity)
