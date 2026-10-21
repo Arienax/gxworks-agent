@@ -721,7 +721,9 @@ def _csv_diagnostics(
             for finding in findings if isinstance(finding, Mapping)]
 
 
-def inspect_gxworks2_csv(program_csv_path, comment_csv_path, *, plc_model, program_name=None):
+def inspect_gxworks2_csv(program_csv_path, comment_csv_path, *, plc_model, program_name=None,
+                         storage_context=None, assume_default_allocation=False,
+                         text_encoding=None):
     """Read-only projection: ordered instruction IR first, drawing preview second.
 
     The exported statement list is authoritative.  Every network goes straight
@@ -831,8 +833,12 @@ def inspect_gxworks2_csv(program_csv_path, comment_csv_path, *, plc_model, progr
     # export keeps its own step labels; a disagreement is reported by kind so an
     # unresolved width is never confused with a known off-by-one.
     from gxworks2.csv_source_export import step_width_plan
-    width_plan = step_width_plan({"raw_networks": networks, "plc_model": plc_model},
-                                 plc_model=plc_model, step_source="source")
+    width_plan = step_width_plan({"raw_networks": networks, "plc_model": plc_model,
+                                  "plc_info": validation.plc_info},
+                                 plc_model=plc_model, step_source="source",
+                                 storage_context=storage_context,
+                                 assume_default_allocation=assume_default_allocation,
+                                 text_encoding=text_encoding)
     width_summary = width_plan["summary"]
     if width_summary["mismatch"]:
         step_width_status = "differences_reported"
@@ -846,6 +852,10 @@ def inspect_gxworks2_csv(program_csv_path, comment_csv_path, *, plc_model, progr
     if target["status"] == "mismatch":
         step_width_status = "target_conflict"
     step_width = {"status": step_width_status, "summary": width_summary,
+                  "text_encoding": text_encoding,
+                  "storage_context": (None if storage_context is None
+                                      else getattr(storage_context, "cpu", None)),
+                  "assume_default_allocation": bool(assume_default_allocation),
                   "findings": width_plan["findings"][:40],
                   "truncated_findings": max(0, len(width_plan["findings"]) - 40),
                   "target": target}

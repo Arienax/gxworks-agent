@@ -23,12 +23,13 @@ from plc.instruction_steps import (
 )
 
 from .models import GXWFormatError
+from .token_profiles import FX_CODEC_PROFILES
 from .template_data import template_bytes
 from .token_listing import TokenInstruction, TokenLabel, TokenOperand, TokenText, decode_token_program
 from .token_pou import parse_token_fragment, observed_source_encodings
 
 
-_FX_PROFILES = frozenset(("fx", "fx3u", "fx1s", "fx3g"))
+_FX_PROFILES = FX_CODEC_PROFILES
 _PROFILES = _FX_PROFILES | {"q02", "q03udv", "l02", "q", "l"}
 _ALIASES = {"ANDI": "ANI", "OUT_T_C": "OUT"}
 _FX_DEVICES = {"M": 0x90, "S": 0x98, "X": 0x9c, "Y": 0x9d,

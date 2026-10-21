@@ -68,45 +68,85 @@ def _step_source(value: Any) -> str:
     return chosen
 
 
+def _identity_members(identity: Any) -> frozenset:
+    """The CPU menu option's own members; one identity is its own member."""
+    from plc.instruction_steps import target_members
+    return frozenset(target_members(identity)) if identity else frozenset()
+
+
 def target_state(snapshot: Mapping[str, Any], model: Any, *, plc_info: Any = None,
                  step_source: str = "source") -> Dict[str, Any]:
-    """How the CPU being computed relates to the CPU the export states.
+    """The one decision about the exported CPU and the PLC信息 line.
 
-    A computed target and a retained header may disagree in three ways, and each
-    one has a different answer: the same CPU (the header is reproduced as read),
-    an explicit conversion (the header is rebuilt from the new CPU and the source
-    CPU stays as provenance), or a conflict (a source-preserving write cannot
-    change the identity, and a header that contradicts the computed CPU must not
-    be written or accepted at all).
+    The plan, the writer and the verifier all read this entry, so none of them
+    can decide a header the others did not plan. Two facts stay separate:
+    whether the computed CPU is the CPU the export states (a menu option is
+    compatible with each of its members, and the members share one header), and
+    whether the export's own header is reproduced verbatim, rebuilt for another
+    CPU, or refused. Every rebuild and every requested header is checked against
+    the target profile here, instead of being reported as done and rejected later.
     """
     from gxworks2.project_profiles import native_plc_info, native_project_profile
 
     source_model = str(snapshot.get("plc_model") or "").strip().upper() or None
     source_info = str(snapshot.get("plc_info") or "").strip()
     output_model = str(model or "").strip().upper() or None
-    converted = bool(source_model and output_model and source_model != output_model)
+    requested = None if plc_info is None else str(plc_info).strip()
+    stated = bool(source_model and output_model)
+    same_identity = bool(stated and _identity_members(source_model) & _identity_members(output_model))
+    converted = bool(stated and not same_identity)
+    # A source-preserving write reproduces the export's own header, so it cannot
+    # also change the identity that header names.
     conflict = bool(converted and step_source == "source")
-
-    if plc_info is not None:
-        output_info = str(plc_info).strip()
-    elif converted and not conflict:
+    profile = native_project_profile(output_model) if output_model else None
+    expected_info = ""
+    if profile is not None:
         try:
-            output_info = native_plc_info(output_model)
+            expected_info = native_plc_info(output_model)
         except ValueError:
-            output_info = ""
-    else:
-        # Same CPU, or a refused conversion: keep the export's own header.
-        output_info = source_info
+            profile, expected_info = None, ""
 
     entry: Dict[str, Any] = {
         "source_model": source_model,
         "output_model": output_model,
         "source_plc_info": source_info or None,
-        "output_plc_info": output_info or None,
+        "output_plc_info": None,
         "converted": converted,
         "status": "same",
         "reason": None,
+        "identity": {"status": ("unstated" if not output_model else
+                                "same" if same_identity or not source_model else "converted"),
+                     "compatible": bool(same_identity or not source_model),
+                     "reason": None},
+        "header": {"status": "unstated", "text": None, "reason": None},
     }
+    if stated and not same_identity:
+        entry["identity"]["reason"] = (f"The computed CPU {output_model} is not the CPU the "
+                                       f"export states ({source_model})")
+
+    header = entry["header"]
+    if requested is not None:
+        if profile is not None and not profile.accepts_plc_info(requested):
+            header.update(status="rejected", text=requested, expected=expected_info,
+                          reason=(f"The requested PLC信息 line {requested!r} does not describe "
+                                  f"the target CPU {output_model!r} ({expected_info!r})"))
+        else:
+            header.update(status="preserved" if requested == source_info else "requested",
+                          text=requested)
+    elif source_info and (conflict or not converted):
+        # Same identity, or a refused conversion: keep the export's own header.
+        header.update(status="preserved", text=source_info)
+    elif output_model and expected_info:
+        header.update(status="rebuilt" if source_info else "derived", text=expected_info,
+                      reason=(f"Rebuilt the PLC信息 header for {output_model}; "
+                              f"{source_model} stays as provenance" if source_info else None))
+    elif source_info:
+        header.update(status="preserved", text=source_info)
+    entry["output_plc_info"] = header["text"] or None
+
+    if header["status"] == "rejected":
+        entry.update(status="mismatch", expected=expected_info, reason=header["reason"])
+        return entry
     if conflict:
         entry.update(status="conflict",
                      reason=("A source-preserving write keeps the export's own CPU: "
@@ -115,30 +155,36 @@ def target_state(snapshot: Mapping[str, Any], model: Any, *, plc_info: Any = Non
         return entry
     if converted:
         entry.update(status="converted",
-                     reason=f"Rebuilt the PLC信息 header for {output_model}; {source_model} stays as provenance")
+                     reason=(f"Rebuilt the PLC信息 header for {output_model}; "
+                             f"{source_model} stays as provenance"))
         return entry
-    if not output_info:
+    if not output_model and not entry["output_plc_info"]:
         entry.update(status="unstated",
                      reason="Neither the export nor the caller states a target CPU")
         return entry
-    profile = native_project_profile(output_model) if output_model else None
-    if profile is None:
+    if output_model and profile is None:
         entry.update(status="unknown_target",
-                     reason=f"No native PLC信息 format for {output_model or '(no target)'}")
+                     reason=f"No native PLC信息 format for {output_model}")
         return entry
-    if profile.accepts_plc_info(output_info):
+    if profile is not None and entry["output_plc_info"] and \
+            not profile.accepts_plc_info(entry["output_plc_info"]):
+        # A retained header that the target profile does not describe must not be
+        # written and later accepted: say so in the plan.
+        entry.update(status="mismatch", expected=expected_info,
+                     reason=(f"The PLC信息 line {entry['output_plc_info']!r} does not describe "
+                             f"the target CPU {output_model!r} ({expected_info!r})"))
         return entry
-    expected = native_plc_info(output_model)
-    entry.update(status="mismatch", expected=expected,
-                 reason=(f"The PLC信息 line {output_info!r} does not describe the target CPU "
-                         f"{output_model!r} ({expected!r})"))
+    if header["status"] == "derived":
+        entry.update(status="derived",
+                     reason=f"Stated the target CPU {output_model} in the PLC信息 header")
     return entry
 
 
 def step_width_plan(snapshot: Mapping[str, Any], *, plc_model: Any = None,
                     step_source: Any = "source", plc_info: Any = None,
                     storage_context: Any = None,
-                    assume_default_allocation: bool = False) -> Dict[str, Any]:
+                    assume_default_allocation: bool = False,
+                    text_encoding: str | None = None) -> Dict[str, Any]:
     """Expected step labels and width findings for one ordered snapshot.
 
     The plan is the single place that turns instructions into steps, so the
@@ -148,6 +194,9 @@ def step_width_plan(snapshot: Mapping[str, Any], *, plc_model: Any = None,
     ``storage_context`` is the saved Q/L device allocation. Without it a D/W
     form is reported as a context gap; ``assume_default_allocation`` is the
     caller's explicit statement that no extended allocation exists.
+    ``text_encoding`` is the project code page, which a string operand needs
+    before its stored length is known; the CSV file's own UTF-16 encoding is a
+    different thing and never stands in for it.
     """
     model = str(plc_model or snapshot.get("plc_model") or "").strip().upper() or None
     chosen = _step_source(step_source)
@@ -189,7 +238,8 @@ def step_width_plan(snapshot: Mapping[str, Any], *, plc_model: Any = None,
             operands = [str(item) for item in instruction.get("args") or []]
             width = instruction_step_width(opcode, operands, plc_model=model,
                                            context=storage_context,
-                                           assume_default_allocation=assume_default_allocation)
+                                           assume_default_allocation=assume_default_allocation,
+                                           text_encoding=text_encoding)
             source_step = observed_pairs[cursor_index]
             native_width = observed_widths[cursor_index]
             cursor_index += 1
@@ -253,6 +303,7 @@ def write_gxworks2_csv_from_source(
     step_source: str = "source",
     storage_context: Any = None,
     assume_default_allocation: bool = False,
+    text_encoding: str | None = None,
 ) -> Dict[str, Any]:
     """Write one ordered snapshot back as native program and comment CSV files.
 
@@ -267,28 +318,25 @@ def write_gxworks2_csv_from_source(
     shared Core width rules and keeps ``source_row``/``source_step`` as
     provenance only.
 
-    The ``PLC信息`` line is written from the planned target: an explicit CPU
+    The ``PLC信息`` line is written exactly as planned: an explicit CPU
     conversion rebuilds it from the new CPU and keeps the source CPU as
-    provenance, while a source-preserving write that would change the identity is
-    reported as ``target_conflict`` rather than silently retargeted.
+    provenance, a source-preserving write that would change the identity is
+    reported as ``target_conflict`` rather than silently retargeted, and a stated
+    target CPU is written from that CPU instead of leaving the writer to decide a
+    header the verifier did not plan.
     """
     plan = step_width_plan(snapshot, plc_model=plc_model, step_source=step_source,
                            plc_info=plc_info, storage_context=storage_context,
-                           assume_default_allocation=assume_default_allocation)
+                           assume_default_allocation=assume_default_allocation,
+                           text_encoding=text_encoding)
     model = plan["plc_model"]
     program_path = Path(program_csv_path).expanduser()
     comment_path = Path(comment_csv_path).expanduser()
 
     document_title = str(title or snapshot.get("export_title") or snapshot.get("program_name") or "MAIN")
+    # The planned header, verbatim: the writer never fills in a line the plan left
+    # unstated, because the verifier compares against this same plan.
     information = str(plan["target"].get("output_plc_info") or "")
-    if not information and model:
-        # No source header to reproduce: state the project CPU instead of an
-        # empty or borrowed FX3U line. Unknown targets stay empty and reported.
-        try:
-            from gxworks2.project_profiles import native_plc_info
-            information = native_plc_info(model)
-        except ValueError:
-            information = ""
     rows: List[List[str]] = [[document_title], ["PLC信息:", information], list(GXWORKS2_HEADER)]
 
     planned = {(entry["network_id"], entry["instruction_index"]): entry
@@ -404,10 +452,12 @@ def verify_gxworks2_csv_source(
     source_program_csv_path: Any = None,
     source_comment_csv_path: Any = None,
     plc_model: Any = None,
+    plc_info: Any = None,
     step_source: str = "source",
     expect_source_unchanged: bool = True,
     storage_context: Any = None,
     assume_default_allocation: bool = False,
+    text_encoding: str | None = None,
 ) -> Dict[str, Any]:
     """Check that a rewritten export still carries this snapshot.
 
@@ -426,8 +476,10 @@ def verify_gxworks2_csv_source(
 
     manager = CSVManager()
     plan = step_width_plan(snapshot, plc_model=plc_model or snapshot.get("plc_model"),
-                           step_source=step_source, storage_context=storage_context,
-                           assume_default_allocation=assume_default_allocation)
+                           step_source=step_source, plc_info=plc_info,
+                           storage_context=storage_context,
+                           assume_default_allocation=assume_default_allocation,
+                           text_encoding=text_encoding)
     checks: Dict[str, Dict[str, Any]] = {}
     mismatches: List[Dict[str, Any]] = []
 
@@ -475,7 +527,22 @@ def verify_gxworks2_csv_source(
            actual=written_info or None,
            accepts_header=model_ok,
            target_status=target.get("status"),
+           identity_status=(target.get("identity") or {}).get("status"),
+           header_status=(target.get("header") or {}).get("status"),
            reason=target.get("reason"))
+    # Whether the export's own header survived verbatim is a separate fact from
+    # whether the written header describes the computed CPU.
+    source_info = str(target.get("source_plc_info") or "").strip()
+    header_status = str((target.get("header") or {}).get("status") or "")
+    if not source_info:
+        skip("source_header", "The export states no PLC信息 line to preserve")
+    elif header_status in ("preserved", "unstated"):
+        record("source_header", written_info == source_info,
+               source=source_info, actual=written_info or None)
+    else:
+        skip("source_header",
+             f"The planned header was {header_status or 'rebuilt'} for "
+             f"{target.get('output_model') or '(no target)'}")
 
     if source_program is not None and expect_source_unchanged:
         source_program_hash = manager.program_semantic_sha256(source_program)

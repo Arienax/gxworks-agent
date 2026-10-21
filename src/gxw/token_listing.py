@@ -236,8 +236,10 @@ class TokenListing:
         width. The PLC-info line comes from the project CPU, never from a
         hardcoded FX3U header. Does not write a GXW or a PLC.
         """
-        if self.profile not in ("fx", "fx3u"):
-            raise GXWFormatError("native CSV export is only established for the FX profile")
+        from .token_profiles import FX_CODEC_PROFILES, source_token_profile
+        if self.profile not in FX_CODEC_PROFILES:
+            raise GXWFormatError("native CSV export is only established for an FX profile, not "
+                                 + str(self.profile))
         if self.gaps or any(isinstance(r, TokenText) and r.text is None for r in self.records):
             raise GXWFormatError("cannot export a complete CSV with opaque instructions/text")
         if any(getattr(record, "step", "") is None for record in self.records):
@@ -246,6 +248,15 @@ class TokenListing:
         identity = str(plc_model or "").strip().upper()
         if not identity:
             raise GXWFormatError("native CSV export needs the project CPU identity")
+        # The listing was decoded with one codec; the target CPU's own profile is
+        # what decides whether this column format can carry it.
+        try:
+            target_codec = source_token_profile(identity)
+        except GXWFormatError:
+            target_codec = None
+        if target_codec not in FX_CODEC_PROFILES:
+            raise GXWFormatError("native CSV export is only established for an FX CPU, not "
+                                 + identity)
         export_profile = native_project_profile(identity)
         if export_profile is None or not export_profile.series[0].startswith("FX"):
             # The column format is the FX statement list and the header names the

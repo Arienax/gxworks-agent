@@ -10,6 +10,11 @@ from gxworks2.project_profiles import native_project_profile
 
 from .models import GXWFormatError
 
+#: Lexical codec profiles whose stored program is the FX statement list.  The
+#: native CSV column format and the FX device widths belong to this set, so a
+#: capability check asks this set rather than naming one or two of its members.
+FX_CODEC_PROFILES = frozenset(("fx", "fx3u", "fx1s", "fx3g"))
+
 
 def source_token_profile(cpu: str, *, language: str = 'ladder') -> str:
     """Return the lexical codec for an existing FX/Q/L source or SFC child.
