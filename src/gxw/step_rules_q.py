@@ -79,44 +79,51 @@ def _status_for(error: GXWFormatError) -> tuple[str, tuple[str, ...]]:
     return "no_profile", ()
 
 
-def context_cpu_mismatch(context: Any, identity: str) -> str | None:
+def _members(identity: str) -> set:
+    """The menu option's own members (a single CPU is its own member)."""
+    return {part.strip() for part in str(identity or "").split("/") if part.strip()}
+
+
+def context_cpu_mismatch(context: Any, identity: str, *, target: str | None = None) -> str | None:
     """Reason when an allocation context was read for another CPU, else None.
 
     A merged menu option accepts any of its own members: one saved project cannot
     carry two allocations, and the context names the option it was read from.
+    ``target`` is the whole menu option the member ``identity`` belongs to, so a
+    context read for one member also covers a merged target and vice versa.
     """
     context_cpu = str(getattr(context, "cpu", "") or "").strip().upper()
     if not context_cpu:
         return None
-    accepted = {context_cpu}
-    accepted.update(part.strip() for part in context_cpu.split("/") if part.strip())
-    if identity in accepted:
+    # One saved project cannot carry two allocations, so a merged option and a
+    # context read from any of that option's members are the same allocation.
+    accepted = {context_cpu} | _members(context_cpu)
+    whole = str(target or identity or "").strip().upper()
+    if identity in accepted or _members(whole) & accepted or whole in accepted:
         return None
     return (f"Q source storage context differs from the saved CPU: the allocation "
             f"was read for {context_cpu}, not {identity}")
 
 
-#: Devices whose stored width depends on the saved allocation: D and W can be
-#: mapped onto the ZR extension, which changes the encoded operand width.
-_ALLOCATION_DEVICES = re.compile(r"^[DW]\d", re.IGNORECASE)
+def allocation_dependent_operands(operands: Sequence[Any], *, op: Any = None,
+                                  profile: str = "q03udv",
+                                  cpu: Any = None) -> tuple[str, ...]:
+    """Operands whose stored width can follow the saved D/W allocation.
 
-
-def allocation_dependent_operands(operands: Sequence[Any]) -> tuple[str, ...]:
-    """Operands whose stored width depends on the saved D/W allocation."""
-    dependent = []
-    for value in operands or ():
-        text = str(value).strip()
-        if text.startswith('"'):
-            # A string literal is payload, not a device reference.
-            continue
-        if _ALLOCATION_DEVICES.match(text):
-            dependent.append(text)
-    return tuple(dependent)
+    The answer comes from the encoded operand, not from its spelling, so one
+    address has one state however it is written (``WA00`` = ``W0A00``,
+    ``@D12000``, ``D12000Z0``) and an operand that addresses another unit
+    (``J1\\WA00``, ``U0\\G0``) or an unexpanded macro placeholder never asks for the
+    local allocation.
+    """
+    from .token_q_encoder import allocation_dependent_operands as classify
+    return classify(operands, op=op, profile=profile, cpu=cpu)
 
 
 def resolve_stored_steps(opcode: Any, operands: Sequence[Any] = (), *, cpu: Any,
                          context: Any = None, text_encoding: str | None = None,
-                         assume_default_allocation: bool = False):
+                         assume_default_allocation: bool = False,
+                         target_identity: str | None = None):
     """Return the expected stored width for one Q/L instruction instance.
 
     ``context`` is the saved project allocation. Three states are distinguished:
@@ -152,13 +159,13 @@ def resolve_stored_steps(opcode: Any, operands: Sequence[Any] = (), *, cpu: Any,
     args = tuple(_normalised_operand(value) for value in operands or ())
     mode = cpu_storage_mode(identity)
     if context is not None:
-        mismatch = context_cpu_mismatch(context, identity)
+        mismatch = context_cpu_mismatch(context, identity, target=target_identity)
         if mismatch is not None:
             return _unresolved("requires_context", mismatch,
                                requirements=("storage_context",))
     assumed_default = False
+    dependent = allocation_dependent_operands(args, op=name, profile=profile, cpu=identity)
     if context is None:
-        dependent = allocation_dependent_operands(args)
         if dependent and not assume_default_allocation:
             return _unresolved(
                 "requires_context",
@@ -173,7 +180,7 @@ def resolve_stored_steps(opcode: Any, operands: Sequence[Any] = (), *, cpu: Any,
                              text_encoding=text_encoding, cpu=identity)
             for index, value in enumerate(args))
         header = encode_q_header(name, args, encoded, profile=profile, cpu=identity,
-                                 storage_context=context)
+                                 storage_context=context, target_identity=target_identity)
     except GXWFormatError as error:
         status, requirements = _status_for(error)
         if not args and status == "no_profile":
@@ -189,9 +196,9 @@ def resolve_stored_steps(opcode: Any, operands: Sequence[Any] = (), *, cpu: Any,
     evidence = (f"native Q/L stored header {header.hex()} for {identity} "
                 f"(mode {mode or 'common'}, profile {profile})",)
     if assumed_default:
-        evidence = evidence + (f"assumed the default (unextended) allocation for "
-                               f"{', '.join(allocation_dependent_operands(args))}; the saved "
-                               "project allocation was not supplied",)
+        evidence = evidence + ("assumed the default (unextended) allocation for "
+                               f"{', '.join(dependent)}; the saved project allocation was "
+                               "not supplied",)
     return _known(int(width), "native_stored_width_algorithm", evidence=evidence)
 
 

@@ -489,7 +489,8 @@ def fx_series(plc_model: Any) -> Optional[str]:
 
 def _resolve_member(member: str, opcode: Any, operands: Sequence[Any], context: Any,
                     assume_default_allocation: bool = False,
-                    text_encoding: Optional[str] = None) -> StepWidth:
+                    text_encoding: Optional[str] = None,
+                    identity: Optional[str] = None) -> StepWidth:
     family = target_family(member)
     if family is None:
         return _unresolved(STATUS_UNKNOWN_CPU, "Unknown PLC target " + repr(member))
@@ -502,7 +503,8 @@ def _resolve_member(member: str, opcode: Any, operands: Sequence[Any], context: 
         from gxw.step_rules_q import resolve_stored_steps
         return resolve_stored_steps(opcode, operands, cpu=member, context=context,
                                     assume_default_allocation=assume_default_allocation,
-                                    text_encoding=text_encoding)
+                                    text_encoding=text_encoding,
+                                    target_identity=identity or member)
     return default_step_width_catalog().resolve(opcode, operands, plc_model=member,
                                                 text_encoding=text_encoding)
 
@@ -549,7 +551,8 @@ def instruction_step_width(opcode: Any, operands: Sequence[Any] = (), *,
             return _resolve_member(members[0], opcode, operands, context,
                                    assume_default_allocation, text_encoding)
         results = tuple((member, _resolve_member(member, opcode, operands, context,
-                                                 assume_default_allocation, text_encoding))
+                                                 assume_default_allocation, text_encoding,
+                                                 identity="/".join(members)))
                         for member in members)
         return _merge_members(results)
     except (OSError, ValueError, KeyError, TypeError) as exc:

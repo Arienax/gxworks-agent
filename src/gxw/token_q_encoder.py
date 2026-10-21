@@ -714,6 +714,54 @@ def encode_q_operand(text, *, op, index, source=None, profile='q03udv', text_enc
     return b''.join(result)
 
 
+#: Device codes whose stored width can follow the saved D/W -> ZR mapping.
+ALLOCATION_DEVICE_CODES = (0xa8, 0xb4)
+
+#: Encoded prefix components that address another module or station rather than
+#: the local device allocation: U..\, J..\, BL..\ and the extended ..\ prefix.
+_MODULE_PREFIX_CODES = (0xf8, 0xf9, 0xfc, 0xff)
+
+#: A native macro placeholder instruction (M./U. and the other named-call
+#: families) is stored in one word whatever its unexpanded arguments say.
+_MACRO_PLACEHOLDER = re.compile(r"[SZGJDMU]P?\.[!-~]+")
+
+
+def allocation_dependent_operands(operands, *, op=None, profile="q03udv", cpu=None):
+    r"""Operands whose stored width can follow the saved D/W device allocation.
+
+    The decision is taken from the encoded operand rather than from its spelling,
+    so every spelling of one address answers the same way: W is a hexadecimal
+    device, so ``WA00`` and ``W0A00`` are the same local word, an ``@`` indirect
+    D operand still reads the local allocation, an index or bit selector does not
+    change what is addressed, and a module or network prefix (``U0\G0``,
+    ``J1\W...``) addresses another unit and therefore never depends on the local
+    mapping. A macro placeholder stores one word regardless of its arguments, so
+    naming a D address inside it cannot make its width allocation-dependent.
+    """
+    name = str(op or "").strip().upper()
+    if name and _MACRO_PLACEHOLDER.fullmatch(name):
+        return ()
+    dependent = []
+    for index, value in enumerate(operands or ()):
+        text = str(value).strip()
+        if not text or text.startswith(('"', "'")):
+            continue
+        try:
+            raw = encode_q_operand(text, op=name, index=index, profile=profile, cpu=cpu)
+        except GXWFormatError:
+            # An operand this encoder cannot parse yet is reported by the width
+            # path itself; it is not evidence of an allocation dependency.
+            continue
+        tokens = _tokens(raw)
+        if not tokens:
+            continue
+        if any(token[1] in _MODULE_PREFIX_CODES for token in tokens[:-1]):
+            continue
+        if tokens[-1][1] in ALLOCATION_DEVICE_CODES:
+            dependent.append(text)
+    return tuple(dependent)
+
+
 def _rounded(value, digits):
     with localcontext() as context:
         context.prec = 800
@@ -863,17 +911,24 @@ def _context_covers_cpu(context_cpu, cpu) -> bool:
         return True
     if context_text == cpu_text:
         return True
-    members = {part.strip() for part in context_text.removesuffix("(REMOTEI/O)").split("/")
-               if part.strip()}
-    return cpu_text.removesuffix("(REMOTEI/O)") in members
+    # A context read from one member also covers a merged option that contains
+    # that member, and a merged option's context covers each of its members: a
+    # saved project carries one allocation, not one per spelling of the CPU.
+    context_members = {part.strip() for part in context_text.removesuffix("(REMOTEI/O)").split("/")
+                       if part.strip()}
+    cpu_members = {part.strip() for part in cpu_text.removesuffix("(REMOTEI/O)").split("/")
+                   if part.strip()}
+    return bool(context_members & cpu_members)
 
 
-def encode_q_header(op, args, operands, *, profile='q03udv', cpu=None, source=None, storage_context=None):
+def encode_q_header(op, args, operands, *, profile='q03udv', cpu=None, source=None,
+                    storage_context=None, target_identity=None):
     """Construct a stored header without treating a lexical profile as CPU admission."""
     if storage_context is not None:
         if not isinstance(storage_context, QStorageContext):
             raise GXWFormatError('invalid Q source storage context')
-        if cpu is not None and not _context_covers_cpu(storage_context.cpu, cpu):
+        target = target_identity if target_identity is not None else cpu
+        if target is not None and not _context_covers_cpu(storage_context.cpu, target):
             raise GXWFormatError('Q source storage context differs from the saved CPU')
         if cpu is None:
             cpu = storage_context.cpu
