@@ -171,17 +171,66 @@ def _operand_text(value: Any) -> str:
 _SCOPE_KEYS = ("scope", "series", "models")
 
 
-def _scope_spec(entry: Mapping[str, Any]) -> Tuple[Tuple[str, ...], Tuple[str, ...], bool]:
-    """(explicit models, series groups, family) declared by one width rule."""
-    scope = str(entry.get("scope") or "").strip().upper()
-    models = tuple(str(item).strip().upper() for item in entry.get("models", ())
-                   if str(item).strip())
-    series = tuple(str(item).strip().upper() for item in entry.get("series", ())
-                   if str(item).strip())
-    if scope and scope != "FAMILY":
-        series = series + (scope,)
-    family = not models and not series
-    return models, series, family
+#: FX series groups a width entry may name instead of single CPUs.
+_SERIES_GROUPS = frozenset(("FX0", "FX1", "FX2", "FX3", "FX5"))
+
+
+def _scope_tokens(entry: Mapping[str, Any], name: str, label: str) -> Tuple[str, ...]:
+    """Declared scope tokens, refusing an empty declaration."""
+    raw = entry.get(name)
+    if raw is None:
+        return ()
+    if isinstance(raw, str):
+        raw = (raw,)
+    tokens = tuple(str(item).strip().upper() for item in raw if str(item).strip())
+    if not tokens:
+        raise ValueError(f"Step-width entry declares an empty {name} list: " + label)
+    return tokens
+
+
+def _scope_spec(entry: Mapping[str, Any],
+                label: str = "") -> Tuple[Tuple[str, ...], Tuple[str, ...], bool]:
+    """(explicit models, series groups, family) declared by one width entry.
+
+    One parser answers for operand rules, device-range tables, exact forms,
+    variable forms and native observations, so a declared scope means the same
+    thing everywhere. A series name is a series whether it is written as
+    ``scope``, in ``series`` or in ``models``; a CPU identity is a model the same
+    way. An empty, unknown or contradictory declaration is refused instead of
+    being read as "the whole FX family".
+    """
+    models: list = []
+    series: list = []
+    family = False
+    if "scope" in entry:
+        declared = str(entry.get("scope") or "").strip().upper()
+        if not declared:
+            raise ValueError("Step-width entry declares an empty evidence scope: " + label)
+        if declared == "FAMILY":
+            family = True
+        elif declared in _SERIES_GROUPS:
+            series.append(declared)
+        elif _native_profile(declared) is not None:
+            models.append(declared)
+        else:
+            raise ValueError("Step-width entry declares an unknown evidence scope "
+                             + repr(declared) + ": " + label)
+    for name, noun, bucket in (("models", "model", models), ("series", "series", series)):
+        for token in _scope_tokens(entry, name, label):
+            if token in _SERIES_GROUPS:
+                series.append(token)
+            elif _native_profile(token) is not None:
+                bucket.append(token)
+            else:
+                raise ValueError("Step-width entry declares an unknown evidence "
+                                 + noun + " " + repr(token) + ": " + label)
+    if family and (models or series):
+        raise ValueError("Step-width entry declares both the whole FX family and "
+                         "specific targets: " + label)
+    if not family and not models and not series and any(
+            key in entry for key in ("models", "series")):
+        raise ValueError("Step-width entry declares no evidence scope: " + label)
+    return tuple(dict.fromkeys(models)), tuple(dict.fromkeys(series)), family
 
 
 def _scope_applies(entry: Mapping[str, Any], model: str) -> bool:
@@ -207,10 +256,32 @@ def _scope_text(entry: Mapping[str, Any]) -> str:
     return "the " + "/".join(series) + " series"
 
 
+def _check_range_overlaps(entry: Mapping[str, Any], label: str) -> None:
+    """Refuse one table whose own ranges overlap with a different step count.
+
+    The same width written twice is one statement; different widths over one
+    address would make the answer depend on the order the file lists them in, so
+    the table is refused instead of being resolved by position.
+    """
+    spans = sorted((int(item["from"]), int(item.get("to", item["from"])), int(item["steps"]))
+                   for item in entry.get("ranges", ()))
+    for (start, end, steps), (next_start, next_end, next_steps) in zip(spans, spans[1:]):
+        if next_start <= end and steps != next_steps:
+            raise ValueError(f"Step-width table ranges overlap with different widths "
+                             f"({start}..{end}={steps}, {next_start}..{next_end}={next_steps}): "
+                             + label)
+
+
 def _require_scope(entry: Mapping[str, Any], label: str) -> None:
-    """Refuse a width rule that does not say which CPUs its evidence covers."""
+    """Refuse a width entry that does not say which CPUs its evidence covers.
+
+    The presence of a key is not enough: the declaration itself is parsed, so an
+    empty string, an empty list or an unknown series name is refused here rather
+    than widening the entry to every FX model at query time.
+    """
     if not any(key in entry for key in _SCOPE_KEYS):
         raise ValueError("Step-width rule declares no evidence scope: " + label)
+    _scope_spec(entry, label)
 
 
 class StepWidthCatalog:
@@ -231,6 +302,22 @@ class StepWidthCatalog:
         self.variable_forms = tuple(rules.get("variable_forms", ()))
         self.aliases = dict(rules.get("aliases", {}))
         self.device_ranges = tuple(rules.get("device_ranges", ()))
+        for row in self.device_ranges:
+            label = " ".join(row.get("opcodes", ())) or "<unnamed table>"
+            _require_scope(row, label)
+            _check_range_overlaps(row, label)
+        declared = rules.get("observation_scopes") or {}
+        default_scope = dict(declared.get("default") or {})
+        if default_scope:
+            _require_scope(default_scope, "native observations")
+        overrides = {str(key).strip().upper(): dict(value)
+                     for key, value in (declared.get("overrides") or {}).items()}
+        for opcode, spec in overrides.items():
+            _require_scope(spec, "native observations for " + opcode)
+        # Until a resource states them, the native samples are family evidence:
+        # that is the pre-existing reading, not a new claim about one model.
+        self.observation_default = default_scope or {"scope": "family"}
+        self.observation_scopes = MappingProxyType(overrides)
         exact = {}
         for row in rules.get("exact_forms", ()):
             opcode = self.aliases.get(str(row["opcode"]).upper(), str(row["opcode"]).upper())
@@ -334,19 +421,28 @@ class StepWidthCatalog:
             return _unresolved(STATUS_REQUIRES_OPERANDS,
                                "Variable-width instruction needs an operand/encoding-specific rule",
                                requirements=("operands", "operand_encoding"))
-        observations = self.observations.get(op, ())
+        observations, observation_scope_note = self._applicable_observations(op, model)
         if not observations:
             reason = "No native step-width observation for " + op
-            if out_of_scope:
-                reason += f" on {model} (" + "; ".join(out_of_scope) + ")"
+            notes = [*out_of_scope, *observation_scope_note]
+            if notes:
+                reason += f" on {model} (" + "; ".join(notes) + ")"
             return _unresolved(STATUS_NO_PROFILE, reason)
         # Stored width is not an operand count. A binary-arity mismatch must not be
         # made to look like a known size, but never rejects the user's program.
         compatible = [entry for entry in observations if entry[1] == len(args)]
+        if not compatible:
+            arities = " or ".join(str(item) for item in
+                                  sorted({entry[1] for entry in observations}))
+            return _unresolved(
+                STATUS_REQUIRES_OPERANDS,
+                f"{op} only stores an observed width with {arities} operand(s) known",
+                requirements=("operands",))
         sizes = {entry[0] for entry in compatible}
         if len(sizes) != 1:
             return _unresolved(STATUS_CONFLICT,
-                               "Native widths are missing or ambiguous for this operand form")
+                               "Native widths disagree for this operand form: "
+                               + ", ".join(str(item) for item in sorted(sizes)) + " words")
         # Strings and indexed/bit-selected operands may change the encoding.
         # Ordinary constants, direct devices and K-digit groups are covered by the
         # observed fixed applied-instruction headers. Do not guess elsewhere.
@@ -459,7 +555,7 @@ class StepWidthCatalog:
             operand_text = args[position]
             for span in entry["ranges"]:
                 if int(span["from"]) <= index <= int(span["to"]):
-                    candidates.append((int(span["steps"]), str(entry["evidence"])))
+                    candidates.append((int(span["steps"]), str(entry.get("evidence") or "")))
                     break
             else:
                 if entry.get("outside", "fall_through") != "gap":
@@ -484,6 +580,28 @@ class StepWidthCatalog:
                     + "; ".join(evidence for _, evidence in candidates))
         steps, evidence = candidates[0]
         return ("known", steps, evidence)
+
+    def observation_scope(self, opcode: str) -> Mapping[str, Any]:
+        """The evidence scope recorded for one mnemonic's native observations."""
+        return self.observation_scopes.get(str(opcode or "").strip().upper(),
+                                           self.observation_default)
+
+    def _applicable_observations(self, opcode: str, model: str):
+        """Native observations that may answer for this target.
+
+        Returns the entries whose evidence scope covers the target and a note
+        describing the ones that do not. Both width questions ask this one filter,
+        so an observation can never be usable through one query and invisible to
+        the other, and a target with no applicable evidence reports a coverage gap
+        even when other CPUs have samples.
+        """
+        entries = self.observations.get(opcode, ())
+        if not entries:
+            return (), ()
+        spec = self.observation_scope(opcode)
+        if _scope_applies(spec, model):
+            return entries, ()
+        return (), (f"its native observations are recorded for {_scope_text(spec)}",)
 
     def _owns_operandless_form(self, opcode: str, model: str) -> bool:
         """Whether a form of this mnemonic applies to the target without operands."""
@@ -559,10 +677,12 @@ class StepWidthCatalog:
                                f"{op} is covered by {owners[0]} on {model}: its stored "
                                "width depends on the operands",
                                requirements=("operands",))
-        observations = self.observations.get(op, ())
+        observations, observation_scope_note = self._applicable_observations(op, model)
         if not observations:
-            return _unresolved(STATUS_NO_PROFILE,
-                               "No program step-width coverage for " + op + " on " + model)
+            reason = "No program step-width coverage for " + op + " on " + model
+            if observation_scope_note:
+                reason += " (" + "; ".join(observation_scope_note) + ")"
+            return _unresolved(STATUS_NO_PROFILE, reason)
         signatures = {(width, arity) for width, arity, _ in observations}
         if len(signatures) != 1:
             return _unresolved(STATUS_REQUIRES_OPERANDS,
