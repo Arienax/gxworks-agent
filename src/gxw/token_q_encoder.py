@@ -470,10 +470,9 @@ def _integer(code, value, bits=32, *, signed=False):
 
 def _header_choices(op, arity=None, *, profile):
     catalog = _catalog('l' if profile == 'l02' else profile)
-    named = re.fullmatch(r'([SZGJDMU])(P)?\.([!-~]+)', op)
+    named = _NAMED_CALL.fullmatch(op)
     if named:
-        family = {'S': 0x70, 'Z': 0x71, 'G': 0x72, 'J': 0x73, 'D': 0x74,
-                  'M': 0x78, 'U': 0x79}[named[1]]
+        family = named_call_family(op)
         if arity is None:
             counts = {count for key, (name, count) in catalog['headers'].items()
                       if key.startswith(f'{family:02x}:') and name == named[1] + '.'}
@@ -721,9 +720,27 @@ ALLOCATION_DEVICE_CODES = (0xa8, 0xb4)
 #: the local device allocation: U..\, J..\, BL..\ and the extended ..\ prefix.
 _MODULE_PREFIX_CODES = (0xf8, 0xf9, 0xfc, 0xff)
 
-#: A native macro placeholder instruction (M./U. and the other named-call
-#: families) is stored in one word whatever its unexpanded arguments say.
-_MACRO_PLACEHOLDER = re.compile(r"[SZGJDMU]P?\.[!-~]+")
+#: Encoded family of a native named call, keyed by its letter prefix.
+_NAMED_CALL_FAMILIES = {"S": 0x70, "Z": 0x71, "G": 0x72, "J": 0x73, "D": 0x74,
+                        "M": 0x78, "U": 0x79}
+_NAMED_CALL = re.compile(r"([SZGJDMU])(P?)\.([!-~]+)")
+
+#: Named-call families the stored-width algorithm gives one placeholder word.
+_PLACEHOLDER_FAMILIES = (0x78, 0x79)
+
+
+def named_call_family(name):
+    """Encoded family number of one native named call, else None.
+
+    Only the 0x78/0x79 pair (M./U.) is stored as a one-word placeholder whatever
+    its unexpanded arguments name; S./Z./G./J./D. are ordinary applied
+    instructions whose width follows the operands, the D/W allocation included.
+    The stored-width algorithm and the allocation classifier ask this one
+    function, so one mnemonic cannot be a placeholder in one place and an applied
+    instruction in the other.
+    """
+    match = _NAMED_CALL.fullmatch(str(name or "").strip().upper())
+    return _NAMED_CALL_FAMILIES[match[1]] if match is not None else None
 
 
 def allocation_dependent_operands(operands, *, op=None, profile="q03udv", cpu=None):
@@ -735,11 +752,13 @@ def allocation_dependent_operands(operands, *, op=None, profile="q03udv", cpu=No
     D operand still reads the local allocation, an index or bit selector does not
     change what is addressed, and a module or network prefix (``U0\G0``,
     ``J1\W...``) addresses another unit and therefore never depends on the local
-    mapping. A macro placeholder stores one word regardless of its arguments, so
-    naming a D address inside it cannot make its width allocation-dependent.
+    mapping. Only the placeholder families (M./U., 0x78/0x79) store one word
+    regardless of their arguments; the other named calls (S./Z./D. ...) keep the
+    operand-dependent width their encoding has, so a D/W argument there does need
+    the saved allocation.
     """
     name = str(op or "").strip().upper()
-    if name and _MACRO_PLACEHOLDER.fullmatch(name):
+    if named_call_family(name) in _PLACEHOLDER_FAMILIES:
         return ()
     dependent = []
     for index, value in enumerate(operands or ()):
