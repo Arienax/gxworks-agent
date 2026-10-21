@@ -916,8 +916,13 @@ def _adjudicated_rows(rows, targets, plc_model):
             within = not pages or page is None or int(page) in pages
             entry = dict(row)
             entry["_within_compiled_pages"] = within
-            entry["compiled_source_chapter"] = True
-            entry["instruction_lookup_basis"] = "compiled_material_identity"
+            # A corpus row may arrive flagged as a compiled chapter; this answer is
+            # not one, so the claim is dropped rather than carried forward.
+            entry.pop("compiled_source_chapter", None)
+            # This row is a published authored unit whose material matches the
+            # adjudicated one; the original chapter was not replayed, so it must not
+            # claim to be a compiled chapter.
+            entry["instruction_lookup_basis"] = "authored_fact_material_match"
             entry["authority_decision"] = copy.deepcopy(record)
             units.append(entry)
         units.sort(key=lambda item: (not item.pop("_within_compiled_pages", True),))
