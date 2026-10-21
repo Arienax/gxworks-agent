@@ -8,6 +8,10 @@ from agent_runtime.engineering_schema import (
     _engineering_native_schema,
     _engineering_st_schema,
     _engineering_fbd_schema,
+    _engineering_declaration_edits,
+    _sfc_child_edit_schema,
+    _source_instruction_edit_schema,
+    _gxw_edit_schema,
 )
 from agent_runtime.program_tools import (
     _get_operation_status,
@@ -201,7 +205,7 @@ def generation_definitions(generation):
     )
     yield ToolDefinition(
         "patch_program",
-        "在当前 IR 副本上增删改 Network，完成校验与临时编译后生成待用户确认的候选补丁。不会直接保存或同步 GX Works2。",
+        "在当前保存版本上修改 Network 或来源绑定的 GXW 指令，生成差异及候选。已有 GXW 使用 instruction_edits 的原始 record_index 和完整 expected；P/I 标签用 op=P0 或 I0、args=[]，来源标签 expected 同形。declaration_edits 使用既有表名及 upserts/renames/remove；指令、标签、声明、注释联合离线写回，原文件保留。不会调用原生编译或同步设备。",
         {
             "type": "object",
             "properties": {
@@ -211,7 +215,7 @@ def generation_definitions(generation):
                 },
                 "patch": {
                     "type": "object",
-                    "description": "基于当前 revision/sha256 的 Network 级候选补丁。",
+                    "description": "基于当前 revision/sha256 的 Network 补丁；有序 GXW 源码改用 instruction_edits，保留真实执行顺序。",
                     "properties": {
                         "base_revision": {"type": "integer"},
                         "base_ir_sha256": {"type": "string"},
@@ -245,8 +249,13 @@ def generation_definitions(generation):
                             "type": "object",
                             "description": "软元件地址到注释；null 表示删除注释。",
                         },
+                        'comment_table': {'type': 'string', 'maxLength': 512},
+                        'declaration_edits': _engineering_declaration_edits(),
+                        'instruction_edits': {'type': 'array', 'maxItems': 512, 'items': _source_instruction_edit_schema()},
+                        'save_policy': {'enum': ['draft', 'checked']},
                     },
-                    "required": ["operations"],
+                    'anyOf': [{'required': ['operations']}, {'required': ['instruction_edits']},
+                              {'required': ['device_comments']}, {'required': ['declaration_edits']}],
                 }
             },
             "required": ["patch"],
@@ -297,7 +306,8 @@ def native_definitions(generation):
         'ents，组合逻辑用 nodes 和 from/to 端口连接。Core 从当前定义生成接口、IN_OUT、分块和布线，不需要坐标；参数 schema 见 ge'
         't_fbd_catalog.parameter_schema。原有 v2 对象编辑仍支持。create_structure 用 source_name/memb'
         'ers 新建类型；create_st_fb 用 source_name/declarations/st_text 编写完整 ST FB；edit_st_fb 省'
-        '略 declarations 时保留接口。create_global_labels/edit_global_labels 用表名和 declarations 新'
+        '略 declarations 时保留接口；edit_st_function/edit_st_source 编辑既有 FUNCTION 或明确选中的 ST 正文。已有图形、ST 和声明编辑使用离线事务；'
+        '当前调用显式 native_save=true 才执行原生保存，历史版本的选择不授权后续原生调用。edit_global_labels/edit_pou_labels 可用 remove_declarations 删除本表已有行。create_global_labels/edit_global_labels 用表名和 declarations 新'
         '建或更新全局表，结构设备映射用 member_devices；edit_pou_labels 用 POU 名和 declarations 更新局部表。confi'
         'gure_project 用目录 project_configuration 的 source_name 和 options 修改 system_variabl'
         'e_ranges，program_capacity 当前仅支持已验证 FX3U/FX3UC 的 16000/64000。create_fb 新建空 FBD FB'
@@ -307,14 +317,14 @@ def native_definitions(generation):
     _engineering_fbd_schema(),
     generation.fbd, confirmation_required=True)
     yield ToolDefinition('read_st_project',
-    '读取保存 GXW 中普通 ST Program 的正文、局部声明、资源及任务成员；program 使用返回的逻辑 POU 名称。只读，不根据正文生成工程。',
+    '读取保存 GXW 中既有 ST Program、FB 或 FUNCTION 的正文、返回类型、局部声明、资源及任务成员；program 使用返回的逻辑 POU 名称。只读，不根据正文生成工程。',
     {'type': 'object', 'properties': {'program': {'type': 'string'}, 'data_base64': {'type': 'string'}},
      'additionalProperties': False}, _read_st_project)
     yield ToolDefinition('create_st_candidate',
     (
         '普通 ST Program 工程候选。from_candidate 接受 candidate v2（schema_version=2、language=st、p'
         'rogram、declaration_edits.upserts、task_binding），绑定当前 GXW 的实际任务、声明及 CPU，检查后冻结原生创建/'
-        '编辑、编译、保存与冷重开方案。也兼容 create_st_program、edit_st_program 和 import；后台写入仍使用隔离副本及 Core '
+        '编辑、编译、保存与冷重开方案。也兼容 create_st_program 和 import；edit_st_program/edit_st_fb/edit_st_function 或通用 edit_st_source 联合离线写入既有正文和声明表，保留对象身份及 FUNCTION 返回类型。declarations 是完整列表，省略保留。新建对象继续使用隔离原生路径及 Core '
         '回读。语法、语义、原生编译和行为状态分别记录；方案获准后沿共享原生事务交付，失败不激活版本。'
     ),
     _engineering_st_schema(),
@@ -323,19 +333,22 @@ def native_definitions(generation):
     '读取当前 GXW 或上传工程中 SFC 的 CPU、声明、图形引用和子程序。native=true 在隔离工作区只读取得原生格点；已有对应证据时复用，不推断执行语义。',
     {'type': 'object', 'properties': {'program': {'type': 'string'}, 'data_base64': {'type': 'string'}, 'native': {'type': 'boolean'}},
      'additionalProperties': False}, _read_sfc_project)
-    yield ToolDefinition('create_sfc_candidate',
+    sfc_definition = ToolDefinition('create_sfc_candidate',
     (
-        '导入已有 SFC 工程，按 kind/name 替换子程序 records_hex；FX3U/FX3UC 可修改独立动作引用或跳转目标，已实测 Q/L 可用 k'
-        'ind=rebuild 和完整 symbols 重建现有图形，或在当前原生格点上用 kind=swap_steps 交换两个普通步骤。图形修改调用原生转换器，当'
-        '前代码编译与检查另行执行；不新建 SFC。'
+        '离线编辑已有 SFC。child_edits 按 kind/name 定位内部 action/zoom/transition，可 create/edit/delete/rename/renumber；'
+        '正文用 instructions、来源绑定 instruction_edits 或原有 records_hex，action 用 number/registrations。'
+        'graph_edits 的 rebuild 用完整 symbols 增删步骤/条件/分支/汇合/跳转并联合维护内部注册；FX步骤可显式 action_number。'
+        'renumber 用 steps/transitions/actions 的 before/after 列表联合编号；swap_steps 保留旧契约。'
+        'declaration_edits 按既有局部或全局表名联合增删声明，使用 upserts/renames/remove。'
+        '当前源码、CPU和具体对象能力决定可编辑范围；原生编译与运行分别验证，不新建工程级 SFC POU 或任务。'
     ),
     {'type': 'object', 'properties': {'operation': {'type': 'string', 'enum': ['import', 'edit']},
      'data_base64': {'type': 'string'}, 'program': {'type': 'string'}, 'summary': {'type': 'string'},
-     'child_edits': {'type': 'array', 'minItems': 1, 'maxItems': 8192, 'items': {'type': 'object',
-         'properties': {'kind': {'type': 'string', 'enum': ['zoom', 'transition']},
-                        'name': {'type': 'string', 'minLength': 1, 'maxLength': 255},
-                        'records_hex': {'type': 'string', 'maxLength': 16 * 1024 * 1024}},
-         'required': ['kind', 'name', 'records_hex'], 'additionalProperties': False}},
+     'device_comments': {'type': 'object', 'additionalProperties': {'oneOf': [{'type': 'string'}, {'type': 'null'}]}},
+     'comment_table': {'type': 'string'},
+     'save_policy': {'enum': ['draft', 'checked']},
+     'declaration_edits': _engineering_declaration_edits(),
+     'child_edits': {'type': 'array', 'minItems': 1, 'maxItems': 8192, 'items': _sfc_child_edit_schema()},
      'graph_edits': {'type': 'array', 'minItems': 1, 'maxItems': 8192, 'items': {'oneOf': [{'type': 'object',
          'properties': {'step_reference': {'type': 'integer', 'minimum': 0, 'maximum': 65535},
                         'action_number': {'type': 'integer', 'minimum': 0, 'maximum': 65535}},
@@ -343,23 +356,43 @@ def native_definitions(generation):
          {'type': 'object', 'properties': {'kind': {'type': 'string', 'enum': ['jump']},
              'x': {'type': 'integer', 'minimum': 0, 'maximum': 65535},
              'y': {'type': 'integer', 'minimum': 0, 'maximum': 65535},
+             'source_offset': {'type': 'integer', 'minimum': 0},
              'before_step_reference': {'type': 'integer', 'minimum': 0, 'maximum': 65535},
              'target_step_reference': {'type': 'integer', 'minimum': 0, 'maximum': 65535}},
-          'required': ['kind', 'x', 'y', 'before_step_reference', 'target_step_reference'],
+          'required': ['kind', 'before_step_reference', 'target_step_reference'],
+          'anyOf': [{'required': ['source_offset']}, {'required': ['x', 'y']}],
           'additionalProperties': False},
          {'type': 'object', 'properties': {'kind': {'type': 'string', 'enum': ['rebuild']},
              'symbols': {'type': 'array', 'minItems': 1, 'maxItems': 8192, 'items': {'type': 'object',
-                 'properties': {'kind': {'type': 'string', 'enum': ['initial_step', 'step', 'transition', 'end', 'line',
+                 'properties': {'kind': {'type': 'string', 'enum': ['initial_step', 'step', 'transition', 'jump', 'end', 'line',
                      'parallel_branch', 'parallel_coupling', 'selective_branch', 'selective_coupling']},
                      **{key: {'type': 'integer', 'minimum': 0, 'maximum': 32767}
-                        for key in ('x', 'y', 'number', 'start', 'end')}},
+                        for key in ('x', 'y', 'number', 'start', 'end', 'action_number')}},
                  'required': ['kind'], 'additionalProperties': False}}},
           'required': ['kind', 'symbols'], 'additionalProperties': False},
          {'type': 'object', 'properties': {'kind': {'type': 'string', 'enum': ['swap_steps']},
              'left_step_reference': {'type': 'integer', 'minimum': 0, 'maximum': 32767},
              'right_step_reference': {'type': 'integer', 'minimum': 0, 'maximum': 32767}},
-          'required': ['kind', 'left_step_reference', 'right_step_reference'], 'additionalProperties': False}]}}},
+          'required': ['kind', 'left_step_reference', 'right_step_reference'], 'additionalProperties': False},
+         _engineering_object({'kind': {'enum': ['renumber']}, **{key: {'type': 'array', 'minItems': 1,
+             'maxItems': 8192, 'items': _engineering_object({field: {'type': 'integer', 'minimum': 0, 'maximum': 32767}
+                 for field in ('before', 'after')}, ['before', 'after'])}
+             for key in ('steps', 'transitions', 'actions')}}, ['kind'])]}}},
      'required': ['operation'], 'additionalProperties': False}, _create_sfc_candidate, confirmation_required=True)
+    yield sfc_definition
+    from application.gxw_files import transaction_candidate, read_source_tool
+    yield ToolDefinition('read_gxw_source',
+        '读取当前保存 GXW 中指定既有程序、FB或FUNCTION的离线编辑模型和声明；program使用逻辑源码身份。'
+        '返回同一工程全部源码清单，不切换或保存版本，不调用原生组件。',
+        _engineering_object({'program': {'type': 'string', 'minLength': 1, 'maxLength': 512}}),
+        read_source_tool)
+    yield ToolDefinition('edit_gxw_project',
+        '在明确 version_id 的 GXW 上联合编辑多个既有 Ladder/ST/FBD/SFC 源码、接口、声明和注释。'
+        'edits 的 source_name 使用检查返回的逻辑身份，command 复用该语言的已有编辑契约；'
+        'save_policy 默认 draft，保留源码诊断并生成可继续编辑的草稿；checked 要求源码检查通过。'
+        '返回统一差异和候选，确认后保存新版本；全程离线，编译和实际运行另行验证。',
+        _gxw_edit_schema(graph_edits=sfc_definition.parameters['properties']['graph_edits']),
+        transaction_candidate, confirmation_required=True)
 
 
 def default_tool_definitions(generation):

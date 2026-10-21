@@ -98,7 +98,7 @@ class ProjectService:
 
     def version(self, project_id: str, version_id: str) -> dict:
         version = self.raw_version(project_id, version_id)
-        keys = ("id", "created_at", "target_mode", "plc_model", "summary", "validation", "lifecycle_status",
+        keys = ("id", "created_at", "target_mode", "plc_model", "program_name", "summary", "validation", "lifecycle_status",
                 "parent_version_id", "ir_sha256", "confirmed_spec_hash", "confirmed_spec_snapshot",
                 "gx_sync", "simulator_runs", "simulator_test_plans", "debug_attempts")
         result = {k: public(version.get(k)) for k in keys}

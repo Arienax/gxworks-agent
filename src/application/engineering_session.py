@@ -27,7 +27,7 @@ from storage.session import default_workspace_dir
 
 
 SESSION_TOOL_NAMES = (
-    "list_projects", "create_project", "select_project",
+    "list_projects", "create_project", "select_project", "import_gxw_project",
     "get_project_artifacts", "get_operation_status",
 )
 
@@ -93,6 +93,14 @@ class EngineeringSession:
              ("project_id",), self._select_project),
             ("get_project_artifacts", "Return verified managed artifact paths for the selected saved version, without exporting or overwriting files.",
              {}, (), self._artifacts),
+            ('import_gxw_project', 'Import a supplied local GXW path or data_base64 as a new source version, without GX Works2. CPU and source language come from the file. program is required for a multi-program file. Specify project_id/version_id only to import against that explicit existing baseline.',
+             {'data_base64': {'type': 'string', 'minLength': 1, 'maxLength': 41943040},
+              'path': {'type': 'string', 'minLength': 1, 'maxLength': 32767},
+              'filename': {'type': 'string', 'maxLength': 255},
+              'program': {'type': 'string', 'minLength': 1, 'maxLength': 512},
+              'project_id': {'type': 'string', 'maxLength': 128},
+              'version_id': {'type': 'string', 'maxLength': 128},
+              'request_id': {'type': 'string', 'maxLength': 128}}, (), self._import_gxw),
         )
         for name, description, properties, required, handler in definitions:
             registry.register(ToolDefinition(name, description,
@@ -133,6 +141,11 @@ class EngineeringSession:
         self.project_id, self.version_id = project_id, version_id
         return {"status": "selected", "project": self.service.projects.project(project_id),
                 "selected_project_id": project_id, "pinned_version_id": version_id}
+
+    def _import_gxw(self, _context, arguments):
+        result = self.service.gxw_files.import_project(**arguments)
+        self.project_id, self.version_id = result['project_id'], result['version_id']
+        return {**result, 'selected_project_id': self.project_id, 'pinned_version_id': self.version_id}
 
     def _artifacts(self, _context, _arguments):
         project_id = self._require_project()

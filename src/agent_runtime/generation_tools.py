@@ -62,8 +62,11 @@ def _get_generation_context(
         snapshot = _read_sfc_project(context, {})
         return {'project_id': context.project_id, 'plc_model': snapshot['model']['cpu'], 'target_mode': 'sfc',
                 'current_version_id': context.version_id, 'current_model': snapshot['model'],
+                'generation_request': str(arguments.get('user_requirement') or ''),
+                'generation_instructions': 'Edit only the requested existing SFC graph or child source through '
+                    'the returned capabilities. Keep other children, registrations and task bindings.',
                 'output_contract': {'tool': 'create_sfc_candidate', 'operation': 'edit'},
-                'limitations': ['Existing source records only; no SFC compiler or graph generator.',
+                'limitations': ['Existing SFC POU only; internal step/action/condition records may change jointly; no new engineering POU or task.',
                                 'Native compilation, checking and PLC execution are separate results.']}
     if target_mode == 'st' and context.native_snapshot is not None:
         from gxw.declarations import CLASS_CODES
@@ -77,9 +80,23 @@ def _get_generation_context(
             raise ValueError('Saved ST generation context requires its exact current logical Program')
         snapshot = project_context_snapshot(context.native_snapshot, selected_name)
         profile = native_project_profile(context.plc_model)
-        if profile is None or profile.cpu != snapshot['cpu']:
+        if profile is None or profile != native_project_profile(snapshot['cpu']):
             raise ValueError('Saved ST generation context CPU differs from its selected PLC model')
         selected = [row for row in snapshot['pous'] if row['program'] == selected_name]
+        if (len(selected) == 1 and selected[0]['kind'] in {'function_block', 'function'}
+                and selected[0]['language'] == 'st' and selected[0]['source_status'] == 'available'):
+            from application.native_st import model_project_context
+            operation = 'edit_st_function' if selected[0]['kind'] == 'function' else 'edit_st_fb'
+            return {'project_id': context.project_id, 'plc_model': context.plc_model,
+                'target_mode': 'st', 'execution_mode': 'offline', 'current_version_id': context.version_id,
+                'current_context': model_project_context(snapshot), 'selected_program': selected[0]['name'],
+                'generation_request': str(arguments.get('user_requirement') or ''),
+                'generation_instructions': 'Edit the selected existing ST callable with operation ' + operation + '. '
+                    'Provide its complete st_text body. Omitted declarations retain the current table; '
+                    'if changed, declarations is the complete ordered list. Keep callers and task registration. '
+                    'Unsafe interface changes are rejected by the shared source checks.',
+                'output_contract': {'tool': 'create_st_candidate' if selected[0]['kind'] == 'function' else 'create_fbd_candidate', 'operation': operation,
+                    'source_name': selected_name, 'editable_fields': ['st_text', 'declarations']}}
         if (len(selected) != 1 or selected[0]['kind'] != 'program' or selected[0]['language'] != 'st'
                 or selected[0]['source_status'] != 'available' or len(selected[0]['task_bindings']) != 1
                 or not isinstance(context.st_text, str)
@@ -123,15 +140,16 @@ def _get_generation_context(
                 'Keep its existing declarations, task binding and other project sources unless explicitly requested. '
                 'Return create_st_candidate arguments using operation edit_st_program and the selected logical source_name. '
                 'st_text replaces the complete body; omitted declarations retain the current declarations. '
-                'Include declaration upserts only when requested; do not replace this project with a template.',
+                'When changing declarations, provide the complete current list with the requested changes; '
+                'do not replace this project with a template.',
             'output_contract': {'tool': 'create_st_candidate', 'operation': 'edit_st_program',
                 'source_name': selected_name, 'input_shape': 'arguments',
                 'required_fields': ['operation', 'source_name'],
                 'editable_fields': ['st_text', 'declarations'],
                 'requires_any': ['st_text', 'declarations'],
-                'declarations': 'upserts; omitted declarations preserve current rows'},
+                'declarations': 'complete list; omission preserves current rows'},
             'limitations': ['This context is read from the selected saved GXW version, not the unsaved active IDE.',
-                'The candidate uses the shared approval and isolated native source-save path.',
+                'The candidate uses the shared proposal flow and offline source writer.',
                 'Native compilation, current device allocation and PLC execution remain separate results.']}
     if target_mode == 'fbd':
         from application.fbd import build_fbd_generation_context
@@ -139,6 +157,8 @@ def _get_generation_context(
         previous = _read_fbd_project(context, {})['model'] if context.fbd_baseline is not None else None
         generation = build_fbd_generation_context(str(arguments.get('user_requirement') or ''),
             plc_model=context.plc_model, confirmed_spec=confirmed_spec, catalog=catalog, previous=previous)
+        from gxw.offline_project import read_offline_project
+        comments, tables, _ = read_offline_project(context.fbd_baseline).comments() if context.fbd_baseline is not None else ({}, [], [])
         return {'project_id': context.project_id, 'plc_model': context.plc_model, 'cpu': catalog['cpu'], 'target_mode': 'fbd',
                 'workflow_mode': str(context.project.get('workflow_mode') or 'generate'),
                 'has_confirmed_spec': isinstance(confirmed_spec, Mapping), 'confirmed_spec': public_spec,
@@ -152,11 +172,45 @@ def _get_generation_context(
                                     'operation': 'edit' if previous is not None else 'generate'},
                 'catalog': {**catalog, 'nodes': generation['generation_input']['catalog'],
                             'empty_model': catalog.get('empty_parameter_model', dict(schema_version=2, program=catalog['program'], networks=[]))},
-                'current_model': generation['generation_input']['previous']}
+                'current_model': generation['generation_input']['previous'],
+                'device_comments': comments, 'comment_tables': tables}
     source = context.ladder
     if isinstance(context.program_ir, Mapping):
         from plc.ir import ir_to_ladder
         source = ir_to_ladder(context.program_ir)
+    from plc.ordered_source import is_ordered_ladder
+    if is_ordered_ladder(source) and context.native_snapshot is not None:
+        from gxw.offline_project import read_offline_project, read_ordered_program
+        from plc.ir import canonical_sha256
+        project = read_offline_project(context.native_snapshot)
+        current = read_ordered_program(project,
+            context.program_ir['program_name'], revision=context.program_ir['revision'])
+        return {'project_id': context.project_id, 'plc_model': context.plc_model,
+            'target_mode': 'ladder', 'execution_mode': 'offline',
+            'current_version_id': context.version_id, 'confirmed_spec': public_spec,
+            'current_model': {'program': context.program_ir['program_name'],
+                'networks': current['raw_networks'], 'device_comments': current['device_comments'],
+                'comment_tables': current['comment_tables'], 'coverage': current['coverage'],
+                'declaration_tables': project.declaration_tables()},
+            'generation_request': public_generation_value(str(arguments.get('user_requirement') or '')),
+            'generation_instructions': 'Edit the existing GXW with patch_program. The source instruction order is '
+                'authoritative, including outputs before contacts or MPS/MRD/MPP. Do not reconstruct graphical rungs. '
+                'instruction_edits uses original record_index and exact expected {op,args}; each index is edited once. '
+                'replace and insert_before require instructions [{op,args}]; delete has no instructions. '
+                'P/I source labels use op="P0" or "I0" and args=[]; bind an existing label using its text as expected.op. '
+                'Preserve all unrelated instructions and comments. Do not edit END; insert before it if needed. '
+                'device_comments maps device addresses to complete comment text, null deletes an existing row. '
+                'declaration_edits maps existing logical table names to upserts, renames and remove; '
+                'source and declaration changes are checked and saved together. Do not create a declaration table. '
+                'Use only the requested edits. Compilation and execution remain separate checks.',
+            'output_contract': {'tool': 'patch_program', 'input_shape': 'arguments',
+                'base_revision': context.program_ir['revision'],
+                'base_ir_sha256': canonical_sha256(context.program_ir),
+                'editable_fields': ['instruction_edits', 'device_comments', 'comment_table', 'declaration_edits'],
+                'requires_any': ['instruction_edits', 'device_comments', 'declaration_edits']},
+            'limitations': ['Unchanged instruction records retain original bytes.',
+                'New instruction forms require established encodings for this CPU.',
+                'Source checks, compilation and PLC execution are separate results.']}
     current_ladder = public_generation_ladder(source)
     user_requirement = public_generation_value(str(arguments.get("user_requirement") or ""))
     is_edit_mode = target_mode == "ladder" and current_ladder is not None

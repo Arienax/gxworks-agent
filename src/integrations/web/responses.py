@@ -82,6 +82,7 @@ class Version(PublicResource):
     created_at: str | None = None
     target_mode: str | None = None
     plc_model: str | None = None
+    program_name: str | None = None
     summary: str | None = None
     validation: Validation | None = None
     lifecycle_status: str | None = None
@@ -139,6 +140,64 @@ class Project(PublicResource):
 
 class ProjectList(PublicResource):
     projects: list[Project] = Field(default_factory=list)
+
+
+class GXWSourceSummary(PublicResource):
+    source_name: str
+    name: str
+    language: Literal['ladder', 'st', 'fbd', 'sfc'] | None
+    program_kind: int | None
+    unit_kind: str
+    readable: bool
+    offline_editable: bool
+    reason: str | None
+    parse_status: str | None = None
+    preserved_records: int | None = None
+    capabilities: EngineeringObject | None = None
+    native_requirements: list[EngineeringObject] | None = None
+
+
+class GXWInspection(PublicResource):
+    cpu_menu: str
+    codepage: int
+    programs: list[GXWSourceSummary]
+    selected_source: GXWSourceSummary | None
+    device_comments: EngineeringMap[str]
+    comment_tables: list[EngineeringObject]
+    declaration_tables: list[EngineeringObject]
+    issues: list[EngineeringObject]
+    write_backend: Literal['offline']
+    integrity: EngineeringObject
+    native_required: Literal[False]
+    native_compile: Literal['not_run']
+    runtime_verified: Literal[False]
+    coverage: EngineeringObject | None = None
+    networks: list[EngineeringObject] | None = None
+    source_records: list[EngineeringObject] | None = None
+
+
+class GXWImportResult(PublicResource):
+    status: str
+    project_id: str
+    version_id: str | None
+    proposal_id: str
+    project: Project
+
+
+class GXWSourceView(PublicResource):
+    project_id: str
+    version_id: str
+    source_name: str
+    language: Literal['ladder', 'st', 'fbd', 'sfc']
+    unit_kind: str
+    model: EngineeringObject
+    source_records: list[EngineeringObject] | None = None
+    svg: str | None = None
+    programs: list[GXWSourceSummary]
+    declaration_tables: list[EngineeringObject]
+    capabilities: EngineeringObject
+    write_backend: Literal['offline']
+    native_required: Literal[False]
 
 
 class ResponseViolation(PublicResource):
@@ -256,6 +315,19 @@ class DeviceCommentChange(PublicResource):
     after: str | None
 
 
+class GXWCommentChange(DeviceCommentChange):
+    table: str
+    address: str | None
+    reason: str | None = None
+
+
+class GXWSourceChange(PublicResource):
+    source_name: str
+    language: Literal['ladder', 'st', 'fbd', 'sfc']
+    unit_kind: str
+    unified_diff: str
+
+
 class LadderProgramDiff(PublicResource):
     kind: Literal["ladder"]
     base_version_id: str | None = None
@@ -272,6 +344,11 @@ class LadderProgramDiff(PublicResource):
     after_network_order: list[str]
     network_order_changed: bool
     property_changes: ProgramPropertyChanges
+    unified_diff: str | None = None
+    definition_changed: bool | None = None
+    definition_changes: EngineeringObject | None = None
+    comment_changes: list[GXWCommentChange] = Field(default_factory=list)
+    source_changes: list[GXWSourceChange] = Field(default_factory=list)
 
 
 class STTextDiff(PublicResource):
@@ -281,6 +358,10 @@ class STTextDiff(PublicResource):
     before: str
     after: str
     unified_diff: str
+    definition_changed: bool | None = None
+    definition_changes: EngineeringObject | None = None
+    comment_changes: list[GXWCommentChange] = Field(default_factory=list)
+    source_changes: list[GXWSourceChange] = Field(default_factory=list)
 
 
 class LadderPreview(PublicResource):
@@ -348,6 +429,10 @@ class FBDDiff(PublicResource):
     library_changes: FBDLibraryChanges | None = None
     definition_changes: FBDDefinitionChanges | None = None
     compilation_save: FBDCompilationSave | None = None
+    definition_changed: bool | None = None
+    comment_changes: list[GXWCommentChange] = Field(default_factory=list)
+    source_changes: list[GXWSourceChange] = Field(default_factory=list)
+    declaration_changes: EngineeringObject | None = None
 
 
 class FBDPreviewResource(PublicResource):
@@ -369,6 +454,11 @@ class SFCDiff(PublicResource):
     has_changes: bool
     modified_children: list[SFCModifiedChild]
     unified_diff: str
+    definition_changed: bool | None = None
+    definition_changes: EngineeringObject | None = None
+    comment_changes: list[GXWCommentChange] = Field(default_factory=list)
+    source_changes: list[GXWSourceChange] = Field(default_factory=list)
+    declaration_changes: EngineeringObject | None = None
 
 
 class SFCPreviewValidation(ExtensibleResource):

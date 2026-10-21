@@ -95,7 +95,14 @@ def resolve_tool_context(definition, context, arguments):
         if context.inspection is None:
             raise ToolPreconditionError("STALE_SOURCE_REF", "分析快照不属于当前会话。", next_actions=PROJECT_ACTIONS)
         context = context.inspection.source_context(arguments["source_ref"])
+        if arguments.get('data_base64') is not None:
+            raise ToolPreconditionError('INVALID_ARGUMENTS', 'source_ref 与上传字节不能混合作为同一次来源。')
+        selected = (context.analysis_source or {}).get('program_name')
+        if arguments.get('program') is not None and arguments['program'] != selected:
+            raise ToolPreconditionError('SOURCE_MISMATCH', 'program 与当前分析快照的所选源码不同，请重新检查该程序。')
     requirement = definition.context_requirement
+    if arguments.get('source_ref') and definition.name == 'read_fbd_definition':
+        requirement = 'project'
     if (definition.name == "validate_project" and arguments.get("native")) or (
             definition.name in {"create_fbd_candidate", "create_sfc_candidate"}
             and arguments.get("operation") in {"edit", "compile", "create_fb", "create_program", "import_library", "create_structure", "create_st_fb", "edit_st_fb", "edit_global_labels", "create_global_labels", "edit_pou_labels", "configure_project"}):
@@ -127,7 +134,12 @@ def resolve_tool_context(definition, context, arguments):
         # Program-info queries report absence as state, rather than an error.
         if definition.name != "get_current_program_info":
             raise ToolPreconditionError("NO_PROGRAM_SOURCE", "当前工程没有可分析的程序来源。", next_actions=SOURCE_ACTIONS)
-    if context.analysis_source and context.program_ir is None and definition.name not in {"get_current_program_info", "read_network"}:
+    source_reads = {'get_current_program_info', 'read_network', 'read_fbd_project', 'read_st_project',
+                    'read_sfc_project', 'read_fbd_definition'}
+    if ((context.analysis_source or {}).get('target_mode') in {'fbd', 'sfc'}
+            and context.native_snapshot is not None):
+        source_reads |= {'validate_current_program', 'validate_project', 'get_diagnostics'}
+    if context.analysis_source and context.program_ir is None and context.st_text is None and definition.name not in source_reads:
         raise ToolPreconditionError("SOURCE_NOT_PARSEABLE", "快照保留原始指令，但不能进行完整静态检查。",
             next_actions=({"tool": "get_current_program_info", "arguments": {"source_ref": arguments.get("source_ref")}},),
             details={"analysis_source": {key: copy.deepcopy(value) for key, value in context.analysis_source.items()

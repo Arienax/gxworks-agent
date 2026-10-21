@@ -233,6 +233,11 @@ class WorkbenchService:
     def upload_attachment(self, project_id, filename, data_base64):
         return self.attachments.upload(project_id, filename, data_base64)
 
+    @property
+    def gxw_files(self):
+        from application.gxw_files import GXWFileService
+        return GXWFileService(self)
+
     def _attachments(self, project_id, ids):
         return self.attachments.load(project_id, ids)
 
@@ -310,7 +315,7 @@ class WorkbenchService:
                        last_call_at=datetime.now(timezone.utc).isoformat())
         if name == "get_generation_context":
             current["generation_context_observed"] = True
-        if name in {"create_program_candidate", "patch_program", "create_fbd_candidate", "create_sfc_candidate", "create_st_candidate"} and response.get("proposal_id"):
+        if name in {"create_program_candidate", "patch_program", "create_fbd_candidate", "create_sfc_candidate", "create_st_candidate", "edit_gxw_project"} and response.get("proposal_id"):
             current["candidate_proposal_id"] = response["proposal_id"]
         self._mcp_activity[project_id] = current
 

@@ -2,13 +2,20 @@
 from __future__ import annotations
 
 from typing import Literal
-from pydantic import ConfigDict, Field, JsonValue, StrictBool
+from pydantic import ConfigDict, Field, JsonValue, StrictBool, StrictInt
 from .response_types import EngineeringMap, EngineeringObject, EngineeringValue, ExtensibleResource, PublicResource
 
 
 class Instruction(ExtensibleResource):
     op: str
     args: list[str] = Field(default_factory=list)
+    kind: Literal['instruction', 'opaque', 'label', 'statement', 'note'] | None = None
+    record_index: int | None = None
+    source_offset: int | None = None
+    raw_hex: str | None = None
+    step: int | None = None
+    text: str | None = None
+    reason: str | None = None
 
 
 class PLCDescriptor(ExtensibleResource):
@@ -52,7 +59,8 @@ class LadderRung(ExtensibleResource):
     debug_note: str | None = None
     header_element: LadderElement | None = None
     shared_inputs: list[LadderElement] | None = None
-    branches: list[LadderBranch]
+    branches: list[LadderBranch] = Field(default_factory=list)
+    ordered_instructions: list[Instruction] | None = None
 
 
 class ProgramRequirement(ExtensibleResource):
@@ -425,20 +433,21 @@ class ProgramFinding(ExtensibleResource):
     category: str
     severity: str
     message: str
-    suggestion: str
-    addresses: list[str]
-    network_refs: list[str]
+    suggestion: str = ''
+    addresses: list[str] = Field(default_factory=list)
+    network_refs: list[str] = Field(default_factory=list)
     rung_ids: list[int]
-    json_paths: list[str]
-    evidence: list[str]
-    confidence: str
-    fixable: StrictBool
+    json_paths: list[str] = Field(default_factory=list)
+    evidence: list[str] = Field(default_factory=list)
+    confidence: str = 'unknown'
+    fixable: StrictBool = False
 
 
 class ProgramFindingCounts(ExtensibleResource):
     error: int
     warning: int
     info: int
+    unverified: int | None = None
 
 
 class ProgramAnalysis(ExtensibleResource):
@@ -493,6 +502,23 @@ class FBDPortEdit(PublicResource):
     negated: StrictBool
 
 
+class FBDNodeSize(PublicResource):
+    width: int | None = None
+    height: int | None = None
+
+
+class FBDStoredPort(PublicResource):
+    flags: StrictInt
+    x: StrictInt
+    y: StrictInt
+
+
+class FBDPortLayout(PublicResource):
+    width: StrictInt
+    height: StrictInt
+    ports: list[FBDStoredPort]
+
+
 class FBDNode(ExtensibleResource):
     id: str
     template: str
@@ -505,21 +531,35 @@ class FBDNode(ExtensibleResource):
     height: int | None = None
     ports: list[FBDPort] | None = None
     port_edits: EngineeringMap[FBDPortEdit] | None = None
+    block: int | None = None
+    resize: FBDNodeSize | None = None
+    refresh_interface: StrictBool | None = None
+    port_layout: FBDPortLayout | None = None
 
 
 class FBDWire(ExtensibleResource):
     model_config = ConfigDict(serialize_by_alias=True)
+    kind: Literal['wire', 'junction'] | None = None
     source_offset: int | None = None
     start: list[int] | None = None
     end: list[int] | None = None
     from_: str | None = Field(default=None, alias="from")
     to: str | None = None
     via: list[list[int]] | None = None
+    block: int | None = None
 
 
 class FBDMemberDevice(PublicResource):
     device: str
     iec_address: str
+
+
+class StructureArrayAddresses(PublicResource):
+    word_address: str
+    word_offset: str
+    word_use_bit: Literal[0, 1]
+    bit_address: str
+    bit_offset: str
 
 
 class FBDLabel(ExtensibleResource):
@@ -532,17 +572,28 @@ class FBDLabel(ExtensibleResource):
     iec_address: str | None = None
     comment: str | None = None
     member_devices: EngineeringMap[FBDMemberDevice] | None = None
+    structure_array_addresses: StructureArrayAddresses | None = None
 
 
 class DeclarationEdit(PublicResource):
     upserts: list[FBDLabel] = Field(default_factory=list)
     renames: EngineeringMap[str] = Field(default_factory=dict)
     remove: list[str] = Field(default_factory=list)
+    order: list[str] | None = None
+    return_type: str | None = None
 
 
 class SourceIssue(ExtensibleResource):
     code: str | None = None
     message: str | None = None
+
+
+class FBDBlock(PublicResource):
+    source_offset: int | None = None
+    canvas_height: int
+    title: str | None = None
+    comment: str | None = None
+    index: int | None = None
 
 
 class FBDModel(ExtensibleResource):
@@ -557,6 +608,7 @@ class FBDModel(ExtensibleResource):
     issues: list[SourceIssue] | None = None
     cpu: str | None = None
     metadata: EngineeringObject | None = None
+    blocks: list[FBDBlock] | None = None
 
 
 class DefinitionInterfaceParameter(ExtensibleResource):
@@ -693,6 +745,31 @@ class SFCWriteSymbol(ExtensibleResource):
     y: int | None = None
     start: int | None = None
     end: int | None = None
+    action_number: int | None = None
+
+
+class SFCSourceNode(ExtensibleResource):
+    id: str
+    kind: str
+    number: int | None = None
+    action_number: int | None = None
+    child_names: list[str] = Field(default_factory=list)
+    binding_status: str | None = None
+
+
+class SFCSourceEdge(ExtensibleResource):
+    source: str
+    target: str
+    kind: str
+
+
+class SFCSourceGraph(ExtensibleResource):
+    status: str
+    nodes: list[SFCSourceNode]
+    edges: list[SFCSourceEdge]
+    position_resolution: str
+    issues: list[EngineeringObject]
+    linear_symbols: list[SFCWriteSymbol] | None = None
 
 
 class SFCGraph(ExtensibleResource):
@@ -704,6 +781,7 @@ class SFCGraph(ExtensibleResource):
     topology: SFCTopology | None = None
     write_symbols: list[SFCWriteSymbol] | None = None
     records: list[SFCGraphRecord]
+    source_graph: SFCSourceGraph | None = None
 
 
 class SFCChildRecord(ExtensibleResource):
@@ -711,6 +789,7 @@ class SFCChildRecord(ExtensibleResource):
     op: str | None = None
     args: list[str] | None = None
     raw_hex: str
+    native_requirements: EngineeringObject | None = None
 
 
 class SFCChild(ExtensibleResource):
@@ -752,6 +831,8 @@ class CatalogNode(ExtensibleResource):
 class FBDPresentationNode(ExtensibleResource):
     id: str
     symbol_editable: bool
+    resizable: bool | None = None
+    callable: bool | None = None
     ports: list[FBDPort]
 
 
@@ -793,6 +874,7 @@ class FBDPresentation(ExtensibleResource):
     rows: EngineeringMap[list[FBDLabel]]
     nodes: list[FBDPresentationNode]
     endpoints: list[FBDEndpoint]
+    blocks: list[FBDBlock] = Field(default_factory=list)
 
 
 class FBDEditorView(ExtensibleResource):

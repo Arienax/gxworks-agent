@@ -1,7 +1,9 @@
 """Saved native project queries and approved engineering intents."""
 from __future__ import annotations
 import copy
+import hashlib
 import json
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 from agent_runtime.tool_errors import ToolPreconditionError, PROJECT_ACTIONS, SOURCE_ACTIONS
 from agent_runtime.tool_context import (
@@ -102,7 +104,8 @@ def _read_fbd_project(context: ToolContext, arguments: Mapping[str, Any]) -> Dic
         if len(names) != 1:
             return {'available': False, 'programs': names, 'message': '请指定要读取的 Program.pou。'}
     return {'available': True, 'version_id': context.version_id or None,
-            **read_snapshot(raw, arguments.get('program') or ((context.version or {}).get('program_name') if uploaded is None else None))}
+            **read_snapshot(raw, arguments.get('program') or (((context.version or {}).get('program_name')
+                or (context.analysis_source or {}).get('program_name')) if uploaded is None else None))}
 
 
 def _read_fbd_libraries(context: ToolContext, arguments: Mapping[str, Any]) -> Dict[str, Any]:
@@ -116,9 +119,10 @@ def _read_fbd_libraries(context: ToolContext, arguments: Mapping[str, Any]) -> D
 
 def _read_fbd_definition(context: ToolContext, arguments: Mapping[str, Any]) -> Dict[str, Any]:
     from gxw.fb_authoring import definition_snapshot
-    if context.fbd_baseline is None:
-        raise ValueError('请选择已保存的 FBD 工程版本。')
-    return {'version_id': context.version_id, **definition_snapshot(context.fbd_baseline, arguments.get('source_name'))}
+    raw = context.native_snapshot or context.fbd_baseline
+    if raw is None:
+        raise ValueError('请选择已保存的 GXW 工程版本。')
+    return {'version_id': context.version_id, **definition_snapshot(raw, arguments.get('source_name'), require_fbd=False)}
 
 
 def _create_fbd_candidate(context: ToolContext, arguments: Mapping[str, Any], *, generation_handoff=None) -> Dict[str, Any]:
@@ -127,6 +131,12 @@ def _create_fbd_candidate(context: ToolContext, arguments: Mapping[str, Any], *,
     from application.fbd import (AUTHORING_OPERATIONS, authoring_command, decode_upload, pack_candidate,
                                  prepare_candidate, version_requires_native_save)
 
+    from gxw.offline_authoring import EXISTING_DEFINITION_OPERATIONS
+    if arguments.get('operation') in EXISTING_DEFINITION_OPERATIONS and context.native_snapshot is not None:
+        from application.gxw_files import definition_candidate
+        return definition_candidate(context, authoring_command(arguments),
+            device_comments=arguments.get('device_comments'), comment_table=arguments.get('comment_table'),
+            save_policy=arguments.get('save_policy', 'checked'))
     if context.project.get('target_mode') != 'fbd' and (context.version or {}).get('target_mode') != 'fbd':
         raise ValueError('FBD 候选需要绑定 FBD 目标工程。')
     operation = arguments['operation']
@@ -161,7 +171,8 @@ def _create_fbd_candidate(context: ToolContext, arguments: Mapping[str, Any], *,
         if 'data_base64' in arguments or 'program' in arguments:
             raise ValueError('edit 的 Program.pou 由 model.program 指定。')
         kwargs = {'model': arguments.get('model'), 'baseline': context.fbd_baseline,
-                  'native_save': version_requires_native_save(context.version)}
+                  'native_save': version_requires_native_save(context.version),
+                  'device_comments': arguments.get('device_comments'), 'comment_table': arguments.get('comment_table')}
     elif operation == 'import_library':
         if not context.version_id or context.fbd_baseline is None:
             raise ValueError('库导入需要绑定已保存的 FBD 基础版本。')
@@ -188,7 +199,8 @@ def _create_fbd_candidate(context: ToolContext, arguments: Mapping[str, Any], *,
         raise ValueError('Unsupported FBD operation')
     with tempfile.TemporaryDirectory(prefix='gxw-fbd-candidate-') as directory:
         payload = prepare_candidate(directory, **kwargs, plc_model=context.plc_model,
-                                    summary=arguments.get('summary') or 'Agent 提出的 FBD 候选')
+                                    summary=arguments.get('summary') or 'Agent 提出的 FBD 候选',
+                                    save_policy=arguments.get('save_policy', 'checked'))
         if generation_handoff is not None:
             payload['metadata']['generation_handoff'] = copy.deepcopy(generation_handoff)
         elif operation in {'generate', 'edit'}:
@@ -232,7 +244,8 @@ def _read_sfc_project(context: ToolContext, arguments: Mapping[str, Any]) -> Dic
     raw = decode_upload(uploaded) if uploaded is not None else context.native_snapshot
     if raw is None:
         raise ValueError('请选择带 GXW 快照的版本或提供已有 SFC 工程。')
-    program = arguments.get('program') or ((context.version or {}).get('program_name') if uploaded is None else None)
+    program = arguments.get('program') or (((context.version or {}).get('program_name')
+        or (context.analysis_source or {}).get('program_name')) if uploaded is None else None)
     graph = context.sfc_graph if uploaded is None else None
     if arguments.get('native') and read_snapshot(raw, program, native_graph=graph)['model']['graph']['position_resolution'] != 'native-source-bound':
         from application.fbd import _native_workspace
@@ -250,14 +263,17 @@ def _create_sfc_candidate(context: ToolContext, arguments: Mapping[str, Any]) ->
 
     operation = arguments['operation']
     if operation == 'import':
-        if 'child_edits' in arguments or 'graph_edits' in arguments:
+        if {'child_edits', 'graph_edits', 'declaration_edits', 'device_comments', 'comment_table'} & arguments.keys():
             raise ValueError('SFC 导入不接受子程序编辑。')
         keywords = {'imported': decode_upload(arguments.get('data_base64', ''))}
     elif operation == 'edit':
         if not context.version_id or context.native_snapshot is None or 'data_base64' in arguments:
             raise ValueError('SFC 编辑需要当前版本的 GXW 快照，不接受导入字节。')
         keywords = {'baseline': context.native_snapshot, 'child_edits': arguments.get('child_edits'),
-                    'graph_edits': arguments.get('graph_edits'), 'native_graph': context.sfc_graph}
+                    'graph_edits': arguments.get('graph_edits'), 'native_graph': context.sfc_graph,
+                    'declaration_edits': arguments.get('declaration_edits'),
+                    'device_comments': arguments.get('device_comments'), 'comment_table': arguments.get('comment_table'),
+                    'save_policy': arguments.get('save_policy', 'checked')}
     else:
         raise ValueError('SFC 目前支持已有工程的导入及子程序编辑。')
     with tempfile.TemporaryDirectory(prefix='gxw-sfc-candidate-') as directory:
@@ -282,10 +298,16 @@ def _read_st_project(context: ToolContext, arguments: Mapping[str, Any]) -> Dict
     if raw is None:
         raise ValueError('请选择带 GXW 快照的版本或提供已有 ST 工程。')
     snapshot = st_program_snapshot(raw)
-    if 'program' in arguments:
-        snapshot['programs'] = [row for row in snapshot['programs'] if row['program'] == arguments['program']]
+    selected = arguments.get('program') or (context.analysis_source or {}).get('program_name')
+    if selected is not None:
+        snapshot['programs'] = [row for row in snapshot['programs'] if row['program'] == selected]
+        if not snapshot['programs']:
+            from gxw.st_program import project_context_snapshot
+            project = project_context_snapshot(raw, selected)
+            snapshot['programs'] = [row for row in project['pous'] if row['program'] == project['selected_source']
+                                    and row['kind'] in {'function_block', 'function'} and row['language'] == 'st']
         if len(snapshot['programs']) != 1:
-            raise ValueError('没有唯一匹配的普通 ST Program。')
+            raise ValueError('没有唯一匹配的既有 ST Program、FB 或 FUNCTION。')
     return {'available': True, 'version_id': context.version_id or None, **snapshot}
 
 
@@ -313,18 +335,36 @@ def _create_st_candidate(context: ToolContext, arguments: Mapping[str, Any]) -> 
         baseline = context.native_snapshot or context.fbd_baseline
         if baseline is None:
             raise ValueError('普通 ST Program 后台创建和编辑需要当前版本的完整 GXW 工程。')
-        command = {key: value for key, value in arguments.items() if key != 'summary'}
-        background_st_program_plan(baseline, command)
-        authored = _native_candidate('author', baseline, command)
+        command = {key: value for key, value in arguments.items()
+                   if key not in {'summary', 'device_comments', 'comment_table', 'save_policy'}}
+        if operation in {'edit_st_program', 'edit_st_fb', 'edit_st_function', 'edit_st_source'}:
+            from gxw.offline_authoring import write_existing_definition
+            authored = write_existing_definition(baseline, command,
+                device_comments=arguments.get('device_comments'), comment_table=arguments.get('comment_table'),
+                save_policy=arguments.get('save_policy', 'checked'))
+        else:
+            background_st_program_plan(baseline, command)
+            authored = _native_candidate('author', baseline, command)
         raw = authored.data
         selected = authored.report['definition_after']['program']
     with tempfile.TemporaryDirectory(prefix='gxw-st-candidate-') as directory:
         payload = prepare_candidate(directory, imported=raw, program_name=selected,
             plc_model=context.plc_model, summary=arguments.get('summary') or '普通 ST Program 工程候选')
         if authored is not None:
-            payload['metadata']['validation'].update(native_save='passed', definition_readback='matched')
+            payload['metadata']['validation'].update(
+                native_save=authored.report.get('validation', {}).get('native_save', 'not_run'),
+                definition_readback='matched', write_backend=authored.report.get('write_backend', 'native'),
+                compile_state=authored.report.get('compile_state', 'unverified'),
+                source_checks=authored.report.get('source_checks', []),
+                save_policy=arguments.get('save_policy', 'checked'),
+                artifact_state=authored.report.get('artifact_state', 'draft'))
             payload['metadata']['validation']['messages'] = [
-                '普通 ST Program 已在隔离工作区写入并核对源码、声明和任务；编译及活动 IDE 编辑另行验证。']
+                '普通 ST Program 源码及声明已写入并回读，任务注册保持原样；编译和运行分别验证。']
+            from application.fbd import json_bytes
+            report_bytes = json_bytes(authored.report)
+            (Path(directory) / 'offline_write_report.json').write_bytes(report_bytes)
+            payload['artifacts']['offline_write_report'] = {'path': 'offline_write_report.json',
+                'sha256': hashlib.sha256(report_bytes).hexdigest()}
         snapshot = pack_candidate(payload, directory)
     return {'requires_confirmation': True, 'verification': payload['metadata']['validation'],
         'pending_action': {'type': 'accept_st_candidate', 'project_id': context.project_id,

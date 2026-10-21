@@ -37,6 +37,9 @@ def _write_program_csv(
     always_on = control_runtime_facts(plc_model).get("always_on", [])
     if is_plc_ir(json_data):
         json_data = ir_to_ladder(json_data)
+    from plc.ordered_source import is_ordered_ladder
+    if is_ordered_ladder(json_data):
+        raise GXNativeLoweringError('Ordered GXW instructions must be exported through the source-bound GXW writer')
 
     declared_comments = {}
     rungs = []

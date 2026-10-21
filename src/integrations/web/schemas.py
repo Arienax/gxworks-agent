@@ -1,6 +1,7 @@
 """Explicit HTTP commands; candidates and credentials never occur in read DTOs."""
 from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
+from .program_contracts import DeclarationEdit
 
 
 class Command(BaseModel):
@@ -56,6 +57,7 @@ class JobCreate(Command):
     kind: Literal["analysis", "generation", "direct_generation", "agent", "review", "test_plan", "debug_plan", "gx_read", "gx_inspect"]
     project_id: str
     version_id: str | None = None
+    program: str | None = Field(default=None, min_length=1, max_length=512)
     clarification_job_id: str | None = None
     clarification_answers: dict[str, str] | None = None
     request_id: str = Field(min_length=1, max_length=128)
@@ -164,9 +166,22 @@ class AttachmentUpload(Command):
     data_base64: str = Field(max_length=42 * 1024 * 1024)
 
 
+class GXWInspectionCommand(Command):
+    data_base64: str = Field(min_length=1, max_length=42 * 1024 * 1024)
+    filename: str | None = Field(default=None, max_length=255)
+    program: str | None = Field(default=None, min_length=1, max_length=255)
+
+
+class GXWImportCommand(GXWInspectionCommand):
+    request_id: str = Field(min_length=1, max_length=128)
+    project_id: str | None = None
+    version_id: str | None = None
+
+
 class FBDProposal(Command):
-    operation: Literal["generate", "edit", "import", "convert", "create_fb", "create_program", "import_library", "create_structure", "create_st_fb", "edit_st_fb", "edit_global_labels", "create_global_labels", "edit_pou_labels", "configure_project", "remove_empty_program", "compile"]
+    operation: Literal["generate", "edit", "import", "convert", "create_fb", "create_program", "import_library", "create_structure", "create_st_fb", "edit_st_fb", "edit_st_function", "edit_st_source", "edit_global_labels", "create_global_labels", "edit_pou_labels", "configure_project", "remove_empty_program", "compile"]
     native_save: bool | None = Field(default=None, strict=True)
+    save_policy: Literal['draft', 'checked'] | None = None
     options: dict[str, Any] | None = None
     project_id: str
     version_id: str | None = None
@@ -179,15 +194,68 @@ class FBDProposal(Command):
     st_text: str | None = Field(default=None, max_length=4 * 1024 * 1024)
     members: list[dict[str, str]] | None = Field(default=None, max_length=8192)
     declarations: list[dict[str, Any]] | None = Field(default=None, max_length=8192)
+    remove_declarations: list[str] | None = Field(default=None, max_length=8192)
+    return_type: str | None = Field(default=None, min_length=1, max_length=255)
+    device_comments: dict[str, str | None] | None = None
+    comment_table: str | None = Field(default=None, max_length=512)
     resource: str | None = Field(default=None, min_length=1, max_length=255)
     task: str | None = Field(default=None, min_length=1, max_length=255)
     scope_mode: Literal['existing_task', 'new_task', 'new_resource'] | None = None
 
 
+class SourceOperand(Command):
+    text: str = Field(min_length=1, max_length=1024)
+    token_codes: list[str] = Field(min_length=1, max_length=16)
+
+
+class SourceInstruction(Command):
+    op: str = Field(min_length=1, max_length=255)
+    args: list[str | SourceOperand] = Field(max_length=8192)
+
+
+class ExpectedSourceInstruction(SourceInstruction):
+    raw_hex: str | None = Field(default=None, max_length=16 * 1024 * 1024)
+
+
+class SourceTextRecord(Command):
+    kind: Literal['statement', 'note']
+    text: str = Field(max_length=4 * 1024 * 1024)
+
+
+class ExpectedSourceTextRecord(SourceTextRecord):
+    raw_hex: str | None = Field(default=None, max_length=16 * 1024 * 1024)
+
+
+class SourceEndBoundary(Command):
+    kind: Literal['end_boundary']
+
+
+class SourceInstructionEdit(Command):
+    operation: Literal['replace', 'insert_before', 'delete', 'move_before']
+    record_index: int = Field(strict=True, ge=0)
+    expected: ExpectedSourceInstruction | ExpectedSourceTextRecord | SourceEndBoundary
+    instructions: list[SourceInstruction | SourceTextRecord] = Field(default_factory=list, max_length=8192)
+    target_record_index: int | None = Field(default=None, strict=True, ge=0)
+
+
+class SFCActionRegistration(Command):
+    qualifier: int = Field(strict=True, ge=0, le=0xffffffff,
+        description='Stored action qualifier. Core reports unverified qualifier semantics separately from source writeback.')
+    zoom: str = Field(min_length=1, max_length=255)
+
+
 class SFCChildEdit(Command):
-    kind: Literal['zoom', 'transition']
+    kind: Literal['zoom', 'transition', 'action']
     name: str = Field(min_length=1, max_length=255)
-    records_hex: str = Field(max_length=16 * 1024 * 1024)
+    operation: Literal['create', 'edit', 'replace', 'delete', 'rename', 'renumber', 'move_before'] | None = None
+    records_hex: str | None = Field(default=None, max_length=16 * 1024 * 1024)
+    instructions: list[SourceInstruction | SourceTextRecord] | None = Field(default=None, max_length=8192)
+    instruction_edits: list[SourceInstructionEdit] | None = Field(default=None, max_length=8192)
+    number: int | None = Field(default=None, strict=True, ge=0, le=65535)
+    new_number: int | None = Field(default=None, strict=True, ge=0, le=65535)
+    new_name: str | None = Field(default=None, min_length=1, max_length=255)
+    target_name: str | None = Field(default=None, min_length=1, max_length=255)
+    registrations: list[SFCActionRegistration] | None = Field(default=None, max_length=8192)
 
 
 class SFCGraphEdit(Command):
@@ -197,17 +265,19 @@ class SFCGraphEdit(Command):
 
 class SFCJumpEdit(Command):
     kind: Literal['jump']
-    x: int = Field(strict=True, ge=0, le=65535)
-    y: int = Field(strict=True, ge=0, le=65535)
+    x: int | None = Field(default=None, strict=True, ge=0, le=65535)
+    y: int | None = Field(default=None, strict=True, ge=0, le=65535)
+    source_offset: int | None = Field(default=None, strict=True, ge=0)
     before_step_reference: int = Field(strict=True, ge=0, le=65535)
     target_step_reference: int = Field(strict=True, ge=0, le=65535)
 
 
 class SFCNodeSymbol(Command):
-    kind: Literal['initial_step', 'step', 'transition']
+    kind: Literal['initial_step', 'step', 'transition', 'jump']
     x: int = Field(strict=True, ge=0, le=32767)
     y: int = Field(strict=True, ge=0, le=32767)
     number: int = Field(strict=True, ge=0, le=32767)
+    action_number: int | None = Field(default=None, strict=True, ge=0, le=32767)
 
 
 class SFCEndSymbol(Command):
@@ -241,15 +311,31 @@ class SFCStepSwap(Command):
     right_step_reference: int = Field(strict=True, ge=0, le=32767)
 
 
+class SFCRenumberPair(Command):
+    before: int = Field(strict=True, ge=0, le=32767)
+    after: int = Field(strict=True, ge=0, le=32767)
+
+
+class SFCRenumberEdit(Command):
+    kind: Literal['renumber']
+    steps: list[SFCRenumberPair] | None = Field(default=None, min_length=1, max_length=8192)
+    transitions: list[SFCRenumberPair] | None = Field(default=None, min_length=1, max_length=8192)
+    actions: list[SFCRenumberPair] | None = Field(default=None, min_length=1, max_length=8192)
+
+
 class SFCProposal(Command):
     operation: Literal['import', 'edit']
+    save_policy: Literal['draft', 'checked'] | None = None
     project_id: str
     version_id: str | None = None
     request_id: str = Field(min_length=1, max_length=128)
     data_base64: str | None = Field(default=None, max_length=42 * 1024 * 1024)
     program: str | None = Field(default=None, min_length=1, max_length=255)
     child_edits: list[SFCChildEdit] | None = Field(default=None, min_length=1, max_length=8192)
-    graph_edits: list[SFCGraphEdit | SFCJumpEdit | SFCRebuildEdit | SFCStepSwap] | None = Field(default=None, min_length=1, max_length=8192)
+    graph_edits: list[SFCGraphEdit | SFCJumpEdit | SFCRebuildEdit | SFCStepSwap | SFCRenumberEdit] | None = Field(default=None, min_length=1, max_length=8192)
+    declaration_edits: dict[str, DeclarationEdit] | None = None
+    device_comments: dict[str, str | None] | None = None
+    comment_table: str | None = Field(default=None, max_length=512)
 
 
 class SFCPreview(Command):
@@ -257,7 +343,50 @@ class SFCPreview(Command):
     version_id: str
     program: str | None = Field(default=None, min_length=1, max_length=255)
     child_edits: list[SFCChildEdit] | None = Field(default=None, min_length=1, max_length=8192)
-    graph_edits: list[SFCGraphEdit | SFCJumpEdit | SFCRebuildEdit | SFCStepSwap] | None = Field(default=None, min_length=1, max_length=8192)
+    graph_edits: list[SFCGraphEdit | SFCJumpEdit | SFCRebuildEdit | SFCStepSwap | SFCRenumberEdit] | None = Field(default=None, min_length=1, max_length=8192)
+    declaration_edits: dict[str, DeclarationEdit] | None = None
+    save_policy: Literal['draft', 'checked'] | None = None
+
+
+class GXWLadderEdit(Command):
+    operation: Literal['edit'] = 'edit'
+    instruction_edits: list[SourceInstructionEdit] = Field(max_length=8192)
+
+
+class GXWSTEdit(Command):
+    operation: Literal['edit', 'edit_st_source', 'edit_st_program', 'edit_st_fb', 'edit_st_function'] = 'edit'
+    st_text: str | None = Field(default=None, max_length=4 * 1024 * 1024)
+    declarations: list[dict[str, Any]] | None = Field(default=None, max_length=8192)
+    return_type: str | None = Field(default=None, min_length=1, max_length=255)
+
+
+class GXWFBDEdit(Command):
+    operation: Literal['edit'] = 'edit'
+    model: dict[str, Any]
+
+
+class GXWSFCEdit(Command):
+    operation: Literal['edit'] = 'edit'
+    child_edits: list[SFCChildEdit] | None = Field(default=None, min_length=1, max_length=8192)
+    graph_edits: list[SFCGraphEdit | SFCJumpEdit | SFCRebuildEdit | SFCStepSwap | SFCRenumberEdit] | None = Field(default=None, min_length=1, max_length=8192)
+
+
+class GXWSourceEdit(Command):
+    source_name: str = Field(min_length=1, max_length=512)
+    command: GXWLadderEdit | GXWSTEdit | GXWFBDEdit | GXWSFCEdit
+
+
+class GXWEditCommand(Command):
+    project_id: str
+    version_id: str
+    request_id: str = Field(min_length=1, max_length=128)
+    program: str | None = Field(default=None, min_length=1, max_length=512)
+    edits: list[GXWSourceEdit] = Field(default_factory=list, max_length=8192)
+    declaration_edits: dict[str, DeclarationEdit] | None = None
+    device_comments: dict[str, str | None] | None = None
+    comment_table: str | None = Field(default=None, max_length=512)
+    save_policy: Literal['draft', 'checked'] = 'draft'
+    summary: str = Field(default='编辑 GXW 工程', max_length=512)
 
 
 class SFCStep(Command):

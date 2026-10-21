@@ -159,7 +159,7 @@ class ProgramInspectionService:
                     "expected_cpu_menu": identity["cpu_menu"], "observed_plc_info": parsed["plc_info"]})
         # Re-reading this target supersedes its older source references.
         self._sources = {key: value for key, value in self._sources.items()
-                         if value["source"]["session_id"] != session_id
+                         if value["source"].get("session_id") != session_id
                          and self._clock() - value["created"] <= self.ttl}
         source_ref = uuid.uuid4().hex
         source = {"source_ref": source_ref, "session_id": session_id, "kind": "native_ladder_snapshot",
@@ -183,6 +183,14 @@ class ProgramInspectionService:
             raise ToolPreconditionError("STALE_SOURCE_REF", "分析快照不存在、已被新快照替换或已过期。",
                 next_actions=({"tool": "list_gxworks2_sessions"},))
         source, parsed = entry["source"], entry["parsed"]
+        if source['kind'] == 'gxw_file_snapshot':
+            return build_tool_context({'plc_model': source['plc_model'], 'target_mode': source['target_mode']},
+                program_ir=parsed.get('program_ir'), native_snapshot=entry['raw'],
+                fbd_baseline=entry['raw'] if source['target_mode'] == 'fbd' else None,
+                st_text=parsed.get('st_text'), sfc_graph=parsed.get('sfc_graph'), inspection=self,
+                analysis_source={**source, 'raw_networks': parsed.get('raw_networks', []),
+                                 'device_comments': parsed.get('device_comments', {}),
+                                 'source_model': parsed.get('source_model')})
         try:
             _, identity = self._session(source["session_id"], source["program_name"])
         except ToolPreconditionError as error:
@@ -192,7 +200,56 @@ class ProgramInspectionService:
                 next_actions=({"tool": "list_gxworks2_sessions"},))
         return build_tool_context({"plc_model": source["plc_model"], "target_mode": "ladder"},
             ladder=parsed["ladder"], program_ir=parsed["program_ir"], inspection=self,
-            analysis_source={**source, "raw_networks": parsed["raw_networks"]})
+            analysis_source={**source, "raw_networks": parsed["raw_networks"],
+                             'device_comments': parsed['device_comments']})
+
+    def inspect_gxw_project(self, *, data_base64=None, path=None, program=None):
+        from application.gxw_files import read_file_input
+        from gxw.models import GXWFormatError
+        from gxw.offline_project import read_offline_project, inspect_offline_project, read_ordered_program
+        raw = read_file_input(data_base64=data_base64, path=path)
+        project = read_offline_project(raw, allow_unverified=True)
+        public = inspect_offline_project(raw, program)
+        selected = public['selected_source']
+        if selected is None or selected['language'] is None or not selected['readable']:
+            return {**public, 'source_ref': None, 'next_actions': [
+                {'tool': 'inspect_gxw_project', 'required_arguments': ['program']}]}
+        parsed = {'device_comments': public['device_comments']}
+        try:
+            if selected['language'] == 'ladder':
+                parsed.update(read_ordered_program(project, selected['source_name']))
+            elif selected['language'] == 'st':
+                from gxw.text_pou import parse_st_pou
+                parsed['st_text'] = parse_st_pou(project.streams[selected['source_name']]).text
+                if parsed['st_text'] is None:
+                    raise GXWFormatError('ST body encoding is not covered')
+            elif selected['language'] == 'sfc':
+                from gxw.sfc_pou import read_sfc_project_context
+                parsed['source_model'] = read_sfc_project_context(raw, selected['source_name']).object_model()
+            elif selected['language'] == 'fbd':
+                from gxw.object_model import read_project_context
+                parsed['source_model'] = read_project_context(raw, selected['source_name']).object_model()
+        except GXWFormatError as error:
+            selected.update(readable=False, offline_editable=False, reason=str(error))
+            public['programs'] = [selected if row['source_name'] == selected['source_name'] else row
+                                  for row in public['programs']]
+            public['issues'].append({'code': 'uncovered_source_format',
+                'source_name': selected['source_name'], 'message': str(error)})
+            return {**public, 'source_ref': None, 'next_actions': []}
+        ref = uuid.uuid4().hex
+        source = {'source_ref': ref, 'kind': 'gxw_file_snapshot', 'cpu_menu': project.context['cpu'],
+            'plc_model': project.context['cpu'], 'program_name': selected['source_name'],
+            'target_mode': selected['language'], 'programs': public['programs'],
+            'read_at': _now(), 'expires_in_seconds': self.ttl, 'freshness': 'immutable_snapshot',
+            'coverage': parsed.get('coverage', {'parse_status': 'complete', 'network_count': 0,
+                'parsed_network_count': 0, 'unknown_instructions': [], 'semantic_status': 'static_only',
+                'runtime_verified': False}), 'editable': False, 'runtime_verified': False}
+        self._sources = {key: value for key, value in self._sources.items()
+                         if self._clock() - value['created'] <= self.ttl}
+        self._sources[ref] = {'source': source, 'parsed': parsed, 'raw': raw, 'created': self._clock()}
+        return {**public, **source, 'next_actions': [
+            {'tool': 'get_current_program_info', 'arguments': {'source_ref': ref}},
+            {'tool': 'import_gxw_project', 'required_arguments': ['data_base64_or_path', 'program']}]}
 
     def list_simulator_targets(self):
         from simulator.gateway import GatewayError

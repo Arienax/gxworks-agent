@@ -1,4 +1,4 @@
-"""Saved ordinary ST Program artifacts in the shared candidate transaction.
+"""Saved ST Program, FB and FUNCTION artifacts in the shared candidate transaction.
 
 GXW is the source of declarations, bodies and task ownership. Model intentions
 are bound to that context and the existing native transaction; saved-source
@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 from gxw.fb_authoring import st_program_snapshot
+from gxw.models import GXWFormatError
 from gxw.native_diagnostics import native_validation_source_plan
 from gxw.project_metadata import project_gui_configuration
 from gxw.st_program import project_context_snapshot
@@ -128,6 +129,7 @@ def model_project_context(context):
         globals=[dict(name=g['name'], source=g['source'], declarations=declarations(g['declarations'])) for g in context['globals']],
         pous=[dict(name=p['name'], kind=p['kind'], language=p['language'], declarations=declarations(p['declarations']),
                    task_bindings=p.get('task_bindings', []),
+                   **({'return_type': p['return_type']} if p.get('kind') == 'function' else {}),
                    **({'body': p['st_text']} if p.get('program') == context.get('selected_source') and p.get('language') == 'st' else {})) for p in context['pous']],
         structures=[dict(name=s['name'], members=declarations(s['members'])) for s in context['structures']])
 
@@ -149,36 +151,52 @@ def _source_snapshot(raw, *, program_name, plc_model):
         raise ValueError('ST candidate requires an explicit current logical POU')
     snapshot = st_program_snapshot(raw)
     selected = [row for row in snapshot['programs'] if row['program'] == program_name]
+    project = project_context_snapshot(raw, program_name)
+    if not selected:
+        selected = [row for row in project['pous'] if row['program'] == program_name
+                    and row['kind'] in ('function_block', 'function') and row['language'] == 'st'
+                    and row['source_status'] == 'available']
     if len(selected) != 1:
-        raise ValueError('ST candidate requires the selected current ordinary ST Program')
+        raise ValueError('ST candidate requires one selected current ST Program, FB or FUNCTION')
     program, = selected
     actual, expected = native_project_profile(snapshot['cpu']), native_project_profile(plc_model)
     if (not isinstance(plc_model, str) or actual is None or expected is None
             or not actual.program_supported or actual.cpu != expected.cpu):
         raise ValueError('ST candidate GXW CPU differs from its selected PLC model')
     bindings = program['task_bindings']
-    if len(bindings) != 1:
+    if program['kind'] in ('function_block', 'function') and bindings:
+        raise ValueError('An ST callable cannot acquire ordinary Program task membership')
+    if program['kind'] == 'program' and len(bindings) != 1:
         raise ValueError('ST candidate requires one current source-bound task membership')
-    binding, = bindings
-    tasks = [task for task in snapshot['tasks']
-             if (task['resource'], task['task']) == (binding['resource'], binding['task'])]
-    if len(tasks) != 1 or [row for row in tasks[0]['programs'] if row['line'] == binding['line']] != [
-            dict(name=program['name'], line=binding['line'])]:
-        raise ValueError('ST candidate task row does not bind the exact current Program owner')
+    if bindings:
+        binding, = bindings
+        tasks = [task for task in snapshot['tasks']
+                 if (task['resource'], task['task']) == (binding['resource'], binding['task'])]
+        if len(tasks) != 1 or [row for row in tasks[0]['programs'] if row['line'] == binding['line']] != [
+                dict(name=program['name'], line=binding['line'])]:
+            raise ValueError('ST candidate task row does not bind the exact current Program owner')
+    try:
+        compiler_sources = native_validation_source_plan(raw, include_logical_names=True)
+    except GXWFormatError as error:
+        compiler_sources = dict(status='unverified', reason=str(error), native_compile='not_run')
+    try:
+        gui_configuration = _json_projection(project_gui_configuration(raw))
+    except GXWFormatError as error:
+        gui_configuration = dict(status='not_verified', reason=str(error))
     return dict(cpu=snapshot['cpu'], selected_program=program,
         task_scopes=dict(resources=snapshot['resources'], tasks=snapshot['tasks']),
         # Saved candidate readback must also retain readable declarations whose
         # address storage is outside the stricter visible editing contract.
-        project=_json_projection(project_context_snapshot(raw, program_name)),
-        compiler_sources=native_validation_source_plan(raw, include_logical_names=True),
-        gui_configuration=_json_projection(project_gui_configuration(raw)))
+        project=_json_projection(project),
+        compiler_sources=compiler_sources, gui_configuration=gui_configuration)
 
 
 def _source_binding(source):
     program = source['selected_program']
     return dict(schema_version=1, cpu=source['cpu'], program=program['program'],
-                owner=program['name'], kind='program', language='st',
-                task_bindings=program['task_bindings'])
+                owner=program['name'], kind=program['kind'], language='st',
+                task_bindings=program['task_bindings'],
+                **({'return_type': program['return_type']} if program['kind'] == 'function' else {}))
 
 
 def validate_candidate(artifacts, *, plc_model=None, program_name=None, metadata=None):
@@ -254,7 +272,7 @@ def bind_verification(metadata, source, *, confirmed_spec=None, compile_status='
 
 def prepare_candidate(output, *, imported, program_name, plc_model, summary='ST 原生工程候选', confirmed_spec=None,
                       compile_status='unverified', native_receipt=None):
-    """Project a selected saved Program; native acceptance remains separate."""
+    """Project a selected saved ST owner; native acceptance remains separate."""
     raw = bytes(imported) if isinstance(imported, (bytes, bytearray)) else imported
     source = _source_snapshot(raw, program_name=program_name, plc_model=plc_model)
     report = dict(schema_version=1, operation='saved_st_program_projection', plc_model=plc_model, source=source)
@@ -262,10 +280,11 @@ def prepare_candidate(output, *, imported, program_name, plc_model, summary='ST 
              'st': ('program.st', source['selected_program']['st_text'].encode('utf-8')),
              'write_report': ('write_report.json', json_bytes(report))}
     metadata = dict(target_mode='st', plc_model=plc_model, program_name=program_name, summary=summary,
-        validation=dict(status='source_preserved', source_readback='matched', task_membership='source_bound',
+        validation=dict(status='source_preserved', source_readback='matched',
+            task_membership='source_bound' if source['selected_program']['kind'] == 'program' else 'not_applicable',
             source_binding=_source_binding(source), native_save='not_run', native_source_save_required=False,
             gx_compile='not_run', execution='not_run', gui_configuration=source['gui_configuration']['status'],
-            messages=['已读取保存工程中的普通 ST Program、声明和任务绑定；编译及运行验证分别执行。']))
+            messages=['已读取保存工程中的 ST 正文、声明和对象归属；Program 任务绑定按来源保留，编译与运行分别验证。']))
     bind_verification(metadata, source, confirmed_spec=confirmed_spec, compile_status=compile_status, native_receipt=native_receipt)
     validate_candidate({name: data for name, (_path, data) in files.items()}, plc_model=plc_model,
                        program_name=program_name, metadata=metadata)

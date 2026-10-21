@@ -22,8 +22,12 @@ def validate_schema(rule, value, path='arguments'):
              'string': lambda x: isinstance(x, str), 'integer': lambda x: type(x) is int,
              'boolean': lambda x: type(x) is bool, 'null': lambda x: x is None,
              'number': lambda x: type(x) in (int, float) and math.isfinite(x)}
-    if rule.get('type') in types and not types[rule['type']](value):
-        raise ValueError(path + ' must be ' + rule['type'])
+    expected = rule.get('type')
+    if isinstance(expected, list):
+        if not any(kind in types and types[kind](value) for kind in expected):
+            raise ValueError(path + ' must be one of ' + ', '.join(expected))
+    elif expected in types and not types[expected](value):
+        raise ValueError(path + ' must be ' + expected)
     if 'enum' in rule and not any(value == item and isinstance(value, bool) == isinstance(item, bool) for item in rule['enum']):
         raise ValueError(path + ' is not an allowed value')
     if isinstance(value, Mapping):

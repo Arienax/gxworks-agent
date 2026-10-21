@@ -12,7 +12,7 @@ import tempfile
 import time
 
 from gxw.object_model import (export_object_model,
-                              prepare_object_project, read_project_context)
+                              prepare_object_project, read_project_context, source_checks)
 from gxw.project_writer import write_prepared_project
 from gxw.render import render_structured_svg
 from .workspace import ConflictError, atomic_json, canonical_hash, contained, read_json, record_id
@@ -22,7 +22,7 @@ class FBDValidationError(ValueError):
     """A source/model validation problem safe to explain in the operator UI."""
 
 
-AUTHORING_OPERATIONS = frozenset({'create_structure', 'create_st_fb', 'edit_st_fb', 'edit_global_labels', 'create_global_labels', 'edit_pou_labels', 'configure_project', 'remove_empty_program'})
+AUTHORING_OPERATIONS = frozenset({'create_structure', 'create_st_fb', 'edit_st_fb', 'edit_st_function', 'edit_st_source', 'edit_global_labels', 'create_global_labels', 'edit_pou_labels', 'configure_project', 'remove_empty_program'})
 
 
 def authoring_command(arguments):
@@ -31,6 +31,8 @@ def authoring_command(arguments):
         raise ValueError('编写项目定义需要操作和 source_name。')
     if operation != 'configure_project' and arguments.get('options') is not None:
         raise ValueError('options 只用于工程配置。')
+    if arguments.get('return_type') is not None and operation not in ('edit_st_function','edit_st_source','edit_pou_labels'):
+        raise ValueError('return_type 只用于已有 FUNCTION。')
     if any(arguments.get(key) is not None for key in ('model', 'data_base64', 'program', 'native_save',
             'library_name', 'resource', 'task', 'scope_mode')):
         raise ValueError('项目定义操作不接受工程导入、图形模型或任务选择。')
@@ -49,13 +51,17 @@ def authoring_command(arguments):
     elif operation in ('edit_global_labels','create_global_labels','edit_pou_labels'):
         if not isinstance(arguments.get('declarations'),list) or any(arguments.get(k) is not None for k in ('st_text','members')):
             raise ValueError('全局声明编辑需要 declarations，不接受 ST 正文或结构定义。')
-        keys=('declarations',)
+        keys=('declarations', 'remove_declarations', 'return_type')
     else:
-        if not isinstance(arguments.get('st_text'), str) or arguments.get('members') is not None:
+        if (arguments.get('members') is not None
+                or arguments.get('st_text') is not None and not isinstance(arguments['st_text'],str)
+                or operation=='create_st_fb' and not isinstance(arguments.get('st_text'),str)
+                or operation!='create_st_fb' and not any(arguments.get(key) is not None for key in
+                    ('st_text','declarations','return_type','remove_declarations'))):
             raise ValueError('编写 ST FB 需要 st_text，不接受结构成员。')
         if operation == 'create_st_fb' and not isinstance(arguments.get('declarations'), list):
             raise ValueError('新建 ST FB 需要显式 declarations。')
-        keys = ('st_text', 'declarations')
+        keys = ('st_text', 'declarations', 'remove_declarations', 'return_type')
     return {'operation': operation, 'source_name': arguments['source_name'],
             **{key: arguments[key] for key in keys if arguments.get(key) is not None}}
 
@@ -75,17 +81,18 @@ def decode_upload(value):
 
 def inspect_upload(data_base64):
     from gxw.container_writer import validate_cfb_streams
-    from gxw.project_metadata import logical_mapping
+    from gxw.integrity import read_project_hdb
+    from gxw.project_metadata import project_stream_mapping
     streams = validate_cfb_streams(decode_upload(data_base64))
-    mapping = logical_mapping(streams["projectdatalist.xml"])
-    payloads = validate_cfb_streams(streams["_hdb"])
+    mapping = project_stream_mapping(streams)
+    payloads = read_project_hdb(streams).payloads
     return {"programs": sorted(k for k, v in mapping.items() if k.endswith(".pou") and v in payloads)}
 
 
 def read_snapshot(raw, program_name=None):
     """One shared source projection for Web and tool clients; no native calls."""
     context = read_project_context(raw, program_name)
-    return {'programs': context.programs, 'model': context.object_model(),
+    return {'programs': list(context.fbd_programs), 'model': context.object_model(),
             'svg': context.svg(), 'gx_compile': 'not_run'}
 
 
@@ -105,7 +112,7 @@ def editor_snapshot(raw, program_name=None):
     context = read_project_context(raw, program_name)
     model = context.object_model()
     templates = context.catalog()
-    return {'model': model, 'catalog': templates, 'programs': context.programs,
+    return {'model': model, 'catalog': templates, 'programs': list(context.fbd_programs),
             'task_scopes': context.task_scopes(),
             'presentation': presentation(model, templates=templates, context=context),
             'source_svg': context.svg(), 'gx_compile': 'not_run'}
@@ -129,6 +136,9 @@ def unpack_candidate(snapshot, output):
         from .native_st import validate_candidate as validate_st_candidate
         validate_st_candidate(files, plc_model=snapshot['plc_model'],
             program_name=snapshot['metadata'].get('program_name'), metadata=snapshot['metadata'])
+    elif snapshot['target_mode'] == 'ladder':
+        from .gxw_files import validate_ladder_candidate
+        validate_ladder_candidate(files)
     else:
         validate_candidate(files)
     output = Path(output)
@@ -203,24 +213,30 @@ def _native_program_candidate(baseline, name, *, resource, task, scope_mode):
 
 
 def version_requires_native_save(version):
-    """Native export can omit Project.gd2; retain the verified save backend."""
-    validation = (version or {}).get('validation') or {}
-    return validation.get('native_source_save_required') is True or validation.get('native_save') == 'passed'
+    """Saved preferences/validation never authorize a later native write.
+
+    Each edit is offline. ``prepare_candidate(native_save=True)`` and the
+    explicit compile operation still select their native operation themselves.
+    """
+    return False
 
 
-def _write_candidate(model, baseline=None, *, native_save=False):
-    prepared = prepare_object_project(model, baseline=baseline)
+def _write_candidate(model, baseline=None, *, native_save=False, device_comments=None, comment_table=None,
+                     save_policy='checked'):
+    prepared = prepare_object_project(model, baseline=baseline, save_policy=save_policy)
     changed = any(old != new for _, old, new in prepared.replacements.values())
-    parameter_input = isinstance(model, dict) and 'networks' in model
-    if not prepared.requires_native_save and not (native_save and changed) and not parameter_input:
-        return write_prepared_project(prepared)
-    return _native_candidate('save', prepared)
+    if native_save and changed:
+        if device_comments:
+            raise FBDValidationError('联合注释修改使用离线保存；原生编译请另行显式执行。')
+        return _native_candidate('save', prepared)
+    return write_prepared_project(prepared, device_comments=device_comments, comment_table=comment_table)
 
 
 def _target_baseline(baseline, plc_model):
     """Check CPU identity without choosing a POU or invoking native writes."""
     from gxw.container_writer import validate_cfb_streams
-    from gxw.project_metadata import logical_mapping, read_project_text_context
+    from gxw.integrity import read_project_hdb
+    from gxw.project_metadata import project_stream_mapping, read_project_text_context
     from gxworks2.project_profiles import native_project_profile
     from gxw.models import GXWFormatError
     from gxw.project_templates import require_fbd_generation_support
@@ -235,8 +251,8 @@ def _target_baseline(baseline, plc_model):
         except GXWFormatError as error:
             raise FBDValidationError(str(error)) from error
     outer = validate_cfb_streams(baseline)
-    mapping = logical_mapping(outer['projectdatalist.xml'])
-    payloads = validate_cfb_streams(outer['_hdb'])
+    mapping = project_stream_mapping(outer)
+    payloads = read_project_hdb(outer).payloads
     contexts = [read_project_text_context(payloads[key]) for name, key in mapping.items() if name.endswith('.prj')]
     if len(contexts) != 1:
         raise FBDValidationError('FBD project requires one CPU configuration')
@@ -257,7 +273,9 @@ def prepare_candidate(output, *, model=None, baseline=None, imported=None, progr
                       summary="FBD 候选工程", source_ladder=None, plc_model="FX3U", source_name=None,
                       native_save=False, pou_kind='function_block', resource=None, task=None, scope_mode=None,
                       library_source=None, library_name=None, authoring=None, compile_save=False,
-                      _prepared_result=None):
+                      _prepared_result=None, device_comments=None, comment_table=None, save_policy='checked'):
+    if save_policy not in ('draft', 'checked'):
+        raise ValueError('save_policy must be draft or checked')
     if compile_save and baseline is None:
         raise ValueError('编译保存需要当前已保存的 FBD 基础版本。')
     scoped = any(value is not None for value in (resource, task, scope_mode))
@@ -277,7 +295,10 @@ def prepare_candidate(output, *, model=None, baseline=None, imported=None, progr
             raise ValueError('项目定义操作需要当前 FBD 基础版本。')
         if authoring['operation'] in ('edit_global_labels','create_global_labels'):
             authoring={**authoring,'device_profile':plc_model}
-        result = _native_candidate('author', baseline, authoring)
+        from gxw.offline_authoring import EXISTING_DEFINITION_OPERATIONS, write_existing_definition
+        result = (write_existing_definition(baseline, authoring)
+                  if authoring['operation'] in EXISTING_DEFINITION_OPERATIONS
+                  else _native_candidate('author', baseline, authoring))
         raw, report = result.data, result.report
         program_name = report['caller'] if authoring['operation']=='remove_empty_program' else result.saved_object_name(program_name or report['caller'])
     elif library_source is not None or library_name is not None:
@@ -297,7 +318,9 @@ def prepare_candidate(output, *, model=None, baseline=None, imported=None, progr
         program_name = report['created_program']
     elif imported is None:
         result = (_prepared_result if _prepared_result is not None else
-                  _write_candidate(model, baseline=baseline, native_save=native_save))
+                  _write_candidate(model, baseline=baseline, native_save=native_save,
+                                   device_comments=device_comments, comment_table=comment_table,
+                                   save_policy=save_policy))
         raw, report = result.data, result.report
         program_name = result.saved_object_name(model.get("program"))
     else:
@@ -331,7 +354,17 @@ def prepare_candidate(output, *, model=None, baseline=None, imported=None, progr
                 "summary": summary, "validation": {"status": "validated", "messages": messages,
                 "gx_compile": "not_run", "object_issues": graph["issues"],
                 'native_save': report.get('validation', {}).get('native_save', 'not_run'),
-                'native_source_save_required': native_save or report.get('validation', {}).get('native_save') == 'passed'}}
+                'native_source_save_required': False,
+                'native_save_requested': native_save,
+                'write_backend': report.get('write_backend', 'offline' if imported is not None else 'native'),
+                'compile_state': report.get('compile_state', 'unverified')}}
+    if 'invalidated_results' in report:
+        metadata['validation']['invalidated_results'] = copy.deepcopy(report['invalidated_results'])
+    metadata['validation']['save_policy'] = save_policy
+    metadata['validation']['source_checks'] = source_checks(context)
+    if save_policy == 'draft' and metadata['validation']['source_checks']['findings']:
+        metadata['validation']['status'] = 'draft_saved'
+        messages[:] = ['工程草稿已离线保存并回读；源码检查结果保留，编译尚未执行。']
     if compile_save:
         metadata['validation'].update(report['validation'])
         metadata['native_compilation'] = {'build':report['native_validation'],'cold_reopen':report['cold_validation']}
@@ -353,7 +386,8 @@ def prepare_candidate(output, *, model=None, baseline=None, imported=None, progr
     if authoring is not None:
         metadata['definition'] = {'name': report['definition_after']['name'], 'kind': report['definition_after']['kind']}
         metadata['validation']['definition_readback'] = 'matched'
-        messages.append('项目定义及实现已原生保存并回读，编译和运行验证分别执行。')
+        metadata['validation']['source_checks'] = report.get('source_checks', [])
+        messages.append('项目定义及实现已保存并回读，编译和运行验证分别执行。')
     if pou_kind == 'program':
         metadata['validation']['native_program_registration'] = 'passed'
         metadata['validation']['program_scope'] = {'resource': resource, 'task': task, 'scope_mode': scope_mode}
@@ -450,6 +484,12 @@ def generate_candidate(output, snapshot, images, ctx):
     generation = build_fbd_generation_context(snapshot.get("text", ""),
         plc_model=project.get("plc_model", "FX3U"), confirmed_spec=project.get("confirmed_spec"),
         catalog=editor_catalog(source_context), previous=previous, model_profile=snapshot.get("model"))
+    from gxw.offline_project import read_offline_project
+    comments, tables, _ = read_offline_project(source_context.raw).comments()
+    generation['generation_input'].update(device_comments=comments, comment_tables=tables)
+    generation['generation_instructions'] += ('\nYou may also return device_comments mapping existing device addresses to complete '
+        'text or null (delete), and comment_table when selecting among existing QCD tables. '
+        'Comments and the model are saved in the same offline transaction; preserve unrelated comments.')
     ctx.emit("progress", {"message": "正在生成 FBD 对象、连线及声明"})
     response = _request_model([{"role": "system", "content": generation["generation_instructions"]},
         _user_message_with_images(json.dumps(generation["generation_input"], ensure_ascii=False), images)],
@@ -463,12 +503,15 @@ def generate_candidate(output, snapshot, images, ctx):
     answer = json.loads(text)
     if isinstance(answer, dict) and set(answer) == {'unsupported'} and isinstance(answer['unsupported'], str):
         raise FBDValidationError('当前 FBD 生成能力存在缺口：' + answer['unsupported'])
-    if not isinstance(answer, dict) or set(answer) != {"summary", "model"} or not isinstance(answer["summary"], str):
+    if (not isinstance(answer, dict) or not {'summary', 'model'} <= set(answer)
+            or set(answer) - {'summary', 'model', 'device_comments', 'comment_table'}
+            or not isinstance(answer['summary'], str)):
         raise ValueError("FBD generation did not produce a supported object candidate")
     ctx.checkpoint()
     result = prepare_candidate(output, model=answer["model"], baseline=source_context.raw,
                                summary=answer["summary"], plc_model=project.get("plc_model", "FX3U"),
-                               native_save=version_requires_native_save(snapshot.get('version')))
+                               native_save=snapshot.get('native_save') is True,
+                               device_comments=answer.get('device_comments'), comment_table=answer.get('comment_table'))
     result["metadata"]["generation_handoff"] = generation["generation_handoff"]
     return result
 
@@ -480,15 +523,16 @@ class FBDService:
         # source/model/policy that produced the already checked preview.
         self._prepared_preview = None
 
-    def _preview_result(self, project_id, version_id, baseline, model, native_save, *, create=False):
+    def _preview_result(self, project_id, version_id, baseline, model, native_save, *, create=False,
+                        save_policy='checked'):
         model_key = json.dumps(model, ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False)
-        key = (project_id, version_id, baseline, model_key, native_save)
+        key = (project_id, version_id, baseline, model_key, native_save, save_policy)
         cached = self._prepared_preview
         if cached is not None and time.monotonic() < cached['expires'] and cached['key'] == key:
             return copy.deepcopy(cached['result'])
         if not create:
             return None
-        result = _write_candidate(model, baseline=baseline, native_save=native_save)
+        result = _write_candidate(model, baseline=baseline, native_save=native_save, save_policy=save_policy)
         # Baseline and output are immutable bytes; the model/report need their
         # own copies so caller edits cannot change this artifact's binding.
         self._prepared_preview = (dict(key=copy.deepcopy(key), result=copy.deepcopy(result),
@@ -500,10 +544,17 @@ class FBDService:
         project = wb.projects.raw_project(project_id)
         if version_id:
             version = wb.projects.raw_version(project_id, version_id)
-            if version.get('target_mode') != 'fbd':
-                raise FBDValidationError('请选择 FBD 版本。')
+            if 'gxw' not in (version.get('artifacts') or {}):
+                raise FBDValidationError('所选版本没有 GXW 工程。')
             raw = wb.projects.artifact(project_id, version_id, 'gxw').read_bytes()
-            program_name = program_name or version.get('program_name') or wb.projects.program(project_id, version_id)['program']
+            if program_name is None and version.get('target_mode')=='fbd':
+                program_name=version.get('program_name') or wb.projects.program(project_id,version_id)['program']
+            if program_name is None:
+                from gxw.offline_project import read_offline_project
+                candidates=[row['source_name'] for row in read_offline_project(raw).sources() if row['language']=='fbd']
+                if len(candidates)!=1:
+                    raise FBDValidationError('请选择工程中的一个 FBD 源码对象。')
+                program_name=candidates[0]
         else:
             if project.get('active_version_id'):
                 raise ConflictError('Select the current base version before editing an FBD draft')
@@ -535,14 +586,14 @@ class FBDService:
                 templates = context.catalog(declaration_edits=result['model'].get('declaration_edits'))
                 result['presentation'] = presentation(result['model'], templates=templates, context=context)
                 result['catalog'] = templates
-                result['programs'] = context.programs
+                result['programs'] = list(context.fbd_programs)
                 result['task_scopes'] = context.task_scopes()
                 result['source_svg'] = context.svg()
                 return result
             except (GXWFormatError, KeyError, TypeError) as error:
                 raise FBDValidationError(str(error)) from error
 
-    def preview(self, project_id, model, version_id=None):
+    def preview(self, project_id, model, version_id=None, *, save_policy='checked'):
         """Validate/render the current draft without saving a proposal or version."""
         from gxw.models import GXWFormatError
         wb = self.workbench
@@ -551,12 +602,13 @@ class FBDService:
                 baseline = self._context(project_id, version_id, model.get('program')).raw
                 version = wb.projects.raw_version(project_id, version_id) if version_id else None
                 result = self._preview_result(project_id, version_id, baseline, model,
-                    version_requires_native_save(version), create=True)
+                    version_requires_native_save(version), create=True, save_policy=save_policy)
                 context = read_project_context(result.data, result.saved_object_name(model.get('program')))
                 return {"model_sha256": canonical_hash(model),
                         "gxw_sha256": hashlib.sha256(result.data).hexdigest(),
                         "svg": context.svg(), "model": context.object_model(),
-                        "gx_compile": "not_run"}
+                        "gx_compile": "not_run", 'save_policy': save_policy,
+                        'source_checks': source_checks(context)}
             except GXWFormatError as error:
                 self._prepared_preview = None
                 raise FBDValidationError(str(error)) from error
@@ -591,20 +643,35 @@ class FBDService:
                 raise ConflictError("Select the current base version before creating an FBD candidate")
             version = wb.projects.raw_version(project_id, base_id) if base_id else None
             baseline = None
-            if version and version["target_mode"] == "fbd":
+            if version and 'gxw' in (version.get('artifacts') or {}):
                 baseline = wb.projects.artifact(project_id, base_id, "gxw").read_bytes()
             operation = command["operation"]
-            if command.get('native_save') is not None and (operation != 'import' or type(command['native_save']) is not bool):
-                raise ValueError('native_save 只用于导入时选择后续的原生保存。')
+            save_policy = command.get('save_policy', 'checked')
+            if save_policy not in ('draft', 'checked'):
+                raise ValueError('save_policy must be draft or checked')
+            from gxw.offline_authoring import EXISTING_DEFINITION_OPERATIONS
+            if operation in EXISTING_DEFINITION_OPERATIONS and version and 'gxw' in (version.get('artifacts') or {}):
+                from .gxw_files import definition_candidate
+                context = wb.projects.tool_context(project_id, base_id)
+                response = definition_candidate(context, authoring_command(command),
+                    device_comments=command.get('device_comments'), comment_table=command.get('comment_table'),
+                    save_policy=save_policy)
+                proposal = wb.proposal_workflow.pending_proposal(response['pending_action'], 'fbd_' + key,
+                    base_version_id=base_id, direct_request=True)
+                atomic_json(saved_path, {'command_hash': digest, 'proposal_id': proposal['id']})
+                return proposal
+            if command.get('native_save') is not None and (operation not in ('import', 'edit', 'generate')
+                    or type(command['native_save']) is not bool):
+                raise ValueError('native_save 只用于导入记录或当前编辑/生成候选的显式原生保存。')
             if operation not in ('create_fb', 'create_program', *AUTHORING_OPERATIONS) and command.get('source_name') is not None:
                 raise ValueError('source_name 只用于新建 FBD POU。')
             if operation != 'import_library' and command.get('library_name') is not None:
                 raise ValueError('library_name 只用于导入用户库。')
             if operation != 'create_program' and any(command.get(key) is not None for key in ('resource', 'task', 'scope_mode')):
                 raise ValueError('资源和任务选择只用于新建普通 FBD Program。')
-            if operation not in AUTHORING_OPERATIONS and any(command.get(key) is not None for key in ('members', 'declarations', 'st_text', 'options')):
+            if operation not in AUTHORING_OPERATIONS and any(command.get(key) is not None for key in ('members', 'declarations', 'st_text', 'options','return_type')):
                 raise ValueError('members、declarations、st_text 和 options 只用于编写项目定义或配置。')
-            args = {"plc_model": project.get("plc_model", "FX3U")}
+            args = {"plc_model": project.get("plc_model", "FX3U"), 'save_policy': save_policy}
             if operation in AUTHORING_OPERATIONS:
                 if baseline is None:
                     raise ValueError('编写项目定义需要已保存的 FBD 基础版本。')
@@ -637,9 +704,13 @@ class FBDService:
                             summary="将现有梯形图转换为 GXW 结构化梯形图")
             elif operation == "edit":
                 if not baseline:
-                    raise ValueError("FBD editing requires an existing FBD version")
+                    raise ValueError("FBD editing requires an existing GXW version")
+                if not isinstance(command.get('model'),dict):
+                    raise FBDValidationError('FBD editing requires its selected source model')
+                self._context(project_id,base_id,command['model'].get('program'))
                 args.update(model=command.get("model"), baseline=baseline, summary="修改 FBD 对象、连接或声明",
-                            native_save=version_requires_native_save(version))
+                            native_save=command.get('native_save') is True,
+                            device_comments=command.get('device_comments'), comment_table=command.get('comment_table'))
             elif operation in ('create_fb', 'create_program'):
                 if baseline is None or not isinstance(command.get('source_name'), str):
                     raise ValueError('新建 FBD POU 需要已有 FBD 基础版本和 source_name。')
@@ -652,15 +723,16 @@ class FBDService:
             elif operation == "generate":
                 if version is not None:
                     raise ValueError("Use edit or convert when a base version is selected")
-                args.update(model=command.get("model"), summary="直接生成 GXW 结构化梯形图/FBD")
+                args.update(model=command.get("model"), summary="直接生成 GXW 结构化梯形图/FBD",
+                            native_save=command.get('native_save') is True)
             else:
                 raise ValueError("Unsupported FBD operation")
             wb.state_dir.mkdir(parents=True, exist_ok=True)
             with tempfile.TemporaryDirectory(dir=wb.state_dir, prefix="fbd-") as directory:
-                if operation in ('edit', 'generate'):
+                if operation in ('edit', 'generate') and not command.get('device_comments'):
                     source = baseline if baseline is not None else _target_baseline(None, args['plc_model'])
                     prepared = self._preview_result(project_id, base_id, source, command.get('model'),
-                                                    version_requires_native_save(version))
+                                                    args.get('native_save') is True, save_policy=save_policy)
                     if prepared is not None:
                         args['_prepared_result'] = prepared
                 payload = prepare_candidate(directory, **args)

@@ -1,6 +1,6 @@
 """Imported SFC source candidates in the shared version/proposal workflow.
 
-Child records are vendor source bytes; graph edits use the original converter.
+Child and graph edits use source-bound Core codecs without a native process.
 Native acceptance and PLC execution remain separate evidence.
 """
 from __future__ import annotations
@@ -20,32 +20,13 @@ from .workspace import ConflictError, atomic_json, canonical_hash, read_json, re
 
 
 def read_snapshot(raw, program_name=None, *, native_graph=None):
-    from gxw.native_diagnostics import native_code_reader_scope
+    from gxw.token_profiles import source_token_profile
 
     context = read_sfc_project_context(raw, program_name)
-    scope = native_code_reader_scope(context.project['cpu'])
+    profile = source_token_profile(context.project['cpu'], language='sfc')
     return {'programs': list(context.programs),
-            'model': context.object_model(token_profile=scope['profile'] if scope else None, native_graph=native_graph),
+            'model': context.object_model(token_profile=profile, native_graph=native_graph),
             'gx_compile': 'not_run'}
-
-
-def _child_edits(edits):
-    if not isinstance(edits, list) or not edits:
-        raise GXWFormatError('SFC 编辑需要现有动作或转换条件的子程序记录。')
-    result = {}
-    for edit in edits:
-        if (not isinstance(edit, dict) or set(edit) != {'kind', 'name', 'records_hex'}
-                or edit['kind'] not in ('zoom', 'transition') or not isinstance(edit['name'], str)
-                or not isinstance(edit['records_hex'], str) or len(edit['records_hex']) > 16 * 1024 * 1024):
-            raise GXWFormatError('SFC 子程序编辑需要 kind、name 和完整 records_hex。')
-        identity = edit['kind'], edit['name']
-        if identity in result:
-            raise GXWFormatError('SFC 子程序编辑身份重复。')
-        try:
-            result[identity] = bytes.fromhex(edit['records_hex'])
-        except ValueError as error:
-            raise GXWFormatError('SFC 子程序记录不是十六进制字节。') from error
-    return result
 
 
 def validate_candidate(artifacts):
@@ -58,42 +39,51 @@ def validate_candidate(artifacts):
 
 
 def prepare_candidate(output, *, imported=None, baseline=None, program_name=None,
-                      child_edits=None, graph_edits=None, native_graph=None, summary='SFC 源码候选'):
-    from gxw.project_writer import prepare_sfc_project_write
+                      child_edits=None, graph_edits=None, native_graph=None, summary='SFC 源码候选',
+                      device_comments=None, comment_table=None, declaration_edits=None, save_policy='checked'):
+    from gxw.project_writer import write_project_replacements
+    if save_policy not in ('draft', 'checked'):
+        raise GXWFormatError('save_policy must be draft or checked')
 
     if imported is not None:
-        if baseline is not None or child_edits is not None or graph_edits is not None:
+        if (baseline is not None or child_edits is not None or graph_edits is not None
+                or device_comments is not None or comment_table is not None or declaration_edits is not None):
             raise ValueError('SFC 导入与子程序编辑分别执行。')
         raw, report = bytes(imported), {'operation': 'import', 'modified_objects': []}
     else:
         if baseline is None:
             raise ValueError('SFC 编辑需要已有 GXW 基础版本。')
         context = read_sfc_project_context(baseline, program_name)
-        if child_edits is None and graph_edits is None:
-            raise GXWFormatError('SFC 编辑需要子程序记录、动作引用或跳转目标。')
-        from gxw.sfc_pou import resolve_sfc_graph_edits
-        graph_edits = resolve_sfc_graph_edits(context, native_graph, graph_edits)
-        prepared = prepare_sfc_project_write(baseline, context.program_name, context.source,
-                                             {} if child_edits is None else _child_edits(child_edits))
-        # Use the original workspace for preview and save, including unsigned
-        # containers. Conversion/checking remain separate operations.
-        with _native_workspace() as workspace:
-            result = (workspace.save(prepared, timeout=None, graph_edits=graph_edits) if graph_edits is not None
-                      else workspace.save(prepared, timeout=None))
-            if graph_edits is not None and any(row.get('kind') == 'rebuild' for row in graph_edits):
-                # Original symbol writers use a hot grid; saving may compact
-                # columns. Publish the actual saved project's cold getter grid.
-                result.report['sfc_graph_write'] = copy.deepcopy(result.report['sfc_graph'])
-                result.report['sfc_graph'] = workspace.read_sfc_graph(
-                    result.data, result.saved_object_name(context.program_name), timeout=None)
+        if child_edits is None and graph_edits is None and not device_comments and not declaration_edits:
+            raise GXWFormatError('SFC 编辑需要子程序、图形、声明或注释修改。')
+        from gxw.sfc_offline import edit_sfc_program
+        from gxw.offline_project import read_offline_project
+        source, graph_report = context.source.raw, None
+        if graph_edits is not None or child_edits is not None:
+            source, graph_report = edit_sfc_program(context, graph_edits=graph_edits,
+                                                   child_edits=child_edits, graph=native_graph, save_policy=save_policy)
+        project = read_offline_project(baseline)
+        replacements = {context.program_name: (project.mapping[context.program_name], context.source.raw, source)}
+        from gxw.offline_authoring import prepare_declaration_edits
+        prepared, checks = prepare_declaration_edits(baseline, declaration_edits,
+            source_replacements={context.program_name: source},
+            expected_sources={context.program_name: context.source.raw}, save_policy=save_policy)
+        if prepared is not None:
+            replacements.update(prepared.replacements)
+        result = write_project_replacements(baseline, replacements,
+            objects=prepared.objects if prepared is not None else None,
+            device_comments=device_comments, comment_table=comment_table)
+        result.report['source_checks'] = checks
+        from gxw.offline_edit import _artifact_state
+        result.report.update(save_policy=save_policy, artifact_state=_artifact_state(checks))
+        if graph_report is not None:
+            result.report['offline_sfc_graph'] = graph_report
         raw, report = result.data, result.report
         program_name = result.saved_object_name(context.program_name)
         if graph_edits is not None:
-            native_graph = copy.deepcopy(report['sfc_graph'])
-            current = read_sfc_project_context(raw, program_name)
-            region = current.source.layout['graph']
-            native_graph.update(logical_name=current.program_name,
-                source_body_hex=current.source.raw[region['offset']:region['offset'] + region['size']].hex())
+            # The old coordinate cache describes the old source. Offline graph
+            # decoding stays separate from a native getter result.
+            native_graph = None
         elif native_graph is not None and context.native_graph(native_graph) is not None:
             current = read_sfc_project_context(raw, program_name)
             region = current.source.layout['graph']
@@ -101,6 +91,8 @@ def prepare_candidate(output, *, imported=None, baseline=None, program_name=None
             if native_graph['source_body_hex'] == body.hex():
                 native_graph = copy.deepcopy(native_graph)
                 native_graph['logical_name'] = current.program_name
+            else:
+                native_graph = None
         if native_graph is not None:
             report['sfc_graph'] = native_graph
     snapshot = read_snapshot(raw, program_name, native_graph=report.get('sfc_graph'))
@@ -117,7 +109,12 @@ def prepare_candidate(output, *, imported=None, baseline=None, program_name=None
     metadata = {'target_mode': 'sfc', 'plc_model': model['cpu'], 'program_name': model['program'],
                 'summary': summary, 'validation': {'status': 'source_preserved', 'gx_compile': 'not_run',
                     'native_save': report.get('validation', {}).get('native_save', 'not_run'),
-                    'native_source_save_required': imported is None,
+                    'native_source_save_required': False, 'write_backend': 'offline',
+                    'offline_write': 'source_preserved' if imported is not None else 'passed',
+                    'compile_state': 'unverified' if imported is not None else report.get('validation', {}).get('compile_state', 'stale'),
+                    'source_checks': report.get('source_checks', []),
+                    'save_policy': save_policy, 'artifact_state': report.get('artifact_state', 'draft'),
+                    **({'invalidated_results': report['invalidated_results']} if 'invalidated_results' in report else {}),
                     'position_resolution': model['graph']['position_resolution'], 'issues': model['issues'],
                     'messages': ['已读取当前 SFC 图形、注册关系及子程序；原生编译和检查分别执行。']}}
     return {'target_mode': 'sfc', 'plc_model': model['cpu'], 'staging_dir': str(output),
@@ -165,13 +162,15 @@ class SFCService:
                 self._graph_reads[(project_id, version_id, selected)] = graph
             return read_snapshot(raw, selected, native_graph=graph)
 
-    def preview(self, project_id, version_id, child_edits=None, program=None, graph_edits=None):
+    def preview(self, project_id, version_id, child_edits=None, program=None, graph_edits=None,
+                declaration_edits=None, *, save_policy='checked'):
         wb = self.workbench
         with wb.lock.thread_lock if wb.lock else nullcontext():
             raw, selected, graph = self._source(project_id, version_id, program)
             with tempfile.TemporaryDirectory() as directory:
                 payload = prepare_candidate(directory, baseline=raw, program_name=selected, child_edits=child_edits,
-                                            graph_edits=graph_edits, native_graph=graph)
+                                            graph_edits=graph_edits, native_graph=graph, declaration_edits=declaration_edits,
+                                            save_policy=save_policy)
                 model = json.loads((Path(directory) / payload['artifacts']['sfc']['path']).read_bytes())
                 return {'target_mode': 'sfc', 'program': model, 'validation': payload['metadata']['validation'],
                         'diff': source_diff(read_snapshot(raw, selected, native_graph=graph)['model'], model), 'gx_compile': 'not_run'}
@@ -194,7 +193,8 @@ class SFCService:
             if base_id is None and project.get('active_version_id'):
                 raise ConflictError('Select the current base version before creating an SFC candidate')
             if command['operation'] == 'import':
-                if command.get('child_edits') is not None or command.get('graph_edits') is not None:
+                if (command.get('child_edits') is not None or command.get('graph_edits') is not None
+                        or command.get('declaration_edits') is not None):
                     raise ValueError('SFC 导入不接受子程序编辑。')
                 arguments = {'imported': decode_upload(command.get('data_base64', '')),
                              'program_name': command.get('program'), 'summary': '导入已有 SFC 工程'}
@@ -203,7 +203,10 @@ class SFCService:
                     raise ValueError('SFC 编辑需要指定基础版本，不接受导入字节。')
                 raw, selected, graph = self._source(project_id, base_id, command.get('program'))
                 arguments = {'baseline': raw, 'program_name': selected, 'child_edits': command.get('child_edits'),
-                             'graph_edits': command.get('graph_edits'), 'native_graph': graph}
+                             'graph_edits': command.get('graph_edits'), 'native_graph': graph,
+                             'declaration_edits': command.get('declaration_edits'),
+                             'device_comments': command.get('device_comments'), 'comment_table': command.get('comment_table'),
+                             'save_policy': command.get('save_policy', 'checked')}
             else:
                 raise ValueError('SFC 目前支持已有工程的导入及子程序编辑。')
             wb.state_dir.mkdir(parents=True, exist_ok=True)

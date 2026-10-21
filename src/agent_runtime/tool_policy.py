@@ -29,6 +29,9 @@ SAFE_TOOL_NAMES = (
     "create_st_candidate",
     "read_sfc_project",
     "create_sfc_candidate",
+    "read_gxw_source",
+    "edit_gxw_project",
+    "inspect_gxw_project",
     "list_gxworks2_sessions",
     "read_gxworks2_snapshot",
     "list_simulator_targets",
@@ -46,6 +49,7 @@ SAFE_TOOL_NAMES = (
 
 
 READ_ONLY_TOOL_NAMES = frozenset({
+    'read_gxw_source',
     "get_current_project", "get_operation_status", "get_native_engineering_session", "get_current_program_info", "read_network",
     "search_plc_manual", "get_diagnostics", "validate_project",
     "read_native_device_assignments", "compare_native_compiled_code", "locate_native_code_steps",
@@ -55,7 +59,7 @@ READ_ONLY_TOOL_NAMES = frozenset({
     "read_fbd_definition",
     "read_sfc_project",
     "read_st_project",
-    "list_gxworks2_sessions", "read_gxworks2_snapshot",
+    "list_gxworks2_sessions", "read_gxworks2_snapshot", "inspect_gxw_project",
     "list_simulator_targets", "get_simulator_status", "read_simulator_devices",
     "connect_simulator", "prepare_simulator_scenario", "start_simulator_trace",
     "get_simulator_trace", "stop_simulator_trace",
@@ -63,10 +67,12 @@ READ_ONLY_TOOL_NAMES = frozenset({
 
 
 SOURCE_TOOL_NAMES = frozenset({"get_current_program_info", "read_network", "get_diagnostics",
-                              "validate_current_program", "validate_project"})
+                              "validate_current_program", "validate_project", 'read_fbd_project',
+                              'read_st_project', 'read_sfc_project', 'read_fbd_definition'})
 
 
 DISCOVERY_TOOL_NAMES = frozenset({"get_current_project", "list_gxworks2_sessions",
+                                "inspect_gxw_project",
                                 "read_gxworks2_snapshot", "list_simulator_targets",
                                 "get_simulator_status", "read_simulator_devices",
                                 "connect_simulator", "prepare_simulator_scenario", "start_simulator_trace",

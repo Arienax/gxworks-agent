@@ -24,6 +24,10 @@ def register_inspection_tools(registry):
             "required": ["at_ms"], "additionalProperties": False}}},
         "required": ["signals"], "additionalProperties": False}
     definitions = (
+        ('inspect_gxw_project', '直接读取上传 GXW 的 data_base64 或本机 path（二选一），无需打开 GX Works2 或选择 Agent 工程；返回 CPU、程序清单、注释、离线写回能力及只读 source_ref。多程序需显式 program；原文件保持不变。',
+         {'data_base64': {'type': 'string', 'minLength': 1, 'maxLength': 41943040},
+          'path': {'type': 'string', 'minLength': 1, 'maxLength': 32767},
+          'program': {'type': 'string', 'minLength': 1, 'maxLength': 512}}, (), 'inspect_gxw_project'),
         ("list_gxworks2_sessions", "发现全部 GX Works2 原生工程候选、软件版本和可读状态；不需要 Agent 工程，不自动选择。",
          {}, (), "list_gxworks2_sessions"),
         ("read_gxworks2_snapshot", "按发现返回的 session_id 读取指定程序及注释的只读分析快照；默认 MAIN。生成临时导出，不保存原工程或 Agent 版本；返回 source_ref、CPU、来源和解析覆盖。",
@@ -104,6 +108,9 @@ def register_inspection_tools(registry):
 def output_schema(name):
     """MCP output contracts; provider function schemas remain unchanged."""
     data_properties = {
+        'inspect_gxw_project': {'source_ref': {'type': ['string', 'null']},
+            'cpu_menu': {'type': 'string'}, 'programs': {'type': 'array'},
+            'write_backend': {'const': 'offline'}, 'native_required': {'const': False}},
         "get_current_project": {"selection_status": {"enum": ["none", "selected"]},
             "project": {"type": ["object", "null"]}, "next_actions": {"type": "array"}},
         "list_gxworks2_sessions": {"sessions": {"type": "array"},

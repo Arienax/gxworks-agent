@@ -48,6 +48,10 @@ class JobSubmission:
         self.require_writable()
         # Mode is a frozen job input, never a PLC contract or mutable UI setting.
         command = copy.deepcopy(command)
+        if command.get('program') is None:
+            command.pop('program', None)
+        elif command.get('kind') != 'generation' or command.get('generation_action') == 'regenerate':
+            raise ValueError('程序选择仅适用于已有 GXW 源码编辑。')
         if command.get("generation_action") is not None and command.get("kind") != "generation":
             raise ValueError("生成动作仅适用于生成程序任务。")
         if command.get("generation_action") is None:

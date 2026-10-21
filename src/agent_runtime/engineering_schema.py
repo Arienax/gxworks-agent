@@ -23,10 +23,10 @@ def _engineering_declarations(scope, *, maximum=4096, nonempty=False, visible=Fa
               'data_type': _engineering_text(), 'initial_value': text, 'comment': text}
     if scope != 'structure':
         classes = (['VAR_GLOBAL', 'VAR_GLOBAL_CONSTANT', 'VAR', 'VAR_CONSTANT', 'VAR_INPUT',
-                    'VAR_OUTPUT', 'VAR_IN_OUT', 'VAR_INPUT_CONSTANT', 'VAR_IN_EXT'] if scope == 'any' else
+                    'VAR_OUTPUT', 'VAR_IN_OUT', 'VAR_INPUT_CONSTANT', 'VAR_IN_EXT', 'VAR_RETAIN'] if scope == 'any' else
                    ['VAR_GLOBAL', 'VAR_GLOBAL_CONSTANT'] if scope == 'global' else
-                   ['VAR', 'VAR_CONSTANT'] if scope == 'program' else
-                   ['VAR', 'VAR_CONSTANT', 'VAR_INPUT', 'VAR_OUTPUT', 'VAR_IN_OUT'] +
+                   ['VAR', 'VAR_CONSTANT', 'VAR_RETAIN'] if scope == 'program' else
+                   ['VAR', 'VAR_CONSTANT', 'VAR_RETAIN', 'VAR_INPUT', 'VAR_OUTPUT', 'VAR_IN_OUT'] +
                    (['VAR_INPUT_CONSTANT', 'VAR_IN_EXT'] if scope == 'pou' else []))
         fields.update(class_name={'type': 'string', 'enum': classes},
                       kind={'type': 'string', 'enum': (['variable', 'function_block'] if visible and scope == 'global'
@@ -37,8 +37,25 @@ def _engineering_declarations(scope, *, maximum=4096, nonempty=False, visible=Fa
             pair = _engineering_object({'device': text, 'iec_address': text}, ['device'])
             fields['member_devices'] = {'type': 'object', 'propertyNames': _engineering_text(),
                                         'additionalProperties': {'oneOf': [text, pair]}}
+            fields['structure_array_addresses'] = _engineering_object({
+                'word_address': text, 'word_offset': text, 'word_use_bit': {'enum': [0, 1]},
+                'bit_address': text, 'bit_offset': text},
+                ['word_address', 'word_offset', 'word_use_bit', 'bit_address', 'bit_offset'])
     return {'type': 'array', 'maxItems': maximum, 'minItems': 1 if nonempty else 0,
             'items': _engineering_object(fields, ['name', 'data_type'])}
+
+
+def _engineering_declaration_edits():
+    identity = _engineering_text(maximum=512)
+    patch = _engineering_object({
+        'upserts': _engineering_declarations('any', maximum=8192),
+        'renames': {'type': 'object', 'maxProperties': 8192, 'propertyNames': identity,
+                    'additionalProperties': _engineering_text(maximum=255)},
+        'remove': {'type': 'array', 'maxItems': 8192, 'uniqueItems': True, 'items': identity},
+        'order': {'type': 'array', 'maxItems': 8192, 'uniqueItems': True, 'items': identity},
+        'return_type': _engineering_text(maximum=255),
+    }, minProperties=1)
+    return {'type': 'object', 'maxProperties': 8192, 'propertyNames': identity, 'additionalProperties': patch}
 
 
 def _engineering_configuration(*, visible, live=False):
@@ -97,17 +114,30 @@ def _engineering_authoring_commands(*, visible, live=False):
         commands[name] = _engineering_object({'source_name': source,
             'declarations': declarations('pou' if name == 'edit_pou_labels' else 'global')},
             ['source_name', 'declarations'])
+        if not visible and name in ('edit_global_labels', 'edit_pou_labels'):
+            commands[name]['properties']['remove_declarations'] = {
+                'type': 'array', 'maxItems': 8192, 'items': identity, 'uniqueItems': True}
+            commands[name]['properties'].update(device_comments={'type': 'object', 'additionalProperties': {'oneOf': [{'type': 'string'}, {'type': 'null'}]}},
+                                                comment_table=identity, save_policy={'enum': ['draft', 'checked']})
     if not live:
         commands['create_structure'] = _engineering_object({'source_name': identity,
             'members': _engineering_declarations('structure', maximum=4096 if visible else 8192, nonempty=True)},
             ['source_name', 'members'])
-    for name in ('create_st_fb', 'edit_st_fb', 'create_st_program', 'edit_st_program'):
+    st_operations = ('create_st_fb', 'edit_st_fb', 'create_st_program', 'edit_st_program')
+    if not visible:
+        st_operations += ('edit_st_function', 'edit_st_source')
+    for name in st_operations:
         fields = {'source_name': identity, 'st_text': body,
                   'declarations': declarations('program' if name.endswith('program') else 'fb')}
         required = ['source_name', 'st_text'] + (['declarations'] if name.startswith('create_') else [])
         if name == 'create_st_program':
             fields.update(resource=identity, task=identity, scope_mode={'type': 'string', 'enum': ['existing_task']})
             required += ['resource', 'task', 'scope_mode']
+        if not visible and name.startswith('edit_st_'):
+            fields.update(device_comments={'type': 'object', 'additionalProperties': {'oneOf': [{'type': 'string'}, {'type': 'null'}]}},
+                          comment_table=identity, save_policy={'enum': ['draft', 'checked']})
+            if name in ('edit_st_function', 'edit_st_source'):
+                fields['return_type'] = _engineering_text(maximum=255)
         commands[name] = _engineering_object(fields, required)
     commands['configure_project'] = _engineering_object({'source_name': _engineering_text(maximum=512),
         'options': _engineering_configuration(visible=visible, live=live)}, ['source_name', 'options'])
@@ -175,7 +205,8 @@ def _engineering_native_schema():
 
 def _engineering_st_schema():
     commands = _engineering_authoring_commands(visible=False)
-    commands = {key: commands[key] for key in ('create_st_program', 'edit_st_program')}
+    commands = {key: commands[key] for key in ('create_st_program', 'edit_st_program', 'edit_st_fb',
+                                              'edit_st_function', 'edit_st_source')}
     commands = {'from_candidate': _engineering_object({'candidate': {'type': 'object'}}, ['candidate']),
         'import': _engineering_object({'data_base64': _engineering_text(),
         'program': _engineering_text(maximum=512)}, ['data_base64', 'program']), **commands}
@@ -191,7 +222,10 @@ def _engineering_fbd_schema():
     commands = {name: rule for name, rule in _engineering_authoring_commands(visible=False).items()
                 if name not in {'create_st_program', 'edit_st_program'}}
     text = _engineering_text(maximum=255)
-    commands.update({name: _engineering_object({'model': {'type': 'object'}}, ['model'])
+    commands.update({name: _engineering_object({'model': {'type': 'object'},
+        'native_save': {'type': 'boolean'},
+        **({'device_comments': {'type': 'object', 'additionalProperties': {'oneOf': [{'type': 'string'}, {'type': 'null'}]}},
+            'comment_table': text} if name == 'edit' else {})}, ['model'])
                      for name in ('generate', 'edit')})
     commands.update(import_library=_engineering_object({'data_base64': _engineering_text(), 'library_name': text},
                                                        ['data_base64', 'library_name']),
@@ -211,6 +245,83 @@ def _engineering_fbd_schema():
     common['operation'] = {'type': 'string', 'enum': list(commands)}
     common['declarations'] = _engineering_declarations('any', maximum=8192)
     return _engineering_object(common, ['operation'], oneOf=variants)
+
+
+def _source_instruction_schema(*, expected=False):
+    text = _engineering_text(maximum=1024)
+    form = _engineering_object({'text': text, 'token_codes': {'type': 'array', 'minItems': 1,
+        'maxItems': 16, 'items': {'type': 'string', 'pattern': '^[0-9a-fA-F]{2}$'}}}, ['text', 'token_codes'])
+    properties = {'op': _engineering_text(maximum=255),
+                  'args': {'type': 'array', 'maxItems': 8192, 'items': {'oneOf': [text, form]}}}
+    if expected:
+        properties['raw_hex'] = {'type': 'string', 'maxLength': 16 * 1024 * 1024,
+                                 'pattern': '^(?:[0-9a-fA-F]{2})*$'}
+    return _engineering_object(properties, ['op', 'args'])
+
+
+def _source_instruction_edit_schema():
+    return _engineering_object({
+        'operation': {'enum': ['replace', 'insert_before', 'delete', 'move_before']},
+        'record_index': {'type': 'integer', 'minimum': 0},
+        'target_record_index': {'type': 'integer', 'minimum': 0},
+        'expected': _source_record_schema(expected=True),
+        'instructions': {'type': 'array', 'maxItems': 8192, 'items': _source_record_schema()}},
+        ['operation', 'record_index', 'expected'])
+
+
+def _source_record_schema(*, expected=False):
+    text = {'kind': {'enum': ['statement', 'note']},
+            'text': _engineering_text(empty=True, maximum=4 * 1024 * 1024)}
+    if expected:
+        text['raw_hex'] = {'type': 'string', 'maxLength': 16 * 1024 * 1024,
+                           'pattern': '^(?:[0-9a-fA-F]{2})*$'}
+    return {'oneOf': [_source_instruction_schema(expected=expected),
+                     _engineering_object(text, ['kind', 'text']),
+                     *([_engineering_object({'kind': {'enum': ['end_boundary']}}, ['kind'])] if expected else [])]}
+
+
+def _gxw_edit_schema(*, graph_edits):
+    identity = _engineering_text(maximum=512)
+    op = {'enum': ['edit']}
+    st = _engineering_object({'operation': {'enum': ['edit', 'edit_st_source', 'edit_st_program',
+        'edit_st_fb', 'edit_st_function']}, 'st_text': _engineering_text(empty=True, maximum=4 * 1024 * 1024),
+        'declarations': _engineering_declarations('any', maximum=8192),
+        'return_type': _engineering_text(maximum=255)},
+        anyOf=[{'required': [key]} for key in ('st_text', 'declarations', 'return_type')])
+    source_command = {'oneOf': [
+        _engineering_object({'operation': op, 'instruction_edits': {'type': 'array', 'maxItems': 8192,
+            'items': _source_instruction_edit_schema()}}, ['instruction_edits']),
+        st,
+        _engineering_object({'operation': op, 'model': {'type': 'object'}}, ['model']),
+        _engineering_object({'operation': op, 'graph_edits': graph_edits,
+            'child_edits': {'type': 'array', 'minItems': 1, 'maxItems': 8192, 'items': _sfc_child_edit_schema()}},
+            anyOf=[{'required': ['child_edits']}, {'required': ['graph_edits']}])
+    ]}
+    return _engineering_object({'version_id': _engineering_text(maximum=128), 'program': identity,
+        'edits': {'type': 'array', 'maxItems': 8192,
+            'items': _engineering_object({'source_name': identity, 'command': source_command}, ['source_name', 'command'])},
+        'declaration_edits': _engineering_declaration_edits(),
+        'device_comments': {'type': 'object', 'additionalProperties': {'type': ['string', 'null']}},
+        'comment_table': identity, 'save_policy': {'enum': ['draft', 'checked'], 'default': 'draft'},
+        'summary': _engineering_text(empty=True, maximum=512)}, ['version_id'],
+        anyOf=[{'required': [key]} for key in ('edits', 'declaration_edits', 'device_comments')])
+
+
+def _sfc_child_edit_schema():
+    identity = _engineering_text(maximum=255)
+    number = {'type': 'integer', 'minimum': 0, 'maximum': 65535}
+    instruction = _source_record_schema()
+    edits = _source_instruction_edit_schema()
+    registration = _engineering_object({'qualifier': {'type': 'integer', 'minimum': 0, 'maximum': 0xffffffff,
+        'description': 'Source qualifier word; Core retains diagnostics for unverified qualifier semantics.'},
+        'zoom': identity}, ['qualifier', 'zoom'])
+    return _engineering_object({'kind': {'enum': ['zoom', 'transition', 'action']}, 'name': identity,
+         'operation': {'enum': ['create', 'edit', 'replace', 'delete', 'rename', 'renumber', 'move_before']},
+        'records_hex': {'type': 'string', 'maxLength': 16 * 1024 * 1024},
+        'instructions': {'type': 'array', 'maxItems': 8192, 'items': instruction},
+        'instruction_edits': {'type': 'array', 'maxItems': 8192, 'items': edits},
+         'number': number, 'new_number': number, 'new_name': identity, 'target_name': identity,
+        'registrations': {'type': 'array', 'maxItems': 8192, 'items': registration}}, ['kind', 'name'])
 
 
 def _validate_engineering_input(name, schema, arguments):
@@ -242,7 +353,8 @@ def _validate_engineering_input(name, schema, arguments):
                 _, bounds = _type_parts(row['data_type'])
                 if len(bounds) > 1 or any(not -2**31 <= low <= high < 2**31 for low, high in bounds):
                     raise ValueError('Engineering declarations require scalar or rank-one types')
-        if command.get('operation') in ('create_st_fb', 'edit_st_fb', 'create_st_program', 'edit_st_program'):
+        if command.get('operation') in ('create_st_fb', 'edit_st_fb', 'create_st_program', 'edit_st_program',
+                                         'edit_st_function', 'edit_st_source'):
             from gxw.fb_authoring import _st_implementation
             _st_implementation(command['st_text'])
         if command.get('operation') == 'configure_project':

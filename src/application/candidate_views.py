@@ -44,8 +44,10 @@ class CandidateViews:
         )
         ladder = ir_to_ladder(program)
         svg = AdvancedSVGLadder().generate_ladder(json.dumps(ladder, ensure_ascii=False))
+        from plc.ordered_source import is_ordered_ladder
         return {"target_mode": "ladder", "ladder": ladder, "program": public(program, document="program"),
-                "svg": self.projects.themed_svg(svg, theme), "st": render_plc_ir_to_st(program)}
+                "svg": self.projects.themed_svg(svg, theme),
+                "st": '' if is_ordered_ladder(ladder) else render_plc_ir_to_st(program)}
 
     def version_preview(self, project_id, version_id, *, theme=None):
         """Re-render a saved ladder from its verified IR without changing a version.
@@ -110,6 +112,10 @@ class CandidateViews:
 
     def candidate_diff(self, project_id, base_version_id, payload):
         """Review the proposal's bound version, never the UI's active selection."""
+        from plc.core import PLCCore
+        base_raw = None
+        if base_version_id and 'gxw' in self.projects.raw_version(project_id, base_version_id).get('artifacts', {}):
+            base_raw = self.projects.artifact(project_id, base_version_id, 'gxw').read_bytes()
         if "_candidate_ir" in payload:
             from plc.core import PLCCore
             before = self.projects.program(project_id, base_version_id) if base_version_id else None
@@ -117,25 +123,37 @@ class CandidateViews:
             if expected and canonical_hash(before) != expected:
                 raise ConflictError("The proposal's base program changed")
             result = dict(PLCCore().diff_programs(before, payload["_candidate_ir"]))
+        elif payload.get('target_mode') == 'ladder' and 'ir' in (payload.get('artifacts') or {}):
+            from application.fbd import staged_bytes
+            artifacts = staged_bytes(payload, self.state_dir)
+            after = json.loads(artifacts['ir'])
+            if base_raw is not None:
+                from gxw.offline_project import read_offline_project, read_ordered_program
+                before = read_ordered_program(read_offline_project(base_raw), after['program_name'])['program_ir']
+            else:
+                before = self.projects.program(project_id, base_version_id) if base_version_id else None
+            result = dict(PLCCore().diff_programs(before, after))
         elif payload.get("target_mode") == "fbd":
             from application.fbd import graph_diff, staged_bytes
             from gxw.object_model import read_project_context
             before = None
             artifacts = staged_bytes(payload, self.state_dir)
             after = json.loads(artifacts['fbd'])
-            if base_version_id and self.projects.raw_version(project_id, base_version_id)["target_mode"] == "fbd":
-                base = self.projects._fbd_context(project_id, base_version_id)
+            if base_raw is not None:
+                from gxw.offline_project import read_offline_project
+                base = read_offline_project(base_raw)
                 program = after['program']
-                if program not in base.programs:
+                programs = {row['source_name'] for row in base.sources() if row['language'] == 'fbd'}
+                if program not in programs:
                     # Native save verifies Body/Program role normalization and
                     # records that mapping; never guess it from an FB name.
                     report = json.loads(artifacts['write_report'])
                     matches = [row['object'] for row in report.get('objects', [])
-                               if row.get('saved_object') == program and row.get('object') in base.programs]
+                               if row.get('saved_object') == program and row.get('object') in programs]
                     if len(matches) == 1:
                         program = matches[0]
-                if program in base.programs:
-                    before = read_project_context(base.raw, program).object_model()
+                if program in programs:
+                    before = read_project_context(base_raw, program).object_model()
             result = graph_diff(before, after)
             report = json.loads(artifacts['write_report'])
             if report.get('operation') == 'native_compilation_save':
@@ -167,16 +185,13 @@ class CandidateViews:
             artifacts = staged_bytes(payload, self.state_dir)
             after = json.loads(artifacts['sfc'])
             before = None
-            if base_version_id:
-                base = self.projects.raw_version(project_id, base_version_id)
-                if base.get('target_mode') == 'sfc':
-                    raw = self.projects.artifact(project_id, base_version_id, 'gxw').read_bytes()
-                    report = json.loads(artifacts['write_report'])
-                    originals = [row['object'] for row in report.get('objects', [])
-                                 if row.get('saved_object', row.get('object')) == after['program']]
-                    if len(originals) > 1:
-                        raise ValueError('SFC 候选的原始源码名称不唯一。')
-                    before = read_snapshot(raw, originals[0] if originals else after['program'])['model']
+            if base_raw is not None:
+                report = json.loads(artifacts['write_report'])
+                originals = [row['object'] for row in report.get('objects', [])
+                             if row.get('saved_object', row.get('object')) == after['program']]
+                if len(originals) > 1:
+                    raise ValueError('SFC 候选的原始源码名称不唯一。')
+                before = read_snapshot(base_raw, originals[0] if originals else after['program'])['model']
             result = source_diff(before, after)
         elif payload.get("target_mode") == "st":
             from difflib import unified_diff
@@ -185,7 +200,10 @@ class CandidateViews:
                 base = self.projects.raw_version(project_id, base_version_id)
                 artifacts = base.get('artifacts') or {}
                 binding = ((payload.get('metadata') or {}).get('validation') or {}).get('source_binding')
-                if (isinstance(binding, dict) and binding.get('kind') == 'program'
+                if base_raw is not None and payload.get('metadata', {}).get('program_name'):
+                    from .gxw_files import read_source
+                    before = read_source(base_raw, payload['metadata']['program_name'])['model']['st_text']
+                elif (isinstance(binding, dict) and binding.get('kind') == 'program'
                         and binding.get('language') == 'st' and 'gxw' in artifacts):
                     from gxw.fb_authoring import st_program_snapshot
                     saved = self.projects.artifact(project_id, base_version_id, 'gxw').read_bytes()
@@ -210,6 +228,56 @@ class CandidateViews:
                 "unified_diff": "".join(line if line.endswith("\n") else line + "\n\\ No newline at end of file\n" for line in lines)}
         else:
             raise ValueError("Candidate has no reviewable program")
+        if 'gxw' in (payload.get('artifacts') or {}):
+            from .fbd import staged_bytes
+            from gxw.offline_project import project_comment_changes
+            files = staged_bytes(payload, self.state_dir)
+            original = None
+            if base_version_id:
+                base = self.projects.raw_version(project_id, base_version_id)
+                if 'gxw' in (base.get('artifacts') or {}):
+                    original = self.projects.artifact(project_id, base_version_id, 'gxw').read_bytes()
+            from .gxw_files import project_source_changes
+            sources = project_source_changes(original, files['gxw'])
+            if sources:
+                result.update(source_changes=sources, has_changes=True)
+            comments = project_comment_changes(original, files['gxw'])
+            if comments:
+                result['comment_changes'] = comments
+                result['has_changes'] = True
+                from difflib import unified_diff
+                left = [{key: value for key, value in row.items() if key != 'after'} for row in comments]
+                right = [{key: value for key, value in row.items() if key != 'before'} for row in comments]
+                text = lambda value: json.dumps(value, ensure_ascii=False, indent=2).splitlines(True)
+                result['unified_diff'] = result.get('unified_diff', '') + ''.join(unified_diff(
+                    text(left), text(right), fromfile='base/device-comments', tofile='candidate/device-comments'))
+            if 'definition' not in files:
+                from gxw.offline_project import project_declaration_changes
+                definitions = project_declaration_changes(original, files['gxw'])
+                if definitions:
+                    from difflib import unified_diff
+                    result.update(definition_changed=True, has_changes=True)
+                    if payload.get('target_mode') in {'ladder', 'st'}:
+                        result['definition_changes'] = definitions
+                    else:
+                        result['declaration_changes'] = definitions
+                    text = lambda value: json.dumps(value, ensure_ascii=False, indent=2).splitlines(True)
+                    result['unified_diff'] = result.get('unified_diff', '') + ''.join(unified_diff(
+                        text(definitions['before']), text(definitions['after']),
+                        fromfile='base/declarations', tofile='candidate/declarations'))
+        if 'definition' in (payload.get('artifacts') or {}) and 'definition_changes' not in result:
+            from .fbd import staged_bytes
+            files = staged_bytes(payload, self.state_dir)
+            report = json.loads(files.get('offline_write_report', files['write_report']))
+            if 'definition_before' in report and 'definition_after' in report:
+                from difflib import unified_diff
+                before, after = report['definition_before'], report['definition_after']
+                result['definition_changes'] = {'before': before, 'after': after}
+                result['definition_changed'] = before != after
+                result['has_changes'] = result['has_changes'] or before != after
+                text = lambda value: json.dumps(value, ensure_ascii=False, indent=2).splitlines(True)
+                result['unified_diff'] = result.get('unified_diff', '') + ''.join(unified_diff(
+                    text(before), text(after), fromfile='base/definition', tofile='candidate/definition'))
         result["base_version_id"] = base_version_id
         return result
 
@@ -218,11 +286,20 @@ class CandidateViews:
         if diff["kind"] in ("fbd", "sfc"):
             return {key: value for key, value in diff.items() if key != "unified_diff"}
         if diff["kind"] == "st":
-            return {"kind": "st", "modified": ["program.st"] if diff["has_changes"] else []}
+            return {"kind": "st", "modified": (["program.st"] if diff.get('before') != diff.get('after') else [])
+                    + (['declarations'] if diff.get('definition_changed') else []),
+                    **({'source_changes': diff['source_changes']} if diff.get('source_changes') else {}),
+                    **({'comment_changes': diff['comment_changes']} if diff.get('comment_changes') else {})}
         summary = {key: diff[key] for key in ("kind", "added", "deleted", "modified", "device_comments_changed",
                     "before_network_count", "after_network_count")}
         summary["changes"] = [{key: change[key] for key in ("marker", "network", "comment", "instruction_count")}
                               for change in diff["changes"]]
+        if diff.get('definition_changed'):
+            summary['definition_changed'] = True
+        if diff.get('comment_changes'):
+            summary['comment_changes'] = diff['comment_changes']
+        if diff.get('source_changes'):
+            summary['source_changes'] = diff['source_changes']
         return summary
 
     def with_candidate_diff(self, project_id, base_version_id, payload):
@@ -235,6 +312,11 @@ class CandidateViews:
     def proposal_preview(self, proposal_id, *, theme=None):
         record = self.proposals.get(proposal_id)
         payload = self.proposals.read_private(proposal_id)
+        if payload.get('target_mode') == 'ladder' and 'ir' in (payload.get('artifacts') or {}):
+            from application.fbd import staged_bytes
+            program = json.loads(staged_bytes(payload, self.state_dir)['ir'])
+            return {**self.render_ladder_preview(program, theme=theme), 'action': record['action'],
+                    'diff': public(payload.get('_preview_diff')), 'proposal_id': proposal_id}
         if payload.get("target_mode") == "fbd":
             from application.fbd import editor_snapshot, staged_bytes
             artifacts = staged_bytes(payload, self.state_dir)

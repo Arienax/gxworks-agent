@@ -154,6 +154,9 @@ class ProposalService:
         if payload.get("target_mode") == "fbd":
             from .fbd import validate_candidate
             validate_candidate({name: data for name, _relative, data in prepared})
+        elif payload.get('target_mode') == 'ladder':
+            from .gxw_files import validate_ladder_candidate
+            validate_ladder_candidate({name: data for name, _relative, data in prepared})
         elif payload.get("target_mode") == "sfc":
             from .sfc import validate_candidate
             validate_candidate({name: data for name, _relative, data in prepared})
@@ -228,12 +231,13 @@ class ProposalService:
                             raise ConflictError("Candidate base program is stale")
                         payload["base_ir_sha256"] = base["ir_sha256"]
                     payload["confirmed_spec_hash"] = canonical_sha256(spec) if spec is not None else None
-                elif payload.get("target_mode") not in ("st", "fbd", "sfc"):
+                elif payload.get("target_mode") not in ("st", "fbd", "sfc") and not (
+                        payload.get('target_mode') == 'ladder' and 'gxw' in (payload.get('artifacts') or {})):
                     raise ValueError("Local candidate requires IR or staged source artifacts")
                 scope_summary = self._candidate_scope(project_id, selected, payload)
                 public_summary = {**(public_summary or {}), **scope_summary}
             proposal_id = "proposal_" + uuid.uuid4().hex
-            if action == "accept_local" and payload.get("target_mode") in ("st", "fbd", "sfc") and "_candidate_ir" not in payload:
+            if action == "accept_local" and payload.get("target_mode") in ("ladder", "st", "fbd", "sfc") and "_candidate_ir" not in payload:
                 payload = self._freeze_staging(proposal_id, payload)
             now = utc_now()
             record = {"id": proposal_id, "action": action, "project_id": project_id,
@@ -256,6 +260,11 @@ class ProposalService:
         summary = {"change_scope": scope}
         if "_candidate_ir" in payload:
             summary["impact"] = enforce_change_scope(before, payload["_candidate_ir"], scope, target_mode=target_mode)
+        elif target_mode == 'ladder' and 'ir' in (payload.get('artifacts') or {}):
+            import json
+            root = contained(Path(payload['staging_dir']), self.state_dir)
+            candidate = json.loads(contained(root / payload['artifacts']['ir']['path'], root).read_bytes())
+            summary['impact'] = enforce_change_scope(before, candidate, scope, target_mode=target_mode)
         return summary
 
     @staticmethod
@@ -276,7 +285,7 @@ class ProposalService:
         payload = record["private_payload"]
         if record["action"] == "accept_local":
             self._candidate_scope(record["project_id"], record["base_version_id"], copy.deepcopy(payload))
-        if payload.get("target_mode") in ("st", "fbd", "sfc") and payload.get("artifacts"):
+        if payload.get("target_mode") in ("ladder", "st", "fbd", "sfc") and payload.get("artifacts"):
             root = contained(Path(payload["staging_dir"]), self.directory)
             for entry in payload["artifacts"].values():
                 path = contained(root / entry["path"], root)
@@ -387,6 +396,11 @@ class ProposalService:
                            "generation_handoff", "maintainability_review"}
                 metadata = {key: copy.deepcopy(value) for key, value in (payload.get("metadata") or {}).items() if key in allowed}
                 metadata.update(target_mode=payload["target_mode"], artifacts=artifacts, plc_model=payload.get("plc_model", "FX3U"))
+                if payload['target_mode'] == 'ladder':
+                    import json
+                    from .gxw_files import validate_ladder_candidate
+                    current = validate_ladder_candidate({key: (output / value).read_bytes() for key, value in artifacts.items()})
+                    metadata.update(self.store._ir_metadata(current['program_ir']))
             metadata.update(summary=metadata.get("summary") or record.get("summary", {}).get("summary") or "已校验的程序",
                             parent_version_id=base_id, source_candidate_id=payload.get("candidate_id", record["id"]),
                             lifecycle_status="accepted", confirmed_spec_snapshot=copy.deepcopy(payload.get("_confirmed_spec")))

@@ -88,6 +88,14 @@ def _get_current_program_info(
     if context.analysis_source is not None:
         source = context.analysis_source
         raw = source["raw_networks"]
+        if source.get('target_mode') not in (None, 'ladder'):
+            return {'available': True, 'editable': False, 'source_ref': source['source_ref'],
+                'target_mode': source['target_mode'], 'plc_model': source['plc_model'],
+                'program_name': source['program_name'], 'programs': source.get('programs', []),
+                'device_comments': copy.deepcopy(source.get('device_comments', {})),
+                **({'st_text': context.st_text} if context.st_text is not None else {}),
+                **({'model': copy.deepcopy(source['source_model'])} if source.get('source_model') else {}),
+                'runtime_verified': False}
         return {"available": True, "version_id": None, "editable": False,
                 "source_ref": source["source_ref"], "plc_model": source["plc_model"],
                 "program_name": source["program_name"], "coverage": source["coverage"],
@@ -95,6 +103,7 @@ def _get_current_program_info(
                 "networks": [{key: value for key, value in row.items() if key != "raw_instructions"}
                              | {"instruction_count": len(row["raw_instructions"])} for row in raw[:100]],
                 "devices": _device_summary(context.program_ir) if context.program_ir else {},
+                'device_comments': copy.deepcopy(source.get('device_comments', {})),
                 "artifacts": {}, "runtime_verified": False}
     version = context.version
     if not isinstance(version, Mapping):
@@ -168,13 +177,22 @@ def _get_current_program_info(
 def _validate_current_program(
     context: ToolContext, _arguments: Mapping[str, Any]
 ) -> Dict[str, Any]:
+    mode = (context.version or {}).get('target_mode') or (context.analysis_source or {}).get('target_mode')
+    if mode in {'fbd', 'sfc'} and context.native_snapshot is not None:
+        from agent_runtime.native_tools import _read_fbd_project
+        snapshot = (_read_fbd_project if mode == 'fbd' else _read_sfc_project)(context, {})
+        issues = snapshot['model'].get('issues', [])
+        return {'available': True, 'valid': False, 'status': 'unverified', 'target_mode': mode,
+            'structural_checks_passed': not issues, 'issues': issues, 'gx_compile': 'not_run',
+            'semantic_status': 'unverified', 'runtime_verified': False,
+            'message': '已读取源码结构和接口；编译及执行语义需独立验证。'}
     if context.st_text is not None:
         from plc.st_validation import inspect_st_program
         st_context, sources = None, None
         if context.native_snapshot is not None:
             from gxw.st_program import project_context_snapshot
             from gxw.callable_sources import ProjectCallableSources
-            selected = (context.version or {}).get('program_name')
+            selected = (context.version or {}).get('program_name') or (context.analysis_source or {}).get('program_name')
             st_context = project_context_snapshot(context.native_snapshot, selected)
             if selected:
                 sources = ProjectCallableSources.from_project(context.native_snapshot, selected)
@@ -188,6 +206,14 @@ def _validate_current_program(
             "valid": False,
             "message": "当前没有可校验的梯形图版本。",
         }
+    if context.program_ir is not None and (context.program_ir.get('source') or {}).get('format') in {
+            'instruction_sequence_v1', 'instruction_sequence_v2'}:
+        from plc.core import PLCCore
+        report = dict(PLCCore().validate_project(context.program_ir, _confirmed_spec(context)))
+        report.setdefault('status', 'passed' if report.get('valid') else 'failed')
+        return {**report, 'version_id': context.version_id, 'plc_model': context.plc_model,
+                'source_format': context.program_ir['source']['format'], 'native_compile': 'not_run',
+                'runtime_verified': False}
 
     from inspection.engine import run_local_inspection
 
@@ -223,7 +249,7 @@ def _validate_current_program(
                 if finding.get(key) not in (None, "", [])
             }
         )
-    counts = {"error": 0, "warning": 0, "info": 0}
+    counts = {"error": 0, "warning": 0, "info": 0, "unverified": 0}
     for finding in report.get("findings") or []:
         severity = str((finding or {}).get("severity") or "").lower()
         if severity in counts:
@@ -235,7 +261,7 @@ def _validate_current_program(
         item.get('constraint_status') == 'unverified' for item in report.get('findings', []))
     available = report.get("status") != "unsupported"
     status = ('failed' if counts['error'] else 'unverified'
-              if not profile_available or conditions_unverified or not available else 'passed')
+              if counts['unverified'] or not profile_available or conditions_unverified or not available else 'passed')
     return {
         "available": available,
         "valid": status == 'passed',
@@ -269,13 +295,21 @@ def _read_network(context: ToolContext, arguments: Mapping[str, Any]) -> Dict[st
         _require_program_ir(context),
         str(arguments.get("network_id") or ""),
     )
+    if context.native_snapshot is not None and (context.program_ir.get('source') or {}).get('format') in {'instruction_sequence_v1', 'instruction_sequence_v2'}:
+        from gxw.offline_project import read_offline_project, read_ordered_program
+        current = read_ordered_program(read_offline_project(context.native_snapshot), context.program_ir['program_name'])
+        source = next(row for row in current['raw_networks'] if row['id'] == arguments['network_id'])
+        return {'network': network, 'raw_instructions': source['raw_instructions'],
+                'device_comments': {key: value for key, value in current['device_comments'].items()
+                                    if key in set(network.get('reads', []) + network.get('writes', []))}}
     return {"network": network}
 
 
 def _get_diagnostics(
     context: ToolContext, _arguments: Mapping[str, Any]
 ) -> Dict[str, Any]:
-    if context.st_text is not None:
+    if context.st_text is not None or ((context.version or {}).get('target_mode')
+            or (context.analysis_source or {}).get('target_mode')) in {'fbd', 'sfc'}:
         return _validate_current_program(context, {})
     from plc.core import PLCCore
 
@@ -299,11 +333,8 @@ def _validate_project(
             program_ir=context.program_ir, sfc_graph=context.sfc_graph)
     if 'program' in arguments:
         raise ValueError('program 仅用于 native=true 的原生检查上下文。')
-    if (context.version or {}).get('target_mode') == 'sfc':
-        snapshot = _read_sfc_project(context, {})
-        return {'status': 'source_preserved', 'gx_compile': 'not_run',
-                'issues': snapshot['model']['issues'], 'position_resolution': 'not-established'}
-    if context.st_text is not None:
+    if context.st_text is not None or ((context.version or {}).get('target_mode')
+            or (context.analysis_source or {}).get('target_mode')) in {'fbd', 'sfc'}:
         return _validate_current_program(context, {})
     from plc.core import PLCCore
 
@@ -330,6 +361,10 @@ def _compile_project(
 
     core = PLCCore()
     program = _require_program_ir(context)
+    if (program.get('source') or {}).get('format') in {'instruction_sequence_v1', 'instruction_sequence_v2'}:
+        return {'compiled': False, 'status': 'not_run', 'artifacts': ['ir', 'json', 'svg', 'gxw'],
+                'message': '有序指令源码可离线检查和写回；GX Works2 编译需显式原生验证。',
+                'validation': core.validate_project(program, _confirmed_spec(context))}
     try:
         compiled = core.compile_project(program)
     except ValidationProfileUnavailableError:
@@ -348,6 +383,9 @@ def _patch_program(context: ToolContext, arguments: Mapping[str, Any], *, genera
     from plc.ir import canonical_sha256
 
     program = _require_program_ir(context)
+    if (program.get('source') or {}).get('format') in {'instruction_sequence_v1', 'instruction_sequence_v2'}:
+        from application.gxw_files import ladder_patch_candidate
+        return ladder_patch_candidate(context, arguments.get('patch') or {})
     if not isinstance(context.version, Mapping):
         raise ValueError("当前没有绑定候选补丁的基础版本。")
     patch = copy.deepcopy(arguments.get("patch"))

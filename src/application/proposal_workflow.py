@@ -55,10 +55,10 @@ class ProposalWorkflow:
 
     def pending_proposal(self, pending, request_id, *, base_version_id=None, consent=None, direct_request=False,
                           change_scope=None):
-        if pending.get('type') in ('accept_fbd_candidate', 'accept_sfc_candidate', 'accept_st_candidate'):
+        if pending.get('type') in ('accept_fbd_candidate', 'accept_sfc_candidate', 'accept_st_candidate', 'accept_gxw_candidate'):
             from application.fbd import unpack_candidate
             mode = pending['target_mode']
-            candidate_key = '_' + mode + '_candidate'
+            candidate_key = '_gxw_candidate' if pending['type'] == 'accept_gxw_candidate' else '_' + mode + '_candidate'
             # Runtime artifacts remain private; materialize them only inside
             # managed state while the existing proposal service freezes them.
             with tempfile.TemporaryDirectory(dir=self.state_dir, prefix=mode + '-tool-') as directory:

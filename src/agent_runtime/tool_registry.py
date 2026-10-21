@@ -33,11 +33,15 @@ class ToolDefinition:
     @property
     def context_requirement(self):
         if self.name in DISCOVERY_TOOL_NAMES or self.name in {
-                "list_projects", "create_project", "select_project", "get_project_artifacts", "get_operation_status",
+                "list_projects", "create_project", "select_project", "import_gxw_project", "get_project_artifacts", "get_operation_status",
                 "get_native_engineering_session", "pause_native_engineering_session"}:
             return "none"
         if self.name == "search_plc_manual":
             return "model"
+        if self.name in {'read_fbd_project', 'read_st_project', 'read_sfc_project'}:
+            return 'project'
+        if self.name in {'read_fbd_definition', 'read_gxw_source', 'edit_gxw_project'}:
+            return 'version'
         if self.name in SOURCE_TOOL_NAMES or self.name == "compile_project":
             return "program"
         if self.name in {"patch_program", "import_current_program_to_gxworks2", "execute_native_engineering", "read_fbd_definition"} | NATIVE_INSPECTION_TOOL_NAMES:
@@ -74,7 +78,7 @@ class ToolRegistry:
         if name in SOURCE_TOOL_NAMES:
             schema.setdefault("properties", {})["source_ref"] = {
                 "type": "string", "minLength": 1, "maxLength": 128,
-                "description": "可选：read_gxworks2_snapshot 返回的当前会话只读快照引用。省略时读取保存版本。"}
+                "description": "可选：inspect_gxw_project 或 read_gxworks2_snapshot 返回的当前会话只读来源引用。省略时读取保存版本。"}
         if name == "search_plc_manual":
             schema.setdefault("properties", {})["plc_model"] = {
                 "type": "string", "minLength": 1, "maxLength": 100,

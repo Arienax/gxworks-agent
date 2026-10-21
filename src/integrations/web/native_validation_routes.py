@@ -13,6 +13,7 @@ class FBDPreview(Command):
     project_id: str
     version_id: str | None = None
     model: dict[str, Any]
+    save_policy: Literal['draft', 'checked'] = 'checked'
 
 
 class FBDDraftEdit(Command):

@@ -63,7 +63,15 @@ class JobExecution:
             from application.generation import GenerationRequest, GenerationWorkflow, GenerationDependencies
             from plc.ir import ir_to_ladder
             out_dir = self.state_dir / "staging" / ctx.job_id
-            if project["target_mode"] == "fbd" or (version or {}).get("target_mode") == "fbd":
+            mode = (version or {}).get('target_mode') or project['target_mode']
+            ordered = ((snapshot.get('program_ir') or {}).get('source') or {}).get('format') in {'instruction_sequence_v1', 'instruction_sequence_v2'}
+            existing_offline = context.native_snapshot is not None and (ordered or mode in {'st', 'fbd', 'sfc'})
+            if existing_offline:
+                from application.gxw_files import generate_candidate
+                source_payload = generate_candidate(out_dir, {**snapshot, 'text': scoped_text}, context, images, ctx)
+                metadata = source_payload['metadata']
+                metadata['artifacts'] = {key: entry['path'] for key, entry in source_payload['artifacts'].items()}
+            elif project["target_mode"] == "fbd" or (version or {}).get("target_mode") == "fbd":
                 from application.fbd import generate_candidate
                 fbd_payload = generate_candidate(out_dir, snapshot, images, ctx)
                 metadata = fbd_payload["metadata"]
@@ -135,7 +143,7 @@ class JobExecution:
                        "normalization": metadata.get("normalization"),
                        "_construction_binding": copy.deepcopy((metadata.get('first_pass_pipeline') or {}).get('construction_binding')),
                        "change_scope": snapshot.get("change_scope")}
-            if metadata["target_mode"] == "ladder":
+            if metadata["target_mode"] == "ladder" and 'gxw' not in metadata['artifacts']:
                 payload["_candidate_ir"] = json.loads((out_dir / metadata["artifacts"]["ir"]).read_text(encoding="utf-8"))
             else:
                 payload.update(staging_dir=str(out_dir), metadata=metadata, artifacts={k: {

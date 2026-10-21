@@ -26,7 +26,8 @@ from . import responses as dto
 from .schemas import (Login, ProjectCreate, ProjectUpdate, ActivateVersion, SpecUpdate, SpecIORowEdit, SpecPresentation,
                       JobCreate, GenerationRepair, ProposalDecision, ExecutionProposal, AgentCall,
                       SettingsUpdate, ApprovalSettingsUpdate, ModelProfileCreate, ModelKeyUpdate, ModelConnectionTest, ModelDiscoveryRequest, ModelVerificationRequest,
-                      AttachmentUpload, SFCInput, SFCProposal, SFCPreview, FBDProposal, ModelRequestPreview)
+                      AttachmentUpload, GXWInspectionCommand, GXWImportCommand, GXWEditCommand,
+                      SFCInput, SFCProposal, SFCPreview, FBDProposal, ModelRequestPreview)
 
 
 def create_app(workspace, *, state_dir=None, read_only=False, origin="http://127.0.0.1:8765",
@@ -147,6 +148,22 @@ def create_app(workspace, *, state_dir=None, read_only=False, origin="http://127
     def fbd_inspect(command: AttachmentUpload):
         from application.fbd import inspect_upload
         return inspect_upload(command.data_base64)
+
+    @app.post('/api/gxw/inspect', response_model=dto.GXWInspection, response_model_exclude_unset=True)
+    def gxw_inspect(command: GXWInspectionCommand):
+        return service.gxw_files.inspect(data_base64=command.data_base64, program=command.program)
+
+    @app.post('/api/gxw/import', status_code=201, response_model=dto.GXWImportResult, response_model_exclude_unset=True)
+    def gxw_import(command: GXWImportCommand):
+        return service.gxw_files.import_project(**command.model_dump(exclude_none=True))
+
+    @app.post('/api/gxw/edit', status_code=201, response_model=dto.Proposal, response_model_exclude_unset=True)
+    def gxw_edit(command: GXWEditCommand):
+        return service.gxw_files.edit_project(**command.model_dump(exclude_none=True))
+
+    @app.get('/api/gxw/source', response_model=dto.GXWSourceView, response_model_exclude_unset=True)
+    def gxw_source(project_id: str, version_id: str, program: str | None = None):
+        return service.gxw_files.source(project_id, version_id, program)
 
     @app.post("/api/fbd/proposals", status_code=201, response_model=dto.Proposal, response_model_exclude_unset=True)
     def fbd_proposal(command: FBDProposal):
@@ -403,11 +420,11 @@ def create_app(workspace, *, state_dir=None, read_only=False, origin="http://127
 
     @app.post('/api/sfc/preview', response_model=dto.SFCPreviewResource, response_model_exclude_unset=True)
     def sfc_preview(command: SFCPreview):
-        return service.sfc.preview(**command.model_dump())
+        return service.sfc.preview(**command.model_dump(exclude_none=True))
 
     @app.post('/api/sfc/proposals', status_code=201, response_model=dto.Proposal)
     def sfc_proposal(command: SFCProposal):
-        return service.sfc.propose(command.model_dump())
+        return service.sfc.propose(command.model_dump(exclude_none=True))
 
     @app.get("/api/agent/tools", response_model=dto.AgentTools)
     def agent_tools():
