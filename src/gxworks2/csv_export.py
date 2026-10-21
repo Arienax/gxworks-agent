@@ -144,7 +144,9 @@ def _write_program_csv(
         width = instruction_step_width(inst, operands, plc_model=plc_model)
         if not width.known:
             width_findings.append({"opcode": inst, "operands": list(operands),
-                                   "step": cursor.step, "reason": width.reason})
+                                   "step": cursor.step, "reason": width.reason,
+                                   "status": width.status, "plc_model": plc_model,
+                                   "requirements": list(width.requirements)})
 
         formatted_ops = [format_device(op) for op in operands if op]
 

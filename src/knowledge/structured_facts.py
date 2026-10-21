@@ -557,17 +557,34 @@ def _attach_instruction_contract(record, target, *, plc_model):
     return value
 
 
-def resolve_instruction_step_width(target, *, plc_model="FX3U"):
+def _step_width_resolution(status):
+    """Name one unresolved state without merging coverage gaps into one bucket."""
+    return {
+        "requires_operands": "requires_operands",
+        "requires_context": "requires_context",
+        "no_profile": "uncovered",
+        "conflict": "conflict",
+        "metadata_unavailable": "metadata_unavailable",
+        "unknown_cpu": "unknown_cpu",
+        "not_applicable": "unresolved",
+    }.get(status, "unresolved")
+
+
+def resolve_instruction_step_width(target, *, plc_model="FX3U", context=None):
     """Resolve one instruction expected GX program width from the shared owner.
 
-    Exact opcode+operands use instruction_step_width. Opcode-only targets may
-    expose a width only when the catalogue proves the mnemonic has one fixed
-    observed width/arity. Operand-dependent and unsupported forms remain
-    explicitly unresolved; this layer never guesses operands or a one-step
+    Exact opcode+operands use instruction_step_width for the real CPU. Opcode-only
+    targets expose a width only when the shared catalogue proves the mnemonic has
+    one fixed observed width for every member of that target. Missing operands,
+    missing project context, an uncovered CPU and conflicting member answers stay
+    separate states: this layer never guesses operands, a CPU or a one-step
     fallback.
     """
-    from plc.instruction_steps import default_step_width_catalog, instruction_step_width
+    from plc.instruction_steps import (STATUS_NO_PROFILE, STATUS_REQUIRES_OPERANDS,
+                                       default_step_width_catalog, instruction_step_width,
+                                       target_family, target_members)
 
+    model = str(plc_model or "").strip().upper()
     if isinstance(target, Mapping):
         opcode = str(target.get("opcode") or target.get("base_opcode") or "").strip().upper()
         raw_operands = target.get("operands")
@@ -582,59 +599,157 @@ def resolve_instruction_step_width(target, *, plc_model="FX3U"):
         return {
             "known": False,
             "steps": None,
+            "status": "not_applicable",
             "resolution": "unresolved",
             "source": "unknown",
             "reason": "Instruction opcode is missing",
             "evidence": [],
+            "requirements": [],
             "operands": operands,
+            "plc_model": model or None,
         }
 
     if has_operands:
-        width = instruction_step_width(opcode, operands, plc_model=plc_model)
+        width = instruction_step_width(opcode, operands, plc_model=model or None, context=context)
         return {
             "known": width.known,
             "steps": width.steps,
-            "resolution": "instruction_instance" if width.known else "unresolved_instance",
+            "status": width.status,
+            "resolution": "instruction_instance" if width.known else _step_width_resolution(width.status),
             "source": width.source,
             "reason": width.reason,
             "evidence": list(width.evidence),
+            "requirements": list(width.requirements),
             "operands": operands,
+            "plc_model": model or None,
+            "members": [{"cpu": cpu, **member.as_dict()} for cpu, member in width.members],
+        }
+
+    members = target_members(model)
+    if not members:
+        return {
+            "known": False,
+            "steps": None,
+            "status": "unknown_cpu",
+            "resolution": "unknown_cpu",
+            "source": "unknown",
+            "reason": "A program step width needs the saved CPU identity",
+            "evidence": [],
+            "requirements": ["plc_model"],
+            "operands": [],
+            "plc_model": None,
+            "members": [],
         }
 
     try:
         catalogue = default_step_width_catalog()
-        model = str(plc_model or "FX3U").strip().upper()
-        fixed = catalogue.fixed_forms().get(opcode) if model in catalogue.models else None
+        families = {member: target_family(member) for member in members}
     except (OSError, ValueError, KeyError, TypeError) as exc:
-        fixed = None
-        unavailable_reason = "Step-width metadata unavailable: " + str(exc)
-    else:
-        unavailable_reason = ""
+        return {
+            "known": False,
+            "steps": None,
+            "status": "metadata_unavailable",
+            "resolution": "metadata_unavailable",
+            "source": "unknown",
+            "reason": "Step-width metadata unavailable: " + str(exc),
+            "evidence": [],
+            "requirements": [],
+            "operands": [],
+            "plc_model": model,
+            "members": [],
+        }
 
+    covered = [member for member in members if target_family(member) == "FX"]
+    fixed = catalogue.fixed_forms().get(opcode) if len(covered) == len(members) else None
     if fixed is not None:
         steps, arity = fixed
         return {
             "known": True,
             "steps": int(steps),
+            "status": "known",
             "resolution": "fixed_mnemonic",
             "source": "native_observation",
             "reason": "",
             "evidence": [],
+            "requirements": [],
             "operands": [],
             "operand_arity": int(arity),
+            "plc_model": model,
+            "members": [],
         }
 
+    unrecognised = [member for member in members if target_family(member) is None]
+    if unrecognised:
+        return {
+            "known": False,
+            "steps": None,
+            "status": "unknown_cpu",
+            "resolution": "unknown_cpu",
+            "source": "unknown",
+            "reason": "Unknown PLC target " + ", ".join(unrecognised),
+            "evidence": [],
+            "requirements": [],
+            "operands": [],
+            "plc_model": model,
+            "members": [],
+        }
+
+    unknown = [member for member in members if target_family(member) != "FX"]
+    if unknown:
+        # A known CPU without FX width coverage is a coverage gap, not an
+        # operand question and never evidence that the instruction is unsupported.
+        return {
+            "known": False,
+            "steps": None,
+            "status": STATUS_NO_PROFILE,
+            "resolution": "uncovered",
+            "source": "unknown",
+            "reason": "No program step-width coverage for "
+                      + ", ".join(unknown) + " (opcode-only target)",
+            "evidence": [],
+            "requirements": [],
+            "operands": [],
+            "plc_model": model,
+            "members": [],
+        }
+
+    q_l = [member for member, family in families.items() if family in ("Q", "L")]
+    if not q_l and not (
+            opcode in catalogue.rule_opcodes or opcode in catalogue.variable
+            or opcode in catalogue.observations):
+        # Nothing in the shared catalogue mentions this mnemonic for an FX target:
+        # that is missing coverage, not a missing operand.
+        return {
+            "known": False,
+            "steps": None,
+            "status": STATUS_NO_PROFILE,
+            "resolution": "uncovered",
+            "source": "unknown",
+            "reason": "No program step-width coverage for " + opcode
+                      + " on " + "/".join(members),
+            "evidence": [],
+            "requirements": [],
+            "operands": [],
+            "plc_model": model,
+            "members": [],
+        }
+
+    reason = ("Operation-specific width needs the concrete operands for this CPU family"
+              if q_l else
+              "Opcode-only target is operand-dependent, variable-width, or lacks one "
+              "fixed observed width")
     return {
         "known": False,
         "steps": None,
+        "status": STATUS_REQUIRES_OPERANDS,
         "resolution": "requires_operands",
         "source": "unknown",
-        "reason": unavailable_reason or (
-            "Opcode-only target is operand-dependent, variable-width, "
-            "unsupported for this CPU, or lacks one fixed observed width"
-        ),
+        "reason": reason,
         "evidence": [],
+        "requirements": ["operands"],
         "operands": [],
+        "plc_model": model,
+        "members": [],
     }
 
 
