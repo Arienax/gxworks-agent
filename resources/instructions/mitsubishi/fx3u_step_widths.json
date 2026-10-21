@@ -2196,24 +2196,26 @@
       "$MOVP"
     ],
     "rules": [
-    {
-      "opcodes": [
-        "MCR"
-      ],
-      "arity": 1,
-      "operands": "N[0-9]+",
-      "steps": 2,
-      "evidence": "native FX header observation: MCR with a nesting operand stores two words"
-    },
-    {
-      "opcodes": [
-        "NEXT"
-      ],
-      "arity": 0,
-      "operands": "",
-      "steps": 1,
-      "evidence": "native FX header observation: NEXT stores one word"
-    },
+      {
+        "opcodes": [
+          "MCR"
+        ],
+        "arity": 1,
+        "operands": "N[0-9]+",
+        "steps": 2,
+        "evidence": "native FX header observation: MCR with a nesting operand stores two words",
+        "scope": "family"
+      },
+      {
+        "opcodes": [
+          "NEXT"
+        ],
+        "arity": 0,
+        "operands": "",
+        "steps": 1,
+        "evidence": "native FX header observation: NEXT stores one word",
+        "scope": "family"
+      },
       {
         "opcodes": [
           "OUT"
@@ -2221,7 +2223,8 @@
         "arity": 2,
         "operands": "C2[0-9]{2} (?:K[+-]?[0-9]+|H[0-9A-F]+|D[0-9]+|R[0-9]+)",
         "steps": 5,
-        "evidence": "native encoding observation"
+        "evidence": "native encoding observation",
+        "scope": "family"
       },
       {
         "opcodes": [
@@ -2235,7 +2238,8 @@
         "arity": 1,
         "operands": "(?:[XY][0-7]+|[MSTC][0-9]+)",
         "steps": 1,
-        "evidence": "native encoding observation"
+        "evidence": "native encoding observation",
+        "scope": "family"
       },
       {
         "opcodes": [
@@ -2251,7 +2255,8 @@
         "arity": 1,
         "operands": "(?:[XY][0-7]+|[MSTC][0-9]+)",
         "steps": 2,
-        "evidence": "native encoding observation"
+        "evidence": "native encoding observation",
+        "scope": "family"
       },
       {
         "opcodes": [
@@ -2276,7 +2281,8 @@
         "arity": 1,
         "operands": "(?:[XY][0-7]+|[MSTC][0-9]+)[VZ][0-7]|D[0-9]+\\.[0-9A-F]",
         "steps": 3,
-        "evidence": "native encoding observation"
+        "evidence": "native encoding observation",
+        "scope": "family"
       },
       {
         "opcodes": [
@@ -2287,7 +2293,8 @@
         "arity": 1,
         "operands": "Y[0-7]+",
         "steps": 1,
-        "evidence": "native-conversion-ladder-mode.json cases 12,13; native CSV alignment OUT Y5. M and S targets depend on the device index and the CPU series, so they are resolved from device_ranges instead of from this rule."
+        "evidence": "native-conversion-ladder-mode.json cases 12,13; native CSV alignment OUT Y5. M and S targets depend on the device index and the CPU series, so they are resolved from device_ranges instead of from this rule.",
+        "scope": "family"
       },
       {
         "opcodes": [
@@ -2296,15 +2303,27 @@
         "arity": 1,
         "operands": "M8161",
         "steps": 2,
-        "evidence": "native encoding observation"
+        "evidence": "native encoding observation",
+        "scope": "FX3"
       },
       {
         "opcodes": [
           "RST"
         ],
         "arity": 1,
-        "operands": "M8123|T[0-9]+|C(?:[0-9]{1,2}|1[0-9]{2})",
+        "operands": "M8123",
         "steps": 2,
+        "scope": "FX3",
+        "evidence": "native encoding observation: RST M8123 stores two words (a special relay, which only the FX3 models carry)"
+      },
+      {
+        "opcodes": [
+          "RST"
+        ],
+        "arity": 1,
+        "operands": "T[0-9]+|C(?:[0-9]{1,2}|1[0-9]{2})",
+        "steps": 2,
+        "scope": "family",
         "evidence": "native encoding observation"
       },
       {
@@ -2314,7 +2333,8 @@
         "arity": 1,
         "operands": "D[0-9]+",
         "steps": 3,
-        "evidence": "native encoding observation"
+        "evidence": "native encoding observation",
+        "scope": "family"
       },
       {
         "opcodes": [
@@ -2323,7 +2343,8 @@
         "arity": 2,
         "operands": "(?:T[0-9]+|C(?:[0-9]{1,2}|1[0-9]{2})) (?:K[+-]?[0-9]+|H[0-9A-F]+|D[0-9]+|R[0-9]+)",
         "steps": 3,
-        "evidence": "native encoding observation"
+        "evidence": "native encoding observation",
+        "scope": "family"
       },
       {
         "opcodes": [
@@ -2332,7 +2353,8 @@
         "arity": 2,
         "operands": "T10Z0 K10",
         "steps": 4,
-        "evidence": "native encoding observation"
+        "evidence": "native encoding observation",
+        "scope": "family"
       }
     ],
     "variable_forms": [
@@ -2348,7 +2370,8 @@
           "base": 3,
           "per_source_word": 2
         },
-        "evidence": "native encoding observation"
+        "evidence": "native encoding observation",
+        "scope": "FX3"
       },
       {
         "opcodes": [
@@ -2361,7 +2384,8 @@
         "steps": {
           "fixed": 5
         },
-        "evidence": "native encoding observation"
+        "evidence": "native encoding observation",
+        "scope": "FX3"
       }
     ],
     "exact_forms": [
@@ -2371,7 +2395,8 @@
           "M8340"
         ],
         "steps": 2,
-        "evidence": "native encoding observation"
+        "evidence": "native encoding observation",
+        "scope": "FX3"
       }
     ],
     "device_ranges": [

@@ -163,6 +163,56 @@ def _operand_text(value: Any) -> str:
     return text.upper() if not text.startswith(('"', "'")) else text
 
 
+#: Scope vocabulary for one width rule: ``scope: "family"`` covers every FX
+#: target, ``scope: "FX3"`` (or FX2/FX1/FX0/FXU) only that series group, and an
+#: explicit ``models`` list only those identities. A rule that declares none of
+#: these is refused at load time: an observation taken on one CPU must not answer
+#: for a CPU it was never taken on.
+_SCOPE_KEYS = ("scope", "series", "models")
+
+
+def _scope_spec(entry: Mapping[str, Any]) -> Tuple[Tuple[str, ...], Tuple[str, ...], bool]:
+    """(explicit models, series groups, family) declared by one width rule."""
+    scope = str(entry.get("scope") or "").strip().upper()
+    models = tuple(str(item).strip().upper() for item in entry.get("models", ())
+                   if str(item).strip())
+    series = tuple(str(item).strip().upper() for item in entry.get("series", ())
+                   if str(item).strip())
+    if scope and scope != "FAMILY":
+        series = series + (scope,)
+    family = not models and not series
+    return models, series, family
+
+
+def _scope_applies(entry: Mapping[str, Any], model: str) -> bool:
+    """Whether one width rule was recorded for this CPU."""
+    models, series, family = _scope_spec(entry)
+    if model in models:
+        return True
+    group = fx_series(model)
+    if group is not None and group in series:
+        return True
+    return bool(family and _in_fx_family(model))
+
+
+def _scope_text(entry: Mapping[str, Any]) -> str:
+    """How a width rule states the CPUs its evidence covers."""
+    models, series, family = _scope_spec(entry)
+    if family:
+        return "the whole FX family"
+    if models and series:
+        return "/".join(models) + " (" + "/".join(series) + " series)"
+    if models:
+        return "/".join(models)
+    return "the " + "/".join(series) + " series"
+
+
+def _require_scope(entry: Mapping[str, Any], label: str) -> None:
+    """Refuse a width rule that does not say which CPUs its evidence covers."""
+    if not any(key in entry for key in _SCOPE_KEYS):
+        raise ValueError("Step-width rule declares no evidence scope: " + label)
+
+
 class StepWidthCatalog:
     """Derive fixed widths from exact native spellings; apply explicit rules.
 
@@ -173,6 +223,8 @@ class StepWidthCatalog:
 
     def __init__(self, encodings: Mapping[str, Sequence[Any]], rules: Mapping[str, Any]):
         self.models = frozenset(rules["models"])
+        for row in [*rules["rules"], *rules.get("variable_forms", ())]:
+            _require_scope(row, " ".join(row.get("opcodes", ())))
         self.rules = tuple(rules["rules"])
         self.rule_opcodes = frozenset(op for rule in self.rules for op in rule["opcodes"])
         self.variable = frozenset(rules.get("variable_opcodes", ()))
@@ -184,8 +236,9 @@ class StepWidthCatalog:
             opcode = self.aliases.get(str(row["opcode"]).upper(), str(row["opcode"]).upper())
             operands = tuple(_operand_text(value) for value in row.get("operands", ()))
             key = (opcode, operands)
-            value = (int(row["steps"]), str(row.get("evidence") or ""))
-            if key in exact and exact[key] != value:
+            _require_scope(row, " ".join((opcode, *operands)))
+            value = (int(row["steps"]), str(row.get("evidence") or ""), dict(row))
+            if key in exact and exact[key][:2] != value[:2]:
                 raise ValueError("Conflicting exact step-width form: " + " ".join((opcode, *operands)))
             exact[key] = value
         self.exact_forms = MappingProxyType(exact)
@@ -224,10 +277,16 @@ class StepWidthCatalog:
         op = self.aliases.get(op, op)
         args = tuple(_operand_text(value) for value in operands)
         joined = " ".join(args)
+        out_of_scope: list = []
         exact = self.exact_forms.get((op, args))
         if exact is not None:
-            steps, evidence = exact
-            return known(steps, "exact_native_form", evidence=(evidence,) if evidence else ())
+            steps, evidence, spec = exact
+            if _scope_applies(spec, model):
+                items = (evidence,) if evidence else ()
+                if not _scope_spec(spec)[2]:
+                    items = items + (f"evidence scope: {_scope_text(spec)}",)
+                return known(steps, "exact_native_form", evidence=items)
+            out_of_scope.append(f"{op} {joined} is recorded for {_scope_text(spec)}")
         ranged = self._device_range_steps(op, args, model)
         if ranged is not None:
             status, steps, detail = ranged
@@ -237,28 +296,50 @@ class StepWidthCatalog:
                 return _unresolved(STATUS_CONFLICT, detail)
             return _unresolved(STATUS_NO_PROFILE, detail)
         if op in self.rule_opcodes:
-            matches = [rule for rule in self.rules
-                       if op in rule["opcodes"]
-                       and len(args) == rule["arity"]
-                       and re.fullmatch(rule["operands"], joined)]
+            candidates = [rule for rule in self.rules
+                          if op in rule["opcodes"]
+                          and len(args) == rule["arity"]
+                          and re.fullmatch(rule["operands"], joined)]
+            matches = [rule for rule in candidates if _scope_applies(rule, model)]
             if not matches:
+                if candidates:
+                    return _unresolved(
+                        STATUS_NO_PROFILE,
+                        f"Operand-dependent width for {op} {joined} is recorded for "
+                        + " and ".join(sorted({_scope_text(rule) for rule in candidates}))
+                        + f", not {model}")
                 return _unresolved(STATUS_NO_PROFILE,
                                    "Operand-dependent width has no matching rule")
             widths = {rule["steps"] for rule in matches}
             if len(widths) != 1 or None in widths:
                 return _unresolved(STATUS_CONFLICT, "Ambiguous or unresolved operand-width rule")
-            return known(next(iter(widths)), "operand_rule",
-                         evidence=tuple(rule["evidence"] for rule in matches))
+            evidence = []
+            for rule in matches:
+                evidence.append(rule["evidence"])
+                if not _scope_spec(rule)[2]:
+                    evidence.append(f"evidence scope: {_scope_text(rule)}")
+            return known(next(iter(widths)), "operand_rule", evidence=tuple(evidence))
         if op in self.variable:
-            form = self._variable_form_steps(op, args, text_encoding, known)
+            form = self._variable_form_steps(op, args, text_encoding, known, model)
             if form is not None:
                 return form
+            scoped = {_scope_text(entry) for entry in self.variable_forms
+                      if op in entry["opcodes"] and len(args) == int(entry["arity"])
+                      and not _scope_applies(entry, model)}
+            if scoped:
+                return _unresolved(
+                    STATUS_NO_PROFILE,
+                    f"Variable-width form for {op} {joined} is recorded for "
+                    + " and ".join(sorted(scoped)) + f", not {model}")
             return _unresolved(STATUS_REQUIRES_OPERANDS,
                                "Variable-width instruction needs an operand/encoding-specific rule",
                                requirements=("operands", "operand_encoding"))
         observations = self.observations.get(op, ())
         if not observations:
-            return _unresolved(STATUS_NO_PROFILE, "No native step-width observation for " + op)
+            reason = "No native step-width observation for " + op
+            if out_of_scope:
+                reason += f" on {model} (" + "; ".join(out_of_scope) + ")"
+            return _unresolved(STATUS_NO_PROFILE, reason)
         # Stored width is not an operand count. A binary-arity mismatch must not be
         # made to look like a known size, but never rejects the user's program.
         compatible = [entry for entry in observations if entry[1] == len(args)]
@@ -291,7 +372,8 @@ class StepWidthCatalog:
                      evidence=tuple(entry[2] for entry in compatible))
 
     def _variable_form_steps(self, op: str, args: Sequence[str],
-                             text_encoding: Optional[str], known) -> Optional[StepWidth]:
+                             text_encoding: Optional[str], known,
+                             model: str = "") -> Optional[StepWidth]:
         """Variable-string storage for one FX form, or ``None`` when none matches.
 
         The stored width is one instruction word, the destination words and two
@@ -301,6 +383,8 @@ class StepWidthCatalog:
         """
         for entry in self.variable_forms:
             if op not in entry["opcodes"] or len(args) != int(entry["arity"]):
+                continue
+            if model and not _scope_applies(entry, model):
                 continue
             if not re.fullmatch(r"[DW][0-9]+", args[1]):
                 continue
@@ -437,6 +521,38 @@ def target_members(plc_model: Any) -> Tuple[str, ...]:
     return tuple(part for part in (piece.strip() for piece in text.split("/")) if part)
 
 
+def target_identity_state(plc_model: Any) -> Tuple[Optional[Tuple[str, ...]], Optional[str]]:
+    """Members of one saved CPU menu option, or the reason this identity is none.
+
+    A merged identity has to name a saved menu option as a whole: every part being
+    a real CPU is not enough (``FX3U/FX1S`` is not a menu option), and a trailing
+    slash names nothing. Core width resolution and the knowledge query both ask
+    this, so one spelling of a target has one answer.
+    """
+    merged_text = ("" if isinstance(plc_model, (list, tuple))
+                   else str(plc_model or "").strip().upper())
+    if isinstance(plc_model, (list, tuple)):
+        # An explicit member list is an internal convenience only.
+        members = tuple(str(part).strip().upper() for part in plc_model if str(part).strip())
+    else:
+        members = target_members(plc_model)
+    if members:
+        merged = "/".join(members)
+        # The spelling may differ from the joined members only by spacing: a
+        # leading or trailing slash, or a pair of unrelated CPUs, names no saved
+        # option even when every part of it is a real CPU.
+        spelling = merged_text.removesuffix("(REMOTEI/O)").replace(" ", "")
+        if spelling != merged:
+            return None, (f"Unsupported CPU identity spelling {merged_text!r}: "
+                          "it is not a saved CPU menu option")
+        if len(members) > 1 and merged not in known_menu_identities():
+            return None, (f"Unsupported merged CPU identity {merged_text or merged!r}: "
+                          "it is not a saved CPU menu option")
+    if not members:
+        return None, "A stored step width needs the saved CPU identity"
+    return members, None
+
+
 @lru_cache(maxsize=256)
 def _native_profile(plc_model: str):
     from gxworks2.project_profiles import native_project_profile
@@ -527,24 +643,9 @@ def instruction_step_width(opcode: Any, operands: Sequence[Any] = (), *,
     code page a string payload is stored in; without it such a form answers
     ``requires_context`` for ``text_encoding``.
     """
-    merged_text = "" if isinstance(plc_model, (list, tuple)) else str(plc_model or "").strip().upper()
-    if isinstance(plc_model, (list, tuple)):
-        # An explicit member list is an internal convenience only.
-        members = tuple(str(part).strip().upper() for part in plc_model if str(part).strip())
-    else:
-        members = target_members(plc_model)
-    if len(members) > 1 or (merged_text.endswith("/") and members):
-        # A merged identity is a menu option, not an arbitrary pair: a spelling
-        # such as FX3U/FX1S or a trailing slash names no saved CPU.
-        merged = "/".join(members)
-        if merged_text not in known_menu_identities() and merged not in known_menu_identities():
-            return _unresolved(STATUS_UNKNOWN_CPU,
-                               f"Unsupported merged CPU identity {merged_text or merged!r}: "
-                               "it is not a saved CPU menu option",
-                               requirements=("plc_model",))
-    if not members:
-        return _unresolved(STATUS_UNKNOWN_CPU,
-                           "A stored step width needs the saved CPU identity",
+    members, identity_error = target_identity_state(plc_model)
+    if members is None:
+        return _unresolved(STATUS_UNKNOWN_CPU, identity_error or "",
                            requirements=("plc_model",))
     try:
         if len(members) == 1:

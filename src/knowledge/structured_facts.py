@@ -586,8 +586,9 @@ def resolve_instruction_step_width(target, *, plc_model=None, context=None,
     """
     from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
     from plc.instruction_steps import (STATUS_NO_PROFILE, STATUS_REQUIRES_OPERANDS,
-                                       _merge_members, default_step_width_catalog,
-                                       instruction_step_width, target_family, target_members)
+                                       STATUS_UNKNOWN_CPU, _merge_members,
+                                       default_step_width_catalog, instruction_step_width,
+                                       target_family, target_identity_state)
 
     model = str(plc_model or "").strip().upper()
     if isinstance(target, Mapping):
@@ -632,19 +633,21 @@ def resolve_instruction_step_width(target, *, plc_model=None, context=None,
             "members": [{"cpu": cpu, **member.as_dict()} for cpu, member in width.members],
         }
 
-    members = target_members(model)
-    if not members:
+    # The same full-identity validation Core uses: a merged spelling has to name a
+    # saved menu option, so FX3U/FX1S and a trailing slash are unknown here too.
+    members, identity_error = target_identity_state(model)
+    if members is None:
         return {
             "known": False,
             "steps": None,
-            "status": "unknown_cpu",
+            "status": STATUS_UNKNOWN_CPU,
             "resolution": "unknown_cpu",
             "source": "unknown",
-            "reason": "A program step width needs the saved CPU identity",
+            "reason": identity_error or "A program step width needs the saved CPU identity",
             "evidence": [],
             "requirements": ["plc_model"],
             "operands": [],
-            "plc_model": None,
+            "plc_model": model or None,
             "members": [],
         }
 
@@ -693,7 +696,7 @@ def resolve_instruction_step_width(target, *, plc_model=None, context=None,
             "status": "unknown_cpu",
             "resolution": "unknown_cpu",
             "source": "unknown",
-            "reason": "Unknown PLC target " + ", ".join(unrecognised),
+            "reason": "Unknown PLC target " + ", ".join(repr(item) for item in unrecognised),
             "evidence": [],
             "requirements": [],
             "operands": [],
