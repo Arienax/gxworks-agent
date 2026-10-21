@@ -485,6 +485,20 @@ class StepWidthCatalog:
         steps, evidence = candidates[0]
         return ("known", steps, evidence)
 
+    def _owns_operandless_form(self, opcode: str, model: str) -> bool:
+        """Whether a form of this mnemonic applies to the target without operands."""
+        for rule in self.rules:
+            if (opcode in rule["opcodes"] and rule["arity"] == 0
+                    and _scope_applies(rule, model)
+                    and re.fullmatch(rule["operands"], "")):
+                return True
+        if any(key[0] == opcode and not key[1] and _scope_applies(spec, model)
+               for key, (_steps, _evidence, spec) in self.exact_forms.items()):
+            return True
+        return any(opcode in entry["opcodes"] and entry["arity"] == 0
+                   and _scope_applies(entry, model)
+                   for entry in self.variable_forms)
+
     def observed_forms(self) -> Mapping[str, Tuple[int, int]]:
         """Inspectable native observations, one signature per mnemonic.
 
@@ -523,6 +537,11 @@ class StepWidthCatalog:
             scope = "family"
         op = str(opcode).strip().upper()
         op = self.aliases.get(op, op)
+        # An instruction with a zero-operand form answers from the same rules an
+        # instance does: the form is evaluated with no operands instead of being
+        # called operand-dependent merely because a rule owns its mnemonic.
+        if self._owns_operandless_form(op, model):
+            return self.resolve(op, (), plc_model=model)
         owners = []
         if any(op in rule["opcodes"] and _scope_applies(rule, model) for rule in self.rules):
             owners.append("an operand-width rule")
