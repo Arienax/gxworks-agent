@@ -106,6 +106,35 @@ def _differences(local: Any, public: Any, path: str = "") -> List[str]:
     return problems
 
 
+#: Answers compared between the two copies: an in-scope form, the device-table
+#: boundaries, an out-of-scope series and a form whose scope the declaration
+#: decides.
+PROBE_MODELS = ("FX3U", "FX3G", "FX2N", "FX1S")
+PROBES = (
+    ("LD", ("M0",)), ("LD", ("M1536",)), ("LD", ("M3584",)), ("LD", ("M8256",)),
+    ("LD", ("S1024",)), ("LDP", ("M3584",)), ("OUT", ("Y0",)), ("SFTL", ("D0",)),
+    ("MC", ("N0", "M0")), ("MC", ("N0", "M3584")), ("MOV", ("D0", "D1")),
+    ("DADD", ("D0", "D2", "D4")), ("NEXT", ()), ("END", ()), ("MCR", ("N0",)),
+)
+
+
+def _answers(document: Mapping[str, Any],
+             encodings: Mapping[str, Tuple[str, int]]) -> Dict[str, Tuple[Any, ...]]:
+    """Instance and mnemonic answers for the probe set, keyed by target and form."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+    from plc.instruction_steps import StepWidthCatalog
+
+    catalogue = StepWidthCatalog(encodings, dict(document["step_width_profile"]))
+    answers: Dict[str, Tuple[Any, ...]] = {}
+    for model in PROBE_MODELS:
+        for opcode, operands in PROBES:
+            instance = catalogue.resolve(opcode, list(operands), plc_model=model)
+            mnemonic = catalogue.mnemonic_width(opcode, plc_model=model)
+            answers[f"{model} {opcode} {' '.join(operands)}".strip()] = (
+                instance.status, instance.steps, mnemonic.status, mnemonic.steps)
+    return answers
+
+
 def main(argv: List[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--local", default=RESOURCE,
@@ -134,13 +163,21 @@ def main(argv: List[str] | None = None) -> int:
     if opcodes_local != opcodes_public:
         problems.append("opcodes: the native encoding map differs")
 
+    encodings = {header: (entry[0], entry[1]) for header, entry in opcodes_local.items()}
+    local_answers = _answers(local_document, encodings)
+    public_answers = _answers(public_document, encodings)
+    for key in sorted(local_answers):
+        if local_answers[key] != public_answers.get(key):
+            problems.append(f"answer {key}: {local_answers[key]} locally, "
+                            f"{public_answers.get(key)} published")
+
     if problems:
         print("Step-width resource semantics differ:")
         for problem in problems:
             print("  " + problem)
         return 1
     print(f"Step-width resource matches: {len(opcodes_local)} encodings, "
-          f"{len(local_scopes)} scoped entries.")
+          f"{len(local_scopes)} scoped entries, {len(local_answers)} probe answers.")
     return 0
 
 
