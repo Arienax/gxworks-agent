@@ -472,9 +472,18 @@ def materialize_instruction_definition(target, *, plc_model, lanes, registry=Non
     spec = form.spec if form is not None else None
     inventory = registry.definition_entry(opcode, cpu=model) or {}
     applicability = copy.deepcopy(lanes.get("target_applicability") or {})
-    if "owner_admission" not in applicability:
-        from plc.target_capabilities import apply_owner_admission
-        applicability = apply_owner_admission(applicability, opcode, model, registry=registry)
+    # Re-project against the registry this call was given instead of trusting a
+    # record produced by another build: a lane carrying an old projection must not
+    # freeze it. A second projection keeps the first one's provenance, so repeating
+    # the same call stays idempotent.
+    previous_admission = (applicability.get("owner_admission")
+                          if isinstance(applicability, Mapping) else None)
+    from plc.target_capabilities import apply_owner_admission
+    applicability = apply_owner_admission(applicability, opcode, model, registry=registry)
+    if previous_admission and "owner_admission" in applicability:
+        for key in ("generic_definition_available", "inconsistent"):
+            if previous_admission.get(key) and not applicability["owner_admission"].get(key):
+                applicability["owner_admission"][key] = previous_admission[key]
     groups = [f.as_mapping() for f in spec.definition_facts] if spec else []
     if not groups:
         groups = [InstructionFactGroup.from_mapping(f).as_mapping() for f in inventory.get('facts', [])]
