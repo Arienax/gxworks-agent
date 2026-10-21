@@ -340,6 +340,10 @@ class InstructionFactGroup:
     scope: Mapping[str, Any] | None = None
     verification: str = "not_performed"
     conditions: tuple[Any, ...] = ()
+    # Which material supports this fact, for this dimension, model and form. Absent
+    # when no precedence rule covers the fact, so a whole-instruction preference is
+    # never copied onto a fact it did not decide.
+    authority_decision: Mapping[str, Any] | None = None
 
     @classmethod
     def from_mapping(cls, raw):
@@ -375,9 +379,15 @@ class InstructionFactGroup:
             raise DefinitionError("Invalid fact conditions")
         if any(not isinstance(condition, (str, Mapping)) for condition in conditions):
             raise DefinitionError("Invalid fact condition")
+        decision = raw.get("authority_decision")
+        if decision is not None and not isinstance(decision, Mapping):
+            raise DefinitionError("Invalid fact authority decision")
+        if decision is not None and str(decision.get("fact_id") or "") not in {"", identity}:
+            raise DefinitionError("Authority decision belongs to another fact")
         return cls(identity, dimension, copy.deepcopy(dict(value)), status, tuple(copy.deepcopy(sources)),
                    tuple(dependencies), tuple(members), copy.deepcopy(dict(scope)), verification,
-                   tuple(copy.deepcopy(conditions)))
+                   tuple(copy.deepcopy(conditions)),
+                   copy.deepcopy(dict(decision)) if decision is not None else None)
 
     def as_mapping(self):
         result = {"id": self.id, "dimension": self.dimension, "value": copy.deepcopy(dict(self.value)),
@@ -386,6 +396,8 @@ class InstructionFactGroup:
                 "scope": copy.deepcopy(dict(self.scope or {})), "verification": self.verification}
         if self.conditions:
             result["conditions"] = copy.deepcopy(list(self.conditions))
+        if self.authority_decision:
+            result["authority_decision"] = copy.deepcopy(dict(self.authority_decision))
         return result
 
     def applies_to(self, *, opcode, model, language="ladder", version=None):

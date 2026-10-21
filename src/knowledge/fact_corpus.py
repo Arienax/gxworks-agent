@@ -94,6 +94,10 @@ def project_definition(entry, *, value_projection=None):
         item.update(value=value, scope=scope, sources=sources)
         if conditions:
             item["conditions"] = conditions
+        # Source precedence is semantic: a fact keeps the material that supports it,
+        # with its own basis, instead of inheriting the instruction's preferred manual.
+        if isinstance(fact.get("authority_decision"), dict):
+            item["authority_decision"] = copy.deepcopy(fact["authority_decision"])
         accepted.append(item)
     # Removing a dependency cannot certify an orphaned result/effect.
     while True:
@@ -108,7 +112,7 @@ def project_definition(entry, *, value_projection=None):
     result["source_materials"] = []
     for source in entry.get("source_materials", []):
         material = {key: copy.deepcopy(source[key]) for key in (
-            "manual_id", "revision", "pdf_pages", "source_ids", "primary_semantic_source") if key in source}
+            "manual_id", "revision", "pdf_pages", "primary_semantic_source") if key in source}
         material["document_id"] = ":".join([str(material.get("manual_id", "")),
             str(material.get("revision", "")), "pages=" + ",".join(map(str, material.get("pdf_pages", [])))])
         material["explicit_reference_ids"] = []

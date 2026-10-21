@@ -462,6 +462,9 @@ def compile_instruction_definitions(index_path, source_catalog, registry, *, sou
                           'source_ids': d['source_ids'], 'pdf_pages': d['pdf_pages'],
                           'primary_semantic_source': d['manual_id'] == preferred,
                           'explicit_reference_ids': [r['document_id'] for r in d['explicit_references']]} for d, _ in ownership]
+            # Display order only: the adjudication below decides which material and
+            # which fact actually answers, and every material stays listed.
+            materials.sort(key=lambda item: (not item['primary_semantic_source'], item['manual_id']))
             unexplained = [{'document_id': d['id'], 'reason': 'remaining_source_content', 'unit_count': len(d['units'])}
                            for d, _ in ownership]
             gaps = []

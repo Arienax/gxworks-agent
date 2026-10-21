@@ -844,6 +844,87 @@ def _instruction_contract_source_records(target, *, plc_model, task_type):
     return records
 
 
+def _adjudicated_rows(rows, targets, plc_model):
+    """Return the owning chapter's units for audited forms, with the decision attached.
+
+    The corpus answers with every material that carries the form. For a form whose
+    source precedence is audited, the owning material's chapter units are the answer;
+    the other candidates are kept in the decision record with the reason they were
+    not selected, so nothing disappears silently. Rows are matched by material
+    identity and page, never by an index-local id.
+    """
+    from knowledge.source_authority import adjudicate_fact_sources, instruction_source_authority
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+
+    if not isinstance(rows, list) or not rows:
+        return rows, False
+    for target in targets or ():
+        if isinstance(target, Mapping):
+            opcode = str(target.get("opcode") or "").strip().upper()
+            base = str(target.get("base_opcode") or opcode).strip().upper()
+        else:
+            opcode = base = str(target or "").strip().upper()
+        if not opcode:
+            continue
+        if instruction_source_authority(opcode, plc_model) is None and base != opcode:
+            opcode = base
+        if instruction_source_authority(opcode, plc_model) is None:
+            continue
+        definition = DEFAULT_INSTRUCTION_REGISTRY.definition_entry(opcode, cpu=plc_model) or {}
+        materials = [material for material in definition.get("source_materials") or ()
+                     if isinstance(material, Mapping)]
+        candidates = [{"manual_id": material.get("manual_id"),
+                       "revision": material.get("revision"),
+                       "fact_id": material.get("document_id")} for material in materials]
+        decision = adjudicate_fact_sources(opcode=opcode, plc_model=plc_model,
+                                           fact_type="instruction_semantics",
+                                           candidates=candidates)
+        selected = decision.get("selected") or {}
+        owner = (str(selected.get("manual_id") or ""), str(selected.get("revision") or ""))
+        if not owner[0]:
+            return rows, True
+        pages = set()
+        for material in materials:
+            if (str(material.get("manual_id") or ""), str(material.get("revision") or "")) == owner:
+                pages.update(int(page) for page in material.get("pdf_pages") or ())
+        record = {
+            "policy": decision["policy"],
+            "schema_version": decision["schema_version"],
+            "status": decision["status"],
+            "opcode": opcode,
+            "plc_model": decision["plc_model"],
+            "fact_type": decision["fact_type"],
+            "selected_manual_id": owner[0],
+            "selected_revision": owner[1],
+            "reason": decision.get("reason"),
+            "rule": decision.get("rule"),
+            "candidates": [
+                {"manual_id": item.get("manual_id"), "revision": item.get("revision"),
+                 "selected": bool(item.get("selected")),
+                 "excluded_because": item.get("excluded_because")}
+                for item in decision["candidates"]
+            ],
+        }
+        units = []
+        for row in rows:
+            identity = (str(row.get("manual_id") or ""), str(row.get("revision") or ""))
+            if identity != owner:
+                continue
+            # Pages are the compiled material's own span: a unit that falls outside it
+            # is still the owner's material, so it is ranked later, never dropped.
+            page = row.get("pdf_page")
+            within = not pages or page is None or int(page) in pages
+            entry = dict(row)
+            entry["_within_compiled_pages"] = within
+            entry["compiled_source_chapter"] = True
+            entry["instruction_lookup_basis"] = "compiled_material_identity"
+            entry["authority_decision"] = copy.deepcopy(record)
+            units.append(entry)
+        units.sort(key=lambda item: (not item.pop("_within_compiled_pages", True),))
+        return (units or rows), True
+    return rows, False
+
+
 def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generate"):
     """Resolve canonical/variant opcodes directly through ``instructions``.
 
@@ -855,6 +936,9 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
     _index, _path, connection, schema, _meta = _runtime()
     authored = resolve("instruction", targets, plc_model=plc_model, task_type=task_type, connection=connection)
     if authored is not None:
+        admitted, decided = _adjudicated_rows(authored, targets, plc_model)
+        if decided:
+            return admitted
         return authored
     table = schema.get("instructions") if schema is not None else None
     table_available = bool(
