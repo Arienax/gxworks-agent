@@ -98,14 +98,14 @@ def _comment_rows(path):
                   for device, text in read_device_comments(path).items())
 
 
-def _compile_status(result):
-    diagnostics = result.get("diagnostics", {})
-    counts = diagnostics.get("severity_counts", {})
-    if (result.get("command") != "rebuild_all" or result.get("completed") is not True
-            or diagnostics.get("status") != "observed"
-            or type(counts.get("Error")) is not int):
+def _compile_status(report):
+    """Judge the rebuilt project by what the native component actually reported."""
+    report = report or {}
+    workspace = report.get("native_workspace", {})
+    failures = [row for row in report.get("steps", []) if row.get("code")]
+    if workspace.get("status") != "observed" or failures:
         return "unverified"
-    return "passed" if counts["Error"] == 0 else "failed"
+    return "passed" if workspace.get("compile") == "completed_accepted" else "failed"
 
 
 def _close_owned_empty_frame(driver):
@@ -149,6 +149,27 @@ def _native_run(options, receipt, receipt_path, expected_rows, expected_comments
         _write_receipt(receipt_path, receipt)
         print(name, flush=True)
 
+    # The native component rebuilds the saved copy without a visible IDE, so the
+    # program, its compiled results and the file the IDE later opens are one object.
+    from gxworks2.workspace_adapter import NativeWorkspaceSourceSave
+
+    compiled = NativeWorkspaceSourceSave().compile_project(path.read_bytes())
+    body_before = path.read_bytes()
+    path.write_bytes(compiled.data)
+    workspace = (compiled.report or {}).get("native_workspace", {})
+    compile_stage = {
+        "status": _compile_status(compiled.report),
+        "component": "native_workspace_adapter",
+        "command": "compile_project",
+        "native_workspace": workspace,
+        "nonzero_steps": [row for row in (compiled.report or {}).get("steps", [])
+                           if row.get("code")][:5],
+        # A native rebuild reserialises the program body, so the delivered body is
+        # only comparable before that rebuild; record both sides of that transition.
+        "body_rewritten_by_native_compile": compiled.data != body_before,
+        "project": _file_record(path),
+    }
+
     with DesktopResourceLock():
         pythoncom.CoInitializeEx(pythoncom.COINIT_APARTMENTTHREADED)
         try:
@@ -161,10 +182,7 @@ def _native_run(options, receipt, receipt_path, expected_rows, expected_comments
                               "library_updates": driver.open_updates}
 
             stage("compile")
-            result = driver.compile_current({"revision": 0, "public_checks_requested": True})
-            stages["compile"] = {"status": _compile_status(result), "receipt": result,
-                                 "severity_counts": result.get("diagnostics", {}).get("severity_counts"),
-                                 "diagnostic_rows": result.get("diagnostics", {}).get("rows", [])}
+            stages["compile"] = compile_stage
 
             stage("save")
             saved = driver.snapshot()
