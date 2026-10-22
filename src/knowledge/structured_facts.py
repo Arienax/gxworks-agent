@@ -845,19 +845,20 @@ def _instruction_contract_source_records(target, *, plc_model, task_type):
 
 
 def _adjudicated_rows(rows, targets, plc_model):
-    """Return the owning chapter's units for audited forms, with the decision attached.
+    """Put the audited material first for its own target and leave the rest alone.
 
-    The corpus answers with every material that carries the form. For a form whose
-    source precedence is audited, the owning material's chapter units are the answer;
-    the other candidates are kept in the decision record with the reason they were
-    not selected, so nothing disappears silently. Rows are matched by material
-    identity and page, never by an index-local id.
+    The runtime does not re-decide which material owns an instruction: each target that
+    has an audited precedence is handled on its own, its rows keep the decision that
+    was already reached, and rows belonging to another target or another material are
+    returned unchanged. Pages only rank the reference list; they never decide which
+    facts may enter the answer.
     """
     from knowledge.source_authority import adjudicate_fact_sources, instruction_source_authority
     from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
 
     if not isinstance(rows, list) or not rows:
         return rows, False
+    entries, decided = [], []
     for target in targets or ():
         if isinstance(target, Mapping):
             opcode = str(target.get("opcode") or "").strip().upper()
@@ -868,8 +869,10 @@ def _adjudicated_rows(rows, targets, plc_model):
             continue
         if instruction_source_authority(opcode, plc_model) is None and base != opcode:
             opcode = base
-        if instruction_source_authority(opcode, plc_model) is None:
+        rule = instruction_source_authority(opcode, plc_model)
+        if rule is None:
             continue
+        decided.append(opcode)
         definition = DEFAULT_INSTRUCTION_REGISTRY.definition_entry(opcode, cpu=plc_model) or {}
         materials = [material for material in definition.get("source_materials") or ()
                      if isinstance(material, Mapping)]
@@ -882,18 +885,20 @@ def _adjudicated_rows(rows, targets, plc_model):
         selected = decision.get("selected") or {}
         owner = (str(selected.get("manual_id") or ""), str(selected.get("revision") or ""))
         if not owner[0]:
-            return rows, True
+            continue
         pages = set()
         for material in materials:
             if (str(material.get("manual_id") or ""), str(material.get("revision") or "")) == owner:
                 pages.update(int(page) for page in material.get("pdf_pages") or ())
-        record = {
+        entries.append((opcode, owner, pages, {
             "policy": decision["policy"],
             "schema_version": decision["schema_version"],
             "status": decision["status"],
+            "fact_id": None,
+            "dimension": decision["fact_type"],
             "opcode": opcode,
             "plc_model": decision["plc_model"],
-            "fact_type": decision["fact_type"],
+            "form": opcode,
             "selected_manual_id": owner[0],
             "selected_revision": owner[1],
             "reason": decision.get("reason"),
@@ -904,30 +909,29 @@ def _adjudicated_rows(rows, targets, plc_model):
                  "excluded_because": item.get("excluded_because")}
                 for item in decision["candidates"]
             ],
-        }
-        units = []
-        for row in rows:
-            identity = (str(row.get("manual_id") or ""), str(row.get("revision") or ""))
-            if identity != owner:
+        }))
+    if not entries:
+        return rows, bool(decided)
+    ordered, ranked = [], []
+    for index, row in enumerate(rows):
+        entry = dict(row)
+        for opcode, owner, pages, record in entries:
+            row_opcode = str(entry.get("instruction_opcode") or entry.get("opcode") or "").upper()
+            if row_opcode and row_opcode != opcode:
+                # Another target's row: it keeps its own state untouched.
                 continue
-            # Pages are the compiled material's own span: a unit that falls outside it
-            # is still the owner's material, so it is ranked later, never dropped.
-            page = row.get("pdf_page")
+            if (str(entry.get("manual_id") or ""), str(entry.get("revision") or "")) != owner:
+                continue
+            page = entry.get("pdf_page")
             within = not pages or page is None or int(page) in pages
-            entry = dict(row)
-            entry["_within_compiled_pages"] = within
-            # A corpus row may arrive flagged as a compiled chapter; this answer is
-            # not one, so the claim is dropped rather than carried forward.
-            entry.pop("compiled_source_chapter", None)
-            # This row is a published authored unit whose material matches the
-            # adjudicated one; the original chapter was not replayed, so it must not
-            # claim to be a compiled chapter.
             entry["instruction_lookup_basis"] = "authored_fact_material_match"
             entry["authority_decision"] = copy.deepcopy(record)
-            units.append(entry)
-        units.sort(key=lambda item: (not item.pop("_within_compiled_pages", True),))
-        return (units or rows), True
-    return rows, False
+            ranked.append((0 if within else 1, index, entry))
+            break
+        else:
+            ordered.append((2, index, entry))
+    merged = sorted(ranked + ordered, key=lambda item: (item[0], item[1]))
+    return [item[2] for item in merged], True
 
 
 def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generate"):
@@ -942,9 +946,7 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
     authored = resolve("instruction", targets, plc_model=plc_model, task_type=task_type, connection=connection)
     if authored is not None:
         admitted, decided = _adjudicated_rows(authored, targets, plc_model)
-        if decided:
-            return admitted
-        return authored
+        return admitted if decided else authored
     table = schema.get("instructions") if schema is not None else None
     table_available = bool(
         connection is not None
@@ -1687,6 +1689,9 @@ def without_structured_targets(query, targets):
             flags=re.IGNORECASE,
         )
     return " ".join(text.split())
+
+
+
 
 
 def exclude_structured_target_hits(records, targets):

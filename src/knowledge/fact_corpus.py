@@ -61,11 +61,64 @@ def typed_value(value):
     raise UnresolvedExpression("unsupported_value")
 
 
+BUILD_LOCAL_ID = re.compile(r"\d+\Z")
+
+
+def public_source_ref(source):
+    """Build a public reference identity that carries no build-index row number."""
+    manual_id = str(source.get("manual_id") or "")
+    revision = str(source.get("revision") or "")
+    pages = source.get("pdf_pages") or ([source["pdf_page"]] if source.get("pdf_page") is not None else [])
+    parts = [part for part in (manual_id, revision) if part]
+    if pages:
+        parts.append("pages=" + ",".join(str(page) for page in pages))
+    return ":".join(parts)
+
+
 def source_reference(source):
     result = {key: copy.deepcopy(value) for key, value in source.items() if key in SOURCE_KEYS}
+    identity = result.get("id")
+    if identity is not None and BUILD_LOCAL_ID.fullmatch(str(identity).strip()):
+        # A bare number is a row id of some development index; publish an identity
+        # derived from the material instead of a number that means something else
+        # in every other database.
+        result.pop("id", None)
+        reference = public_source_ref(source)
+        if reference:
+            result["source_ref"] = reference
     for key in ('conditions', 'applicability'):
         if source.get(key):
             result[key] = typed_value(source[key])
+    return result
+
+
+DECISION_KEYS = ("fact_id", "dimension", "opcode", "plc_model", "form", "status",
+                 "selected_manual_id", "selected_revision", "reason", "policy",
+                 "schema_version")
+RULE_KEYS = ("rule_id", "manual_id", "revision", "authority", "fact_types", "policy")
+CANDIDATE_KEYS = ("manual_id", "revision", "selected", "equivalent", "excluded_because")
+
+
+def public_authority_decision(decision):
+    """Publish the ruling, never the working material it was reached with.
+
+    Raw text, geometry, private paths and build-local ids stay in the development
+    data; what ships is the fact identity, the compared candidates, the selection and
+    the rule that produced it.
+    """
+    if not isinstance(decision, dict):
+        return None
+    result = {key: copy.deepcopy(decision[key]) for key in DECISION_KEYS if key in decision}
+    rule = decision.get("rule")
+    if isinstance(rule, dict):
+        result["rule"] = {key: copy.deepcopy(rule[key]) for key in RULE_KEYS if key in rule}
+    candidates = []
+    for item in decision.get("candidates") or ():
+        if isinstance(item, dict):
+            candidates.append({key: copy.deepcopy(item[key]) for key in CANDIDATE_KEYS
+                               if key in item})
+    if candidates:
+        result["candidates"] = candidates
     return result
 
 
@@ -96,8 +149,9 @@ def project_definition(entry, *, value_projection=None):
             item["conditions"] = conditions
         # Source precedence is semantic: a fact keeps the material that supports it,
         # with its own basis, instead of inheriting the instruction's preferred manual.
-        if isinstance(fact.get("authority_decision"), dict):
-            item["authority_decision"] = copy.deepcopy(fact["authority_decision"])
+        ruling = public_authority_decision(fact.get("authority_decision"))
+        if ruling:
+            item["authority_decision"] = ruling
         accepted.append(item)
     # Removing a dependency cannot certify an orphaned result/effect.
     while True:
@@ -113,8 +167,11 @@ def project_definition(entry, *, value_projection=None):
     for source in entry.get("source_materials", []):
         material = {key: copy.deepcopy(source[key]) for key in (
             "manual_id", "revision", "pdf_pages", "primary_semantic_source") if key in source}
+        # This is a page locator, not the original chapter identity: two chapters that
+        # share a page range would collide, so the field says what it is.
         material["document_id"] = ":".join([str(material.get("manual_id", "")),
             str(material.get("revision", "")), "pages=" + ",".join(map(str, material.get("pdf_pages", [])))])
+        material["location_kind"] = "page_locator"
         material["explicit_reference_ids"] = []
         result["source_materials"].append(material)
     result["uninterpreted_content"] = [{"reason": "private_source_not_distributed",
