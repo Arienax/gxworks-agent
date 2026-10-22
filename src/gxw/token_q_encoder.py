@@ -23,7 +23,8 @@ from .models import GXWFormatError
 TABLES = _shared.TABLES
 
 __all__ = ["QStorageContext", "TABLES", "encode_q_header", "encode_q_operand",
-           "q_header_compatible", "q_project_storage_context", "q_storage_context"]
+           "q_header_compatible", "q_project_storage_context", "q_storage_context",
+           "select_q_storage_form"]
 
 
 def encode_q_operand(*args, **kwargs):
@@ -34,20 +35,68 @@ def encode_q_operand(*args, **kwargs):
         raise GXWFormatError(str(error)) from None
 
 
-def encode_q_header(*args, **kwargs):
-    """Build one stored header, reporting a shared rule failure as a format error."""
+def encode_q_header(op, args, operands, *, profile="q03udv", cpu=None, source=None,
+                    storage_context=None, target_identity=None):
+    """Build one stored header, checking a preserved source record first.
+
+    The storage form itself is chosen in :func:`plc.storage.q_encoder.select_q_storage_form`;
+    what stays here is the project-record question: whether the width recorded on an
+    existing source is still the width this allocation implies.
+    """
     try:
-        return _shared.encode_q_header(*args, **kwargs)
+        if source is not None and storage_context is None:
+            before = tuple(b"".join(token.raw for token in value.tokens)
+                           for value in source.operands)
+            old_header = _shared.encode_q_header(source.mnemonic, source.args, before,
+                                                profile=profile, cpu=cpu)
+            old_width = _shared._header_width(old_header)
+            if source.step_width != old_width:
+                raise StorageRuleError("original Q stored width differs; its project "
+                                       "allocation context is required")
+        return _shared.encode_q_header(op, args, operands, profile=profile, cpu=cpu,
+                                       storage_context=storage_context,
+                                       target_identity=target_identity)
     except StorageRuleError as error:
         raise GXWFormatError(str(error)) from None
 
 
-def q_header_compatible(*args, **kwargs):
-    """Answer a compatibility question about one header."""
+def q_header_compatible(source, op, args, operands, *, profile, cpu=None, storage_context=None):
+    """Prove width invariance before preserving a source header on an edit."""
+    if source is None or source.mnemonic != op or len(source.operands) != len(operands):
+        return False
+    before = tuple(b''.join(token.raw for token in value.tokens) for value in source.operands)
     try:
-        return _shared.q_header_compatible(*args, **kwargs)
-    except StorageRuleError as error:
-        raise GXWFormatError(str(error)) from None
+        old_header = _shared.encode_q_header(op, source.args, before, profile=profile, cpu=cpu,
+                                     storage_context=storage_context)
+        new_header = _shared.encode_q_header(op, args, operands, profile=profile, cpu=cpu,
+                                     storage_context=storage_context)
+    except StorageRuleError:
+        if before == tuple(operands):
+            return True
+        # An opaque extension does not prevent a proven independent operand
+        # update. MOV's destination width depends on its storage class, cost
+        # and modifiers, not its ordinary D address. Keep the extension's
+        # complete bytes and require exactly the same saved D allocation.
+        # Do not turn the display equivalence of FD/FE/FF into a new width
+        # rule, or apply this invariant to alias-sensitive arithmetic forms.
+        if op != 'MOV' or len(before) != 2 or before[0] != operands[0]:
+            return False
+        if not any(token[1] in (0xfd, 0xfe, 0xff) for token in _shared._tokens(before[0])):
+            return False
+        if (len(_shared._tokens(before[1])) != 1 or len(_shared._tokens(operands[1])) != 1
+                or _shared._tokens(before[1])[0][1] != 0xa8 or _shared._tokens(operands[1])[0][1] != 0xa8):
+            return False
+        mode = _shared._cpu_mode(profile, cpu or getattr(storage_context, 'cpu', None))
+        try:
+            old, old_cost = _shared._descriptors((before[1],), mode=mode, storage_context=storage_context)
+            new, new_cost = _shared._descriptors((operands[1],), mode=mode, storage_context=storage_context)
+        except StorageRuleError:
+            return False
+        if old[0][6] != 0xa8 or new[0][6] != 0xa8:
+            return False
+        return old_cost == new_cost and old[0][:9] + old[0][13:] == new[0][:9] + new[0][13:]
+    old_width = _shared._header_width(old_header)
+    return source.step_width == old_width and old_header == new_header
 
 
 def _context_operand(context, device, value):

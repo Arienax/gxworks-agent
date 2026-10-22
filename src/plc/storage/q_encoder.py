@@ -23,6 +23,7 @@ import math
 import re
 import struct
 import sys
+from typing import Any, Optional, Tuple
 
 from plc.storage.context import QStorageContext
 from plc.storage.errors import StorageFramingError, StorageRuleError
@@ -763,9 +764,38 @@ def _context_covers_cpu(context_cpu, cpu) -> bool:
     return bool(context_members & cpu_members)
 
 
-def encode_q_header(op, args, operands, *, profile='q03udv', cpu=None, source=None,
-                    storage_context=None, target_identity=None):
-    """Construct a stored header without treating a lexical profile as CPU admission."""
+@dataclass(frozen=True)
+class QStorageSelection:
+    """The stored form one Q/L instruction instance takes.
+
+    ``header`` is the native header that follows from the choice and ``steps`` its
+    bounded stored width, so a caller that only needs the width does not read bytes
+    back out of a header. ``family``, ``variant``, ``mode`` and ``operands`` name the
+    selection itself, so a writer can encode without choosing again.
+    """
+
+    header: bytes
+    steps: int
+    family: int
+    variant: int
+    mode: Optional[str]
+    profile: str
+    operands: Tuple[Any, ...] = ()
+
+    def as_dict(self) -> dict:
+        return {"steps": self.steps, "family": self.family, "variant": self.variant,
+                "mode": self.mode, "profile": self.profile,
+                "header": self.header.hex()}
+
+
+def select_q_storage_form(op, args, operands, *, profile='q03udv', cpu=None,
+                          storage_context=None, target_identity=None) -> QStorageSelection:
+    """Choose the storage form and expected stored width for one Q/L instance.
+
+    This is the single selection: Core asks for ``steps``, the project writer encodes
+    ``header``, and neither repeats the candidate enumeration or the width rules.
+    """
+    encoded = tuple(operands or ())
     if storage_context is not None:
         if not isinstance(storage_context, QStorageContext):
             raise StorageRuleError('invalid Q source storage context')
@@ -774,19 +804,14 @@ def encode_q_header(op, args, operands, *, profile='q03udv', cpu=None, source=No
             raise StorageRuleError('Q source storage context differs from the saved CPU')
         if cpu is None:
             cpu = storage_context.cpu
-    if source is not None and storage_context is None:
-        before = tuple(b''.join(token.raw for token in value.tokens) for value in source.operands)
-        old_header = encode_q_header(source.mnemonic, source.args, before, profile=profile, cpu=cpu)
-        old_width = _header_width(old_header)
-        if source.step_width != old_width:
-            raise StorageRuleError('original Q stored width differs; its project allocation context is required')
-    if op == 'NOP' and not args and not operands:
-        return b'\x02\x02'
+    if op == 'NOP' and not args and not encoded:
+        header = b'\x02\x02'
+        return QStorageSelection(header, _header_width(header), 0, 0, None, profile, ())
     choices = _header_choices(op, len(args), profile=profile)
     if not choices:
         raise StorageRuleError('Q instruction mnemonic/arity has no proven storage descriptor')
     mode = _cpu_mode(profile, cpu)
-    results = set()
+    results = {}
     for initial, _ in choices:
         family, variant = initial[1], initial[3] if len(initial) >= 5 else 0
         # Native M./U. macro placeholders are stored with width 1, independent
@@ -795,7 +820,7 @@ def encode_q_header(op, args, operands, *, profile='q03udv', cpu=None, source=No
         # every newly constructed macro. Independent controls cover all six
         # Q/L CPU storage groups and ordinary/pulse/constant/modifier forms.
         descriptors = [] if family in (0x78, 0x79) else _descriptors(
-            operands, mode=mode, storage_context=storage_context)[0]
+            encoded, mode=mode, storage_context=storage_context)[0]
         normalized = family - 1 if family in (0x29, 0x2b) else family
         if family in (0x78, 0x79):
             width = 1
@@ -806,22 +831,36 @@ def encode_q_header(op, args, operands, *, profile='q03udv', cpu=None, source=No
             if any(d[6] == 0xd2 or d[6] in (0xe8, 0xea) and
                    (mode == 'q71' or d[4] == 255) for d in descriptors):
                 continue
-            width = _named_width(initial, operands, mode, storage_context)
+            width = _named_width(initial, encoded, mode, storage_context)
         elif any(operand_rule_status(normalized, variant, i, d) < 0 for i, d in enumerate(descriptors)):
             continue
         elif mode == 'q71':
-            width = _q71_width(initial, operands, storage_context)
+            width = _q71_width(initial, encoded, storage_context)
         elif mode in ('q02', 'q61', 'q63', 'q66'):
-            width = _q02_width(initial, operands, mode=mode, storage_context=storage_context)
+            width = _q02_width(initial, encoded, mode=mode, storage_context=storage_context)
         else:
-            width = _common_width(initial, operands, storage_context)
+            width = _common_width(initial, encoded, storage_context)
         if not 0 <= width <= 127 or width == 0 and (family, variant) != (0x62, 1):
             raise StorageRuleError('Q instruction stored width exceeds its bounded field')
-        results.add(bytes((3, family, 3)) if family < 0x40 and width == 1 else
-                    bytes((4, family, width, 4)) if family < 0x40 else initial[:2] + bytes((width,)) + initial[3:])
+        header = (bytes((3, family, 3)) if family < 0x40 and width == 1 else
+                  bytes((4, family, width, 4)) if family < 0x40 else initial[:2] + bytes((width,)) + initial[3:])
+        results[header] = QStorageSelection(header, _header_width(header), family, variant,
+                                           mode, profile, encoded)
     if len(results) != 1:
         raise StorageRuleError('Q instruction parameter roles or stored header are ambiguous')
-    return results.pop()
+    return next(iter(results.values()))
+
+
+def encode_q_header(op, args, operands, *, profile='q03udv', cpu=None,
+                    storage_context=None, target_identity=None):
+    """Construct a stored header without treating a lexical profile as CPU admission.
+
+    The header is the encoded consequence of :func:`select_q_storage_form`; a caller
+    that needs the width asks that selection instead of reading it back from here.
+    """
+    return select_q_storage_form(op, args, operands, profile=profile, cpu=cpu,
+                                 storage_context=storage_context,
+                                 target_identity=target_identity).header
 
 
 def _named_width(header, operands, mode, storage_context=None):
@@ -1059,44 +1098,6 @@ def _common_width(header, operands, storage_context=None):
     raise StorageRuleError('stored width needs an exact CPU rule or a compatible original source header')
 
 
-def q_header_compatible(source, op, args, operands, *, profile, cpu=None, storage_context=None):
-    """Prove width invariance before preserving a source header on an edit."""
-    if source is None or source.mnemonic != op or len(source.operands) != len(operands):
-        return False
-    before = tuple(b''.join(token.raw for token in value.tokens) for value in source.operands)
-    try:
-        old_header = encode_q_header(op, source.args, before, profile=profile, cpu=cpu,
-                                     storage_context=storage_context)
-        new_header = encode_q_header(op, args, operands, profile=profile, cpu=cpu,
-                                     storage_context=storage_context)
-    except StorageRuleError:
-        if before == tuple(operands):
-            return True
-        # An opaque extension does not prevent a proven independent operand
-        # update. MOV's destination width depends on its storage class, cost
-        # and modifiers, not its ordinary D address. Keep the extension's
-        # complete bytes and require exactly the same saved D allocation.
-        # Do not turn the display equivalence of FD/FE/FF into a new width
-        # rule, or apply this invariant to alias-sensitive arithmetic forms.
-        if op != 'MOV' or len(before) != 2 or before[0] != operands[0]:
-            return False
-        if not any(token[1] in (0xfd, 0xfe, 0xff) for token in _tokens(before[0])):
-            return False
-        if (len(_tokens(before[1])) != 1 or len(_tokens(operands[1])) != 1
-                or _tokens(before[1])[0][1] != 0xa8 or _tokens(operands[1])[0][1] != 0xa8):
-            return False
-        mode = _cpu_mode(profile, cpu or getattr(storage_context, 'cpu', None))
-        try:
-            old, old_cost = _descriptors((before[1],), mode=mode, storage_context=storage_context)
-            new, new_cost = _descriptors((operands[1],), mode=mode, storage_context=storage_context)
-        except StorageRuleError:
-            return False
-        if old[0][6] != 0xa8 or new[0][6] != 0xa8:
-            return False
-        return old_cost == new_cost and old[0][:9] + old[0][13:] == new[0][:9] + new[0][13:]
-    old_width = _header_width(old_header)
-    return source.step_width == old_width and old_header == new_header
-
-
 __all__ = ['QStorageContext', 'StorageFramingError', 'StorageRuleError',
-           'encode_q_operand', 'encode_q_header', 'q_header_compatible']
+           'QStorageSelection', 'encode_q_operand', 'encode_q_header',
+           'select_q_storage_form']

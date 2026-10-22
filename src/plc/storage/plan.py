@@ -21,7 +21,7 @@ from typing import Any, Sequence
 
 from plc.storage.errors import StorageRuleError as GXWFormatError
 from plc.storage.tables import storage_profile as source_token_profile
-from plc.storage.q_encoder import encode_q_header, encode_q_operand
+from plc.storage.q_encoder import (encode_q_operand, select_q_storage_form)
 
 
 #: Failure texts that mean "known CPU, but this form has no covered rule".
@@ -180,8 +180,9 @@ def resolve_stored_steps(opcode: Any, operands: Sequence[Any] = (), *, cpu: Any,
             encode_q_operand(value, op=name, index=index, profile=profile,
                              text_encoding=text_encoding, cpu=identity)
             for index, value in enumerate(args))
-        header = encode_q_header(name, args, encoded, profile=profile, cpu=identity,
-                                 storage_context=context, target_identity=target_identity)
+        selection = select_q_storage_form(name, args, encoded, profile=profile, cpu=identity,
+                                          storage_context=context,
+                                          target_identity=target_identity)
     except GXWFormatError as error:
         status, requirements = _status_for(error)
         if not args and status == "no_profile":
@@ -192,10 +193,11 @@ def resolve_stored_steps(opcode: Any, operands: Sequence[Any] = (), *, cpu: Any,
             return _unresolved(status, f"{identity} has no observed Q/L storage mode: {error}",
                                requirements=requirements)
         return _unresolved(status, str(error), requirements=requirements)
-    width = 1 if len(header) <= 3 else header[2]
-    # An implicit one-word header carries no width byte; say which form answered.
-    evidence = (f"native Q/L stored header {header.hex()} for {identity} "
-                f"(mode {mode or 'common'}, profile {profile})",)
+    # The width is the selection's own answer, not a byte read back out of a header.
+    width = selection.steps
+    evidence = (f"native Q/L stored header {selection.header.hex()} for {identity} "
+                f"(family {selection.family:#04x}, variant {selection.variant:#04x}, "
+                f"mode {selection.mode or 'common'}, profile {profile})",)
     if assumed_default:
         evidence = evidence + ("assumed the default (unextended) allocation for "
                                f"{', '.join(dependent)}; the saved project allocation was "
