@@ -183,13 +183,67 @@ def test_delivery_refuses_what_it_cannot_place():
     else:
         raise AssertionError("a CPU without a captured baseline must not be delivered")
 
+def test_a_source_program_is_reproduced_record_for_record():
+    """The clone path carries records the reader cannot decode instead of interpreting them."""
+    if not project_templates.blank_ladder_models():
+        return
+    from gxw.ladder_program_writer import (build_ladder_project,
+                                          build_ladder_project_from_source)
+    from gxw.offline_project import read_offline_project
+    from gxw.token_pou import frame_token_pou
+    from gxworks2.csv_export import lower_ladder_program
+
+    rungs = {"rungs": [{"debug_note": "第一步",
+                        "branches": [{"inputs": [{"type": "NO", "address": "X0"}],
+                                      "outputs": [{"type": "COIL", "address": "Y0"}]}]}]}
+    built = build_ladder_project(lower_ladder_program(rungs, plc_model="FX3U"), plc_model="FX3U")
+    cloned = build_ladder_project_from_source(built.data, plc_model="FX3U")
+    source_body = frame_token_pou(read_offline_project(built.data).streams["MAIN.Program.pou"]).body
+    cloned_body = frame_token_pou(read_offline_project(cloned.data).streams["MAIN.Program.pou"]).body
+    assert cloned_body == source_body
+    assert cloned.report["instructions"] == 2 and cloned.report["statements"] == 1
+    assert cloned.carried_records == 0
+    assert "delivery_limits" not in cloned.report
+
+
+def test_a_clone_refuses_a_foreign_cpu_and_an_empty_program():
+    from gxw.ladder_program_writer import build_ladder_project_from_source
+    from gxworks2.csv_export import lower_ladder_program
+
+    built_data = None
+    if project_templates.blank_ladder_models():
+        from gxw.ladder_program_writer import build_ladder_project
+
+        rungs = {"rungs": [{"branches": [{"inputs": [{"type": "NO", "address": "X0"}],
+                                         "outputs": [{"type": "COIL", "address": "Y0"}]}]}]}
+        built_data = build_ladder_project(lower_ladder_program(rungs, plc_model="FX3U"),
+                                          plc_model="FX3U").data
+    if built_data is not None:
+        try:
+            build_ladder_project_from_source(built_data, plc_model="Q03UDV")
+        except GXWFormatError as error:
+            assert "belongs to" in str(error)
+        else:
+            raise AssertionError("a clone must refuse a different CPU than its source")
+    empty = project_templates.blank_ladder_baseline("FX3U") if project_templates.blank_ladder_models() else None
+    if empty is not None:
+        try:
+            build_ladder_project_from_source(empty, plc_model="FX3U")
+        except GXWFormatError as error:
+            assert "no instruction" in str(error)
+        else:
+            raise AssertionError("an empty source program must not be delivered")
+
+
 CASES = (test_the_surface_says_whether_a_ladder_project_can_be_delivered,
          test_an_fbd_project_is_not_a_ladder_baseline,
          test_the_capture_script_refuses_projects_that_carry_logic,
          test_the_archive_manifest_is_read_but_never_trusted,
          test_a_lowered_program_becomes_a_project,
          test_a_line_statement_is_delivered_with_its_step,
-         test_delivery_refuses_what_it_cannot_place)
+         test_delivery_refuses_what_it_cannot_place,
+         test_a_source_program_is_reproduced_record_for_record,
+         test_a_clone_refuses_a_foreign_cpu_and_an_empty_program)
 
 if __name__ == "__main__":
     for case in CASES:

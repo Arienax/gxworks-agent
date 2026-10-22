@@ -105,7 +105,18 @@ def edit_token_records(listing, edits, *, text_encoding, plc_model=None,
             # newly added records. Bind every compatible row to that source
             # so an unchanged float/string never travels through its display.
             bound = source if edit['operation'] == 'replace' else None
-            if (isinstance(row, Mapping) and {'kind', 'text'} <= set(row)
+            if isinstance(row, Mapping) and set(row) == {'raw_hex'}:
+                # A record the reader cannot decode travels as its own bytes. It is only
+                # accepted when the caller carries it from a bound source program, and the
+                # readback below still requires it to reparse as exactly one record.
+                try:
+                    chunk = bytes.fromhex(row['raw_hex'])
+                except (TypeError, ValueError) as exc:
+                    raise GXWFormatError('carried record requires hexadecimal bytes') from exc
+                if not chunk:
+                    raise GXWFormatError('carried record cannot be empty')
+                chunks.append(chunk)
+            elif (isinstance(row, Mapping) and {'kind', 'text'} <= set(row)
                     and set(row) <= {'kind', 'text', 'flag'}):
                 chunks.append(encode_text_record(row['kind'], row['text'], text_encoding=text_encoding,
                     profile=listing.profile,

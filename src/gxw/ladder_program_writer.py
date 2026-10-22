@@ -25,7 +25,9 @@ from dataclasses import dataclass
 
 from .models import GXWFormatError
 from .offline_project import edit_ladder_project, read_offline_project, read_ordered_program
-from .project_templates import blank_ladder_baseline, verify_ladder_baseline
+from .project_templates import (blank_ladder_baseline, captured_project_cpu,
+                               verify_ladder_baseline)
+from .token_pou import frame_token_pou
 
 TEXT_KINDS = ("statement", "note")
 # FX stores this flag beside the text code: 0 shares the step of the next instruction,
@@ -44,6 +46,12 @@ class LadderDelivery:
     statements: tuple
     device_comments: int
     report: dict
+    carried_records: int = 0
+
+
+def _body_of(stream):
+    """The program body of one source stream, without its frame header or trailer."""
+    return frame_token_pou(stream).body
 
 
 def _device(text):
@@ -124,7 +132,8 @@ def build_ladder_project(program, *, plc_model, program_name=None, device_commen
     trailing END is dropped because the baseline already carries one.
     """
     baseline = blank_ladder_baseline(plc_model)
-    cpu = verify_ladder_baseline(baseline, plc_model)
+    verify_ladder_baseline(baseline, plc_model)
+    cpu = captured_project_cpu(baseline)
     project, selected, listing = _empty_baseline_program(baseline, program_name)
     rows = _body_rows(program)
     delivered = [row for row in rows if "op" in row]
@@ -153,3 +162,83 @@ def build_ladder_project(program, *, plc_model, program_name=None, device_commen
                           instructions=tuple((row["op"], tuple(row["args"])) for row in delivered),
                           statements=tuple(statements),
                           device_comments=len(comments or {}), report=report)
+
+def _source_rows(listing):
+    """Rows for an existing program: every record travels as the bytes it already has."""
+    rows = []
+    for record in listing.records:
+        mnemonic = getattr(record, "mnemonic", None)
+        if mnemonic is not None and mnemonic.upper() == "END":
+            continue
+        raw = b"".join(token.raw for token in record.tokens)
+        if not raw:
+            raise GXWFormatError("the source program holds a record without bytes")
+        rows.append({"raw_hex": raw.hex()})
+    return rows
+
+
+def build_ladder_project_from_source(source, *, plc_model, program_name=None,
+                                     device_comments=None):
+    """Reproduce an existing program in the blank project captured for this CPU.
+
+    This is the clone path, not the generation path: records the reader cannot decode are
+    carried as their own bytes instead of being interpreted, so the delivered body is
+    compared with the source body and the delivery fails if they differ. Only the program
+    body and its device comments travel; project-level declarations, labels outside the
+    body and compiled results do not, and the report says so.
+    """
+    baseline = blank_ladder_baseline(plc_model)
+    verify_ladder_baseline(baseline, plc_model)
+    cpu = captured_project_cpu(baseline)
+    project = read_offline_project(source)
+    current = read_ordered_program(project, program_name)
+    selected, listing = current["selected"], current["listing"]
+    if project.context.get("cpu") != cpu:
+        raise GXWFormatError(
+            f"the source program belongs to {project.context.get('cpu')!r},"
+            f" not to the captured {cpu!r} baseline")
+    rows = _source_rows(listing)
+    instructions = [record for record in listing.instructions if record.mnemonic.upper() != "END"]
+    if not instructions:
+        raise GXWFormatError("the source program has no instruction to reproduce")
+    statements = [(record.role, record.text) for record in listing.records
+                  if getattr(record, "role", None)]
+    carried = len(rows) - len(instructions) - len(statements)
+    base_project, base_selected, base_listing = _empty_baseline_program(baseline)
+    end_index = next(index for index, record in enumerate(base_listing.records)
+                     if getattr(record, "mnemonic", None) == "END")
+    edits = [{"operation": "insert_before", "record_index": end_index,
+              "expected": {"op": "END", "args": []}, "instructions": rows}]
+    comments = dict(current.get("device_comments") or {}) if device_comments is None \
+        else device_comments
+    saved = edit_ladder_project(baseline, base_selected["name"], edits,
+                                device_comments=comments or None)
+    source_body = _body_of(project.streams[selected["source_name"]])
+    delivered_body = _body_of(read_offline_project(saved.data).streams[base_selected["source_name"]])
+    if source_body != delivered_body:
+        raise GXWFormatError(
+            "the reproduced program body differs from its source, so it is not delivered")
+    report = dict(saved.report)
+    report.update({"plc_model": cpu, "program": base_selected["name"],
+                   "source_program": selected["name"],
+                   "instructions": len(instructions),
+                   "statements": len(statements),
+                   "carried_records": carried,
+                   "device_comments": len(comments or {}),
+                   "baseline": "captured blank Ladder project",
+                   "not_carried": "declarations, labels outside the body, compiled results"})
+    if carried:
+        # Undecoded records carry inline FB-block bodies and symbol operands. Their
+        # definitions live outside the program body, so this project opens but does not
+        # compile until those declarations exist; say it instead of implying otherwise.
+        report["delivery_limits"] = (
+            f"{carried} record(s) reference symbols or FB blocks defined outside the program "
+            "body; the delivered project carries the body only and does not compile until "
+            "those declarations are delivered too")
+    return LadderDelivery(data=saved.data, plc_model=cpu, program=base_selected["name"],
+                          instructions=tuple((record.mnemonic,
+                                              tuple(operand.text for operand in record.operands))
+                                             for record in instructions),
+                          statements=tuple(statements),
+                          device_comments=len(comments or {}), carried_records=carried,
+                          report=report)
