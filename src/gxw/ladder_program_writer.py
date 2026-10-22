@@ -228,13 +228,14 @@ def build_ladder_project_from_source(source, *, plc_model, program_name=None,
                    "baseline": "captured blank Ladder project",
                    "not_carried": "declarations, labels outside the body, compiled results"})
     if carried:
-        # Undecoded records carry inline FB-block bodies and symbol operands. Their
-        # definitions live outside the program body, so this project opens but does not
-        # compile until those declarations exist; say it instead of implying otherwise.
+        # Undecoded records carry inline FB-block bodies and symbol operands. What travels
+        # is the program body: other POUs, their declarations and the compiled results do
+        # not, and GX Works2 asks for the instruction-set update before a full rebuild.
         report["delivery_limits"] = (
-            f"{carried} record(s) reference symbols or FB blocks defined outside the program "
-            "body; the delivered project carries the body only and does not compile until "
-            "those declarations are delivered too")
+            f"{carried} record(s) reference symbols or FB blocks; only the program body and "
+            "its device comments travel, not other POUs, declarations or compiled results. "
+            "GX Works2 must accept the instruction-set update and run a full rebuild "
+            "before the delivered program is treated as compiled")
     return LadderDelivery(data=saved.data, plc_model=cpu, program=base_selected["name"],
                           instructions=tuple((record.mnemonic,
                                               tuple(operand.text for operand in record.operands))
