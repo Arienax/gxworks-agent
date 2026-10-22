@@ -55,10 +55,13 @@ def _program_rows(path):
     from gxworks2.csv_importer import _read_program_rows
     from gxworks2.csv_manager import CSVManager
 
-    _, records = _read_program_rows(path)
+    table, records = _read_program_rows(path)
     rows = []
-    for text in _pi_declaration_cells(path):
-        rows.append({"kind": "pi_declaration", "text": text})
+    # PI声明 sits in a column the record reader does not model, so take it from the
+    # same parsed table instead of reading the file a second time.
+    for row in table[3:]:
+        if len(row) > 5 and row[5].strip():
+            rows.append({"kind": "pi_declaration", "text": row[5].strip()})
     for record in records:
         if record.statement:
             rows.append({"kind": "statement", "step": record.step,
@@ -69,16 +72,6 @@ def _program_rows(path):
                          "operands": CSVManager._program_operand_cell(" ".join(record.args)),
                          "note": record.label.replace("\r\n", "\n")})
     return rows
-
-
-def _pi_declaration_cells(path):
-    """PI声明 lives in a column the program-row reader does not model; keep it visible."""
-    import csv
-    try:
-        table = list(csv.reader(Path(path).read_text(encoding="utf-16", errors="replace").splitlines()))
-    except OSError:
-        return []
-    return [row[5].strip() for row in table if len(row) > 5 and row[5].strip()]
 
 
 def _program_streams(raw):
@@ -128,7 +121,8 @@ def _compile_status(report):
                                             and call["hresult"] < 0)]
     if workspace.get("status") != "observed" or failed_calls:
         return "unverified"
-    if workspace.get("source_bodies") not in (None, "matched"):
+    source_bodies = ((report.get("validation") or {}).get("source_bodies"))
+    if source_bodies not in (None, "matched"):
         return "unverified"
     return "passed" if workspace.get("compile") == "completed_accepted" else "failed"
 
@@ -185,15 +179,21 @@ def _native_run(options, receipt, receipt_path, expected_rows, expected_comments
             reserialised = _program_streams(before) != _program_streams(after)
         except Exception:
             reserialised = None
+        validation = (report or {}).get("validation") or {}
+        source_bodies = validation.get("source_bodies")
         return {"status": _compile_status(report),
                 "component": "native_workspace_adapter",
                 "command": "compile_project",
                 "native_workspace_status": workspace.get("status"),
                 "native_compile": workspace.get("compile"),
-                "source_bodies": workspace.get("source_bodies"),
+                "source_bodies": source_bodies,
+                # The component compares the extracted program body before and after
+                # the rebuild; the POU stream changing does not contradict that.
+                "program_body_verified_equal": None if source_bodies is None
+                else source_bodies == "matched",
                 "failed_calls": failed_calls[:5],
-                # The whole container is expected to change; only the per-stream
-                # comparison says that a program stream was reserialised.
+                # The container and the POU stream change; the program body itself is
+                # compared by the component and reported above.
                 "project_rewritten_by_native_compile": after != before,
                 "program_stream_reserialised": reserialised,
                 "project": project}
@@ -208,8 +208,8 @@ def _native_run(options, receipt, receipt_path, expected_rows, expected_comments
                 before, timeout=options.timeout)
         except Exception as error:
             observation = getattr(error, "observation", None)
-            workspace = ((observation or {}).get("native_workspace")
-                         if isinstance(observation, dict) else None) or {}
+            workspace = ((observation.get("native_workspace") or observation)
+                         if isinstance(observation, dict) else {})
             native_compile = workspace.get("compile")
             # A rejection is still a result: it must not be filed as "never ran".
             stages["compile"] = {
