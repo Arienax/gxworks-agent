@@ -7,6 +7,8 @@ Unknown records in a recognised grammar are retained by the source reader.
 from __future__ import annotations
 
 from gxworks2.project_profiles import native_project_profile
+from plc.storage.errors import StorageRuleError
+from plc.storage.tables import storage_profile
 
 from .models import GXWFormatError
 
@@ -19,22 +21,15 @@ FX_CODEC_PROFILES = frozenset(("fx", "fx3u", "fx1s", "fx3g"))
 def source_token_profile(cpu: str, *, language: str = 'ladder') -> str:
     """Return the lexical codec for an existing FX/Q/L source or SFC child.
 
-    Native read/build evidence has a deliberately narrower admission policy;
-    it must not decide whether an offline file can be inspected or edited.
-    The family codecs recognise bounded records and preserve all other bytes.
+    The selection belongs to the shared storage tables, so Core and this codec agree on
+    which grammar a saved CPU uses. Native read/build evidence has a deliberately
+    narrower admission policy; it must not decide whether an offline file can be
+    inspected, and the family codecs preserve every record they do not recognise.
     """
-    if language not in {'ladder', 'sfc'}:
-        raise GXWFormatError('token grammar requires Ladder or an SFC child')
-    target = native_project_profile(cpu)
-    if target is None:
-        raise GXWFormatError('unrecognised GX Works2 source CPU: ' + str(cpu))
-    if not target.program_supported:
-        raise GXWFormatError('parameter-only GX Works2 target has no program source: ' + target.cpu)
-    if target.cpu.startswith('FX'):
-        return {'FX1S': 'fx1s', 'FX3G/FX3GC': 'fx3g'}.get(target.cpu, 'fx3u')
-    if target.cpu.startswith('L'):
-        return 'l'
-    return {'Q02/Q02H': 'q02', 'Q03UDV': 'q03udv'}.get(target.cpu, 'q')
+    try:
+        return storage_profile(cpu, language=language)
+    except StorageRuleError as error:
+        raise GXWFormatError(str(error)) from None
 
 
 def source_token_capability(cpu: str, *, language: str = 'ladder') -> dict:
