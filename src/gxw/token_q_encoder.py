@@ -61,7 +61,19 @@ def encode_q_header(op, args, operands, *, profile="q03udv", cpu=None, source=No
 
 
 def q_header_compatible(source, op, args, operands, *, profile, cpu=None, storage_context=None):
-    """Prove width invariance before preserving a source header on an edit."""
+    """Prove width invariance before preserving a source header on an edit.
+
+    The fallback itself reads source tokens, so a framing failure there is reported as
+    the project format error instead of escaping the shared-rule boundary.
+    """
+    try:
+        return _source_header_preserved(source, op, args, operands, profile=profile, cpu=cpu,
+                                        storage_context=storage_context)
+    except StorageRuleError as error:
+        raise GXWFormatError(str(error)) from None
+
+
+def _source_header_preserved(source, op, args, operands, *, profile, cpu=None, storage_context=None):
     if source is None or source.mnemonic != op or len(source.operands) != len(operands):
         return False
     before = tuple(b''.join(token.raw for token in value.tokens) for value in source.operands)

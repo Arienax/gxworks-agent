@@ -805,8 +805,8 @@ def select_q_storage_form(op, args, operands, *, profile='q03udv', cpu=None,
         if cpu is None:
             cpu = storage_context.cpu
     if op == 'NOP' and not args and not encoded:
-        header = b'\x02\x02'
-        return QStorageSelection(header, _header_width(header), 0, 0, None, profile, ())
+        # One stored word, stated by the rule rather than read from the two-byte form.
+        return QStorageSelection(b'\x02\x02', 1, 0, 0, None, profile, ())
     choices = _header_choices(op, len(args), profile=profile)
     if not choices:
         raise StorageRuleError('Q instruction mnemonic/arity has no proven storage descriptor')
@@ -844,7 +844,7 @@ def select_q_storage_form(op, args, operands, *, profile='q03udv', cpu=None,
             raise StorageRuleError('Q instruction stored width exceeds its bounded field')
         header = (bytes((3, family, 3)) if family < 0x40 and width == 1 else
                   bytes((4, family, width, 4)) if family < 0x40 else initial[:2] + bytes((width,)) + initial[3:])
-        results[header] = QStorageSelection(header, _header_width(header), family, variant,
+        results[header] = QStorageSelection(header, int(width), family, variant,
                                            mode, profile, encoded)
     if len(results) != 1:
         raise StorageRuleError('Q instruction parameter roles or stored header are ambiguous')
