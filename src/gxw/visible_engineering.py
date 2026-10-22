@@ -33,8 +33,51 @@ def normalized_st(text):
     return text.replace('\r\n', '\n').replace('\r', '\n')
 
 
+def _ladder_source_projection(raw):
+    """Project ordinary Ladder bodies without entering structured authoring."""
+    from .declarations import parse_declarations
+    from .offline_project import read_offline_project
+    from .project_metadata import existing_source_groups, read_project_system_variables
+    from .token_pou import frame_token_pou
+
+    project = read_offline_project(raw)
+    streams, config = project.streams, project.context
+    groups, issues = existing_source_groups(project.outer['projectdatalist.xml'], streams)
+    # Simple projects have source groups too. Classify their stored language,
+    # not the presence of groups or whether a structured parser raises.
+    if (not groups or issues or any(logical not in streams or group['labels'] not in streams or
+            streams[logical][source_payload_offset(streams[logical])] != 1
+            for logical, group in groups.items())):
+        return None
+
+    bodies = {}
+    for logical, group in groups.items():
+        document = parse_declarations(streams[group['labels']], logical_name=group['labels'])
+        owner = document.owner_name or group.get('owner_name') or logical
+        if owner in bodies:
+            raise GXWFormatError('visible source owner is ambiguous')
+        # Framing retains undecoded records; compile admission does not depend
+        # on how much of the instruction set the offline reader understands.
+        bodies[owner] = {'kind': 1, 'body': frame_token_pou(streams[logical]).body}
+
+    project_names = [name for name in streams if name.endswith('.prj')]
+    if len(project_names) != 1:
+        raise GXWFormatError('visible project configuration is ambiguous')
+    configuration = {'name': project_names[0], 'ranges':
+        read_project_system_variables(streams[project_names[0]])['ranges']}
+    parameter = streams.get('Param.wpa', b'')
+    if (config['cpu'] == 'FX3U/FX3UC' and len(parameter) == 1100
+            and parameter[:4] == bytes.fromhex('40002201')):
+        configuration['program_capacity'] = parameter[704] * 1000
+    return {'cpu': config['cpu'], 'sources': bodies, 'declarations': {},
+            'structures': {}, 'configuration': configuration}
+
+
 def source_projection(raw):
     """Compare declarations, bodies, structures and configuration, without caches."""
+    ladder = _ladder_source_projection(raw)
+    if ladder is not None:
+        return ladder
     from .project_metadata import read_project_system_variables
     config, streams, groups, sources, _ = _context(raw, require_fbd=False)
     bodies = {}

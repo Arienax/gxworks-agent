@@ -144,8 +144,11 @@ class NativeEngineeringDriver:
         return driver
 
     @classmethod
-    def start_from_saved(cls, path, cpu, *, timeout=30, progress=None, evidence_directory=None):
+    def start_from_saved(cls, path, cpu, *, timeout=30, progress=None, evidence_directory=None,
+                         accept_library_update=False):
         """Open the caller's explicitly managed copy in a new native process."""
+        if type(accept_library_update) is not bool:
+            raise NativeEngineeringDriverError('库更新选择必须是明确布尔值。')
         if os.name != 'nt':
             raise NativeEngineeringDriverError('可见工程会话需要 Windows 交互桌面。')
         path = Path(path).expanduser().resolve()
@@ -170,18 +173,91 @@ class NativeEngineeringDriver:
             raise NativeEngineeringDriverError('新建 GX Works2 进程没有明确的空白窗口。')
         driver = cls._bind_started_frame(session, path, cpu, timeout=timeout, progress=progress,
                                         evidence_directory=evidence_directory, finder=finder)
+        driver.open_updates = []
         import win32gui
         try:
             win32gui.ShowWindow(session.window_handle, 3)
             driver._command(0x400, project=False)
             driver._file_name(driver._dialog('打开工程'), path)
-            driver._wait(lambda: path.name.casefold() in driver._window().window_text().casefold()
-                         and not driver._dialogs(), '托管工程副本没有在新进程中打开。')
+            def opened():
+                dialogs = driver._dialogs()
+                active = [dialog for dialog in dialogs if dialog.is_enabled()]
+                if accept_library_update and len(active) == 1:
+                    update = driver._accept_library_update(active[0])
+                    if update is not None:
+                        return False
+                return (path.name.casefold() in driver._window().window_text().casefold()
+                        and not dialogs and driver._window().is_enabled())
+            driver._wait(opened, '托管工程副本没有在新进程中打开。')
             driver.inspect()
             driver._visible('工程导航树', path=str(path), opened_managed_copy=True)
         except Exception as error:
             raise driver._startup_error(error) from error
         return driver
+
+    def _accept_library_update(self, dialog):
+        """Select available library updates on the owned opening dialog only.
+
+        The Common manual, section 4.2.2, shows two library checkboxes and an
+        OK/Cancel pair. IDs are read from the actual controls, not guessed.
+        Localized title/option words must agree with that page's structure.
+        """
+        title = dialog.window_text().strip()
+        patterns = {
+            'en': r'Library Update Confirmation',
+            'zh-CN': r'(?:库(?:文件)?(?:的)?)?更新确认',
+            'ja': r'(?:ライブラリ)?更新確認',
+        }
+        if not re.fullmatch(patterns.get(self.native_ui_language, r'(?!)'), title):
+            return None
+        if 'gxworks2' not in re.sub(r'\s+', '', self._dialog_text(dialog)).casefold():
+            return None
+        def caption(control):
+            return re.sub(r'\(&[A-Za-z]\)', '', control.window_text()).replace('&', '').strip()
+        buttons = [button for button in dialog.descendants(class_name='Button') if button.is_visible()]
+        checks = [button for button in buttons if button.style() & 0xF in (2, 3)]
+        push = [button for button in buttons if button.style() & 0xF in (0, 1)]
+        names = {
+            'en': ('instructions', 'Application functions'),
+            'zh-CN': ('指令', '应用函数'),
+            'ja': ('命令', '応用関数'),
+        }
+        instruction_word, functions = names[self.native_ui_language]
+        instructions = [button for button in checks if 'PID' in caption(button)
+                        and instruction_word in caption(button)]
+        applications = [button for button in checks if caption(button) == functions]
+        ok = [button for button in push if caption(button) == self._text('ok')]
+        cancel = [button for button in push if caption(button) == self._text('cancel')]
+        if (len(checks) != 2 or len(push) != 2 or len(instructions) != 1
+                or len(applications) != 1 or len(ok) != 1 or len(cancel) != 1
+                or len({button.control_id() for button in checks + push}) != 4
+                or not dialog.is_enabled()):
+            return None
+        states = [(checkbox, checkbox.get_check_state(), checkbox.is_enabled()) for checkbox in checks]
+        if any(state not in (0, 1) for _, state, _ in states):
+            raise NativeEngineeringDriverError('库更新选项状态不可确认。')
+        if inspect_native_language(self.session.process_id, self.session.executable) != self.native_ui_language:
+            raise NativeEngineeringDriverError('原生界面语言已经改变，需要重新绑定工程会话。')
+        options = []
+        update = {'title': title, 'options': options, 'confirmation_dispatched': False, 'confirmed': False}
+        self.open_updates.append(update)
+        for checkbox, state, enabled in states:
+            option = {'caption': caption(checkbox), 'control_id': checkbox.control_id(),
+                      'enabled': enabled, 'selected': bool(state)}
+            options.append(option)
+            if enabled and state == 0:
+                self._click(dialog, checkbox.control_id())
+                option['selection_dispatched'] = True
+                self._wait(lambda: checkbox.get_check_state() == 1, '库更新选项没有选中。')
+            option['selected'] = bool(checkbox.get_check_state())
+        handle = dialog.handle
+        self._wait(lambda: dialog.is_enabled() and ok[0].is_enabled(), '库更新确认按钮尚未可用。')
+        self._click(dialog, ok[0].control_id())
+        update['confirmation_dispatched'] = True
+        self._wait(lambda: not any(row.handle == handle for row in self._dialogs()),
+                   '库更新确认尚未完成。')
+        update['confirmed'] = True
+        return update
 
     def _startup_error(self, error):
         from copy import deepcopy
@@ -189,6 +265,7 @@ class NativeEngineeringDriver:
         observation['startup_session'] = dict(zip((
             'process_id', 'window_handle', 'process_started', 'executable', 'software_version'), self._binding))
         observation['requested_project'] = str(self.path)
+        observation['library_updates'] = getattr(self, 'open_updates', [])
         try:
             current = self._frame_identity()
             observation['project_opened'] = current.project_open
@@ -248,8 +325,8 @@ class NativeEngineeringDriver:
         key = (stat.st_mtime_ns, stat.st_size)
         cached = self._codepage_observation
         if cached is None or cached[0] != key:
-            from gxw.fb_authoring import _context
-            codepage = _context(self.path.read_bytes(), require_fbd=False)[0]['codepage']
+            from gxw.offline_project import read_offline_project
+            codepage = read_offline_project(self.path.read_bytes()).context['codepage']
             self._codepage_observation = (key, codepage)
         project_language = self.ui._current_native_project_codepage_observation(session, actual_language)
         if self._codepage_observation[1] not in project_language['codepage_candidates']:
