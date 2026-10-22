@@ -73,7 +73,8 @@ def collect(capture_dir, overrides=None):
             failures.append({'file': path.name,
                              'reason': f'second capture for CPU {cpu!r}; keep one per CPU'})
             continue
-        models[cpu] = {'cpu': cpu, 'file': f'{cpu}.gxw', 'sha256': hashlib.sha256(raw).hexdigest(),
+        models[cpu] = {'cpu': cpu, 'file': f'projects/{cpu}.gxw',
+                       'sha256': hashlib.sha256(raw).hexdigest(),
                        'size': len(raw), 'program': source_name, 'capture': path.name}
         models[cpu]['data'] = raw
     if failures:

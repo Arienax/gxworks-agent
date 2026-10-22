@@ -253,6 +253,7 @@
     "src/gxw/structured_writer.py",
     "src/gxw/template_data.py",
     "src/gxw/templates/blank-fbd-projects.zip.xz",
+    "src/gxw/templates/blank-ladder-projects.zip.xz",
     "src/gxw/templates/fx-token-encoder-forms.json",
     "src/gxw/templates/fx3u.gxw",
     "src/gxw/templates/nodes.json",

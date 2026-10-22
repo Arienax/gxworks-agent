@@ -18,6 +18,7 @@ REQUIRED = {
     "LICENSE", "LICENSE-SCOPE.md", "README.md", "README.zh-CN.md",
     "README.ja.md", "src/gxw/project_templates.py",
     "src/gxw/templates/blank-fbd-projects.zip.xz",
+    "src/gxw/templates/blank-ladder-projects.zip.xz",
     "src/gxw/templates/fx3u.gxw", "src/gxw/templates/nodes.json",
     "src/gxw/templates/provenance.json",
     "src/gxw/templates/q02-token-grammar.json",
@@ -35,6 +36,7 @@ REQUIRED = {
 }
 BINARY = {
     "resources/app.ico", "src/gxw/templates/blank-fbd-projects.zip.xz",
+    "src/gxw/templates/blank-ladder-projects.zip.xz",
     "src/gxw/templates/fx3u.gxw",
 }
 PATTERNS = {
@@ -62,19 +64,21 @@ def names_on_disk() -> set[str]:
                         for part in path.relative_to(ROOT).parts)}
 
 
-def check_archive(data: bytes) -> list[str]:
+def check_archive(data: bytes, expected: int | None = 57) -> list[str]:
     problems = []
     try:
         with ZipFile(io.BytesIO(lzma.decompress(data))) as archive:
             names = archive.namelist()
             projects = [name for name in names if name.startswith("projects/") and name.endswith(".gxw")]
-            if len(projects) != 57 or set(names) != set(projects) | {"manifest.json"}:
-                problems.append("blank template archive must contain 57 projects and one manifest")
+            if expected is not None and len(projects) != expected:
+                problems.append(f"blank template archive must contain {expected} projects")
+            if not projects or set(names) != set(projects) | {"manifest.json"}:
+                problems.append("blank template archive must contain projects and one manifest")
             if any(".." in Path(name).parts or name.startswith("/") for name in names):
                 problems.append("template archive contains an unsafe path")
             manifest = json.loads(archive.read("manifest.json"))
             listed = {row["file"] for row in manifest["models"]}
-            if listed != set(projects) or len(manifest["models"]) != 57:
+            if listed != set(projects) or len(manifest["models"]) != len(projects):
                 problems.append("template manifest does not match archived projects")
             for name in projects:
                 raw = archive.read(name)
@@ -94,7 +98,9 @@ def check_file(name: str) -> list[str]:
     if len(data) > MAX_SIZE:
         problems.append(f"{name}: exceeds size limit")
     if name == "src/gxw/templates/blank-fbd-projects.zip.xz":
-        problems.extend(check_archive(data))
+        problems.extend(check_archive(data, 57))
+    elif name == "src/gxw/templates/blank-ladder-projects.zip.xz":
+        problems.extend(check_archive(data, None))
     if name in BINARY or name.startswith("resources/assets/"):
         if b"Arienax" in data or b"research/evidence" in data:
             problems.append(f"{name}: local or research marker")

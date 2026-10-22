@@ -40,7 +40,8 @@ WEB_ROOT = (
 )
 
 TEMPLATE_NAMES = {
-    "blank-fbd-projects.zip.xz", "fx3u.gxw", "nodes.json", "provenance.json",
+    "blank-fbd-projects.zip.xz", "blank-ladder-projects.zip.xz",
+        "fx3u.gxw", "nodes.json", "provenance.json",
     "q02-token-grammar.json", "q03udv-token-grammar.json",
     "fx-token-encoder-forms.json",
     "q-token-encoder-forms.json",

@@ -23,6 +23,7 @@ def audit(package, component):
     required = {"LICENSE", "LICENSE-SCOPE.md", "THIRD_PARTY_NOTICES.md",
                 "THIRD_PARTY_LICENSES/README.md", "gxw/templates/fx3u.gxw",
                 "gxw/templates/blank-fbd-projects.zip.xz",
+    "gxw/templates/blank-ladder-projects.zip.xz",
                 "resources/instructions/mitsubishi/fx3u_step_widths.json"}
     for name in required:
         assert (package / name).is_file(), name
