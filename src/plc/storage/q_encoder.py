@@ -25,7 +25,7 @@ import struct
 import sys
 
 from plc.storage.context import QStorageContext
-from plc.storage.errors import StorageRuleError
+from plc.storage.errors import StorageFramingError, StorageRuleError
 from plc.storage.operands_q import (ALLOCATION_DEVICE_CODES, MODULE_PREFIX_CODES as _MODULE_PREFIX_CODES,
                                     NAMED_CALL as _NAMED_CALL,
                                     NAMED_CALL_FAMILIES as _NAMED_CALL_FAMILIES,
@@ -1098,5 +1098,5 @@ def q_header_compatible(source, op, args, operands, *, profile, cpu=None, storag
     return source.step_width == old_width and old_header == new_header
 
 
-__all__ = ['QStorageContext', 'q_storage_context', 'q_project_storage_context',
+__all__ = ['QStorageContext', 'StorageFramingError', 'StorageRuleError',
            'encode_q_operand', 'encode_q_header', 'q_header_compatible']

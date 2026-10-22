@@ -8,3 +8,7 @@ from __future__ import annotations
 
 class StorageRuleError(ValueError):
     """A storage form or encoding this rule set cannot describe."""
+
+class StorageFramingError(StorageRuleError):
+    """An encoded operand whose token framing could not be read."""
+

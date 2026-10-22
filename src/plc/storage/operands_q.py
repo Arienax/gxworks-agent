@@ -12,9 +12,15 @@ from __future__ import annotations
 
 import re
 
+# Re-exported: the framing failure is one of the shared storage rule failures, so the
+# project adapter's single conversion covers it.
+from plc.storage.errors import StorageFramingError
 
-class StorageFramingError(ValueError):
-    """An encoded operand whose token framing could not be read."""
+__all__ = ["StorageFramingError", "ALLOCATION_DEVICE_CODES", "MODULE_PREFIX_CODES",
+           "NAMED_CALL_FAMILIES", "NAMED_CALL", "PLACEHOLDER_FAMILIES",
+           "allocation_dependent_operands", "encoded_tokens", "named_call_family"]
+
+
 
 
 #: Encoded device codes whose stored width can follow the saved D/W allocation.

@@ -59,10 +59,27 @@ def _context_operand(context, device, value):
 
 
 def __getattr__(name):
-    """Every other shared name stays reachable under its historical spelling."""
+    """Every other shared name stays reachable, reporting its failures as format errors.
+
+    A shared rule raises :class:`StorageRuleError`; this adapter is the boundary that
+    turns it into the project format error existing callers handle, for the delegated
+    names as well as the ones defined here.
+    """
     if name.startswith("__"):
         raise AttributeError(name)
-    return getattr(_shared, name)
+    value = getattr(_shared, name)
+    if not callable(value) or isinstance(value, type):
+        return value
+
+    def converted(*args, **kwargs):
+        try:
+            return value(*args, **kwargs)
+        except StorageRuleError as error:
+            raise GXWFormatError(str(error)) from None
+
+    converted.__name__ = getattr(value, "__name__", name)
+    converted.__doc__ = value.__doc__
+    return converted
 
 
 def q_storage_context(parameter_record: bytes, *, cpu: str) -> QStorageContext:
