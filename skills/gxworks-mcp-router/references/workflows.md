@@ -1,30 +1,29 @@
 # 调用流程与示例
 
-这些是路由模板，不是已经执行的结果。示例中的 `${...}` 必须替换为实际工具返回值；工具名使用宿主当前暴露的命名空间。未列出的必填参数从实时 schema 取得，不用空对象冒充完整工程命令。
+以下示例中的 `${...}` 均取自上一步工具的实际返回值；工具名称与参数字段以客户端当前连接的 `tools/list` schema 为准。
 
-## 1. “解释这个 GXW”，不修改它
+## 1. 只读分析外部 `.gxw` 文件
 
-`inspect_gxw_project(path=实际服务器侧文件路径)`，或传文件内容的 `data_base64`。两者不能同时传。先读实际 CPU/语言与程序清单；多程序按用户目标选择返回的逻辑程序名。
+调用 `inspect_gxw_project`，传入服务端可读的 `path` 或文件内容的 `data_base64`，获取文件的 CPU 型号、程序清单与 `source_ref`（多程序工程可按清单指定 `program`）。
 
-随后：
+随后携带 `source_ref` 读取程序结构或静态诊断：
 
 ```json
 {"tool":"get_current_program_info","arguments":{"source_ref":"${source_ref}"}}
 ```
 
-Ladder 需要一段细节时再用返回的 `network_id` 调 `read_network`；静态问题用 `get_diagnostics` 或 `validate_project(native=false)`。结构化程序使用对应 `read_st_project/read_fbd_project/read_sfc_project`，且只在 schema 接受时传 `source_ref`。
+- **Ladder**：根据返回的 `network_id` 调用 `read_network`，或调用 `get_diagnostics` / `validate_project(native=false)`。
+- **ST / FBD / SFC**：调用对应的 `read_st_project`、`read_fbd_project` 或 `read_sfc_project`（在 schema 支持时传入 `source_ref`）。
 
-结束条件：解释实际读取内容与覆盖限制。此任务不需要创建 Agent 工程、导入 IDE或原生编译。宿主文件路径不一定是 MCP 服务器文件路径，不可把客户端路径当成服务器必然可读的路径。
+## 2. 查看本机已打开的 GX Works2 程序
 
-## 2. “看看我已打开的 GX Works2 程序”
+1. 调用 `list_gxworks2_sessions()` 获取当前打开的 GX Works2 窗口列表。
+2. 按工程路径、CPU 或窗口标题匹配目标窗口，调用 `read_gxworks2_snapshot(session_id=..., program=...)` 取得 `source_ref`（存在多个窗口且无法从上下文区分时先向用户确认）。
+3. 后续分析同流程 1，直接将 `source_ref` 传给读取与静态诊断工具。
 
-`list_gxworks2_sessions()` → 按工程名、CPU、会话标识匹配用户目标 → `read_gxworks2_snapshot(session_id=发现结果, program=所需程序)`。
+## 3. 分析导出的程序 CSV 与注释 CSV
 
-无匹配时报告发现结果；多个匹配且上下文不能消除歧义时才询问。不要因为 `get_current_project` 返回 none 就说“GX 没打开”，也不要随便选一个保存工程继续。
-
-后续只读分析同流程 1。快照产生临时导出，但不保存原工程或创建保存版本。
-
-## 3. “没有打开 IDE，只有程序 CSV 和注释 CSV”
+当用户提供 GX Works2 导出的程序 CSV 与软元件注释 CSV 时，连同明确的 `plc_model` 调用 `inspect_gxworks2_csv_files`（支持服务端路径或 `*_data_base64`）：
 
 ```json
 {
@@ -37,11 +36,12 @@ Ladder 需要一段细节时再用返回的 `network_id` 调 `read_network`；�
 }
 ```
 
-文件内容来自客户端时改用各自的 `*_data_base64`。取得 `source_ref` 后直接做只读/静态分析。不先导入 GX Works2，不把 CSV 转述成已经有原生 GXW 保存版本。指令解析、图形预览、语义覆盖分别保留；绘图缺失不自动否定指令已读出。
+取得 `source_ref` 后即可按网络读取指令、查看绘图预览结果并运行静态分析。
 
-## 4. “从完整要求生成 Ladder”
+## 4. 根据需求新建 Ladder 程序
 
-当前已有正确工程就复用；独立 local 模式的新项目使用 `create_project(name,plc_model,target_mode="ladder")`。工程选择不明时 `list_projects` → `select_project`，不换掉用户明确的 CPU。
+1. **选择或创建工程**：若当前已选中匹配的工程则直接复用；在 `local` 模式下新建工程可调用 `create_project(name, plc_model, target_mode="ladder")`，切换已有工程用 `list_projects` → `select_project`。
+2. **获取生成上下文**：
 
 ```json
 {
@@ -53,69 +53,58 @@ Ladder 需要一段细节时再用返回的 `network_id` 调 `read_network`；�
 }
 ```
 
-使用返回的 `generation_instructions`、`generation_request`、规格、CPU 和当前程序。工艺事实缺失才澄清；指令语义不确定时 `search_plc_manual`。生成与合同一致的 ladder JSON，然后 `create_program_candidate(ladder=..., generation_context_id=实际ID)`。用途注释遵守工具当前长度/内容规则，不把动作说明塞进设备短名称。
+3. **补充检索与提交候选**：优先使用上下文返回的 `generation_instructions`、规格与指令事实；仍需核对特定指令细节时调用 `search_plc_manual`。按合同生成 Ladder JSON（软元件注释遵守当前长度与格式要求），再调用 `create_program_candidate(ladder=..., generation_context_id=...)`。
+4. **查看产物**：版本保存成功后，可调用 `get_project_artifacts()` 获取生成的 JSON、SVG、衍生 ST 与 CSV 路径。
 
-检查实际返回的版本/候选/提案状态。只在有保存回执后取得 `get_project_artifacts()`；不再重复导出已有产物。用户要求原生编译时，确认有绑定的 GXW 再走流程 7；没有 GXW 时说明缺少原生输入，不把 CSV 检查说成原生通过。
+## 5. 离线修改 `.gxw` 中的单个或多个 POU
 
-## 5. “修改这个 GXW 的一个程序或多个 POU”
+1. **导入版本**：在 `local` 模式下，若文件尚未导入为工程版本，先调用 `import_gxw_project` 创建保存版本。
+2. **读取编辑模型**：调用 `read_gxw_source(program=实际逻辑名称)` 获取目标 POU 的结构、指令记录（含 `record_index`）及同工程源码清单。
+3. **提交修改**：
+   - 单个 Ladder 网络或原始指令补丁：调用 `patch_program`（GXW 指令级修改需传入当前 `record_index` 与完整 `expected`）。
+   - 多源码、接口声明或软元件注释联合修改：调用 `edit_gxw_project`，显式传入当前 `version_id` 与 `edits`（`save_policy` 默认为 `"draft"`，需要严格拦截新增已识别错误时设为 `"checked"`）。
 
-独立 local 模式：已有正确保存版本则直接复用；否则 `import_gxw_project` 导入用户文件。该操作会创建保存版本，不与 `inspect_gxw_project` 混用。
-
-`read_gxw_source(program=实际逻辑名称)` 取得当前模型、同工程源码清单和声明。局部 Ladder 可 `patch_program`；多个程序/接口/注释联合修改可 `edit_gxw_project`，显式绑定实际 `version_id`。
-
-已有 GXW 的指令编辑使用当前 `record_index` 与完整 `expected`，而不是按显示步号猜索引。具名 P/I 标签与原始记录身份照实际模型提交。普通文件修改保持离线；只有当前请求明确需要原生保存时使用相应原生操作。
-
-保存策略的 draft/checked 不等于编译器通过。原生验证及仿真独立执行。
-
-## 6. FBD / ST / SFC 的语言路由
+## 6. FBD / ST / SFC 工程读写
 
 ### FBD 与项目定义
 
-`get_fbd_catalog` → 按任务读取 `read_fbd_project`、`read_fbd_definition`、`read_fbd_libraries` → `create_fbd_candidate`。
+1. 调用 `get_fbd_catalog` 获取可用功能块、端口方向与 `parameter_schema`。
+2. 按需调用 `read_fbd_project`（读取网络与连接）、`read_fbd_definition`（读取工程内结构体与 FB 定义）或 `read_fbd_libraries`（查看用户库）。
+3. 调用 `create_fbd_candidate` 提交修改：
+   - 生成或修改图形：使用 `generate` / `edit`，优先通过具名网络、`calls`、端口与 `IN_OUT` 配对提交。
+   - 导入用户库定义：使用 `operation="import_library"` 并传入来源文件与 `library_name`。
+   - 原生编译并保存 FBD 工程：对已保存版本调用 `operation="compile"`。
 
-生成与图形编辑优先用目录提供的具名网络、calls、端口、实例和参数 schema。`IN_OUT` 两侧方向分开绑定。不自造“所有 CPU 通用”的函数签名、设备分配或坐标。
+### ST 程序与块定义
 
-只读库用 `read_fbd_libraries`；复制库定义用候选操作 `import_library` 并提供实际 donor 与 `library_name`；不要混成修改调用者源码。已有定义编辑时，省略声明与传空声明列表含义不同，以当前 schema/handler 为准。
+1. 调用 `read_st_project` 读取既有 Program、FB、FUNCTION 的正文、返回类型、声明表和任务归属。
+2. 编辑既有对象时，调用 `create_st_candidate` 对应的 `edit_*` 操作或 `edit_gxw_project`。
+3. 新建普通 ST Program 时，结合 `get_generation_context` 与工程内实际存在的资源、任务名称构造 `task_binding`，通过 `create_st_candidate` 提交。
 
-FBD 的 `operation=compile` 是当前保存版本的原生编译/检查/保存路线，不同时传源码修改参数；不是任意语言的通用保存捷径。
+### 已有 SFC 工程
 
-### 普通 ST
+调用 `read_sfc_project` 读取既有 SFC 的步骤、转换、动作、分支及子程序（需要原生格点坐标时传 `native=true`），再通过 `create_sfc_candidate(operation="edit")` 或 `edit_gxw_project` 在既有 POU 范围内提交修改。
 
-`read_st_project` 读取既有 Program、FB、FUNCTION 的身份、正文、返回类型、局部声明和任务。编辑同一对象用 `create_st_candidate` 对应 edit 操作，或统一多源码编辑工具。
+## 7. 无界面后台原生编译检查
 
-新 Program 使用 `from_candidate`/创建操作的当前合同，`task_binding` 来自实际资源与任务。不能把读取 ST 的工具当作“凭一段文本构造完整 GXW”。需要前台连续写 ST 时改走流程 8，而不是同时在离线版本和活动窗口写同一对象。
-
-### 既有 SFC
-
-`read_sfc_project` → 针对当前 child/graph/declarations 支持范围调用 `create_sfc_candidate(operation="edit")`。确需原生格点才显式 `native=true` 读取；普通读取不额外触发原生组件。现有 SFC 内部对象编辑不代表支持新建工程级 SFC POU/任务。
-
-## 7. “编译一下，不要打开 IDE”
-
-确认当前选中保存版本且包含 GXW。然后：
+确认当前已选中包含 `.gxw` 的保存版本后，调用：
 
 ```json
 {"tool":"validate_project","arguments":{"native":true}}
 ```
 
-需要指定 POU 上下文时可传实际 `program`；编译/检查的实际范围看返回的 `selection`、`targets`，不能仅因传了 program 就宣称只编译该 POU。
+如需指定目标 POU 上下文可传入 `program`。从返回结果中查看 `compilation`（编译完成与通过状态）、`public_check`、`current_source_check` 及具体诊断列表。
 
-不要调用 MCP `compile_project` 代替，也不要自动打开 IDE。读取 `compilation` 的完成与接受状态、诊断、`public_check`、`current_source_check`；原生检查不会保存一个新应用版本。
+## 8. 在 GX Works2 中连续可见编辑（Live 会话）
 
-出现原生组件不可用/协议失配时，记录实际错误与阶段，进入结果恢复指南。未安装的修复不能靠 Skill 生效；修改安装、构建组件或切换服务需要相应开发/维护任务，而不是 PLC 工程工具的隐式动作。
+1. **启动会话**：选中目标工程后，调用 `execute_native_engineering` 并传入 `plan.mode="live"`、`session_action="start"`，记录返回的工程会话 `session_id`。
+2. **分步推进**：每次继续操作前，先调用 `get_native_engineering_session` 获取当前 `controls.expected_revision` 与待处理状态，再提交 `session_action="continue"`。在持续会话内获取生成上下文时传入 `execution_mode="live"`。
+3. **暂停与恢复**：需要暂停时调用 `pause_native_engineering_session(session_id=...)`；步骤中断或超时后，通过 `rebind` 先核对实际界面状态再继续。
+4. **会话内编译与地址查询**：在当前修订上执行 `compile` 步骤后，可通过 `show_assignments` 查询编译器分配地址；后续继续修改源码会使此前的编译与地址结果变为 `stale`。
 
-## 8. “在 GX Works2 中展示整个编辑过程”
+## 9. 查询编译器分配地址、代码一致性与步号定位
 
-正确工程 → `execute_native_engineering` 的显式 live start 方案 → 保留返回的持续工程 `session_id`。
-
-后续 `get_native_engineering_session` 取得当前修订/待完成动作，再按当前 schema 提交 continue 与 `controls.expected_revision`。持续会话内读取生成上下文时使用 live；刻意操作保存版本才指定 background。
-
-需要暂停时 `pause_native_engineering_session`，等待当前操作完成。继续待执行动作使用当前协议的 resume 字段，不重放不确定的已发出修改。`rebind` 是核对现有会话，不是重新执行编辑。
-
-同一会话中先编译当前修订，才展示该修订的编译分配地址。后续编辑会使旧编译/地址结果失效。保存、重开是任务中的明确阶段，不为每个图形动作自动重复。
-
-## 9. “变量实际分配到哪里 / 保存代码一致吗”
-
-从当前工程读取准确声明表、POU、成员名或资源名，再选择：
+基于当前已保存的 `.gxw` 版本，传入工程内实际的声明表名、POU 名或资源名：
 
 ```json
 {"tool":"read_native_device_assignments","arguments":{"queries":[{"source":"${实际全局声明表}","name":"${实际变量名}","scope":"global"}]}}
@@ -129,15 +118,16 @@ FBD 的 `operation=compile` 是当前保存版本的原生编译/检查/保存�
 {"tool":"locate_native_code_steps","arguments":{"queries":[{"resource":"${实际资源名}","step":12}]}}
 ```
 
-示例步号 12 仅说明参数类型，真实任务使用实际诊断中的步号。分配、代码比较和定位分别解释；非唯一结果不能补造唯一源码位置。
+## 10. 读取 Simulator2 软元件与波形时间轴
 
-## 10. “看模拟器 Y0 / 给我一张时序图”
-
-有已连接目标：`list_simulator_targets` → 使用匹配 `target_ref`。没有目标且用户请求包含连接时使用 `connect_simulator`，它连接现有 Simulator2，并非替用户启动/下载程序。
+1. **获取目标**：调用 `list_simulator_targets` 查看已连接目标；若尚未连接且任务需要连接本机 Simulator2，调用 `connect_simulator` 获取 `target_ref`。
+2. **读取状态或软元件值**：
 
 ```json
 {"tool":"read_simulator_devices","arguments":{"target_ref":"${target_ref}","addresses":["Y0"]}}
 ```
+
+3. **启动波形采样**：
 
 ```json
 {
@@ -153,4 +143,4 @@ FBD 的 `operation=compile` 是当前保存版本的原生编译/检查/保存�
 }
 ```
 
-展示工具返回的视图，随后按需 `get_simulator_trace(view_ref)`；结束用 `stop_simulator_trace`。用户要输入刺激方案可用 `prepare_simulator_scenario`，但这不执行写入。运行观察与保存工程的对应关系仍须分别说明。
+采样期间或结束后可通过 `get_simulator_trace(view_ref)` 查看采样进度、波形数据与时间轴页面地址，需要提前结束采样时调用 `stop_simulator_trace(view_ref)`。
