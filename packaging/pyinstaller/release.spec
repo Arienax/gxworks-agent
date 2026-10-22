@@ -23,6 +23,7 @@ datas = [
     (str(root / 'resources/pattern_library.json'), '.'),
     (str(root / 'resources/plc_models.json'), '.'),
     (str(root / 'resources/instructions/control_runtime.json'), 'resources/instructions'),
+    (str(root / 'skills'), 'skills'),
 ]
 datas += runtime_knowledge_data(resources) + runtime_instruction_data(resources)
 datas += ([(str(root / 'web/dist'), 'web/dist')] if component == 'full' else runtime_viewer_data(root))
