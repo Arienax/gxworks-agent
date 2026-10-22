@@ -17,14 +17,24 @@ from gxw.native_write import (native_program_task_plan, native_scope_creation_pl
                               verify_native_source_creation)
 from gxw.native_diagnostics import native_validation_source_plan, project_native_validation
 from .finder import GXWorks2Finder
-from shared.paths import bundled_executable
 from .workspace_protocol import WORKSPACE_PROTOCOL, workspace_business_request
+from .workspace_runtime import WorkspaceRuntimeError, resolve_workspace_executable
 
 
 class WorkspaceAdapterError(GXWFormatError):
-    def __init__(self, message, observation=None):
+    def __init__(self, message, observation=None, *, code='WORKSPACE_ADAPTER_FAILED',
+                 details=None, next_actions=(), retryable=False):
         super().__init__(message)
         self.observation = observation
+        self.code = code
+        self.details = dict(details or {})
+        self.next_actions = list(next_actions)
+        self.retryable = retryable
+
+    def payload(self):
+        """Stable tool data; localized messages are for display, not routing."""
+        return {'code': self.code, 'message': str(self), 'details': self.details,
+                'next_actions': self.next_actions, 'retryable': self.retryable}
 
 
 class WorkspaceSaveError(WorkspaceAdapterError):
@@ -68,7 +78,10 @@ def _run_native_adapter(executable, request, root, timeout, error_type):
                 stderr=subprocess.PIPE, text=True, encoding='utf-8', cwd=root,
                 creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         except OSError as error:
-            raise error_type('无法启动 GX Works2 离线工作区适配器。') from error
+            raise error_type('无法启动 GX Works2 离线工作区适配器。',
+                code='WORKSPACE_ADAPTER_UNAVAILABLE', retryable=True,
+                details={'stage': 'runtime_setup', 'reason': 'process_start_failed',
+                         'executable': str(executable), 'gx_compile': 'not_run'}) from error
         try:
             try:
                 stdout, _ = process.communicate(json.dumps(wire_request, ensure_ascii=False),
@@ -88,8 +101,27 @@ def _run_native_adapter(executable, request, root, timeout, error_type):
             raise error_type('原生工作区没有返回完整结果。') from None
         if not isinstance(observation, dict):
             raise error_type('原生工作区返回格式无效。')
-        if type(observation.get('protocol_version')) is not int or observation['protocol_version'] != WORKSPACE_PROTOCOL:
-            raise error_type('原生工作区协议版本不匹配，请更新运行组件。', observation)
+        observed_version = observation.get('protocol_version')
+        if type(observed_version) is not int or observed_version != WORKSPACE_PROTOCOL:
+            # Known older collectors can reject the wire request before doing
+            # any native work. Unknown/partial responses prove no such thing.
+            not_started = (type(observed_version) is int and observed_version in (1, 2)
+                and type(process.returncode) is int and process.returncode != 0
+                and observation.get('status') == 'failed'
+                and observation.get('calls') == []
+                and observation.get('compile') == observation.get('check') == 'not_requested'
+                and 'validation' in observation and observation['validation'] is None
+                and 'creation' in observation and observation['creation'] is None)
+            raise error_type(
+                f'原生工作区运行组件协议不兼容：需要 {WORKSPACE_PROTOCOL}，收到 {observed_version!r}。'
+                '请更新所选适配器或移除旧 GX_WORKSPACE_ADAPTER_EXE 配置后重试；这不是工程编译诊断。',
+                observation, code='WORKSPACE_PROTOCOL_MISMATCH', retryable=not_started,
+                details={'stage': 'transport', 'executable': str(executable),
+                         'expected_protocol_version': WORKSPACE_PROTOCOL,
+                         'observed_protocol_version': observed_version,
+                         'gx_compile': 'not_run' if not_started else 'unverified',
+                         'recovery_action': 'update_workspace_adapter',
+                         'retry_after_repair': not_started})
         observation['protocol_version'] = 1  # Internal evidence schema; not a wire fallback.
         # The native filename is fixed to the child's OS PID. A stale
         # foreign directory is never removed. Retry only the collision
@@ -106,12 +138,23 @@ class _NativeWorkspaceAdapter:
     """Execute validated engineering objects with the version-bound runtime."""
 
     def __init__(self, executable=None, installation=None):
-        default = Path(os.environ.get('LOCALAPPDATA', '')) / 'PLC AI Studio/workspace-adapter/PlcAi.WorkspaceSourceSave.exe'
-        self.executable = Path(executable or os.environ.get('GX_WORKSPACE_ADAPTER_EXE')
-                               or bundled_executable('workspace-adapter', 'PlcAi.WorkspaceSourceSave.exe')
-                               or default).expanduser().resolve()
         gx = GXWorks2Finder().find_executable() if installation is None else None
         self.installation = Path(installation).resolve() if installation else gx.parent.parent if gx else None
+        try:
+            self.executable = resolve_workspace_executable(executable,
+                build=os.name == 'nt' and self.installation is not None)
+        except WorkspaceRuntimeError as error:
+            raise WorkspaceAdapterError(str(error), code=error.code, details=error.details,
+                                        retryable=True) from error
+
+    def _require_available(self, error_type, message):
+        reason = ('windows_required' if os.name != 'nt' else
+                  'gxworks2_not_found' if self.installation is None else
+                  'executable_missing' if not self.executable.is_file() else None)
+        if reason is not None:
+            raise error_type(message, code='WORKSPACE_ADAPTER_UNAVAILABLE', retryable=True,
+                details={'stage': 'runtime_setup', 'reason': reason,
+                         'executable': str(self.executable), 'gx_compile': 'not_run'})
 
 
 class NativeWorkspaceSourceSave(_NativeWorkspaceAdapter):
@@ -136,8 +179,7 @@ class NativeWorkspaceSourceSave(_NativeWorkspaceAdapter):
         planner = background_st_program_plan if ordinary_st else authoring_plan
         verifier = verify_background_st_program_save if ordinary_st else verify_authoring
         plan, _, _, _ = planner(raw, command)
-        if os.name != 'nt' or not self.executable.is_file() or self.installation is None:
-            raise WorkspaceSaveError('新建类型或编写 ST/FB 需要本地 GX Works2 离线工作区适配器。')
+        self._require_available(WorkspaceSaveError, '新建类型或编写 ST/FB 需要本地 GX Works2 离线工作区适配器。')
         with tempfile.TemporaryDirectory(prefix='gxw-definition-') as directory:
             root = Path(directory); (root / 'input.gxw').write_bytes(raw)
             request = {'operation': 'author_definition', 'protocol_version': 1, 'installation': str(self.installation),
@@ -170,8 +212,7 @@ class NativeWorkspaceSourceSave(_NativeWorkspaceAdapter):
         """Export a named donor library, import its definitions into a copy."""
         from gxw.library_transfer import library_transfer_plan, verify_library_import
         plan = library_transfer_plan(raw, donor, library_name)
-        if os.name != 'nt' or not self.executable.is_file() or self.installation is None:
-            raise WorkspaceSaveError('导入库需要本地 GX Works2 离线工作区适配器。')
+        self._require_available(WorkspaceSaveError, '导入库需要本地 GX Works2 离线工作区适配器。')
         stages = []
         with tempfile.TemporaryDirectory(prefix='gxw-library-') as directory:
             base = Path(directory)
@@ -221,8 +262,7 @@ class NativeWorkspaceSourceSave(_NativeWorkspaceAdapter):
         prepared = prepare_sfc_project_write(raw, context.program_name, context.source, {})
         source = native_source_plan(prepared)
         source['graph_profile'] = graph_profile
-        if os.name != 'nt' or not self.executable.is_file() or self.installation is None:
-            raise WorkspaceSaveError('原生格点读取需要本地 GX Works2 离线工作区适配器。')
+        self._require_available(WorkspaceSaveError, '原生格点读取需要本地 GX Works2 离线工作区适配器。')
         with tempfile.TemporaryDirectory(prefix='gxw-sfc-read-') as directory:
             root = Path(directory); (root / 'input.gxw').write_bytes(raw)
             request = {'operation': 'read_sfc_graph', 'protocol_version': 1, 'installation': str(self.installation),
@@ -256,8 +296,7 @@ class NativeWorkspaceSourceSave(_NativeWorkspaceAdapter):
     def create(self, raw, name, *, pou_kind='function_block', timeout=None):
         """Create a native empty FBD Program or FB and verify its selected type."""
         source = native_source_creation_plan(raw, name, pou_kind=pou_kind)
-        if os.name != 'nt' or not self.executable.is_file() or self.installation is None:
-            raise WorkspaceSaveError('新建原生 POU 需要本地 GX Works2 离线工作区适配器；请先构建 workspace adapter。')
+        self._require_available(WorkspaceSaveError, '新建原生 POU 需要本地 GX Works2 离线工作区适配器。')
         with tempfile.TemporaryDirectory(prefix='gxw-source-create-') as directory:
             root = Path(directory)
             (root / 'input.gxw').write_bytes(raw)
@@ -294,8 +333,7 @@ class NativeWorkspaceSourceSave(_NativeWorkspaceAdapter):
 
     def _create_scope(self, raw, name, *, scope_kind, resource=None, timeout=None):
         source = native_scope_creation_plan(raw, name, scope_kind=scope_kind, resource=resource)
-        if os.name != 'nt' or not self.executable.is_file() or self.installation is None:
-            raise WorkspaceSaveError('创建原生资源或任务需要本地 GX Works2 离线工作区适配器。')
+        self._require_available(WorkspaceSaveError, '创建原生资源或任务需要本地 GX Works2 离线工作区适配器。')
         with tempfile.TemporaryDirectory(prefix='gxw-scope-create-') as directory:
             root = Path(directory)
             (root / 'input.gxw').write_bytes(raw)
@@ -336,8 +374,7 @@ class NativeWorkspaceSourceSave(_NativeWorkspaceAdapter):
     def bind_program(self, raw, program, *, resource, task, timeout=None):
         """Append one current ordinary Program, preserving the selected task."""
         source = native_program_task_plan(raw, program, resource=resource, task=task)
-        if os.name != 'nt' or not self.executable.is_file() or self.installation is None:
-            raise WorkspaceSaveError('注册原生 Program 需要本地 GX Works2 离线工作区适配器。')
+        self._require_available(WorkspaceSaveError, '注册原生 Program 需要本地 GX Works2 离线工作区适配器。')
         with tempfile.TemporaryDirectory(prefix='gxw-task-bind-') as directory:
             root = Path(directory)
             (root / 'input.gxw').write_bytes(raw)
@@ -373,8 +410,7 @@ class NativeWorkspaceSourceSave(_NativeWorkspaceAdapter):
 
     def save(self, prepared, *, timeout=None, graph_edits=None):
         source = native_source_plan(prepared, graph_edits=graph_edits)
-        if os.name != 'nt' or not self.executable.is_file() or self.installation is None:
-            raise WorkspaceSaveError('修改此原生工程需要本地 GX Works2 离线工作区适配器；请先构建 workspace adapter。')
+        self._require_available(WorkspaceSaveError, '修改此原生工程需要本地 GX Works2 离线工作区适配器。')
         with tempfile.TemporaryDirectory(prefix='gxw-source-') as directory:
             root = Path(directory)
             (root / 'input.gxw').write_bytes(prepared.baseline)
@@ -435,8 +471,7 @@ class NativeWorkspaceValidation(_NativeWorkspaceAdapter):
         if inspection is not None:
             from gxw.native_diagnostics import native_inspection_queries
             source['inspection'] = native_inspection_queries(raw, inspection)
-        if os.name != 'nt' or not self.executable.is_file() or self.installation is None:
-            raise WorkspaceValidationError('原生检查需要本地 GX Works2 离线工作区适配器；请先构建 workspace adapter。')
+        self._require_available(WorkspaceValidationError, '原生检查需要本地 GX Works2 离线工作区适配器。')
         with tempfile.TemporaryDirectory(prefix='gxw-check-') as directory:
             root = Path(directory)
             (root / 'input.gxw').write_bytes(raw)
