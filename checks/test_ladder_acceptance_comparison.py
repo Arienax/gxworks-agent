@@ -53,10 +53,13 @@ def test_the_same_declaration_on_another_instruction_differs(tmp_path):
 
 
 def test_the_same_declaration_on_a_continuation_row_differs(tmp_path):
-    rows = [list(row) for row in BASE]
-    rows[2][3] = ""            # operand moved to the continuation row below
-    rows.insert(2, ["", "", "MOV", "K500", "", "声明A", ""])
-    assert _status(tmp_path, rows, _with_pi(2, "声明A")) == "failed"
+    """Both exports hold the same instruction and operands; only the row differs."""
+    left = [list(row) for row in BASE]
+    left.insert(3, ["", "", "", "K501", "", "声明A", ""])
+    right = [list(row) for row in left]
+    right[3][5] = ""
+    right[2][5] = "声明A"
+    assert _status(tmp_path, left, right) == "failed"
 
 
 def test_a_declaration_only_row_is_compared(tmp_path):
