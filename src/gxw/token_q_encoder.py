@@ -19,6 +19,13 @@ import sys
 from .models import GXWFormatError
 from .template_data import template_bytes
 from .token_q import _catalog, q_instruction_header
+from plc.storage.context import QStorageContext
+from plc.storage.operands_q import (ALLOCATION_DEVICE_CODES, MODULE_PREFIX_CODES as _MODULE_PREFIX_CODES,
+                                    NAMED_CALL as _NAMED_CALL,
+                                    NAMED_CALL_FAMILIES as _NAMED_CALL_FAMILIES,
+                                    PLACEHOLDER_FAMILIES as _PLACEHOLDER_FAMILIES,
+                                    encoded_tokens as _tokens, named_call_family)
+from plc.storage.operands_q import allocation_dependent_operands as _allocation_dependent_operands
 
 
 @lru_cache(maxsize=1)
@@ -39,35 +46,6 @@ TABLES['operand_rules'] = [dict(family=row[0], variant=row[1],
     offset=0x7fff if row[2] is None else 0,
     parameters=[] if row[2] is None else [dict(mask=v[0], devices=v[1], class_id=v[2]) for v in row[2]])
     for row in TABLES['operand_rules']]
-
-
-@dataclass(frozen=True)
-class QStorageContext:
-    """Project-bound D/W extension ranges; absence is explicitly unknown.
-
-    Each row is (source device code, source start, count, ZR start). These
-    ranges describe source storage width, not allocation or execution safety.
-    An empty tuple means a parsed parameter record has no extended ranges.
-    ``None`` means its allocation information could not be established.
-    """
-    cpu: str
-    parameter_record: bytes | None
-    ranges: tuple[tuple[int, int, int, int], ...] | None
-    reason: str | None = None
-    device_limits: tuple[tuple[int, int], ...] = ()
-
-    @property
-    def status(self):
-        return 'available' if self.ranges is not None else 'unavailable'
-
-    @property
-    def has_extended_ranges(self):
-        return bool(self.ranges) if self.ranges is not None else None
-
-    def as_dict(self):
-        return dict(status=self.status, cpu=self.cpu, has_extended_ranges=self.has_extended_ranges,
-                    ranges=[dict(device=code, start=start, count=count, zr_start=target)
-                            for code, start, count, target in self.ranges or ()], reason=self.reason)
 
 
 def q_storage_context(parameter_record: bytes, *, cpu: str) -> QStorageContext:
@@ -164,17 +142,6 @@ def _context_operand(context, device, value):
 
 def u32(d,off=9):
     return int.from_bytes(d[off:off+4],'little')
-
-def _tokens(raw):
-    out=[]
-    at=0
-    while at<len(raw):
-        n=raw[at]
-        if n<3 or at+n>len(raw) or raw[at+n-1]!=n:
-            raise GXWFormatError('malformed token framing')
-        out.append(raw[at:at+n])
-        at+=n
-    return out
 
 def operand(raw, *, mode='q71', storage_context=None):
     """Build the source descriptor, including the saved D/W -> ZR mapping."""
@@ -714,71 +681,14 @@ def encode_q_operand(text, *, op, index, source=None, profile='q03udv', text_enc
 
 
 #: Device codes whose stored width can follow the saved D/W -> ZR mapping.
-ALLOCATION_DEVICE_CODES = (0xa8, 0xb4)
-
-#: Encoded prefix components that address another module or station rather than
-#: the local device allocation: U..\, J..\, BL..\ and the extended ..\ prefix.
-_MODULE_PREFIX_CODES = (0xf8, 0xf9, 0xfc, 0xff)
-
-#: Encoded family of a native named call, keyed by its letter prefix.
-_NAMED_CALL_FAMILIES = {"S": 0x70, "Z": 0x71, "G": 0x72, "J": 0x73, "D": 0x74,
-                        "M": 0x78, "U": 0x79}
-_NAMED_CALL = re.compile(r"([SZGJDMU])(P?)\.([!-~]+)")
-
-#: Named-call families the stored-width algorithm gives one placeholder word.
-_PLACEHOLDER_FAMILIES = (0x78, 0x79)
-
-
-def named_call_family(name):
-    """Encoded family number of one native named call, else None.
-
-    Only the 0x78/0x79 pair (M./U.) is stored as a one-word placeholder whatever
-    its unexpanded arguments name; S./Z./G./J./D. are ordinary applied
-    instructions whose width follows the operands, the D/W allocation included.
-    The stored-width algorithm and the allocation classifier ask this one
-    function, so one mnemonic cannot be a placeholder in one place and an applied
-    instruction in the other.
-    """
-    match = _NAMED_CALL.fullmatch(str(name or "").strip().upper())
-    return _NAMED_CALL_FAMILIES[match[1]] if match is not None else None
-
-
 def allocation_dependent_operands(operands, *, op=None, profile="q03udv", cpu=None):
-    r"""Operands whose stored width can follow the saved D/W device allocation.
+    """Allocation-dependent operands of one form, encoded with this writer's encoder.
 
-    The decision is taken from the encoded operand rather than from its spelling,
-    so every spelling of one address answers the same way: W is a hexadecimal
-    device, so ``WA00`` and ``W0A00`` are the same local word, an ``@`` indirect
-    D operand still reads the local allocation, an index or bit selector does not
-    change what is addressed, and a module or network prefix (``U0\G0``,
-    ``J1\W...``) addresses another unit and therefore never depends on the local
-    mapping. Only the placeholder families (M./U., 0x78/0x79) store one word
-    regardless of their arguments; the other named calls (S./Z./D. ...) keep the
-    operand-dependent width their encoding has, so a D/W argument there does need
-    the saved allocation.
+    The rule itself lives in :mod:`plc.storage.operands_q`; this writer supplies the
+    encoder it must not own.
     """
-    name = str(op or "").strip().upper()
-    if named_call_family(name) in _PLACEHOLDER_FAMILIES:
-        return ()
-    dependent = []
-    for index, value in enumerate(operands or ()):
-        text = str(value).strip()
-        if not text or text.startswith(('"', "'")):
-            continue
-        try:
-            raw = encode_q_operand(text, op=name, index=index, profile=profile, cpu=cpu)
-        except GXWFormatError:
-            # An operand this encoder cannot parse yet is reported by the width
-            # path itself; it is not evidence of an allocation dependency.
-            continue
-        tokens = _tokens(raw)
-        if not tokens:
-            continue
-        if any(token[1] in _MODULE_PREFIX_CODES for token in tokens[:-1]):
-            continue
-        if tokens[-1][1] in ALLOCATION_DEVICE_CODES:
-            dependent.append(text)
-    return tuple(dependent)
+    return _allocation_dependent_operands(operands, encode=encode_q_operand, op=op,
+                                          profile=profile, cpu=cpu)
 
 
 def _rounded(value, digits):
