@@ -344,6 +344,9 @@ class InstructionFactGroup:
     # when no precedence rule covers the fact, so a whole-instruction preference is
     # never copied onto a fact it did not decide.
     authority_decision: Mapping[str, Any] | None = None
+    # Reviewed explanatory prose, kept apart from ``value``: it explains a fact for
+    # readers and is never a formal behaviour rule the executor may rely on.
+    note: str | None = None
 
     @classmethod
     def from_mapping(cls, raw):
@@ -379,6 +382,9 @@ class InstructionFactGroup:
             raise DefinitionError("Invalid fact conditions")
         if any(not isinstance(condition, (str, Mapping)) for condition in conditions):
             raise DefinitionError("Invalid fact condition")
+        note = raw.get("note")
+        if note is not None and (not isinstance(note, str) or not note.strip() or len(note) > 2000):
+            raise DefinitionError("Fact note must be reviewed prose")
         decision = raw.get("authority_decision")
         if decision is not None and not isinstance(decision, Mapping):
             raise DefinitionError("Invalid fact authority decision")
@@ -387,7 +393,8 @@ class InstructionFactGroup:
         return cls(identity, dimension, copy.deepcopy(dict(value)), status, tuple(copy.deepcopy(sources)),
                    tuple(dependencies), tuple(members), copy.deepcopy(dict(scope)), verification,
                    tuple(copy.deepcopy(conditions)),
-                   copy.deepcopy(dict(decision)) if decision is not None else None)
+                   copy.deepcopy(dict(decision)) if decision is not None else None,
+                   note.strip() if isinstance(note, str) else None)
 
     def as_mapping(self):
         result = {"id": self.id, "dimension": self.dimension, "value": copy.deepcopy(dict(self.value)),
@@ -398,6 +405,8 @@ class InstructionFactGroup:
             result["conditions"] = copy.deepcopy(list(self.conditions))
         if self.authority_decision:
             result["authority_decision"] = copy.deepcopy(dict(self.authority_decision))
+        if self.note:
+            result["note"] = self.note
         return result
 
     def applies_to(self, *, opcode, model, language="ladder", version=None):

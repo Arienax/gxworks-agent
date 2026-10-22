@@ -972,9 +972,11 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
             instruction_source_authority(opcode, plc_model)
             or instruction_source_authority(base, plc_model)
         )
-        # Prefer the compiled literal chapter over a historical index row whose
-        # first opcode mention can be a reading-guide example. Verify its source
-        # identity against this index before using the reproducible artifact.
+        # Research path, kept as-is and no longer extended: it re-derives a compiled
+        # chapter from this index and is reached when no authored corpus answers.
+        # Published retrieval does not depend on it, and no new verification is added
+        # here. Prefer the compiled literal chapter over a historical index row whose
+        # first opcode mention can be a reading-guide example.
         from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
         form = DEFAULT_INSTRUCTION_REGISTRY.resolve_form(opcode, cpu=plc_model)
         materials = list(form.spec.source_materials) if form else []

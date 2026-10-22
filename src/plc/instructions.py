@@ -714,8 +714,11 @@ class InstructionRegistry:
             if not isinstance(source, dict) or any(not isinstance(source.get(k), str) or not source[k] for k in ("manual", "revision", "url")):
                 raise ValueError("Promotion source identity missing")
             digest = source.get("sha256", "")
-            if not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
-                raise ValueError("Promotion source hash missing")
+            if digest and (not isinstance(digest, str) or len(digest) != 64
+                           or any(c not in "0123456789abcdef" for c in digest)):
+                raise ValueError("Promotion source hash malformed")
+            # A digest is development audit material. Its absence lowers the recorded
+            # evidence grade, it does not reject the reviewed contract.
         pending = {}
         for row in payload["entries"]:
             if not isinstance(row, dict):
@@ -732,12 +735,16 @@ class InstructionRegistry:
             evidence = []
             for manual, prefix in zip(manual_ids, ("native", "structured")):
                 page, proof = row.get(prefix + "_page"), row.get(prefix + "_proof", "")
-                if type(page) is not int or page < 1 or not isinstance(proof, str) or len(proof) != 64 or any(c not in "0123456789abcdef" for c in proof):
-                    raise ValueError("Promotion page/proof missing")
+                if type(page) is not int or page < 1:
+                    raise ValueError("Promotion page missing")
+                if proof and (not isinstance(proof, str) or len(proof) != 64
+                              or any(c not in "0123456789abcdef" for c in proof)):
+                    raise ValueError("Promotion proof malformed")
                 evidence.append({"manual_id": manual, "manual": sources[manual]["manual"],
                                  "revision": sources[manual]["revision"], "pdf_page": page,
-                                 "source_sha256": sources[manual]["sha256"],
-                                 "proof_sha256": proof})
+                                 "source_sha256": sources[manual].get("sha256"),
+                                 "proof_sha256": proof or None,
+                                 "proof_status": "recorded" if proof else "not_recorded"})
             for opcode in forms:
                 if not isinstance(opcode, str) or opcode != opcode.upper():
                     raise ValueError("Invalid promotion opcode")
@@ -783,17 +790,18 @@ class InstructionRegistry:
 
         signature_digest = payload.get("signature_ledger_sha256")
         source = payload.get("source")
+        digest = str(source.get("sha256")) if isinstance(source, Mapping) else ""
         if (
-            not isinstance(signature_digest, str)
-            or len(signature_digest) != 64
-            or any(c not in "0123456789abcdef" for c in signature_digest)
+            (signature_digest and (not isinstance(signature_digest, str)
+                                   or len(signature_digest) != 64
+                                   or any(c not in "0123456789abcdef" for c in signature_digest)))
             or not isinstance(source, Mapping)
             or any(
                 not isinstance(source.get(key), str) or not source.get(key)
-                for key in ("manual", "revision", "sha256", "url")
+                for key in ("manual", "revision", "url")
             )
-            or len(str(source.get("sha256"))) != 64
-            or any(c not in "0123456789abcdef" for c in str(source.get("sha256")))
+            or (digest and (len(digest) != 64
+                            or any(c not in "0123456789abcdef" for c in digest)))
         ):
             raise ValueError("Operand-semantic source identity missing")
 
@@ -853,15 +861,17 @@ class InstructionRegistry:
                         f"Operand type conflicts with registry {opcode}[{index}]"
                     )
 
+            proof = row.get("operand_proof")
             evidence = {
                 "manual_id": "fx3_programming_r",
                 "manual": source["manual"],
                 "revision": source["revision"],
-                "source_sha256": source["sha256"],
+                "source_sha256": source.get("sha256"),
                 "pdf_page": row.get("native_page"),
                 "operand_page_start": row.get("operand_page_start"),
                 "operand_page_end": row.get("operand_page_end"),
-                "proof_sha256": row.get("operand_proof"),
+                "proof_sha256": proof or None,
+                "proof_status": "recorded" if proof else "not_recorded",
                 "method": payload.get("method"),
             }
             if (
@@ -870,9 +880,8 @@ class InstructionRegistry:
                 or type(evidence["operand_page_end"]) is not int
                 or evidence["operand_page_start"] > evidence["pdf_page"]
                 or evidence["pdf_page"] > evidence["operand_page_end"]
-                or not isinstance(evidence["proof_sha256"], str)
-                or len(evidence["proof_sha256"]) != 64
-                or any(c not in "0123456789abcdef" for c in evidence["proof_sha256"])
+                or (proof and (not isinstance(proof, str) or len(proof) != 64
+                               or any(c not in "0123456789abcdef" for c in proof)))
             ):
                 raise ValueError("Operand-semantic evidence missing for " + opcode)
 

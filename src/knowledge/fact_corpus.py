@@ -152,6 +152,11 @@ def project_definition(entry, *, value_projection=None):
         ruling = public_authority_decision(fact.get("authority_decision"))
         if ruling:
             item["authority_decision"] = ruling
+        note = fact.get("note")
+        if isinstance(note, str) and note.strip():
+            # Explanatory text: readable, explicitly not a machine behaviour rule.
+            item["note"] = note.strip()
+            item["note_kind"] = "explanation"
         accepted.append(item)
     # Removing a dependency cannot certify an orphaned result/effect.
     while True:
