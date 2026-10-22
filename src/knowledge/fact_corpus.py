@@ -236,11 +236,18 @@ def resolve(kind, targets, *, plc_model, task_type="analysis", connection=_DEFAU
             name = canonical_reference_device(name)
         if kind == "error":
             name = name.removeprefix("0X").removesuffix("H")
+        names = [name]
+        if kind == "error":
+            # "6106" and "6106H" are one diagnostic identity; the hexadecimal
+            # spelling is a lookup alias, not a second fact target.
+            canonical = name.removeprefix("0X").removesuffix("H")
+            names = list(dict.fromkeys((name, canonical, canonical + "H")))
         rows = connection.execute(
             "SELECT c.rowid AS _chunk_rowid,c.*,f.payload_json FROM facts f JOIN chunks c ON c.id=f.chunk_id "
-            "WHERE f.kind=? AND f.target=? AND f.plc_model IN (" + ",".join("?" for _ in members) + ") "
+            "WHERE f.kind=? AND f.target IN (" + ",".join("?" for _ in names) + ") AND f.plc_model IN ("
+            + ",".join("?" for _ in members) + ") "
             "ORDER BY CASE WHEN f.id LIKE 'definition:%' OR f.id LIKE 'function:definition:%' THEN 0 ELSE 1 END,f.id",
-            (kind, name, *members)).fetchall()
+            (kind, *names, *members)).fetchall()
         for row in rows:
             projected = chunk_result(row, {"corpus_kind": CORPUS_KIND}, index_access.index_path(), plc_model, task_type)
             if projected is not None:

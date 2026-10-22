@@ -112,17 +112,43 @@ def resolve_tool_context(definition, context, arguments):
     if requirement == "none":
         return context
     if requirement == "model":
+        from knowledge.scope import model_corpus_status, reference_cpu, reference_models
         supplied = arguments.get("plc_model")
         actual = (context.version or {}).get("plc_model") or context.project.get("plc_model")
-        if supplied and actual and supplied.upper() != actual.upper():
-            raise ToolPreconditionError("MODEL_MISMATCH", "检索型号与当前工程不一致。")
+        supplied_cpu = reference_cpu(supplied) if supplied else None
+        actual_cpu = reference_cpu(actual) if actual else None
+        if supplied and supplied_cpu is None:
+            # A manual-reference query is not a native project creation request:
+            # an unrecognized hardware spelling is a model question, not a
+            # GX Works2 New-dialog failure.
+            raise ToolPreconditionError(
+                "UNKNOWN_PLC_MODEL",
+                f"未收录型号 {supplied}；手册检索范围由已收录 CPU 决定。",
+                next_actions=({"tool": "search_plc_manual",
+                               "required_arguments": ["query", "plc_model"],
+                               "hint": "使用手册覆盖的 CPU 名称，例如 FX3U、FX3UC、Q03UDV 或 L02。"},),
+                details={"plc_model": str(supplied), "model_namespace": "manual_reference",
+                         "known_model_count": len(reference_models())},
+            )
+        if supplied_cpu and actual_cpu and supplied_cpu != actual_cpu:
+            raise ToolPreconditionError("MODEL_MISMATCH", "检索型号与当前工程不一致。",
+                                        details={"supplied": supplied_cpu, "project": actual_cpu})
         if not (supplied or actual):
             raise ToolPreconditionError("PLC_MODEL_REQUIRED", "手册检索需要明确 CPU 型号。",
                 next_actions=({"tool": "search_plc_manual", "required_arguments": ["query", "plc_model"]},))
         if supplied and not actual:
-            from plc.project_capabilities import normalize_project_selection
-            selection = normalize_project_selection(supplied, "ladder", None, None)
-            context = replace(context, project={"plc_model": selection["plc_model"]})
+            status = model_corpus_status(supplied_cpu)
+            if status != "facts_available":
+                raise ToolPreconditionError(
+                    "KNOWLEDGE_UNAVAILABLE",
+                    f"{supplied_cpu} 的已审查手册事实尚未随插件发布，检索不会返回该型号内容。",
+                    next_actions=({"tool": "search_plc_manual",
+                                   "required_arguments": ["query", "plc_model"],
+                                   "hint": "改用已发布事实的 CPU，例如 FX3U、FX3UC、Q03UDV。"},),
+                    details={"plc_model": supplied_cpu, "knowledge_status": status,
+                             "native_project_support": "not_established"},
+                )
+            context = replace(context, project={"plc_model": supplied_cpu})
         return context
     if not context.project_id and context.analysis_source is None:
         raise ToolPreconditionError("NO_PROJECT_SELECTED", "未选中 Agent 工程；可先发现原生工程并读取分析快照。",

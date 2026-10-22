@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import json
 import re
+import sqlite3
 from functools import lru_cache
 from knowledge.text_matching import normalize_text, NON_MITSUBISHI_MARKERS, MITSUBISHI_SCOPE_MARKERS
 from knowledge.index_access import MODEL_COLUMNS, TASK_COLUMNS, row_value
@@ -232,6 +233,62 @@ def query_is_out_of_scope(query, plc_model):
     foreign = any(marker.casefold() in normalized for marker in NON_MITSUBISHI_MARKERS)
     in_scope = any(marker.casefold() in normalized for marker in MITSUBISHI_SCOPE_MARKERS)
     return foreign and not in_scope
+
+_CPU_NAME_SUFFIXES = ("CPU-T", "CPU")
+_REMOTE_IO_RE = re.compile(r"\s*\(REMOTE\s*I/?O\)$", re.IGNORECASE)
+
+
+def reference_models():
+    """CPU identities known to the reference corpus and the device profiles.
+
+    This is the manual-reference namespace. It deliberately says nothing about
+    which CPUs the GX Works2 New-project dialog can create. Grouped menu
+    identities such as ``Q02/Q02H`` also expose their single-CPU members.
+    """
+    from gxworks2.project_profiles import NATIVE_PROJECT_PROFILES
+    from plc.validation import SUPPORTED_PLC_MODELS
+    known = set()
+    for value in [*SUPPORTED_PLC_MODELS, *(profile.cpu for profile in NATIVE_PROJECT_PROFILES)]:
+        text = str(value).upper()
+        known.add(text)
+        known.update(part.strip() for part in text.split('/') if part.strip())
+    return frozenset(known)
+
+
+def reference_cpu(value):
+    """Resolve a hardware spelling such as ``Q03UDVCPU`` to the corpus identity."""
+    text = _REMOTE_IO_RE.sub("", normalize_text(value).upper()).strip()
+    if not text:
+        return None
+    models = reference_models()
+    candidates = [text]
+    for suffix in _CPU_NAME_SUFFIXES:
+        if text.endswith(suffix) and len(text) > len(suffix):
+            candidates.append(text[: -len(suffix)].strip())
+    candidates.extend(part.strip() for part in text.split('/') if part.strip())
+    for candidate in candidates:
+        if candidate in models:
+            return candidate
+    return None
+
+
+def model_corpus_status(plc_model):
+    """Whether the shipped fact corpus carries any fact for this CPU."""
+    model = reference_cpu(plc_model) or normalize_text(plc_model).upper()
+    members = [part.strip() for part in model.split('/') if part.strip()] or [model]
+    from knowledge import index_access
+    path = index_access.index_path()
+    if path is None:
+        return "index_unavailable"
+    try:
+        with sqlite3.connect(path.resolve().as_uri() + "?mode=ro&immutable=1", uri=True) as connection:
+            row = connection.execute(
+                "SELECT 1 FROM facts WHERE plc_model IN (" + ",".join("?" for _ in members) + ") LIMIT 1",
+                members).fetchone()
+    except sqlite3.Error:
+        return "index_unavailable"
+    return "facts_available" if row else "no_facts_for_model"
+
 
 def scope_values(value):
     if value is None:

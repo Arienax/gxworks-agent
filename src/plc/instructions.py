@@ -107,6 +107,9 @@ class OperandSpec:
     usage_facts: Tuple[OperandUsageFact, ...] = ()
     allowed_devices: Tuple[str, ...] = ()
     word_count: int = 1
+    # The manual symbol (S1, S2, D) is an identity, not a meaning.  A separate
+    # semantic name keeps the operand meaning auditable without renaming slots.
+    semantic_name: str = ""
 
     @classmethod
     def from_mapping(cls, payload: Mapping[str, Any], index: int) -> "OperandSpec":
@@ -135,6 +138,7 @@ class OperandSpec:
             usage_facts=tuple(OperandUsageFact.from_mapping(item) for item in usage),
             allowed_devices=tuple(str(x).upper() for x in payload.get("allowed_devices", ())),
             word_count=count,
+            semantic_name=str(payload.get("semantic_name") or "").strip(),
         )
 
 
@@ -1092,10 +1096,12 @@ class InstructionRegistry:
         spec = form.spec
         if not spec.st_call or not spec.contract_sources:
             return {}
-        parameters = [{"name": name, "role": operand.role.value, "type": operand.data_type,
+        parameters = [{"position": index, "name": name, "symbol": name,
+                       **({"semantic_name": operand.semantic_name} if operand.semantic_name else {}),
+                       "role": operand.role.value, "type": operand.data_type,
                        **({"word_count": operand.word_count} if operand.word_count != 1 else {}),
                        **({"allowed_devices": list(operand.allowed_devices)} if operand.allowed_devices else {})}
-                      for name, operand in zip(spec.native_operand_order, spec.operands)]
+                      for index, (name, operand) in enumerate(zip(spec.native_operand_order, spec.operands), start=1)]
         st_parameters = ([{"name": "EN", "role": "read", "type": "bit"}]
                          if spec.st_call["enable"] else []) + copy.deepcopy(parameters)
         return {"target_model": cpu, "opcode": form.opcode,

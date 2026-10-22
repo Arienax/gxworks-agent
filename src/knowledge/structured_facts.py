@@ -111,8 +111,10 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None):
     # its own namespace; it must not retrieve a counter or incidental examples.
     compiler_query = bool(re.search(r'编译|警告|compiler|compil(?:e|ation)|warning|GX\s*Works\s*2', str(query), re.I)
                           and re.search(r'\bC[0-9A-F]{4,7}\b', str(query), re.I))
-    errors = list(dict.fromkeys(error_terms(str(query or ""))))
     devices = list(dict.fromkeys(value.upper() for value in route.devices))
+    device_identities = {device.upper() for device in devices}
+    errors = [value for value in dict.fromkeys(error_terms(str(query or ""), plc_model=plc_model))
+              if value.upper() not in device_identities]
     if compiler_query:
         diagnostics = re.findall(r'\bC[0-9A-F]{4,7}\b', str(query).upper())
         devices = [device for device in devices if device not in diagnostics]
@@ -258,9 +260,125 @@ def fact_record_coverage(record, *, limits=False):
     return all(complete(fact) for fact in required)
 
 
+_ASPECT_TERMS = (
+    ('arity', r'参数个数|几个参数|参数数量|操作数个数|操作数量|arity|operand count|number of operands|how many'),
+    ('order', r'参数顺序|操作数顺序|顺序|符号|operand order|parameter order|signature'),
+    ('roles', r'读写|输入输出|角色|read|write|role|direction'),
+    ('devices', r'软元件|设备类型|哪些地址|operand device|device type|allowed device'),
+    ('types', r'类型|位宽|字长|数据宽度|16\s*位|32\s*位|type|width|bit length'),
+    ('effects', r'效果|结果|写入|读出|影响|effect|behaviour|behavior'),
+    ('execution', r'执行条件|触发|边沿|脉冲|时序|trigger|execution|edge|timing'),
+    ('constraints', r'限制|条件|范围|约束|注意|limit|restrict|constraint|domain|range|qualification'),
+    ('st_call', r'\bST\b|结构化文本|structured text|st\s*调用|st\s*call|function ?block'),
+)
+_PARAMETER_ASPECTS = ('arity', 'order', 'roles')
+_ASPECT_DIMENSIONS = {
+    'arity': ('parameters.arity', 'parameters.st_signature', 'parameters.source_order'),
+    'order': ('parameters.order', 'parameters.st_signature', 'parameters.source_order'),
+    'roles': ('parameters.roles', 'parameters.st_signature'),
+    'devices': ('parameters.devices', 'constraints.operand_devices', 'constraints.device_models'),
+    'types': ('parameters.types', 'parameters.width', 'parameters.value_type'),
+    'effects': ('effects.',),
+    'execution': ('execution.lifecycle', 'execution.form'),
+    'constraints': ('constraints.',),
+}
+
+
+def requested_aspects(query):
+    """Aspects the question asks about; empty means the whole definition."""
+    text = str(query or '')
+    aspects = [name for name, pattern in _ASPECT_TERMS if re.search(pattern, text, re.I)]
+    if re.search(r'操作数|参数|形参|operand|parameter', text, re.I):
+        aspects = [*_PARAMETER_ASPECTS, *aspects]
+    return list(dict.fromkeys(aspects))
+
+
+def _aspect_state(packet, aspect):
+    """One aspect of a typed instruction packet: answered, unverified or missing."""
+    value = packet.get('value') or {}
+    if aspect == 'st_call':
+        call = (value.get('registry_contract') or {}).get('st_call') or {}
+        return 'answered' if call.get('enable') is True else (
+            'unresolved' if call.get('enable') is False else 'missing')
+    facts = list(value.get('facts') or ())
+    for related in value.get('related_instructions') or ():
+        facts.extend(related.get('facts') or ())
+    prefixes = _ASPECT_DIMENSIONS.get(aspect, ())
+    selected = [fact for fact in facts
+                if any(str(fact.get('dimension') or '').startswith(prefix) for prefix in prefixes)]
+    if not selected:
+        return 'missing'
+    states = {fact.get('status') for fact in selected}
+    if 'source_verified' in states:
+        return 'answered'
+    if 'partially_source_verified' in states or 'declared_unverified' in states \
+            or 'candidate_evidence' in states or 'source_checked' in states:
+        return 'unverified'
+    return 'unresolved'
+
+
+def _call_admission(packet):
+    """Call construction is a third question, separate from fact coverage."""
+    value = packet.get('value') or {}
+    if packet.get('kind') != 'instruction':
+        return {'call_available': None, 'call_admission': 'not_applicable'}
+    call = (value.get('registry_contract') or {}).get('st_call') or {}
+    admitted = value.get('call_available')
+    admission = ('st_admitted' if call.get('enable') is True else
+                 'st_not_admitted' if call.get('enable') is False else 'unverified')
+    return {'call_available': admitted if isinstance(admitted, bool) else None,
+            'call_admission': admission}
+
+
+def _instruction_aspects(records, aspects):
+    """Per-aspect state over every retrieved record; a single source is enough."""
+    packets = [authored_packet(record) for record in records]
+    rows = []
+    for aspect in aspects:
+        states = [_aspect_state(packet, aspect) for packet in packets]
+        state = ('answered' if 'answered' in states else
+                 'unverified' if 'unverified' in states else
+                 'unresolved' if 'unresolved' in states else 'missing')
+        rows.append({'aspect': aspect, 'status': state})
+    return rows
+
+
+def _covering_device_range(records, address):
+    """Reviewed device-number range that contains this address, if any."""
+    from plc.device_identity import reference_device_parts
+    parts = reference_device_parts(str(address or ''))
+    if not parts:
+        return None
+    family, digits = parts
+    try:
+        number = int(digits)
+    except ValueError:
+        return None
+    for row in records or ():
+        if not isinstance(row, Mapping) or row.get('fact_kind') != 'device_family':
+            continue
+        value = authored_packet(row).get('value') or {}
+        if not isinstance(value, Mapping) or value.get('range_basis') != 'model_reference_device_number_ranges':
+            continue
+        if str(value.get('family') or '').upper() != family:
+            continue
+        for item in value.get('ranges') or ():
+            try:
+                first, last = int(item.get('first')), int(item.get('last'))
+            except (TypeError, ValueError):
+                continue
+            if first <= number <= last:
+                return {'family': family, 'first': first, 'last': last,
+                        'basis': value.get('range_basis'),
+                        **{key: item[key] for key in ('unit_ms', 'timer_class', 'latched', 'id')
+                           if item.get(key) is not None}}
+    return None
+
+
 def retrieval_coverage(query, records, *, plc_model, targets=None):
     targets = targets or structured_fact_targets(query, plc_model=plc_model)
     limits = bool(re.search(r'限制|条件|范围|约束|\blimit|restrict|constraint|domain|range', str(query), re.I))
+    aspects = requested_aspects(query)
     requirements = []
     def identity(kind, value):
         value = str(value or '').upper()
@@ -274,10 +392,31 @@ def retrieval_coverage(query, records, *, plc_model, targets=None):
             target = (raw.get('opcode') or raw.get('target')) if isinstance(raw, Mapping) else raw
             selected = [row for row in records if row.get('fact_kind') == kind and
                         identity(kind, row.get('fact_target')) == identity(kind, target)]
-            complete = any(fact_record_coverage(row, limits=limits) for row in selected)
-            requirements.append({'kind': kind, 'target': target, 'identity_found': bool(selected),
-                                 'status': 'complete' if complete else 'incomplete' if selected else 'unresolved',
-                                 'reason': '' if complete else 'requested_facts_not_established' if selected else 'exact_fact_not_found'})
+            entry = {'kind': kind, 'target': target, 'identity_found': bool(selected)}
+            if kind == 'instruction' and aspects and selected:
+                # Located identity and answered questions are separate results:
+                # an instruction can be identified while its parameters,
+                # execution or limits are still unestablished.
+                aspect_rows = _instruction_aspects(selected, aspects)
+                unanswered = [row['aspect'] for row in aspect_rows if row['status'] != 'answered']
+                entry['status'] = 'incomplete' if unanswered else 'complete'
+                entry['reason'] = 'requested_aspects_not_established' if unanswered else ''
+                entry['aspects'] = aspect_rows
+                entry.update(_call_admission(authored_packet(selected[0])))
+            else:
+                complete = any(fact_record_coverage(row, limits=limits) for row in selected)
+                entry['status'] = 'complete' if complete else 'incomplete' if selected else 'unresolved'
+                entry['reason'] = '' if complete else 'requested_facts_not_established' if selected else 'exact_fact_not_found'
+                if kind == 'device' and not complete:
+                    covering = _covering_device_range(records, identity(kind, target))
+                    if covering:
+                        # A reviewed number range locates the address without
+                        # becoming its individual definition.
+                        entry['identity_found'] = True
+                        entry['range_fact'] = covering
+                        entry['status'] = 'incomplete'
+                        entry['reason'] = 'device_definition_not_established'
+            requirements.append(entry)
     statuses = {row['status'] for row in requirements}
     return {'status': 'unresolved' if not requirements or statuses == {'unresolved'} else
             'complete' if statuses == {'complete'} else 'incomplete', 'targets': requirements,

@@ -143,6 +143,24 @@ def _covered_structured_kinds(targets, records, *, limits=False):
     return frozenset(covered)
 
 
+def _diagnostic_candidate_rows(rows, codes):
+    """Keep only diagnostics that name a code the query actually asked about.
+
+    An exact code with no established fact stays unresolved; neighbouring error
+    records are not thereby the requested answer and must not displace it.
+    """
+    patterns = [re.compile(r'(?<![0-9A-F])' + re.escape(str(code).upper()) + r'H?(?![0-9A-F])')
+                for code in codes if str(code).strip()]
+
+    def names_requested_code(row):
+        text = str(row.get('text') or '').upper()
+        return any(pattern.search(text) for pattern in patterns)
+
+    return [row for row in rows
+            if str(row.get('fact_kind') or row.get('structured_fact_kind') or '').strip().casefold() != 'error'
+            or names_requested_code(row)]
+
+
 def _residual_prefilters(covered_kinds):
     covered = set(covered_kinds or ())
     return {
@@ -296,6 +314,60 @@ def retrieve_design_knowledge(
 
 
 
+def _reviewed_family_records(records):
+    """Drop presence-only stubs of a family that already has a reviewed range.
+
+    The reviewed range states the manual device numbers, so a bare family
+    presence record adds nothing. Source sections keep their own order and
+    table text; the range record stays where the family block placed it.
+    """
+    from knowledge.structured_facts import authored_packet
+    rows = []
+    for row in records or ():
+        if not isinstance(row, Mapping):
+            continue
+        value = authored_packet(row).get('value') or {}
+        rows.append((row, value if isinstance(value, Mapping) else {}))
+    families = {str(row.get('fact_target') or '') for row, value in rows if value.get('range_basis')}
+    kept = []
+    for row, value in rows:
+        family = str(row.get('fact_target') or '')
+        if family in families and value.get('address_support') == 'unknown' \
+                and not row.get('source_section_id'):
+            continue
+        # A cited source section outranks the derived range summary, which in
+        # turn outranks a bare presence record.
+        rank = 0 if row.get('source_section_id') else 1 if value.get('range_basis') else 2
+        kept.append((rank, row))
+    return [row for _rank, row in sorted(kept, key=lambda item: item[0])]
+
+
+def _unresolved_device_families(devices, records):
+    """Families of requested addresses that have no individual definition yet.
+
+    The reviewed number range of the family still locates the address; it is
+    added as family evidence instead of inventing an address definition.
+    """
+    from plc.device_identity import reference_device_parts
+    if not devices:
+        return ()
+    located = set()
+    for row in records or ():
+        if isinstance(row, Mapping) and row.get('fact_kind') == 'device':
+            identity = _fact_identity('device', row.get('fact_target'))[0]
+            if identity:
+                located.add(identity)
+    families = []
+    for value in devices:
+        identity = _fact_identity('device', value)[0]
+        if not identity or identity in located:
+            continue
+        parts = reference_device_parts(identity)
+        if parts and parts[0] not in families:
+            families.append(parts[0])
+    return tuple(families)
+
+
 def retrieve_fact_aware_knowledge(
     query,
     plc_model="FX3U",
@@ -361,11 +433,24 @@ def retrieve_fact_aware_knowledge(
             task_type=task,
             query=query,
         ),
-        *resolve_device_family_records(targets.get('device_families') or (), plc_model=plc_model, task_type=task),
         *resolve_error_records(
             targets.get("errors") or (),
             plc_model=plc_model,
             task_type=task,
+        ),
+    ]
+    # Explicit family questions keep their own resolution. A concrete address
+    # without an individual definition is located by the reviewed number range
+    # of its family, and that family's presence stubs then add nothing.
+    unresolved_families = _unresolved_device_families(targets.get('devices') or (), direct)
+    direct = [
+        *direct,
+        *_reviewed_family_records(
+            resolve_device_family_records(targets.get('device_families') or (),
+                                          plc_model=plc_model, task_type=task)
+        ),
+        *_reviewed_family_records(
+            resolve_device_family_records(unresolved_families, plc_model=plc_model, task_type=task)
         ),
     ]
     direct = [
@@ -389,6 +474,8 @@ def retrieve_fact_aware_knowledge(
         **prefilters,
     ) if plan["facts"] and residual.strip() and not diagnostic_only else []
     broad = filter_records(exclude_structured_target_hits(broad, resolved_targets), lanes)
+    if targets.get('errors') and 'error' not in covered_kinds:
+        broad = _diagnostic_candidate_rows(broad, targets.get('errors') or ())
     from knowledge.structured_facts import project_device_source_records
     broad = project_device_source_records(broad,plc_model=plc_model)
 

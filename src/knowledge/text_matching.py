@@ -13,6 +13,14 @@ ERROR_CODE_RE = re.compile(
     re.IGNORECASE,
 )
 
+_ERROR_CONTEXT_RE = re.compile(r"error|fault|alarm|diagnos|错误|故障|报警|异常|诊断", re.IGNORECASE)
+
+_ERROR_NAMESPACED_RE = re.compile(
+    r"(?:错误|故障|报警|异常|诊断)\s*(?:代码|码|编号|号)?\s*[:：#]?\s*(?:0[xX])?([0-9A-F]{1,7})(H)?(?![A-Za-z0-9])"
+    r"|(?:error|fault|alarm)\s*(?:code|no\.?|number)?\s*[:#]?\s*(?:0[xX])?([0-9A-F]{1,7})(H)?(?![A-Za-z0-9])",
+    re.IGNORECASE,
+)
+
 ASCII_TERM_RE = re.compile(
     r"(?<![A-Za-z0-9_])[A-Za-z][A-Za-z0-9_]{1,23}"
     r"(?:<>|<=|>=|[<>=])?(?![A-Za-z0-9_<>=])"
@@ -211,27 +219,55 @@ def entity_term_variants(term):
     return list(dict.fromkeys(variants))
 
 
-def error_terms(query):
+def error_terms(query, *, plc_model=None):
+    """Diagnostic codes stated by the query, not devices that merely look like codes.
+
+    A device address such as ``D100``, ``D8000`` or ``C235`` stays a device even
+    next to an error keyword; the diagnostic namespace is only entered when the
+    token is not a valid device for the current CPU or when the query names it as
+    an error code (``错误码 D100``).  ``6106H`` and ``6106`` are one identity, so
+    the hexadecimal spelling is carried as a lookup alias instead of a second
+    coverage target.
+    """
     normalized = normalize_text(query)
-    has_error_context = bool(
-        re.search(
-            r"error|fault|alarm|diagnos|错误|故障|报警|异常|诊断",
-            normalized,
-            flags=re.IGNORECASE,
-        )
-    )
-    values = []
-    seen = set()
+    has_error_context = bool(_ERROR_CONTEXT_RE.search(normalized))
+    values, seen = [], set()
+
+    def accept(code):
+        canonical = code[:-1] if code.endswith("H") and len(code) > 1 else code
+        if canonical and canonical.casefold() not in seen:
+            seen.add(canonical.casefold())
+            values.append(canonical)
+
+    for match in _ERROR_NAMESPACED_RE.finditer(normalized):
+        token = (match.group(1) or match.group(3) or "").upper()
+        if token:
+            accept(token + ("H" if (match.group(2) or match.group(4)) else ""))
     for match in ERROR_CODE_RE.finditer(normalized):
-        code = match.group(1).upper() + ("H" if match.group(2) else "")
-        has_hex_letter = bool(re.search(r"[A-F]", match.group(1), flags=re.I))
-        if not (has_error_context or match.group(2) or has_hex_letter):
+        token = match.group(1).upper()
+        if token.casefold() in seen:
             continue
-        for value in (code, code[:-1] if code.endswith("H") else code + "H"):
-            if value.casefold() not in seen:
-                seen.add(value.casefold())
-                values.append(value)
+        has_hex_letter = bool(re.search(r"[A-F]", token))
+        if _is_device_address(token, plc_model):
+            continue
+        if not has_hex_letter and not (has_error_context or match.group(2)):
+            continue
+        accept(token + ("H" if match.group(2) else ""))
     return values[:12]
+
+
+def _is_device_address(token, plc_model):
+    """A supported address spelling for this CPU, as opposed to a code."""
+    from plc.validation import parse_device_address
+    for model in (plc_model, "FX3U"):
+        if not model:
+            continue
+        try:
+            if parse_device_address(token, model) is not None:
+                return True
+        except Exception:  # unsupported CPU profile: try the next known profile
+            continue
+    return False
 
 
 def fts_tokens(query):
