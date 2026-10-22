@@ -10,20 +10,14 @@ from dataclasses import dataclass
 
 GXWORKS2_NATIVE_VERSION = (1, 635, 0, 1)
 
-_Q_CPUS = (
-    "Q00J", "Q00UJ", "Q00", "Q00U", "Q01", "Q01U", "Q02/Q02H", "Q02PH", "Q02U",
-    "Q03UD", "Q03UDE", "Q03UDV", "Q04UDH", "Q04UDEH", "Q04UDV", "Q04UDPV",
-    "Q06H", "Q06PH", "Q06UDH", "Q06UDEH", "Q06UDV", "Q06UDPV", "Q10UDH",
-    "Q10UDEH", "Q12H", "Q12PH", "Q12PRH", "Q13UDH", "Q13UDEH", "Q13UDV",
-    "Q13UDPV", "Q20UDH", "Q20UDEH", "Q25H", "Q25PH", "Q25PRH", "Q26UDH",
-    "Q26UDEH", "Q26UDV", "Q26UDPV", "Q50UDEH", "Q100UDEH",
-    "QJ72LP25/QJ72BR15(RemoteI/O)",
-)
-_L_CPUS = ("L02S/L02S-P", "L02/L02-P", "L06/L06-P", "L26/L26-P", "L26-BT/L26-PBT",
-           "LJ72GF15-T2", "LJ72MS15")
-_FX_CPUS = ("FX0S/FX0", "FX0N", "FX1", "FX1S", "FX1N/FX1NC", "FXU/FX2C",
-            "FX2N/FX2NC", "FX3S", "FX3G/FX3GC", "FX3U/FX3UC")
-_PARAMETER_ONLY = frozenset({"QJ72LP25/QJ72BR15(RemoteI/O)", "LJ72GF15-T2", "LJ72MS15"})
+from plc.target_identity import CPU_GROUPS, PARAMETER_ONLY, SERIES_FX, SERIES_L, SERIES_Q
+
+#: Native display labels are a GX Works2 representation, not CPU identity.
+_NATIVE_SERIES_NAMES = {
+    SERIES_Q: ('QCPU(Q模式)', 'QCPU (Q mode)', 'QCPU(Qモード)'),
+    SERIES_L: ('LCPU',),
+    SERIES_FX: ('FXCPU',),
+}
 
 
 @dataclass(frozen=True)
@@ -46,9 +40,8 @@ class NativeProjectProfile:
 
 
 NATIVE_PROJECT_PROFILES = tuple(
-    NativeProjectProfile(cpu, series, cpu not in _PARAMETER_ONLY)
-    for series, cpus in ((('QCPU(Q模式)', 'QCPU (Q mode)', 'QCPU(Qモード)'), _Q_CPUS),
-                         (('LCPU',), _L_CPUS), (('FXCPU',), _FX_CPUS))
+    NativeProjectProfile(cpu, _NATIVE_SERIES_NAMES[series], cpu not in PARAMETER_ONLY)
+    for series, cpus in CPU_GROUPS
     for cpu in cpus
 )
 

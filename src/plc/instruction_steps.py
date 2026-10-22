@@ -23,6 +23,8 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 import json
 import os
+from plc.target_identity import (known_menu_identities, target_family,
+                                 target_identity_state, target_members, target_series)
 from pathlib import Path
 import re
 import sys
@@ -32,23 +34,13 @@ from typing import Any, Mapping, Optional, Sequence, Tuple
 
 NATIVE_CATALOG = "fx3u_step_widths.json"
 
-#: Resolution states. None of them changes the project's model range, and none of
-#: them means "this CPU does not support the instruction".
-STATUS_KNOWN = "known"
-STATUS_REQUIRES_OPERANDS = "requires_operands"
-STATUS_REQUIRES_CONTEXT = "requires_context"
-STATUS_NO_PROFILE = "no_profile"
-STATUS_CONFLICT = "conflict"
-STATUS_METADATA_UNAVAILABLE = "metadata_unavailable"
-STATUS_UNKNOWN_CPU = "unknown_cpu"
-STATUS_NOT_APPLICABLE = "not_applicable"
-
-#: How unresolved member answers merge, most fundamental first.
-_UNRESOLVED_PRIORITY = (
-    STATUS_NO_PROFILE, STATUS_CONFLICT, STATUS_METADATA_UNAVAILABLE,
-    STATUS_UNKNOWN_CPU, STATUS_REQUIRES_CONTEXT, STATUS_REQUIRES_OPERANDS,
-    STATUS_NOT_APPLICABLE,
-)
+from plc.step_width_types import (STATUS_CONFLICT, STATUS_KNOWN, STATUS_METADATA_UNAVAILABLE,
+                                  STATUS_NO_PROFILE, STATUS_NOT_APPLICABLE,
+                                  STATUS_REQUIRES_CONTEXT, STATUS_REQUIRES_OPERANDS,
+                                  STATUS_UNKNOWN_CPU, StepWidth)
+from plc.step_width_types import UNRESOLVED_PRIORITY as _UNRESOLVED_PRIORITY
+from plc.step_width_types import known_width as _known
+from plc.step_width_types import unresolved_width as _unresolved
 
 
 def _catalog_directories() -> Tuple[Path, ...]:
@@ -109,51 +101,6 @@ def stored_header_width(raw: bytes) -> Optional[int]:
     return raw[2] if 1 <= raw[2] <= 127 else None
 
 
-@dataclass(frozen=True)
-class StepWidth:
-    """One expected program width, with the reason it is (un)resolved."""
-
-    steps: Optional[int]
-    source: str
-    reason: str = ""
-    evidence: Tuple[str, ...] = ()
-    status: str = ""
-    requirements: Tuple[str, ...] = ()
-    #: "exact" when the rule was verified for this CPU, "family" when it is a
-    #: shared family rule whose evidence names the CPUs it was verified on.
-    scope: str = "exact"
-    # Per-member answers for a merged target such as FX3U/FX3UC or L02/L02-P.
-    members: Tuple[Tuple[str, "StepWidth"], ...] = field(default=(), repr=False)
-
-    def __post_init__(self):
-        if not self.status:
-            object.__setattr__(self, "status",
-                               STATUS_KNOWN if self.steps is not None else STATUS_NO_PROFILE)
-
-    @property
-    def known(self) -> bool:
-        return self.steps is not None
-
-    def as_dict(self) -> dict:
-        return {"steps": self.steps, "status": self.status, "source": self.source,
-                "scope": self.scope, "reason": self.reason,
-                "requirements": list(self.requirements), "evidence": list(self.evidence),
-                "members": [{"cpu": cpu, **value.as_dict()} for cpu, value in self.members]}
-
-
-def _known(steps: int, source: str, *, evidence: Sequence[str] = (), scope: str = "exact",
-           members: Sequence[Tuple[str, "StepWidth"]] = ()) -> StepWidth:
-    return StepWidth(int(steps), source, evidence=tuple(evidence), status=STATUS_KNOWN,
-                     scope=scope, members=tuple(members))
-
-
-def _unresolved(status: str, reason: str, *, source: str = "unknown",
-                requirements: Sequence[str] = (),
-                members: Sequence[Tuple[str, "StepWidth"]] = ()) -> StepWidth:
-    return StepWidth(None, source, reason=reason, status=status,
-                     requirements=tuple(requirements), members=tuple(members))
-
-
 def _operand_text(value: Any) -> str:
     text = str(value).strip()
     # Do not normalize or reinterpret quoted data, bit selects or indices.
@@ -210,7 +157,7 @@ def _scope_spec(entry: Mapping[str, Any],
             family = True
         elif declared in _SERIES_GROUPS:
             series.append(declared)
-        elif _native_profile(declared) is not None:
+        elif target_series(declared) is not None:
             models.append(declared)
         else:
             raise ValueError("Step-width entry declares an unknown evidence scope "
@@ -219,7 +166,7 @@ def _scope_spec(entry: Mapping[str, Any],
         for token in _scope_tokens(entry, name, label):
             if token in _SERIES_GROUPS:
                 series.append(token)
-            elif _native_profile(token) is not None:
+            elif target_series(token) is not None:
                 bucket.append(token)
             else:
                 raise ValueError("Step-width entry declares an unknown evidence "
@@ -708,88 +655,10 @@ def default_step_width_catalog() -> StepWidthCatalog:
 
 
 @lru_cache(maxsize=1)
-def known_menu_identities() -> frozenset:
-    """Every saved CPU menu option, with and without a Remote/O suffix."""
-    from gxworks2.project_profiles import NATIVE_PROJECT_PROFILES
-    names = set()
-    for profile in NATIVE_PROJECT_PROFILES:
-        text = str(profile.cpu).strip().upper()
-        names.add(text)
-        names.add(text.removesuffix("(REMOTEI/O)"))
-    # Existing Core target without a GX Works2 creation option.
-    names.add("FX5U")
-    return frozenset(name for name in names if name)
-
-
-def target_members(plc_model: Any) -> Tuple[str, ...]:
-    """Concrete members of one target identity, including merged menu options."""
-    text = str(plc_model or "").strip().upper()
-    text = text.removesuffix("(REMOTEI/O)")
-    return tuple(part for part in (piece.strip() for piece in text.split("/")) if part)
-
-
-def target_identity_state(plc_model: Any) -> Tuple[Optional[Tuple[str, ...]], Optional[str]]:
-    """Members of one saved CPU menu option, or the reason this identity is none.
-
-    A merged identity has to name a saved menu option as a whole: every part being
-    a real CPU is not enough (``FX3U/FX1S`` is not a menu option), and a trailing
-    slash names nothing. Core width resolution and the knowledge query both ask
-    this, so one spelling of a target has one answer.
-    """
-    merged_text = ("" if isinstance(plc_model, (list, tuple))
-                   else str(plc_model or "").strip().upper())
-    if isinstance(plc_model, (list, tuple)):
-        # An explicit member list is an internal convenience only.
-        members = tuple(str(part).strip().upper() for part in plc_model if str(part).strip())
-    else:
-        members = target_members(plc_model)
-    if members:
-        merged = "/".join(members)
-        # The spelling may differ from the joined members only by spacing: a
-        # leading or trailing slash, or a pair of unrelated CPUs, names no saved
-        # option even when every part of it is a real CPU.
-        spelling = merged_text.removesuffix("(REMOTEI/O)").replace(" ", "")
-        if spelling != merged:
-            return None, (f"Unsupported CPU identity spelling {merged_text!r}: "
-                          "it is not a saved CPU menu option")
-        if len(members) > 1 and merged not in known_menu_identities():
-            return None, (f"Unsupported merged CPU identity {merged_text or merged!r}: "
-                          "it is not a saved CPU menu option")
-    if not members:
-        return None, "A stored step width needs the saved CPU identity"
-    return members, None
-
-
-@lru_cache(maxsize=256)
-def _native_profile(plc_model: str):
-    from gxworks2.project_profiles import native_project_profile
-    return native_project_profile(plc_model)
-
-
-def target_family(plc_model: Any) -> Optional[str]:
-    """Existing native CPU family for one identity; never narrows the model range."""
-    identity = str(plc_model or "").strip().upper()
-    profile = _native_profile(identity)
-    if profile is not None:
-        series = profile.series[0]
-        if series.startswith("FX"):
-            return "FX"
-        if series.startswith("QCPU"):
-            return "Q"
-        if series.startswith("L"):
-            return "L"
-        return None
-    if identity == "FX5U":
-        # Existing Core target; not a GX Works2 native creation option, and it has
-        # no program-width coverage of its own yet.
-        return "FX5U"
-    return None
-
-
 def _in_fx_family(plc_model: Any) -> bool:
     """True for an FX menu identity: the FX width rules are shared family rules."""
-    profile = _native_profile(str(plc_model or "").strip().upper())
-    return bool(profile is not None and profile.series[0].startswith("FX"))
+    resolved = target_series(str(plc_model or "").strip().upper())
+    return bool(resolved is not None and resolved[0] == "FX")
 
 
 #: FX series groups whose device-index step ranges differ. The group is a
