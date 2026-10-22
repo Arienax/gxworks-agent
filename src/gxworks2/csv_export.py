@@ -7,6 +7,63 @@ from plc.ir import ir_to_ladder, is_plc_ir
 from plc.instruction_steps import StepCursor, instruction_step_width
 from plc.comments import short_device_comment
 
+"""Canonical GX Works2 CSV export, native step widths, and export-only lowering."""
+import csv
+import logging
+from dataclasses import dataclass
+from gxworks2.csv_manager import CSVManager
+from gxworks2.native_export import GXNativeLoweringError, lower_large_parallel_blocks_for_gxworks2
+from plc.ir import ir_to_ladder, is_plc_ir
+from plc.instruction_steps import StepCursor, instruction_step_width
+from plc.comments import short_device_comment
+
+
+@dataclass(frozen=True)
+class LoweredInstruction:
+    """One program instruction as it will be stored, before any output format."""
+
+    step: int | None
+    mnemonic: str
+    operands: tuple
+    steps: int | None
+    note: str = ""
+    note_allowed: bool = True
+    rung: int = 0
+
+
+@dataclass(frozen=True)
+class LoweredStatement:
+    """A rung line statement; it occupies no step of its own."""
+
+    step: int | None
+    text: str
+    rung: int = 0
+
+
+@dataclass(frozen=True)
+class LadderProgram:
+    """One lowered program: instructions, statements and device comments.
+
+    Every output format reads this instead of lowering the ladder again, so the CSV
+    export and a project writer cannot disagree about the instructions or their step
+    widths. ``width_findings`` names the instructions whose stored width is unknown;
+    those keep their instructions and leave the following labels blank.
+    """
+
+    plc_model: str
+    entries: tuple
+    device_comments: tuple
+    width_findings: tuple
+
+    @property
+    def instructions(self):
+        return tuple(entry for entry in self.entries if isinstance(entry, LoweredInstruction))
+
+    @property
+    def unresolved(self):
+        return tuple(entry for entry in self.instructions if entry.steps is None)
+
+
 def _step_width_model(payload, override):
     """Keep an explicit CPU through IR-to-ladder projection; default legacy FX."""
     if override is not None:
@@ -20,16 +77,14 @@ def _step_width_model(payload, override):
     return "FX3U"
 
 
-def _write_program_csv(
-    json_data,
-    output_program_csv="MAIN.csv",
-    output_comment_csv="COMMENT.csv",
-    *,
-    infer_device_comments=True,
-    plc_model=None,
-    step_diagnostics=None,
-):
-    import csv
+def lower_ladder_program(json_data, *, plc_model=None, infer_device_comments=True,
+                         step_diagnostics=None):
+    """Lower ladder JSON or PLC IR into instructions, statements and device comments.
+
+    This is the one lowering: the CSV export serializes its result, and a project
+    writer encodes the same instructions. Ordered GXW instructions are refused here
+    because they already belong to a project; they are not lowered again.
+    """
     import re
 
     plc_model = _step_width_model(json_data, plc_model)
@@ -107,28 +162,10 @@ def _write_program_csv(
                 if elem.get("address") and elem.get("label"):
                     add_missing_comment(elem["address"], elem["label"])
 
-    # 2. 生成注释
-    comment_rows = [["COMMENT - 副本"], ["软元件名", "注释"]]
-    for addr, comment in device_comments.items():
-        if addr and comment and comment != "null":
-            comment_rows.append([format_device(addr), comment])
-
-    try:
-        with open(output_comment_csv, mode="w", newline="", encoding="utf-16") as f_comment:
-            writer = csv.writer(f_comment, delimiter="\t", quoting=csv.QUOTE_ALL, lineterminator="\r\n")
-            writer.writerows(comment_rows)
-    except Exception as e:
-        print(f"注释CSV生成失败: {e}")
-
-    # 3. 编译器核心逻辑
-    rows = [
-        ["MAIN - 副本"],
-        ["PLC信息:", "三菱 GX Works2 兼容"],
-        ["步号", "行间声明", "指令", "I/O(软元件)", "空白栏", "PI声明", "注解"]
-    ]
-
+    entries = []
     cursor = StepCursor()
     width_findings = []
+    rung_index = [0]
 
     def get_operands(elem):
         t, expr = elem.get("type", ""), elem.get("expression", "").strip()
@@ -155,18 +192,14 @@ def _write_program_csv(
         is_sys_block = inst_up in ["MPS", "MRD", "MPP", "ORB", "ANB", "END"]
 
         valid_note = short_device_comment(comment)
-        if is_contact or is_sys_block:
-            valid_note = ""
+        note_allowed = not (is_contact or is_sys_block)
 
-        combined_ops = " ".join(formatted_ops)
-
-        # 当前指令行，注解列强制留空
-        rows.append([cursor.label, "", inst, combined_ops, "", "", ""])
-
+        entries.append(LoweredInstruction(step=cursor.step, mnemonic=inst,
+                                          operands=tuple(formatted_ops),
+                                          steps=width.steps if width.known else None,
+                                          note=valid_note, note_allowed=note_allowed,
+                                          rung=rung_index[0]))
         cursor.advance(width)
-
-        if valid_note:
-            rows.append(["", "", "", "", "", "", valid_note])
 
     def get_input_inst(elem, is_first, is_sub=False):
         t, expr = elem.get("type", ""), elem.get("expression", "").strip()
@@ -221,14 +254,13 @@ def _write_program_csv(
                 parts = out.get("expression", "").strip().split()
                 if len(parts) >= 2: add_instruction(parts[0], parts[1:], label)
 
-    for rung in rungs:
+    for index, rung in enumerate(rungs):
+        rung_index[0] = index
         line_statement = rung.get("debug_note", "")
         if line_statement and line_statement != "null":
-            rows.append([
-                cursor.label,
-                CSVManager.truncate_statement(line_statement),
-                "", "", "", "", "",
-            ])
+            entries.append(LoweredStatement(step=cursor.step,
+                                            text=CSVManager.truncate_statement(line_statement),
+                                            rung=index))
 
         header = rung.get("header_element")
         shared_inputs = rung.get("shared_inputs", [])
@@ -284,6 +316,54 @@ def _write_program_csv(
             len(width_findings), width_findings[0],
         )
 
+    return LadderProgram(plc_model=plc_model, entries=tuple(entries),
+                         device_comments=tuple(device_comments.items()),
+                         width_findings=tuple(width_findings))
+
+
+def _write_program_csv(
+    json_data,
+    output_program_csv="MAIN.csv",
+    output_comment_csv="COMMENT.csv",
+    *,
+    infer_device_comments=True,
+    plc_model=None,
+    step_diagnostics=None,
+):
+    import csv
+
+    program = lower_ladder_program(json_data, plc_model=plc_model,
+                                   infer_device_comments=infer_device_comments,
+                                   step_diagnostics=step_diagnostics)
+
+    # 2. 生成注释
+    comment_rows = [["COMMENT - 副本"], ["软元件名", "注释"]]
+    for addr, comment in program.device_comments:
+        if addr and comment and comment != "null":
+            comment_rows.append([_format_device(addr), comment])
+
+    try:
+        with open(output_comment_csv, mode="w", newline="", encoding="utf-16") as f_comment:
+            writer = csv.writer(f_comment, delimiter="\t", quoting=csv.QUOTE_ALL, lineterminator="\r\n")
+            writer.writerows(comment_rows)
+    except Exception as e:
+        print(f"注释CSV生成失败: {e}")
+
+    # 3. 编译器核心逻辑
+    rows = [
+        ["MAIN - 副本"],
+        ["PLC信息:", "三菱 GX Works2 兼容"],
+        ["步号", "行间声明", "指令", "I/O(软元件)", "空白栏", "PI声明", "注解"]
+    ]
+
+    for entry in program.entries:
+        if isinstance(entry, LoweredStatement):
+            rows.append([entry.step, entry.text, "", "", "", "", ""])
+            continue
+        rows.append([entry.step, "", entry.mnemonic, " ".join(entry.operands), "", "", ""])
+        if entry.note and entry.note_allowed:
+            rows.append(["", "", "", "", "", "", entry.note])
+
     try:
         with open(output_program_csv, mode="w", newline="", encoding="utf-16") as f_prog:
             writer = csv.writer(f_prog, delimiter="\t", quoting=csv.QUOTE_ALL, lineterminator="\r\n")
@@ -292,6 +372,18 @@ def _write_program_csv(
     except Exception as e:
         print(f"主程序CSV生成失败: {e}")
         return False
+
+
+def _format_device(addr):
+    """One device spelling for every output format."""
+    import re
+    if not addr:
+        return ""
+    addr = addr.strip().upper()
+    match = re.match(r'^([XY])([0-7]+)$', addr)
+    if match:
+        return f"{match.group(1)}{match.group(2).zfill(3)}"
+    return addr
 
 
 def _generate_native_wrapped_csv(
