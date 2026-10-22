@@ -8,9 +8,9 @@ incorrect widths, rather than silently replacing them with a calculated width.
 Target identity follows the existing native CPU catalogue, including merged menu
 options such as ``FX3U/FX3UC`` or ``L02/L02-P``: a merged target answers only when
 every member answers, and consistently. FX rules live in the shared resource. Q/L
-widths reuse the stored-width algorithms in :mod:`gxw.step_rules_q` through a
-lazy delegation, so each CPU family has exactly one implementation and Core holds
-no second copy of a formula.
+widths come from the shared storage plan in :mod:`plc.storage.plan`, which the
+project writer imports as well, so each CPU family has one implementation and Core
+holds no second copy of a formula.
 
 A width is never guessed. An unresolved form reports why: missing operands,
 missing project context, no coverage for that CPU, conflicting member answers, or
@@ -690,9 +690,9 @@ def _resolve_member(member: str, opcode: Any, operands: Sequence[Any], context: 
         return _unresolved(STATUS_NO_PROFILE,
                            "No program step-width coverage for FX5U; FX rules are not borrowed")
     if family in ("Q", "L"):
-        # The Q/L stored-width algorithms stay in the GXW layer that owns the
-        # native encodings; this delegation is the single implementation.
-        from gxw.step_rules_q import resolve_stored_steps
+        # The Q/L storage plan lives in Core's storage layer, which the project
+        # writer imports as well, so this is the single implementation.
+        from plc.storage.plan import resolve_stored_steps
         return resolve_stored_steps(opcode, operands, cpu=member, context=context,
                                     assume_default_allocation=assume_default_allocation,
                                     text_encoding=text_encoding,

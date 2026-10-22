@@ -1,0 +1,10 @@
+"""The computation error every storage rule raises.
+
+Project-file writers convert it to their own format error at their boundary, so the
+shared rules never import a project byte reader or writer.
+"""
+from __future__ import annotations
+
+
+class StorageRuleError(ValueError):
+    """A storage form or encoding this rule set cannot describe."""
