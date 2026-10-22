@@ -34,6 +34,7 @@
     "packaging/pyinstaller/release.spec",
     "publication/public-files.json",
     "requirements/context.txt",
+    "requirements/development.constraints.txt",
     "requirements/mcp.txt",
     "requirements/release-mcp.txt",
     "requirements/release.txt",
