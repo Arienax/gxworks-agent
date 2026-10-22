@@ -108,17 +108,27 @@ def _operand_input(value) -> tuple[str, tuple[int, ...] | None]:
 
 
 def encode_text_record(kind: str, text: str, *, text_encoding: str,
-                       profile: str = 'fx3u', source_record: TokenText | None = None) -> bytes:
+                       profile: str = 'fx3u', source_record: TokenText | None = None,
+                       storage_flag: int | None = None) -> bytes:
     """Encode inline text using its grammar's statement field or note flag.
 
     New FX text and Q/L notes use the independently accepted external form.
     Existing flags remain bound to their source. Q/L integrated statements
     instead store their record word extent, which changes with the text size.
+
+    On FX the stored flag distinguishes a statement that shares its step from
+    one that owns a step of its own; both occur in native projects and GX Works2
+    prints the step-owning form with a leading '*'. A caller that owns that
+    decision passes ``storage_flag`` explicitly, since the choice changes the
+    program's step numbering.
     """
     if profile not in _PROFILES:
         raise GXWFormatError('inline source text requires a known token profile')
     if kind not in {'statement', 'note'} or not isinstance(text, str) or '\0' in text:
         raise GXWFormatError('inline source text requires statement/note and text without NUL')
+    if storage_flag is not None and (type(storage_flag) is not int or storage_flag not in (0, 1)
+                                     or source_record is not None):
+        raise GXWFormatError('inline source text storage flag requires a new record and a 0/1 flag')
     if source_record is not None:
         if (not isinstance(source_record, TokenText) or len(source_record.tokens) != 1
                 or source_record.role not in {'statement', 'note'}):
@@ -141,7 +151,7 @@ def encode_text_record(kind: str, text: str, *, text_encoding: str,
     if len(payload) > 251:
         raise GXWFormatError('inline source text exceeds its single-record 251-byte extent')
     size = len(payload) + 4
-    field = 1
+    field = 1 if storage_flag is None else storage_flag
     if source_record is not None:
         raw = source_record.tokens[0].raw
         field = raw[2]

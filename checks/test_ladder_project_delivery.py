@@ -131,7 +131,37 @@ def test_a_lowered_program_becomes_a_project():
     assert built.report["validation"]["compile_state"] == "stale"
     assert built.report["validation"]["native_save"] == "not_run"
     assert built.report["validation"]["gxworks_compile"] == "not_run"
-    assert built.instructions == (("LD", ["X000"]), ("OUT", ["Y000"]))
+    assert built.instructions == (("LD", ("X000",)), ("OUT", ("Y000",)))
+    assert built.statements == ()
+
+
+def test_a_line_statement_is_delivered_with_its_step():
+    """行间声明 shares the next instruction's step, as the CSV rows already say."""
+    if not project_templates.blank_ladder_models():
+        return
+    from gxw.ladder_program_writer import build_ladder_project
+    from gxw.offline_project import read_offline_project, read_ordered_program
+    from gxworks2.csv_export import lower_ladder_program
+
+    rungs = {"rungs": [{"debug_note": "启动后点亮",
+                        "branches": [{"inputs": [{"type": "NO", "address": "X0"}],
+                                      "outputs": [{"type": "COIL", "address": "Y0"}]}]}]}
+    program = lower_ladder_program(rungs, plc_model="FX3U")
+    assert [entry.mnemonic for entry in program.instructions] == ["LD", "OUT", "END"]
+    built = build_ladder_project(program, plc_model="FX3U")
+    assert built.statements == (("statement", "启动后点亮"),)
+    listing = read_ordered_program(read_offline_project(built.data))["listing"]
+    kinds = [(type(record).__name__, getattr(record, "role", None),
+              getattr(record, "text", None) or getattr(record, "mnemonic", None))
+             for record in listing.records]
+    assert kinds == [("TokenText", "statement", "启动后点亮"),
+                     ("TokenInstruction", None, "LD"),
+                     ("TokenInstruction", None, "OUT"),
+                     ("TokenInstruction", None, "END")]
+    # The statement must not take a step of its own: GX Works2 stores that form as flag 1.
+    text_raw = b"".join(token.raw for token in listing.records[0].tokens)
+    assert text_raw[1] == 0x80 and text_raw[2] == 0
+    assert [step.step for step in listing.instructions] == [0, 1, 2]
 
 
 def test_delivery_refuses_what_it_cannot_place():
@@ -158,6 +188,7 @@ CASES = (test_the_surface_says_whether_a_ladder_project_can_be_delivered,
          test_the_capture_script_refuses_projects_that_carry_logic,
          test_the_archive_manifest_is_read_but_never_trusted,
          test_a_lowered_program_becomes_a_project,
+         test_a_line_statement_is_delivered_with_its_step,
          test_delivery_refuses_what_it_cannot_place)
 
 if __name__ == "__main__":

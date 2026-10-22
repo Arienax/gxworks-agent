@@ -105,10 +105,12 @@ def edit_token_records(listing, edits, *, text_encoding, plc_model=None,
             # newly added records. Bind every compatible row to that source
             # so an unchanged float/string never travels through its display.
             bound = source if edit['operation'] == 'replace' else None
-            if isinstance(row, Mapping) and set(row) == {'kind', 'text'}:
+            if (isinstance(row, Mapping) and {'kind', 'text'} <= set(row)
+                    and set(row) <= {'kind', 'text', 'flag'}):
                 chunks.append(encode_text_record(row['kind'], row['text'], text_encoding=text_encoding,
                     profile=listing.profile,
-                    source_record=bound if isinstance(bound, TokenText) else None))
+                    source_record=bound if isinstance(bound, TokenText) else None,
+                    storage_flag=row.get('flag')))
             else:
                 if not isinstance(row, Mapping) or set(row) != {'op', 'args'} or row['op'] == 'END':
                     raise GXWFormatError('replacement instruction requires op/args and cannot contain END')
