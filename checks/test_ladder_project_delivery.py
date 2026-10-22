@@ -108,11 +108,57 @@ def test_the_archive_manifest_is_read_but_never_trusted():
         project_templates._ladder_archive.cache_clear()
 
 
+def test_a_lowered_program_becomes_a_project():
+    if not project_templates.blank_ladder_models():
+        return  # this checkout carries no captured Ladder baseline
+    from gxw.ladder_program_writer import build_ladder_project
+    from gxw.offline_project import read_offline_project, read_ordered_program
+    from gxworks2.csv_export import lower_ladder_program
+
+    rungs = {"rungs": [{"branches": [{"inputs": [{"type": "NO", "address": "X0"}],
+                                     "outputs": [{"type": "COIL", "address": "Y0"}]}]}]}
+    program = lower_ladder_program(rungs, plc_model="FX3U")
+    built = build_ladder_project(program, plc_model="FX3U")
+    readback = read_ordered_program(read_offline_project(built.data))
+    assert [(item.mnemonic, [operand.text for operand in item.operands])
+            for item in readback["listing"].instructions] == [
+                ("LD", ["X0"]), ("OUT", ["Y0"]), ("END", [])]
+    before = read_offline_project(project_templates.blank_ladder_baseline("FX3U")).streams
+    after = read_offline_project(built.data).streams
+    assert sorted(before) == sorted(after)
+    assert [name for name in before if before[name] != after[name]] == ["MAIN.Program.pou"]
+    # The delivery states what it did not prove.
+    assert built.report["validation"]["compile_state"] == "stale"
+    assert built.report["validation"]["native_save"] == "not_run"
+    assert built.report["validation"]["gxworks_compile"] == "not_run"
+    assert built.instructions == (("LD", ["X000"]), ("OUT", ["Y000"]))
+
+
+def test_delivery_refuses_what_it_cannot_place():
+    from gxw.ladder_program_writer import build_ladder_project
+    from gxworks2.csv_export import lower_ladder_program
+
+    empty = lower_ladder_program({"rungs": []}, plc_model="FX3U")
+    try:
+        build_ladder_project(empty, plc_model="FX3U")
+    except GXWFormatError as error:
+        assert "no instruction" in str(error)
+    else:
+        raise AssertionError("an empty program must not be delivered")
+    try:
+        build_ladder_project(lower_ladder_program({"rungs": []}, plc_model="L02/L02-P"),
+                             plc_model="L02/L02-P")
+    except GXWFormatError:
+        pass
+    else:
+        raise AssertionError("a CPU without a captured baseline must not be delivered")
+
 CASES = (test_the_surface_says_whether_a_ladder_project_can_be_delivered,
          test_an_fbd_project_is_not_a_ladder_baseline,
          test_the_capture_script_refuses_projects_that_carry_logic,
-         test_the_archive_manifest_is_read_but_never_trusted)
-
+         test_the_archive_manifest_is_read_but_never_trusted,
+         test_a_lowered_program_becomes_a_project,
+         test_delivery_refuses_what_it_cannot_place)
 
 if __name__ == "__main__":
     for case in CASES:

@@ -222,6 +222,7 @@
     "src/gxw/generation_contract.py",
     "src/gxw/integrity.py",
     "src/gxw/ladder_lowering.py",
+    "src/gxw/ladder_program_writer.py",
     "src/gxw/library_sources.py",
     "src/gxw/library_transfer.py",
     "src/gxw/live_assignments.py",
