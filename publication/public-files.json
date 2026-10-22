@@ -16,6 +16,7 @@
     "THIRD_PARTY_NOTICES.md",
     "build-web.bat",
     "checks/source_smoke.py",
+    "checks/test_storage_migration.py",
     "gxworks-agent-mcp",
     "gxworks-agent-mcp.cmd",
     "hardware_reader/Program.cs",
