@@ -129,7 +129,7 @@ def _create_fbd_candidate(context: ToolContext, arguments: Mapping[str, Any], *,
     from pathlib import Path
     import tempfile
     from application.fbd import (AUTHORING_OPERATIONS, authoring_command, decode_upload, pack_candidate,
-                                 prepare_candidate, version_requires_native_save)
+                                 prepare_candidate)
 
     from gxw.offline_authoring import EXISTING_DEFINITION_OPERATIONS
     if arguments.get('operation') in EXISTING_DEFINITION_OPERATIONS and context.native_snapshot is not None:
@@ -140,8 +140,9 @@ def _create_fbd_candidate(context: ToolContext, arguments: Mapping[str, Any], *,
     if context.project.get('target_mode') != 'fbd' and (context.version or {}).get('target_mode') != 'fbd':
         raise ValueError('FBD 候选需要绑定 FBD 目标工程。')
     operation = arguments['operation']
-    if arguments.get('native_save') is not None and (operation != 'import' or type(arguments['native_save']) is not bool):
-        raise ValueError('native_save 只用于 FBD 导入时选择后续原生保存。')
+    if 'native_save' in arguments and (operation not in {'import', 'edit', 'generate'}
+                                       or type(arguments['native_save']) is not bool):
+        raise ValueError('native_save 仅接受布尔值，用于本次 FBD import、edit 或 generate 的原生保存选择。')
     if operation not in ('create_fb', 'create_program', *AUTHORING_OPERATIONS) and 'source_name' in arguments:
         raise ValueError('source_name 只用于新建 FBD POU。')
     if operation != 'import_library' and 'library_name' in arguments:
@@ -163,15 +164,15 @@ def _create_fbd_candidate(context: ToolContext, arguments: Mapping[str, Any], *,
         if context.version is not None or context.fbd_baseline is not None:
             raise ValueError('已有版本的 FBD 工程请使用 edit 并绑定基础版本。')
         if 'data_base64' in arguments or 'program' in arguments:
-            raise ValueError('generate 只接受 model 和 summary。')
-        kwargs = {'model': arguments.get('model')}
+            raise ValueError('generate 的源码由 model 提供，不接受 data_base64 或 program。')
+        kwargs = {'model': arguments.get('model'), 'native_save': arguments.get('native_save') is True}
     elif operation == 'edit':
         if not context.version_id or context.fbd_baseline is None:
             raise ValueError('edit 需要绑定已保存的 FBD 基础版本。')
         if 'data_base64' in arguments or 'program' in arguments:
             raise ValueError('edit 的 Program.pou 由 model.program 指定。')
         kwargs = {'model': arguments.get('model'), 'baseline': context.fbd_baseline,
-                  'native_save': version_requires_native_save(context.version),
+                  'native_save': arguments.get('native_save') is True,
                   'device_comments': arguments.get('device_comments'), 'comment_table': arguments.get('comment_table')}
     elif operation == 'import_library':
         if not context.version_id or context.fbd_baseline is None:
