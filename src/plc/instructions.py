@@ -107,6 +107,12 @@ class OperandSpec:
     usage_facts: Tuple[OperandUsageFact, ...] = ()
     allowed_devices: Tuple[str, ...] = ()
     word_count: int = 1
+    semantic_name: str = ""
+
+    def slot_metadata(self, position: int, symbol: str = "") -> Dict[str, Any]:
+        return {"position": position,
+                **({"symbol": symbol} if symbol else {}),
+                **({"semantic_name": self.semantic_name} if self.semantic_name else {})}
 
     @classmethod
     def from_mapping(cls, payload: Mapping[str, Any], index: int) -> "OperandSpec":
@@ -126,8 +132,12 @@ class OperandSpec:
         count = payload.get("word_count", 1)
         if type(count) is not int or not 1 <= count <= 65536:
             raise ValueError("Invalid operand memory extent")
+        name = str(payload.get("name") or f"operand_{index}").strip()
+        semantic_name = str(payload.get("semantic_name") or name).strip()
+        if re.fullmatch(r"operand_\d+|[A-Z]\d*", semantic_name, re.I):
+            semantic_name = ""
         return cls(
-            name=str(payload.get("name") or f"operand_{index}").strip(),
+            name=name,
             role=role,
             data_type=str(payload.get("data_type") or "any").strip().lower(),
             device_prefixes=prefixes,
@@ -135,6 +145,7 @@ class OperandSpec:
             usage_facts=tuple(OperandUsageFact.from_mapping(item) for item in usage),
             allowed_devices=tuple(str(x).upper() for x in payload.get("allowed_devices", ())),
             word_count=count,
+            semantic_name=semantic_name,
         )
 
 
@@ -1092,10 +1103,11 @@ class InstructionRegistry:
         spec = form.spec
         if not spec.st_call or not spec.contract_sources:
             return {}
-        parameters = [{"name": name, "role": operand.role.value, "type": operand.data_type,
+        parameters = [{"name": name, **operand.slot_metadata(index, name),
+                       "role": operand.role.value, "type": operand.data_type,
                        **({"word_count": operand.word_count} if operand.word_count != 1 else {}),
                        **({"allowed_devices": list(operand.allowed_devices)} if operand.allowed_devices else {})}
-                      for name, operand in zip(spec.native_operand_order, spec.operands)]
+                      for index, (name, operand) in enumerate(zip(spec.native_operand_order, spec.operands), start=1)]
         st_parameters = ([{"name": "EN", "role": "read", "type": "bit"}]
                          if spec.st_call["enable"] else []) + copy.deepcopy(parameters)
         return {"target_model": cpu, "opcode": form.opcode,
@@ -1160,12 +1172,15 @@ class InstructionRegistry:
                 "cpu_replacements": dict(spec.cpu_replacements),
                 "verified_fields": list(spec.verified_fields),
                 "unverified_fields": [key for key, value in coverage.items() if value != "source_verified"],
-                "operand_annotations": [{"name": o.name, "role": o.role.value,
+                "operand_annotations": [{"name": o.name,
+                    **o.slot_metadata(index, spec.native_operand_order[index - 1]
+                                      if index <= len(spec.native_operand_order) else ""),
+                    "role": o.role.value,
                     "data_type": o.data_type, "device_prefixes": list(o.device_prefixes),
                     **({"allowed_devices": list(o.allowed_devices)} if o.allowed_devices else {}),
                     **({"word_count": o.word_count} if o.word_count != 1 else {}),
                     **({"usage_facts": [fact.as_mapping() for fact in o.usage_facts]} if o.usage_facts else {})}
-                    for o in spec.operands],
+                    for index, o in enumerate(spec.operands, start=1)],
                 "sources": [{k: v for k, v in source.items() if k not in {"proof_sha256", "source_sha256"}} for source in spec.contract_sources]}
 
     def is_known(self, mnemonic: Any, *, vendor: str = "mitsubishi") -> bool:

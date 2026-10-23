@@ -12,6 +12,8 @@ generated for; see :mod:`plc.target_support` for that.
 from __future__ import annotations
 
 from functools import lru_cache
+import re
+import unicodedata
 from typing import Any, Optional, Tuple
 
 SERIES_Q = "Q"
@@ -132,3 +134,30 @@ def target_family(plc_model: Any) -> Optional[str]:
         # no program-width coverage of its own yet.
         return CORE_ONLY_TARGETS[identity.upper()]
     return None
+
+
+def reference_target_identity(value: Any) -> Optional[str]:
+    """Known hardware spellings for reference queries, without creation admission.
+
+    Resolve every member before admitting a merged identity as a whole. A valid
+    member must never hide an unknown member or turn a group into one CPU.
+    """
+    if not isinstance(value, str):
+        return None
+    text = unicodedata.normalize("NFKC", value).strip().upper()
+    text = re.sub(r"\s*\(\s*REMOTE\s*I\s*/?\s*O\s*\)$", REMOTE_IO_SUFFIX, text)
+    remote = text.endswith(REMOTE_IO_SUFFIX)
+    parts = text.removesuffix(REMOTE_IO_SUFFIX).split("/")
+    members = []
+    for part in parts:
+        member = part.strip()
+        if target_family(member) is None:
+            member = re.sub(r"CPU(?:-T)?$", "", member).strip()
+        if not member or target_family(member) is None:
+            return None
+        members.append(member)
+    identity = "/".join(members) + (REMOTE_IO_SUFFIX if remote else "")
+    if remote and identity not in known_menu_identities():
+        return None
+    resolved, reason = target_identity_state(identity)
+    return identity if resolved and reason is None else None
