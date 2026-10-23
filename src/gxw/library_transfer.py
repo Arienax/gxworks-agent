@@ -156,6 +156,76 @@ def _initial_value_changes(expected, actual):
     return compared, changes
 
 
+def _program_streams(streams):
+    """Project program sources named by the native directory mapping."""
+    return sorted(name for name in streams if name.endswith('.pou'))
+
+
+def _project_programs(streams, sources, role):
+    """Project-owned program sources from ownership already resolved by the sources.
+
+    A confirmed user-library source carries its own namespace and is never a
+    target program. Missing or ambiguous ownership stays a rejection instead of
+    becoming a silent exclusion; duplicate stream identities are already refused
+    by the native directory/history mapping before this comparison.
+    """
+    groups = sources.source_groups
+    if not isinstance(groups, dict):
+        raise GXWFormatError(role + ': native project source ownership is unavailable')
+    library_sources = {owner['source_program'] for owner in sources.user_library_owners.values()}
+    programs = []
+    for name in _program_streams(streams):
+        group = groups.get(name)
+        if name in library_sources or (group is not None and group.get('library') is not None):
+            raise GXWFormatError(role + ': project program source has user library ownership: ' + name)
+        if group is None:
+            raise GXWFormatError(role + ': project program source ownership is missing or ambiguous: ' + name)
+        programs.append(name)
+    unowned = sorted(name for name, group in groups.items()
+                     if group.get('library') is None and name not in programs)
+    if unowned:
+        raise GXWFormatError(role + ': project program payload is missing or ambiguous: ' + ', '.join(unowned))
+    return programs
+
+
+def _project_declaration_labels(sources):
+    """Source-bound declaration projection; imported library tables stay library data."""
+    return {name: [_row(row) for row in document.rows] for name, document in sources.declarations.items()
+            if not name.endswith('.lnl')}
+
+
+def _project_caller_state(raw, program, streams, sources):
+    """Compare one existing project POU by its saved source language.
+
+    FBD keeps the object-model projection. Supported ST uses the existing text
+    projection because the structured reader accepts only FBD bytes. Every other
+    language stays a strict byte comparison, so an unreadable or unobserved
+    source change is still rejected rather than ignored.
+    """
+    from .source_header import source_payload_offset
+    from .text_pou import parse_st_pou
+    payload = streams[program]
+    language = payload[source_payload_offset(payload)]
+    if language == 208:
+        from .object_model import read_project_context
+        model = read_project_context(raw, program).object_model()
+        model['labels'] = {name: rows for name, rows in model['labels'].items() if not name.endswith('.lnl')}
+        for node in model['nodes']:
+            node.pop('source_offset', None)
+        for wire in model['wires']:
+            wire.pop('source_offset', None)
+        return {'language': 'fbd', 'model': model}
+    if language == 193:
+        try:
+            source = parse_st_pou(payload)
+        except GXWFormatError as error:
+            raise GXWFormatError('library import cannot read target ST source: ' + program + ': ' + str(error)) from error
+        if source.text is None:
+            return {'language': 'st', 'source': payload, 'labels': _project_declaration_labels(sources)}
+        return {'language': 'st', 'text': source.text, 'labels': _project_declaration_labels(sources)}
+    return {'language': language, 'source': payload, 'labels': _project_declaration_labels(sources)}
+
+
 def verify_library_import(target, donor, library_name, saved, observation):
     from .project_writer import ProjectWriteResult
     plan = library_transfer_plan(target, donor, library_name)
@@ -171,21 +241,24 @@ def verify_library_import(target, donor, library_name, saved, observation):
         raise GXWFormatError('existing target library definitions changed')
     # Check semantic caller state. Native storage/cache normalization is recorded
     # by the established save path rather than rejected as a byte difference.
-    from .object_model import read_project_context
-    program = next(name for name in _project(target)[1] if name.endswith('.pou'))
-    old = read_project_context(target, program)
-    reopened = read_project_context(saved, program)
-    if old.programs != reopened.programs or old.task_scopes() != reopened.task_scopes():
-        raise GXWFormatError('library import changed target programs or tasks')
-    for program in old.programs:
-        previous = read_project_context(target, program).object_model()
-        current = read_project_context(saved, program).object_model()
-        for model in (previous, current):
-            model['labels'] = {name: rows for name, rows in model['labels'].items() if not name.endswith('.lnl')}
-            for node in model['nodes']:
-                node.pop('source_offset', None)
-            for wire in model['wires']:
-                wire.pop('source_offset', None)
+    from .native_write import native_task_scope_context
+    target_streams, saved_streams = _project(target)[1], _project(saved)[1]
+    programs = _program_streams(target_streams)
+    if not programs:
+        raise GXWFormatError('library import target has no current project program')
+    program = programs[0]
+    previous_sources = ProjectCallableSources.from_project(target, program)
+    previous_programs = _project_programs(target_streams, previous_sources, 'target')
+    if program not in _program_streams(saved_streams):
+        raise GXWFormatError('library import changed target program sources: ' + program + ' is missing')
+    current_sources = ProjectCallableSources.from_project(saved, program)
+    if previous_programs != _project_programs(saved_streams, current_sources, 'reopened'):
+        raise GXWFormatError('library import changed target program sources')
+    if native_task_scope_context(target) != native_task_scope_context(saved):
+        raise GXWFormatError('library import changed target task scopes')
+    for program in previous_programs:
+        previous = _project_caller_state(target, program, target_streams, previous_sources)
+        current = _project_caller_state(saved, program, saved_streams, current_sources)
         if previous != current:
             raise GXWFormatError('library import changed target caller: ' + program)
     return ProjectWriteResult(saved, {'operation': 'native_library_import', 'library': plan['library_name'],
