@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Trash2, GitBranch, FileUp, Download } from "lucide-react";
+import { GitBranch, FileUp, Download } from "lucide-react";
 import { api, artifactUrl, key } from "../api/client";
 import type { Proposal } from "../api/client";
 import { Button } from "../components/ui";
@@ -7,8 +7,6 @@ import "./fbd.css";
 
 import type { ApiSchema } from "../api/client";
 export type FBDModel = ApiSchema["FBDModel"];
-type CatalogNode = ApiSchema["CatalogNode"];
-type DraftPreview = ApiSchema["FBDDraftPreview"];
 type NativeEvidence = ApiSchema["NativeEvidence"];
 
 type NativeCheck = ApiSchema["NativeCheck"];
@@ -699,19 +697,10 @@ export function FBDImport({
   );
 }
 
-type ScopeMode = "existing_task" | "new_task" | "new_resource";
 export type EditorView = ApiSchema["FBDEditorView"];
 
 export function FBDPanel({
-  value,
-  svg,
-  pid,
-  vid,
-  readOnly,
-  preview,
-  previewEditor,
-  onProposal,
-  t,
+  value, svg, pid, vid, readOnly, preview, previewEditor, t,
 }: {
   value: FBDModel | null;
   svg: string;
@@ -720,223 +709,63 @@ export function FBDPanel({
   readOnly: boolean;
   preview: boolean;
   previewEditor?: EditorView;
-  onProposal: (proposal: Proposal) => Promise<void>;
   t: (s: string) => string;
 }) {
-  const [editor, setEditor] = useState<EditorView | null>(null),
-    [sourceKey, setSourceKey] = useState("");
-  const [section, setSection] = useState("diagram"),
-    [catalog, setCatalog] = useState<CatalogNode[]>([]);
-  const [templateSearch, setTemplateSearch] = useState("");
-  const visibleCatalog = useMemo(() => {
-    const query = templateSearch.trim().toLocaleLowerCase();
-    return catalog.filter((item) => !query || templateLabel(item.template, t).toLocaleLowerCase().includes(query)).slice(0, 80);
-  }, [catalog, templateSearch, t]);
-  const [selectedTemplate, setSelectedTemplate] = useState(""),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
-  const [from, setFrom] = useState(""),
-    [to, setTo] = useState(""),
-    [table, setTable] = useState("");
-  const [zoom, setZoom] = useState(1),
-    [page, setPage] = useState(0);
-  const [creating, setCreating] = useState<"fb" | "program" | null>(null),
-    [sourceName, setSourceName] = useState("");
-  const [scopeMode, setScopeMode] = useState<ScopeMode>("existing_task");
-  const [targetResource, setTargetResource] = useState(""),
-    [targetTask, setTargetTask] = useState("");
-  const [rendered, setRendered] = useState<{
-    identity: string;
-    value?: DraftPreview;
-    error?: string;
-  } | null>(null);
-  const generation = useRef(0),
-    pending = useRef(false);
+  const [loaded, setLoaded] = useState<{ identity: string; view: EditorView } | null>(null);
+  const [section, setSection] = useState("diagram");
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [table, setTable] = useState(""), [page, setPage] = useState(0);
+  const [zoom, setZoom] = useState(1), [search, setSearch] = useState("");
+  const generation = useRef(0), pending = useRef(false);
   const inputKey = useMemo(() => JSON.stringify(value), [value]);
+  const identity = `${pid}/${vid}/${inputKey}`;
+  const editor = preview ? previewEditor : loaded?.identity === identity ? loaded.view : null;
+
   useEffect(() => {
     const current = ++generation.current;
     pending.current = false;
+    setLoaded(null);
     setBusy(false);
-    setEditor(null);
-    setCatalog([]);
     setError("");
-    setRendered(null);
     setPage(0);
-    setFrom("");
-    setTo("");
-    setCreating(null);
-    setSourceName("");
-    setTargetResource("");
-    setTargetTask("");
+    setSearch("");
+    setZoom(1);
     if (preview) {
-      if (previewEditor) {
-        setEditor(previewEditor);
-        setCatalog(previewEditor.catalog);
-        setSourceKey(JSON.stringify(previewEditor.model));
-        setTable(previewEditor.presentation.tables[0] || "");
-      }
-      return () => {
-        generation.current++;
-      };
+      setTable(previewEditor?.presentation.tables[0] || "");
+      return () => { generation.current++; };
     }
     api<EditorView>("/fbd/editor", "POST", {
-      project_id: pid,
-      version_id: vid || null,
-      model: JSON.parse(inputKey),
-    })
-      .then((result) => {
-        if (generation.current === current) {
-          setEditor(result);
-          setCatalog(result.catalog);
-          setSelectedTemplate(result.catalog[0]?.template || "");
-          setSourceKey(JSON.stringify(result.model));
-          setTable(result.presentation.tables[0] || "");
-        }
-      })
-      .catch((e) => {
-        if (generation.current === current) setError(e.message);
-      });
-    return () => {
-      generation.current++;
-    };
-  }, [inputKey, pid, vid, preview, previewEditor]);
-  const draft = editor?.model;
-  const draftKey = useMemo(() => JSON.stringify(draft), [draft]),
-    dirty = !!draft && draftKey !== sourceKey;
-  const previewIdentity = `${pid}/${vid}/${draftKey}`;
-  const disabled = readOnly || preview || busy;
-  useEffect(() => {
-    if (!dirty || preview) return;
-    let active = true;
-    const timer = window.setTimeout(() => {
-      api<DraftPreview>("/fbd/preview", "POST", {
-        project_id: pid,
-        version_id: vid || null,
-        model: JSON.parse(draftKey),
-        save_policy: "draft",
-      })
-        .then((value) => {
-          if (active) setRendered({ identity: previewIdentity, value });
-        })
-        .catch((error) => {
-          if (active)
-            setRendered({
-              identity: previewIdentity,
-              error: String(error instanceof Error ? error.message : error),
-            });
-        });
-    }, 350);
-    return () => {
-      active = false;
-      window.clearTimeout(timer);
-    };
-  }, [dirty, preview, pid, vid, draftKey, previewIdentity]);
-  async function edit(command: Record<string, unknown>) {
-    if (!editor || disabled || pending.current) return;
-    const current = generation.current;
-    pending.current = true;
-    setBusy(true);
-    setError("");
-    try {
-      const result = await api<EditorView>("/fbd/editor", "POST", {
-        project_id: pid,
-        version_id: vid || null,
-        model: editor.model,
-        command,
-      });
+      project_id: pid, version_id: vid || null, model: JSON.parse(inputKey),
+    }).then((view) => {
       if (generation.current === current) {
-        setEditor(result);
-        setCatalog(result.catalog);
-        setSelectedTemplate((previous) =>
-          result.catalog.some((item) => item.template === previous)
-            ? previous
-            : result.catalog[0]?.template || "",
-        );
+        setLoaded({ identity, view });
+        setTable(view.presentation.tables[0] || "");
       }
-    } catch (e) {
-      if (generation.current === current) setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      if (generation.current === current) {
-        pending.current = false;
-        setBusy(false);
-      }
-    }
-  }
-  async function discard() {
-    if (pending.current) return;
-    const current = generation.current;
-    pending.current = true;
-    setBusy(true);
-    try {
-      const result = await api<EditorView>("/fbd/editor", "POST", {
-        project_id: pid,
-        version_id: vid || null,
-        model: JSON.parse(sourceKey),
-      });
-      if (generation.current === current) {
-        setEditor(result);
-        setCatalog(result.catalog);
-        setError("");
-      }
-    } catch (e) {
-      if (generation.current === current) setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      if (generation.current === current) {
-        pending.current = false;
-        setBusy(false);
-      }
-    }
-  }
-  async function propose() {
-    if (!draft || pending.current || error) return;
-    const current = generation.current;
-    pending.current = true;
-    setBusy(true);
-    setError("");
-    try {
-      const proposal = await api<Proposal>("/fbd/proposals", "POST", {
-        operation: vid ? "edit" : "generate",
-        project_id: pid,
-        version_id: vid || null,
-        request_id: key(),
-        model: draft,
-        save_policy: "draft",
-      });
-      if (generation.current === current) await onProposal(proposal);
-    } catch (e) {
-      if (generation.current === current) setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      if (generation.current === current) {
-        pending.current = false;
-        setBusy(false);
-      }
-    }
-  }
+    }).catch((error) => {
+      if (generation.current === current) setError(error.message);
+    });
+    return () => { generation.current++; };
+  }, [identity, inputKey, pid, vid, preview, previewEditor]);
+
   async function selectProgram(program: string) {
-    if (pending.current || dirty || preview) return;
+    if (pending.current || preview) return;
     const current = generation.current;
     pending.current = true;
     setBusy(true);
     setError("");
     try {
-      const result = await api<EditorView>("/fbd/editor", "POST", {
-        project_id: pid,
-        version_id: vid,
-        program,
+      const view = await api<EditorView>("/fbd/editor", "POST", {
+        project_id: pid, version_id: vid, program,
       });
       if (generation.current === current) {
-        setEditor(result);
-        setCatalog(result.catalog);
-        setSourceKey(JSON.stringify(result.model));
-        setRendered(null);
-        setSelectedTemplate(result.catalog[0]?.template || "");
-        setTable(result.presentation.tables[0] || "");
+        setLoaded({ identity, view });
+        setTable(view.presentation.tables[0] || "");
         setPage(0);
-        setFrom("");
-        setTo("");
+        setSearch("");
+        setZoom(1);
       }
-    } catch (e) {
-      if (generation.current === current) setError(e instanceof Error ? e.message : String(e));
+    } catch (error) {
+      if (generation.current === current) setError(error instanceof Error ? error.message : String(error));
     } finally {
       if (generation.current === current) {
         pending.current = false;
@@ -944,723 +773,139 @@ export function FBDPanel({
       }
     }
   }
-  function chooseScopeMode(mode: ScopeMode) {
-    setScopeMode(mode);
-    const scopes = editor?.task_scopes,
-      first = scopes?.tasks[0];
-    setTargetResource(
-      mode === "new_resource"
-        ? ""
-        : mode === "existing_task"
-          ? first?.resource || ""
-          : scopes?.resources[0] || "",
-    );
-    setTargetTask(mode === "existing_task" ? first?.task || "" : "");
-  }
-  function openCreation(kind: "fb" | "program") {
-    setCreating((previous) => (previous === kind ? null : kind));
-    setSourceName("");
-    if (kind === "program")
-      chooseScopeMode(
-        editor?.task_scopes?.tasks.length
-          ? "existing_task"
-          : editor?.task_scopes?.resources.length
-            ? "new_task"
-            : "new_resource",
-      );
-  }
-  async function createSource() {
-    if (disabled || dirty || !vid || !sourceName.trim() || pending.current) return;
-    if (creating === "program" && (!targetResource.trim() || !targetTask.trim())) return;
-    const current = generation.current;
-    pending.current = true;
-    setBusy(true);
-    setError("");
-    try {
-      const proposal = await api<Proposal>("/fbd/proposals", "POST", {
-        operation: creating === "program" ? "create_program" : "create_fb",
-        project_id: pid,
-        version_id: vid,
-        request_id: key(),
-        source_name: sourceName.trim(),
-        ...(creating === "program"
-          ? {
-              scope_mode: scopeMode,
-              resource: scopeMode === "new_resource" ? targetResource.trim() : targetResource,
-              task: scopeMode === "existing_task" ? targetTask : targetTask.trim(),
-            }
-          : {}),
-      });
-      if (generation.current === current) await onProposal(proposal);
-    } catch (e) {
-      if (generation.current === current) setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      if (generation.current === current) {
-        pending.current = false;
-        setBusy(false);
-      }
-    }
-  }
-  if (!editor || !draft)
-    return (
-      <div className="fbd-panel">
-        <p role={error ? "alert" : "status"}>{error || t("正在读取…")}</p>
-      </div>
-    );
-  const currentRender = rendered?.identity === previewIdentity ? rendered : null;
-  const diagram =
-    dirty && !preview
-      ? currentRender?.value
-        ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(currentRender.value.svg)}`
-        : ""
-      : editor.source_svg
-        ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(editor.source_svg)}`
-        : svg;
-  const diagramIssues = currentRender?.value?.model.issues || (!dirty ? draft.issues : []) || [];
-  const rows = editor.presentation.rows[table] || [],
-    endpoints = editor.presentation.endpoints;
-  const number = (text: string) => (text.trim() === "" ? text : Number(text));
+
+  if (!editor) return (
+    <div className="fbd-panel">
+      <p className="fbd-notice" role={error ? "alert" : "status"}>
+        {error || t(preview ? "程序详情暂不可用。" : "正在读取…")}
+      </p>
+    </div>
+  );
+
+  const model = editor.model;
+  const diagram = editor.source_svg
+    ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(editor.source_svg)}` : svg;
+  const blocks = editor.presentation.blocks || [];
+  const rows = editor.presentation.rows[table] || [];
+  const query = search.trim().toLocaleLowerCase();
+  const components = model.nodes.filter((node) => node.template !== "comment" &&
+    (!query || `${node.symbol} ${templateLabel(node.template, t)}`.toLocaleLowerCase().includes(query)));
+  const nodeViews = new Map(editor.presentation.nodes.map((node) => [node.id, node]));
+  const sections = [
+    ["diagram", "程序图"], ["networks", "网络"], ["components", "元件与端口"], ["labels", "标签"],
+    ...(!preview && vid ? [["native", "原生验证"]] : []),
+  ];
+  const visibleSection = sections.some(([id]) => id === section) ? section : "diagram";
   return (
     <div className="fbd-panel">
       <div className="fbd-toolbar">
         {vid && !preview && editor.programs.length > 1 ? (
-          <select
-            aria-label={t("所选 POU")}
-            value={draft.program}
-            disabled={busy || dirty}
-            onChange={(e) => void selectProgram(e.target.value)}
-          >
+          <select aria-label={t("所选 POU")} value={model.program} disabled={busy}
+            onChange={(event) => void selectProgram(event.target.value)}>
             {editor.programs.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
+              <option key={name} value={name}>{name.replace(".Program.pou", "")}</option>
             ))}
           </select>
-        ) : (
-          <strong>{draft.program.replace(".Program.pou", "")} · FBD</strong>
-        )}
-        <span className="muted">
-          {draft.nodes.length} {t("对象")} · {draft.wires.length} {t("导线")}
-        </span>
-        <div className="fbd-toolbar-actions">
-          {vid && !preview && (
-            <a className="button" href={artifactUrl(pid, vid, "gxw", true)}>
-              <Download size={14} />
-              GXW
-            </a>
-          )}
-          {vid && !preview && (
-            <Button
-              disabled={disabled || dirty || editor.task_scopes?.status !== "available"}
-              title={editor.task_scopes?.message ?? undefined}
-              onClick={() => openCreation("program")}
-            >
-              <Plus size={14} />
-              {t("新建 FBD Program")}
-            </Button>
-          )}
-          {vid && !preview && (
-            <Button disabled={disabled || dirty} onClick={() => openCreation("fb")}>
-              <Plus size={14} />
-              {t("新建 FBD FB")}
-            </Button>
-          )}
-          {!preview && (
-            <Button
-              disabled={disabled || !!error || (!vid && !draft.nodes.length) || (!!vid && !dirty)}
-              variant="primary"
-              onClick={() => void propose()}
-            >
-              <GitBranch size={14} />
-              {t("校验并保存版本")}
-            </Button>
-          )}
-        </div>
+        ) : <strong>{model.program.replace(".Program.pou", "")} · FBD</strong>}
+        <span className="muted">{model.cpu}{model.cpu && " · "}{blocks.length || 1} {t("网络")}</span>
+        {vid && !preview && <div className="fbd-toolbar-actions">
+          <a className="button" href={artifactUrl(pid, vid, "gxw", true)}>
+            <Download size={14} />{t("下载 GXW")}
+          </a>
+        </div>}
       </div>
-      {creating && !preview && (
-        <div className="fbd-toolbar">
-          <label>
-            {t(creating === "program" ? "Program 名称" : "FB 名称")}{" "}
-            <input
-              aria-label={t(creating === "program" ? "Program 名称" : "FB 名称")}
-              value={sourceName}
-              disabled={disabled || dirty}
-              maxLength={255}
-              onChange={(e) => setSourceName(e.target.value)}
-            />
-          </label>
-          {creating === "program" && (
-            <>
-              <label>
-                {t("任务归属")}{" "}
-                <select
-                  aria-label={t("任务归属")}
-                  value={scopeMode}
-                  disabled={disabled || dirty}
-                  onChange={(e) => chooseScopeMode(e.target.value as ScopeMode)}
-                >
-                  <option value="existing_task" disabled={!editor.task_scopes?.tasks.length}>
-                    {t("已有任务")}
-                  </option>
-                  <option value="new_task" disabled={!editor.task_scopes?.resources.length}>
-                    {t("已有资源中的新任务")}
-                  </option>
-                  <option value="new_resource">{t("新资源和任务")}</option>
-                </select>
-              </label>
-              <label>
-                {t("资源")}{" "}
-                {scopeMode === "new_resource" ? (
-                  <input
-                    aria-label={t("资源")}
-                    value={targetResource}
-                    disabled={disabled || dirty}
-                    maxLength={255}
-                    onChange={(e) => setTargetResource(e.target.value)}
-                  />
-                ) : (
-                  <select
-                    aria-label={t("资源")}
-                    value={targetResource}
-                    disabled={disabled || dirty}
-                    onChange={(e) => {
-                      setTargetResource(e.target.value);
-                      if (scopeMode === "existing_task")
-                        setTargetTask(
-                          editor.task_scopes?.tasks.find((row) => row.resource === e.target.value)
-                            ?.task || "",
-                        );
-                    }}
-                  >
-                    {editor.task_scopes?.resources.map((resource) => (
-                      <option key={resource}>{resource}</option>
-                    ))}
-                  </select>
-                )}
-              </label>
-              <label>
-                {t("PLC 任务")}{" "}
-                {scopeMode === "existing_task" ? (
-                  <select
-                    aria-label={t("PLC 任务")}
-                    value={targetTask}
-                    disabled={disabled || dirty}
-                    onChange={(e) => setTargetTask(e.target.value)}
-                  >
-                    {editor.task_scopes?.tasks
-                      .filter((row) => row.resource === targetResource)
-                      .map((row) => (
-                        <option key={row.task}>{row.task}</option>
-                      ))}
-                  </select>
-                ) : (
-                  <input
-                    aria-label={t("PLC 任务")}
-                    value={targetTask}
-                    disabled={disabled || dirty}
-                    maxLength={255}
-                    onChange={(e) => setTargetTask(e.target.value)}
-                  />
-                )}
-              </label>
-            </>
-          )}
-          <Button
-            disabled={
-              disabled ||
-              dirty ||
-              !sourceName.trim() ||
-              (creating === "program" && (!targetResource.trim() || !targetTask.trim()))
-            }
-            onClick={() => void createSource()}
-          >
-            {t("创建并保存版本")}
-          </Button>
-        </div>
-      )}
-      <div className="fbd-sections">
-        {[
-          ["diagram", "图形"],
-          ["networks", "网络"],
-          ["objects", "对象"],
-          ["wires", "连接"],
-          ["labels", "声明"],
-          ...(!preview && vid ? [["native", "原生验证"]] : []),
-        ].map(([id, label]) => (
-          <button
-            className={section === id ? "active" : ""}
-            key={id}
-            onClick={() => setSection(id)}
-          >
-            {t(label)}
-          </button>
+      <p className="fbd-notice">{t("在对话中描述修改需求；图形编辑可在 GX Works2 中完成。")}</p>
+      <div className="fbd-sections" aria-label={t("FBD 视图")}>
+        {sections.map(([id, label]) => (
+          <button key={id} className={visibleSection === id ? "active" : ""}
+            aria-pressed={visibleSection === id} onClick={() => setSection(id)}>{t(label)}</button>
         ))}
-        {dirty && (
-          <>
-            <span role="status">
-              {t(
-                currentRender?.error
-                  ? "草稿有错误，请检查后重试。"
-                  : currentRender?.value
-                    ? "图形已与草稿同步；尚未保存、尚未原生编译。"
-                    : "正在校验并更新草稿图形…",
-              )}
-            </span>
-            <Button disabled={disabled} onClick={() => void discard()}>
-              {t("撤销草稿")}
-            </Button>
-          </>
-        )}
       </div>
-      {error && (
-        <p role="alert" className="fbd-error">
-          {error}
-        </p>
-      )}
-      {dirty && currentRender?.error && (
-        <p role="alert" className="fbd-error">
-          {currentRender.error}
-        </p>
-      )}
-      {!!diagramIssues.length && (
-        <details className="fbd-issues">
-          <summary>
-            {t("结构检查提示")} · {diagramIssues.length}
-          </summary>
-          <ul>
-            {diagramIssues.map((issue, i) => (
-              <li key={i}>
-                <code>{issue.code}</code> · {issue.message}
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
-      {section === "diagram" ? (
+      {error && <p className="fbd-error" role="alert">{error}</p>}
+      {!!model.issues?.length && <details className="fbd-issues">
+        <summary>{t("结构检查提示")} · {model.issues.length}</summary>
+        <ul>{model.issues.map((issue, index) => <li key={index}>{issue.message || issue.code}</li>)}</ul>
+      </details>}
+      {visibleSection === "diagram" ? (
         <div className="fbd-diagram">
-          <div className="fbd-zoom">
-            <Button onClick={() => setZoom((v) => Math.max(0.25, v - 0.25))}>−</Button>
-            <Button onClick={() => setZoom(1)} title={t("适应画布")}>
-              {Math.round(zoom * 100)}%
-            </Button>
-            <Button onClick={() => setZoom((v) => Math.min(4, v + 0.25))}>+</Button>
-          </div>
-          {diagram ? (
-            <img
-              alt={t(dirty ? "当前草稿结构化梯形图/FBD" : "结构化梯形图/FBD")}
-              src={diagram}
-              style={{ width: `${zoom * 100}%`, maxWidth: "none" }}
-            />
-          ) : dirty ? (
-            <div className="empty-state" role="status">
-              <p>
-                {t(
-                  currentRender?.error
-                    ? "修正对象、导线或声明后，图形会自动更新。"
-                    : "正在生成当前草稿图形…",
-                )}
-              </p>
+          {diagram && model.nodes.length ? <>
+            <div className="fbd-zoom">
+              <Button aria-label={t("缩小")} onClick={() => setZoom((value) => Math.max(0.25, value - 0.25))}>−</Button>
+              <Button title={t("重置缩放")} onClick={() => setZoom(1)}>{Math.round(zoom * 100)}%</Button>
+              <Button aria-label={t("放大")} onClick={() => setZoom((value) => Math.min(4, value + 0.25))}>+</Button>
             </div>
-          ) : (
-            <div className="empty-state">
-              <GitBranch size={38} />
-              <h2>{t("生成 FBD 工程")}</h2>
-              <p>{t("在右侧描述需求并选择“生成程序”，或在对象和连接页签中创建程序。")}</p>
-              <Button onClick={() => setSection("objects")}>{t("添加对象")}</Button>
-            </div>
-          )}
+            <img alt={t("结构化梯形图/FBD")} src={diagram}
+              style={{ width: `${zoom * 100}%`, maxWidth: "none" }} />
+          </> : <div className="empty-state">
+            <GitBranch size={38} /><h2>{t("暂无程序图")}</h2>
+            <p>{t("在对话中描述控制需求，或导入已有 GXW 工程。")}</p>
+          </div>}
         </div>
-      ) : section === "networks" ? (
-        <div className="fbd-sheet">
-          <Button disabled={disabled} onClick={() => void edit({ action: "add_block" })}>
-            <Plus size={14} />{t("添加网络")}
-          </Button>
-          <table>
-            <thead><tr>{["网络", "标题", "注释", "高度", "顺序", ""].map((title) => <th key={title}>{t(title)}</th>)}</tr></thead>
-            <tbody>{(editor.presentation.blocks || []).map((block, index, all) => <tr key={`${block.source_offset ?? "new"}:${index}`}>
-              <td>{index + 1}</td>
-              {(["title", "comment", "canvas_height"] as const).map((field) => <td key={field}>
-                {field === "canvas_height" ? <input key={`${field}:${block[field]}`} disabled={disabled} defaultValue={block[field] ?? ""}
-                  type="number"
-                  aria-label={`${t("高度")} ${index + 1}`}
-                  onBlur={(event) => {
-                    const value = Number(event.target.value);
-                    if (value !== block[field]) void edit({ action: "update_block", index, field, value });
-                  }} /> : <textarea key={`${field}:${block[field]}`} disabled={disabled} defaultValue={block[field] ?? ""}
-                    aria-label={`${t(field === "title" ? "标题" : "注释")} ${index + 1}`} rows={2}
-                    onBlur={(event) => {
-                      if (event.target.value !== (block[field] ?? ""))
-                        void edit({ action: "update_block", index, field, value: event.target.value });
-                    }} />}
-              </td>)}
-              <td>
-                <Button disabled={disabled || index === 0} aria-label={`${t("上移")} ${index + 1}`}
-                  onClick={() => void edit({ action: "move_block", index, target: index - 1 })}>↑</Button>
-                <Button disabled={disabled || index + 1 === all.length} aria-label={`${t("下移")} ${index + 1}`}
-                  onClick={() => void edit({ action: "move_block", index, target: index + 1 })}>↓</Button>
-              </td>
-              <td><Button disabled={disabled} aria-label={`${t("删除网络")} ${index + 1}`}
-                onClick={() => void edit({ action: "delete_block", index })}><Trash2 size={14} /></Button></td>
-            </tr>)}</tbody>
-          </table>
+      ) : visibleSection === "networks" ? (
+        <div className="fbd-sheet fbd-network-list">
+          {blocks.map((block, index) => {
+            const comments = model.nodes.filter((node) => (node.block ?? 0) === index && node.template === "comment");
+            return <article className="fbd-network" key={index}>
+              <header><span>{t("网络")} {index + 1}</span>{block.title && <code>{block.title}</code>}</header>
+              {block.comment && <strong>{block.comment}</strong>}
+              {comments.map((node) => <p key={node.id}>{node.symbol}</p>)}
+              {!block.title && !block.comment && !comments.length && <p className="muted">{t("未填写网络说明")}</p>}
+            </article>;
+          })}
         </div>
-      ) : section === "objects" ? (
+      ) : visibleSection === "components" ? (
         <div className="fbd-sheet">
           <div className="fbd-inline">
-            <input type="search" aria-label={t("搜索对象类型")} placeholder={t("搜索对象类型")}
-              value={templateSearch} onChange={(event) => setTemplateSearch(event.target.value)} />
-            <select
-              aria-label={t("对象类型")}
-              value={selectedTemplate}
-              onChange={(e) => setSelectedTemplate(e.target.value)}
-            >
-              {!visibleCatalog.some((item) => item.template === selectedTemplate) && selectedTemplate &&
-                <option value={selectedTemplate}>{templateLabel(selectedTemplate, t)}</option>}
-              {visibleCatalog.map((c) => (
-                <option key={c.template} value={c.template}>
-                  {templateLabel(c.template, t)}
-                </option>
-              ))}
-            </select>
-            <Button
-              disabled={disabled || !selectedTemplate}
-              onClick={() => void edit({ action: "add_node", template: selectedTemplate })}
-            >
-              <Plus size={14} />
-              {t("添加对象")}
-            </Button>
+            <input type="search" aria-label={t("搜索元件或实例")} placeholder={t("搜索元件或实例")}
+              value={search} onChange={(event) => setSearch(event.target.value)} />
           </div>
-          <table>
-            <thead>
-              <tr>
-                {["类型", "设备或实例名", "网络", "列", "行", "端口", "尺寸", ""].map((v, i) => (
-                  <th key={i}>{t(v)}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {draft.nodes.map((node, i) => {
-                const view = editor.presentation.nodes.find((n) => n.id === node.id);
-                return (
-                  <tr key={node.id}>
-                    <td>
-                      <select
-                        disabled={disabled}
-                        value={node.template}
-                        onChange={(e) =>
-                          void edit({
-                            action: "update_node",
-                            id: node.id,
-                            field: "template",
-                            value: e.target.value,
-                          })
-                        }
-                      >
-                        {!visibleCatalog.some((c) => c.template === node.template) && (
-                          <option>{node.template}</option>
-                        )}
-                        {visibleCatalog.map((c) => (
-                          <option key={c.template} value={c.template}>
-                            {templateLabel(c.template, t)}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td>
-                      <textarea
-                        key={`${node.id}:symbol:${node.symbol}`}
-                        aria-label={`${t("设备或实例名")} ${i + 1}`}
-                        disabled={disabled || !view?.symbol_editable}
-                        rows={1}
-                        defaultValue={node.symbol}
-                        onBlur={(e) => {
-                          if (e.target.value !== node.symbol)
-                            void edit({
-                              action: "update_node",
-                              id: node.id,
-                              field: "symbol",
-                              value: e.target.value,
-                            });
-                        }}
-                      />
-                    </td>
-                    <td>
-                      <select aria-label={`${t("网络")} ${i + 1}`} disabled={disabled} value={node.block ?? 0}
-                        onChange={(event) => void edit({ action: "update_node", id: node.id, field: "block", value: Number(event.target.value) })}>
-                        {(editor.presentation.blocks || []).map((_block, index) => <option key={index} value={index}>{index + 1}</option>)}
-                      </select>
-                    </td>
-                    {(["x", "y"] as const).map((coord) => (
-                      <td key={coord}>
-                        <input
-                          key={`${node.id}:${coord}:${node[coord]}`}
-                          aria-label={`${node.id} ${coord}`}
-                          className="fbd-number"
-                          type="number"
-                          disabled={disabled}
-                          defaultValue={node[coord]}
-                          onBlur={(e) => {
-                            if (e.target.value !== String(node[coord]))
-                              void edit({
-                                action: "update_node",
-                                id: node.id,
-                                field: coord,
-                                value: number(e.target.value),
-                              });
-                          }}
-                        />
-                      </td>
-                    ))}
-                    <td className="mono">
-                      {view?.ports
-                        .map((p) => (p.data_type ? `${p.name}: ${p.data_type}` : p.name))
-                        .join(" · ")}
-                      {view?.callable && <Button disabled={disabled}
-                        onClick={() => void edit({ action: "refresh_callable", id: node.id })}>{t("更新调用端口")}</Button>}
-                    </td>
-                    <td>
-                      {(["width", "height"] as const).map((field) => <input key={`${node.id}:${field}:${JSON.stringify(node.resize)}:${JSON.stringify(node.port_layout)}`}
-                        className="fbd-number" type="number" disabled={disabled || !view?.resizable}
-                        aria-label={`${t(field === "width" ? "宽度" : "高度")} ${i + 1}`}
-                        defaultValue={node.resize?.[field] ?? node.port_layout?.[field] ?? node[field] ?? ""}
-                        onBlur={(event) => {
-                          const value = Number(event.target.value);
-                          if (value !== (node.resize?.[field] ?? node.port_layout?.[field] ?? node[field]))
-                            void edit({ action: "resize_node", id: node.id, ...node.resize, [field]: value });
-                        }} />)}
-                    </td>
-                    <td>
-                      <Button
-                        aria-label={`${t("删除对象")} ${i + 1}`}
-                        disabled={disabled}
-                        onClick={() => void edit({ action: "delete_node", id: node.id })}
-                      >
-                        <Trash2 size={14} />
-                      </Button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      ) : section === "wires" ? (
-        <div className="fbd-sheet">
-          <div className="fbd-inline">
-            <select
-              aria-label={t("起点端口")}
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-            >
-              <option value="">{t("起点端口")}</option>
-              {endpoints.map((e) => (
-                <option key={e.value} value={e.value}>
-                  {e.label}
-                </option>
-              ))}
-            </select>
-            <span>→</span>
-            <select aria-label={t("终点端口")} value={to} onChange={(e) => setTo(e.target.value)}>
-              <option value="">{t("终点端口")}</option>
-              {endpoints.map((e) => (
-                <option key={e.value} value={e.value}>
-                  {e.label}
-                </option>
-              ))}
-            </select>
-            <Button
-              disabled={disabled || !from || !to}
-              onClick={() => void edit({ action: "add_wire", from, to })}
-            >
-              <Plus size={14} />
-              {t("连接端口")}
-            </Button>
-            <Button disabled={disabled} onClick={() => void edit({ action: "add_bus" })}>
-              {t("添加左母线")}
-            </Button>
-            <Button disabled={disabled} onClick={() => void edit({ action: "add_junction", point: [3, 2] })}>
-              {t("添加连接点")}
-            </Button>
+          <div className="fbd-components">
+            {components.map((node) => {
+              const ports = nodeViews.get(node.id)?.ports || [];
+              return <details className="fbd-component" key={node.id}>
+                <summary>
+                  <span className="fbd-component-name">{node.symbol || templateLabel(node.template, t)}</span>
+                  <span className="muted">{templateLabel(node.template, t)}</span>
+                  <span className="muted">{t("网络")} {(node.block ?? 0) + 1}</span>
+                </summary>
+                {ports.length ? <table>
+                  <thead><tr>{["端口", "方向", "数据类型", "属性"].map((label) => <th key={label}>{t(label)}</th>)}</tr></thead>
+                  <tbody>{ports.map((port, index) => <tr key={index}>
+                    <td>{port.formal_name || port.name}</td>
+                    <td>{t(port.side === "in" ? "输入" : port.side === "out" ? "输出" : "未解析")}</td>
+                    <td>{port.data_type || t("未解析")}</td>
+                    <td>{[port.class_code === 5 ? "IN_OUT" : "", port.negated === true ? t("取反") : ""].filter(Boolean).join(" · ") || "—"}</td>
+                  </tr>)}</tbody>
+                </table> : <p className="muted">{t("无端口信息")}</p>}
+              </details>;
+            })}
+            {!components.length && <p className="muted">{t("没有匹配的元件")}</p>}
           </div>
-          <table>
-            <thead>
-              <tr>
-                <th>{t("起点")}</th>
-                <th>{t("终点")}</th>
-                <th>{t("折点")}</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {draft.wires.map((w, i) => (
-                <tr key={i}>
-                  {(["start", "end"] as const).map((field, side) => (
-                    <td key={field}>
-                      {w[field] ? (
-                        <div className="fbd-inline">
-                          {[0, 1].map((coord) => (
-                            <input
-                              key={`${coord}:${w[field]![coord]}`}
-                              className="fbd-number"
-                              type="number"
-                              aria-label={`${t("导线")} ${i + 1} ${field} ${coord}`}
-                              disabled={disabled}
-                              defaultValue={w[field]![coord]}
-                              onBlur={(e) => {
-                                const value = [...w[field]!];
-                                const next = number(e.target.value);
-                                if (next !== value[coord])
-                                  void edit(w.kind === "junction" ? {
-                                    action: "move_junction", index: i, point: [
-                                      ...(coord === 0 ? [next, value[1]] : [value[0], next]),
-                                    ],
-                                  } : {
-                                    action: "update_wire",
-                                    index: i,
-                                    field,
-                                    value: value.map((v, j) => (j === coord ? next : v)),
-                                  });
-                              }}
-                            />
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="mono">{side ? w.to : w.from}</span>
-                      )}
-                    </td>
-                  ))}
-                  <td className="mono">
-                    {w.from ? (
-                      <input
-                        key={`${i}:${JSON.stringify(w.via)}`}
-                        aria-label={`${t("折点")} ${i + 1}`}
-                        disabled={disabled}
-                        defaultValue={w.via?.map((p) => p.join(",")).join("; ") || ""}
-                        placeholder="x,y; x,y"
-                        onBlur={(e) => {
-                          if (e.target.value !== (w.via?.map((p) => p.join(",")).join("; ") || ""))
-                            void edit({
-                              action: "update_wire",
-                              index: i,
-                              field: "via",
-                              value: e.target.value,
-                            });
-                        }}
-                      />
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td>
-                    <Button
-                      disabled={disabled}
-                      aria-label={`${t("删除导线")} ${i + 1}`}
-                      onClick={() => void edit({ action: "delete_wire", index: i })}
-                    >
-                      <Trash2 size={14} />
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
-      ) : section === "native" && vid && !preview ? (
-        <NativeValidationPanel
-          key={`${pid}/${vid}/${draft.program}`}
-          pid={pid}
-          vid={vid}
-          program={draft.program}
-          disabled={readOnly || busy || dirty}
-          t={t}
-        />
+      ) : visibleSection === "native" && vid && !preview ? (
+        <NativeValidationPanel key={`${pid}/${vid}/${model.program}`} pid={pid} vid={vid}
+          program={model.program} disabled={readOnly || busy} t={t} />
       ) : (
         <div className="fbd-sheet">
           <div className="fbd-inline">
-            <select
-              aria-label={t("声明表")}
-              value={table}
-              onChange={(e) => {
-                setTable(e.target.value);
-                setPage(0);
-              }}
-            >
-              {editor.presentation.tables.map((n) => (
-                <option key={n}>{n}</option>
-              ))}
+            <select aria-label={t("声明表")} value={table} onChange={(event) => { setTable(event.target.value); setPage(0); }}>
+              {editor.presentation.tables.map((name) => <option key={name}>{name}</option>)}
             </select>
-            <Button
-              disabled={disabled || !table}
-              onClick={() => void edit({ action: "add_label", table })}
-            >
-              <Plus size={14} />
-              {t("添加声明")}
-            </Button>
           </div>
           <table>
-            <thead>
-              <tr>
-                {["名称", "数据类型", "类别", "初始值", "软元件", "注释", ""].map((v, i) => (
-                  <th key={i}>{t(v)}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.slice(page * 50, (page + 1) * 50).map((row) => (
-                <tr key={`${table}:${row.name}`}>
-                  {(
-                    [
-                      "name",
-                      "data_type",
-                      "class_name",
-                      "initial_value",
-                      "device",
-                      "comment",
-                    ] as const
-                  ).map((field) => (
-                    <td key={field}>
-                      <input
-                        key={`${row.name}:${field}:${row[field]}`}
-                        disabled={disabled}
-                        aria-label={`${row.name} ${field}`}
-                        defaultValue={row[field] || ""}
-                        onBlur={(e) => {
-                          if (e.target.value !== (row[field] || ""))
-                            void edit({
-                              action: "update_label",
-                              table,
-                              name: row.name,
-                              field,
-                              value: e.target.value,
-                            });
-                        }}
-                      />
-                    </td>
-                  ))}
-                  <td>
-                    <Button
-                      disabled={disabled}
-                      aria-label={`${t("删除声明")} ${row.name}`}
-                      onClick={() => void edit({ action: "delete_label", table, name: row.name })}
-                    >
-                      <Trash2 size={14} />
-                    </Button>
-                  </td>
-                </tr>
+            <thead><tr>{["名称", "数据类型", "类别", "初始值", "软元件", "注释"].map((label) => <th key={label}>{t(label)}</th>)}</tr></thead>
+            <tbody>{rows.slice(page * 50, (page + 1) * 50).map((row) => <tr key={row.name}>
+              {(["name", "data_type", "class_name", "initial_value", "device", "comment"] as const).map((field) => (
+                <td key={field}>{row[field] || "—"}</td>
               ))}
-            </tbody>
+            </tr>)}</tbody>
           </table>
-          <div className="fbd-inline">
-            <Button disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
-              {t("上一页")}
-            </Button>
-            <span>
-              {page + 1} / {Math.max(1, Math.ceil(rows.length / 50))} · {rows.length}
-            </span>
-            <Button disabled={(page + 1) * 50 >= rows.length} onClick={() => setPage((p) => p + 1)}>
-              {t("下一页")}
-            </Button>
-          </div>
+          {!rows.length && <p className="muted">{t("此表没有标签")}</p>}
+          {rows.length > 50 && <div className="fbd-inline">
+            <Button disabled={page === 0} onClick={() => setPage((value) => value - 1)}>{t("上一页")}</Button>
+            <span>{page + 1} / {Math.ceil(rows.length / 50)} · {rows.length}</span>
+            <Button disabled={(page + 1) * 50 >= rows.length} onClick={() => setPage((value) => value + 1)}>{t("下一页")}</Button>
+          </div>}
         </div>
       )}
     </div>

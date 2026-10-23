@@ -178,7 +178,6 @@ export function EditorContent({
         preview?.target_mode === "fbd" && isFBDEditorView(preview.editor) ? preview.editor : undefined
       }
       t={t}
-      onProposal={showFBDProposal}
     />
   ) : visibleTab === "fbd" ? (
     <div className="empty-state">
