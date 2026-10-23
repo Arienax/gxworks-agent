@@ -4,7 +4,7 @@ from dataclasses import replace
 import re
 from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
 from plc.validation import (DEVICE_ADDRESS_RE, PLCJsonValidationError, is_bit_device,
-    SUPPORTED_PLC_MODELS, parse_device_address, _validate_device_address,
+    SUPPORTED_PLC_MODELS, parse_device_address, device_address_status, _validate_device_address,
     _validate_instruction_boundaries, _validate_source_operand_types, _validate_writable_device)
 from plc.st_frontend import STUncovered, Declaration, Unit, parse_body, parse_initializer
 from plc.instruction_definition import ValueType, DefinitionError
@@ -420,10 +420,13 @@ class _DeviceInspector:
             if DEVICE_ADDRESS_RE.fullmatch(text):
                 self.devices.add(text)
                 self.device_fact(text)
-                if self.model not in SUPPORTED_PLC_MODELS:
-                    self.finding('ST_DEVICE_COVERAGE', f'No device profile for {self.model}', severity='unverified')
+                status = device_address_status(text, self.model)
+                if status == 'unverified':
+                    self.finding('ST_DEVICE_COVERAGE', f'No address coverage for {self.model} device {text}', severity='unverified')
                     return self.partial_device_type(text)
                 self.guard(_validate_device_address, text, '$.st_code', self.model)
+                if status == 'invalid':
+                    return 'unknown'
                 return 'bit' if is_bit_device(text, self.model) else 'word'
             self.finding('ST_LABEL_COVERAGE', f'Label {text} has no bound declaration/type', offset=node[-1], severity='unverified')
             return 'unknown'
@@ -483,14 +486,15 @@ class _DeviceInspector:
             if index in spec.write_indexes:
                 if arg[0] == 'atom' and DEVICE_ADDRESS_RE.fullmatch(literal):
                     self.device_fact(literal,write=True)
-                if not profile_available:
+                    if profile_available:
+                        self.guard(_validate_writable_device, literal, '$.st_code', self.model, opcode=form.opcode)
+                if not profile_available or device_address_status(literal, self.model) == 'unverified':
                     continue
                 if arg[0] != 'atom' or parse_device_address(literal, self.model) is None:
                     self.finding('ST_WRITE_TARGET', f'{name} requires a device write target at operand {index}')
-                else:
-                    self.guard(_validate_writable_device, literal, '$.st_code', self.model, opcode=form.opcode)
         if profile_available and '__UNVERIFIED_EXPRESSION__' not in values:
-            self.guard(_validate_source_operand_types, spec, values, '$.st_code', self.model)
+            self.guard(_validate_source_operand_types, spec, values, '$.st_code', self.model,
+                       allow_unverified_devices=True)
             self.guard(_validate_instruction_boundaries, spec, values, '$.st_code', self.model)
         self.calls.append({'name': name, 'opcode': form.opcode, 'operands': values})
         return spec.st_call.get('returns', 'unknown') if spec.st_call else 'unknown'
@@ -509,9 +513,7 @@ class _DeviceInspector:
                 left, right = self.value_type(target), self.value_type(value)
                 if DEVICE_ADDRESS_RE.fullmatch(target[1]):
                     self.device_fact(target[1],write=True)
-                if self.model in SUPPORTED_PLC_MODELS and parse_device_address(target[1], self.model):
-                    if target[1].startswith('X'):
-                        self.finding('ST_WRITE_TARGET', 'Input device X cannot be an assignment target')
+                if self.model in SUPPORTED_PLC_MODELS and DEVICE_ADDRESS_RE.fullmatch(target[1]):
                     self.guard(_validate_writable_device, target[1], '$.st_code', self.model)
                 if 'unknown' not in {left, right} and left != right:
                     self.finding('ST_TYPE', f'Assignment types differ: {left}/{right}', offset=target[-1])

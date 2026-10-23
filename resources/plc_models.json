@@ -2080,7 +2080,7 @@
   "FX3UC": {
     "family": "FX",
     "coverage": "source_subset",
-    "desc": "Source-scoped M/D address subset; native operations and instruction semantics require separate evidence.",
+    "desc": "Source-scoped octal X/Y and M/D address subsets; native operations and instruction semantics require separate evidence.",
     "manual_reference": {
       "manual_id": "jy997d16601r",
       "manual": "JY997D16601",
@@ -2096,20 +2096,31 @@
       ]
     },
     "addressing": {
-      "default": 10
+      "default": 10,
+      "radices": {
+        "X": 8,
+        "Y": 8
+      }
     },
     "soft_limits": {
       "M": 8511,
-      "D": 8511
+      "D": 8511,
+      "X": 247,
+      "Y": 247
     },
-    "notes": "Only the cited M/D namespaces are covered. Parameter-dependent extensions, other device classes, special-device meanings, native I/O and runtime behavior remain separately scoped.",
+    "notes": "X/Y limits are octal device-numbering ceilings, not proof of installed physical I/O. Actual availability depends on the main unit and extension allocation, with at most 256 combined I/O points; FX3UC-32MT-LT(-2) extensions stop at X357/Y357. Only the cited X/Y/M/D namespaces are covered; other classes, special-device meanings, native I/O and runtime behavior remain separately scoped.",
     "validation": {
       "status": "source_subset",
       "device_limits": {
         "M": 8511,
-        "D": 8511
+        "D": 8511,
+        "X": 247,
+        "Y": 247
       },
-      "radices": {},
+      "radices": {
+        "X": 8,
+        "Y": 8
+      },
       "sources": [
         {
           "manual_id": "jy997d16601r",
@@ -2124,9 +2135,26 @@
           "covered_models": [
             "FX3UC"
           ]
+        },
+        {
+          "manual_id": "jy997d16601r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 90,
+          "related_pdf_pages": [
+            92,
+            93
+          ],
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d16601/jy997d16601r.pdf",
+          "target_model": "FX3UC",
+          "covered_models": [
+            "FX3UC"
+          ]
         }
       ],
       "bit_prefixes": [
+        "X",
+        "Y",
         "M"
       ],
       "word_bit_prefixes": [],
@@ -2177,7 +2205,7 @@
   "FX3U/FX3UC": {
     "family": "FX",
     "coverage": "source_subset",
-    "desc": "Source-scoped M/D address subset; native operations and instruction semantics require separate evidence.",
+    "desc": "Source-scoped octal X/Y and M/D address subsets; native operations and instruction semantics require separate evidence.",
     "manual_reference": {
       "manual_id": "jy997d16601r",
       "manual": "JY997D16601",
@@ -2194,20 +2222,31 @@
       ]
     },
     "addressing": {
-      "default": 10
+      "default": 10,
+      "radices": {
+        "X": 8,
+        "Y": 8
+      }
     },
     "soft_limits": {
       "M": 8511,
-      "D": 8511
+      "D": 8511,
+      "X": 247,
+      "Y": 247
     },
-    "notes": "Only the cited M/D namespaces are covered. Parameter-dependent extensions, other device classes, special-device meanings, native I/O and runtime behavior remain separately scoped.",
+    "notes": "X/Y limits are octal device-numbering ceilings, not proof of installed physical I/O. Actual availability depends on the main unit and extension allocation, with at most 256 combined I/O points; FX3UC-32MT-LT(-2) extensions stop at X357/Y357. Only the cited X/Y/M/D namespaces are covered; other classes, special-device meanings, native I/O and runtime behavior remain separately scoped.",
     "validation": {
       "status": "source_subset",
       "device_limits": {
         "M": 8511,
-        "D": 8511
+        "D": 8511,
+        "X": 247,
+        "Y": 247
       },
-      "radices": {},
+      "radices": {
+        "X": 8,
+        "Y": 8
+      },
       "sources": [
         {
           "manual_id": "jy997d16601r",
@@ -2223,9 +2262,27 @@
             "FX3U",
             "FX3UC"
           ]
+        },
+        {
+          "manual_id": "jy997d16601r",
+          "manual": "JY997D16601",
+          "revision": "R",
+          "pdf_page": 90,
+          "related_pdf_pages": [
+            92,
+            93
+          ],
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d16601/jy997d16601r.pdf",
+          "target_model": "FX3U/FX3UC",
+          "covered_models": [
+            "FX3U",
+            "FX3UC"
+          ]
         }
       ],
       "bit_prefixes": [
+        "X",
+        "Y",
         "M"
       ],
       "word_bit_prefixes": [],

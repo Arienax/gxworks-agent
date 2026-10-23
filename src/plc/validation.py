@@ -173,8 +173,8 @@ def parse_device_address(value, plc_model="FX3U"):
     """Parse and range-check a simple Mitsubishi device address.
 
     The returned index is a logical integer.  FX3U X/Y spelling is octal, while
-    FX5U X/Y spelling is decimal.  ``None`` means the token is not valid for the
-    selected model.
+    FX5U X/Y spelling is decimal. ``None`` means invalid or not covered for the
+    selected model; :func:`device_address_status` distinguishes those outcomes.
     """
 
     model = normalize_plc_model(plc_model)
@@ -245,6 +245,26 @@ def parse_indexed_device_address(value, plc_model="FX3U"):
     }
 
 
+def device_address_status(value, plc_model="FX3U"):
+    """Distinguish invalid addresses from namespaces absent in a source subset.
+
+    A valid result covers numbering syntax and the declared software allocation,
+    never the presence of physical I/O or permission for a native operation.
+    """
+    if not isinstance(value, str) or not DEVICE_ADDRESS_RE.fullmatch(value.strip()):
+        return "invalid"
+    try:
+        model = normalize_plc_model(plc_model)
+    except ValidationProfileUnavailableError:
+        return "unverified"
+    if parse_device_address(value, model) is not None:
+        return "valid"
+    prefix = DEVICE_ADDRESS_RE.fullmatch(value.strip()).group(1).upper()
+    if model in SOURCE_DEVICE_PROFILES and prefix not in DEVICE_LIMITS[model]:
+        return "unverified"
+    return "invalid"
+
+
 def _validate_indexed_device_address(value, path, plc_model="FX3U"):
     if not isinstance(value, str):
         return None
@@ -267,12 +287,13 @@ def _operand_base_device(value):
 
 
 def is_bit_device(value, plc_model="FX3U"):
-    parsed = parse_device_address(value, plc_model)
+    model = normalize_plc_model(plc_model)
+    parsed = parse_device_address(value, model)
     if not parsed:
         return False
     if "." in value:
         return True
-    prefixes = SOURCE_DEVICE_PROFILES.get(plc_model, {}).get(
+    prefixes = SOURCE_DEVICE_PROFILES.get(model, {}).get(
         "bit_prefixes", ["X", "Y", "M", "SM", "S", "T", "C"])
     return parsed[0] in prefixes
 
@@ -322,15 +343,16 @@ def _validate_writable_device(value, path, plc_model="FX3U", *, opcode=None):
     if not isinstance(value, str):
         return
     address = value.strip().upper()
-    indexed = parse_indexed_device_address(address, plc_model)
-    writable_address = indexed["base_text"] if indexed else address
     model = normalize_plc_model(plc_model)
+    match = DEVICE_ADDRESS_RE.fullmatch(_operand_base_device(address))
+    if match and match.group(1) == "X":
+        _fail(path, f"{model} input device {address} cannot be used as a write target")
+    indexed = parse_indexed_device_address(address, model)
+    writable_address = indexed["base_text"] if indexed else address
     access = _source_access(writable_address, model)
     if access and opcode in access.get("instruction_writers", []):
         return
     parsed = parse_device_address(writable_address, model)
-    if parsed and model in SOURCE_DEVICE_PROFILES and parsed[0] == "X":
-        _fail(path, f"{model} input device {address} cannot be used as a write target")
     if parsed and not access:
         regions = SOURCE_DEVICE_PROFILES.get(model, {}).get("special_regions", {}).get(parsed[0], [])
         if any(lo <= parsed[1] <= hi for lo, hi in regions):
@@ -520,7 +542,7 @@ def _validate_operand_token(value, path):
 
 
 def _validate_source_operand_types(spec, operands, path, plc_model, *, allow_indexed_literals=False,
-                                   allow_buffer_references=False):
+                                   allow_buffer_references=False, allow_unverified_devices=False):
     """Validate only dimensions actually reviewed for this CPU/form."""
     if spec is None or "operand_types" not in spec.verified_fields:
         return
@@ -548,6 +570,10 @@ def _validate_source_operand_types(spec, operands, path, plc_model, *, allow_ind
         if definition.data_type == "string":
             if len(value) < 2 or value[0] not in {'\"', "'"} or value[-1] != value[0]:
                 _fail(operand_path, "Expected a string literal")
+            continue
+        if allow_unverified_devices and device_address_status(value, plc_model) == "unverified":
+            # ST reports this address gap and preserves any independently bound
+            # type. A missing namespace is not a proven operand violation.
             continue
         if parsed:
             bit = is_bit_device(value, plc_model)
