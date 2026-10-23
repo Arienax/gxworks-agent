@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "description": "Reviewed device-number ranges and timing bases. These are manual-reference ranges; they do not certify that the current Core executes every address as a timer.",
+  "source": {
+    "manual_id": "fx3_programming_r",
+    "manual_number": "JY997D16601",
+    "revision": "R",
+    "pdf_pages": [
+      100,
+      101
+    ]
+  },
+  "ranges": [
+    {
+      "id": "fx3u_timer_100ms_general",
+      "device": "T",
+      "models": [
+        "FX3U",
+        "FX3UC"
+      ],
+      "first": 0,
+      "last": 191,
+      "unit_ms": 100,
+      "timer_class": "general",
+      "latched": false
+    },
+    {
+      "id": "fx3u_timer_100ms_subroutine",
+      "device": "T",
+      "models": [
+        "FX3U",
+        "FX3UC"
+      ],
+      "first": 192,
+      "last": 199,
+      "unit_ms": 100,
+      "timer_class": "subroutine_and_interrupt_subroutine",
+      "latched": false
+    },
+    {
+      "id": "fx3u_timer_10ms_general",
+      "device": "T",
+      "models": [
+        "FX3U",
+        "FX3UC"
+      ],
+      "first": 200,
+      "last": 245,
+      "unit_ms": 10,
+      "timer_class": "general",
+      "latched": false
+    },
+    {
+      "id": "fx3u_timer_1ms_latched",
+      "device": "T",
+      "models": [
+        "FX3U",
+        "FX3UC"
+      ],
+      "first": 246,
+      "last": 249,
+      "unit_ms": 1,
+      "timer_class": "accumulative",
+      "latched": true
+    },
+    {
+      "id": "fx3u_timer_100ms_latched",
+      "device": "T",
+      "models": [
+        "FX3U",
+        "FX3UC"
+      ],
+      "first": 250,
+      "last": 255,
+      "unit_ms": 100,
+      "timer_class": "accumulative",
+      "latched": true
+    },
+    {
+      "id": "fx3u_timer_1ms_general",
+      "device": "T",
+      "models": [
+        "FX3U",
+        "FX3UC"
+      ],
+      "first": 256,
+      "last": 511,
+      "unit_ms": 1,
+      "timer_class": "general",
+      "latched": false
+    }
+  ]
+}
