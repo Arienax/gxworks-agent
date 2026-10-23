@@ -8,6 +8,8 @@ from __future__ import annotations
 from copy import deepcopy
 
 
+# EXE wire contract. Internal operation requests and normalized evidence remain
+# protocol_version=1; they are encoded/validated at the process boundary.
 WORKSPACE_PROTOCOL = 3
 _ACTIONS = {
     'save_source': 'edit_program', 'create_source': 'add_program_unit',

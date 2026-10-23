@@ -133,12 +133,12 @@ def program_definitions(generation):
     yield ToolDefinition(
         "validate_project",
         (
-            '默认校验当前程序；native=true 在隔离工作区检查当前版本已绑定的 GXW 快照，分别返回编译、公开检查、底层重检、诊断和当前源码对应状态。仅有源码或 '
+            '默认校验当前程序；native=true 在后台隔离工作区调用本机 GX Works2 原生编译与检查，不启动或操作 IDE 窗口。检查当前版本已绑定的 GXW 快照，分别返回编译、公开检查、底层重检、诊断和当前源码对应状态。仅有源码或 '
             'CSV 不能启动原生检查；简单 Ladder 必须有明确原生 CPU，并完整回读源码词法、与当前候选的指令逐项匹配，覆盖外保留为未验证。program 仅标识请'
-            '求的 POU 上下文，实际检查范围以 selection 和 targets 为准。不会操作 GX 界面、PLC 或写入项目版本。'
+            '求的 POU 上下文，实际检查范围以 selection 和 targets 为准。适配器缺失、构建失败或协议不匹配按独立错误码返回，不代表程序编译失败。不会操作 PLC 或写入项目版本。'
         ),
         {"type": "object", "properties": {
-            "native": {"type": "boolean", "description": "显式启动已保存 GXW 的离线原生检查；默认 false。"},
+            "native": {"type": "boolean", "description": "显式在后台编译并检查已保存 GXW，不打开 IDE；默认 false。"},
             "program": {"type": "string", "minLength": 1, "maxLength": 256,
                         "description": "native=true 时的请求 POU；默认使用版本所选 Program。"},
         }, "additionalProperties": False},

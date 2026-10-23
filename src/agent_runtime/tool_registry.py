@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 from agent_runtime.tool_schema import validate_schema
 from agent_runtime.tool_errors import ToolPreconditionError, PROJECT_ACTIONS, SOURCE_ACTIONS
+from gxworks2.workspace_adapter import WorkspaceAdapterError
 from agent_runtime.tool_policy import (
     SOURCE_TOOL_NAMES,
     DISCOVERY_TOOL_NAMES,
@@ -155,6 +156,8 @@ class ToolRegistry:
         except PermissionError as error:
             return {"ok": False, "tool": definition.name, "error": {
                 "code": "PERMISSION_DENIED", "message": str(error), "next_actions": []}}
+        except WorkspaceAdapterError as error:
+            return {"ok": False, "tool": definition.name, "error": error.payload()}
         except Exception as error:  # tool errors are data, not agent-loop crashes
             return {
                 "ok": False,
