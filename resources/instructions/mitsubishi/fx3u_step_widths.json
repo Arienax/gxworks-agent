@@ -2203,7 +2203,7 @@
         "arity": 1,
         "operands": "N[0-9]+",
         "steps": 2,
-        "evidence": "native FX header observation: MCR with a nesting operand stores two words",
+        "evidence": "native encoding observation",
         "scope": "family"
       },
       {
@@ -2213,7 +2213,7 @@
         "arity": 0,
         "operands": "",
         "steps": 1,
-        "evidence": "native FX header observation: NEXT stores one word",
+        "evidence": "native encoding observation",
         "scope": "family"
       },
       {
@@ -2293,7 +2293,7 @@
         "arity": 1,
         "operands": "Y[0-7]+",
         "steps": 1,
-        "evidence": "native-conversion-ladder-mode.json cases 12,13; native CSV alignment OUT Y5. M and S targets depend on the device index and the CPU series, so they are resolved from device_ranges instead of from this rule.",
+        "evidence": "native encoding observation",
         "scope": "family"
       },
       {
@@ -2314,7 +2314,7 @@
         "operands": "M8123",
         "steps": 2,
         "scope": "FX3",
-        "evidence": "native encoding observation: RST M8123 stores two words (a special relay, which only the FX3 models carry)"
+        "evidence": "native encoding observation"
       },
       {
         "opcodes": [

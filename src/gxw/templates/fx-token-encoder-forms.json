@@ -2,12 +2,6 @@
   "schema_version": 1,
   "profile": "fx3u",
   "scope": "Observed native memory-conversion operand type bytes only; no CPU availability, project compile, or execution claim. Type bytes are parameter-specific, never inferred from mnemonic prefixes.",
-  "evidence": [
-    "research/results/token-20260919/native-conversion-corpus.json",
-    "research/results/token-20260919/native-conversion-ladder-mode.json",
-    "research/results/token-20260919/native-operand-corpus-20260920.json",
-    "tests/fixtures/gxw_token_native_20260919.json"
-  ],
   "literal_types": {
     "$MOV": {
       "0": [
