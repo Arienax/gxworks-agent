@@ -10,9 +10,9 @@ compatibility: >-
 metadata:
   source-repository: Arienax/gxworks-agent
   source-ref: main
-  source-commit: 278edb699dc40e9658970bb66095edeed8bd47b1
-  reviewed-on: '2026-10-22'
-  version: '1.0.0'
+  source-commit: e5f6ca03455c97e0feb7328a21493dcdbf7fa620
+  reviewed-on: '2026-10-23'
+  version: '1.0.1'
 ---
 
 # GXWorks MCP 任务路由
@@ -67,6 +67,12 @@ metadata:
 **新需求生成。** 复用已给出的 CPU 与 I/O 信息，调用 `get_generation_context` 获取输出合同后直接生成候选并提交。仅在缺少关键现场工艺事实时向用户提问；工程内可读取的事实先通过工具读取。
 
 **已有文件读写。** 只读分析直接走 `inspect_*` 或窗口快照获取 `source_ref`；需要修改并保存新版本时，先将 `.gxw` 导入为工程版本，再通过离线编辑工具在可编辑对象范围内提交修改。
+
+**FBD 按次保存。** `create_fbd_candidate` 的 `import`、`edit`、`generate` 仅在本次显式传入布尔 `native_save=true` 时请求原生保存；省略或传 `false` 使用离线路径，不继承历史版本的保存选择。源码和声明没有变化时不重复原生保存。该参数不用于 `create_fb`、`create_program` 或 `import_library`，这些操作保留自身的原生创建或导入流程。
+
+**用户库导入。** 对已保存的目标版本使用 `create_fbd_candidate(operation="import_library")`，传入来源 GXW 的 `data_base64` 和选定的 `library_name`。导入库定义，保留目标项目的源码集合、任务绑定、调用者正文与声明；不复制来源工程的调用程序。新增库定义不应被当成目标调用程序的变更。
+
+**ST 后台编辑。** 先读出对象的准确逻辑身份，以 `source_name` 调用 `create_st_candidate` 的 `edit_st_program`、`edit_st_fb`、`edit_st_function` 或 `edit_st_source`。省略 `declarations` 保留原声明；给出列表则按整份列表替换，需包含所有应保留的声明，不能只提交新增或修改行。这些后台操作不扩大前台 `execute_native_engineering` 的操作集合。
 
 **本地产物与原生编译。** `compile_project` 用于生成 Core 本地产物（JSON、SVG、衍生 ST、CSV）；需要调用 GX Works2 编译器做后台无界面检查时使用 `validate_project(native=true)`。若需编译并更新保存的 `.gxw`，使用对应语言支持的保存操作（如 FBD 的 `operation="compile"` 或原生工程方案）。
 

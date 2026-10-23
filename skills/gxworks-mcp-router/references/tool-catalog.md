@@ -1,6 +1,6 @@
 # MCP 工具目录
 
-对应公开分支 `main@278edb6`，涵盖 42 个共享工具与 5 个独立 `local` 会话扩展工具（`get_operation_status` 在两种模式下同名复用）。具体暴露的工具列表与完整 JSON Schema 以连接时的 `tools/list` 和服务 instructions 为准。
+对应公开分支 `main@e5f6ca0`，涵盖 42 个共享工具与 5 个独立 `local` 会话扩展工具（`get_operation_status` 在两种模式下同名复用）。具体暴露的工具列表与完整 JSON Schema 以连接时的 `tools/list` 和服务 instructions 为准。
 
 表中“共享”指注册在共享工具表中的工具；“local”指独立工程会话额外暴露的工程与产物管理工具。支持只读快照的工具会在注册时接受可选的 `source_ref` 参数。
 
@@ -50,9 +50,9 @@
 | `read_fbd_project` | 共享 | 离线读取 FBD 图形、标签、端口与 SVG | 可选 `program`, `data_base64`, `source_ref` | 返回 FBD 网络结构、节点端子连接及声明信息。 |
 | `read_fbd_definition` | 共享 | 读取工程内的结构体或 FB 定义 | 可选 `source_name`, `source_ref` | 省略 `source_name` 时列出定义目录；指定时返回该定义的详细接口与实现。 |
 | `read_fbd_libraries` | 共享 | 查看 `.gxw` 中的用户库及库内定义 | 可选 `data_base64`, `library_name`, `include_source` | 只读列出用户库目录及定义详情，供后续 `import_library` 参考。 |
-| `create_fbd_candidate` | 共享 | 执行 FBD 图形编辑、定义维护、库导入或原生编译保存 | `operation` 及对应参数（见 `get_fbd_catalog.parameter_schema`） | 支持 `generate`/`edit`、结构体与 FB 定义编写、`import_library`、`compile` 与 `native_save`。 |
+| `create_fbd_candidate` | 共享 | 执行 FBD 图形编辑、定义维护、库导入或原生编译保存 | `operation` 及对应参数（见 `get_fbd_catalog.parameter_schema`）；`import`/`edit`/`generate` 可传布尔 `native_save`；`import_library` 传来源 GXW 的 `data_base64` 与 `library_name` | `native_save=true` 仅请求本次原生保存，省略或 `false` 使用离线路径，不继承历史选择。库导入保留目标源码、任务、调用者正文与声明。创建和库导入保留各自的原生路径，`compile` 单独执行编译保存。 |
 | `read_st_project` | 共享 | 读取 ST Program、FB 与 FUNCTION | 可选 `program`, `data_base64`, `source_ref` | 返回 ST 正文、返回类型、局部/全局声明与任务绑定信息。 |
-| `create_st_candidate` | 共享 | 创建、导入或离线编辑 ST 源码与声明 | `operation`（如 `import`、`from_candidate`、`create_st_program`、`edit_st_program`、`edit_st_fb`、`edit_st_function`、`edit_st_source`） | 校验 ST 语法与声明绑定；新建普通 ST Program 时需指定工程内实际存在的资源与任务。 |
+| `create_st_candidate` | 共享 | 创建、导入或离线编辑 ST 源码与声明 | `operation`（如 `import`、`from_candidate`、`create_st_program`、`edit_st_program`、`edit_st_fb`、`edit_st_function`、`edit_st_source`）；编辑时以准确逻辑身份指定 `source_name` | `edit_*` 省略 `declarations` 保留原声明，给出列表则整体替换；新建普通 ST Program 时需指定工程内实际存在的资源与任务。 |
 | `read_sfc_project` | 共享 | 读取已有 SFC 工程结构与子程序 | 可选 `program`, `data_base64`, `source_ref`, `native`（默认 `false`） | 返回 SFC 关系图、步骤、转换、动作与子程序；`native=true` 时补充原生格点信息。 |
 | `create_sfc_candidate` | 共享 | 导入或编辑已有 SFC 内部对象 | `operation`（`import`/`edit`）、`child_edits`, `graph_edits`, `declaration_edits` | 在既有 SFC 工程支持范围内修改内部步骤、分支、动作、转换及声明。 |
 

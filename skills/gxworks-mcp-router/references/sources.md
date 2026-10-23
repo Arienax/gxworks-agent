@@ -1,6 +1,6 @@
 # 来源与维护
 
-本 Skill 基于 `Arienax/gxworks-agent` 公开仓库（`main@278edb699dc40e9658970bb66095edeed8bd47b1`，2026-10-22）整理，采用 Agent Skills 的 `SKILL.md` + `references/` 目录结构。
+本 Skill 基于 `Arienax/gxworks-agent` 公开仓库（`main@e5f6ca03455c97e0feb7328a21493dcdbf7fa620`，2026-10-23）整理，采用 Agent Skills 的 `SKILL.md` + `references/` 目录结构。
 
 ## 对应源码模块
 
@@ -8,6 +8,10 @@
 | --- | --- |
 | `src/agent_runtime/tool_policy.py` | 共享工具名、来源工具集合、发现与原生检查分类。 |
 | `src/agent_runtime/tool_catalog.py` | 生成、编辑、各语言工具与原生工程操作的描述及 schema 入口。 |
+| `src/agent_runtime/native_tools.py` | FBD 本次 `native_save` 参数校验、用户库导入与 ST 后台 `edit_*` 路由。 |
+| `src/application/fbd.py` | FBD 候选保存策略、未变更时的保存处理与实际保存结果。 |
+| `src/gxw/library_transfer.py` | 用户库导入后的目标项目源码、任务、调用者及声明保护。 |
+| `src/gxw/offline_authoring.py` | ST 声明省略保留与完整列表替换语义。 |
 | `src/agent_runtime/inspection_tools.py` | GXW/CSV/GX 会话发现、Simulator2、原生分配地址与代码步号查询参数。 |
 | `src/agent_runtime/program_tools.py` | `compile_project` 与 `validate_project` 的处理流程及版本/快照要求。 |
 | `src/agent_runtime/tool_errors.py` | 结构化错误码、前置条件与 `next_actions`。 |

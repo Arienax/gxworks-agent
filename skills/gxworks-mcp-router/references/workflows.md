@@ -72,14 +72,25 @@
 2. 按需调用 `read_fbd_project`（读取网络与连接）、`read_fbd_definition`（读取工程内结构体与 FB 定义）或 `read_fbd_libraries`（查看用户库）。
 3. 调用 `create_fbd_candidate` 提交修改：
    - 生成或修改图形：使用 `generate` / `edit`，优先通过具名网络、`calls`、端口与 `IN_OUT` 配对提交。
-   - 导入用户库定义：使用 `operation="import_library"` 并传入来源文件与 `library_name`。
+   - 导入用户库定义：绑定已保存的目标版本，使用 `operation="import_library"`，传入来源 GXW 的 `data_base64` 与实际 `library_name`。只导入所选库的定义、接口和库内类型；保留目标项目的源码集合、任务绑定、调用者正文及声明，不复制来源工程的调用程序、任务或项目全局声明。新增库定义与目标调用程序分别校验。
    - 原生编译并保存 FBD 工程：对已保存版本调用 `operation="compile"`。
+
+`import`、`edit`、`generate` 的 `native_save` 必须是布尔值，只表示本次调用的选择：显式 `true` 请求原生保存，省略或 `false` 使用离线写入。历史版本曾原生保存不会授权本次保存；源码和声明未变时不会重复原生保存。`create_fb`、`create_program` 和 `import_library` 不接受该选项，继续使用各自的原生创建或导入路径。保存及回读成功仍不表示候选已确认、原生编译通过或运行通过。
 
 ### ST 程序与块定义
 
 1. 调用 `read_st_project` 读取既有 Program、FB、FUNCTION 的正文、返回类型、声明表和任务归属。
-2. 编辑既有对象时，调用 `create_st_candidate` 对应的 `edit_*` 操作或 `edit_gxw_project`。
-3. 新建普通 ST Program 时，结合 `get_generation_context` 与工程内实际存在的资源、任务名称构造 `task_binding`，通过 `create_st_candidate` 提交。
+2. 编辑既有对象时，以读取结果中的准确逻辑身份作为 `source_name`，调用 `create_st_candidate` 的 `edit_st_program`、`edit_st_fb`、`edit_st_function` 或通用 `edit_st_source`；多源码联合修改也可使用 `edit_gxw_project`。
+3. 只改正文时省略 `declarations`，保留原声明。需要改声明时传入完整目标列表：给出的列表整体替换原表，未列出的旧声明将删除，列表本身决定名称和顺序；`[]` 表示请求清空，仍须通过现有引用及类型检查。整表替换不与 `remove_declarations`、`renames` 或 `order` 混用。
+4. 新建普通 ST Program 时，结合 `get_generation_context` 与工程内实际存在的资源、任务名称构造 `task_binding`，通过 `create_st_candidate` 提交。
+
+例如，只修改已读取对象的正文并保留声明：
+
+```json
+{"tool":"create_st_candidate","arguments":{"operation":"edit_st_source","source_name":"${实际逻辑源码身份}","st_text":"${完整目标ST正文}"}}
+```
+
+上述 `edit_*` 为后台候选编辑；可见批次和 Live 会话继续按 `execute_native_engineering` 自己的操作集合调用。候选确认、保存回读、原生编译与运行结果分别报告。
 
 ### 已有 SFC 工程
 
