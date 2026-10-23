@@ -1,5 +1,17 @@
 export type Locale = "zh-CN" | "en" | "ja";
 const words: Record<string, string> = {
+  "工程画布": "Engineering canvas",
+  "打开画布": "Open canvas",
+  "收起画布": "Close canvas",
+  "显示侧栏": "Show sidebar",
+  "隐藏侧栏": "Hide sidebar",
+  "新任务": "New task",
+  "开始一个 PLC 工程任务": "Start a PLC project",
+  "有什么需要处理的？": "What would you like to work on?",
+  "新建工程，或将 GXW 工程拖到对话输入框导入。": "Create a project, or drop a GXW file into the composer to import it.",
+  "显示全部": "Show all",
+  "收起": "Show less",
+  "添加": "Add",
   "编辑的程序": "Program to edit",
   "程序修改": "Program changes",
   "搜索对象类型": "Search object types",

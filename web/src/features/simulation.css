@@ -22,15 +22,15 @@
 .sim-checks { display: flex; flex-wrap: wrap; gap: .7rem; }
 .sim-checks label { display: flex; align-items: center; gap: .3rem; }
 .sim-context, .sim-notice { border: 1px solid var(--border); background: var(--panel); padding: .9rem; border-radius: 8px; }
-.sim-error { color: var(--bad, #d44); overflow-wrap: anywhere; }
+.sim-error { color: var(--bad); overflow-wrap: anywhere; }
 .sim-step { background: var(--panel); }
 .sim-replay { display: grid; gap: .8rem; }
 .sim-waveforms { display: grid; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .sim-wave-row { display: grid; grid-template-columns: 72px minmax(120px, 1fr) 64px; align-items: center; gap: .4rem; padding: .45rem .7rem; border-bottom: 1px solid var(--border); }
 .sim-wave-row svg { width: 100%; min-height: 44px; }
-.sim-signal { fill: none; stroke: var(--accent, #3d86f5); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.sim-signal { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
 .sim-grid { stroke: var(--border); }
-.sim-cursor { stroke: #d48c31; stroke-width: 1; }
+.sim-cursor { stroke: var(--text); stroke-width: 1; stroke-dasharray: 3 3; }
 .simulation-workbench table { width: 100%; border-collapse: collapse; font-size: .85rem; }
 .simulation-workbench th, .simulation-workbench td { padding: .65rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
 .simulation-workbench td .button { white-space: normal; }

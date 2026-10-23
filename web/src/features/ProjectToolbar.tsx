@@ -18,11 +18,11 @@ function Menu({ label, icon, children, disabled, title, className = "" }: {
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
   }, []);
-  if (disabled) return <Button disabled title={title}>{icon}{label}<ChevronDown size={13}/></Button>;
+  if (disabled) return <Button disabled title={title}>{icon}<span className="button-label">{label}</span><ChevronDown size={13}/></Button>;
   return <details ref={ref} className={`toolbar-menu ${className}`} onKeyDown={(e) => {
     if (e.key === "Escape") { ref.current?.removeAttribute("open"); ref.current?.querySelector("summary")?.focus(); }
   }}>
-    <summary className="button" title={title}>{icon}{label}<ChevronDown size={13}/></summary>
+    <summary className="button" title={title || label}>{icon}<span className="button-label">{label}</span><ChevronDown size={13}/></summary>
     <div className="toolbar-menu-content" onClick={(e) => {
       const item = (e.target as HTMLElement).closest("button,a");
       if (item && !item.hasAttribute("disabled")) ref.current?.removeAttribute("open");
@@ -70,8 +70,8 @@ export function ProjectToolbar({ pid, vid, artifacts, exportable, diagnosticJobI
       </Menu>
     </div>
     <div className="toolbar-group gx-transfer-group">
-      <Button disabled={!canRead} onClick={onRead} title={t("GX Works2 → 工作台")}><ArrowLeft size={15}/>{t("从 GX 读取")}</Button>
-      <Button disabled={!canSend} onClick={onSend} title={t("工作台 → GX Works2")}><ArrowRight size={15}/>{t("发送到 GX")}</Button>
+      <Button disabled={!canRead} onClick={onRead} title={t("GX Works2 → 工作台")}><ArrowLeft size={15}/><span className="button-label">{t("从 GX 读取")}</span></Button>
+      <Button disabled={!canSend} onClick={onSend} title={t("工作台 → GX Works2")}><ArrowRight size={15}/><span className="button-label">{t("发送到 GX")}</span></Button>
     </div>
     <div className="toolbar-group toolbar-secondary">
       <Button variant="ghost" disabled={!canRefresh} onClick={onRefresh}

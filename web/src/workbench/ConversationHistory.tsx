@@ -1,39 +1,32 @@
 import {
+  ArrowLeft,
+  Bot,
   Check,
   ChevronDown,
+  CircuitBoard,
+  ClipboardCheck,
+  FlaskConical,
+  MessageSquare,
+  Plus,
   Workflow
 } from "lucide-react";
 import { activeJob } from "../api/client";
-import { Button } from "../components/ui";
+import { Badge, Button } from "../components/ui";
+import { FirstProjectGuide } from "../features/FirstProjectGuide";
 import { GenerationResult } from "../features/GenerationResult";
 import { JobFailure } from "../features/JobFailure";
 import { JobProgress } from "../features/JobProgress";
 import { AcceptedMessage } from "../workbench/ResultViews";
 import type { WorkbenchModel } from "./useWorkbenchController";
 
-const jobKindLabel = (kind: string) =>
-  (
-    ({
-      analysis: "整理需求",
-      generation: "生成程序",
-      direct_generation: "生成程序",
-      agent: "工程问答",
-      review: "检查程序",
-      test_plan: "设计测试",
-      debug_plan: "排查问题",
-      gx_read: "从 GX 读取",
-      gx_inspect: "检查 GX 工程",
-      execution: "执行操作",
-    }) as Record<string, string>
-  )[kind] || "任务";
 export const conversationHistoryFields = [
   "analysisOutput",
   "busy",
   "canWrite",
   "continuingDirect",
+  "creation",
   "currentJob",
   "directAnswers",
-  "displayedJobStatus",
   "eventText",
   "events",
   "generationResult",
@@ -43,7 +36,9 @@ export const conversationHistoryFields = [
   "loading",
   "openAnalysisDraft",
   "openGenerationResult",
+  "operations",
   "pid",
+  "preview",
   "project",
   "proposeExecution",
   "repairFailedGeneration",
@@ -51,13 +46,16 @@ export const conversationHistoryFields = [
   "setDirectAnswers",
   "setDrafts",
   "setIgnoredClarification",
+  "setModal",
   "setPanel",
+  "setReviewRequested",
   "setTask",
   "setWorkflow",
   "specIsDirty",
-  "status",
+  "submitJob",
   "t",
   "task",
+  "version",
   "vid",
 ] as const;
 type Props = Pick<WorkbenchModel, typeof conversationHistoryFields[number]>;
@@ -67,9 +65,9 @@ export function ConversationHistory(props: Props) {
     busy,
     canWrite,
     continuingDirect,
+    creation,
     currentJob,
     directAnswers,
-    displayedJobStatus,
     eventText,
     events,
     generationResult,
@@ -79,7 +77,9 @@ export function ConversationHistory(props: Props) {
     loading,
     openAnalysisDraft,
     openGenerationResult,
+    operations,
     pid,
+    preview,
     project,
     proposeExecution,
     repairFailedGeneration,
@@ -87,29 +87,91 @@ export function ConversationHistory(props: Props) {
     setDirectAnswers,
     setDrafts,
     setIgnoredClarification,
+    setModal,
     setPanel,
+    setReviewRequested,
     setTask,
     setWorkflow,
     specIsDirty,
-    status,
+    submitJob,
     t,
     task,
+    version,
     vid,
   } = props;
+  const loaded = !!project && project.id === pid;
+  const idle = canWrite && !jobs.some(activeJob);
 
   return (
     <div className="conversation">
+      <div className="conversation-inner">
       {task === "create" &&
-        project?.id === pid &&
+        loaded &&
         !hasSavedVersions &&
         !!project.confirmed_spec &&
         specIsDirty && <p role="alert">{t("请先确认修改后的需求。")}</p>}
+      {!currentJob && (
+        <div className="welcome">
+          <div className="welcome-mark"><CircuitBoard size={26} /></div>
+          <h2>{loaded ? t("有什么需要处理的？") : t("开始一个 PLC 工程任务")}</h2>
+          {loaded ? (
+            <p className="welcome-context">
+              <Badge>{project.plc_model}</Badge>
+              <Badge>{project.target_mode.toUpperCase()}</Badge>
+              <span className="mono">{vid || t("暂无版本")}</span>
+            </p>
+          ) : (
+            <p className="muted">{t("新建工程，或将 GXW 工程拖到对话输入框导入。")}</p>
+          )}
+          {!pid && !loading && (
+            <div className="welcome-actions">
+              <Button variant="primary" disabled={!canWrite} onClick={() => setModal("new")}>
+                <Plus size={15} />{t("新建工程")}
+              </Button>
+            </div>
+          )}
+          {loaded && !hasSavedVersions && (
+            <FirstProjectGuide
+              example={creation?.starter_requirement || ""}
+              t={t}
+              hasSpec={!!project.confirmed_spec}
+              disabled={!idle}
+              onExample={(value) => {
+                setDrafts((before) => ({ ...before, create: value }));
+                setTask("create");
+                setWorkflow(project.target_mode === "ladder" ? "direct" : "review");
+                setReviewRequested(false);
+              }}
+              onSpec={() => setPanel("spec")}
+              onGenerate={() => void guarded(() => submitJob("generation"))}
+            />
+          )}
+          {loaded && !!hasSavedVersions && (
+            <div className="quick-actions">
+              <button disabled={!idle || !version || !operations.diagnose}
+                onClick={() => void guarded(() => submitJob("review", { deep: false }))}>
+                <ClipboardCheck size={16} /><span>{t("本地检查")}</span>
+              </button>
+              <button disabled={!idle || !version || !!preview || !operations.simulation}
+                onClick={() => void guarded(() => submitJob("test_plan"))}>
+                <FlaskConical size={16} /><span>{t("生成测试方案")}</span>
+              </button>
+              <button disabled={!idle || !operations.gx_inspect}
+                onClick={() => void guarded(() => submitJob("gx_read"))}>
+                <ArrowLeft size={16} /><span>{t("从 GX 读取")}</span>
+              </button>
+              <button disabled={!canWrite} className={task === "question" ? "active" : ""}
+                onClick={() => setTask("question")}>
+                <MessageSquare size={16} /><span>{t("工程问答")}</span>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       {currentJob && (
-        <div className="job-conversation">
-          <div className="job-line">
-            <span>{t(jobKindLabel(currentJob.kind))}</span>
-            {status(displayedJobStatus)}
-          </div>
+        <div className="job-conversation assistant-turn">
+          <div className="assistant-avatar" aria-hidden="true"><Bot size={16} /></div>
+          <div className="assistant-body">
           <JobProgress job={currentJob} events={events} t={t} />
           {events.some((e) => e.event_type === "progress") && (
             <details className="reasoning">
@@ -226,8 +288,10 @@ export function ConversationHistory(props: Props) {
               {t("运行指定方案")}
             </Button>
           )}
+          </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

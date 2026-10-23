@@ -1,17 +1,17 @@
 import { X } from "lucide-react";
 import type { CSSProperties } from "react";
 import { lazy, Suspense, useRef } from "react";
+import { RetainedPanel } from "./components/RetainedPanel";
 import { AgentConversation, agentConversationFields } from "./workbench/AgentConversation";
-import { AgentSidebar, agentSidebarFields } from "./workbench/AgentSidebar";
+import { CanvasPanels, canvasPanelFields } from "./workbench/CanvasPanels";
 import { ComposerPanel, composerPanelFields } from "./workbench/ComposerPanel";
 import { ConversationHistory, conversationHistoryFields } from "./workbench/ConversationHistory";
 import { LoginScreen, loginScreenFields } from "./workbench/LoginScreen";
 import { ProgramWorkspace, programWorkspaceFields } from "./workbench/ProgramWorkspace";
 import { ProjectSidebar, projectSidebarFields } from "./workbench/ProjectSidebar";
 import { ProposalList, proposalListFields } from "./workbench/ProposalList";
-import { TaskDock, taskDockFields } from "./workbench/TaskDock";
-import { WorkbenchHeader, workbenchHeaderFields } from "./workbench/WorkbenchHeader";
 import { workbenchDialogsFields } from "./workbench/dialogFields";
+import { clampCanvasWidth } from "./workbench/usePanelResize";
 import { useWorkbenchController } from "./workbench/useWorkbenchController";
 import { pickView } from "./workbench/viewProps";
 
@@ -22,29 +22,46 @@ export default function App() {
   const dialogsOpened = useRef(false);
   if (view.modal || view.gxSend) dialogsOpened.current = true;
   if (!view.session) return <LoginScreen {...pickView(view, loginScreenFields)} />;
+  const canvasVisible = view.canvasOpen && !!view.pid;
   return (
-    <div className={`workbench ${view.leftOpen ? "" : "sidebar-hidden"}`} style={{ "--inspector-width": `${view.rightWidth}px` } as CSSProperties}>
-      <WorkbenchHeader {...pickView(view, workbenchHeaderFields)} />
+    <div
+      className={`workbench ${view.leftOpen ? "" : "sidebar-hidden"} ${canvasVisible ? "canvas-open" : ""}`}
+      style={{ "--canvas-width": `${view.rightWidth}px` } as CSSProperties}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && view.leftOpen && window.innerWidth <= 1100) {
+          view.setLeftOpen(false);
+          requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(".sidebar-toggle")?.focus());
+        }
+      }}
+    >
       <ProjectSidebar {...pickView(view, projectSidebarFields)} />
-      <ProgramWorkspace {...pickView(view, programWorkspaceFields)} />
+      {view.leftOpen && <div className="sidebar-scrim" aria-hidden="true" onClick={() => view.setLeftOpen(false)} />}
+      <AgentConversation {...pickView(view, agentConversationFields)}
+        history={<ConversationHistory {...pickView(view, conversationHistoryFields)} />}
+        composer={<ComposerPanel {...pickView(view, composerPanelFields)} />} />
       <div
         role="separator"
-        aria-label={view.t("检查器")}
+        aria-label={view.t("工程画布")}
         aria-orientation="vertical"
-        tabIndex={0}
+        aria-valuemin={clampCanvasWidth(0, view.leftOpen)}
+        aria-valuemax={clampCanvasWidth(window.innerWidth, view.leftOpen)}
+        aria-valuenow={view.rightWidth}
+        aria-controls="engineering-canvas"
+        tabIndex={canvasVisible ? 0 : -1}
         className="panel-resizer"
         onPointerDown={view.resizePanel}
         onKeyDown={(e) => {
-          if (e.key === "ArrowLeft") view.setRightWidth((v) => Math.min(650, v + 20));
-          if (e.key === "ArrowRight") view.setRightWidth((v) => Math.max(300, v - 20));
+          if (!["ArrowLeft", "ArrowRight"].includes(e.key)) return;
+          e.preventDefault();
+          if (e.key === "ArrowLeft") view.setRightWidth((v) => clampCanvasWidth(v + 20, view.leftOpen));
+          if (e.key === "ArrowRight") view.setRightWidth((v) => clampCanvasWidth(v - 20, view.leftOpen));
         }}
       />
-      <AgentSidebar {...pickView(view, agentSidebarFields)}
-        conversation={<AgentConversation {...pickView(view, agentConversationFields)}
-          history={<ConversationHistory {...pickView(view, conversationHistoryFields)} />}
-          composer={<ComposerPanel {...pickView(view, composerPanelFields)} />} />}
-        proposalsView={<ProposalList {...pickView(view, proposalListFields)} />} />
-      <TaskDock {...pickView(view, taskDockFields)} />
+      <RetainedPanel active={canvasVisible}>
+        {() => <ProgramWorkspace {...pickView(view, programWorkspaceFields)}
+          contextView={<CanvasPanels {...pickView(view, canvasPanelFields)}
+            proposalsView={<ProposalList {...pickView(view, proposalListFields)} />} />} />}
+      </RetainedPanel>
       {(view.error || view.notice) && (
         <div className={`toast ${view.error ? "toast-error" : ""}`} role={view.error ? "alert" : "status"}>
           <span>{view.error || view.notice}</span>

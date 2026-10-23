@@ -23,14 +23,25 @@ const labels: Record<Locale, { title: string; direct: string; design: string }> 
   },
 };
 
-export function AnalysisModePicker({ locale, value, onChange, disabled = false }: {
+export function AnalysisModePicker({ locale, value, onChange, disabled = false, compact = false }: {
   locale: Locale;
   value: AnalysisMode;
   onChange: (mode: AnalysisMode) => void;
   disabled?: boolean;
+  compact?: boolean;
 }) {
   const group = useId();
   const text = labels[locale];
+  if (compact) return (
+    <label className="composer-select">
+      <span className="sr-only">{text.title}</span>
+      <select aria-label={text.title} value={value} disabled={disabled}
+        onChange={(event) => onChange(event.target.value as AnalysisMode)}>
+        <option value="direct">{text.direct}</option>
+        <option value="design">{text.design}</option>
+      </select>
+    </label>
+  );
   return (
     <fieldset className="analysis-mode-picker" disabled={disabled}>
       <legend>{text.title}</legend>

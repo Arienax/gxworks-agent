@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import type { Json, Spec, ProgramDocument } from "../api/client";
 import { activeJob, artifactUrl } from "../api/client";
 import { Badge } from "../components/ui";
@@ -51,14 +52,22 @@ export function useWorkbenchController() {
   const [refresh, setRefresh] = useState(0);
 
   const [tab, setTab] = useState("ladder"),
-    [panel, setPanel] = useState("agent"),
-    [leftOpen, setLeftOpen] = useState(window.innerWidth > 900);
+    [panel, storePanel] = useState("agent"),
+    [leftOpen, setLeftOpen] = useState(window.innerWidth > 1100),
+    [canvasOpen, setCanvasOpen] = useState(false);
+
+  // Opening the same context view again must also reopen a collapsed canvas.
+  const setPanel = useCallback<Dispatch<SetStateAction<string>>>((value) => {
+    const next = typeof value === "function" ? value(panel) : value;
+    storePanel(next);
+    if (next !== "agent") setCanvasOpen(true);
+  }, [panel]);
 
   const feed = useJobFeed(pid, session, setError);
 
-  const { jobs, setJobs, jobId, setJobId, events, proposals, jobsPolling } = feed;
+  const { jobs, setJobs, jobId, setJobId, startNewTask, events, proposals, jobsPolling } = feed;
 
-  const { rightWidth, setRightWidth, resizePanel } = usePanelResize();
+  const { rightWidth, setRightWidth, resizePanel } = usePanelResize(leftOpen);
 
   const composer = useComposer(pid, vid, t);
 
@@ -224,7 +233,8 @@ export function useWorkbenchController() {
 
   const navigation = { setTab, setPanel, setModal };
 
-  const candidates = useCandidateReview({ workspace, feed, generationResult, currentJob, session, theme, specIsDirty, busy, guarded, setRefresh, setOutputRetry, setError, setNotice, t, ...navigation });
+  const candidates = useCandidateReview({ workspace, feed, generationResult, currentJob, session, theme, specIsDirty, busy, guarded, setRefresh, setOutputRetry, setError, setNotice, t, ...navigation,
+    onShowResult: () => setCanvasOpen(true) });
 
   const {
     selectedProposal,
@@ -264,6 +274,30 @@ export function useWorkbenchController() {
   }, [version?.id, version?.target_mode, project?.id, project?.target_mode]);
   useEffect(() => { if (gxwSource.view) setTab(gxwSource.view.language); },
     [pid, vid, gxwSource.view?.source_name, gxwSource.view?.language]);
+
+  // The canvas opens for content the operator should see: a saved version on a
+  // wide screen, a candidate/diagnostic preview, or an explicitly requested view.
+  useEffect(() => { if (vid && window.innerWidth > 860) setCanvasOpen(true); }, [vid]);
+  const previewing = !!preview;
+  useEffect(() => { if (previewing) setCanvasOpen(true); }, [previewing, selectedProposal?.id, diagnosticJobId]);
+  useEffect(() => {
+    if (project?.id === pid && !project.versions?.length) setCanvasOpen(false);
+  }, [project?.id, pid]);
+
+  function newTask() {
+    startNewTask();
+    clearPreview();
+    setDrafts({ create: "", edit: "", question: "" });
+    setAttachments([]);
+    setScopeEnabled(false);
+    setScopeNetworks("");
+    setScopeAddresses("");
+    setReviewRequested(false);
+    setPanel("agent");
+    if (window.innerWidth <= 1100) setLeftOpen(false);
+    if (window.innerWidth <= 860) setCanvasOpen(false);
+    requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>(".composer textarea")?.focus());
+  }
 
   function retryOutput() {
     setOutputRetry((value) => value + 1);
@@ -394,6 +428,7 @@ export function useWorkbenchController() {
     busy,
     canSubmit,
     canWrite,
+    canvasOpen,
     changeSpec,
     clearPreview,
     composerRoute,
@@ -432,6 +467,7 @@ export function useWorkbenchController() {
     login,
     modal,
     network,
+    newTask,
     notice,
     openAnalysisDraft,
     openGenerationResult,
@@ -464,6 +500,7 @@ export function useWorkbenchController() {
     setAnalysisMode,
     setApprovalSettings,
     setAttachments,
+    setCanvasOpen,
     setConstructionExamples,
     setDirectAnswers,
     setDrafts,

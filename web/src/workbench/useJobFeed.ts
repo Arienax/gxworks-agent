@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import type { SetStateAction } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Job, JobEvent, Json, Proposal, Session } from "../api/client";
 import { activeJob, api } from "../api/client";
 import { reconcileByRevision } from "../lifecycle/requests";
@@ -12,12 +13,24 @@ export function useJobFeed(
   const activeProjectRef = useRef(pid);
   activeProjectRef.current = pid;
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [jobId, setJobId] = useState("");
+  const [jobId, storeJobId] = useState("");
   const [events, setEvents] = useState<JobEvent[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
+  // An explicit "new task" keeps the conversation empty instead of letting the
+  // next poll fall back to the latest job. Any explicit selection releases it.
+  const draftingNew = useRef(false);
+  const setJobId = useCallback((value: SetStateAction<string>) => {
+    draftingNew.current = false;
+    storeJobId(value);
+  }, []);
+  const startNewTask = useCallback(() => {
+    draftingNew.current = true;
+    storeJobId("");
+  }, []);
   useEffect(() => {
+    draftingNew.current = false;
     setJobs([]);
-    setJobId("");
+    storeJobId("");
     setEvents([]);
     setProposals([]);
   }, [pid]);
@@ -34,8 +47,10 @@ export function useJobFeed(
     (value) => {
       setJobs((old) => reconcileByRevision(old, value.jobs));
       setProposals((old) => reconcileByRevision(old, value.proposals));
-      setJobId((old) =>
-        value.jobs.some((item) => item.id === old) ? old : value.jobs[0]?.id || "",
+      storeJobId((old) =>
+        value.jobs.some((item) => item.id === old)
+          ? old
+          : draftingNew.current ? "" : value.jobs[0]?.id || "",
       );
     },
     (e) => setError(String(e instanceof Error ? e.message : e)),
@@ -119,6 +134,7 @@ export function useJobFeed(
     setJobs,
     jobId,
     setJobId,
+    startNewTask,
     events,
     setEvents,
     proposals,

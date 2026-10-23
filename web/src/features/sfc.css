@@ -2,9 +2,9 @@
 .sfc-toolbar { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
 .sfc-toolbar strong { margin-right: auto; }
 .sfc-layout { display: grid; grid-template-columns: minmax(0, 1fr) 17rem; gap: 1rem; }
-.sfc-canvas { overflow: auto; border: 1px solid var(--border); border-radius: .6rem; min-height: 22rem; padding: 1rem; }
+.sfc-canvas { background: var(--canvas-paper); overflow: auto; border: 1px solid var(--border); border-radius: .6rem; min-height: 22rem; padding: 1rem; }
 .sfc-canvas svg { width: 100%; min-width: 340px; max-height: 70vh; }
-.sfc-cell { cursor: pointer; fill: var(--bg); stroke: var(--text); stroke-width: 1.5; }
+.sfc-cell { cursor: pointer; fill: var(--panel); stroke: var(--muted); stroke-width: 1.5; }
 .sfc-cell text { fill: var(--text); stroke: none; font-size: 13px; }
 .sfc-cell .sfc-action { font-size: 10px; }
 .sfc-connections, .sfc-jump-connections { fill: none; stroke: var(--text); stroke-width: 1.5; pointer-events: none; }
@@ -16,5 +16,5 @@
 .sfc-details h3 { margin: .6rem 0; }
 .sfc-details label { display: flex; align-items: center; justify-content: space-between; gap: .6rem; }
 .sfc-details pre { white-space: pre-wrap; padding: .6rem; border: 1px solid var(--border); border-radius: .4rem; }
-.sfc-error { color: #e65e66; }
+.sfc-error { color: var(--bad); }
 @media (max-width: 760px) { .sfc-layout { grid-template-columns: 1fr; } }

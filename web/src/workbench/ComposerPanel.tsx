@@ -1,20 +1,26 @@
 import {
-  Paperclip,
+  ArrowUp,
+  ImagePlus,
   FileUp,
-  Send,
+  Plus,
+  ShieldCheck,
   Workflow,
   X
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { activeJob } from "../api/client";
+import { Popover } from "../components/Popover";
 import { Button } from "../components/ui";
+import { approvalLabels } from "../features/ApprovalSettings";
 import { ConversationControls } from "../features/ConversationControls";
+import { ModelSwitcher } from "../features/ModelUsage";
 import type { WorkbenchModel } from "./useWorkbenchController";
 
 
 export const composerPanelFields = [
   "analysisMode",
   "answeringDirect",
+  "approvalSettings",
   "attachments",
   "canSubmit",
   "canWrite",
@@ -42,9 +48,12 @@ export const composerPanelFields = [
   "setScopeAddresses",
   "setScopeEnabled",
   "setScopeNetworks",
+  "setSettings",
+  "setSettingsTab",
   "setTask",
   "setText",
   "setWorkflow",
+  "settings",
   "submitJob",
   "t",
   "task",
@@ -58,6 +67,7 @@ export function ComposerPanel(props: Props) {
   const {
     analysisMode,
     answeringDirect,
+    approvalSettings,
     attachments,
     canSubmit,
     canWrite,
@@ -85,9 +95,12 @@ export function ComposerPanel(props: Props) {
     setScopeAddresses,
     setScopeEnabled,
     setScopeNetworks,
+    setSettings,
+    setSettingsTab,
     setTask,
     setText,
     setWorkflow,
+    settings,
     submitJob,
     t,
     task,
@@ -195,45 +208,6 @@ export function ComposerPanel(props: Props) {
           }
         }}
       >
-        <div className="composer-mode">
-          <strong>{t("工程任务")}</strong>
-          <button
-            className="text-button"
-            disabled={!canWrite || task === "question"}
-            onClick={() => setModal("sfc")}
-          >
-            {t("流程步骤")} <Workflow size={13} />
-          </button>
-        </div>
-        <ConversationControls
-          task={task}
-          onTask={setTask}
-          workflow={workflow}
-          onWorkflow={setWorkflow}
-          editAction={editAction}
-          onEditAction={setEditAction}
-          analysisMode={analysisMode}
-          onAnalysisMode={setAnalysisMode}
-          hasVersions={!!hasSavedVersions}
-          targetMode={project?.target_mode || "ladder"}
-          analyzing={intent === "analysis"}
-          confirmed={!!project?.confirmed_spec && !reviewRequested}
-          onReview={() => {
-            setWorkflow("review");
-            setReviewRequested(true);
-          }}
-          disabled={!canWrite || jobs.some(activeJob)}
-          locale={locale}
-          t={t}
-        />
-        {composerRoute.requiresText && (
-          <textarea
-            aria-label={t(answeringDirect ? "补充说明（选填）" : composerRoute.placeholder)}
-            placeholder={t(answeringDirect ? "补充说明（选填）" : composerRoute.placeholder)}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-          />
-        )}
         {task !== "question" && attachments.length > 0 && (
           <div className="attachment-chips">
             {attachments.map((a) => (
@@ -251,46 +225,113 @@ export function ComposerPanel(props: Props) {
             ))}
           </div>
         )}
-        <p className="gxw-drop-hint">{t(dragging ? "松开以检查 GXW 工程" : "可将 GXW 工程拖到这里，或选择文件导入。")}</p>
-        <div className="composer-actions">
-          <input ref={gxwRef} type="file" hidden accept=".gxw"
-            aria-label={t("选择 GXW 工程")}
-            onChange={(event) => {
-              const files = Array.from(event.target.files || []);
-              event.target.value = "";
-              void gxwImport.open(files);
-            }} />
-          <Button variant="ghost" disabled={!canWrite} aria-label={t("导入 GXW")}
-            onClick={() => gxwRef.current?.click()}>
-            <FileUp size={16} />{t("导入 GXW")}
-          </Button>
-          <input
-            ref={uploadRef}
-            type="file"
-            hidden
-            multiple
-            accept="image/png,image/jpeg,image/gif,image/webp"
-            onChange={(e) => void guarded(() => upload(e.target.files))}
+        {composerRoute.requiresText ? (
+          <textarea
+            rows={2}
+            aria-label={t(answeringDirect ? "补充说明（选填）" : composerRoute.placeholder)}
+            placeholder={t(answeringDirect ? "补充说明（选填）" : composerRoute.placeholder)}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
           />
-          <Button
-            variant="ghost"
-            aria-label={t("添加图片")}
-            disabled={!canWrite || !pid || task === "question" || !composerRoute.requiresText}
-            onClick={() => uploadRef.current?.click()}
+        ) : (
+          <p className="composer-ready">{t(composerRoute.placeholder)}</p>
+        )}
+        <input ref={gxwRef} type="file" hidden accept=".gxw"
+          aria-label={t("选择 GXW 工程")}
+          onChange={(event) => {
+            const files = Array.from(event.target.files || []);
+            event.target.value = "";
+            void gxwImport.open(files);
+          }} />
+        <input
+          ref={uploadRef}
+          type="file"
+          hidden
+          multiple
+          accept="image/png,image/jpeg,image/gif,image/webp"
+          onChange={(e) => void guarded(() => upload(e.target.files))}
+        />
+        <div className="composer-actions">
+          <Popover className="composer-menu" summaryClassName="composer-icon" label={t("添加")} title={t("添加")}
+            summary={<Plus size={17} />}>
+            <Button variant="ghost" disabled={!canWrite} aria-label={t("导入 GXW")}
+              onClick={() => gxwRef.current?.click()}>
+              <FileUp size={15} />{t("导入 GXW")}
+            </Button>
+            <Button
+              variant="ghost"
+              aria-label={t("添加图片")}
+              disabled={!canWrite || !pid || task === "question" || !composerRoute.requiresText}
+              onClick={() => uploadRef.current?.click()}
+            >
+              <ImagePlus size={15} />{t("添加图片")}
+            </Button>
+            <Button variant="ghost" disabled={!canWrite || task === "question"} onClick={() => setModal("sfc")}>
+              <Workflow size={15} />{t("流程步骤")}
+            </Button>
+          </Popover>
+          <ConversationControls
+            task={task}
+            onTask={setTask}
+            workflow={workflow}
+            onWorkflow={setWorkflow}
+            editAction={editAction}
+            onEditAction={setEditAction}
+            analysisMode={analysisMode}
+            onAnalysisMode={setAnalysisMode}
+            hasVersions={!!hasSavedVersions}
+            targetMode={project?.target_mode || "ladder"}
+            analyzing={intent === "analysis"}
+            confirmed={!!project?.confirmed_spec && !reviewRequested}
+            onReview={() => {
+              setWorkflow("review");
+              setReviewRequested(true);
+            }}
+            disabled={!canWrite || jobs.some(activeJob)}
+            locale={locale}
+            t={t}
+          />
+          <span className="spacer" />
+          <ModelSwitcher
+            compact
+            settings={settings}
+            job={jobs.find(activeJob)}
+            disabled={!canWrite}
+            onChange={setSettings}
+            onSettings={() => {
+              setSettingsTab("model");
+              setModal("settings");
+            }}
+            t={t}
+          />
+          <button
+            className={`approval-mode-indicator ${approvalSettings?.mode === "full" ? "full-access" : ""}`}
+            aria-label={t(approvalSettings ? approvalLabels[approvalSettings.mode] : "审批设置")}
+            title={`${t(approvalSettings ? approvalLabels[approvalSettings.mode] : "审批设置")} · ${t("在设置中调整审批模式")}`}
+            onClick={() => {
+              setSettingsTab("general");
+              setModal("settings");
+            }}
           >
-            <Paperclip size={16} />
-          </Button>
-          <span className="muted">Ctrl ↵</span>
+            <ShieldCheck size={13} />
+            <span>{t(approvalSettings ? approvalLabels[approvalSettings.mode] : "审批设置")}</span>
+          </button>
           <Button
             variant="primary"
+            className="composer-send"
+            title={`${t(composerRoute.submitLabel)} · Ctrl ↵`}
             disabled={!canSubmit}
             onClick={() => void guarded(() => submitJob())}
           >
-            <Send size={14} />
-            {t(composerRoute.submitLabel)}
+            <ArrowUp size={15} />
+            <span>{t(composerRoute.submitLabel)}</span>
           </Button>
         </div>
       </div>
+      <p className="gxw-drop-hint">
+        {t(dragging ? "松开以检查 GXW 工程" : "可将 GXW 工程拖到这里，或选择文件导入。")}
+        <span className="muted"> · Ctrl ↵</span>
+      </p>
     </>
   );
 }

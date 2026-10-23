@@ -2,7 +2,7 @@
   min-width: 0;
   margin: 8px 0;
   padding: 8px;
-  border: 1px solid currentColor;
+  border: 1px solid var(--border);
   border-radius: 8px;
 }
 .analysis-mode-picker legend {
@@ -29,6 +29,7 @@
   line-height: 1.4;
 }
 .analysis-mode-picker strong { font-size: 0.8rem; font-weight: 500; }
+.analysis-mode-picker .selected { background: var(--accent-soft); color: var(--accent); }
 .analysis-mode-picker .selected strong { font-weight: 700; }
-.analysis-mode-picker small { font-size: 0.75rem; opacity: 0.8; }
-.analysis-mode-picker label:focus-within { outline: 1px solid currentColor; }
+.analysis-mode-picker small { font-size: 0.75rem; color: var(--muted); }
+.analysis-mode-picker label:focus-within { outline: 2px solid var(--accent); }

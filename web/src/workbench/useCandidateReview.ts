@@ -12,11 +12,12 @@ type Options = Navigation & {
   theme: string; specIsDirty: boolean; busy: boolean; guarded: (action: () => Promise<void>) => Promise<void>;
   setRefresh: Setter<number>; setOutputRetry: Setter<number>; setError: (message: string) => void;
   setNotice: (message: string) => void; t: Translate
+  onShowResult: () => void;
 };
 
 export function useCandidateReview(options: Options) {
   const { workspace, feed, generationResult, currentJob, session, theme, specIsDirty, busy,
-    guarded, setTab, setPanel, setModal, setRefresh, setOutputRetry, setError, setNotice, t } = options;
+    guarded, setTab, setPanel, setModal, setRefresh, setOutputRetry, setError, setNotice, t, onShowResult } = options;
   const { pid, vid, version, loading, setVid, reloadProjectSilently } = workspace;
   const { jobs, jobId, setJobId, setJobs, setProposals, jobsPolling } = feed;
   const [selectedProposal, setSelectedProposal] = useState<Proposal | null>(null);
@@ -45,6 +46,7 @@ export function useCandidateReview(options: Options) {
     if (!saved) throw new Error(t("已保存版本尚不可用，请刷新重试。"));
     clearPreview(); setVid(versionId);
     setTab(saved.target_mode || fresh.target_mode || "ladder"); setPanel("agent");
+    onShowResult();
     if (saved.target_mode === "ladder") await redrawVersion(versionId, previewTheme);
   }
 
@@ -152,6 +154,7 @@ export function useCandidateReview(options: Options) {
         setDiagnosticJobId(generationResult.id);
         setTab("ladder");
         setPanel("agent");
+        onShowResult();
       } else if (typeof output?.version_id === "string" || generationResult.versionId) {
         await openSavedVersion(
           String(output?.version_id || generationResult.versionId),

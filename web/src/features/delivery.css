@@ -5,9 +5,9 @@
 .delivery-report p {margin:10px 0;white-space:pre-wrap}
 .delivery-report ul {padding-left:24px;margin:12px 0}
 .delivery-report li {margin:8px 0;white-space:pre-wrap}
-.delivery-report blockquote {margin:12px 0;padding:10px 16px;border-left:3px solid var(--accent);background:var(--hover);white-space:pre-wrap}
+.delivery-report blockquote {margin:12px 0;padding:10px 16px;border-left:3px solid var(--accent);background:var(--soft);white-space:pre-wrap}
 .delivery-table {overflow-x:auto;margin:12px 0;border:1px solid var(--border);border-radius:6px}
 .delivery-table table {width:100%;border-collapse:collapse;table-layout:auto}
 .delivery-table th,.delivery-table td {padding:10px 14px;text-align:left;vertical-align:top;border-bottom:1px solid var(--border);min-width:75px}
-.delivery-table th {font-weight:600;background:var(--hover)}
+.delivery-table th {font-weight:600;background:var(--soft)}
 .delivery-table tr:last-child td {border-bottom:0}

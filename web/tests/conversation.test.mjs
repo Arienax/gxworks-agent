@@ -7,10 +7,73 @@ import { createRequire } from "node:module";
 import ts from "typescript";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { listedJobStatus } from "../src/workbench/jobLabels.ts";
 
 const initial = { task: "create", workflow: "direct", editAction: "edit", targetMode: "ladder",
   hasVersions: false, hasSpec: false, reviewRequested: false, continuingDirect: false };
 const route = changes => conversationRoute({ ...initial, ...changes });
+
+test("task history preserves unresolved generation and failed execution outcomes", () => {
+  for (const [kind, status, result, expected] of [
+    ["execution", "completed", { status: "failed" }, "failed"],
+    ["execution", "completed", { status: "interrupted" }, "failed"],
+    ["execution", "completed", { status: "conflict" }, "failed"],
+    ["direct_generation", "completed", { status: "needs_input" }, "needs_input"],
+    ["generation", "completed", { status: "contract_mismatch" }, "contract_mismatch"],
+    ["generation", "completed", { proposal_id: "proposal-1" }, "candidate_ready"],
+    ["generation", "completed", { version_id: "v0001", proposal_id: "proposal-1" }, "saved"],
+    ["generation", "running", { status: "needs_input" }, "running"],
+    ["review", "completed", null, "completed"],
+  ]) {
+    const job = { id: "history-job", kind, status, result };
+    assert.equal(listedJobStatus(job, "other-job", "saved"), expected);
+    assert.equal(listedJobStatus(job, "history-job", "loading_result"), "loading_result");
+  }
+});
+
+test("canvas shows only the current program language, including imported programs and candidates", () => {
+  const path = new URL("../src/workbench/ProgramWorkspace.tsx", import.meta.url);
+  const code = ts.transpileModule(readFileSync(path, "utf8"), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText;
+  const module = { exports: {} }, require = createRequire(path);
+  const dependencies = {
+    "../api/client": { activeJob: () => false },
+    "../components/RetainedPanel": { RetainedPanel: ({ active, children }) => active ? children() : null },
+    "../components/ui": { Button: ({ children, ...props }) => createElement("button", props, children) },
+    "../features/ProjectToolbar": { ProjectToolbar: () => null },
+    "../workbench/EditorContent": { EditorContent: ({ visibleTab }) => createElement("article", { "data-view": visibleTab }) },
+  };
+  new Function("require", "module", "exports", code)(name => dependencies[name] || require(name), module, module.exports);
+  const labels = { ladder: "梯形图", fbd: "FBD", sfc: "SFC", st: "ST" };
+  const cases = [
+    ...Object.keys(labels).map(target => ({ target, expected: target })),
+    { target: "ladder", document: "st", expected: "st" },
+    { target: "st", document: "fbd", expected: "fbd" },
+    { target: "ladder", document: "st", candidate: "sfc", expected: "sfc" },
+    { target: "st", document: "fbd", candidate: "ladder", expected: "ladder" },
+    { target: "fbd", tab: "reports", expected: "fbd" },
+  ];
+  for (const { target, document, candidate, tab = "ladder", expected } of cases) {
+    const markup = renderToStaticMarkup(createElement(module.exports.ProgramWorkspace, {
+      pid: "project", project: { id: "project", target_mode: target },
+      editorProps: { version: document ? { target_mode: document } : undefined },
+      preview: candidate ? { target_mode: candidate } : null,
+      jobs: [], operations: {}, panel: "agent", tab, t: value => value,
+    }));
+    const nav = markup.match(/<nav\b[^>]*>(.*?)<\/nav>/s)?.[1];
+    assert.ok(nav);
+    for (const [language, label] of Object.entries(labels)) {
+      assert.equal(nav.includes(`aria-label="${label}"`), language === expected, JSON.stringify({ target, document, candidate, language }));
+    }
+    assert.match(nav, /aria-label="诊断"/);
+    assert.match(nav, /aria-label="仿真记录"/);
+    assert.match(nav, /aria-label="工程交付摘要"/);
+    const active = tab === "reports" ? tab : expected;
+    assert.ok(markup.includes(`data-view="${active}"`));
+    assert.equal((markup.match(/data-view=/g) || []).length, 1);
+  }
+});
 
 test("creation separates direct generation, analysis and confirmed generation", () => {
   assert.equal(route({}).kind, "direct_generation");

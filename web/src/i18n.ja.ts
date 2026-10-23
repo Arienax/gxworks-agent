@@ -1,6 +1,18 @@
 // Japanese strings load on demand: the workbench starts in the stored locale and
 // only pulls this table when that locale is Japanese.
 export const japanese: Record<string, string> = {
+  "工程画布": "プロジェクトビュー",
+  "打开画布": "プロジェクトビューを開く",
+  "收起画布": "プロジェクトビューを閉じる",
+  "显示侧栏": "サイドバーを表示",
+  "隐藏侧栏": "サイドバーを閉じる",
+  "新任务": "新しいタスク",
+  "开始一个 PLC 工程任务": "PLC プロジェクトを始める",
+  "有什么需要处理的？": "何から始めますか？",
+  "新建工程，或将 GXW 工程拖到对话输入框导入。": "プロジェクトを作成するか、入力欄に GXW ファイルをドロップして取り込みます。",
+  "显示全部": "すべて表示",
+  "收起": "折りたたむ",
+  "添加": "追加",
   "编辑的程序": "編集対象のプログラム",
   "程序修改": "プログラムの変更",
   "搜索对象类型": "オブジェクトの種類を検索",

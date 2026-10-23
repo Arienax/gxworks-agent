@@ -13,7 +13,7 @@ export function ConversationControls({ task, onTask, workflow, onWorkflow, editA
   onReview: () => void; disabled: boolean; locale: Locale; t: (value: string) => string;
 }) {
   return <div className="conversation-controls">
-    <label className="composer-select">{t("任务")}
+    <label className="composer-select"><span className="sr-only">{t("任务")}</span>
       <select aria-label={t("任务")} value={task} disabled={disabled}
         onChange={event => onTask(event.target.value as TaskPurpose)}>
         <option value="create" disabled={hasVersions}>{t("创建程序")}</option>
@@ -21,21 +21,21 @@ export function ConversationControls({ task, onTask, workflow, onWorkflow, editA
         <option value="question">{t("工程问答")}</option>
       </select>
     </label>
-    {task === "create" && targetMode === "ladder" && <label className="composer-select">{t("创建方式")}
+    {task === "create" && targetMode === "ladder" && <label className="composer-select"><span className="sr-only">{t("创建方式")}</span>
       <select aria-label={t("创建方式")} value={workflow} disabled={disabled}
         onChange={event => onWorkflow(event.target.value as CreationWorkflow)}>
         <option value="direct">{t("直接生成")}</option>
         <option value="review">{t("先确认需求")}</option>
       </select>
     </label>}
-    {task === "edit" && <label className="composer-select">{t("修改方式")}
+    {task === "edit" && <label className="composer-select"><span className="sr-only">{t("修改方式")}</span>
       <select aria-label={t("修改方式")} value={editAction} disabled={disabled}
         onChange={event => onEditAction(event.target.value as GenerationAction)}>
         <option value="edit">{t("修改当前版本")}</option>
         {targetMode === "ladder" && <option value="regenerate">{t("按需求重新生成")}</option>}
       </select>
     </label>}
-    {analyzing && <AnalysisModePicker locale={locale} value={analysisMode} onChange={onAnalysisMode} disabled={disabled} />}
+    {analyzing && <AnalysisModePicker compact locale={locale} value={analysisMode} onChange={onAnalysisMode} disabled={disabled} />}
     {confirmed && task !== "question" && (task === "create" || editAction === "regenerate") &&
       <button className="text-button" disabled={disabled} onClick={onReview}>{t("重新确认需求")}</button>}
   </div>;

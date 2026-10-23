@@ -22,14 +22,14 @@ export function RequestSummary({summary, t}: {summary:Summary; t:(s:string)=>str
   </div>;
 }
 
-export function ModelSwitcher({settings, job, disabled, onChange, onSettings, t}: {
+export function ModelSwitcher({settings, job, disabled, onChange, onSettings, t, compact = false}: {
   settings:ModelSettings | null; job?:Job; disabled:boolean; onChange:(s:ModelSettings)=>void;
-  onSettings:()=>void; t:(s:string)=>string;
+  onSettings:()=>void; t:(s:string)=>string; compact?: boolean;
 }) {
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const pending = useRef(false);
   const frozen = job && activeJob(job) ? job.model_usage : null;
-  return <div className="model-switcher">
+  return <div className={`model-switcher${compact ? " compact" : ""}`}>
     <div className="form-actions"><label className="sr-only">{t("新任务模型")}</label><select aria-label={t("当前模型（用于新任务）")} title={frozen?.model ? `${t("运行中")}: ${String(frozen.profile_name || frozen.model)} · ${String(frozen.model)}` : t("新任务模型")} value={settings?.active_profile_id || ""}
       disabled={disabled || busy || !settings?.profiles?.length} onChange={async e=>{
         if (pending.current) return;
@@ -40,7 +40,7 @@ export function ModelSwitcher({settings, job, disabled, onChange, onSettings, t}
       }}>
       {!settings?.profiles?.length && <option value="">{t("添加模型")}</option>}
       {settings?.profiles?.map(p=><option key={p.id} value={p.id}>{p.name} · {p.model}</option>)}
-    </select><Button variant="ghost" onClick={onSettings}>{t("模型设置")}</Button>
+    </select>{(!compact || !settings?.profiles?.length) && <Button variant="ghost" onClick={onSettings}>{t("模型设置")}</Button>}
     {!!frozen?.model && frozen.profile_id !== settings?.active_profile_id && <small title={String(frozen.model)}>{t("运行中")}: {String(frozen.profile_name || frozen.model)}</small>}</div>
     {error && <p role="alert">{error}</p>}
   </div>;
