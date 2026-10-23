@@ -175,9 +175,15 @@ def source_subquery(
     structured_clauses = []
     for raw_kind in exclude_structured_kinds or ():
         kind = str(raw_kind or "").strip().casefold()
+        if 'fact_kind' in table['columns']:
+            structured_clauses.append(f"COALESCE({_quote_identifier('fact_kind')},'')<>?")
+            values.append(kind)
+            continue
         owner_name = owner_tables.get(kind)
         owner = schema.get(owner_name) if owner_name else None
         if not owner or "chunk_id" not in owner["columns"]:
+            if kind == 'error' and 'chunk_type' in table['columns']:
+                structured_clauses.append(f"COALESCE({_quote_identifier('chunk_type')},'')<>'error'")
             continue
         ownership = ''
         if kind == 'device':

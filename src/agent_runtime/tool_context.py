@@ -112,18 +112,32 @@ def resolve_tool_context(definition, context, arguments):
     if requirement == "none":
         return context
     if requirement == "model":
+        from plc.target_identity import reference_target_identity
+        from knowledge.fact_corpus import model_corpus_status
         supplied = arguments.get("plc_model")
         actual = (context.version or {}).get("plc_model") or context.project.get("plc_model")
-        if supplied and actual and supplied.upper() != actual.upper():
-            raise ToolPreconditionError("MODEL_MISMATCH", "检索型号与当前工程不一致。")
         if not (supplied or actual):
             raise ToolPreconditionError("PLC_MODEL_REQUIRED", "手册检索需要明确 CPU 型号。",
                 next_actions=({"tool": "search_plc_manual", "required_arguments": ["query", "plc_model"]},))
-        if supplied and not actual:
-            from plc.project_capabilities import normalize_project_selection
-            selection = normalize_project_selection(supplied, "ladder", None, None)
-            context = replace(context, project={"plc_model": selection["plc_model"]})
-        return context
+        normalized = {}
+        for key, value in (("supplied", supplied), ("project", actual)):
+            if value:
+                normalized[key] = reference_target_identity(value)
+                if normalized[key] is None:
+                    raise ToolPreconditionError("UNKNOWN_PLC_MODEL", f"无法识别手册查询型号 {value}。",
+                        details={"plc_model": value, "model_namespace": "manual_reference"},
+                        next_actions=({"tool": "search_plc_manual", "required_arguments": ["query", "plc_model"]},))
+        if supplied and actual and normalized["supplied"] != normalized["project"]:
+            raise ToolPreconditionError("MODEL_MISMATCH", "检索型号与当前工程不一致。", details=normalized)
+        model = normalized.get("supplied") or normalized["project"]
+        status = model_corpus_status(model)
+        if status["status"] != "facts_available":
+            unavailable = status["status"] == "index_unavailable"
+            raise ToolPreconditionError("KNOWLEDGE_INDEX_UNAVAILABLE" if unavailable else "KNOWLEDGE_UNAVAILABLE",
+                "知识索引不可用，无法完成手册检索。" if unavailable else f"当前资料未覆盖请求的型号 {model}。",
+                details=status, next_actions=({"tool": "search_plc_manual", "required_arguments": ["query", "plc_model"]},))
+        return replace(context, project={**context.project, "plc_model": model},
+                       version={**context.version, "plc_model": model} if context.version is not None else None)
     if not context.project_id and context.analysis_source is None:
         raise ToolPreconditionError("NO_PROJECT_SELECTED", "未选中 Agent 工程；可先发现原生工程并读取分析快照。",
                                     next_actions=PROJECT_ACTIONS)

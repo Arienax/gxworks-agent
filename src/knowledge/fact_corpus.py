@@ -206,6 +206,36 @@ def runtime_connection():
 _DEFAULT_CONNECTION = object()
 
 
+def model_corpus_status(plc_model):
+    """Report missing model facts separately from an inaccessible fact index."""
+    from plc.target_identity import target_members
+    from knowledge.scope import scope_matches
+    members = target_members(plc_model)
+    result = {"plc_model": plc_model, "members": list(members)}
+    try:
+        path = index_access.index_path()
+        if path is None:
+            return {**result, "status": "index_unavailable"}
+        connection = index_access.connection(path, index_access.index_identity(path))
+        schema = index_access.schema(connection)
+        if "facts" in schema:
+            present = {row[0] for row in connection.execute(
+                "SELECT DISTINCT plc_model FROM facts WHERE plc_model IN ("
+                + ",".join("?" for _ in members) + ")", members)}
+        elif "chunks" in schema and "plc_models" in schema["chunks"]["columns"]:
+            # Explicit legacy evidence fixtures keep their own source scope.
+            scopes = [row[0] for row in connection.execute("SELECT DISTINCT plc_models FROM chunks")]
+            present = {member for member in members if any(scope_matches(scope, member) for scope in scopes)}
+        else:
+            return {**result, "status": "index_unavailable"}
+    except (OSError, sqlite3.Error):
+        index_access.close_thread_connection()
+        return {**result, "status": "index_unavailable"}
+    missing = [member for member in members if member not in present]
+    return {**result, "status": "no_facts_for_model" if missing else "facts_available",
+            "missing_members": missing}
+
+
 def resolve(kind, targets, *, plc_model, task_type="analysis", connection=_DEFAULT_CONNECTION):
     """Exact projection over the same database and scope used by broad RRF."""
     if connection is _DEFAULT_CONNECTION:
@@ -226,21 +256,28 @@ def resolve(kind, targets, *, plc_model, task_type="analysis", connection=_DEFAU
         if expected and (marker[0] != expected or not DEFAULT_INSTRUCTION_REGISTRY.fact_bundle_current()):
             raise ValueError('Runtime knowledge and Core fact bundles differ; reload the checking context')
     result = []
-    from gxworks2.project_profiles import native_project_profile
-    profile = native_project_profile(plc_model)
-    members = profile.cpu.removesuffix("(RemoteI/O)").split("/") if profile else [plc_model]
+    from plc.target_identity import reference_target_identity, target_members
+    model = reference_target_identity(plc_model)
+    if model is None:
+        return []
+    plc_model = model
+    members = target_members(model)
     for target in targets or ():
         name = str(target.get("opcode") if isinstance(target, dict) else target).upper()
         if kind == "device":
             from plc.device_identity import canonical_reference_device
             name = canonical_reference_device(name)
         if kind == "error":
-            name = name.removeprefix("0X").removesuffix("H")
+            from knowledge.text_matching import error_code_aliases
+            names = error_code_aliases(name)
+        else:
+            names = (name,)
         rows = connection.execute(
             "SELECT c.rowid AS _chunk_rowid,c.*,f.payload_json FROM facts f JOIN chunks c ON c.id=f.chunk_id "
-            "WHERE f.kind=? AND f.target=? AND f.plc_model IN (" + ",".join("?" for _ in members) + ") "
+            "WHERE f.kind=? AND f.target IN (" + ",".join("?" for _ in names) + ") "
+            "AND f.plc_model IN (" + ",".join("?" for _ in members) + ") "
             "ORDER BY CASE WHEN f.id LIKE 'definition:%' OR f.id LIKE 'function:definition:%' THEN 0 ELSE 1 END,f.id",
-            (kind, name, *members)).fetchall()
+            (kind, *names, *members)).fetchall()
         for row in rows:
             projected = chunk_result(row, {"corpus_kind": CORPUS_KIND}, index_access.index_path(), plc_model, task_type)
             if projected is not None:

@@ -26,6 +26,9 @@ def _target_identity(kind, value):
         return _instruction_identity(value)
     if kind == "positioning" and isinstance(value, Mapping):
         return str(value.get("target") or "").strip().upper(), None
+    if kind == 'error':
+        from knowledge.text_matching import canonical_error_code
+        return canonical_error_code(value), None
     return str(value or "").strip().upper(), None
 
 
@@ -176,9 +179,17 @@ def build_fact_coverage(
     targets, records, included_ids=(), *, instruction_questions=None, extra_requirements=(),
 ):
     """Adapt structured PLC targets into the domain-agnostic coverage core."""
+    normalized_records = []
+    for record in records or ():
+        if isinstance(record, Mapping) and (record.get('fact_kind') or record.get('structured_fact_kind')) == 'error':
+            record = dict(record)
+            for key in ('fact_target', 'structured_fact_target', 'structured_fact_requested_target'):
+                if record.get(key):
+                    record[key] = _target_identity('error', record[key])[0]
+        normalized_records.append(record)
     return build_coverage(
         [*fact_requirements(targets, instruction_questions=instruction_questions), *extra_requirements],
-        records,
+        normalized_records,
         included_ids,
     )
 

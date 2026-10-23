@@ -22,6 +22,7 @@ from knowledge.text_matching import (
     PRODUCT_TERM_RE,
     alias_occurs,
     error_terms,
+    canonical_error_code,
     normalize_text,
 )
 
@@ -81,7 +82,7 @@ def _fact_identity(kind, value):
         from plc.device_identity import canonical_reference_device
         return canonical_reference_device(str(value or "").strip().upper()), None
     if kind == "error":
-        return str(value or "").strip().upper().removesuffix("H"), None
+        return canonical_error_code(value), None
     return str(value or "").strip().upper(), None
 
 
@@ -143,14 +144,53 @@ def _covered_structured_kinds(targets, records, *, limits=False):
     return frozenset(covered)
 
 
-def _residual_prefilters(covered_kinds):
+def _residual_prefilters(covered_kinds, targets=None):
     covered = set(covered_kinds or ())
+    if (targets or {}).get('errors'):
+        # Explicit diagnostic identities always use their exact owner. Keep
+        # generic troubleshooting prose, not neighbouring code definitions.
+        covered.add('error')
     return {
         "exclude_chunk_types": ("instruction",) if "instruction" in covered else (),
         "exclude_structured_kinds": tuple(
             kind for kind in ("device", "error") if kind in covered
         ),
     }
+
+
+def _diagnostic_candidate_rows(rows, codes, namespace=None):
+    """Structured diagnostic identity outranks incidental body mentions."""
+    requested = {canonical_error_code(code) for code in codes}
+    patterns = [re.compile(r'(?<![0-9A-Z_])(?:0X)?' + re.escape(code) + r'H?(?![0-9A-Z_])')
+                for code in requested]
+    result = []
+    from knowledge.structured_facts import authored_packet
+    for row in rows:
+        value = authored_packet(row).get('value') or {}
+        value = value if isinstance(value, Mapping) else {}
+        kind = row.get('fact_kind') or row.get('structured_fact_kind')
+        if not kind and row.get('chunk_type') == 'error':
+            kind = 'error'
+        code = (row.get('fact_target') or row.get('structured_fact_target')) if kind == 'error' else None
+        code = code or row.get('diagnostic_code') or row.get('error_code') or value.get('code')
+        if not code and kind == 'error':
+            heading_codes = error_terms(str(row.get('section') or ''))
+            if len(heading_codes) == 1:
+                code = heading_codes[0]
+        row_namespace = row.get('diagnostic_namespace') or value.get('diagnostic_namespace')
+        if value.get('runtime_domain_separate') is True:
+            row_namespace = row_namespace or 'compiler'
+        if namespace and row_namespace and row_namespace != namespace:
+            continue
+        if code:
+            keep = canonical_error_code(code) in requested
+        elif kind == 'error':
+            keep = any(pattern.search(str(row.get('text') or '').upper()) for pattern in patterns)
+        else:
+            keep = True
+        if keep:
+            result.append(row)
+    return result
 
 
 def _resolved_targets(targets, covered_kinds):
@@ -346,6 +386,11 @@ def retrieve_fact_aware_knowledge(
     if not lanes:
         return []
 
+    from plc.target_identity import reference_target_identity
+    normalized_model = reference_target_identity(plc_model)
+    if normalized_model is None:
+        return []
+    plc_model = normalized_model
     targets = structured_fact_targets(query, plc_model=plc_model)
     direct = [
         *resolve_positioning_records(targets.get("positioning"), plc_model=plc_model, task_type=task),
@@ -372,9 +417,11 @@ def retrieve_fact_aware_knowledge(
         compact_structured_fact_record(row)
         for row in filter_records(direct, lanes)
     ]
+    if targets.get('errors'):
+        direct = _diagnostic_candidate_rows(direct, targets['errors'], targets.get('diagnostic_namespace'))
     limits = bool(re.search(r'限制|条件|范围|约束|\blimit|restrict|constraint|domain|range', str(query), re.I))
     covered_kinds = _covered_structured_kinds(targets, direct, limits=limits)
-    prefilters = _residual_prefilters(covered_kinds)
+    prefilters = _residual_prefilters(covered_kinds, targets)
 
     resolved_targets = _resolved_targets(targets, covered_kinds)
     residual = _residual_fact_text(query, targets, covered_kinds)
@@ -389,6 +436,8 @@ def retrieve_fact_aware_knowledge(
         **prefilters,
     ) if plan["facts"] and residual.strip() and not diagnostic_only else []
     broad = filter_records(exclude_structured_target_hits(broad, resolved_targets), lanes)
+    if targets.get('errors'):
+        broad = _diagnostic_candidate_rows(broad, targets['errors'], targets.get('diagnostic_namespace'))
     from knowledge.structured_facts import project_device_source_records
     broad = project_device_source_records(broad,plc_model=plc_model)
 
@@ -530,6 +579,8 @@ def build_knowledge_context(
         if task in {"generate", "edit"} and not getattr(query, "precompiled", False):
             exact_targets["devices"] = []
 
+    exact_targets = {**exact_targets, 'errors': list(dict.fromkeys(
+        canonical_error_code(code) for code in exact_targets.get('errors', ()) if canonical_error_code(code)))}
     instruction_targets = list(exact_targets.get("instructions") or ())
     device_targets = list(exact_targets.get("devices") or ())
     family_targets = list(exact_targets.get("device_families") or ())
@@ -569,16 +620,17 @@ def build_knowledge_context(
             error_targets, plc_model=plc_model, task_type=task,
         ))
     direct_results.extend(process_results)
+    if error_targets:
+        direct_results = _diagnostic_candidate_rows(direct_results, error_targets, exact_targets.get('diagnostic_namespace'))
     # Coverage must describe the same projected body the model receives.
     direct_results = [context_reference(row) for row in direct_results]
 
-    # Close a structured owner lane only after every explicit target of that
-    # kind actually produced eligible direct evidence. Unresolved direct lookup
-    # leaves broad recall available rather than failing closed on missing data.
+    # Definition coverage and diagnostic identity are separate: unresolved
+    # codes retain general troubleshooting context, never a neighbour's facts.
     eligible_direct_results = filter_records(direct_results, plan["source_lanes"])
     covered_kinds = _covered_structured_kinds(exact_targets, eligible_direct_results,
         limits=bool(re.search(r'限制|条件|范围|约束|\blimit|restrict|constraint|domain|range', str(query), re.I)))
-    prefilters = _residual_prefilters(covered_kinds)
+    prefilters = _residual_prefilters(covered_kinds, exact_targets)
 
     # The broad retriever sees only the residual prose. Structured-owner rows
     # covered above are removed before entity/BM25/dense candidate limits.
@@ -599,6 +651,8 @@ def build_knowledge_context(
         **prefilters,
     ) if should_retrieve_residual else []
     broad_results = exclude_structured_target_hits(broad_results, resolved_targets)
+    if error_targets:
+        broad_results = _diagnostic_candidate_rows(broad_results, error_targets, exact_targets.get('diagnostic_namespace'))
     from knowledge.structured_facts import project_device_source_records
     broad_results = project_device_source_records(broad_results,plc_model=plc_model)
     fact_results = filter_records([*direct_results, *broad_results], plan["source_lanes"])

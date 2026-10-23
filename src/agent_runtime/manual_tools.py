@@ -13,6 +13,10 @@ def _search_plc_manual(context: ToolContext, arguments: Mapping[str, Any]) -> Di
     from knowledge.evidence import evidence_record
 
     query = str(arguments.get("query") or "").strip()
+    if not query:
+        from agent_runtime.tool_errors import ToolPreconditionError
+        raise ToolPreconditionError("INVALID_ARGUMENTS", "query 不能为空；请给出要查询的指令、软元件或错误码。",
+            next_actions=({"tool": "search_plc_manual", "required_arguments": ["query", "plc_model"]},))
     top_k = int(arguments.get("top_k", 5))
     rows = retrieve_fact_aware_knowledge(
         query,
@@ -43,6 +47,7 @@ def _search_plc_manual(context: ToolContext, arguments: Mapping[str, Any]) -> Di
                     "plc_models", "source_applicability", "source_evidence", "source_chunk_id", "source_section_id",
                     "source_address_locations",
                     "fact_kind", "fact_target", "fact_dimensions", "device_lookup_basis",
+                    "device_range",
                     "structured_fact_requested_target",
                     "device_definition_status", "device_definition", "evidence_scope",
                     "table_binding_status", "content_status",

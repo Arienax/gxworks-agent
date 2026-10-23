@@ -9,9 +9,15 @@ from plc.device_identity import REFERENCE_DEVICE_TOKEN_RE
 DEVICE_RE = REFERENCE_DEVICE_TOKEN_RE
 
 ERROR_CODE_RE = re.compile(
-    r"(?<![A-Za-z0-9])(?:0X)?([0-9A-F]{4,5})(H)?(?![A-Za-z0-9])",
+    r"(?<![A-Za-z0-9_])(?:0X)?([0-9A-F]{4,7})(H)?(?![A-Za-z0-9_])",
     re.IGNORECASE,
 )
+_ERROR_CONTEXT_RE = re.compile(r"error|fault|alarm|diagnos|错误|故障|报警|异常|诊断", re.I)
+_EXPLICIT_ERROR_RE = re.compile(
+    r"(?:错误|故障|报警|异常|诊断)\s*(?:代码|码|编号|号)?\s*[:：#]?\s*"
+    r"((?:0X)?[0-9A-F]{1,7}H?)(?![A-Za-z0-9_])"
+    r"|(?:error|fault|alarm)\s*(?:code|no\.?|number)?\s*[:#]?\s*"
+    r"((?:0X)?[0-9A-F]{1,7}H?)(?![A-Za-z0-9_])", re.I)
 
 ASCII_TERM_RE = re.compile(
     r"(?<![A-Za-z0-9_])[A-Za-z][A-Za-z0-9_]{1,23}"
@@ -211,27 +217,47 @@ def entity_term_variants(term):
     return list(dict.fromkeys(variants))
 
 
-def error_terms(query):
+def canonical_error_code(value):
+    return str(value or "").strip().upper().removeprefix("0X").removesuffix("H")
+
+
+def error_code_aliases(value):
+    code = canonical_error_code(value)
+    return (code, code + "H", "0X" + code) if code else ()
+
+
+def explicit_error_terms(query):
+    return tuple(dict.fromkeys(canonical_error_code(match[1] or match[2])
+                              for match in _EXPLICIT_ERROR_RE.finditer(normalize_text(query))))
+
+
+def diagnostic_reference_text(query):
+    """Mask only code occurrences explicitly bound to the error namespace."""
+    text = normalize_text(query)
+    spans = [match.span(1 if match[1] else 2) for match in _EXPLICIT_ERROR_RE.finditer(text)]
+    for start, end in reversed(spans):
+        text = text[:start] + ' ' * (end - start) + text[end:]
+    return text
+
+
+def error_terms(query, *, plc_model=None):
+    """Diagnostic identities, with lookup aliases kept out of coverage targets.
+
+    Device recognition is lexical reference recognition, independent of Core's
+    execution support for that CPU. An explicit error namespace takes priority.
+    """
     normalized = normalize_text(query)
-    has_error_context = bool(
-        re.search(
-            r"error|fault|alarm|diagnos|错误|故障|报警|异常|诊断",
-            normalized,
-            flags=re.IGNORECASE,
-        )
-    )
-    values = []
-    seen = set()
+    has_error_context = bool(_ERROR_CONTEXT_RE.search(normalized))
+    values = list(explicit_error_terms(normalized))
     for match in ERROR_CODE_RE.finditer(normalized):
-        code = match.group(1).upper() + ("H" if match.group(2) else "")
-        has_hex_letter = bool(re.search(r"[A-F]", match.group(1), flags=re.I))
+        code = canonical_error_code(match[0])
+        if REFERENCE_DEVICE_TOKEN_RE.fullmatch(match[0]) and code not in values:
+            continue
+        has_hex_letter = bool(re.search(r"[A-F]", code))
         if not (has_error_context or match.group(2) or has_hex_letter):
             continue
-        for value in (code, code[:-1] if code.endswith("H") else code + "H"):
-            if value.casefold() not in seen:
-                seen.add(value.casefold())
-                values.append(value)
-    return values[:12]
+        values.append(code)
+    return list(dict.fromkeys(values))[:12]
 
 
 def fts_tokens(query):

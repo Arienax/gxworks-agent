@@ -27,6 +27,10 @@ from knowledge.scope import (
 from knowledge.text_matching import (
     alias_occurs,
     error_terms,
+    explicit_error_terms,
+    canonical_error_code,
+    error_code_aliases,
+    diagnostic_reference_text,
     instruction_heading_terms,
 )
 
@@ -62,11 +66,16 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None):
     if plc_model and re.match(r'^\s*' + re.escape(str(plc_model)) + r'\s*[:：]', str(query), re.I):
         scoped_query = re.sub(r'^\s*' + re.escape(str(plc_model)) + r'\s*[:：]\s*', '', str(query), count=1, flags=re.I)
     route = route_analysis_request(
-        scoped_query,
+        diagnostic_reference_text(scoped_query),
         confirmed_context=None,
         resolve_opcode=DEFAULT_INSTRUCTION_REGISTRY.resolve_fact_form,
     )
-    instructions = instruction_fact_targets(query, spec)
+    entity_query = diagnostic_reference_text(query)
+    if hasattr(query, 'metadata'):
+        from knowledge.evidence import KnowledgeQuery
+        entity_query = KnowledgeQuery(entity_query, precompiled=getattr(query, 'precompiled', False),
+                                      metadata=query.metadata, truncated=getattr(query, 'truncated', False))
+    instructions = instruction_fact_targets(entity_query, spec)
     identified = {str(row.get("opcode") or "").upper() for row in instructions}
     try:
         alias_targets = _declared_instruction_alias_targets(route.query_text, plc_model=plc_model)
@@ -111,7 +120,9 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None):
     # its own namespace; it must not retrieve a counter or incidental examples.
     compiler_query = bool(re.search(r'编译|警告|compiler|compil(?:e|ation)|warning|GX\s*Works\s*2', str(query), re.I)
                           and re.search(r'\bC[0-9A-F]{4,7}\b', str(query), re.I))
-    errors = list(dict.fromkeys(error_terms(str(query or ""))))
+    errors = error_terms(str(query or ""), plc_model=plc_model)
+    explicit_errors = set(explicit_error_terms(query))
+    errors = [code for code in errors if code not in identified or code in explicit_errors]
     devices = list(dict.fromkeys(value.upper() for value in route.devices))
     if compiler_query:
         diagnostics = re.findall(r'\bC[0-9A-F]{4,7}\b', str(query).upper())
@@ -245,9 +256,7 @@ def fact_record_coverage(record, *, limits=False):
         by_id.update({f['id']: f for f in related.get('facts', [])})
     visiting = set()
     def complete(fact):
-        if fact['id'] in visiting or fact.get('status') in {'unknown', 'conflict', 'not_applicable'}:
-            return False
-        if limits and fact.get('dimension', '').startswith('constraints.') and fact.get('status') != 'source_verified':
+        if fact['id'] in visiting or fact.get('status') != 'source_verified':
             return False
         if fact.get('dimension') == 'constraints.source_qualifications':
             return False
@@ -258,26 +267,222 @@ def fact_record_coverage(record, *, limits=False):
     return all(complete(fact) for fact in required)
 
 
+_ASPECT_PATTERNS = (
+    ('arity', r'参数个数|几个参数|参数数量|操作数个数|操作数量|arity|operand count|number of operands|how many'),
+    ('order', r'参数顺序|操作数顺序|顺序|符号|签名|operand order|parameter order|signature'),
+    ('roles', r'读写|输入输出|角色|\brole|direction'),
+    ('purpose', r'含义|用途|意义|meaning|purpose|semantic name'),
+    ('unit', r'单位|\bunit'),
+    ('encoding', r'编码|encoding'),
+    ('devices', r'允许.*软元件|哪些软元件|设备类型|operand device|device type|allowed device'),
+    ('types', r'数据类型|位宽|字长|数据宽度|16\s*位|32\s*位|\btype|\bwidth|bit length'),
+    ('effects', r'效果|结果|写入|读出|行为|effect|behaviour|behavior'),
+    ('execution', r'执行条件|触发|边沿|脉冲|使能|时序|trigger|execution|edge|timing'),
+    ('constraints', r'限制|范围|约束|注意|limit|restrict|constraint|domain|range'),
+    ('st_call', r'\bST\b|结构化文本|structured text'),
+)
+
+
+def requested_aspects(query):
+    text = str(query or '')
+    aspects = [name for name, pattern in _ASPECT_PATTERNS if re.search(pattern, text, re.I)]
+    parameter_question = bool(re.search(r'操作数|参数|形参|operand|parameter', text, re.I))
+    if parameter_question and not set(aspects) - {'st_call'}:
+        aspects = [*aspects, 'arity', 'order', 'roles', 'types', 'purpose']
+    if re.search(r'操作数|参数|形参|operand|parameter', text, re.I):
+        if re.search(r'范围|\brange', text, re.I):
+            aspects.append('operand_range')
+        if re.search(r'条件|\bcondition', text, re.I):
+            aspects.append('operand_condition')
+    return aspects
+
+
+def _aspect_state(packet, aspect, *, model, language, query):
+    """Require every requested slot and the shared atomic dependency closure."""
+    from plc.instruction_definition import DefinitionError, select_fact_dependencies
+    value = packet.get('value') or {}
+    if aspect == 'st_call':
+        contract = value.get('registry_contract') or {}
+        call = contract.get('st_call') or {}
+        if value.get('call_available') is False:
+            return 'unresolved'
+        # enable describes an EN argument, including a valid signature without EN.
+        if not call.get('name') or type(call.get('enable')) is not bool:
+            return 'missing'
+        return ('answered' if value.get('call_available') is True
+                and contract.get('verification', {}).get('st_call') == 'source_verified' else 'unverified')
+    facts = list(value.get('facts') or ())
+    by_dimension = {}
+    for fact in facts:
+        by_dimension.setdefault(fact.get('dimension'), []).append(fact)
+    prefixes = {'effects': ('effects.',), 'execution': ('execution.',),
+                'constraints': ('constraints.',)}
+    aliases = {'arity': ('parameters.arity',),
+               'order': ('parameters.order', 'parameters.st_signature', 'parameters.source_order'),
+               'roles': ('parameters.roles',), 'types': ('parameters.types', 'parameters.value_type'),
+               'devices': ('parameters.devices', 'constraints.operand_devices')}
+    roots = []
+    if aspect in {'purpose', 'unit', 'encoding', 'operand_range', 'operand_condition'}:
+        arities = by_dimension.get('parameters.arity') or ()
+        count = next((f.get('value', {}).get('maximum') for f in arities
+                      if f.get('value', {}).get('maximum') == f.get('value', {}).get('minimum')), None)
+        if type(count) is not int:
+            return 'missing'
+        order = (value.get('registry_contract') or {}).get('native_operand_order') or next(
+            (f.get('value', {}).get('symbols') for f in by_dimension.get('parameters.order', ())), ())
+        positions = [index for index, symbol in enumerate(order or (), start=1)
+                     if re.search(r'(?<![A-Za-z0-9_])' + re.escape(symbol) + r'(?![A-Za-z0-9_])', str(query), re.I)]
+        if positions:
+            ordering = by_dimension.get('parameters.order') or by_dimension.get('parameters.source_order')
+            if not ordering:
+                return 'missing'
+            roots.extend(f['id'] for f in ordering)
+        facet = {'operand_range': 'range', 'operand_condition': 'condition'}.get(aspect, aspect)
+        for position in positions or range(1, count + 1):
+            slot = by_dimension.get(f'parameters.{position}.{facet}')
+            if not slot:
+                return 'missing'
+            roots.extend(f['id'] for f in slot)
+        roots.extend(f['id'] for f in arities)
+    elif aspect in aliases:
+        selected = next((by_dimension[key] for key in aliases[aspect] if by_dimension.get(key)), [])
+        if not selected:
+            return 'missing'
+        roots.extend(f['id'] for f in selected)
+        # Aggregate slot arrays must cover the declared arity, not one operand.
+        facet = {'roles': 'roles', 'types': 'types', 'devices': 'prefixes'}.get(aspect)
+        if facet and any(facet in f.get('value', {}) for f in selected):
+            arities = by_dimension.get('parameters.arity') or ()
+            count = next((f.get('value', {}).get('maximum') for f in arities), None)
+            if type(count) is not int or any(len(f['value'][facet]) != count for f in selected if facet in f.get('value', {})):
+                return 'missing'
+            roots.extend(f['id'] for f in arities)
+    else:
+        selected = [f for f in facts if any(str(f.get('dimension', '')).startswith(prefix)
+                                           for prefix in prefixes.get(aspect, ()))]
+        roots.extend(f['id'] for f in selected)
+        if not roots:
+            return 'missing'
+    if not roots:
+        return 'missing'
+    try:
+        # An unqualified manual question may refer to a language-scoped source
+        # (for example EXPT's ST constraints). Use its declared common scope,
+        # rather than silently imposing Ladder on every reference question.
+        by_id = {fact['id']: fact for fact in facts}
+        pending, visited, scopes = list(roots), set(), []
+        while pending:
+            identity = pending.pop()
+            if identity in visited or identity not in by_id:
+                continue
+            visited.add(identity)
+            fact = by_id[identity]
+            if fact.get('scope', {}).get('languages'):
+                scopes.append(set(fact['scope']['languages']))
+            pending.extend(fact.get('depends_on', ()))
+        languages = [language] if language else sorted(set.intersection(*scopes)) if scopes else [None]
+        if not languages:
+            return 'unresolved'
+        closures = [select_fact_dependencies(facts, roots, opcode=packet.get('target') or value.get('opcode'),
+                                             model=model, language=lang) for lang in languages]
+    except (DefinitionError, KeyError, TypeError, ValueError):
+        return 'unresolved'
+    if any(closure['gaps'] for closure in closures):
+        return 'unresolved'
+    return 'answered' if all(closure['source_verification_complete'] for closure in closures) else 'unverified'
+
+
+def _instruction_aspects(records, aspects, *, plc_model, language, query):
+    from plc.target_identity import target_members
+    packets = [authored_packet(row) for row in records]
+    rows = []
+    for aspect in aspects:
+        states = []
+        for member in target_members(plc_model):
+            candidates = [_aspect_state(packet, aspect, model=member, language=language, query=query)
+                          for packet in packets if member in packet.get('scope', {}).get('models', ())]
+            states.append('answered' if 'answered' in candidates else 'unresolved' if 'unresolved' in candidates
+                          else 'unverified' if 'unverified' in candidates else 'missing')
+        state = ('answered' if states and all(s == 'answered' for s in states) else
+                 'unresolved' if 'unresolved' in states else 'unverified' if 'unverified' in states else 'missing')
+        rows.append({'aspect': aspect, 'status': state})
+    return rows
+
+
+def _device_range_coverage(query, records, address, *, plc_model):
+    from plc.device_identity import canonical_reference_device
+    from plc.target_identity import target_members
+    rows = [row for row in records if isinstance(row.get('device_range'), Mapping)
+            and canonical_reference_device(row['device_range'].get('address')) == address]
+    if not rows:
+        return None
+    members = set(target_members(plc_model))
+    covered = {member for row in rows for member in authored_packet(row).get('scope', {}).get('models', ())}
+    aspects = []
+    for aspect, pattern in (('time_base', r'时基|time\s*base|分辨率'),
+                            ('range', r'编号|地址范围|number\s*range|address\s*range'),
+                            ('timer_class', r'定时器类[型别]|timer\s*(?:class|type)')):
+        if re.search(pattern, str(query), re.I):
+            aspects.append({'aspect': aspect, 'status': 'answered' if members <= covered else 'missing'})
+    definition_needed = not aspects or bool(re.search(
+        r'掉电|断电|复位|使能|撤销|行为|运行|执行|Core|Simulator|reset|power.loss|enable|execution', str(query), re.I))
+    if definition_needed:
+        aspects.append({'aspect': 'device_definition', 'status': 'missing'})
+    complete = bool(aspects) and all(item['status'] == 'answered' for item in aspects)
+    return {'identity_found': members <= covered, 'range_fact': copy.deepcopy(rows[0]['device_range']),
+            'aspects': aspects, 'status': 'complete' if complete else 'incomplete',
+            'reason': '' if complete else 'device_definition_not_established',
+            'runtime_execution': 'not_established'}
+
+
 def retrieval_coverage(query, records, *, plc_model, targets=None):
+    from plc.target_identity import reference_target_identity
+    plc_model = reference_target_identity(plc_model) or plc_model
     targets = targets or structured_fact_targets(query, plc_model=plc_model)
     limits = bool(re.search(r'限制|条件|范围|约束|\blimit|restrict|constraint|domain|range', str(query), re.I))
     requirements = []
+    aspects = requested_aspects(query) or ['arity', 'order', 'roles', 'types', 'purpose',
+                                          'effects', 'execution', 'constraints']
     def identity(kind, value):
         value = str(value or '').upper()
         if kind == 'device':
             from plc.device_identity import canonical_reference_device
             return canonical_reference_device(value)
-        return value.removeprefix('0X').removesuffix('H') if kind == 'error' else value
+        return canonical_error_code(value) if kind == 'error' else value
     for kind, key in (('instruction', 'instructions'), ('language', 'language_features'),
                       ('device', 'devices'), ('error', 'errors'), ('positioning', 'positioning')):
+        seen = set()
         for raw in targets.get(key, []):
             target = (raw.get('opcode') or raw.get('target')) if isinstance(raw, Mapping) else raw
+            if kind == 'error':
+                target = canonical_error_code(target)
+                if target in seen:
+                    continue
+                seen.add(target)
             selected = [row for row in records if row.get('fact_kind') == kind and
                         identity(kind, row.get('fact_target')) == identity(kind, target)]
             complete = any(fact_record_coverage(row, limits=limits) for row in selected)
-            requirements.append({'kind': kind, 'target': target, 'identity_found': bool(selected),
+            entry = {'kind': kind, 'target': target, 'identity_found': bool(selected),
                                  'status': 'complete' if complete else 'incomplete' if selected else 'unresolved',
-                                 'reason': '' if complete else 'requested_facts_not_established' if selected else 'exact_fact_not_found'})
+                                 'reason': '' if complete else 'requested_facts_not_established' if selected else 'exact_fact_not_found'}
+            if kind == 'instruction' and selected and aspects and any(authored_packet(row) for row in selected):
+                aspect_rows = _instruction_aspects(selected, aspects, plc_model=plc_model,
+                    language='st' if 'st_call' in aspects else 'ladder' if re.search(r'梯形图|\bladder\b', str(query), re.I) else None,
+                    query=query)
+                answered = all(row['status'] == 'answered' for row in aspect_rows)
+                entry.update(aspects=aspect_rows, status='complete' if answered else 'incomplete',
+                             reason='' if answered else 'requested_aspects_not_established')
+                value = authored_packet(selected[0]).get('value') or {}
+                call = (value.get('registry_contract') or {}).get('st_call') or {}
+                available = value.get('call_available')
+                entry.update(call_available=available,
+                             st_call_available=False if available is False else True if available is True and call.get('name') else None,
+                             st_has_enable_parameter=call.get('enable'))
+            if kind == 'device':
+                range_coverage = _device_range_coverage(query, records, identity(kind, target), plc_model=plc_model)
+                if range_coverage:
+                    entry.update(range_coverage)
+            requirements.append(entry)
     statuses = {row['status'] for row in requirements}
     return {'status': 'unresolved' if not requirements or statuses == {'unresolved'} else
             'complete' if statuses == {'complete'} else 'incomplete', 'targets': requirements,
@@ -1217,6 +1422,43 @@ def _device_definition_ids(connection, schema, device, *, plc_model, task_type):
     return ids
 
 
+def _device_range_records(devices, *, plc_model, task_type, connection):
+    """Bind an address to a typed range without promoting it to a definition."""
+    from knowledge.fact_corpus import resolve
+    from plc.device_identity import reference_device_parts, canonical_reference_device
+    requests = []
+    for device in devices:
+        parts = reference_device_parts(device)
+        if parts and parts[0] == 'T' and parts[1].isdigit():
+            requests.append((canonical_reference_device(device), parts[0], int(parts[1])))
+    families = list(dict.fromkeys(family for _, family, _ in requests))
+    rows = resolve('device_family', families, plc_model=plc_model, task_type=task_type, connection=connection) or []
+    results = []
+    for address, family, number in requests:
+        for row in rows:
+            packet = authored_packet(row)
+            value = packet.get('value') or {}
+            if (value.get('family') != family or value.get('range_basis') != 'model_reference_device_number_ranges'
+                    or packet.get('technical_status') != 'source_verified'):
+                continue
+            matches = [item for item in value.get('ranges', ())
+                       if type(item.get('first')) is int and type(item.get('last')) is int
+                       and item['first'] <= number <= item['last']]
+            if len(matches) != 1:
+                continue
+            selected = copy.deepcopy(row)
+            packet = copy.deepcopy(packet)
+            packet['value'] = {**packet['value'], 'address': address, 'ranges': copy.deepcopy(matches)}
+            selected.update(id=f"{row['id']}:address:{address}", text=json.dumps(packet, ensure_ascii=False),
+                structured_fact_requested_target=address,
+                device_lookup_basis='reviewed_model_number_range',
+                device_range={**copy.deepcopy(matches[0]), 'family': family, 'address': address,
+                              'basis': value['range_basis']},
+                fact_dimensions=['range', 'time_base', 'timer_class'])
+            results.append(selected)
+    return results
+
+
 def resolve_device_records(devices, *, plc_model="FX3U", task_type="analysis", query=None, hardware_context=None):
     """Resolve device definitions and explicit property questions, before RRF.
 
@@ -1251,7 +1493,8 @@ def resolve_device_records(devices, *, plc_model="FX3U", task_type="analysis", q
                 if connection_number is not None:
                     lines.append(f'bit 0 -> connection {connection_number}')
             row['text'] = '\n'.join(lines)
-        return authored
+        return [*_device_range_records(authored_targets, plc_model=plc_model,
+                    task_type=task_type, connection=connection), *authored]
     if connection is None or schema is None:
         return []
     table = schema.get("device_records")
@@ -1586,10 +1829,10 @@ def resolve_error_records(codes, *, plc_model="FX3U", task_type="debug"):
     results = []
     seen = set()
     for requested in codes or ():
-        code = str(requested or "").strip().upper()
+        code = canonical_error_code(requested)
         if not code:
             continue
-        variants = list(dict.fromkeys((code, code[:-1] if code.endswith("H") else code + "H")))
+        variants = error_code_aliases(code)
         placeholders = ",".join("?" for _ in variants)
         rows = connection.execute(
             "SELECT * FROM {} WHERE error_code_norm IN ({}) AND chunk_id IS NOT NULL "
