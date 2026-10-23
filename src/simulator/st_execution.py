@@ -302,7 +302,7 @@ class Scope:
                 if type(value) is bool:
                     return not value
                 value_type = self.numeric_type(node[2])
-                return value_type.decode_bits(~value)
+                return value_type.decode_bits((~value) & ((1 << value_type.bits) - 1))
             return -value if node[1] == '-' else +value
         left, right, op = self.evaluate(node[2]), self.evaluate(node[3]), node[1]
         if op == '**':
