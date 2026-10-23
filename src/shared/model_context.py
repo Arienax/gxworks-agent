@@ -60,7 +60,7 @@ def _technical_facts(groups):
             unresolved.append(dimension)
             continue
         item = {key: technical_value(fact[key]) for key in
-                ('dimension', 'status', 'value', 'scope', 'conditions', 'requires') if key in fact}
+                ('dimension', 'value', 'scope', 'conditions', 'requires') if key in fact}
         dependencies = []
         for identity in fact.get('depends_on', ()):
             dependency = by_id.get(identity)
