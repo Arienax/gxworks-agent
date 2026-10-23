@@ -11,17 +11,8 @@ def _search_plc_manual(context: ToolContext, arguments: Mapping[str, Any]) -> Di
     from knowledge.retriever import retrieve_fact_aware_knowledge
     from knowledge.structured_facts import retrieval_coverage
     from knowledge.evidence import evidence_record
-    from agent_runtime.tool_errors import ToolPreconditionError
 
     query = str(arguments.get("query") or "").strip()
-    if not query:
-        # An empty question has no identity to resolve; returning an empty hit
-        # list would read as "the manual says nothing".
-        raise ToolPreconditionError(
-            "INVALID_ARGUMENTS",
-            "query 不能为空；请给出要检索的指令、软元件、错误码或功能名称。",
-            next_actions=[{"tool": "search_plc_manual", "arguments": {"query": "MOV 指令 操作数"}}],
-        )
     top_k = int(arguments.get("top_k", 5))
     rows = retrieve_fact_aware_knowledge(
         query,
