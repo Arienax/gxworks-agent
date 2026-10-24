@@ -1092,6 +1092,7 @@ def _pack_target(
 def retrieve_instruction_facts(
     query, *, plc_model, task_type, char_budget=None, candidates=(), targets=None,
     retrieve=None, resolver=None, token_budget=None, primary_slots=None, compact_sources=False,
+    language=None, aspects=None, project_mode=None, instance_context=None, version=None,
 ):
     """Resolve selected instructions directly, then pack their source evidence.
 
@@ -1103,6 +1104,7 @@ def retrieve_instruction_facts(
 
     target_source = "provided_targets" if targets is not None else "query_references"
     targets = copy.deepcopy(targets if targets is not None else instruction_fact_targets(query))
+    custom_resolver = resolver is not None
     resolver = resolver or resolve_instruction_records
     report = {
         "version": _VERSION,
@@ -1135,7 +1137,17 @@ def retrieve_instruction_facts(
             "base_opcode": target["base_opcode"],
             "source": "instructions.opcode_norm",
         })
-        hits = list(resolver([target], plc_model=plc_model, task_type=task_type))
+        if custom_resolver:
+            hits = list(resolver([target], plc_model=plc_model, task_type=task_type))
+            from knowledge.fact_selection import project_instruction_records
+            from knowledge.structured_facts import generation_aspects, requested_aspects
+            selected_aspects = (generation_aspects(query, language=language) if aspects is None else
+                                requested_aspects(query, language=language, aspects=aspects))
+            hits = project_instruction_records(hits, plc_model=plc_model, language=language,
+                aspects=selected_aspects, project_mode=project_mode, instance_context=instance_context, version=version, query=query)
+        else:
+            hits = list(resolver([target], plc_model=plc_model, task_type=task_type, query=query,
+                language=language, aspects=aspects, project_mode=project_mode, instance_context=instance_context, version=version))
         from knowledge.fact_corpus import is_authored_record
         if hits and all(is_authored_record(row) for row in hits):
             groups.append(hits)

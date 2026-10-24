@@ -9,74 +9,32 @@ import re
 from plc.instruction_definition import UnknownInstructionSemantics
 
 MODELS = ('FX5S', 'FX5UJ', 'FX5U', 'FX5UC')
-SOURCE_BINDING = 'JY997D55801AB+JY997D55401AG:bounded_pwm_v1'
-# Shared AB table: extraction and consumers import this single source profile.
-PWM_AB_MINIMUM_TIMES = tuple(
-    {'models': models, 'hardware': hardware, 'outputs': ['Y' + str(n) for n in outputs],
-     'minimum_ON_us': on, 'minimum_period_us': period}
-    for models, hardware, outputs, on, period in [
-        (['FX5S', 'FX5UJ'], 'CPU_module', range(3), 2, 5),
-        (['FX5S', 'FX5UJ'], 'CPU_module', range(3, 8), 200, 400),
-        (['FX5U', 'FX5UC'], 'CPU_module', range(4), 2, 5),
-        (['FX5U', 'FX5UC'], 'CPU_module', range(4, 8), 200, 400),
-        (['FX5U', 'FX5UC'], 'high_speed_pulse_IO_module', range(3), 2, 5)])
-BOOL = {'kind': 'bool'}
-INTEGER = {'kind': 'int', 'bits': 64, 'signed': True}
+from plc.pwm_fact_source import (profile, source_binding, rule_supported,
+    snapshot_facts, source_identity_matches, load_contract)
 
-
-def _parameter(name):
-    return {'op': 'parameter', 'name': name, 'type': INTEGER}
-
-
-def _compare(op, left, right):
-    return {'op': op, 'type': BOOL, 'args': [left, right]}
-
-
-def _predicate(name):
-    if name == 'PWM_RELATION_VALID':
-        return _compare('le', _parameter('PWM_ON_POSITIVE'), _parameter('PWM_PERIOD_POSITIVE'))
-    if name == 'PWM_OFF_TIME_VALID':
-        return _compare('ge', {'op': 'sub', 'type': INTEGER, 'overflow': 'reject',
-                              'args': [_parameter('PWM_PERIOD_US_PULSING'), _parameter('PWM_ON_US_PULSING')]},
-                        {'op': 'constant', 'type': INTEGER, 'value': 3})
-    return {'op': 'parameter', 'name': name, 'type': BOOL}
-
-
-
-def _source(opcode, pages):
-    return [{'id': 'pwm-formal:AB:' + opcode, 'manual_id': 'fx5_programming_ab',
-             'manual_number': 'JY997D55801', 'revision': 'AB', 'pdf_pages': pages},
-            {'id': 'pwm-formal:AG', 'manual_id': 'fx5_application_ag',
-             'manual_number': 'JY997D55401', 'revision': 'AG', 'pdf_pages': [332, 335, 337]}]
+def __getattr__(name):
+    # Compatibility exports are lazy: unrelated PLC imports need no PWM data.
+    if name == 'SOURCE_BINDING':
+        return source_binding()
+    if name == 'PWM_AB_MINIMUM_TIMES':
+        return tuple(profile('PWM', 'FX5U')['AB_timing'])
+    raise AttributeError(name)
 
 
 def pwm_formal_facts(opcode, model):
-    """Individually reviewed predicates, not a replacement for the full graph."""
+    """Generated predicates; their live source witnesses are bound by derivation."""
     if opcode not in {'PWM', 'DPWM'} or model not in MODELS:
         return []
-    first, precaution, error = (813, 816, 819) if opcode == 'PWM' else (820, 824, 826)
-    rows = [
-        ('operand_width', 'PWM_WIDTH_VALID', [first], 'decoded operands must fit the documented unsigned width'),
-        ('operand_domain', 'PWM_DOMAIN_VALID', [first, error], 'documented numeric domain; zero/example qualification remains unknown'),
-        ('operand_relation', 'PWM_RELATION_VALID', [error], 'ON time must not exceed period'),
-        ('destination', 'PWM_DESTINATION_VALID', [first, error], 'Y0..Y7 CPU destination or configured channel'),
-        ('channel_configuration', 'PWM_CONFIGURED', [precaution, error], 'channel must be selected for PWM'),
-        ('resource', 'PWM_RESOURCE_FREE', [error], 'destination must not be owned by a positioning instruction'),
-        ('unused_channel', 'PWM_UNUSED_CHANNEL', [first, error], 'Y-addressed output requires an unused channel'),
-        ('time_unit', 'PWM_UNIT_KNOWN', [first + 1], 'time unit must be explicitly resolved'),
-        ('hardware_timing', 'PWM_TIMING_VALID', [precaution], 'model/output-specific minimum times; conflicting FX5S fast-output evidence unresolved'),
-        ('off_time', 'PWM_OFF_TIME_VALID', [precaution], 'minimum OFF time is 3us; steady-output qualification unresolved'),
-        ('program_context', 'PWM_PROGRAM_VALID', [error], 'instruction cannot be used in interrupt program'),
-    ]
+    config = profile(opcode, model)
+    facts = snapshot_facts(opcode, model)
     return [{'id': 'pwm-formal:' + opcode + ':' + model + ':' + name,
-             'dimension': 'constraints.pwm_' + name, 'status': 'source_verified',
-             'verification': 'source_checked', 'scope': {'models': [model], 'forms': [opcode],
-                                                       'languages': ['ladder', 'st', 'fbd']},
-             'sources': _source(opcode, pages), 'value': {
-                 'predicate': _predicate(parameter),
-                 'rule': re.sub(r'[^A-Za-z0-9_]+', '_', rule).strip('_'), 'binding_contract': SOURCE_BINDING,
-                 'coverage': 'bounded_predicate_not_whole_instruction_admission'}}
-            for name, parameter, pages, rule in rows]
+        'dimension': 'constraints.pwm_' + name, 'status': 'source_verified',
+        'verification': 'source_checked', 'scope': {'models': [model], 'forms': [opcode],
+            'languages': ['ladder', 'st', 'fbd']},
+        'sources': [dict(source) for fact in facts for source in fact['sources']],
+        'value': {'predicate': predicate, 'binding_contract': source_binding(),
+            'coverage': 'bounded_predicate_not_whole_instruction_admission'}}
+        for name, predicate in config['predicates'].items()]
 
 
 def bind_pwm_values(opcode, model, values, context):
@@ -85,6 +43,7 @@ def bind_pwm_values(opcode, model, values, context):
     No memory reads, implicit zero, integer wrapping, or inferred device/channel
     mappings occur here. Destination numeric value and device token are distinct.
     """
+    config = profile(opcode, model)
     result = dict(values)
     # Callers cannot inject the conclusions of reviewed predicates.
     for key in list(result):
@@ -112,11 +71,11 @@ def bind_pwm_values(opcode, model, values, context):
         if value is not None:
             result[name] = result['$' + str(index)] = value
     if on is not None and period is not None:
-        maximum = 65535 if opcode == 'PWM' else 2147483647
+        maximum = profile(opcode, model)['maximum_ON']
         # PWM negative literals need the language's unsigned interpretation.
         if on >= 0 and period >= 0 or opcode == 'DPWM':
-            result['PWM_WIDTH_VALID'] = 0 <= on <= maximum and 0 <= period <= maximum
-        if on > 0 and period > 0:
+            result['PWM_WIDTH_VALID'] = 0 <= on <= maximum and 0 <= period <= config['maximum_period']
+        if on >= config['domain_minimum'] and period >= config['domain_minimum']:
             result['PWM_DOMAIN_VALID'] = True
             result['PWM_ON_POSITIVE'], result['PWM_PERIOD_POSITIVE'] = on, period
         elif opcode == 'DPWM' and (on < 0 or period < 0):
@@ -132,7 +91,7 @@ def bind_pwm_values(opcode, model, values, context):
     if token and re.fullmatch(r'Y[0-7]+', token):
         representation = 'bit_device'
         output = 'Y' + format(int(token[1:], 8), 'o')
-        valid = int(token[1:], 8) <= 7
+        valid = output in config['CPU_outputs']
         if not valid: result['PWM_DESTINATION_VALID'] = False
         elif module == 'CPU_module': result['PWM_DESTINATION_VALID'] = True
         elif module == 'high_speed_pulse_IO_module': result['PWM_DESTINATION_VALID'] = False
@@ -145,11 +104,11 @@ def bind_pwm_values(opcode, model, values, context):
         representation = 'channel'
         channel = number('D', 2)
         if channel is not None and module in {'CPU_module', 'high_speed_pulse_IO_module'}:
-            low, high = (1, 4) if module == 'CPU_module' else (5, 12)
+            low, high = config['channel_ranges'][module]
             result['PWM_DESTINATION_VALID'] = low <= channel <= high
         result['PWM_UNUSED_CHANNEL'] = True  # Y-only requirement not applicable
         candidate = pwm.get('output_device')
-        if isinstance(candidate, str) and re.fullmatch(r'Y[0-7]', candidate): output = candidate
+        if isinstance(candidate, str) and candidate in config['CPU_outputs']: output = candidate
         if (result.get('PWM_DESTINATION_VALID') is not False and type(pwm.get('channel')) is int
                 and channel is not None and pwm['channel'] != channel):
             result.pop('PWM_DESTINATION_VALID', None)
@@ -182,20 +141,20 @@ def bind_pwm_values(opcode, model, values, context):
                 result['PWM_ON_US_PULSING'], result['PWM_PERIOD_US_PULSING'] = on_us, period_us
                 if (output is not None and module == 'CPU_module' and model in MODELS
                         and hardware.get('output_type') == 'transistor'
-                        and on_us <= 2147483647 and period_us <= 2147483647):
-                    rows = [r for r in PWM_AB_MINIMUM_TIMES if model in r['models']
+                        and on_us <= max(r['maximum_ON_us'] for r in profile(opcode, model)['AG_timing'])
+                        and period_us <= max(r['maximum_period_us'] for r in profile(opcode, model)['AG_timing'])):
+                    rows = [r for r in profile(opcode, model)['AB_timing'] if model in r['models']
                             and module == r['hardware'] and output in r['outputs']]
                     if len(rows) == 1:
                         row = rows[0]
                         ab = on_us >= row['minimum_ON_us'] and period_us >= row['minimum_period_us']
-                        if model == 'FX5S':
-                            ag_on, ag_period = (5, 10) if int(output[1:], 8) <= 3 else (200, 400)
-                            ag = on_us >= ag_on and period_us >= ag_period
-                            # Consensus is not an authority decision or resolution
-                            # of the minimum. Disagreement remains unknown.
-                            if ab == ag: result['PWM_TIMING_VALID'] = ab
-                        else:
-                            result['PWM_TIMING_VALID'] = ab
+                        ag_rows = [r for r in profile(opcode, model)['AG_timing']
+                            if model in r['models'] and module == r['hardware'] and output in r['outputs']]
+                        if len(ag_rows) == 1:
+                            ag_row = ag_rows[0]
+                            ag = on_us >= ag_row['minimum_ON_us'] and period_us >= ag_row['minimum_period_us']
+                            if ab == ag:
+                                result['PWM_TIMING_VALID'] = ab
     return result
 
 
@@ -216,7 +175,7 @@ def validate_pwm_request(opcode, model, on_time, period, destination, context):
         raise UnknownInstructionSemantics('pwm_context_required')
     # These are coverage boundaries, not claims of source illegality.
     requirements = {'execution_mode': 'core_software_model', 'initially_idle': True,
-                    'pulse_count': 0, 'source_binding': SOURCE_BINDING}
+                    'pulse_count': 0, 'source_binding': source_binding()}
     if any(type(pwm.get(k)) is not type(v) or pwm.get(k) != v for k, v in requirements.items()):
         raise UnknownInstructionSemantics('pwm_bounded_software_contract_required')
     if hardware.get('module_type') != 'CPU_module' or hardware.get('output_type') != 'transistor':
@@ -231,10 +190,20 @@ def validate_pwm_request(opcode, model, on_time, period, destination, context):
     if not isinstance(language, str) or language not in {'ladder', 'st', 'fbd'}:
         raise UnknownInstructionSemantics('pwm_language_not_supported')
     bound = bind_pwm_values(opcode, model, values, context)
-    required = pwm_formal_facts(opcode, model)
-    report = check_fact_constraints(required, bound, target=opcode,
-                                   plc_model=model, language=language, context=context)
-    required_ids = {fact['id'] for fact in required}
+    # A live owner, including an empty/withdrawn owner, always takes priority.
+    # The named snapshot is usable only when this owner was never installed.
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+    registry = DEFAULT_INSTRUCTION_REGISTRY
+    if not registry.fact_bundle_current():
+        raise UnknownInstructionSemantics('pwm_live_fact_bundle_stale')
+    entry = registry.definition_entry(opcode, cpu=model)
+    groups = snapshot_facts(opcode, model) if entry is None else entry.get('facts', [])
+    required_ids = {fact['id'] for fact in pwm_formal_facts(opcode, model)}
+    report = check_fact_constraints(groups, bound, target=opcode,
+        plc_model=model, language=language, version=context.get('software_version'), context=context,
+        root_ids=sorted(required_ids))
+    report['source_mode'] = 'version_bound_snapshot' if entry is None else 'live_owner'
+    report['source_binding'] = source_binding()
     passed_ids = {row['fact_id'] for row in report['checks'] if row['status'] == 'passed'}
     if report['status'] != 'passed' or not required_ids <= passed_ids:
         error = ValueError('pwm_known_constraint_violation') if report['status'] == 'failed' else UnknownInstructionSemantics('pwm_constraint_unverified')
@@ -245,83 +214,13 @@ def validate_pwm_request(opcode, model, on_time, period, destination, context):
         raise UnknownInstructionSemantics('pwm_resolved_CPU_channel_and_output_required')
     return {'channel': channel, 'output_device': bound['$PWM_OUTPUT'], 'on_time': on_time,
             'period': period, 'on_time_us': bound['$PWM_ON_US'], 'period_us': bound['$PWM_PERIOD_US'],
-            'source_binding': SOURCE_BINDING, 'time_unit': pwm['time_unit'], 'constraint_report': report,
+            'source_binding': source_binding(), 'time_unit': pwm['time_unit'], 'constraint_report': report,
             'coverage': 'bounded_software_model_only', 'whole_graph_admission': 'not_established'}
 
 
 def _supported_pwm_rule_shape(rule):
-    """Recognize complete reviewed relations, not just a kind or one number.
-
-    Additional fields can contain conditions, so unknown keys are not ignored.
-    Both source consumption and derivation use this same recognition boundary.
-    """
-    templates = [
-        {'kind': 'operand_relation', 'left': {'operand': 's1'}, 'operator': '>',
-         'right': {'operand': 's2'}, 'error': True},
-        {'kind': 'resource_in_use', 'resource': 'pulse_output_destination',
-         'subject': {'operand': 'd'}, 'owner': 'positioning_instruction'},
-        {'kind': 'invalid_program_context', 'context': 'interrupt_program'},
-        {'kind': 'PWM_channel_configuration', 'channel': {'operand': 'd'},
-         'when': 'not_selected_for_PWM_in_parameters', 'execution': False},
-        {'kind': 'PWM_channel_configuration', 'when': 'channel_not_selected_for_PWM_in_parameters',
-         'operation_error': True},
-        {'kind': 'PWM_minimum_OFF_time', 'ON_time': {'operand': 's1'},
-         'period': {'operand': 's2'}, 'minimum_period_minus_ON_time_us': 3},
-        {'kind': 'PWM_hardware_minimum_times', 'ON_time': {'operand': 's1'}, 'period': {'operand': 's2'},
-         'rows': list(PWM_AB_MINIMUM_TIMES), 'dash_cell': 'no_module_output_entry',
-         'unit_conversion': 'parameter_selected_time_to_us'},
-        {'kind': 'any_value_less_than', 'subjects': [{'operand': 's1'}, {'operand': 's2'}],
-         'value': 1, 'error': True, 'logical_connective': 'OR'},
-        {'kind': 'label_type_disallowed', 'label_type': 'digit_specified_bit', 'subjects': [{'operand': 'd'}]},
-        {'kind': 'PWM_module_interrupt_priority', 'module_channel_range': [5, 12],
-         'forbidden_program_interrupt_priority': 1},
-        {'kind': 'allowed_device_classes', 'subject': {'operand': 'd'},
-         'when': {'representation': 'bit_device'}, 'allowed': ['Y'],
-         'allowed_addresses': ['Y' + str(n) for n in range(8)], 'hardware': 'CPU_module'},
-        {'kind': 'disallowed_device_form', 'subject': {'operand': 'd'},
-         'forms': ['digit_specified_bit', 'high_speed_pulse_IO_module_bit_device']},
-        {'kind': 'value_outside_interval', 'subject': {'context': 'pwm.pulse_count'},
-         'minimum': 0, 'maximum': 2147483647, 'inclusive': True, 'error': True},
-        {'kind': 'conditional_result', 'when': {'operand': 'd', 'device_class': 'Y',
-         'minimum_address': 'Y10', 'address_notation': 'octal', 'inclusive': True},
-         'result': {'PWM_output': 'stops'}},
-        {'kind': 'conditional_result', 'when': {'all': [{'operand': 'd', 'device_class': 'Y'},
-         {'parameter_unused_channel_available': False}]},
-         'result': {'operation_error': True, 'output_effect': 'not_established'}},
-        {'kind': 'conditional_result', 'when': {'all': [{'operand': 'd', 'device_class': 'Y'},
-         {'parameter_unused_channel_available': True}, {'specified_Y_number_in_use': False}]},
-         'result': {'outputs_enabled': True}},
-    ]
-    # DPWM's independently split timing fact omits the source dash-cell annotation.
-    templates.append({k: v for k, v in templates[6].items() if k != 'dash_cell'})
-    templates.extend([
-        {**templates[1], 'effects': {'PWM_output': 'not_executed'}},
-        {**templates[2], 'instruction_names': []},
-        {**templates[7], 'zero_example_qualification': 'unresolved'}])
-    templates.extend({'kind': 'allowed_interval', 'subject': {'operand': 'd'},
-        'when': {'representation_any_of': ['word_device', 'constant'], 'hardware': hw},
-        'quantity': 'channel_number', 'minimum': low, 'maximum': high, 'inclusive': True}
-        for hw, low, high in [('CPU_module', 1, 4), ('high_speed_pulse_IO_module', 5, 12)])
-    templates.extend({'kind': 'allowed_interval', 'minimum': 1, 'maximum': maximum,
-        'inclusive': True, 'lower_encoding': 'decimal', 'upper_encoding': 'decimal',
-        'subject': {'operand': operand}}
-        for maximum in (65535, 2147483647) for operand in ('s1', 's2'))
-    templates.extend({'kind': 'conditional_data_storage', 'when': {'instruction_executed': opcode},
-        'destination_channel': {'operand': 'd'}, 'bindings': [
-            {'channel': ch, 'ON_time': {'operand': 's1', 'register_pair': ['SD' + str(5303 + 16*(ch-1)), 'SD' + str(5302 + 16*(ch-1))]},
-             'period': {'operand': 's2', 'register_pair': ['SD' + str(5305 + 16*(ch-1)), 'SD' + str(5304 + 16*(ch-1))]}}
-            for ch in range(1, 13)],
-        'unit': 'parameter_selected_us_or_ms', 'register_pair_order': 'source_printed_order'}
-        for opcode in ('PWM', 'DPWM'))
-    def exact(left, right):
-        if type(left) is not type(right):
-            return False
-        if isinstance(left, dict):
-            return left.keys() == right.keys() and all(exact(left[k], right[k]) for k in left)
-        if isinstance(left, list):
-            return len(left) == len(right) and all(exact(a, b) for a, b in zip(left, right))
-        return left == right
-    return any(exact(rule, template) for template in templates)
+    """Only exact reviewed relations, with no ignored condition or extra key."""
+    return rule_supported(rule)
 
 
 def derive_pwm_formal_facts(opcode, model, language, groups):
@@ -337,6 +236,7 @@ def derive_pwm_formal_facts(opcode, model, language, groups):
         if (group.status != 'source_verified' or group.verification != 'source_checked'
                 or any(source.get('conditions') or source.get('applicability') for source in group.sources)
                 or any(not isinstance(c, Mapping) or c.get('kind') != 'operand_form' or not set(c.get('required_operands', [])) <= {'s1', 's2', 'd'} for c in group.conditions)
+                or not source_identity_matches(group, opcode, model)
                 or model not in scope.get('models', [model])
                 or opcode not in scope.get('forms', [opcode])
                 or language not in scope.get('languages', [language])):
@@ -377,10 +277,10 @@ def derive_pwm_formal_facts(opcode, model, language, groups):
                       and any(r.get('unit') == 'parameter_selected_us_or_ms' and _supported_pwm_rule_shape(r)
                               and r.get('when') == {'instruction_executed': opcode} for r in g.value.get('rules', []))],
         'hardware_timing': [g for g in kinds.get('PWM_hardware_minimum_times', [])
-                            if any(_supported_pwm_rule_shape(r) and r.get('rows') == list(PWM_AB_MINIMUM_TIMES) for r in g.value.get('rules', []))],
+                            if any(_supported_pwm_rule_shape(r) and r.get('rows') == profile(opcode, model)['AB_timing'] for r in g.value.get('rules', []))],
         'off_time': [g for g in kinds.get('PWM_minimum_OFF_time', [])
                      if any(r == {'kind':'PWM_minimum_OFF_time', 'ON_time':{'operand':'s1'}, 'period':{'operand':'s2'},
-                                  'minimum_period_minus_ON_time_us':3} for r in g.value.get('rules', []))],
+                                  'minimum_period_minus_ON_time_us':profile(opcode, model)['minimum_OFF_us']} for r in g.value.get('rules', []))],
         'program_context': [g for g in kinds.get('invalid_program_context', []) if any(
             _supported_pwm_rule_shape(r) and r.get('kind') == 'invalid_program_context' and r.get('context') == 'interrupt_program'
             for r in g.value.get('rules', []))],
@@ -388,7 +288,7 @@ def derive_pwm_formal_facts(opcode, model, language, groups):
     width_operands = {r.get('subject', {}).get('operand')
         for g in witnesses['operand_width'] for r in g.value.get('rules', [])
         if _supported_pwm_rule_shape(r) and r.get('kind') == 'allowed_interval' and r.get('minimum') == 1
-        and r.get('maximum') == (65535 if opcode == 'PWM' else 2147483647)}
+        and r.get('maximum') == profile(opcode, model)['maximum_ON']}
     if width_operands != {'s1', 's2'}:
         witnesses['operand_width'] = []
     channel_witnesses = [g for g in kinds.get('allowed_interval', []) if any(
@@ -413,6 +313,11 @@ def derive_pwm_formal_facts(opcode, model, language, groups):
         fact['depends_on'] = sorted({dependency for g in evidence for dependency in g.depends_on})
         if evidence:
             fact['sources'] = [dict(source) for g in evidence for source in g.sources]
+            if fact['id'].endswith(':hardware_timing'):
+                supplemental = load_contract()[0]['supplemental_facts']
+                fact['sources'].extend(dict(s) for f in supplemental for s in f['sources'])
+                fact['value']['supplemental_source_binding'] = source_binding()
+                fact['value']['cross_source_policy'] = 'consensus_without_precedence'
             version_scopes = [set(g.scope['versions']) for g in evidence if g.scope.get('versions')]
             if version_scopes:
                 versions = set.intersection(*version_scopes)
@@ -445,6 +350,16 @@ def evaluate_pwm_source_constraint(group, values, context, model):
     hardware = hardware if isinstance(hardware, Mapping) else {}
     module = hardware.get('module_type')
     if not isinstance(module, str): module = None
+    opcode = next((op for op in (group.scope or {}).get('forms', []) if op in {'PWM', 'DPWM'}), None)
+    if opcode is None:
+        return 'unverified', 'pwm_source_form_missing'
+    predicates = profile(opcode, model)['predicates']
+    by_parameter = {'PWM_WIDTH_VALID':'operand_width', 'PWM_DOMAIN_VALID':'operand_domain',
+        'PWM_RELATION_VALID':'operand_relation', 'PWM_DESTINATION_VALID':'destination',
+        'PWM_CONFIGURED':'channel_configuration', 'PWM_RESOURCE_FREE':'resource',
+        'PWM_UNUSED_CHANNEL':'unused_channel', 'PWM_UNIT_KNOWN':'time_unit',
+        'PWM_TIMING_VALID':'hardware_timing', 'PWM_OFF_TIME_VALID':'off_time',
+        'PWM_PROGRAM_VALID':'program_context'}
     statuses = []
     for rule in rules:
         if not _supported_pwm_rule_shape(rule):
@@ -461,9 +376,9 @@ def evaluate_pwm_source_constraint(group, values, context, model):
                 {'kind': 'PWM_channel_configuration', 'when': 'channel_not_selected_for_PWM_in_parameters', 'operation_error': True}]:
             name = 'PWM_CONFIGURED'
         elif rule == {'kind': 'PWM_minimum_OFF_time', 'ON_time': {'operand': 's1'},
-                      'period': {'operand': 's2'}, 'minimum_period_minus_ON_time_us': 3}:
+                      'period': {'operand': 's2'}, 'minimum_period_minus_ON_time_us': profile(opcode, model)['minimum_OFF_us']}:
             name = 'PWM_OFF_TIME_VALID'
-        elif kind == 'PWM_hardware_minimum_times' and rule.get('rows') == list(PWM_AB_MINIMUM_TIMES):
+        elif kind == 'PWM_hardware_minimum_times' and rule.get('rows') == profile(opcode, model)['AB_timing']:
             name = 'PWM_TIMING_VALID'
         elif (kind == 'operand_relation' and rule.get('left') == {'operand':'s1'}
               and rule.get('right') == {'operand':'s2'} and rule.get('operator') == '>' and rule.get('error') is True):
@@ -532,7 +447,7 @@ def evaluate_pwm_source_constraint(group, values, context, model):
         if name is None:
             statuses.append('unverified'); continue
         try:
-            statuses.append('passed' if evaluate_expression(_predicate(name), values, state=context) else 'failed')
+            statuses.append('passed' if evaluate_expression(predicates[by_parameter[name]], values, state=context) else 'failed')
         except (DefinitionError, TypeError, ValueError, OverflowError):
             statuses.append('unverified')
     status = 'failed' if 'failed' in statuses else 'unverified' if 'unverified' in statuses else 'passed'

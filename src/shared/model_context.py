@@ -40,6 +40,9 @@ _DEBUG_FIELDS = frozenset({
     'record_id', 'record_ids', 'evidence_ids', 'candidate_source_ids',
     'fact_id', 'fact_ids', 'definition_ids', 'verified_fields', 'verification_level', 'profile_status',
     'deterministic_analysis',
+    'manual_text', 'layout_text', 'raw_text',
+    'source_page', 'source_line', 'clause_index', 'complete_clause_review',
+    'full_clause_review', 'source_block', 'source_kind',
 })
 
 _REVIEW_STATES = frozenset({
@@ -61,7 +64,7 @@ def _technical_facts(groups):
         if dimension == 'identity.source_model_mark' and fact.get('id') not in referenced:
             continue
         item = {key: technical_value(fact[key]) for key in
-                ('dimension', 'value', 'scope', 'conditions', 'requires', 'note') if key in fact}
+                ('dimension', 'value', 'scope', 'conditions', 'requires', 'note', 'selection_applicability') if key in fact}
         if fact.get('id'):
             item['id'] = local_ids[fact['id']]
         if fact.get('status'):
@@ -135,6 +138,12 @@ def technical_fact_packet(packet):
         result['knowledge_status'] = packet['status']
     if packet.get('gaps'):
         result['unresolved_aspects'] = technical_value(packet['gaps'])
+    selection = packet.get('fact_selection')
+    if isinstance(selection, Mapping):
+        result['selection'] = {key: technical_value(selection[key]) for key in
+            ('language', 'project_mode', 'version', 'aspects', 'partial_projection', 'whole_instruction_complete') if key in selection}
+        if selection.get('gaps'):
+            result['selection']['unresolved_reasons'] = list(dict.fromkeys(g.get('reason', 'unknown') for g in selection['gaps']))
     return result
 
 

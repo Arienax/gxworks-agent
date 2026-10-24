@@ -340,7 +340,7 @@ def _additional_constraint(dimension, rule, values, context, model):
 
 
 def check_fact_constraints(groups, values, *, target, plc_model, language=None, version=None,
-                           context=None, phase='input'):
+                           context=None, phase='input', root_ids=None):
     """Evaluate applicable constraint roots with their complete fact closure."""
     target, plc_model = str(target).strip().upper(), str(plc_model).strip().upper()
     language = (str(language).strip().casefold() or None) if language is not None else None
@@ -439,8 +439,8 @@ def check_fact_constraints(groups, values, *, target, plc_model, language=None, 
             # A derived PWM predicate proves only its selected relation. Its
             # witness scope/conditions and prerequisite facts still apply; a
             # provenance ID alone must never turn missing evidence into failure.
-            if group.id.startswith('pwm-formal:') and 'live_source_witnesses' in group.value:
-                witness_ids = group.value['live_source_witnesses']
+            if group.id.startswith('pwm-formal:'):
+                witness_ids = group.value.get('live_source_witnesses')
                 if not isinstance(witness_ids, (list, tuple)) or not witness_ids:
                     return outcome(group, 'unverified', 'source_witness_missing')
                 for witness_id in witness_ids:
@@ -655,13 +655,24 @@ def check_fact_constraints(groups, values, *, target, plc_model, language=None, 
 
     roots = [g.id for g in by_id.values() if g.dimension.startswith('constraints.')
              and g.value.get('phase', 'input') in {phase, 'both'}]
+    if root_ids is not None:
+        selected = list(root_ids) if isinstance(root_ids, (list, tuple)) else []
+        if (not selected or any(not isinstance(i, str) for i in selected)
+                or len(set(selected)) != len(selected)
+                or any(identity not in roots for identity in selected)):
+            return {'status': 'unverified', 'target': target, 'phase': phase,
+                'checks': [], 'findings': [{'code': 'PLC_RULE_COVERAGE', 'severity': 'unverified',
+                    'message': 'invalid_or_missing_selected_constraint_root'}],
+                'root_selection': selected, 'coverage': 'selected_roots_only'}
+        roots = selected
     for identity in roots:
         cached[identity] = visit(identity)
     statuses = [row['status'] for row in checks]
     execution_qualifications = [g.id for g in by_id.values()
         if g.dimension == 'execution.source_qualifications'
         and _scope(g, target=target, model=plc_model, language=language, version=version) != 'not_applicable']
-    return {'execution_coverage': 'unverified' if execution_qualifications else 'not_assessed',
+    return {'root_selection': roots, 'coverage': 'all_constraint_roots' if root_ids is None else 'selected_roots_only',
+            'execution_coverage': 'unverified' if execution_qualifications else 'not_assessed',
             'execution_qualifications': execution_qualifications, 'status': 'failed' if 'failed' in statuses else 'unverified' if 'unverified' in statuses else 'passed',
             'checks': checks, 'findings': findings, 'phase': phase, 'target': target}
 

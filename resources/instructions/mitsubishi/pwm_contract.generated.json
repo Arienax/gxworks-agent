@@ -1,0 +1,4100 @@
+{
+  "schema_version": 1,
+  "compiler_version": 1,
+  "source_sha256": "a48721c828e52ed1a9733be751a4616ece3c882d0e8692293d5f85647ca0d64a",
+  "binding": "PWM-reviewed-v1:a48721c828e52ed1a9733be751a4616ece3c882d0e8692293d5f85647ca0d64a",
+  "profiles": {
+    "DPWM:FX5S": {
+      "maximum_ON": 2147483647,
+      "maximum_period": 2147483647,
+      "predicates": {
+        "operand_width": {
+          "op": "parameter",
+          "name": "PWM_WIDTH_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "operand_domain": {
+          "op": "parameter",
+          "name": "PWM_DOMAIN_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "operand_relation": {
+          "op": "le",
+          "type": {
+            "kind": "bool"
+          },
+          "args": [
+            {
+              "op": "parameter",
+              "name": "PWM_ON_POSITIVE",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              }
+            },
+            {
+              "op": "parameter",
+              "name": "PWM_PERIOD_POSITIVE",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              }
+            }
+          ]
+        },
+        "destination": {
+          "op": "parameter",
+          "name": "PWM_DESTINATION_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "channel_configuration": {
+          "op": "parameter",
+          "name": "PWM_CONFIGURED",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "resource": {
+          "op": "parameter",
+          "name": "PWM_RESOURCE_FREE",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "unused_channel": {
+          "op": "parameter",
+          "name": "PWM_UNUSED_CHANNEL",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "time_unit": {
+          "op": "parameter",
+          "name": "PWM_UNIT_KNOWN",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "hardware_timing": {
+          "op": "parameter",
+          "name": "PWM_TIMING_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "off_time": {
+          "op": "ge",
+          "type": {
+            "kind": "bool"
+          },
+          "args": [
+            {
+              "op": "sub",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              },
+              "overflow": "reject",
+              "args": [
+                {
+                  "op": "parameter",
+                  "name": "PWM_PERIOD_US_PULSING",
+                  "type": {
+                    "kind": "int",
+                    "bits": 64,
+                    "signed": true
+                  }
+                },
+                {
+                  "op": "parameter",
+                  "name": "PWM_ON_US_PULSING",
+                  "type": {
+                    "kind": "int",
+                    "bits": 64,
+                    "signed": true
+                  }
+                }
+              ]
+            },
+            {
+              "op": "constant",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              },
+              "value": 3
+            }
+          ]
+        },
+        "program_context": {
+          "op": "parameter",
+          "name": "PWM_PROGRAM_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        }
+      },
+      "minimum_OFF_us": 3,
+      "AB_timing": [
+        {
+          "models": [
+            "FX5S",
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        },
+        {
+          "models": [
+            "FX5S",
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y3",
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "high_speed_pulse_IO_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        }
+      ],
+      "AG_timing": [
+        {
+          "models": [
+            "FX5S"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3"
+          ],
+          "minimum_ON_us": 5,
+          "minimum_period_us": 10,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5S"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y3",
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        }
+      ],
+      "domain_minimum": 1,
+      "channel_ranges": {
+        "CPU_module": [
+          1,
+          4
+        ],
+        "high_speed_pulse_IO_module": [
+          5,
+          12
+        ]
+      },
+      "CPU_outputs": [
+        "Y0",
+        "Y1",
+        "Y2",
+        "Y3",
+        "Y4",
+        "Y5",
+        "Y6",
+        "Y7"
+      ],
+      "source_fact_ids": [
+        "fx5prog:applicability:DPWM:32_bit_binary_pulse_width_modulation_p820:FX5S",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r0_c0:FX5S",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r0_c1:FX5S",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r2_c0:FX5S",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r3_c0:FX5S",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r4_c0:FX5S",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p820_r0_c0:FX5S",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p820_r1_c0:FX5S",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p820_r2_c0:FX5S",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p822_r5_c0:FX5S",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r0_c0_storage_fbd:FX5S",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r0_c0_storage_ladder:FX5S",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r0_c0_storage_st:FX5S",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r1_c0_storage_fbd:FX5S",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r1_c0_storage_ladder:FX5S",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r1_c0_storage_st:FX5S",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r0_c0:FX5S",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r3_c0:FX5S",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r3_c1:FX5S",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r4_c0:FX5S",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r5_c0_hardware_table:FX5S",
+        "fx5prog:ladder:DPWM:32_bit_binary_pulse_width_modulation_p820:2:FX5S",
+        "fx5prog:language:DPWM:32_bit_binary_pulse_width_modulation_p820:1:operands:FX5S",
+        "fx5prog:language:DPWM:32_bit_binary_pulse_width_modulation_p820:4:operands:FX5S"
+      ],
+      "supplemental_fact_ids": [
+        "fx5app:pwm_parameter_timing:AG:p332"
+      ],
+      "fact_digests": {
+        "fx5prog:applicability:DPWM:32_bit_binary_pulse_width_modulation_p820:FX5S": "39acaecb37297a70b97e4ce688963eb0099c1b1cb350b17e8b3b3efc8fbbd13c",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r0_c0:FX5S": "6413d6ed8dade726ff44f2812b9456c42622b33f43bb4581a71171b9f411563d",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r0_c1:FX5S": "bc8545f54a12d5bf8e045dbdc4335ce3d7c9a584089b040d5fe341cd01048d40",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r2_c0:FX5S": "c776474e55029eba26bed2bee2ca78ed0c3249c995bbf02d73332b8a0f4b30d0",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r3_c0:FX5S": "2f4d0e62225304c4f6530e4f97b21dedd1a10de0935c812b458d7f5cb5c773d6",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r4_c0:FX5S": "1a12f9183d93c781b5bafb883792a6bf5fa51fa2850adef3428c03a39f8020be",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p820_r0_c0:FX5S": "bd960600ed309c444e9166663b81ef295dbdfa7e7877e50249fbfd2abc143c3f",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p820_r1_c0:FX5S": "fb425ee92d43351a3e80af92a7a15002dabd2c33972776a63efae0786f576d44",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p820_r2_c0:FX5S": "044742c31f770de97c909f6a78f53c2925a358ddd42d9289649f0a08789a5313",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p822_r5_c0:FX5S": "de5781b103b5ebb1c8557125edf9c1a858ce09986c45a55acf6c1c5625690b62",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r0_c0_storage_fbd:FX5S": "7525f6442aa5a9e2139910c97e685d761e1cf8db5073c28a4914fa397fb58e60",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r0_c0_storage_ladder:FX5S": "bddbd66fbc2c27e8b16893e9be66f4dd896050391f6e55e54b30271e24ff1503",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r0_c0_storage_st:FX5S": "25d68b88e78639499bcea6e7bd185b91cb6389842b735216b6c4df32b3d32490",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r1_c0_storage_fbd:FX5S": "c8d362c42701a89c4050ee3316bf7734fed96188502a1004cd6dde2afefe5396",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r1_c0_storage_ladder:FX5S": "4b3cc720a00123103fb01396242de83be19363b83a285f1af1f9b7a56ccf2b94",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r1_c0_storage_st:FX5S": "316a8410894399034444ae61d41fb01215a9be2f2b0b740024bb9bfe260c9e15",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r0_c0:FX5S": "a6d28380efca2adf8b2f01e2225f432528fb6f9fccf30f56aa7a00d305f59baf",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r3_c0:FX5S": "39841efdfe32139549913585a9db830f154dd0ca3362a68db29a324c13a79741",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r3_c1:FX5S": "1a6711300b7cf656928e6da4db929813507a803280c877c3853fe9900b2c964c",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r4_c0:FX5S": "9d55479dbc00b8f2f3d12822931ecb250fac3647fcbc991ee04b5e87f64b9fdf",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r5_c0_hardware_table:FX5S": "7c311d2da8c21a71d5fd47a118d2070df385f3ae1ca9c4a2ca2a4768ddacfeed",
+        "fx5prog:ladder:DPWM:32_bit_binary_pulse_width_modulation_p820:2:FX5S": "bb3c6594da222f21930b3c32ba2fc3b50d70f9df8b126be3f3d12c839292e3f5",
+        "fx5prog:language:DPWM:32_bit_binary_pulse_width_modulation_p820:1:operands:FX5S": "5013b5c6b368c1e78b7e477c9011fca9203dc937527a3d784be8c6d5c68aeabe",
+        "fx5prog:language:DPWM:32_bit_binary_pulse_width_modulation_p820:4:operands:FX5S": "d434151b458f0725d41f24f9737002f6c0e658916e5c08ebd571cc3f1d5d4621",
+        "fx5app:pwm_parameter_timing:AG:p332": "b9697f6a971c0e60afe09f6ea0f07218b071215638a33980762578c09f1446d7"
+      }
+    },
+    "PWM:FX5S": {
+      "maximum_ON": 65535,
+      "maximum_period": 65535,
+      "predicates": {
+        "operand_width": {
+          "op": "parameter",
+          "name": "PWM_WIDTH_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "operand_domain": {
+          "op": "parameter",
+          "name": "PWM_DOMAIN_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "operand_relation": {
+          "op": "le",
+          "type": {
+            "kind": "bool"
+          },
+          "args": [
+            {
+              "op": "parameter",
+              "name": "PWM_ON_POSITIVE",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              }
+            },
+            {
+              "op": "parameter",
+              "name": "PWM_PERIOD_POSITIVE",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              }
+            }
+          ]
+        },
+        "destination": {
+          "op": "parameter",
+          "name": "PWM_DESTINATION_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "channel_configuration": {
+          "op": "parameter",
+          "name": "PWM_CONFIGURED",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "resource": {
+          "op": "parameter",
+          "name": "PWM_RESOURCE_FREE",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "unused_channel": {
+          "op": "parameter",
+          "name": "PWM_UNUSED_CHANNEL",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "time_unit": {
+          "op": "parameter",
+          "name": "PWM_UNIT_KNOWN",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "hardware_timing": {
+          "op": "parameter",
+          "name": "PWM_TIMING_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "off_time": {
+          "op": "ge",
+          "type": {
+            "kind": "bool"
+          },
+          "args": [
+            {
+              "op": "sub",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              },
+              "overflow": "reject",
+              "args": [
+                {
+                  "op": "parameter",
+                  "name": "PWM_PERIOD_US_PULSING",
+                  "type": {
+                    "kind": "int",
+                    "bits": 64,
+                    "signed": true
+                  }
+                },
+                {
+                  "op": "parameter",
+                  "name": "PWM_ON_US_PULSING",
+                  "type": {
+                    "kind": "int",
+                    "bits": 64,
+                    "signed": true
+                  }
+                }
+              ]
+            },
+            {
+              "op": "constant",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              },
+              "value": 3
+            }
+          ]
+        },
+        "program_context": {
+          "op": "parameter",
+          "name": "PWM_PROGRAM_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        }
+      },
+      "minimum_OFF_us": 3,
+      "AB_timing": [
+        {
+          "models": [
+            "FX5S",
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        },
+        {
+          "models": [
+            "FX5S",
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y3",
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "high_speed_pulse_IO_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        }
+      ],
+      "AG_timing": [
+        {
+          "models": [
+            "FX5S"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3"
+          ],
+          "minimum_ON_us": 5,
+          "minimum_period_us": 10,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5S"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y3",
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        }
+      ],
+      "domain_minimum": 1,
+      "channel_ranges": {
+        "CPU_module": [
+          1,
+          4
+        ],
+        "high_speed_pulse_IO_module": [
+          5,
+          12
+        ]
+      },
+      "CPU_outputs": [
+        "Y0",
+        "Y1",
+        "Y2",
+        "Y3",
+        "Y4",
+        "Y5",
+        "Y6",
+        "Y7"
+      ],
+      "source_fact_ids": [
+        "fx5prog:applicability:PWM:16_bit_binary_pulse_width_modulation_p813:FX5S",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r0_c0:FX5S",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r0_c1:FX5S",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r2_c0:FX5S",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r3_c0:FX5S",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r4_c0:FX5S",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p813_r0_c0:FX5S",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p813_r1_c0:FX5S",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p813_r2_c0:FX5S",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p815_r5_c0:FX5S",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r0_c0_storage_fbd:FX5S",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r0_c0_storage_ladder:FX5S",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r0_c0_storage_st:FX5S",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r1_c0_storage_fbd:FX5S",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r1_c0_storage_ladder:FX5S",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r1_c0_storage_st:FX5S",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r0_c0:FX5S",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r2_c0:FX5S",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r2_c1:FX5S",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r3_c0:FX5S",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r3_c1:FX5S",
+        "fx5prog:ladder:PWM:16_bit_binary_pulse_width_modulation_p813:2:FX5S",
+        "fx5prog:language:PWM:16_bit_binary_pulse_width_modulation_p813:1:operands:FX5S",
+        "fx5prog:language:PWM:16_bit_binary_pulse_width_modulation_p813:4:operands:FX5S"
+      ],
+      "supplemental_fact_ids": [
+        "fx5app:pwm_parameter_timing:AG:p332"
+      ],
+      "fact_digests": {
+        "fx5prog:applicability:PWM:16_bit_binary_pulse_width_modulation_p813:FX5S": "e8bd748e4c3119aa960305f794e54f34490ecc1f1dfddfb21ce6e4f343be9337",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r0_c0:FX5S": "cd5024fd30c6280bb8e0f6e6336f2e47b9f3dcfe557d27da234697da4edc5682",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r0_c1:FX5S": "c9c6cfef525ad620c8c2dd2553f981fa6755c271e003c30a41368ab783888ddf",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r2_c0:FX5S": "17a882b9d120406a3e4b6644db59f17dbbf8099dca488feaaec45832db55352f",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r3_c0:FX5S": "c85896208ac38ee19151f612a1165f4c77fbe7f2d82d9d2d750bc9c23fef912d",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r4_c0:FX5S": "ff64cb13a6f49339c23a30549f500b80b809f60ae4e5dbda3c3baef9fef7937b",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p813_r0_c0:FX5S": "08e31065701998ec0c3267bb07826acfa45c9431318ca4d961ad68ae08d82018",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p813_r1_c0:FX5S": "a437a38bc3ff9d6e5194dfa9dfdcd4a8ab39ba942635212bd17d7014ead2c894",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p813_r2_c0:FX5S": "9703afe08a299ff8f103331fa85318102b038cd7ec886373ce7d846ddeece5e0",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p815_r5_c0:FX5S": "55b5f58c31ad87a530140e2c556ebaedeff6ae1f6144c08a791fa3f7b0162734",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r0_c0_storage_fbd:FX5S": "7f774990578edb57b92809f7fbbb3a3aace50d28b5ade6ac3907dbbba7ff0b63",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r0_c0_storage_ladder:FX5S": "eb0971cf73810a8dbdeab4b97aaa09c05789e118f206e5c1c0256452b786a90b",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r0_c0_storage_st:FX5S": "19dd77fc33fb54cbe2d194f39f34ece6b6654b09bd0e748f862293bb4437a75b",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r1_c0_storage_fbd:FX5S": "e7f9fe66ba9d02076591fb36b7092d1210f01eb2d1a89b8a252e8cfc46f2b3a2",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r1_c0_storage_ladder:FX5S": "45f32c7484b9a9f3f581580ac2bff3d7446ef8773358ad52cb5a0f5de6f4deef",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r1_c0_storage_st:FX5S": "8fc12bd284614a63f04d733a0091c44ddccf1a52d3f9f961a12f57f6d62d3d01",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r0_c0:FX5S": "1e62b206a5e21c7a6e7d6e4a91ac754031a07b9f3d620c0e9642b36b3751310e",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r2_c0:FX5S": "c8fa1fe662bf1a1dae0d0d34e6c92b71780676c1f3599b4802933d7d93f34f9e",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r2_c1:FX5S": "bcb955ae44a316903e85cf39d2b61433a48fcd39fe7fc97baed96f1a3bbe4d29",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r3_c0:FX5S": "b53371a764bdbabb4c3a788060804754bc78a5e6fbfcf80f4c3e6ac56481147c",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r3_c1:FX5S": "328e19d1d2085cccca580f4777281e51c71691ceadc8e25d359d5be8ed769c9b",
+        "fx5prog:ladder:PWM:16_bit_binary_pulse_width_modulation_p813:2:FX5S": "0c3b2042793e02229ef3e30578400effa3930fa22d4d802990939343484310e0",
+        "fx5prog:language:PWM:16_bit_binary_pulse_width_modulation_p813:1:operands:FX5S": "c88afc18093853e0d1c771b77f7a8783f6928010c2e99afe1ef75a6f580f9b0f",
+        "fx5prog:language:PWM:16_bit_binary_pulse_width_modulation_p813:4:operands:FX5S": "b027e49e9c401599aa67ac2921b3c417ed88b120e42ad913274ec8651b9abec8",
+        "fx5app:pwm_parameter_timing:AG:p332": "b9697f6a971c0e60afe09f6ea0f07218b071215638a33980762578c09f1446d7"
+      }
+    },
+    "DPWM:FX5U": {
+      "maximum_ON": 2147483647,
+      "maximum_period": 2147483647,
+      "predicates": {
+        "operand_width": {
+          "op": "parameter",
+          "name": "PWM_WIDTH_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "operand_domain": {
+          "op": "parameter",
+          "name": "PWM_DOMAIN_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "operand_relation": {
+          "op": "le",
+          "type": {
+            "kind": "bool"
+          },
+          "args": [
+            {
+              "op": "parameter",
+              "name": "PWM_ON_POSITIVE",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              }
+            },
+            {
+              "op": "parameter",
+              "name": "PWM_PERIOD_POSITIVE",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              }
+            }
+          ]
+        },
+        "destination": {
+          "op": "parameter",
+          "name": "PWM_DESTINATION_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "channel_configuration": {
+          "op": "parameter",
+          "name": "PWM_CONFIGURED",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "resource": {
+          "op": "parameter",
+          "name": "PWM_RESOURCE_FREE",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "unused_channel": {
+          "op": "parameter",
+          "name": "PWM_UNUSED_CHANNEL",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "time_unit": {
+          "op": "parameter",
+          "name": "PWM_UNIT_KNOWN",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "hardware_timing": {
+          "op": "parameter",
+          "name": "PWM_TIMING_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "off_time": {
+          "op": "ge",
+          "type": {
+            "kind": "bool"
+          },
+          "args": [
+            {
+              "op": "sub",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              },
+              "overflow": "reject",
+              "args": [
+                {
+                  "op": "parameter",
+                  "name": "PWM_PERIOD_US_PULSING",
+                  "type": {
+                    "kind": "int",
+                    "bits": 64,
+                    "signed": true
+                  }
+                },
+                {
+                  "op": "parameter",
+                  "name": "PWM_ON_US_PULSING",
+                  "type": {
+                    "kind": "int",
+                    "bits": 64,
+                    "signed": true
+                  }
+                }
+              ]
+            },
+            {
+              "op": "constant",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              },
+              "value": 3
+            }
+          ]
+        },
+        "program_context": {
+          "op": "parameter",
+          "name": "PWM_PROGRAM_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        }
+      },
+      "minimum_OFF_us": 3,
+      "AB_timing": [
+        {
+          "models": [
+            "FX5S",
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        },
+        {
+          "models": [
+            "FX5S",
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y3",
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "high_speed_pulse_IO_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        }
+      ],
+      "AG_timing": [
+        {
+          "models": [
+            "FX5S"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3"
+          ],
+          "minimum_ON_us": 5,
+          "minimum_period_us": 10,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5S"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y3",
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        }
+      ],
+      "domain_minimum": 1,
+      "channel_ranges": {
+        "CPU_module": [
+          1,
+          4
+        ],
+        "high_speed_pulse_IO_module": [
+          5,
+          12
+        ]
+      },
+      "CPU_outputs": [
+        "Y0",
+        "Y1",
+        "Y2",
+        "Y3",
+        "Y4",
+        "Y5",
+        "Y6",
+        "Y7"
+      ],
+      "source_fact_ids": [
+        "fx5prog:applicability:DPWM:32_bit_binary_pulse_width_modulation_p820:FX5U",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r0_c0:FX5U",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r0_c1:FX5U",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r2_c0:FX5U",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r3_c0:FX5U",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r4_c0:FX5U",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p820_r0_c0:FX5U",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p820_r1_c0:FX5U",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p820_r2_c0:FX5U",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p822_r5_c0:FX5U",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r0_c0_storage_fbd:FX5U",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r0_c0_storage_ladder:FX5U",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r0_c0_storage_st:FX5U",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r1_c0_storage_fbd:FX5U",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r1_c0_storage_ladder:FX5U",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r1_c0_storage_st:FX5U",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r0_c0:FX5U",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r3_c0:FX5U",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r3_c1:FX5U",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r4_c0:FX5U",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r5_c0_hardware_table:FX5U",
+        "fx5prog:ladder:DPWM:32_bit_binary_pulse_width_modulation_p820:2:FX5U",
+        "fx5prog:language:DPWM:32_bit_binary_pulse_width_modulation_p820:1:operands:FX5U",
+        "fx5prog:language:DPWM:32_bit_binary_pulse_width_modulation_p820:4:operands:FX5U"
+      ],
+      "supplemental_fact_ids": [
+        "fx5app:pwm_parameter_timing:AG:p332"
+      ],
+      "fact_digests": {
+        "fx5prog:applicability:DPWM:32_bit_binary_pulse_width_modulation_p820:FX5U": "95f817f3ba78cee334a38af6e8de6a8d84e7f6a192a4b122c99255763e1da1d3",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r0_c0:FX5U": "26f760a88faa531db29e0d4e459d3421e86ffbec571ae58189e7a825452c7af7",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r0_c1:FX5U": "052a2d4e92d4803c099136438edd127d5aca32dbc02673a74e8d724b4d5235ed",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r2_c0:FX5U": "3fd287b153ee16701bf1cb72b3b9ec661af8bc16f3bb3ad79fa67146844d73a1",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r3_c0:FX5U": "d16753b53344f42a9851a19a09a3c28e79849c3bea5cefc84a595c155b126079",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r4_c0:FX5U": "cba7e6d9ebe992f0a9ce34c77802088e1b9187b1f9d56e8f99ea5cc3c53acae1",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p820_r0_c0:FX5U": "5527addae1b894dffb04a4e44ad4c851cb7eeac61f040254af25006092c98d98",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p820_r1_c0:FX5U": "2bdee63f6eb7bb32dbcf9e1cac64fb7da45b61d1f4780506ecaa81e3dd83b875",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p820_r2_c0:FX5U": "9d41669d7e3d3699430901b1cc66cabb46feb489cef4715e80dbf5c37c0dbfbc",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p822_r5_c0:FX5U": "55b253fb2ea4b92a9401da6628cb2a1a9f8e25882426ee2d9014da5bbd20572d",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r0_c0_storage_fbd:FX5U": "281d4ca2eea001e27f33ca239a6e6d9961c3eae2b847d5f15a71c80c426e5773",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r0_c0_storage_ladder:FX5U": "a6caacf51ddec5f2166a3aa8b2519ca1987758cd204f177bcf4547f932882388",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r0_c0_storage_st:FX5U": "bd1c7988ea2aa9bcdb0118d1865535610680f87cba011ebd9d224eeaecb3f149",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r1_c0_storage_fbd:FX5U": "f3af15b687efb91bbe5da1a9eda115ce0626bbb8bdc5cb0b10e8a99654e3f833",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r1_c0_storage_ladder:FX5U": "8dc126e0d9a5c52078803474a266e53acd9d910f052f30aa9352da484a3bd4e1",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r1_c0_storage_st:FX5U": "6edf0ca47ecf953a8e8dd21e8420e4f9d5a574eb996277f52eba8cb1e6d09406",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r0_c0:FX5U": "a8acc50095198d691bfb5f8231b8d12205c876fa48ab21e8ea09086b4f1dc582",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r3_c0:FX5U": "faf1ed3322c122dc920ddd9dd90c5f3adbefab82e23aa083075b7ad98c73c755",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r3_c1:FX5U": "7229080013fe6d4c1d9daa0d9937ab2b0771639a0766a4e1868da3ff643db79c",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r4_c0:FX5U": "63da72a699c9667cc2e988e375865052358973ea2c4d6d826980ed82adf338aa",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r5_c0_hardware_table:FX5U": "07b4a2497d58df0b4b00f77e65268649471f5042bce48253c5beef38ad67f1d7",
+        "fx5prog:ladder:DPWM:32_bit_binary_pulse_width_modulation_p820:2:FX5U": "896be34c5116317073fb41877d2dc700b1786a1e100a26235c6959a8d4e352fa",
+        "fx5prog:language:DPWM:32_bit_binary_pulse_width_modulation_p820:1:operands:FX5U": "3aae3822350a73d4dd9f2edd6934975efde183384b7c134abf73792504d4694a",
+        "fx5prog:language:DPWM:32_bit_binary_pulse_width_modulation_p820:4:operands:FX5U": "46bd7eb7a9e5960b13a1b54038d8450390ba167e355799d456ad24c3b6b17ea3",
+        "fx5app:pwm_parameter_timing:AG:p332": "b9697f6a971c0e60afe09f6ea0f07218b071215638a33980762578c09f1446d7"
+      }
+    },
+    "PWM:FX5U": {
+      "maximum_ON": 65535,
+      "maximum_period": 65535,
+      "predicates": {
+        "operand_width": {
+          "op": "parameter",
+          "name": "PWM_WIDTH_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "operand_domain": {
+          "op": "parameter",
+          "name": "PWM_DOMAIN_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "operand_relation": {
+          "op": "le",
+          "type": {
+            "kind": "bool"
+          },
+          "args": [
+            {
+              "op": "parameter",
+              "name": "PWM_ON_POSITIVE",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              }
+            },
+            {
+              "op": "parameter",
+              "name": "PWM_PERIOD_POSITIVE",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              }
+            }
+          ]
+        },
+        "destination": {
+          "op": "parameter",
+          "name": "PWM_DESTINATION_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "channel_configuration": {
+          "op": "parameter",
+          "name": "PWM_CONFIGURED",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "resource": {
+          "op": "parameter",
+          "name": "PWM_RESOURCE_FREE",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "unused_channel": {
+          "op": "parameter",
+          "name": "PWM_UNUSED_CHANNEL",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "time_unit": {
+          "op": "parameter",
+          "name": "PWM_UNIT_KNOWN",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "hardware_timing": {
+          "op": "parameter",
+          "name": "PWM_TIMING_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "off_time": {
+          "op": "ge",
+          "type": {
+            "kind": "bool"
+          },
+          "args": [
+            {
+              "op": "sub",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              },
+              "overflow": "reject",
+              "args": [
+                {
+                  "op": "parameter",
+                  "name": "PWM_PERIOD_US_PULSING",
+                  "type": {
+                    "kind": "int",
+                    "bits": 64,
+                    "signed": true
+                  }
+                },
+                {
+                  "op": "parameter",
+                  "name": "PWM_ON_US_PULSING",
+                  "type": {
+                    "kind": "int",
+                    "bits": 64,
+                    "signed": true
+                  }
+                }
+              ]
+            },
+            {
+              "op": "constant",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              },
+              "value": 3
+            }
+          ]
+        },
+        "program_context": {
+          "op": "parameter",
+          "name": "PWM_PROGRAM_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        }
+      },
+      "minimum_OFF_us": 3,
+      "AB_timing": [
+        {
+          "models": [
+            "FX5S",
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        },
+        {
+          "models": [
+            "FX5S",
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y3",
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "high_speed_pulse_IO_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        }
+      ],
+      "AG_timing": [
+        {
+          "models": [
+            "FX5S"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3"
+          ],
+          "minimum_ON_us": 5,
+          "minimum_period_us": 10,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5S"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y3",
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        }
+      ],
+      "domain_minimum": 1,
+      "channel_ranges": {
+        "CPU_module": [
+          1,
+          4
+        ],
+        "high_speed_pulse_IO_module": [
+          5,
+          12
+        ]
+      },
+      "CPU_outputs": [
+        "Y0",
+        "Y1",
+        "Y2",
+        "Y3",
+        "Y4",
+        "Y5",
+        "Y6",
+        "Y7"
+      ],
+      "source_fact_ids": [
+        "fx5prog:applicability:PWM:16_bit_binary_pulse_width_modulation_p813:FX5U",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r0_c0:FX5U",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r0_c1:FX5U",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r2_c0:FX5U",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r3_c0:FX5U",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r4_c0:FX5U",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p813_r0_c0:FX5U",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p813_r1_c0:FX5U",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p813_r2_c0:FX5U",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p815_r5_c0:FX5U",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r0_c0_storage_fbd:FX5U",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r0_c0_storage_ladder:FX5U",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r0_c0_storage_st:FX5U",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r1_c0_storage_fbd:FX5U",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r1_c0_storage_ladder:FX5U",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r1_c0_storage_st:FX5U",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r0_c0:FX5U",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r2_c0:FX5U",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r2_c1:FX5U",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r3_c0:FX5U",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r3_c1:FX5U",
+        "fx5prog:ladder:PWM:16_bit_binary_pulse_width_modulation_p813:2:FX5U",
+        "fx5prog:language:PWM:16_bit_binary_pulse_width_modulation_p813:1:operands:FX5U",
+        "fx5prog:language:PWM:16_bit_binary_pulse_width_modulation_p813:4:operands:FX5U"
+      ],
+      "supplemental_fact_ids": [
+        "fx5app:pwm_parameter_timing:AG:p332"
+      ],
+      "fact_digests": {
+        "fx5prog:applicability:PWM:16_bit_binary_pulse_width_modulation_p813:FX5U": "a1a23be67cb8c8d16219fb05d05303bdcb99bd7eca7b974387d8055f8bcec141",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r0_c0:FX5U": "bc08d17b32088175faca937ee6b400fcbf1d3456336628bcaefb35cc79ce1221",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r0_c1:FX5U": "8115bc97687ebdead197283982c1f47f6acd735859161b9a68487127e424de6d",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r2_c0:FX5U": "5a33fd9d03cede6bed994d55866b6fda3216f208cfc7acabcff267706a8b893f",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r3_c0:FX5U": "d2540726045884e0e4d08e07012ab1ed39af5e746edea6969697c6962afe7938",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r4_c0:FX5U": "2d3fbc8564331d2e088ab3a9c680b65a03d5d0a0d25e972906f679ed7536c159",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p813_r0_c0:FX5U": "e1a60e2a286e75bfb391c5f630e6fbddaa7a34ab10746d8df249f0a9920ed666",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p813_r1_c0:FX5U": "05ebe9ecb7b7937cc8164d519b4aacb4ff2d9b33cd8bf24e3b55c3959092f766",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p813_r2_c0:FX5U": "6211290b02fb559a8308de709d6f5a7ab079a286c50ffcc11c7a24862f317e7c",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p815_r5_c0:FX5U": "653f34f3756307c60da3e4f988a0cfd01173b42a186420523a5363811bbb3c92",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r0_c0_storage_fbd:FX5U": "fa23fd04a730b064a8c83c13fa2bb2803469972a2d2ca2aeb1df78136fbb5fbc",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r0_c0_storage_ladder:FX5U": "b6c88d1f4f1a666efe1dbbb1bc34343b066f2c471b744c6531f3679a76fc5819",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r0_c0_storage_st:FX5U": "bd1abd6decd4ffdd03f957d301c38eae6c61692b3005f0f325245cd88c65f0b5",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r1_c0_storage_fbd:FX5U": "8041976bddf00a93e9b96eca1236ea09fe4a4097f3edfa27fd8ce2207d0904b5",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r1_c0_storage_ladder:FX5U": "de12ae7bcda5da02dac6a4de462d61331d6d926a299c7a20bb0134810038f716",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r1_c0_storage_st:FX5U": "bfb1a1b9518e5e85b91ea2f310b6024a21045e00e8eb1eeed470ac3490867a70",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r0_c0:FX5U": "98591a49b3b01c2fa9e30c51b0498695ce851390c9061adea53c32d53b796128",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r2_c0:FX5U": "47e542be4d6f24fa95c39de37d58e264001dd1138f75a35d25ab1f264e667939",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r2_c1:FX5U": "6f390ba66344d8db2633e61d9eb2a935c91fdb0731a96f932323809a2dcde453",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r3_c0:FX5U": "04425046084af2bb5be819a8f144c193d0d382c27e3b494d0f9803c51a29aa6d",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r3_c1:FX5U": "1b656a9b21edda46e3b4c5811913a3d46fde90629b555c66007cd241b74bceb6",
+        "fx5prog:ladder:PWM:16_bit_binary_pulse_width_modulation_p813:2:FX5U": "a3477283dcf06e3f6d308c84e387a44c2b9b7a8fdc03a488ca37b1fbe1777280",
+        "fx5prog:language:PWM:16_bit_binary_pulse_width_modulation_p813:1:operands:FX5U": "332127e13a044f172904856cb9e74f1be8bdaf79ffa0f8356a269f4549811e0e",
+        "fx5prog:language:PWM:16_bit_binary_pulse_width_modulation_p813:4:operands:FX5U": "f3298515122e36b344a625da09ec59422eb2087d7c2714ab3bd7f51a41fa6b5b",
+        "fx5app:pwm_parameter_timing:AG:p332": "b9697f6a971c0e60afe09f6ea0f07218b071215638a33980762578c09f1446d7"
+      }
+    },
+    "DPWM:FX5UC": {
+      "maximum_ON": 2147483647,
+      "maximum_period": 2147483647,
+      "predicates": {
+        "operand_width": {
+          "op": "parameter",
+          "name": "PWM_WIDTH_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "operand_domain": {
+          "op": "parameter",
+          "name": "PWM_DOMAIN_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "operand_relation": {
+          "op": "le",
+          "type": {
+            "kind": "bool"
+          },
+          "args": [
+            {
+              "op": "parameter",
+              "name": "PWM_ON_POSITIVE",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              }
+            },
+            {
+              "op": "parameter",
+              "name": "PWM_PERIOD_POSITIVE",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              }
+            }
+          ]
+        },
+        "destination": {
+          "op": "parameter",
+          "name": "PWM_DESTINATION_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "channel_configuration": {
+          "op": "parameter",
+          "name": "PWM_CONFIGURED",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "resource": {
+          "op": "parameter",
+          "name": "PWM_RESOURCE_FREE",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "unused_channel": {
+          "op": "parameter",
+          "name": "PWM_UNUSED_CHANNEL",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "time_unit": {
+          "op": "parameter",
+          "name": "PWM_UNIT_KNOWN",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "hardware_timing": {
+          "op": "parameter",
+          "name": "PWM_TIMING_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "off_time": {
+          "op": "ge",
+          "type": {
+            "kind": "bool"
+          },
+          "args": [
+            {
+              "op": "sub",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              },
+              "overflow": "reject",
+              "args": [
+                {
+                  "op": "parameter",
+                  "name": "PWM_PERIOD_US_PULSING",
+                  "type": {
+                    "kind": "int",
+                    "bits": 64,
+                    "signed": true
+                  }
+                },
+                {
+                  "op": "parameter",
+                  "name": "PWM_ON_US_PULSING",
+                  "type": {
+                    "kind": "int",
+                    "bits": 64,
+                    "signed": true
+                  }
+                }
+              ]
+            },
+            {
+              "op": "constant",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              },
+              "value": 3
+            }
+          ]
+        },
+        "program_context": {
+          "op": "parameter",
+          "name": "PWM_PROGRAM_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        }
+      },
+      "minimum_OFF_us": 3,
+      "AB_timing": [
+        {
+          "models": [
+            "FX5S",
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        },
+        {
+          "models": [
+            "FX5S",
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y3",
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "high_speed_pulse_IO_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        }
+      ],
+      "AG_timing": [
+        {
+          "models": [
+            "FX5S"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3"
+          ],
+          "minimum_ON_us": 5,
+          "minimum_period_us": 10,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5S"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y3",
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        }
+      ],
+      "domain_minimum": 1,
+      "channel_ranges": {
+        "CPU_module": [
+          1,
+          4
+        ],
+        "high_speed_pulse_IO_module": [
+          5,
+          12
+        ]
+      },
+      "CPU_outputs": [
+        "Y0",
+        "Y1",
+        "Y2",
+        "Y3",
+        "Y4",
+        "Y5",
+        "Y6",
+        "Y7"
+      ],
+      "source_fact_ids": [
+        "fx5prog:applicability:DPWM:32_bit_binary_pulse_width_modulation_p820:FX5UC",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r0_c0:FX5UC",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r0_c1:FX5UC",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r2_c0:FX5UC",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r3_c0:FX5UC",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r4_c0:FX5UC",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p820_r0_c0:FX5UC",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p820_r1_c0:FX5UC",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p820_r2_c0:FX5UC",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p822_r5_c0:FX5UC",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r0_c0_storage_fbd:FX5UC",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r0_c0_storage_ladder:FX5UC",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r0_c0_storage_st:FX5UC",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r1_c0_storage_fbd:FX5UC",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r1_c0_storage_ladder:FX5UC",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r1_c0_storage_st:FX5UC",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r0_c0:FX5UC",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r3_c0:FX5UC",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r3_c1:FX5UC",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r4_c0:FX5UC",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r5_c0_hardware_table:FX5UC",
+        "fx5prog:ladder:DPWM:32_bit_binary_pulse_width_modulation_p820:2:FX5UC",
+        "fx5prog:language:DPWM:32_bit_binary_pulse_width_modulation_p820:1:operands:FX5UC",
+        "fx5prog:language:DPWM:32_bit_binary_pulse_width_modulation_p820:4:operands:FX5UC"
+      ],
+      "supplemental_fact_ids": [
+        "fx5app:pwm_parameter_timing:AG:p332"
+      ],
+      "fact_digests": {
+        "fx5prog:applicability:DPWM:32_bit_binary_pulse_width_modulation_p820:FX5UC": "1ff9349756872a87c403b451521bc2c7621a09718de052d4b0920df3de24b158",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r0_c0:FX5UC": "2a504abf6102f5c4d94fd23dd82ad134d140788bd220771a8f4428d19bd57bc9",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r0_c1:FX5UC": "473dd245e48a02738a72665d5dc75078fcedc47250d915c80015c807b5091e9e",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r2_c0:FX5UC": "459bd4583a9cfdc6e75f546b8048de4dd8ac0bf16efd2ea4d313f93472b83902",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r3_c0:FX5UC": "828876a53499d1bbf9a01a047a7d835ff27d02671db84c99b1dddf5025710bee",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r4_c0:FX5UC": "8a4707a1c1a5ef910ffc37e5e88f8ee314e718f7204f6691156d29f7c18428b0",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p820_r0_c0:FX5UC": "f5e22098bfcc18ec4a6c786106a4468337fa460a46e8aecbc8711efdd68107f4",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p820_r1_c0:FX5UC": "ff8347f33e9ba123aebb65c2ec788dba67f442822832432c30190dfbd24e7075",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p820_r2_c0:FX5UC": "879f48a2daa84664e835ff3539577fcb36c8eac26ab527dad8ae8a43f2740181",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p822_r5_c0:FX5UC": "cb8b815bc88b5b69e6afb3e24dcab036cc69e0d70af737256aca176ff6f4cf41",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r0_c0_storage_fbd:FX5UC": "4044cfb3bb8bcb594cb0b00d7dede1ca2e5ff70534ed7e526ed6db4440680cbd",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r0_c0_storage_ladder:FX5UC": "07ca57c18d7f4e70a045920e66be780d106e6cc63bbfd5ff7bfdc64a335f2364",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r0_c0_storage_st:FX5UC": "2466a91910bbc6ed57ca5a54200c92f9e68efe4fff7eddd7168164bffac1c582",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r1_c0_storage_fbd:FX5UC": "3018091b03117ff4d237692718701b8059015f28b0e207bb045ec16c14635aff",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r1_c0_storage_ladder:FX5UC": "f65fab5d497fade7bb8707823e89808106203fdcd8301fc3f5758616f061f30e",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r1_c0_storage_st:FX5UC": "a58026f095beb884e4edfc6d54671cab346540c22313e9a66767950ad101e32f",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r0_c0:FX5UC": "800eec90dad08788738d6f871cb3822794e7cd9a1e11b3055e07ebfc27fc1bef",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r3_c0:FX5UC": "989dc253b8c11409aae29e788fc68b856594f055f64a5defd166dc50509a249a",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r3_c1:FX5UC": "50ed27f87c6dacb230f066aba7a0b32373fdec0947ce355d326f24a66a6ccae6",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r4_c0:FX5UC": "6eba7b1e75bb16ea45695058df3e49ad015f8658ba3d350e5ebbded9305d9e79",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r5_c0_hardware_table:FX5UC": "8bcdbf036ab84b5a7b881a6536cd89543c634ecc83839dbb4ed74c0f77f5ad59",
+        "fx5prog:ladder:DPWM:32_bit_binary_pulse_width_modulation_p820:2:FX5UC": "3e2bf8757dd0ace695f99f937bd1dce35a9ae334e27c753ff46aa01517448c3f",
+        "fx5prog:language:DPWM:32_bit_binary_pulse_width_modulation_p820:1:operands:FX5UC": "f48728cd5f5502a49d086f369093c304673a99bc29199f39aa6904463b9b47a5",
+        "fx5prog:language:DPWM:32_bit_binary_pulse_width_modulation_p820:4:operands:FX5UC": "75ea3d7ac9ed73994cf1713e8126263d0361e752b72ca3a5abc39911df96f6c7",
+        "fx5app:pwm_parameter_timing:AG:p332": "b9697f6a971c0e60afe09f6ea0f07218b071215638a33980762578c09f1446d7"
+      }
+    },
+    "PWM:FX5UC": {
+      "maximum_ON": 65535,
+      "maximum_period": 65535,
+      "predicates": {
+        "operand_width": {
+          "op": "parameter",
+          "name": "PWM_WIDTH_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "operand_domain": {
+          "op": "parameter",
+          "name": "PWM_DOMAIN_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "operand_relation": {
+          "op": "le",
+          "type": {
+            "kind": "bool"
+          },
+          "args": [
+            {
+              "op": "parameter",
+              "name": "PWM_ON_POSITIVE",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              }
+            },
+            {
+              "op": "parameter",
+              "name": "PWM_PERIOD_POSITIVE",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              }
+            }
+          ]
+        },
+        "destination": {
+          "op": "parameter",
+          "name": "PWM_DESTINATION_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "channel_configuration": {
+          "op": "parameter",
+          "name": "PWM_CONFIGURED",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "resource": {
+          "op": "parameter",
+          "name": "PWM_RESOURCE_FREE",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "unused_channel": {
+          "op": "parameter",
+          "name": "PWM_UNUSED_CHANNEL",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "time_unit": {
+          "op": "parameter",
+          "name": "PWM_UNIT_KNOWN",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "hardware_timing": {
+          "op": "parameter",
+          "name": "PWM_TIMING_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "off_time": {
+          "op": "ge",
+          "type": {
+            "kind": "bool"
+          },
+          "args": [
+            {
+              "op": "sub",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              },
+              "overflow": "reject",
+              "args": [
+                {
+                  "op": "parameter",
+                  "name": "PWM_PERIOD_US_PULSING",
+                  "type": {
+                    "kind": "int",
+                    "bits": 64,
+                    "signed": true
+                  }
+                },
+                {
+                  "op": "parameter",
+                  "name": "PWM_ON_US_PULSING",
+                  "type": {
+                    "kind": "int",
+                    "bits": 64,
+                    "signed": true
+                  }
+                }
+              ]
+            },
+            {
+              "op": "constant",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              },
+              "value": 3
+            }
+          ]
+        },
+        "program_context": {
+          "op": "parameter",
+          "name": "PWM_PROGRAM_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        }
+      },
+      "minimum_OFF_us": 3,
+      "AB_timing": [
+        {
+          "models": [
+            "FX5S",
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        },
+        {
+          "models": [
+            "FX5S",
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y3",
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "high_speed_pulse_IO_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        }
+      ],
+      "AG_timing": [
+        {
+          "models": [
+            "FX5S"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3"
+          ],
+          "minimum_ON_us": 5,
+          "minimum_period_us": 10,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5S"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y3",
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        }
+      ],
+      "domain_minimum": 1,
+      "channel_ranges": {
+        "CPU_module": [
+          1,
+          4
+        ],
+        "high_speed_pulse_IO_module": [
+          5,
+          12
+        ]
+      },
+      "CPU_outputs": [
+        "Y0",
+        "Y1",
+        "Y2",
+        "Y3",
+        "Y4",
+        "Y5",
+        "Y6",
+        "Y7"
+      ],
+      "source_fact_ids": [
+        "fx5prog:applicability:PWM:16_bit_binary_pulse_width_modulation_p813:FX5UC",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r0_c0:FX5UC",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r0_c1:FX5UC",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r2_c0:FX5UC",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r3_c0:FX5UC",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r4_c0:FX5UC",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p813_r0_c0:FX5UC",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p813_r1_c0:FX5UC",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p813_r2_c0:FX5UC",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p815_r5_c0:FX5UC",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r0_c0_storage_fbd:FX5UC",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r0_c0_storage_ladder:FX5UC",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r0_c0_storage_st:FX5UC",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r1_c0_storage_fbd:FX5UC",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r1_c0_storage_ladder:FX5UC",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r1_c0_storage_st:FX5UC",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r0_c0:FX5UC",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r2_c0:FX5UC",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r2_c1:FX5UC",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r3_c0:FX5UC",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r3_c1:FX5UC",
+        "fx5prog:ladder:PWM:16_bit_binary_pulse_width_modulation_p813:2:FX5UC",
+        "fx5prog:language:PWM:16_bit_binary_pulse_width_modulation_p813:1:operands:FX5UC",
+        "fx5prog:language:PWM:16_bit_binary_pulse_width_modulation_p813:4:operands:FX5UC"
+      ],
+      "supplemental_fact_ids": [
+        "fx5app:pwm_parameter_timing:AG:p332"
+      ],
+      "fact_digests": {
+        "fx5prog:applicability:PWM:16_bit_binary_pulse_width_modulation_p813:FX5UC": "54ba72a07fa1e282c28a2c232c4e8f8a846e862edd2f03b2274541e3b4f08c2b",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r0_c0:FX5UC": "43b2ec7f6e4299ff2fe14916e4f36b2cfec50f4ef6a5a65511dabbd3d8edf39b",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r0_c1:FX5UC": "ed501f57995dc6bd518e0dbc8df8a11334cbcba81e3e7131f7f653e9bdb7bbb8",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r2_c0:FX5UC": "314a748ae3d3ee4af98397034f7c06f409aea4046ccb3c65cda4800bf6aba042",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r3_c0:FX5UC": "c83e89a5db331971f4c9f3a63e13def83e19934184cd2d3e39deb1a4711e0504",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r4_c0:FX5UC": "eccf33c72da8e9aa7424e5dd9b817f73e586aa0e0c48254a42278a33a6992e25",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p813_r0_c0:FX5UC": "84f4e8dfc3c47cf369ac8a8732db57631f0b7816d741b50a3381819c0a7d4f6f",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p813_r1_c0:FX5UC": "2cbf483037a4cde1014dac66597ad36ee2a4a44a1994b246c2add4fafbdcf288",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p813_r2_c0:FX5UC": "bd95e1673145c5c5da1d17c951f934503fecfdf4593957593e5a4f1332842e94",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p815_r5_c0:FX5UC": "fe3f3dc0191385c476ef0b428019ce2dab7116f3b936cbb80dec43bcc41e3806",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r0_c0_storage_fbd:FX5UC": "21fbdef4f8647c7cbbb112a4298817401d52038a98b948d8f52d9250c40f6bf6",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r0_c0_storage_ladder:FX5UC": "49b8b0dcfbfd08a066f143638155680c5591afe4d7baf8746a509c441d57d407",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r0_c0_storage_st:FX5UC": "a52f21531f1843f788654102edf60eb2462bd96f0f6000ca947c88efe05999a8",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r1_c0_storage_fbd:FX5UC": "1a9612796df5b3fa724e934ce4b308420fc09e36cb1c00b2a564098eeb7e3571",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r1_c0_storage_ladder:FX5UC": "0db05e44730f8b77dcc4826041cdf0d218d1dea559a0baf84ec310096732ea36",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r1_c0_storage_st:FX5UC": "076dc2d3292f1bc3501a3cc25f58bae2bbf23aaa647e16c1074daba89f777d62",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r0_c0:FX5UC": "9c84bdb58bc7e21db176ee8b55f857c9bb3c4bbaa2b0d63a07573d7a230e034c",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r2_c0:FX5UC": "7a8d0e37eeba11daa4eb6e25b1f9e0da6240197334aa345f3626e61e498675f0",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r2_c1:FX5UC": "58c155c6263a81ee82074b525a73b3ae36b0d201b5fbe49d7b7493807031c076",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r3_c0:FX5UC": "57b6ad5626f1221e4c6973474216fbef845036cb9e0e24ce42f3e82d85581815",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r3_c1:FX5UC": "1e1162f2c80ba413c01ab3f6a97a850e5be497d49f0aaf1e3e070f6a6590fd4b",
+        "fx5prog:ladder:PWM:16_bit_binary_pulse_width_modulation_p813:2:FX5UC": "3d7286ec0b7220ba84d6b275b7c31f0e961f38b1f972874ebec54f2ec759676d",
+        "fx5prog:language:PWM:16_bit_binary_pulse_width_modulation_p813:1:operands:FX5UC": "d72c848be21a52d3625f0eee97371587ad97b1a6282db54f2a7c0ac54da19cdf",
+        "fx5prog:language:PWM:16_bit_binary_pulse_width_modulation_p813:4:operands:FX5UC": "f29839bd524bc4cf93dac79f1e5c0f54cf698a5d3b774b8227e4621cafd2a315",
+        "fx5app:pwm_parameter_timing:AG:p332": "b9697f6a971c0e60afe09f6ea0f07218b071215638a33980762578c09f1446d7"
+      }
+    },
+    "DPWM:FX5UJ": {
+      "maximum_ON": 2147483647,
+      "maximum_period": 2147483647,
+      "predicates": {
+        "operand_width": {
+          "op": "parameter",
+          "name": "PWM_WIDTH_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "operand_domain": {
+          "op": "parameter",
+          "name": "PWM_DOMAIN_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "operand_relation": {
+          "op": "le",
+          "type": {
+            "kind": "bool"
+          },
+          "args": [
+            {
+              "op": "parameter",
+              "name": "PWM_ON_POSITIVE",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              }
+            },
+            {
+              "op": "parameter",
+              "name": "PWM_PERIOD_POSITIVE",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              }
+            }
+          ]
+        },
+        "destination": {
+          "op": "parameter",
+          "name": "PWM_DESTINATION_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "channel_configuration": {
+          "op": "parameter",
+          "name": "PWM_CONFIGURED",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "resource": {
+          "op": "parameter",
+          "name": "PWM_RESOURCE_FREE",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "unused_channel": {
+          "op": "parameter",
+          "name": "PWM_UNUSED_CHANNEL",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "time_unit": {
+          "op": "parameter",
+          "name": "PWM_UNIT_KNOWN",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "hardware_timing": {
+          "op": "parameter",
+          "name": "PWM_TIMING_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "off_time": {
+          "op": "ge",
+          "type": {
+            "kind": "bool"
+          },
+          "args": [
+            {
+              "op": "sub",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              },
+              "overflow": "reject",
+              "args": [
+                {
+                  "op": "parameter",
+                  "name": "PWM_PERIOD_US_PULSING",
+                  "type": {
+                    "kind": "int",
+                    "bits": 64,
+                    "signed": true
+                  }
+                },
+                {
+                  "op": "parameter",
+                  "name": "PWM_ON_US_PULSING",
+                  "type": {
+                    "kind": "int",
+                    "bits": 64,
+                    "signed": true
+                  }
+                }
+              ]
+            },
+            {
+              "op": "constant",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              },
+              "value": 3
+            }
+          ]
+        },
+        "program_context": {
+          "op": "parameter",
+          "name": "PWM_PROGRAM_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        }
+      },
+      "minimum_OFF_us": 3,
+      "AB_timing": [
+        {
+          "models": [
+            "FX5S",
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        },
+        {
+          "models": [
+            "FX5S",
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y3",
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "high_speed_pulse_IO_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        }
+      ],
+      "AG_timing": [
+        {
+          "models": [
+            "FX5S"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3"
+          ],
+          "minimum_ON_us": 5,
+          "minimum_period_us": 10,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5S"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y3",
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        }
+      ],
+      "domain_minimum": 1,
+      "channel_ranges": {
+        "CPU_module": [
+          1,
+          4
+        ],
+        "high_speed_pulse_IO_module": [
+          5,
+          12
+        ]
+      },
+      "CPU_outputs": [
+        "Y0",
+        "Y1",
+        "Y2",
+        "Y3",
+        "Y4",
+        "Y5",
+        "Y6",
+        "Y7"
+      ],
+      "source_fact_ids": [
+        "fx5prog:applicability:DPWM:32_bit_binary_pulse_width_modulation_p820:FX5UJ",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r0_c0:FX5UJ",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r0_c1:FX5UJ",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r2_c0:FX5UJ",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r3_c0:FX5UJ",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r4_c0:FX5UJ",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p820_r0_c0:FX5UJ",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p820_r1_c0:FX5UJ",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p820_r2_c0:FX5UJ",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p822_r5_c0:FX5UJ",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r0_c0_storage_fbd:FX5UJ",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r0_c0_storage_ladder:FX5UJ",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r0_c0_storage_st:FX5UJ",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r1_c0_storage_fbd:FX5UJ",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r1_c0_storage_ladder:FX5UJ",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r1_c0_storage_st:FX5UJ",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r0_c0:FX5UJ",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r3_c0:FX5UJ",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r3_c1:FX5UJ",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r4_c0:FX5UJ",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r5_c0_hardware_table:FX5UJ",
+        "fx5prog:ladder:DPWM:32_bit_binary_pulse_width_modulation_p820:2:FX5UJ",
+        "fx5prog:language:DPWM:32_bit_binary_pulse_width_modulation_p820:1:operands:FX5UJ",
+        "fx5prog:language:DPWM:32_bit_binary_pulse_width_modulation_p820:4:operands:FX5UJ"
+      ],
+      "supplemental_fact_ids": [
+        "fx5app:pwm_parameter_timing:AG:p332"
+      ],
+      "fact_digests": {
+        "fx5prog:applicability:DPWM:32_bit_binary_pulse_width_modulation_p820:FX5UJ": "068b486e27a8e8b68595772df96065ebeb75c084dcb90e70a410dab56f017108",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r0_c0:FX5UJ": "e86edea65e7b8d10b9f1ce79ee3fc1eb89d1b7ee6fb23ebfda56b0aa3e46666f",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r0_c1:FX5UJ": "86917ab41244e2392532f4dc754d94003f324ad854b0cd13860dc4dfd98d0857",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r2_c0:FX5UJ": "6e1e6cf59570762308973c7a7cdbc913ae90f03904eec0c7091e3d6a9d11b191",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r3_c0:FX5UJ": "b895a925f39d84a1991a17e5748d8df798f731f497082a5e8fbc91fb3398b579",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_error_p826_r4_c0:FX5UJ": "2857c42f45800720d5760c1bf7181970c90e71d8570e78a61713dfbee5c5c80a",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p820_r0_c0:FX5UJ": "bd1e716f78eafda69d42c4576f92323e93a007fc6a652d8a46d904ba400f8776",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p820_r1_c0:FX5UJ": "b0b6ead7d4ae0deb9bc1148899955704c5b602041a055bdd2954175409096fce",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p820_r2_c0:FX5UJ": "cdc155b6a7a75f14cee11015b513cb3ea71c502e3dbf1c911b331f41ede9c71f",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_footnote_p822_r5_c0:FX5UJ": "ebf9cb722c55ae4984a4a75282ea339a23322d27c602104339bc4a11c56e302e",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r0_c0_storage_fbd:FX5UJ": "099965f34f4f08092418ddc79dfd64a8e578269adb4712d8f66554ce7d7e0462",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r0_c0_storage_ladder:FX5UJ": "17077c1d5264d90839e230c59b2df1bfba5109fd45744a4a47af97f59024f01f",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r0_c0_storage_st:FX5UJ": "67da7e4a1e424112587b8da26f66041f615b0d4a5bb78a1f2b70ae5cba251a5a",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r1_c0_storage_fbd:FX5UJ": "07790f5cd93b80ae1aa354df468a608fade937c96ae7b9d9c3f2bd14293d2204",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r1_c0_storage_ladder:FX5UJ": "11a005991fe26dce13880eaaa9a7874b392677522cdf224f0573b8f9012f9313",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_operand_ranges_p820_r1_c0_storage_st:FX5UJ": "ddb7778d8483ffc0f22993e7c9de541b96dcd99dc617a88e085f75bb8b1f8ab0",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r0_c0:FX5UJ": "efd21d204dec9baed6e9d635731f0cad7a65ed70fd452f80ffd532903432b09f",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r3_c0:FX5UJ": "232a08522ea9213375bbdd7c67ec320f99fec86a7940121879320ecc01f03a84",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r3_c1:FX5UJ": "fb9a56042ae15dd092ecd0b1e7db5428333176af548c0740056d65d1c00f0194",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r4_c0:FX5UJ": "a1cb0e8bb02af9c63d486d49563d619ed55ae7f699c664052fc540dcb30ac900",
+        "fx5prog:condition:DPWM:32_bit_binary_pulse_width_modulation_p820:condition_precautions_p824_r5_c0_hardware_table:FX5UJ": "3f042a4c50135e193f16678f8a428c54241dd198a65a47ce41e1eb1d9ef240f1",
+        "fx5prog:ladder:DPWM:32_bit_binary_pulse_width_modulation_p820:2:FX5UJ": "ea61c4aa516a397cf308516978041d8917908d74a703af7236253ad3ff990634",
+        "fx5prog:language:DPWM:32_bit_binary_pulse_width_modulation_p820:1:operands:FX5UJ": "cca5a3f741ef6da8afd5fe943b300c4b7dc7ca7d26e727fca8348eb6fb9bbaa4",
+        "fx5prog:language:DPWM:32_bit_binary_pulse_width_modulation_p820:4:operands:FX5UJ": "de4d6dba6ad7f4f8150fe5f73c54b716ed5661ab36502b6f629430d3874bd357",
+        "fx5app:pwm_parameter_timing:AG:p332": "b9697f6a971c0e60afe09f6ea0f07218b071215638a33980762578c09f1446d7"
+      }
+    },
+    "PWM:FX5UJ": {
+      "maximum_ON": 65535,
+      "maximum_period": 65535,
+      "predicates": {
+        "operand_width": {
+          "op": "parameter",
+          "name": "PWM_WIDTH_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "operand_domain": {
+          "op": "parameter",
+          "name": "PWM_DOMAIN_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "operand_relation": {
+          "op": "le",
+          "type": {
+            "kind": "bool"
+          },
+          "args": [
+            {
+              "op": "parameter",
+              "name": "PWM_ON_POSITIVE",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              }
+            },
+            {
+              "op": "parameter",
+              "name": "PWM_PERIOD_POSITIVE",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              }
+            }
+          ]
+        },
+        "destination": {
+          "op": "parameter",
+          "name": "PWM_DESTINATION_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "channel_configuration": {
+          "op": "parameter",
+          "name": "PWM_CONFIGURED",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "resource": {
+          "op": "parameter",
+          "name": "PWM_RESOURCE_FREE",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "unused_channel": {
+          "op": "parameter",
+          "name": "PWM_UNUSED_CHANNEL",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "time_unit": {
+          "op": "parameter",
+          "name": "PWM_UNIT_KNOWN",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "hardware_timing": {
+          "op": "parameter",
+          "name": "PWM_TIMING_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        "off_time": {
+          "op": "ge",
+          "type": {
+            "kind": "bool"
+          },
+          "args": [
+            {
+              "op": "sub",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              },
+              "overflow": "reject",
+              "args": [
+                {
+                  "op": "parameter",
+                  "name": "PWM_PERIOD_US_PULSING",
+                  "type": {
+                    "kind": "int",
+                    "bits": 64,
+                    "signed": true
+                  }
+                },
+                {
+                  "op": "parameter",
+                  "name": "PWM_ON_US_PULSING",
+                  "type": {
+                    "kind": "int",
+                    "bits": 64,
+                    "signed": true
+                  }
+                }
+              ]
+            },
+            {
+              "op": "constant",
+              "type": {
+                "kind": "int",
+                "bits": 64,
+                "signed": true
+              },
+              "value": 3
+            }
+          ]
+        },
+        "program_context": {
+          "op": "parameter",
+          "name": "PWM_PROGRAM_VALID",
+          "type": {
+            "kind": "bool"
+          }
+        }
+      },
+      "minimum_OFF_us": 3,
+      "AB_timing": [
+        {
+          "models": [
+            "FX5S",
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        },
+        {
+          "models": [
+            "FX5S",
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y3",
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "high_speed_pulse_IO_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        }
+      ],
+      "AG_timing": [
+        {
+          "models": [
+            "FX5S"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3"
+          ],
+          "minimum_ON_us": 5,
+          "minimum_period_us": 10,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5S"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y3",
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400,
+          "maximum_ON_us": 2147483647,
+          "maximum_period_us": 2147483647
+        }
+      ],
+      "domain_minimum": 1,
+      "channel_ranges": {
+        "CPU_module": [
+          1,
+          4
+        ],
+        "high_speed_pulse_IO_module": [
+          5,
+          12
+        ]
+      },
+      "CPU_outputs": [
+        "Y0",
+        "Y1",
+        "Y2",
+        "Y3",
+        "Y4",
+        "Y5",
+        "Y6",
+        "Y7"
+      ],
+      "source_fact_ids": [
+        "fx5prog:applicability:PWM:16_bit_binary_pulse_width_modulation_p813:FX5UJ",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r0_c0:FX5UJ",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r0_c1:FX5UJ",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r2_c0:FX5UJ",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r3_c0:FX5UJ",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r4_c0:FX5UJ",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p813_r0_c0:FX5UJ",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p813_r1_c0:FX5UJ",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p813_r2_c0:FX5UJ",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p815_r5_c0:FX5UJ",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r0_c0_storage_fbd:FX5UJ",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r0_c0_storage_ladder:FX5UJ",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r0_c0_storage_st:FX5UJ",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r1_c0_storage_fbd:FX5UJ",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r1_c0_storage_ladder:FX5UJ",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r1_c0_storage_st:FX5UJ",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r0_c0:FX5UJ",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r2_c0:FX5UJ",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r2_c1:FX5UJ",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r3_c0:FX5UJ",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r3_c1:FX5UJ",
+        "fx5prog:ladder:PWM:16_bit_binary_pulse_width_modulation_p813:2:FX5UJ",
+        "fx5prog:language:PWM:16_bit_binary_pulse_width_modulation_p813:1:operands:FX5UJ",
+        "fx5prog:language:PWM:16_bit_binary_pulse_width_modulation_p813:4:operands:FX5UJ"
+      ],
+      "supplemental_fact_ids": [
+        "fx5app:pwm_parameter_timing:AG:p332"
+      ],
+      "fact_digests": {
+        "fx5prog:applicability:PWM:16_bit_binary_pulse_width_modulation_p813:FX5UJ": "a066d6fad05cee85f4db1b27cdb32138da88c2a3e913f2e90db19147ef5909ee",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r0_c0:FX5UJ": "5daa0c948648f09485c25c370cd12cb2227f51e26905a628f5f5222d93fa5ac0",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r0_c1:FX5UJ": "99930d47a66f42a622ff8ef96525c2772a224c621e02dd9a18922798c9bc66eb",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r2_c0:FX5UJ": "617349360acbce5e2f78bcef6587007cc7cf9d9fb3f7e3a371c14823afd72686",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r3_c0:FX5UJ": "28bc3f51d0317f89a9e4ec075c9cf9339e0ea91e22a319ba374e0d08ad213b32",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_error_p819_r4_c0:FX5UJ": "176f4a8a73b48da7a04325f0acf29d146a31f5c9f633b2b05998c6b5e1ab7f36",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p813_r0_c0:FX5UJ": "71e707eb21538cb47b9a64b4ca2756c01ad9bd518d67ffea7c6311ba399a79e4",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p813_r1_c0:FX5UJ": "499f66330881fc0965dd0e9bc6b81eaa5eaf9a1eead69aecf097c27674dbd7dd",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p813_r2_c0:FX5UJ": "b19d01f11000fcbb66da5881d85d59b07b8f18f39179fc1005e8cd50b295af17",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_footnote_p815_r5_c0:FX5UJ": "3fbb1b3a50fac1007e77aca8fb5b348f40e31dbd3116d2be76e356d53e3df600",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r0_c0_storage_fbd:FX5UJ": "6b25555bae35ac12a19ebed43e4e90da8a91152ccae6568470fb4734796223db",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r0_c0_storage_ladder:FX5UJ": "3a85daba23501aa9e5cf71da1de28ef1a2693a3cdc5194ded291a9d4ef62b14b",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r0_c0_storage_st:FX5UJ": "d1f913976df5705c2d58503abc463e85f49975bace465ffe896e20dfd192f377",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r1_c0_storage_fbd:FX5UJ": "6fc949b2f259b11ed69334f68389f6302e1765dff4426f6b2126909d499bda17",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r1_c0_storage_ladder:FX5UJ": "b6c15236d3bc056ef79ca76a556024f31b3b535ed2254bfda1e445daf921fb93",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_operand_ranges_p813_r1_c0_storage_st:FX5UJ": "f9edf58aab149e8168cef696122e8d36f3a7eacd7d1bbf09b9c83ef739763188",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r0_c0:FX5UJ": "e93388b50effbcc66f1faa4f51f084494fa8705425c4cfc4444578e2fb47940d",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r2_c0:FX5UJ": "c2e24f6b0285f0e6c3746542949e184bfe0e9b6c5134ed7876e98b4dd21fac17",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r2_c1:FX5UJ": "d5fcb05ae6b660b7cca400fd494733342b0e51e6a14dadd9151b913e9ee9f3eb",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r3_c0:FX5UJ": "05122b94ddca19aaacb88f7df14d78e7ffb693fa810ad8d5b8337aae3f8b48a8",
+        "fx5prog:condition:PWM:16_bit_binary_pulse_width_modulation_p813:condition_precautions_p816_r3_c1:FX5UJ": "e1d7c7e4cd47e8c50cf75ae1aa112f2a0f9401ad0c727c412cecfe0f2641919d",
+        "fx5prog:ladder:PWM:16_bit_binary_pulse_width_modulation_p813:2:FX5UJ": "1a847dd483de97ffc5f37a30bd1022f69dbcd2a06d74187290f3a477a9afbfed",
+        "fx5prog:language:PWM:16_bit_binary_pulse_width_modulation_p813:1:operands:FX5UJ": "06c7f972260e3d2f20171bf514562c58149c3e6356c0a0f5b39b4ad1c6667fd2",
+        "fx5prog:language:PWM:16_bit_binary_pulse_width_modulation_p813:4:operands:FX5UJ": "59a6118cede5c0407d443b3d405731d291707d9a80d08c10b5521d5cee7bfbc5",
+        "fx5app:pwm_parameter_timing:AG:p332": "b9697f6a971c0e60afe09f6ea0f07218b071215638a33980762578c09f1446d7"
+      }
+    }
+  },
+  "rule_catalog": [
+    {
+      "kind": "PWM_hardware_minimum_times",
+      "ON_time": {
+        "operand": "s1"
+      },
+      "period": {
+        "operand": "s2"
+      },
+      "rows": [
+        {
+          "models": [
+            "FX5S",
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        },
+        {
+          "models": [
+            "FX5S",
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y3",
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "high_speed_pulse_IO_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        }
+      ],
+      "dash_cell": "no_module_output_entry",
+      "unit_conversion": "parameter_selected_time_to_us"
+    },
+    {
+      "kind": "PWM_hardware_minimum_times",
+      "ON_time": {
+        "operand": "s1"
+      },
+      "period": {
+        "operand": "s2"
+      },
+      "rows": [
+        {
+          "models": [
+            "FX5S",
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        },
+        {
+          "models": [
+            "FX5S",
+            "FX5UJ"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y3",
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "CPU_module",
+          "outputs": [
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ],
+          "minimum_ON_us": 200,
+          "minimum_period_us": 400
+        },
+        {
+          "models": [
+            "FX5U",
+            "FX5UC"
+          ],
+          "hardware": "high_speed_pulse_IO_module",
+          "outputs": [
+            "Y0",
+            "Y1",
+            "Y2"
+          ],
+          "minimum_ON_us": 2,
+          "minimum_period_us": 5
+        }
+      ],
+      "unit_conversion": "parameter_selected_time_to_us"
+    },
+    {
+      "kind": "PWM_minimum_OFF_time",
+      "ON_time": {
+        "operand": "s1"
+      },
+      "period": {
+        "operand": "s2"
+      },
+      "minimum_period_minus_ON_time_us": 3
+    },
+    {
+      "kind": "allowed_device_classes",
+      "subject": {
+        "operand": "d"
+      },
+      "when": {
+        "representation": "bit_device"
+      },
+      "allowed": [
+        "Y"
+      ],
+      "allowed_addresses": [
+        "Y0",
+        "Y1",
+        "Y2",
+        "Y3",
+        "Y4",
+        "Y5",
+        "Y6",
+        "Y7"
+      ],
+      "hardware": "CPU_module"
+    },
+    {
+      "kind": "conditional_data_storage",
+      "when": {
+        "instruction_executed": "DPWM"
+      },
+      "destination_channel": {
+        "operand": "d"
+      },
+      "bindings": [
+        {
+          "channel": 1,
+          "ON_time": {
+            "operand": "s1",
+            "register_pair": [
+              "SD5303",
+              "SD5302"
+            ]
+          },
+          "period": {
+            "operand": "s2",
+            "register_pair": [
+              "SD5305",
+              "SD5304"
+            ]
+          }
+        },
+        {
+          "channel": 2,
+          "ON_time": {
+            "operand": "s1",
+            "register_pair": [
+              "SD5319",
+              "SD5318"
+            ]
+          },
+          "period": {
+            "operand": "s2",
+            "register_pair": [
+              "SD5321",
+              "SD5320"
+            ]
+          }
+        },
+        {
+          "channel": 3,
+          "ON_time": {
+            "operand": "s1",
+            "register_pair": [
+              "SD5335",
+              "SD5334"
+            ]
+          },
+          "period": {
+            "operand": "s2",
+            "register_pair": [
+              "SD5337",
+              "SD5336"
+            ]
+          }
+        },
+        {
+          "channel": 4,
+          "ON_time": {
+            "operand": "s1",
+            "register_pair": [
+              "SD5351",
+              "SD5350"
+            ]
+          },
+          "period": {
+            "operand": "s2",
+            "register_pair": [
+              "SD5353",
+              "SD5352"
+            ]
+          }
+        },
+        {
+          "channel": 5,
+          "ON_time": {
+            "operand": "s1",
+            "register_pair": [
+              "SD5367",
+              "SD5366"
+            ]
+          },
+          "period": {
+            "operand": "s2",
+            "register_pair": [
+              "SD5369",
+              "SD5368"
+            ]
+          }
+        },
+        {
+          "channel": 6,
+          "ON_time": {
+            "operand": "s1",
+            "register_pair": [
+              "SD5383",
+              "SD5382"
+            ]
+          },
+          "period": {
+            "operand": "s2",
+            "register_pair": [
+              "SD5385",
+              "SD5384"
+            ]
+          }
+        },
+        {
+          "channel": 7,
+          "ON_time": {
+            "operand": "s1",
+            "register_pair": [
+              "SD5399",
+              "SD5398"
+            ]
+          },
+          "period": {
+            "operand": "s2",
+            "register_pair": [
+              "SD5401",
+              "SD5400"
+            ]
+          }
+        },
+        {
+          "channel": 8,
+          "ON_time": {
+            "operand": "s1",
+            "register_pair": [
+              "SD5415",
+              "SD5414"
+            ]
+          },
+          "period": {
+            "operand": "s2",
+            "register_pair": [
+              "SD5417",
+              "SD5416"
+            ]
+          }
+        },
+        {
+          "channel": 9,
+          "ON_time": {
+            "operand": "s1",
+            "register_pair": [
+              "SD5431",
+              "SD5430"
+            ]
+          },
+          "period": {
+            "operand": "s2",
+            "register_pair": [
+              "SD5433",
+              "SD5432"
+            ]
+          }
+        },
+        {
+          "channel": 10,
+          "ON_time": {
+            "operand": "s1",
+            "register_pair": [
+              "SD5447",
+              "SD5446"
+            ]
+          },
+          "period": {
+            "operand": "s2",
+            "register_pair": [
+              "SD5449",
+              "SD5448"
+            ]
+          }
+        },
+        {
+          "channel": 11,
+          "ON_time": {
+            "operand": "s1",
+            "register_pair": [
+              "SD5463",
+              "SD5462"
+            ]
+          },
+          "period": {
+            "operand": "s2",
+            "register_pair": [
+              "SD5465",
+              "SD5464"
+            ]
+          }
+        },
+        {
+          "channel": 12,
+          "ON_time": {
+            "operand": "s1",
+            "register_pair": [
+              "SD5479",
+              "SD5478"
+            ]
+          },
+          "period": {
+            "operand": "s2",
+            "register_pair": [
+              "SD5481",
+              "SD5480"
+            ]
+          }
+        }
+      ],
+      "unit": "parameter_selected_us_or_ms",
+      "register_pair_order": "source_printed_order"
+    },
+    {
+      "kind": "conditional_data_storage",
+      "when": {
+        "instruction_executed": "PWM"
+      },
+      "destination_channel": {
+        "operand": "d"
+      },
+      "bindings": [
+        {
+          "channel": 1,
+          "ON_time": {
+            "operand": "s1",
+            "register_pair": [
+              "SD5303",
+              "SD5302"
+            ]
+          },
+          "period": {
+            "operand": "s2",
+            "register_pair": [
+              "SD5305",
+              "SD5304"
+            ]
+          }
+        },
+        {
+          "channel": 2,
+          "ON_time": {
+            "operand": "s1",
+            "register_pair": [
+              "SD5319",
+              "SD5318"
+            ]
+          },
+          "period": {
+            "operand": "s2",
+            "register_pair": [
+              "SD5321",
+              "SD5320"
+            ]
+          }
+        },
+        {
+          "channel": 3,
+          "ON_time": {
+            "operand": "s1",
+            "register_pair": [
+              "SD5335",
+              "SD5334"
+            ]
+          },
+          "period": {
+            "operand": "s2",
+            "register_pair": [
+              "SD5337",
+              "SD5336"
+            ]
+          }
+        },
+        {
+          "channel": 4,
+          "ON_time": {
+            "operand": "s1",
+            "register_pair": [
+              "SD5351",
+              "SD5350"
+            ]
+          },
+          "period": {
+            "operand": "s2",
+            "register_pair": [
+              "SD5353",
+              "SD5352"
+            ]
+          }
+        },
+        {
+          "channel": 5,
+          "ON_time": {
+            "operand": "s1",
+            "register_pair": [
+              "SD5367",
+              "SD5366"
+            ]
+          },
+          "period": {
+            "operand": "s2",
+            "register_pair": [
+              "SD5369",
+              "SD5368"
+            ]
+          }
+        },
+        {
+          "channel": 6,
+          "ON_time": {
+            "operand": "s1",
+            "register_pair": [
+              "SD5383",
+              "SD5382"
+            ]
+          },
+          "period": {
+            "operand": "s2",
+            "register_pair": [
+              "SD5385",
+              "SD5384"
+            ]
+          }
+        },
+        {
+          "channel": 7,
+          "ON_time": {
+            "operand": "s1",
+            "register_pair": [
+              "SD5399",
+              "SD5398"
+            ]
+          },
+          "period": {
+            "operand": "s2",
+            "register_pair": [
+              "SD5401",
+              "SD5400"
+            ]
+          }
+        },
+        {
+          "channel": 8,
+          "ON_time": {
+            "operand": "s1",
+            "register_pair": [
+              "SD5415",
+              "SD5414"
+            ]
+          },
+          "period": {
+            "operand": "s2",
+            "register_pair": [
+              "SD5417",
+              "SD5416"
+            ]
+          }
+        },
+        {
+          "channel": 9,
+          "ON_time": {
+            "operand": "s1",
+            "register_pair": [
+              "SD5431",
+              "SD5430"
+            ]
+          },
+          "period": {
+            "operand": "s2",
+            "register_pair": [
+              "SD5433",
+              "SD5432"
+            ]
+          }
+        },
+        {
+          "channel": 10,
+          "ON_time": {
+            "operand": "s1",
+            "register_pair": [
+              "SD5447",
+              "SD5446"
+            ]
+          },
+          "period": {
+            "operand": "s2",
+            "register_pair": [
+              "SD5449",
+              "SD5448"
+            ]
+          }
+        },
+        {
+          "channel": 11,
+          "ON_time": {
+            "operand": "s1",
+            "register_pair": [
+              "SD5463",
+              "SD5462"
+            ]
+          },
+          "period": {
+            "operand": "s2",
+            "register_pair": [
+              "SD5465",
+              "SD5464"
+            ]
+          }
+        },
+        {
+          "channel": 12,
+          "ON_time": {
+            "operand": "s1",
+            "register_pair": [
+              "SD5479",
+              "SD5478"
+            ]
+          },
+          "period": {
+            "operand": "s2",
+            "register_pair": [
+              "SD5481",
+              "SD5480"
+            ]
+          }
+        }
+      ],
+      "unit": "parameter_selected_us_or_ms",
+      "register_pair_order": "source_printed_order"
+    },
+    {
+      "kind": "PWM_channel_configuration",
+      "channel": {
+        "operand": "d"
+      },
+      "when": "not_selected_for_PWM_in_parameters",
+      "execution": false
+    },
+    {
+      "kind": "invalid_program_context",
+      "context": "interrupt_program",
+      "instruction_names": []
+    },
+    {
+      "kind": "resource_in_use",
+      "resource": "pulse_output_destination",
+      "subject": {
+        "operand": "d"
+      },
+      "owner": "positioning_instruction",
+      "effects": {
+        "PWM_output": "not_executed"
+      }
+    },
+    {
+      "kind": "PWM_runtime_register_validation",
+      "fields": [
+        "ON_time",
+        "period"
+      ],
+      "validity": "invalid",
+      "error": true
+    },
+    {
+      "kind": "value_outside_interval",
+      "subject": {
+        "context": "pwm.pulse_count"
+      },
+      "minimum": 0,
+      "maximum": 2147483647,
+      "inclusive": true,
+      "error": true
+    },
+    {
+      "kind": "any_value_less_than",
+      "subjects": [
+        {
+          "operand": "s1"
+        },
+        {
+          "operand": "s2"
+        }
+      ],
+      "value": 1,
+      "error": true,
+      "logical_connective": "OR",
+      "zero_example_qualification": "unresolved"
+    },
+    {
+      "kind": "operand_relation",
+      "left": {
+        "operand": "s1"
+      },
+      "operator": ">",
+      "right": {
+        "operand": "s2"
+      },
+      "error": true
+    },
+    {
+      "kind": "PWM_module_interrupt_priority",
+      "module_channel_range": [
+        5,
+        12
+      ],
+      "forbidden_program_interrupt_priority": 1
+    },
+    {
+      "kind": "disallowed_device_form",
+      "subject": {
+        "operand": "d"
+      },
+      "forms": [
+        "digit_specified_bit",
+        "high_speed_pulse_IO_module_bit_device"
+      ]
+    },
+    {
+      "kind": "allowed_interval",
+      "minimum": 1,
+      "maximum": 2147483647,
+      "inclusive": true,
+      "lower_encoding": "decimal",
+      "upper_encoding": "decimal",
+      "subject": {
+        "operand": "s1"
+      }
+    },
+    {
+      "kind": "allowed_interval",
+      "minimum": 1,
+      "maximum": 2147483647,
+      "inclusive": true,
+      "lower_encoding": "decimal",
+      "upper_encoding": "decimal",
+      "subject": {
+        "operand": "s2"
+      }
+    },
+    {
+      "kind": "allowed_interval",
+      "minimum": 1,
+      "maximum": 65535,
+      "inclusive": true,
+      "lower_encoding": "decimal",
+      "upper_encoding": "decimal",
+      "subject": {
+        "operand": "s1"
+      }
+    },
+    {
+      "kind": "allowed_interval",
+      "minimum": 1,
+      "maximum": 65535,
+      "inclusive": true,
+      "lower_encoding": "decimal",
+      "upper_encoding": "decimal",
+      "subject": {
+        "operand": "s2"
+      }
+    },
+    {
+      "kind": "allowed_interval",
+      "subject": {
+        "operand": "d"
+      },
+      "when": {
+        "representation_any_of": [
+          "word_device",
+          "constant"
+        ],
+        "hardware": "high_speed_pulse_IO_module"
+      },
+      "quantity": "channel_number",
+      "minimum": 5,
+      "maximum": 12,
+      "inclusive": true
+    },
+    {
+      "kind": "allowed_interval",
+      "subject": {
+        "operand": "d"
+      },
+      "when": {
+        "representation_any_of": [
+          "word_device",
+          "constant"
+        ],
+        "hardware": "CPU_module"
+      },
+      "quantity": "channel_number",
+      "minimum": 1,
+      "maximum": 4,
+      "inclusive": true
+    },
+    {
+      "kind": "PWM_channel_configuration",
+      "when": "channel_not_selected_for_PWM_in_parameters",
+      "operation_error": true
+    },
+    {
+      "kind": "conditional_result",
+      "when": {
+        "operand": "d",
+        "device_class": "Y",
+        "minimum_address": "Y10",
+        "address_notation": "octal",
+        "inclusive": true
+      },
+      "result": {
+        "PWM_output": "stops"
+      }
+    },
+    {
+      "kind": "conditional_result",
+      "when": {
+        "event": "channel_pulse_output_started"
+      },
+      "result": {
+        "pulse_output_monitor_state": "ON",
+        "channel_registers": [
+          {
+            "channel": 1,
+            "device": "SM5300"
+          },
+          {
+            "channel": 2,
+            "device": "SM5301"
+          },
+          {
+            "channel": 3,
+            "device": "SM5302"
+          },
+          {
+            "channel": 4,
+            "device": "SM5303"
+          },
+          {
+            "channel": 5,
+            "device": "SM5304"
+          },
+          {
+            "channel": 6,
+            "device": "SM5305"
+          },
+          {
+            "channel": 7,
+            "device": "SM5306"
+          },
+          {
+            "channel": 8,
+            "device": "SM5307"
+          },
+          {
+            "channel": 9,
+            "device": "SM5308"
+          },
+          {
+            "channel": 10,
+            "device": "SM5309"
+          },
+          {
+            "channel": 11,
+            "device": "SM5310"
+          },
+          {
+            "channel": 12,
+            "device": "SM5311"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "conditional_result",
+      "when": {
+        "all": [
+          {
+            "operand": "d",
+            "device_class": "Y"
+          },
+          {
+            "parameter_unused_channel_available": false
+          }
+        ]
+      },
+      "result": {
+        "operation_error": true,
+        "output_effect": "not_established"
+      }
+    },
+    {
+      "kind": "conditional_result",
+      "when": {
+        "all": [
+          {
+            "operand": "d",
+            "device_class": "Y"
+          },
+          {
+            "parameter_unused_channel_available": true
+          },
+          {
+            "specified_Y_number_in_use": false
+          }
+        ]
+      },
+      "result": {
+        "outputs_enabled": true
+      }
+    },
+    {
+      "kind": "label_type_disallowed",
+      "label_type": "digit_specified_bit",
+      "subjects": [
+        {
+          "operand": "d"
+        }
+      ]
+    }
+  ],
+  "coverage": "named_bounded_software_subset_not_full_instruction_admission"
+}

@@ -5,6 +5,7 @@ guards prevent a changed sentence from silently reusing a previous review.
 """
 from __future__ import annotations
 from copy import deepcopy
+from tools.fact_fx5_sorting_review import review_sorting_precaution
 
 REVIEWED_PRECAUTIONS = {(148, 'When the RST instruction for a timer or counter is executed by a program containing a jump or by a subroutine program or interrupt program, the timer or counter is held in a reset state, and the timer or counter may not work normally.'): {'rules': [{'kind': 'reset_retention',
                                                                                                                                                                                                                                                                   'instruction': 'RST',
@@ -4013,7 +4014,9 @@ def _operands(value):
 
 
 def review_precaution_clause(clause, *, section, block, value, declared):
-    selected = REVIEWED_PRECAUTIONS.get((block['page'], clause))
+    selected = review_sorting_precaution(clause, section=section, block=block, declared=declared)
+    if selected is None:
+        selected = REVIEWED_PRECAUTIONS.get((block['page'], clause))
     if selected is None:
         return None
     result = deepcopy(selected)

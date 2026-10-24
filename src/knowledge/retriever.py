@@ -346,6 +346,9 @@ def retrieve_fact_aware_knowledge(
     targets=None,
     language=None,
     aspects=None,
+    project_mode=None,
+    instance_context=None,
+    version=None,
 ):
     """Return row results with exact PLC identities resolved before broad recall.
 
@@ -400,7 +403,8 @@ def retrieve_fact_aware_knowledge(
         *resolve_instruction_records(
             targets.get("instructions") or (),
             plc_model=plc_model,
-            task_type=task,
+            task_type=task, language=language, aspects=aspects, query=query,
+            project_mode=project_mode, instance_context=instance_context, version=version,
         ),
         *resolve_device_records(
             targets.get("devices") or (),
@@ -473,6 +477,7 @@ def format_knowledge_reference(result, *, debug=False):
 def build_knowledge_context(
     query, plc_model="FX3U", task_type="generate", top_k=5, char_budget=None,
     token_budget=None, include_design=False, design_query=None, language=None, aspects=None,
+    project_mode=None, instance_context=None, version=None,
 ):
     """Return prompt text plus a detached manifest of the blocks actually used.
 
@@ -599,7 +604,8 @@ def build_knowledge_context(
     selected_results = retrieve_fact_aware_knowledge(
         query, plc_model=plc_model, task_type=task, top_k=fact_slots,
         source_lanes=plan["source_lanes"], targets=exact_targets,
-        language=language, aspects=aspects) if plan['facts'] else []
+        language=language, aspects=aspects, project_mode=project_mode,
+        instance_context=instance_context, version=version) if plan['facts'] else []
     direct_results = [row for row in selected_results if row.get('_explicit_target')]
     broad_results = [row for row in selected_results if not row.get('_explicit_target')]
     process_results = (filter_records(resolve_process_records(
@@ -610,7 +616,9 @@ def build_knowledge_context(
     if instruction_targets and task in {"generate", "edit"}:
         from knowledge.instruction_facts import retrieve_instruction_facts, delivered_fact_report
         _targeted, fact_report = retrieve_instruction_facts(
-            query, plc_model=plc_model, task_type=task, targets=instruction_targets)
+            query, plc_model=plc_model, task_type=task, targets=instruction_targets,
+            language=language, aspects=aspects, project_mode=project_mode,
+            instance_context=instance_context, version=version)
     direct_results = [context_reference(row) for row in [*direct_results, *process_results]]
     eligible_direct_results = direct_results
     covered_kinds = _covered_structured_kinds(exact_targets, direct_results,

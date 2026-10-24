@@ -13,6 +13,9 @@ from plc.runtime_semantics import control_runtime_facts
 
 
 OPERATIONS = ("composition", "fbd_topology", "fbd_native_compile", "closed_loop_scan")
+# Core identities only: these are not GX Works2 native menu options.
+# Operation capabilities remain gated by exact CPU source-scoped facts.
+CORE_ONLY_TARGETS = frozenset({"FX5S", "FX5UJ", "FX5U", "FX5UC"})
 NATIVE_UI_LANGUAGES = ("zh-CN", "en", "ja")
 LIVE_OPERATIONS = (
     "create_global_labels", "edit_global_labels", "edit_pou_labels", "delete_label",
@@ -35,10 +38,10 @@ def require_native_program_target(cpu):
 def target_cpu_names():
     """Known identities, independent of instruction/device validation coverage.
 
-    FX5U remains an existing Core target, not a GX Works2 creation option.
+    FX5 targets are Core identities, not GX Works2 creation options.
     Native menu identities and their concrete members come from one catalogue.
     """
-    names = {"FX5U"}
+    names = set(CORE_ONLY_TARGETS)
     for profile in NATIVE_PROJECT_PROFILES:
         names.add(profile.cpu)
         names.update(profile.cpu.removesuffix("(RemoteI/O)").split("/"))
@@ -51,7 +54,7 @@ def normalize_target_cpu(cpu="FX3U"):
     profile = native_project_profile(candidate)
     if profile is not None:
         return profile.cpu if candidate == profile.cpu.upper() else candidate
-    if candidate == "FX5U":
+    if candidate in CORE_ONLY_TARGETS:
         return candidate
     raise ValueError(f"Unknown PLC target {cpu!r}")
 

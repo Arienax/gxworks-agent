@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import math
 import re
 from collections.abc import Mapping
 
@@ -187,14 +188,110 @@ def normalize_construction_plan(raw):
         if not a or not b or a[1] != b[1] or not 0 <= int(b[2])-int(a[2]) <= 511:
             raise DefinitionError('Internal allocation needs an ascending ordinary M/D range')
         normalized.append({'start': start, 'end': end})
-    context = raw.get('execution_context', {})
-    if not isinstance(context, Mapping) or set(context) - {'program_type', 'initial_execution_program', 'cpu_version'}:
-        raise DefinitionError('Invalid construction execution context')
+    context = normalize_execution_context(raw.get('execution_context', {}))
     occupied = raw.get('occupied_devices', [])
     if not isinstance(occupied, list) or len(occupied) > 4096:
         raise DefinitionError('Occupied device set exceeds the bound')
     return {'instances': result, 'internal_ranges': normalized, 'occupied_devices': [_device(d) for d in occupied],
             'execution_context': copy.deepcopy(dict(context))}
+
+
+def normalize_execution_context(raw):
+    """Typed simulation inputs, not permission to run physical PLC hardware.
+
+    Missing fields stay missing and therefore unknown at execution. In
+    particular no clock, initial stop bit, PWM ownership or configuration is
+    inferred from a model name or from a scan number.
+    """
+    allowed = {'program_type', 'initial_execution_program', 'cpu_version', 'software_version',
+               'pwm', 'hardware', 'program_context', 'simulation'}
+    if not isinstance(raw, Mapping) or set(raw) - allowed:
+        raise DefinitionError('Invalid construction execution context')
+    result = copy.deepcopy(dict(raw))
+    # CPU firmware and engineering-software versions are separate evidence axes.
+    for key in ('program_type', 'cpu_version', 'software_version', 'program_context'):
+        if key in raw and (not isinstance(raw[key], str) or not raw[key] or len(raw[key]) > 128):
+            raise DefinitionError('Execution context text needs an explicit bounded value')
+    if 'initial_execution_program' in raw and type(raw['initial_execution_program']) is not bool:
+        raise DefinitionError('Initial execution program must be Boolean')
+    if 'hardware' in raw:
+        hardware = raw['hardware']
+        if not isinstance(hardware, Mapping) or set(hardware) - {'module_type', 'output_type'}:
+            raise DefinitionError('Unknown execution hardware fields')
+        if any(not isinstance(v, str) or not v or len(v) > 128 for v in hardware.values()):
+            raise DefinitionError('Execution hardware values must be bounded names')
+    if 'pwm' in raw:
+        fields = {'execution_mode', 'source_binding', 'initially_idle', 'pulse_count',
+                  'channel', 'output_device', 'configured_for_PWM', 'unused_channel_available',
+                  'resource_owner', 'time_unit', 'specified_Y_number_in_use'}
+        boolean = {'initially_idle', 'configured_for_PWM', 'unused_channel_available', 'specified_Y_number_in_use'}
+        def pwm_config(value, *, binding=False):
+            if not isinstance(value, Mapping) or set(value) - fields - (set() if binding else {'bindings'}):
+                raise DefinitionError('Unknown PWM execution fields')
+            normalized = copy.deepcopy(dict(value))
+            for key, item in value.items():
+                if key in boolean and type(item) is not bool:
+                    raise DefinitionError('PWM configuration flags must be Boolean')
+                if key in {'channel', 'pulse_count'} and (type(item) is not int or not 0 <= item <= 2147483647):
+                    raise DefinitionError('PWM integer configuration is invalid')
+                if key in {'execution_mode', 'source_binding', 'time_unit'} and (
+                        not isinstance(item, str) or not item or len(item) > 256):
+                    raise DefinitionError('PWM configuration identity is invalid')
+                if key == 'resource_owner' and item is not None and (
+                        not isinstance(item, str) or not item or len(item) > 256):
+                    raise DefinitionError('PWM resource owner must be explicit or null')
+                if key == 'output_device':
+                    if not isinstance(item, str) or not re.fullmatch(r'Y[0-7]+', item, re.I):
+                        raise DefinitionError('PWM output needs an explicit Y device')
+                    normalized[key] = canonical_device(item)
+            if 'bindings' in value:
+                bindings = value['bindings']
+                if not isinstance(bindings, Mapping) or len(bindings) > 128:
+                    raise DefinitionError('PWM instruction bindings exceed the bound')
+                normalized['bindings'] = {}
+                for owner, configuration in bindings.items():
+                    if not isinstance(owner, str) or not owner or len(owner) > 256:
+                        raise DefinitionError('PWM binding needs an explicit instruction owner')
+                    normalized['bindings'][owner] = pwm_config(configuration, binding=True)
+            return normalized
+        result['pwm'] = pwm_config(raw['pwm'])
+    if 'simulation' in raw:
+        simulation = raw['simulation']
+        if not isinstance(simulation, Mapping) or set(simulation) - {'clock', 'initial_memory'}:
+            raise DefinitionError('Unknown simulation assumptions')
+        result['simulation'] = {}
+        if 'clock' in simulation:
+            clock = simulation['clock']
+            if (not isinstance(clock, Mapping) or set(clock) != {'kind', 'timestamps_ms'}
+                    or clock['kind'] != 'explicit_timestamps'):
+                raise DefinitionError('Simulation clock requires explicit timestamps')
+            times = clock['timestamps_ms']
+            if (not isinstance(times, list) or not 1 <= len(times) <= 8
+                    or any(type(t) not in {int, float} or not 0 <= t <= 10**15 or not math.isfinite(t) for t in times)
+                    or any(a > b for a, b in zip(times, times[1:]))):
+                raise DefinitionError('Simulation timestamps must be finite, nonnegative and monotonic')
+            result['simulation']['clock'] = copy.deepcopy(dict(clock))
+        if 'initial_memory' in simulation:
+            memory = simulation['initial_memory']
+            if not isinstance(memory, Mapping) or len(memory) > 512:
+                raise DefinitionError('Simulation initial memory exceeds the bound')
+            normalized = {}
+            for device, value in memory.items():
+                device = _device(device)
+                if type(value) not in {bool, int} and value is not None:
+                    raise DefinitionError('Simulation memory must contain explicit bits, words or unknowns')
+                prefix = re.match(r'[A-Z]+', device)[0]
+                if value is not None:
+                    if prefix in {'D', 'SD'}:
+                        if type(value) is not int or not -32768 <= value <= 65535:
+                            raise DefinitionError('Simulation word must fit one explicit 16-bit word')
+                    elif type(value) not in {bool, int} or value not in {0, 1}:
+                        raise DefinitionError('Simulation bit must be Boolean or zero/one')
+                if device in normalized:
+                    raise DefinitionError('Duplicate simulation memory device alias')
+                normalized[device] = value
+            result['simulation']['initial_memory'] = normalized
+    return result
 
 
 def initialization_values(row):
