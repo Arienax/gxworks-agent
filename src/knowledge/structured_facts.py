@@ -271,7 +271,7 @@ def _merge_comparable_fact(fact):
 class _FactMergeIndex:
     """Per-accumulator lookup; store references, not copies of the facts."""
 
-    __slots__ = ('by_id', 'by_family', 'next_suffix')
+    __slots__ = ('by_id', 'by_family', 'next_suffix', 'transient_ids')
 
     def __init__(self, facts):
         # Match the legacy dict's last-value/first-key-order behavior if the
@@ -283,10 +283,25 @@ class _FactMergeIndex:
                 family = identity.split(':variant:')[0]
                 self.by_family.setdefault(family, []).append(fact)
         self.next_suffix = {}
+        self.transient_ids = set()
+
+    def begin_batch(self):
+        # The legacy routine rebuilt by_id from the accumulator and excluded
+        # falsy IDs. Keep such IDs visible within a batch, but not across calls.
+        if not self.transient_ids:
+            return
+        for identity in self.transient_ids:
+            self.by_id.pop(identity, None)
+        if '' in self.transient_ids and '' in self.by_family:
+            self.by_family[''] = [fact for fact in self.by_family['']
+                                  if fact.get('id')]
+        self.transient_ids.clear()
 
     def add(self, fact):
         identity = fact.get('id')
         self.by_id[identity] = fact
+        if not identity:
+            self.transient_ids.add(identity)
         if isinstance(identity, str):
             family = identity.split(':variant:')[0]
             self.by_family.setdefault(family, []).append(fact)
@@ -308,6 +323,7 @@ def _merge_fact_rows(left, incoming, *, _index=None):
     batches must reuse it until the accumulator's facts list is replaced.
     """
     index = _index if _index is not None else _FactMergeIndex(left)
+    index.begin_batch()
     remap, added = {}, []
     for original in incoming:
         identity = original.get('id')
