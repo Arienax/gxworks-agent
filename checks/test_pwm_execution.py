@@ -283,10 +283,11 @@ class PWMExecution(unittest.TestCase):
         self.assertEqual(set(o['peripherals']['pwm']['channels']), {1, 2})
         self.assertTrue(all(s['command_state'] == 'unknown' for s in o['peripherals']['pwm']['channels'].values()))
 
-    def test_one_failed_owner_makes_current_multichannel_observation_unknown(self):
+    def test_one_failed_owner_preserves_unrelated_multichannel_observation(self):
         m = self.two_channel_machine(); scan(m, 0)
         o = scan(m, 1, X1=None)
-        self.assertTrue(all(s['command_state'] == 'unknown' for s in o['peripherals']['pwm']['channels'].values()))
+        self.assertEqual(o['peripherals']['pwm']['channels'][1]['command_state'], 'run_commanded')
+        self.assertEqual(o['peripherals']['pwm']['channels'][2]['command_state'], 'unknown')
         self.assertEqual(o['peripherals']['pwm']['owner_attempts']['1:branches[0].outputs[0]']['status'], 'unverified')
 
     def test_unrelated_production_mov_behavior_is_preserved(self):

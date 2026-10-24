@@ -14,6 +14,8 @@
     "checks/source_smoke.py",
     "checks/test_ladder_project_delivery.py",
     "checks/test_pwm_contract.py",
+    "checks/test_pwm_contract_correctness.py",
+    "checks/test_pwm_peripheral_correctness.py",
     "checks/test_pwm_execution.py",
     "checks/test_storage_migration.py",
     "gxworks-agent-mcp",
