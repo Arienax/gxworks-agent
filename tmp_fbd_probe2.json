@@ -1,0 +1,84 @@
+{
+ "budget": {
+  "model_context_window": 20000,
+  "budget_confidence": "known",
+  "budget_state": "available",
+  "reserved_output_tokens": 8192,
+  "protocol_overhead_tokens": 4096,
+  "safety_margin_tokens": 2048,
+  "usable_input_tokens": 5664,
+  "pre_compaction_estimated_input_tokens": 4123,
+  "estimated_input_tokens": 4123,
+  "original_generation_payload_tokens": 27,
+  "compiled_generation_payload_tokens": 27,
+  "budget_basis": "application_wire_messages",
+  "original_budget_payload_tokens": 27,
+  "compiled_budget_payload_tokens": 27,
+  "compaction_saved_tokens": 0,
+  "context_pressure": "high",
+  "pre_compaction_context_utilization": 0.727931,
+  "context_utilization": 0.727931,
+  "budget_exceeded_after_compaction": false,
+  "retrieval_query_token_budget": null,
+  "rag_evidence_token_budget": null,
+  "retrieval_query_estimated_tokens": 2,
+  "source_tokens": {
+   "confirmed_facts": 1,
+   "selected_method": 1,
+   "active_requests": 3,
+   "historical_requests": 1,
+   "generation_contract": 1,
+   "rag_evidence": 0,
+   "current_program": 0,
+   "context_checkpoint": 0,
+   "wire_history": 1
+  },
+  "dropped": {
+   "duplicate_requests": 0,
+   "superseded_structured": 0,
+   "checkpoint_compacted_requests": 0,
+   "duplicate_evidence_blocks": 0,
+   "provenance_tokens": 0
+  },
+  "compression_mode": "dedupe_only",
+  "checkpoint_compaction_required": false,
+  "retrieval_sections": {
+   "confirmed_facts": {
+    "included_tokens": 0,
+    "omitted_fragments": 0
+   },
+   "selected_method": {
+    "included_tokens": 0,
+    "omitted_fragments": 0
+   },
+   "latest_amendment": {
+    "included_tokens": 2,
+    "omitted_fragments": 0
+   },
+   "implementation_preferences": {
+    "included_tokens": 0,
+    "omitted_fragments": 0
+   },
+   "positive_contract": {
+    "included_tokens": 0,
+    "omitted_fragments": 0
+   },
+   "older_requests": {
+    "included_tokens": 0,
+    "omitted_fragments": 0
+   }
+  },
+  "token_estimate": "deterministic_heuristic_estimate"
+ },
+ "receipt": {
+  "context_plan_sha256": "a08552d5055a9375cbdc2f66be6c609c199f82c0cd9f4399f3dfa348fe51a7a0",
+  "persistent_spec_sha256": "af7c797d6f01630abc6a0c244c8c2a1cbecb52b5874866539cedc1e467096efe",
+  "runtime_spec_sha256": "af7c797d6f01630abc6a0c244c8c2a1cbecb52b5874866539cedc1e467096efe",
+  "retrieval_query_sha256": "6aa8f49cc992dfd75a114269ed26de0ad6d4e7d7a70d9c8afb3d7a57a88a73ed",
+  "wire_sha256": "acb37da66fba329b94962931cdd572b766a11c1fcae04a016b0cc294ae56dd81",
+  "context_pressure": "high",
+  "compression_mode": "dedupe_only",
+  "audit_policy": "decision_receipt_reference_only"
+ },
+ "wire": "{\"request\": \"\\u6d4b\\u8bd5\", \"n\": 1}"
+}

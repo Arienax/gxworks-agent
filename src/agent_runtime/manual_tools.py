@@ -23,9 +23,10 @@ def _search_plc_manual(context: ToolContext, arguments: Mapping[str, Any]) -> Di
         plc_model=context.plc_model,
         task_type="analysis",
         top_k=top_k,
+        language=arguments.get('language'), aspects=arguments.get('aspects'),
     )
     results = []
-    for row in rows[:top_k]:
+    for row in rows:
         if not isinstance(row, Mapping):
             continue
         results.append(
@@ -56,18 +57,20 @@ def _search_plc_manual(context: ToolContext, arguments: Mapping[str, Any]) -> Di
             }
         )
     if not arguments.get('debug', False):
-        from shared.model_context import technical_knowledge_text
+        from shared.model_context import technical_knowledge_text, technical_context_units
         results = [{**{key: copy.deepcopy(row[key]) for key in
                     ('fact_kind', 'fact_target', 'plc_models', 'instruction_opcode') if row.get(key)},
-                    'text': technical_knowledge_text(row)} for row in results]
+                    'knowledge': technical_context_units(technical_knowledge_text(row))} for row in results]
         return {'query': query, 'plc_model': context.plc_model, 'count': len(results), 'results': results,
-                'coverage': retrieval_coverage(query, rows, plc_model=context.plc_model)}
+                'coverage': retrieval_coverage(query, rows, plc_model=context.plc_model,
+                    language=arguments.get('language'), aspects=arguments.get('aspects'))}
     return {
         "query": query,
         "plc_model": context.plc_model,
         "count": len(results),
         "results": results,
-        "coverage": retrieval_coverage(query, rows, plc_model=context.plc_model),
+        "coverage": retrieval_coverage(query, rows, plc_model=context.plc_model,
+                    language=arguments.get('language'), aspects=arguments.get('aspects')),
         "evidence_delivery": {
             "policy": "relevance_complete_units",
             "top_k": top_k,

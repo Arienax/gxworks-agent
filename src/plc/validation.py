@@ -20,7 +20,7 @@ from plc.device_profiles import (
 
 
 DEVICE_ADDRESS_RE = re.compile(
-    r"^(ZR|SM|SD|SB|SW|X|Y|M|D|T|C|S|L|F|B|W|R|V|Z)([0-9A-F]+)(?:\.([0-9A-F]+))?$", re.IGNORECASE
+    r"^(ZR|ER|SM|SD|SB|SW|ST|X|Y|M|D|T|C|S|L|F|B|W|R|V|Z)([0-9A-F]+)(?:\.([0-9A-F]+))?$", re.IGNORECASE
 )
 INDEXED_DEVICE_ADDRESS_RE = re.compile(
     r"^(?P<base>(?:SM|SD|X|Y|M|D|T|C|S)\d+)(?P<index>[VZ]\d+)$",
@@ -172,18 +172,26 @@ def device_address_radix(prefix, plc_model="FX3U"):
 def parse_device_address(value, plc_model="FX3U"):
     """Parse and range-check a simple Mitsubishi device address.
 
-    The returned index is a logical integer.  FX3U X/Y spelling is octal, while
-    FX5U X/Y spelling is decimal. ``None`` means invalid or not covered for the
+    The returned index is a logical integer. Each CPU's device profile owns
+    its radix and numbering envelope. ``None`` means invalid or not covered for the
     selected model; :func:`device_address_status` distinguishes those outcomes.
     """
 
     model = normalize_plc_model(plc_model)
     if not isinstance(value, str):
         return None
-    match = DEVICE_ADDRESS_RE.fullmatch(value.strip())
+    text = value.strip().upper()
+    profile = SOURCE_DEVICE_PROFILES.get(model, {})
+    unnumbered = {prefix for prefix, rule in profile.get('allocation_rules', {}).items()
+                  if rule.get('unnumbered_spelling') == prefix}
+    if text in unnumbered:
+        return text, 0
+    match = DEVICE_ADDRESS_RE.fullmatch(text)
     if not match:
         return None
     prefix, raw_index = match.group(1).upper(), match.group(2)
+    if prefix in unnumbered:
+        return None
     limits = DEVICE_LIMITS[model]
     if prefix not in limits:
         return None
@@ -192,7 +200,6 @@ def parse_device_address(value, plc_model="FX3U"):
     if any(character.upper() not in digits for character in raw_index):
         return None
     index = int(raw_index, radix)
-    profile = SOURCE_DEVICE_PROFILES.get(model, {})
     bit = match.group(3)
     if bit is not None and (prefix not in profile.get("word_bit_prefixes", []) or int(bit, 16) > 15):
         return None
@@ -248,19 +255,25 @@ def parse_indexed_device_address(value, plc_model="FX3U"):
 def device_address_status(value, plc_model="FX3U"):
     """Distinguish invalid addresses from namespaces absent in a source subset.
 
-    A valid result covers numbering syntax and the declared software allocation,
-    never the presence of physical I/O or permission for a native operation.
+    A valid result covers numbering syntax and the model's numeric envelope.
+    Current project allocation, physical I/O and native permission are separate.
     """
-    if not isinstance(value, str) or not DEVICE_ADDRESS_RE.fullmatch(value.strip()):
+    if not isinstance(value, str):
         return "invalid"
+    if not DEVICE_ADDRESS_RE.fullmatch(value.strip()) and value.strip().upper() not in {'V', 'Z'}:
+        return 'invalid'
     try:
         model = normalize_plc_model(plc_model)
     except ValidationProfileUnavailableError:
         return "unverified"
     if parse_device_address(value, model) is not None:
         return "valid"
-    prefix = DEVICE_ADDRESS_RE.fullmatch(value.strip()).group(1).upper()
-    if model in SOURCE_DEVICE_PROFILES and prefix not in DEVICE_LIMITS[model]:
+    match = DEVICE_ADDRESS_RE.fullmatch(value.strip())
+    if not match:
+        return 'invalid'
+    prefix = match.group(1).upper()
+    if (model in SOURCE_DEVICE_PROFILES and prefix not in DEVICE_LIMITS[model]
+            and not SOURCE_DEVICE_PROFILES[model].get('address_families_complete')):
         return "unverified"
     return "invalid"
 
@@ -355,7 +368,9 @@ def _validate_writable_device(value, path, plc_model="FX3U", *, opcode=None):
     parsed = parse_device_address(writable_address, model)
     if parsed and not access:
         regions = SOURCE_DEVICE_PROFILES.get(model, {}).get("special_regions", {}).get(parsed[0], [])
-        if any(lo <= parsed[1] <= hi for lo, hi in regions):
+        # FX3U already has independently reviewed read-only/reserved tables.
+        # Adding its numbering profile must not replace that access policy.
+        if model != 'FX3U' and any(lo <= parsed[1] <= hi for lo, hi in regions):
             _fail(path, f"Write access to {model} special device {address} is not source-verified")
     if _is_read_only_special_device(writable_address, plc_model):
         model = normalize_plc_model(plc_model)
@@ -386,11 +401,10 @@ def _validate_device_address(value, path, plc_model, expected_prefixes=None):
     parsed = parse_device_address(value, plc_model)
     if parsed is None:
         model = normalize_plc_model(plc_model)
-        addressing = (
-            "octal X/Y and V0-V7/Z0-Z7 index registers"
-            if model == "FX3U"
-            else "decimal X/Y and SM/SD specials"
-        )
+        profile = SOURCE_DEVICE_PROFILES.get(model, {})
+        radices = profile.get('radices', {'X': 8, 'Y': 8} if model == 'FX3U' else {})
+        addressing = ', '.join(f'{prefix}: base {radix}' for prefix, radix in sorted(radices.items()))
+        addressing = addressing or 'decimal device numbering'
         _fail(path, f"invalid or unsupported {model} device address {value!r} ({addressing})")
     if expected_prefixes and parsed[0] not in expected_prefixes:
         _fail(
@@ -443,7 +457,9 @@ def _validate_instruction_boundaries(spec, operands, path, plc_model="FX3U", *, 
     if coverage.get("numeric_and_memory_boundaries") != "source_verified":
         from plc.instruction_constraints import check_instruction_constraints, literal_operand_values
         report = check_instruction_constraints(opcode or spec.mnemonic, literal_operand_values(spec, operands),
-                                               plc_model=plc_model, language=language)
+                                               plc_model=plc_model, language=language,
+                                               context={'project_mode': 'native_ladder' if language == 'ladder' else language,
+                                                        'program_context': language})
         if report['status'] == 'failed':
             _fail(path, next(f['message'] for f in report['findings'] if f['severity'] == 'error'))
         return
@@ -518,7 +534,9 @@ def _validate_instruction_boundaries(spec, operands, path, plc_model="FX3U", *, 
         )
     from plc.instruction_constraints import check_instruction_constraints, literal_operand_values
     report = check_instruction_constraints(opcode or spec.mnemonic, literal_operand_values(spec, operands),
-                                           plc_model=plc_model, language=language)
+                                           plc_model=plc_model, language=language,
+                                           context={'project_mode': 'native_ladder' if language == 'ladder' else language,
+                                                    'program_context': language})
     if report['status'] == 'failed':
         _fail(path, next(f['message'] for f in report['findings'] if f['severity'] == 'error'))
 

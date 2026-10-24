@@ -1,0 +1,718 @@
+{
+ "Arienax/gxworks-agent": {
+  "description": "三菱 PLC 编程与工程助手。  MCP server and AI workbench for Mitsubishi PLC programming with GX Works2. Generate Ladder and Structured Text, edit native FBD, and review versioned projects with CPU-aware RAG and diagnostics.",
+  "size": 8167,
+  "language": "Python",
+  "url": "https://github.com/Arienax/gxworks-agent"
+ },
+ "Serhioromano/gxw2-libraries": {
+  "size": 6978,
+  "description": "Libraries for GX Works 2 (Tested with Coolmay PLCs)"
+ },
+ "jonghyeon9084/plc_project": {
+  "description": "PLC 기반 식품 자동 분류·창고 관리 | GX Works2 · Ladder · HMI | 동작 시간 11.8% 단축",
+  "size": 39178,
+  "language": null,
+  "url": "https://github.com/jonghyeon9084/plc_project"
+ },
+ "clei32879-gif/electrical-copilot": {
+  "description": "电气工程师 AI Copilot — 本地运行的电气工程师智能体工作台：AI 编写/读懂梯形图、直出多品牌 PLC 工程文件（信捷 .xdp / 三菱 / 汇川 / 西门子 / 松下 / 台达）、电气图设计与理解、智能选型、梯形图仿真器",
+  "size": 464,
+  "language": "Python",
+  "url": "https://github.com/clei32879-gif/electrical-copilot"
+ },
+ "TuanNgoNo1/Digital-Twin-BaiTH2": {
+  "size": 117113,
+  "description": "Bài TH2 hệ thống Digital Twin (GxWorks 2 - Unity - Gateway) - 6000.3.11f1"
+ },
+ "gotree94/GX_Works2_MELSEC_Q_PLC_Servo_M": {
+  "description": "GX Works2를 활용한 MELSEC Q PLC - 서보까지 할수 있다(중급)",
+  "size": 5,
+  "language": null,
+  "url": "https://github.com/gotree94/GX_Works2_MELSEC_Q_PLC_Servo_M"
+ },
+ "gotree94/GX_Works2_MELSEC_Q_PLC_From_Basic_To_TouchP_GOT-TOP": {
+  "description": "GX Works2를 활용한 MELSEC Q PLC 기초부터 터치패널(GOT-TOP) 화용하기",
+  "size": 5,
+  "language": null,
+  "url": "https://github.com/gotree94/GX_Works2_MELSEC_Q_PLC_From_Basic_To_TouchP_GOT-TOP"
+ },
+ "gotree94/GX_Works2_MELSEC_Q_PLC-Servo_Basic": {
+  "description": "GX Works2를 활용한 MELSEC Q PLC - 서보까지 할수 있다",
+  "size": 5,
+  "language": null,
+  "url": "https://github.com/gotree94/GX_Works2_MELSEC_Q_PLC-Servo_Basic"
+ },
+ "gotree94/GX_Works2_MelsecProgramming": {
+  "description": "GX Works2를 사용하는 Melsec 프로그래밍 완전정복",
+  "size": 5,
+  "language": null,
+  "url": "https://github.com/gotree94/GX_Works2_MelsecProgramming"
+ },
+ "tia-forge/awesome-plc-ai": {
+  "size": 17,
+  "description": "A curated list of AI tools, agents and MCP bridges for PLC engineering — writing, reviewing, verifying and documenting control code for Siemens TIA Portal, CODESYS, TwinCAT, Studio 5000, GX Works and friends."
+ },
+ "jiaojiaojiao7749/PLC-Traffic-Signal-Light": {
+  "description": "三色交通信号灯PLC梯形图程序（GX Works2）- 支持红绿黄灯自动循环控制",
+  "size": 4,
+  "language": null,
+  "url": "https://github.com/jiaojiaojiao7749/PLC-Traffic-Signal-Light"
+ },
+ "jiaojiaojiao7749/PLC-Traffic-Signal": {
+  "description": "PLC交通信号灯控制系统 - GX Works2梯形图程序",
+  "size": 9,
+  "language": null,
+  "url": "https://github.com/jiaojiaojiao7749/PLC-Traffic-Signal"
+ },
+ "plcmanjp/plc-io-check-helper": {
+  "size": 597,
+  "description": "PLC IO Check Helper (Android) 제품 안내, 다운로드 가이드 | Mitsubishi MELSEC PLC I/O 점검 모니터링 앱"
+ },
+ "s516486730-ui/Robot-RAG-Demo-PLC-": {
+  "description": "工控专用轻量化RAG故障检索工具，仅单份知识库文件：伺服PLC故障手册.txt，不再新增其他设备文档，覆盖伺服驱动器全报警代码、伺服电机无报警排查、EtherCAT/Modbus总线通讯、三菱FX定位模块、PLC硬件报警、现场通用排查规范。 基于LangChain+Chroma向量库+智谱GLM大模型，提供Gradio网页可视化 + 控制台双交互，适配低版本Gradio无兼容报错。",
+  "size": 63219,
+  "language": "Python",
+  "url": "https://github.com/s516486730-ui/Robot-RAG-Demo-PLC-"
+ },
+ "brooksg44/ISU-FX2N": {
+  "description": "Open-source FX2N-compatible PLC runtime for the Raspberry Pi Pico WH (FX programming protocol + Modbus)",
+  "size": 2094,
+  "language": "C",
+  "url": "https://github.com/brooksg44/ISU-FX2N"
+ },
+ "lx666-qq/Automatic-vending-machinePLC": {
+  "description": "基于 PC（GXMCGS组态软件）-PLC(三菱FX2N) 两级架构的双品类自动售货机控制系统",
+  "size": 787,
+  "language": null,
+  "url": "https://github.com/lx666-qq/Automatic-vending-machinePLC"
+ },
+ "Dino-MLC-Board/DINO-PLC-V2": {
+  "description": "This is FX2N Library for DINO PLC V2",
+  "size": 24510,
+  "language": "C",
+  "url": "https://github.com/Dino-MLC-Board/DINO-PLC-V2"
+ },
+ "suratin27/MiniPLC_FX2N": {
+  "description": "This is MiniPLC-32u FX2N Library",
+  "size": 1028,
+  "language": null,
+  "url": "https://github.com/suratin27/MiniPLC_FX2N"
+ },
+ "Chupakabra303/FX_PLC_STM32duino": {
+  "description": "Reverse engineering FX1N FX2N FX3U PLC for STM32duino",
+  "size": 66,
+  "language": null,
+  "url": "https://github.com/Chupakabra303/FX_PLC_STM32duino"
+ },
+ "galopago/stm32-industrial-control-boards": {
+  "description": "Pin mapping for STM32 based industrial control boards advertised as compatible with FX1N, FX2N, FX3U PLC software.",
+  "size": 8867,
+  "language": null,
+  "url": "https://github.com/galopago/stm32-industrial-control-boards"
+ },
+ "xventus/CF2N-FX2N-23MR": {
+  "description": "Washing machine based on CF2N FX2N 23MR",
+  "size": 94767,
+  "language": null,
+  "url": "https://github.com/xventus/CF2N-FX2N-23MR"
+ },
+ "huvert/PID_test": {
+  "description": "PID regulator for GX Works 2 PLC type: FX2N med analogkort FX0N-3A. ",
+  "size": 2784,
+  "language": "C",
+  "url": "https://github.com/huvert/PID_test"
+ },
+ "aixiwang/myplc": {
+  "description": "Fx2N compatible PLC running on windows with motion control support",
+  "size": 64,
+  "language": "C++",
+  "url": "https://github.com/aixiwang/myplc"
+ },
+ "brucedii/STM32_OS": {
+  "description": "stm32平台，UCOS操作系统，实现FX2N驱动代码",
+  "size": 0,
+  "language": null,
+  "url": "https://github.com/brucedii/STM32_OS"
+ },
+ "snsdpen-luke/kyouiku": {
+  "description": "工業高校 電子計測制御31 の教材。三菱系PLCラダー図シミュレータ「ラダー工房」",
+  "size": 6210,
+  "language": "HTML",
+  "url": "https://github.com/snsdpen-luke/kyouiku"
+ },
+ "iteaj/aiots": {
+  "description": "aiots(iot)是一款springboot和netty开发的通用ai物联网平台 、主要用于工业物联网，用于业务系统方便快速的采集和控制设备。现已支持modbus、plc(西门子、欧姆龙、三菱、汇川、罗克韦尔、松下)、串口、mqtt、dlt645、opcua等工业协议以及提供自定义设备驱动的能力,(交流群：696454214)",
+  "size": 58852,
+  "language": "Java",
+  "url": "https://github.com/iteaj/aiots"
+ },
+ "purinzan/gx3-cli-mcp": {
+  "description": "Trace a GX Works3 ladder without opening GX Works3 — read-only CLI + MCP server so anyone (or an AI agent) can find why a coil never turns on.",
+  "size": 2145,
+  "language": "Python",
+  "url": "https://github.com/purinzan/gx3-cli-mcp"
+ },
+ "agentthink/gts-line-control": {
+  "size": 666,
+  "description": "基于 .NET 8 的多设备产线控制平台，专配固高 GTS 运动控制卡：Modbus/OPC UA/MQTT/S7/三菱全协议通讯，Halcon 视觉触发，MES 双协议上报，一条 JSON 工作流跑通产线。"
+ },
+ "PeiKeSmart/DH.NMelsec": {
+  "description": "三菱PLC协议",
+  "size": 25916,
+  "language": "C#",
+  "url": "https://github.com/PeiKeSmart/DH.NMelsec"
+ },
+ "purinzan/ladder-fabricator": {
+  "size": 275,
+  "description": "Open-source JSON AST renderer for MELSEC and KEYENCE PLC ladder diagrams in SVG, PNG, text, and structured JSON."
+ },
+ "KrupaPatil19/PLC-Automatic-Conveyor-Control": {
+  "size": 638,
+  "description": "PLC-based conveyor control and object counting using Mitsubishi FX5U and GX Works3."
+ },
+ "Prapti28/PLC-Automated-Mixers": {
+  "description": "PLC-based sequential control of three mixers using ladder logic and timers, with timed starting intervals of 7s, 3.6s, and 5s. Developed using Mitsubishi GX Works3 to demonstrate industrial automation and timer-based control.",
+  "size": 2342,
+  "language": null,
+  "url": "https://github.com/Prapti28/PLC-Automated-Mixers"
+ },
+ "ShubhamAgre28/PLC-Forward-Reverse-Motor-Control": {
+  "description": "Industrial automation capstone: Bidirectional motor control with electrical interlocking using Mitsubishi GX Works3 ladder logic (FX5U PLC).",
+  "size": 2864,
+  "language": null,
+  "url": "https://github.com/ShubhamAgre28/PLC-Forward-Reverse-Motor-Control"
+ },
+ "n-car/node-fxplc": {
+  "description": "Node.js library for communication with Mitsubishi FX PLCs via MELSEC protocol (TCP/Serial)",
+  "size": 119,
+  "language": "JavaScript",
+  "url": "https://github.com/n-car/node-fxplc"
+ },
+ "Bibin-VR/GXBridge-MCP": {
+  "size": 7,
+  "description": "Control Mitsubishi GX Works3 and your PLC with AI — an MCP server for any agent"
+ },
+ "plcmanjp/melsec-mc-kotlin": {
+  "size": 208,
+  "description": "Pure Kotlin/JVM Mitsubishi MELSEC MC Protocol 3E/4E client and CLI (TCP/UDP, Binary/ASCII)."
+ },
+ "score915/mc-protocol-3e": {
+  "size": 21,
+  "description": "MC protocol / SLMP 3E binary client for Mitsubishi MELSEC and KEYENCE KV PLCs. Supports D/DM word and M/MR bit read/write, CPU model/status diagnostics, and vendor/port auto-detection."
+ },
+ "NewLifeX/NewLife.Melsec": {
+  "description": "三菱PLC协议",
+  "size": 26259,
+  "language": "C#",
+  "url": "https://github.com/NewLifeX/NewLife.Melsec"
+ },
+ "mokouliszt/iqr_device_validator": {
+  "size": 32,
+  "description": "Mitsubishi MELSEC iQ-R series device string validator."
+ },
+ "rom/mitsubishicheck": {
+  "size": 88,
+  "description": "Tool to check Mitsubishi security for their PLC and using MELSEC"
+ },
+ "KunYi/Retro_FXPLC": {
+  "description": "An AI Plan about Melsec FX Series PLC Simulator ",
+  "size": 21445,
+  "language": null,
+  "url": "https://github.com/KunYi/Retro_FXPLC"
+ },
+ "KrystianD/fxplc": {
+  "description": "Python connector for low-level Mitsubishi PLC MELSEC FX series (FX-232AW) serial protocol with builtin HTTP server.",
+  "size": 183,
+  "language": "Python",
+  "url": "https://github.com/KrystianD/fxplc"
+ },
+ "senrust/pymcprotocol": {
+  "size": 88,
+  "description": "MC Protocol(MELSEC Communication Protocol) implementation by Python"
+ },
+ "NothinRandom/pymelsec": {
+  "size": 78,
+  "description": "Python3 Implementation of MELSEC Communication"
+ },
+ "plcpeople/mcprotocol": {
+  "description": "node.js implementation of the MC (MELSEC communication) protocol to exchange data with Mitsubishi FX programmable controllers.",
+  "size": 34,
+  "language": "JavaScript",
+  "url": "https://github.com/plcpeople/mcprotocol"
+ },
+ "Jamal432-lab/fx2naira": {
+  "description": null,
+  "size": 1,
+  "language": null,
+  "url": "https://github.com/Jamal432-lab/fx2naira"
+ },
+ "DapGitHubTHF/-script-alert-1-fx2na-lt-hwn6h-script-": {
+  "description": "test",
+  "size": 0,
+  "language": null,
+  "url": "https://github.com/DapGitHubTHF/-script-alert-1-fx2na-lt-hwn6h-script-"
+ },
+ "qmycy/FX2N_COMM": {
+  "description": "PYTHON实现了device_read,device_write,force_on,force_off",
+  "size": 1,
+  "language": "Python",
+  "url": "https://github.com/qmycy/FX2N_COMM"
+ },
+ "bomingfeng/Fx2N": {
+  "description": null,
+  "size": 445,
+  "language": "C",
+  "url": "https://github.com/bomingfeng/Fx2N"
+ },
+ "lizhoujian/fx2n": {
+  "description": "fx2n",
+  "size": 322,
+  "language": "C++",
+  "url": "https://github.com/lizhoujian/fx2n"
+ },
+ "FX1Sports-data/FX1Sports": {
+  "description": null,
+  "size": 13977,
+  "language": null,
+  "url": "https://github.com/FX1Sports-data/FX1Sports"
+ },
+ "mauroghersi/FX1SCommunication": {
+  "description": "FX1S Application for Android using a regular RS-232 cable",
+  "size": 38,
+  "language": null,
+  "url": "https://github.com/mauroghersi/FX1SCommunication"
+ },
+ "mauroghersi/FX1S_PLC_Python": {
+  "description": "Serial control of FX1S PLC",
+  "size": 38,
+  "language": "Python",
+  "url": "https://github.com/mauroghersi/FX1S_PLC_Python"
+ },
+ "JarinTabassum/FX1StageAndScene": {
+  "description": null,
+  "size": 2,
+  "language": "Java",
+  "url": "https://github.com/JarinTabassum/FX1StageAndScene"
+ },
+ "trentycents-fx1/FX1SportsToken": {
+  "description": null,
+  "size": 214,
+  "language": "TypeScript",
+  "url": "https://github.com/trentycents-fx1/FX1SportsToken"
+ },
+ "FX100profit/-fx1spm": {
+  "description": "Forex trader",
+  "size": 0,
+  "language": null,
+  "url": "https://github.com/FX100profit/-fx1spm"
+ },
+ "GameTheory-/android_kernel_lge_fx1s": {
+  "description": "Freedom Kernel - LG870",
+  "size": 126893,
+  "language": "C",
+  "url": "https://github.com/GameTheory-/android_kernel_lge_fx1s"
+ },
+ "yymin1022/CyanogenMod11_Leche_fx1sk": {
+  "description": "CyanogenMod11 with Leche Theme for LG Optimus LTE III",
+  "size": 258967,
+  "language": "Vim script",
+  "url": "https://github.com/yymin1022/CyanogenMod11_Leche_fx1sk"
+ },
+ "yymin1022/Stock_G3_Theme_fx1sk": {
+  "description": "LG G3 Theme Rom for LG Optimus LTE III",
+  "size": 216452,
+  "language": "Shell",
+  "url": "https://github.com/yymin1022/Stock_G3_Theme_fx1sk"
+ },
+ "ewruen/fx1s_timer": {
+  "description": "none",
+  "size": 115,
+  "language": "C",
+  "url": "https://github.com/ewruen/fx1s_timer"
+ },
+ "chevanlol360/android_device_lge_fx1sk": {
+  "description": "Optimus LTE3 Device Tree",
+  "size": 6954,
+  "language": "C",
+  "url": "https://github.com/chevanlol360/android_device_lge_fx1sk"
+ },
+ "chevanlol360/proprietary_vendor_lge_fx1sk": {
+  "description": "Optimus LTE3 Vendor",
+  "size": 22388,
+  "language": "Makefile",
+  "url": "https://github.com/chevanlol360/proprietary_vendor_lge_fx1sk"
+ },
+ "JesseEisen/fx1s-plc-communication": {
+  "description": "三菱FX系列PLC通信库",
+  "size": 240,
+  "language": "C",
+  "url": "https://github.com/JesseEisen/fx1s-plc-communication"
+ },
+ "playfulgod/android_device_lge_fx1s": {
+  "description": "Device Tree for the LG Optimus F7 on Boost Mobile",
+  "size": 12744,
+  "language": "Shell",
+  "url": "https://github.com/playfulgod/android_device_lge_fx1s"
+ },
+ "shw98-jp/gxworks2-io-list-lab": {
+  "description": "GX Works2のCSVデータをPythonで解析し、PLCのI/Oリスト自動化を試す学習・研究プロジェクト",
+  "size": 254,
+  "language": "Python",
+  "url": "https://github.com/shw98-jp/gxworks2-io-list-lab"
+ },
+ "rjsxo943-gif/gxworks2-plc-practice": {
+  "description": "GX Works2",
+  "size": 1061,
+  "language": null,
+  "url": "https://github.com/rjsxo943-gif/gxworks2-plc-practice"
+ },
+ "shana624/project2": {
+  "description": "project with ABB RAPID, GXworks2,  MIT App Inventor",
+  "size": 3667,
+  "language": "AMPL",
+  "url": "https://github.com/shana624/project2"
+ },
+ "INVEO-company/BoxID-Clocker---Mitsubishi-GxWorks2---Sample-Poroject": {
+  "description": null,
+  "size": 191,
+  "language": null,
+  "url": "https://github.com/INVEO-company/BoxID-Clocker---Mitsubishi-GxWorks2---Sample-Poroject"
+ },
+ "cmz269/-plc-gxworks2-": {
+  "description": "plc程序",
+  "size": 1235,
+  "language": null,
+  "url": "https://github.com/cmz269/-plc-gxworks2-"
+ },
+ "factonation/modbus-rs485-fundamentals": {
+  "description": "A GXWorks2 ladder code for master-slave communication via MODBUS 485",
+  "size": 8587,
+  "language": null,
+  "url": "https://github.com/factonation/modbus-rs485-fundamentals"
+ },
+ "SriparnoRoy/PLC-Based-Daily-Production-Control": {
+  "description": "PLC-based industrial automation system for daily production counting, target monitoring, and record control using Mitsubishi FX Series PLC and GX Works2.",
+  "size": 1716,
+  "language": null,
+  "url": "https://github.com/SriparnoRoy/PLC-Based-Daily-Production-Control"
+ },
+ "NurHuda-Eng/automated-metal-detection-conveyor": {
+  "description": "PLC-based automated conveyor system for metal detection and sorting using Mitsubishi FX3U PLC, GX Works2, sensors, and pneumatic actuators.",
+  "size": 6,
+  "language": null,
+  "url": "https://github.com/NurHuda-Eng/automated-metal-detection-conveyor"
+ },
+ "IhsanSA/PLC-Mitsubishi-Study-Case-Using-GX-Works2": {
+  "description": null,
+  "size": 11,
+  "language": null,
+  "url": "https://github.com/IhsanSA/PLC-Mitsubishi-Study-Case-Using-GX-Works2"
+ },
+ "ramyashanmugasundram01-crypto/PLC-Traffic-control": {
+  "description": "Designed a traffic light control system using Mitsubishi plc(GX Works2). Used timers and counters to manage light cycles. Tested functionality in simulation software",
+  "size": 0,
+  "language": null,
+  "url": "https://github.com/ramyashanmugasundram01-crypto/PLC-Traffic-control"
+ },
+ "PokudaEngineer/SampleCounterMonitor": {
+  "description": "C#でPLCと通信するプログラムを作ろう（GX Works2編）のサンプルコード",
+  "size": 27,
+  "language": "C#",
+  "url": "https://github.com/PokudaEngineer/SampleCounterMonitor"
+ },
+ "longan55/melsecfx": {
+  "description": "三菱fx系列plc串口通信协议",
+  "size": 9,
+  "language": "Go",
+  "url": "https://github.com/longan55/melsecfx"
+ },
+ "hidegonzalez/python-to-melsec-fx5u-with-hslcommunication": {
+  "description": null,
+  "size": 2,
+  "language": "Python",
+  "url": "https://github.com/hidegonzalez/python-to-melsec-fx5u-with-hslcommunication"
+ },
+ "navyachanna07/PLC-Based-Mixing-Motor-Control-System": {
+  "description": "PLC-based mixing motor control automates industrial processes using Mitsubishi FX5U, Ladder Logic, internal relays, timers, and programmed output control.",
+  "size": 12815,
+  "language": null,
+  "url": "https://github.com/navyachanna07/PLC-Based-Mixing-Motor-Control-System"
+ },
+ "jotinhaxx1/varal-automatizado-clp": {
+  "description": "Sistema de automação residencial de alta robustez com CLP (Mitsubishi CF2n / Siemens LOGO!) e lógica Ladder.",
+  "size": 13,
+  "language": null,
+  "url": "https://github.com/jotinhaxx1/varal-automatizado-clp"
+ },
+ "MinJunKimsdaads/plc-ladder-viewer": {
+  "description": "Free browser-based PLC ladder diagram viewer & simulator - Mitsubishi GX Works3, Keyence KV STUDIO, Siemens TIA Portal, LS Electric XG5000 | PLC 래더 뷰어 & 시뮬레이터",
+  "size": 7,
+  "language": null,
+  "url": "https://github.com/MinJunKimsdaads/plc-ladder-viewer"
+ },
+ "CuplexUser/AutomationSolver": {
+  "description": "A full-stack ladder-logic puzzle game: program a Mitsubishi-style PLC to solve motor-control problems, then get graded by a shared TypeScript engine that runs identically on the client and server. Includes user accounts, Google/GitHub OAuth sign-in, and an SQLite backend.",
+  "size": 6203,
+  "language": "TypeScript",
+  "url": "https://github.com/CuplexUser/AutomationSolver"
+ },
+ "KishoreRaam/plc-ai-studio": {
+  "description": "Plain English to checked Mitsubishi FX ladder logic, with a debugger and a virtual-station simulator. Built for SIH26.",
+  "size": 171,
+  "language": "TypeScript",
+  "url": "https://github.com/KishoreRaam/plc-ai-studio"
+ },
+ "robotjaol/plc-100-challenge": {
+  "description": "100-day open-source PLC challenge: solve 100 industrial automation problems in Ladder Logic across Omron CX-Programmer, Mitsubishi GX Works, and Siemens TIA Portal.",
+  "size": 4072,
+  "language": null,
+  "url": "https://github.com/robotjaol/plc-100-challenge"
+ },
+ "RavenDimaculangan/mitsubishi-plc-ladder-logic": {
+  "description": null,
+  "size": 3000,
+  "language": null,
+  "url": "https://github.com/RavenDimaculangan/mitsubishi-plc-ladder-logic"
+ },
+ "brooksg44/Mitsubishi-PLC-Sim-Xojo": {
+  "description": "Mitsubishi PLC Simulator – Xojo 2026 R1.2 desktop app with full MELSEC IL instruction set and Ladder Diagram display",
+  "size": 171,
+  "language": "Xojo",
+  "url": "https://github.com/brooksg44/Mitsubishi-PLC-Sim-Xojo"
+ },
+ "szymon030405/PLCVault": {
+  "description": "A version control system for PLC ladder logic programs created with Mitsubishi GXWorks3. Inspired by real-world challenges in industrial automation software management.",
+  "size": 5,
+  "language": null,
+  "url": "https://github.com/szymon030405/PLCVault"
+ },
+ "shivansharorax/ParkFlow-Automation": {
+  "description": "ParkFlow is a PLC-based Smart Parking System developed using Mitsubishi PLC, Ladder Logic, and HMI. Features include automatic slot allocation, 2W/4W vehicle management, parking full detection, gate control, real-time slot monitoring, fee calculation, and revenue analytics. Designed for industrial automation and smart parking applications.",
+  "size": 15680,
+  "language": null,
+  "url": "https://github.com/shivansharorax/ParkFlow-Automation"
+ },
+ "MuratEmreDemirci/PLC-Ladder-Control-Applications": {
+  "description": "PLC ladder logic implementations including self-holding circuit, set/reset control, timer-based operations, and cyclic output control using Mitsubishi FX5U PLC and GX Works3.",
+  "size": 2186,
+  "language": null,
+  "url": "https://github.com/MuratEmreDemirci/PLC-Ladder-Control-Applications"
+ },
+ "Ritiksuman07/ladderlogic-gen": {
+  "description": "Universal CLI tool to generate ladder logic code for Siemens, Allen-Bradley, Mitsubishi, and Omron PLCs from simple text descriptions—including support for timers, counters, and complex logic.",
+  "size": 18,
+  "language": "Python",
+  "url": "https://github.com/Ritiksuman07/ladderlogic-gen"
+ },
+ "vincenplepi-ops/mitsubishi": {
+  "description": "plc ladder",
+  "size": 5,
+  "language": null,
+  "url": "https://github.com/vincenplepi-ops/mitsubishi"
+ },
+ "BugraGulmez/BugraGulmez-Mitsubishi-GX-Works-3": {
+  "description": "Application of basic commands and functions in programming via Ladder Diagram with PLC in Mitsubishi GX Works 3 program",
+  "size": 8342,
+  "language": null,
+  "url": "https://github.com/BugraGulmez/BugraGulmez-Mitsubishi-GX-Works-3"
+ },
+ "indraalfendipurba/PLC_Mitsubishi_Schneider": {
+  "description": "programmable logic controller, traffic light, mitsubishi, schneider, quiz bell, flip-flop, ladder diagrams",
+  "size": 23,
+  "language": null,
+  "url": "https://github.com/indraalfendipurba/PLC_Mitsubishi_Schneider"
+ },
+ "HarrisXia/Mitsubishi-QPLC": {
+  "description": "some ladder diagram codes of Mitsubishi Q series PLC and MES mode, etc.",
+  "size": 3158,
+  "language": null,
+  "url": "https://github.com/HarrisXia/Mitsubishi-QPLC"
+ },
+ "wenlin0000/FX5U-PLC-MC-Protocol": {
+  "description": "三菱 FX5U PLC MC Protocol",
+  "size": 134,
+  "language": "C#",
+  "url": "https://github.com/wenlin0000/FX5U-PLC-MC-Protocol"
+ },
+ "BA4IHS/plc-fx5u-Create-skill": {
+  "description": "三菱 FX5U系列等 PLC程序生成的Skill",
+  "size": 75,
+  "language": "Python",
+  "url": "https://github.com/BA4IHS/plc-fx5u-Create-skill"
+ },
+ "HiroakiOtawa/PLCViewer": {
+  "description": "三菱のPLCに対してMCプロトコルで値の取得と設定を行う",
+  "size": 46,
+  "language": "C#",
+  "url": "https://github.com/HiroakiOtawa/PLCViewer"
+ },
+ "oldstonelq/PLCTest": {
+  "description": "PLC客户端和服务端模拟，暂时只支持三菱MC3E",
+  "size": 3007,
+  "language": "C#",
+  "url": "https://github.com/oldstonelq/PLCTest"
+ },
+ "masahase0117/SlmpClient": {
+  "description": "Rustによる三菱電機のSLMP (Seamless Message Protocol)クライアント",
+  "size": 66,
+  "language": "Rust",
+  "url": "https://github.com/masahase0117/SlmpClient"
+ },
+ "chenjackie178/plc-comm-assistant": {
+  "description": "PLC通信配置助手 - 支持西门子/三菱/欧姆龙/Modbus等主流PLC通信协议配置与代码生成",
+  "size": 528,
+  "language": "Python",
+  "url": "https://github.com/chenjackie178/plc-comm-assistant"
+ },
+ "wenjunyi16-del/eplan-pdf-io-extraction": {
+  "description": "从EPLAN电气原理图PDF中自动提取PLC I/O表(DI/DQ/AI/阀岛)并导出Excel - 用于TIA Portal/汇川/三菱PLC编程变量表生成",
+  "size": 102,
+  "language": null,
+  "url": "https://github.com/wenjunyi16-del/eplan-pdf-io-extraction"
+ },
+ "EHbtj/SLMP_Client": {
+  "description": "三菱電機製PLC（MELSEC）とSLMPプロトコル（3Eフレーム/TCP）で通信するためのArduinoライブラリ",
+  "size": 18695,
+  "language": "C++",
+  "url": "https://github.com/EHbtj/SLMP_Client"
+ },
+ "qinshihu/FactoryLink": {
+  "description": "工业设备数据采集网关，单EXE双击就跑，不用装Java不用装Docker，支持Modbus、西门子S7、三菱MC，专门给国内制造业的一线工程师使用。",
+  "size": 2106,
+  "language": "Python",
+  "url": "https://github.com/qinshihu/FactoryLink"
+ },
+ "AmazingDucksh0ut/plc-editor-no-transpiler": {
+  "description": "PLC 編寫程式介面 — 以階梯圖/指令表編寫三菱 FX PLC 程式並匯出 CSV 指令表(交 il2st 轉譯)。碩士論文《基於開源架構之 PLC 模擬器建構方法》3.4 節成果。",
+  "size": 10941,
+  "language": "C#",
+  "url": "https://github.com/AmazingDucksh0ut/plc-editor-no-transpiler"
+ },
+ "AmazingDucksh0ut/plc-3d-fx3u": {
+  "description": "PLC 模擬器的 Unity 3D 視覺前端 — 換機種示範(實習箱主機外觀換成三菱 FX3U)。碩士論文《基於開源架構之 PLC 模擬器建構方法》5.3 節成果。",
+  "size": 35588,
+  "language": "ShaderLab",
+  "url": "https://github.com/AmazingDucksh0ut/plc-3d-fx3u"
+ },
+ "AmazingDucksh0ut/il2st-csharp": {
+  "description": "三菱 FX 指令表(IL)→ OpenPLC IEC 61131-3 結構化文字(ST)轉譯器(C# 版);輸出與 Python 版逐位元組相同。碩士論文《基於開源架構之 PLC 模擬器建構方法》成果。",
+  "size": 36,
+  "language": "C#",
+  "url": "https://github.com/AmazingDucksh0ut/il2st-csharp"
+ },
+ "xueyongqiang/PLCReadWrite": {
+  "description": "PLC读写各种点位，支持三菱，西门子，欧姆龙",
+  "size": 17,
+  "language": "Python",
+  "url": "https://github.com/xueyongqiang/PLCReadWrite"
+ },
+ "SuperIdolDog/AAPC": {
+  "description": "基于 WPF(WPF-UI)开发、适配三菱全伺服 PLC 主控的医用品行业操作监控系统",
+  "size": 11,
+  "language": null,
+  "url": "https://github.com/SuperIdolDog/AAPC"
+ },
+ "MAS-Copilot/wpf-mc-protocol-next": {
+  "description": "高性能且完全异步的MC协议库，2倍性能提升，用于三菱PLC通信（MC1E/MC3E/MC4E），附带WPF示例应用",
+  "size": 25032,
+  "language": "C#",
+  "url": "https://github.com/MAS-Copilot/wpf-mc-protocol-next"
+ },
+ "shenchia/laser-cutting-system": {
+  "description": "雷射切割機控制系統 - Python Qt UI + GO Backend + MySQL + PLC (基恩斯/三菱MC協議)",
+  "size": 67,
+  "language": "Python",
+  "url": "https://github.com/shenchia/laser-cutting-system"
+ },
+ "McEyes/PlcAdpService": {
+  "description": "三菱FX3,FX5系列轨道设备和支持Modbus协议的设备数据采集和远程控制通用服务，数据通过Mqtt上报，实时监控轨道状态，是否有板，过板数量，远程调规等",
+  "size": 1578,
+  "language": "C#",
+  "url": "https://github.com/McEyes/PlcAdpService"
+ },
+ "ChangYuan-Semiconductor-Equipment/mitsubishi_plc": {
+  "description": "读写三菱plc封装",
+  "size": 21,
+  "language": "Python",
+  "url": "https://github.com/ChangYuan-Semiconductor-Equipment/mitsubishi_plc"
+ },
+ "wwwwqqqqliao/PLC-MC-portocol": {
+  "description": "c#与三菱PLC做MC协议通讯",
+  "size": 13,
+  "language": "C#",
+  "url": "https://github.com/wwwwqqqqliao/PLC-MC-portocol"
+ },
+ "ping9719/McProtocol": {
+  "description": "三菱plc通信MC协议的实现。(This is a protocol for communicating with Mitsubishi PLCs.)",
+  "size": 89,
+  "language": "C#",
+  "url": "https://github.com/ping9719/McProtocol"
+ },
+ "AlexDai0x271/FX5U_PLC": {
+  "description": "三菱FX5U_PLC学习笔记以及实例工程",
+  "size": 1,
+  "language": null,
+  "url": "https://github.com/AlexDai0x271/FX5U_PLC"
+ },
+ "t44958/TDMCProtocol": {
+  "description": "This is a Mitsubishi PLC communication library that uses Ethernet communication.这是一个以网口通讯的三菱PLC通讯库。",
+  "size": 23,
+  "language": null,
+  "url": "https://github.com/t44958/TDMCProtocol"
+ },
+ "perter-laoguo/MitsubishiFxPlc": {
+  "description": "一个用于三菱FX系列plc的辅助库，不依赖任何外部库，小巧方便",
+  "size": 33,
+  "language": "C#",
+  "url": "https://github.com/perter-laoguo/MitsubishiFxPlc"
+ },
+ "102757017/FX_PLC_communication": {
+  "description": "使用串口通信协议对三菱(Mitsubishi) FX系列PLC进行读取与写入",
+  "size": 45268,
+  "language": "Python",
+  "url": "https://github.com/102757017/FX_PLC_communication"
+ },
+ "johnfromhk/mplc-st-lib": {
+  "description": "三菱plc fx3u st 常用函数/FB 库",
+  "size": 3,
+  "language": null,
+  "url": "https://github.com/johnfromhk/mplc-st-lib"
+ },
+ "Zekun-Gao/Sample_References2010": {
+  "description": "三菱PLC与C#通讯，使用MX Component通讯软件完成。",
+  "size": 16,
+  "language": "C#",
+  "url": "https://github.com/Zekun-Gao/Sample_References2010"
+ },
+ "xzcdgit/WorkpieceTransfer": {
+  "description": "plc 三菱 移动工件的程序 FX3U",
+  "size": 318,
+  "language": null,
+  "url": "https://github.com/xzcdgit/WorkpieceTransfer"
+ },
+ "sda134/MCProtocol": {
+  "description": "三菱PLCとの通信",
+  "size": 205,
+  "language": "Python",
+  "url": "https://github.com/sda134/MCProtocol"
+ },
+ "0000duck/PlcRobotManager": {
+  "description": "PLC机器人管理器 三菱PLC",
+  "size": 430,
+  "language": null,
+  "url": "https://github.com/0000duck/PlcRobotManager"
+ },
+ "xzcdgit/GrindingMachineControl": {
+  "description": "plc 三菱 控制砂轮机运动的简单程序",
+  "size": 167,
+  "language": null,
+  "url": "https://github.com/xzcdgit/GrindingMachineControl"
+ },
+ "wlcb-lucky/SerialPort": {
+  "description": "三菱PLC串口通信",
+  "size": 4243,
+  "language": "C#",
+  "url": "https://github.com/wlcb-lucky/SerialPort"
+ }
+}

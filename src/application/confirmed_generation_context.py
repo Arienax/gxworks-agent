@@ -207,7 +207,9 @@ def build_confirmed_generation_context(
     from plc.specification.provenance import handoff_snapshot
     from knowledge.evidence import context_manifest, text_sha256
     from shared.model_context import technical_context_text
-    knowledge_text = technical_context_text(public_generation_value(knowledge or ""))
+    from knowledge.evidence import KnowledgeContext
+    knowledge_text = KnowledgeContext(technical_context_text(public_generation_value(knowledge or "")),
+                                      getattr(knowledge, "manifest", {}))
     compiled = compiler.compile(compiler_input, evidence_text=knowledge_text)
     from application.context_compactor import compact_if_needed
     if not raw_request:

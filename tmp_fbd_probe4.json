@@ -1,0 +1,422 @@
+{
+ "sel_caps": {
+  "language": "fbd",
+  "unit_kind": "program",
+  "write_backend": "offline",
+  "source_edit": {
+   "status": "available",
+   "reason": null,
+   "scope": "recognised_objects",
+   "operations": [
+    "graph_edit",
+    "node_insert",
+    "node_delete",
+    "connection_edit",
+    "instance_edit"
+   ]
+  },
+  "native_compile": "not_run",
+  "execution": "unverified"
+ },
+ "psrc": [
+  {
+   "source_name": "1.Program.pou",
+   "name": "1",
+   "language": "fbd",
+   "unit_kind": "program",
+   "capabilities": {
+    "language": "fbd",
+    "unit_kind": "program",
+    "write_backend": "offline",
+    "source_edit": {
+     "status": "available",
+     "reason": null,
+     "scope": "recognised_objects",
+     "operations": [
+      "graph_edit",
+      "node_insert",
+      "node_delete",
+      "connection_edit",
+      "instance_edit"
+     ]
+    },
+    "native_compile": "not_run",
+    "execution": "unverified"
+   }
+  }
+ ],
+ "decl_tables": {
+  "Global1.gh": "global",
+  "1.Labels.lh": "local"
+ },
+ "compile_opts": {
+  "count_offset": 172,
+  "values": [
+   65543,
+   131073,
+   268697601,
+   327807,
+   393217,
+   720897,
+   268632096,
+   536870913,
+   536936449,
+   268894208,
+   4294967295
+  ],
+  "global_variable_hiding": false
+ },
+ "task_scopes": {
+  "status": "available",
+  "resources": [
+   "MAIN"
+  ],
+  "tasks": [
+   {
+    "resource": "MAIN",
+    "task": "1",
+    "event_name": "TRUE",
+    "interval": "0",
+    "priority": 31,
+    "programs": [
+     {
+      "name": "1",
+      "line": 1
+     }
+    ]
+   }
+  ]
+ },
+ "unknown_gui": {
+  "allocation_profile": "gxworks2-1.635-system-variables/FX3U/FX3UC",
+  "cpu_menu": "FX3U/FX3UC",
+  "workspace_source": "48_STRUCT_X1_Y1.prj",
+  "workspace_ranges": {
+   "D": [
+    512,
+    999
+   ],
+   "R": [
+    4294967295,
+    4294967295
+   ],
+   "W": [
+    4294967295,
+    4294967295
+   ],
+   "T": [
+    100,
+    199
+   ],
+   "ST": [
+    4294967295,
+    4294967295
+   ],
+   "C": [
+    100,
+    199
+   ],
+   "M": [
+    3840,
+    7679
+   ],
+   "B": [
+    4294967295,
+    4294967295
+   ],
+   "P": [
+    2048,
+    4095
+   ],
+   "S": [
+    2048,
+    4095
+   ],
+   "T10": [
+    220,
+    245
+   ]
+  },
+  "gui_mirror_status": "verified",
+  "status": "differs",
+  "source": "Gppw2.gpj/Option/SystemVariable",
+  "missing": [],
+  "differences": {
+   "D": {
+    "workspace": [
+     512,
+     999
+    ],
+    "gui": [
+     4294967295,
+     4294967295
+    ]
+   },
+   "T": {
+    "workspace": [
+     100,
+     199
+    ],
+    "gui": [
+     4294967295,
+     4294967295
+    ]
+   },
+   "C": {
+    "workspace": [
+     100,
+     199
+    ],
+    "gui": [
+     4294967295,
+     4294967295
+    ]
+   },
+   "M": {
+    "workspace": [
+     3840,
+     7679
+    ],
+    "gui": [
+     4294967295,
+     4294967295
+    ]
+   },
+   "P": {
+    "workspace": [
+     2048,
+     4095
+    ],
+    "gui": [
+     4294967295,
+     4294967295
+    ]
+   },
+   "S": {
+    "workspace": [
+     2048,
+     4095
+    ],
+    "gui": [
+     4294967295,
+     4294967295
+    ]
+   },
+   "T10": {
+    "workspace": [
+     220,
+     245
+    ],
+    "gui": [
+     4294967295,
+     4294967295
+    ]
+   }
+  },
+  "word_device": 0,
+  "bit_device": 3,
+  "effective_ranges": {
+   "D": [
+    4294967295,
+    4294967295
+   ],
+   "R": [
+    4294967295,
+    4294967295
+   ],
+   "W": [
+    4294967295,
+    4294967295
+   ],
+   "ST": [
+    4294967295,
+    4294967295
+   ],
+   "C": [
+    4294967295,
+    4294967295
+   ],
+   "M": [
+    4294967295,
+    4294967295
+   ],
+   "B": [
+    4294967295,
+    4294967295
+   ],
+   "P": [
+    4294967295,
+    4294967295
+   ],
+   "S": [
+    4294967295,
+    4294967295
+   ],
+   "T10": [
+    4294967295,
+    4294967295
+   ],
+   "T": [
+    4294967295,
+    4294967295
+   ]
+  },
+  "stored_ranges": {
+   "D": [
+    4294967295,
+    4294967295
+   ],
+   "R": [
+    4294967295,
+    4294967295
+   ],
+   "W": [
+    4294967295,
+    4294967295
+   ],
+   "T": [
+    4294967295,
+    4294967295
+   ],
+   "ST": [
+    4294967295,
+    4294967295
+   ],
+   "C": [
+    4294967295,
+    4294967295
+   ],
+   "M": [
+    4294967295,
+    4294967295
+   ],
+   "B": [
+    4294967295,
+    4294967295
+   ],
+   "P": [
+    4294967295,
+    4294967295
+   ],
+   "S": [
+    4294967295,
+    4294967295
+   ],
+   "T10": [
+    4294967295,
+    4294967295
+   ],
+   "100T": [
+    4294967295,
+    4294967295
+   ]
+  },
+  "retained_fields": {
+   "SMax": {
+    "storage_type": "DWORD",
+    "value": 4294967295
+   },
+   "BMax": {
+    "storage_type": "DWORD",
+    "value": 4294967295
+   },
+   "RMin": {
+    "storage_type": "DWORD",
+    "value": 4294967295
+   },
+   "RMax": {
+    "storage_type": "DWORD",
+    "value": 4294967295
+   },
+   "WordDevice": {
+    "storage_type": "WORD",
+    "value": 0
+   },
+   "PMin": {
+    "storage_type": "DWORD",
+    "value": 4294967295
+   },
+   "BitDevice": {
+    "storage_type": "WORD",
+    "value": 3
+   },
+   "PMax": {
+    "storage_type": "DWORD",
+    "value": 4294967295
+   },
+   "MMin": {
+    "storage_type": "DWORD",
+    "value": 4294967295
+   },
+   "MMax": {
+    "storage_type": "DWORD",
+    "value": 4294967295
+   },
+   "WMin": {
+    "storage_type": "DWORD",
+    "value": 4294967295
+   },
+   "STMin": {
+    "storage_type": "DWORD",
+    "value": 4294967295
+   },
+   "WMax": {
+    "storage_type": "DWORD",
+    "value": 4294967295
+   },
+   "STMax": {
+    "storage_type": "DWORD",
+    "value": 4294967295
+   },
+   "10TMin": {
+    "storage_type": "DWORD",
+    "value": 4294967295
+   },
+   "DMin": {
+    "storage_type": "DWORD",
+    "value": 4294967295
+   },
+   "CMin": {
+    "storage_type": "DWORD",
+    "value": 4294967295
+   },
+   "10TMax": {
+    "storage_type": "DWORD",
+    "value": 4294967295
+   },
+   "100TMin": {
+    "storage_type": "DWORD",
+    "value": 4294967295
+   },
+   "TMin": {
+    "storage_type": "DWORD",
+    "value": 4294967295
+   },
+   "DMax": {
+    "storage_type": "DWORD",
+    "value": 4294967295
+   },
+   "CMax": {
+    "storage_type": "DWORD",
+    "value": 4294967295
+   },
+   "SMin": {
+    "storage_type": "DWORD",
+    "value": 4294967295
+   },
+   "100TMax": {
+    "storage_type": "DWORD",
+    "value": 4294967295
+   },
+   "TMax": {
+    "storage_type": "DWORD",
+    "value": 4294967295
+   },
+   "BMin": {
+    "storage_type": "DWORD",
+    "value": 4294967295
+   }
+  },
+  "unverified_selectors": []
+ }
+}

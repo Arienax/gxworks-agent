@@ -654,11 +654,14 @@ class InstructionRegistry:
             target = feature.get('target')
             if not isinstance(target, str) or not target or target in features:
                 raise ValueError('Invalid or duplicate language feature')
+            language = feature.get('language', target.partition('.')[0].lower())
+            if language not in {'st', 'fbd'} or not target.startswith(language.upper() + '.'):
+                raise ValueError('Language feature needs a supported, matching language identity')
             for fact in feature.get('facts', []):
                 group = InstructionFactGroup.from_mapping(fact)
-                if group.scope.get('forms') != [target] or group.scope.get('languages') != ['st']:
+                if group.scope.get('forms') != [target] or group.scope.get('languages') != [language]:
                     raise ValueError('Language fact needs its exact feature/language scope')
-            features[target] = copy.deepcopy(feature)
+            features[target] = {**copy.deepcopy(feature), 'language': language}
         after = path.stat()
         if (before.st_mtime_ns, before.st_size) != (after.st_mtime_ns, after.st_size):
             raise ValueError('Fact definitions changed while loading')
@@ -682,9 +685,13 @@ class InstructionRegistry:
         except OSError:
             return False
 
-    def language_feature(self, target):
-        """The same source-owned feature used by ST and exact retrieval."""
-        feature = getattr(self, '_language_features', {}).get(target)
+    def language_feature(self, target, *, language=None):
+        """Resolve one language-owned feature without crossing dialect scopes."""
+        feature = getattr(self, '_language_features', {}).get(str(target).upper())
+        if feature is not None and language is not None:
+            owner = feature.get('language', feature['target'].partition('.')[0].lower())
+            if owner != str(language).lower():
+                return None
         return copy.deepcopy(feature) if feature is not None else None
 
     def resolve_fact_form(self, mnemonic, *, cpu=None):

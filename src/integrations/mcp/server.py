@@ -13,7 +13,7 @@ from mcp.types import (
 )
 
 from agent_runtime.runtime import ToolRuntime, build_default_tool_runtime
-from shared.project_info import PROJECT_URL
+from shared.project_info import PROJECT_URL, MCP_SERVER_INFO
 
 from .context_provider import ToolContextProvider
 from .tool_adapter import MCPToolAdapter
@@ -21,6 +21,15 @@ from .tool_adapter import MCPToolAdapter
 
 WORKFLOW_INSTRUCTIONS = (
     f"GXWorks Agent project source and releases: {PROJECT_URL}. "
+    "search_plc_manual, get_generation_context and get_fbd_catalog return one JSON text block with "
+    "data.context_schema_version=3, document, objects and delivery. Follow delivery.next exactly until "
+    "delivery.complete=true, merge all objects, then resolve document $ref pointers, $concat list chunks "
+    "and $merge map chunks. Do not use a partial "
+    "page as complete knowledge. Stale cursors require restarting the same query. Each final MCP response "
+    "is bounded to 6000 estimated tokens and 32 KiB UTF-8; indivisible oversized sources fail explicitly. "
+    "top_k limits only supplementary search; explicit targets and their dependencies remain required. "
+    "Pass language and aspects for targeted manual questions. Corpus presence, requested knowledge "
+    "completeness and delivery are separate; missing runtime knowledge is not permission to web-search. "
     "get_current_project queries Agent project selection; selection_status=none is normal and does not block inspection. "
     "For an already-open/imported program, call list_gxworks2_sessions, explicitly choose the matching session_id, "
     "then read_gxworks2_snapshot. Use its source_ref with get_current_program_info/read_network and static checks. "
@@ -47,22 +56,38 @@ WORKFLOW_INSTRUCTIONS = (
     "these are the same engineering context, output guidance and local RAG used by the built-in API. "
     "Fresh Ladder requests use Direct generation from the complete original requirement. "
     "If a real process fact is missing, ask only the necessary question and do not submit a candidate until answered. "
-    "Use search_plc_manual for remaining uncertain model or instruction facts. "
+    "Use search_plc_manual for remaining uncertain model or instruction facts, bound to the actual CPU. "
+    "Device numbering limits, default allocations and configurable allocation conditions are separate; "
+    "a numbering match does not prove current project allocation or permit native device access. "
     "Design the ladder yourself and submit one full or partial response with create_program_candidate. "
     "The server uses the API compatibility normalization, structural acceptance and artifact generation, "
     "without a second model call or an automatic semantic repair loop. "
     "If a submission fails, report the returned error; do not start an automatic repeated-submission loop. "
     "Use read_network and patch_program for explicit scoped Debug patches. "
     "Use get_generation_context for the shared functional discovery, selection policy and source coverage; "
-    "copy its generation_context_id when submitting a candidate. Discovery and local review do not call a model. "
-    "For an FBD target use its supplied native catalog and current graph, then submit the native object model "
-    "with create_fbd_candidate. Use the supplied source-bound ports and declaration tables, including "
-    "direction-qualified IN_OUT endpoints. This path produces a GXW and SVG; it does not run GX Works2 compilation. "
+    "copy its generation_context_id only to a submission tool whose schema accepts that field. "
+    "Discovery and local review do not call a model. "
+    "For FBD, get_generation_context supplies generation_input.device_address_rules and language_rules, "
+    "task-scoped interfaces, source_context, call_bindings, project_options and supported_paths. "
+    "Use these mandatory rules; get_fbd_catalog alone is not a generation context and ST literal syntax is not an FBD substitute. "
+    "get_generation_context defaults catalog_scope to task; get_fbd_catalog defaults to full. "
+    "Use templates for exact additional interfaces and retain missing_templates as missing, without inventing ports. "
+    "Follow output_contract: saved FBD sources expose edit_gxw_project with the exact version_id, "
+    "so ST bodies, interfaces and all affected FBD callers can be checked together in one offline transaction. "
+    "A new graph or a single-graph alternative uses create_fbd_candidate with the supplied parameter_schema. "
+    "Use source-bound ports, declaration tables and direction-qualified IN_OUT endpoints. "
+    "Preserve source_block, block titles/comments and shared-instance execution order when editing. "
+    "New invalid FBD literals are rejected even with save_policy=draft; do not silently convert literals or round TIME. "
+    "Read error.findings for the source, expression, port and local rule returned by source validation. "
+    "Other known new source errors are rejected by checked; retained pre-existing diagnostics are not a compilation pass. "
+    "Missing mandatory rules block generation; do not substitute another CPU or infer support from a template. "
+    "Offline generation produces a GXW and SVG without GX Works2 compilation. "
     "For FBD import, edit or generate, native_save=true explicitly requests native saving for this call; "
     "omitting it or setting false uses the offline path regardless of a prior version's save history. "
     "Use read_fbd_libraries to inspect user-library definitions. To add a library to a saved FBD project, "
     "use create_fbd_candidate with operation=import_library, library_name and the donor GXW in data_base64; "
-    "this imports definitions and library types, while preserving the target caller programs. "
+    "this transfers supported ST implementations, interfaces and library types while preserving target caller programs. "
+    "Readable FBD library interfaces do not imply supported FBD implementation transfer. "
     "For an existing ordinary ST Program use read_st_project and import the saved GXW with "
     "create_st_candidate(operation=import, program=<exact logical source>, data_base64=...); "
     "this entry does not synthesize a GXW from ST text. For background edits, first read the existing ST Program, FB "
@@ -89,7 +114,7 @@ WORKFLOW_INSTRUCTIONS = (
 
 SERVER_INSTRUCTIONS = WORKFLOW_INSTRUCTIONS + (
     "GXWorks tools inspect the configured saved PLC project through ToolRuntime. "
-    "create_program_candidate, create_fbd_candidate, create_st_candidate, patch_program and import_current_program_to_gxworks2 return confirmation_required; "
+    "create_program_candidate, create_fbd_candidate, create_st_candidate, edit_gxw_project, patch_program and import_current_program_to_gxworks2 return confirmation_required; "
     "they do not save a version, change active_version_id or import into GX Works2. "
     "This standalone server cannot approve, commit candidates or execute imports; read-only native snapshots remain available. "
     "MCP tool approval is not engineering confirmation. "
@@ -165,9 +190,9 @@ def _create_adapter_server(adapter, instructions):
         )
 
     return Server(
-        "gxworks-agent", version="0.1.0", instructions=instructions,
-        title="GXWorks Agent", website_url=PROJECT_URL,
-        description=f"Local PLC engineering tools. Project source and releases: {PROJECT_URL}",
+        MCP_SERVER_INFO["name"], version=MCP_SERVER_INFO["version"], instructions=instructions,
+        title=MCP_SERVER_INFO["title"], website_url=MCP_SERVER_INFO["websiteUrl"],
+        description=MCP_SERVER_INFO["description"],
         on_list_tools=list_tools, on_call_tool=call_tool,
     )
 

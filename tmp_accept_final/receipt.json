@@ -1,0 +1,5733 @@
+{
+  "schema_version": 1,
+  "operation": "native_ladder_acceptance",
+  "status": "passed",
+  "started_at": "2026-10-22T12:00:38.831410+00:00",
+  "active_stage": "native_export",
+  "simulation": "not_run",
+  "stages": {
+    "open": {
+      "status": "passed",
+      "identity": {
+        "process_id": 10548,
+        "window_handle": 7934842,
+        "process_started": "134371440510233149",
+        "executable": "D:\\GXWORKS2\\GPPW2\\GD2.exe",
+        "software_version": "1.635.0.1",
+        "project_path": "D:\\gxworks-agent\\tmp_accept_final\\project.gxw",
+        "cpu_menu": "FX3U/FX3UC",
+        "path_binding": "native_full_caption",
+        "native_ui_language": "zh-CN",
+        "project_codepage": 936,
+        "project_language_observation": {
+          "status": "observed",
+          "codepage_candidates": [
+            936,
+            54936
+          ],
+          "status_text": "简体中文"
+        }
+      },
+      "library_updates": []
+    },
+    "compile": {
+      "status": "passed",
+      "component": "native_workspace_adapter",
+      "command": "compile_project",
+      "native_workspace": {
+        "protocol_version": 1,
+        "status": "observed",
+        "message": "",
+        "native_version": "1.635.0.1",
+        "cpu": "FX3U/FX3UC",
+        "compile": "completed_accepted",
+        "check": "completed_accepted",
+        "validation": {
+          "events": [
+            {
+              "operation": "NativeProcessEncoding",
+              "ansi_codepage": 65001,
+              "thread_locale": 1033,
+              "provenance": "process code page; project source code page is read separately",
+              "check_pass": "common"
+            },
+            {
+              "operation": "CoInitializeEx",
+              "hresult": 1,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "CoCreateInstance:0bf65a7e-5f7d-4c34-927a-a24ef88a7c8a",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Navigator.Initialize",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Navigator.SetApplicationParameterEX4",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Navigator.SetSupportFunctionInfo",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Navigator.SetParameterVersionInfo",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "CoCreateInstance:97de49af-71ee-4f89-b6c3-f8bc47b6f5ad",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "QueryInterface:2a4da64f-0505-4b64-9414-e5c97594ba51",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Inside.SetDNaviServer",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "CoCreateInstance:98651bdf-9fc8-4a3e-abd3-69892b52a82c",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "QueryInterface:a1b152dd-01e5-4764-893b-91ed0759ef35",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "CommInside.SetDNaviServer",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "CommInside.SetWorkspace",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Inside.SetCommABSPointer",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.SetDisplayStyle",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.SetMFCDLLMode",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.Initialize",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetCommonManager",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.SetDABOperationSetting",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetProjectOperation",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "QueryInterface:d4368a41-d713-4013-86f3-9ea1a3922930",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "GetProjectNameOfOneFileProject",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "ImportOneFileProject",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "MaterializeVendorSaveState",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "GetProjectAttributesForOpenProject",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "NativeProjectOpenAttributes",
+              "name": "FX3U",
+              "cpu": "FX3U/FX3UC",
+              "attribute": 1,
+              "mode": 1,
+              "user_manage": 0,
+              "provenance": "original GetProjectAttributesForOpenProject; raw fields, not a guessed engineering type",
+              "check_pass": "common"
+            },
+            {
+              "operation": "Navigator.SetSupportControllerTypeInfo",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Navigator.SetLanguageString",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Navigator.SetCpuTypeString",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Navigator.ReserveProject",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Inside.SetReservID",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "OpenProjectEX2",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "QueryInterface:1ef736c6-f881-4bfa-9fe4-0601bbadff23",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetProjectCodePage",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "ProjectID",
+              "words": [
+                0,
+                3221225472,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.FindSourceOwner",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectName",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.FindSourceBody",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectName",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetParent",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.CountObject",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetObjectIDList",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadChildType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadChildType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetSourceLanguage",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadSourceParent",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "NativeBodySelection",
+              "name": "MAIN",
+              "stage": "before-build",
+              "program_kind": 1,
+              "source_object": {
+                "status": "verified-source-object",
+                "parent": [
+                  0,
+                  3221225472,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "lookup_type": 32,
+                "name": "MAIN",
+                "lookup": {
+                  "hresult": 0,
+                  "code": 0,
+                  "id": [
+                    0,
+                    3758104836,
+                    1,
+                    16777216,
+                    1,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "owner_lookup": {
+                  "hresult": 0,
+                  "code": 0,
+                  "lookup_type": 26,
+                  "id": [
+                    0,
+                    3758104832,
+                    1,
+                    16777216,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "body": {
+                  "id": [
+                    0,
+                    3758104836,
+                    1,
+                    16777216,
+                    1,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ],
+                  "read_type": {
+                    "hresult": 0,
+                    "code": 0,
+                    "data_type": 32
+                  },
+                  "read_name": {
+                    "hresult": 0,
+                    "code": 0,
+                    "name": "Program"
+                  }
+                },
+                "owner": {
+                  "id": [
+                    0,
+                    3758104832,
+                    1,
+                    16777216,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ],
+                  "read_type": {
+                    "hresult": 0,
+                    "code": 0,
+                    "data_type": 26
+                  },
+                  "read_name": {
+                    "hresult": 0,
+                    "code": 0,
+                    "name": "MAIN"
+                  }
+                },
+                "body_parent": {
+                  "hresult": 0,
+                  "code": 0,
+                  "id": [
+                    0,
+                    3758104832,
+                    1,
+                    16777216,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "language": {
+                  "hresult": 0,
+                  "code": 0,
+                  "object_id": [
+                    0,
+                    3758104832,
+                    1,
+                    16777216,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ],
+                  "value": 1,
+                  "expected": 1
+                }
+              },
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetPOUBodySize",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetPOUBodyData",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "NativeBodyRead",
+              "stage": "before-build",
+              "body": [
+                0,
+                3758104836,
+                1,
+                16777216,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "bytes": 1438,
+              "file": "source-before-build-0.bin",
+              "evidence": {
+                "schema_version": 1,
+                "origin": "source_body"
+              },
+              "provenance": "original Workspace.GetPOUBodyData(1692); source bytes, not compiled PCode",
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadDeclarationCollection:13",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.CountObject",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetObjectIDList",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectName",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadDeclarationParent",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadDeclarationParent",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectName",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.CountObject",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "NativeDeclarationOwnerRead",
+              "stage": "before-build",
+              "role": "global",
+              "library": "",
+              "status": "observed",
+              "project_id": [
+                0,
+                3221225472,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "owner": {
+                "id": [
+                  0,
+                  3758292992,
+                  1,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "read_type": {
+                  "hresult": 0,
+                  "code": 0,
+                  "data_type": 14
+                },
+                "read_name": {
+                  "hresult": 0,
+                  "code": 0,
+                  "name": "Global1"
+                }
+              },
+              "owner_parent": {
+                "hresult": 0,
+                "code": 0,
+                "id": [
+                  0,
+                  3758227456,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              },
+              "collection": {
+                "id": [
+                  0,
+                  3758227456,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "read_type": {
+                  "hresult": 0,
+                  "code": 0,
+                  "data_type": 13
+                },
+                "read_name": {
+                  "hresult": 0,
+                  "code": 0,
+                  "name": ""
+                }
+              },
+              "collection_parent": {
+                "hresult": 0,
+                "code": 0,
+                "id": [
+                  0,
+                  3221225472,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              },
+              "namespace_object": null,
+              "namespace_parent": null,
+              "namespace_collection": null,
+              "namespace_collection_parent": null,
+              "rows": [],
+              "provenance": "original collection, type, parent and variable field getters; read-only",
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadDeclarationCollection:768",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectName",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadDeclarationParent",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.CountObject",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetSourceResourceCollection",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.CountObject",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetObjectIDList",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectName",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadResourceParent",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.CountObject",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetObjectIDList",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectName",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetParent",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.CountObject",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetObjectIDList",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectName",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetParent",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "NativeTaskSelection",
+              "resource": {
+                "id": [
+                  0,
+                  3959422976,
+                  1,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "read_type": {
+                  "hresult": 0,
+                  "code": 0,
+                  "data_type": 8
+                },
+                "read_name": {
+                  "hresult": 0,
+                  "code": 0,
+                  "name": "MAIN"
+                }
+              },
+              "tasks": [
+                {
+                  "task": {
+                    "id": [
+                      0,
+                      4009754624,
+                      1,
+                      1,
+                      1,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "read_type": {
+                      "hresult": 0,
+                      "code": 0,
+                      "data_type": 10
+                    },
+                    "read_name": {
+                      "hresult": 0,
+                      "code": 0,
+                      "name": "MAIN"
+                    }
+                  },
+                  "programs": [
+                    {
+                      "id": [
+                        0,
+                        4022337536,
+                        1,
+                        1,
+                        1,
+                        1,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0
+                      ],
+                      "read_type": {
+                        "hresult": 0,
+                        "code": 0,
+                        "data_type": 12
+                      },
+                      "read_name": {
+                        "hresult": 0,
+                        "code": 0,
+                        "name": "MAIN"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "parent": {
+                "hresult": 0,
+                "code": 0,
+                "id": [
+                  0,
+                  3892314112,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              },
+              "evidence": {
+                "schema_version": 1,
+                "origin": "task_selection"
+              },
+              "provenance": "original Workspace collection, child, type, name and parent reads before compilation",
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetProjectCompiler",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "QueryInterface:99db1d02-f474-430d-bc1f-03abf0c7064b",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Compiler.ToBackward",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Compiler.Reinitialize",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Compiler.PrepareBuildData",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Compiler.Build",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "OwnedBackendModule",
+              "name": "DZDataABS_CompilerAdapter.dll",
+              "version": "1.635.0.1",
+              "path": "D:\\GXWORKS2\\DNaviZero\\DataAbsorber\\DZDataABS_CompilerAdapter.dll",
+              "check_pass": "common"
+            },
+            {
+              "operation": "Progress",
+              "poll": 1,
+              "hresult": 0,
+              "code": 0,
+              "percent": 100,
+              "count": 0,
+              "report_interface": "public-compiler",
+              "progress_slot": 40,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Compiler.BuildProgress",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "CompilePublicReports",
+              "poll": 1,
+              "percent": 100,
+              "reports": [],
+              "report_interface": "public-compiler",
+              "record_size": 100,
+              "check_pass": "common"
+            },
+            {
+              "operation": "CompilePublicReportCleanup",
+              "poll": 1,
+              "count": 0,
+              "report_interface": "public-compiler",
+              "record_size": 100,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.FindSourceOwner",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectName",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.FindSourceBody",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectName",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetParent",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.CountObject",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetObjectIDList",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadChildType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadChildType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetSourceLanguage",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadSourceParent",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "NativeBodySelection",
+              "name": "MAIN",
+              "stage": "after-build",
+              "program_kind": 1,
+              "source_object": {
+                "status": "verified-source-object",
+                "parent": [
+                  0,
+                  3221225472,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "lookup_type": 32,
+                "name": "MAIN",
+                "lookup": {
+                  "hresult": 0,
+                  "code": 0,
+                  "id": [
+                    0,
+                    3758104836,
+                    1,
+                    16777216,
+                    1,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "owner_lookup": {
+                  "hresult": 0,
+                  "code": 0,
+                  "lookup_type": 26,
+                  "id": [
+                    0,
+                    3758104832,
+                    1,
+                    16777216,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "body": {
+                  "id": [
+                    0,
+                    3758104836,
+                    1,
+                    16777216,
+                    1,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ],
+                  "read_type": {
+                    "hresult": 0,
+                    "code": 0,
+                    "data_type": 32
+                  },
+                  "read_name": {
+                    "hresult": 0,
+                    "code": 0,
+                    "name": "Program"
+                  }
+                },
+                "owner": {
+                  "id": [
+                    0,
+                    3758104832,
+                    1,
+                    16777216,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ],
+                  "read_type": {
+                    "hresult": 0,
+                    "code": 0,
+                    "data_type": 26
+                  },
+                  "read_name": {
+                    "hresult": 0,
+                    "code": 0,
+                    "name": "MAIN"
+                  }
+                },
+                "body_parent": {
+                  "hresult": 0,
+                  "code": 0,
+                  "id": [
+                    0,
+                    3758104832,
+                    1,
+                    16777216,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "language": {
+                  "hresult": 0,
+                  "code": 0,
+                  "object_id": [
+                    0,
+                    3758104832,
+                    1,
+                    16777216,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ],
+                  "value": 1,
+                  "expected": 1
+                }
+              },
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetPOUBodySize",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetPOUBodyData",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "NativeBodyRead",
+              "stage": "after-build",
+              "body": [
+                0,
+                3758104836,
+                1,
+                16777216,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "bytes": 1438,
+              "file": "source-after-build-0.bin",
+              "evidence": {
+                "schema_version": 1,
+                "origin": "source_body"
+              },
+              "provenance": "original Workspace.GetPOUBodyData(1692); source bytes, not compiled PCode",
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadDeclarationCollection:13",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.CountObject",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetObjectIDList",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectName",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadDeclarationParent",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadDeclarationParent",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectName",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.CountObject",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "NativeDeclarationOwnerRead",
+              "stage": "after-build",
+              "role": "global",
+              "library": "",
+              "status": "observed",
+              "project_id": [
+                0,
+                3221225472,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "owner": {
+                "id": [
+                  0,
+                  3758292992,
+                  1,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "read_type": {
+                  "hresult": 0,
+                  "code": 0,
+                  "data_type": 14
+                },
+                "read_name": {
+                  "hresult": 0,
+                  "code": 0,
+                  "name": "Global1"
+                }
+              },
+              "owner_parent": {
+                "hresult": 0,
+                "code": 0,
+                "id": [
+                  0,
+                  3758227456,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              },
+              "collection": {
+                "id": [
+                  0,
+                  3758227456,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "read_type": {
+                  "hresult": 0,
+                  "code": 0,
+                  "data_type": 13
+                },
+                "read_name": {
+                  "hresult": 0,
+                  "code": 0,
+                  "name": ""
+                }
+              },
+              "collection_parent": {
+                "hresult": 0,
+                "code": 0,
+                "id": [
+                  0,
+                  3221225472,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              },
+              "namespace_object": null,
+              "namespace_parent": null,
+              "namespace_collection": null,
+              "namespace_collection_parent": null,
+              "rows": [],
+              "provenance": "original collection, type, parent and variable field getters; read-only",
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadDeclarationCollection:768",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectName",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadDeclarationParent",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.CountObject",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Compiler.GetPCode",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Resource",
+              "index": 0,
+              "name": "MAIN",
+              "channels": [
+                {
+                  "channel": 0,
+                  "bytes": 1418,
+                  "file": "pcode-0-0.bin"
+                },
+                {
+                  "channel": 1,
+                  "bytes": 0,
+                  "file": "pcode-0-1.bin"
+                },
+                {
+                  "channel": 2,
+                  "bytes": 0,
+                  "file": "pcode-0-2.bin"
+                }
+              ],
+              "check_pass": "common"
+            },
+            {
+              "operation": "NativeSourceReferencesUnavailable",
+              "reason": "simple Ladder has no established IEC symbol-analysis binding",
+              "provenance": "L02 non-label source: original CreateProgramAnalysis3 progress fails; task/source identity remains independently checked",
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.UpdatePCodeBeforeProgramCheck",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetProgramCheckCollection",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.CountObject",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetObjectIDList",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "ProgramCheckTargetOrder",
+              "targets": [
+                [
+                  0,
+                  3959422976,
+                  1,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              ],
+              "check_pass": "common"
+            },
+            {
+              "operation": "OwnedBackendModule",
+              "name": "DZDataABS_CompilerAdapter.dll",
+              "version": "1.635.0.1",
+              "path": "D:\\GXWORKS2\\DNaviZero\\DataAbsorber\\DZDataABS_CompilerAdapter.dll",
+              "check_pass": "common"
+            },
+            {
+              "operation": "OwnedBackendModule",
+              "name": "DZDataABS_Compiler_IEC.dll",
+              "version": "1.635.0.1",
+              "path": "D:\\GXWORKS2\\DNaviZero\\DataAbsorber\\DZDataABS_Compiler_IEC.dll",
+              "check_pass": "common"
+            },
+            {
+              "operation": "OwnedBackendModule",
+              "name": "DZDataABS_CompilerAdapter.dll",
+              "version": "1.635.0.1",
+              "path": "D:\\GXWORKS2\\DNaviZero\\DataAbsorber\\DZDataABS_CompilerAdapter.dll",
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectName",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "ResourceCompilerLookup",
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "resource": "MAIN",
+              "function_kind": 65537,
+              "hresult": 0,
+              "code": 0,
+              "provenance": "original Workspace.GetProjectFunction2560 with exact resource target, matching CDZClient::ProgramCheck getter argument",
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetResourceContextCompiler",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "QueryInterface:99db1d02-f474-430d-bc1f-03abf0c7064b",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "ResourceCompilerInterface",
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "resource": "MAIN",
+              "borrowed_compiler": 166735072,
+              "queried_compiler": 166735072,
+              "same_interface": true,
+              "original_progress_rva": 81454,
+              "original_program_check_rva": 86113,
+              "provenance": "actual original factory return used directly by CDZClient ProgramCheck/GetProgress; no interface substitution",
+              "check_pass": "common"
+            },
+            {
+              "operation": "OwnedBackendModule",
+              "name": "DZDataABS_CompilerAdapter.dll",
+              "version": "1.635.0.1",
+              "path": "D:\\GXWORKS2\\DNaviZero\\DataAbsorber\\DZDataABS_CompilerAdapter.dll",
+              "check_pass": "common"
+            },
+            {
+              "operation": "OwnedBackendModule",
+              "name": "DZDataABS_Compiler_IEC.dll",
+              "version": "1.635.0.1",
+              "path": "D:\\GXWORKS2\\DNaviZero\\DataAbsorber\\DZDataABS_Compiler_IEC.dll",
+              "check_pass": "common"
+            },
+            {
+              "operation": "QueryInterface:00000000-0000-0000-c000-000000000046",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "QueryInterface:00000000-0000-0000-c000-000000000046",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "ResourceCompilerContext",
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "resource": "MAIN",
+              "project_public_compiler": 166735072,
+              "resource_public_compiler": 166735072,
+              "same_public_interface": true,
+              "same_canonical_iunknown": true,
+              "same_original_adapter": true,
+              "same_original_backend": true,
+              "project_adapter_root": [
+                0,
+                3221225472,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "resource_adapter_root": [
+                0,
+                3221225472,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "resource_workspace_matches": true,
+              "provenance": "original COM getter and QueryInterface identities; read-only original adapter workspace/project fields",
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "public"
+            },
+            {
+              "operation": "Workspace.ReadObjectName",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "public"
+            },
+            {
+              "operation": "NativeObject",
+              "id": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "parent": [
+                0,
+                3892314112,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "name": "MAIN",
+              "name_hresult": 0,
+              "name_code": 0,
+              "check_pass": "public"
+            },
+            {
+              "operation": "OwnedBackendModule",
+              "name": "DZDataABS_Workspace.dll",
+              "version": "1.635.0.1",
+              "path": "D:\\GXWORKS2\\DNaviZero\\DataAbsorber\\DZDataABS_Workspace.dll",
+              "check_pass": "public"
+            },
+            {
+              "operation": "Workspace.GetPublishedCodeSize",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "public"
+            },
+            {
+              "operation": "Workspace.GetPublishedCode",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "public"
+            },
+            {
+              "operation": "Workspace.ReadObjectType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "public"
+            },
+            {
+              "operation": "Workspace.ReadObjectName",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "public"
+            },
+            {
+              "operation": "PublishedResourceCodeRead",
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "name": "MAIN",
+              "hresult": 0,
+              "code": 0,
+              "sizes": [
+                1418,
+                0,
+                0
+              ],
+              "check_pass": "public"
+            },
+            {
+              "operation": "PublishedResourceCodeCorrespondence",
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "resource": {
+                "id": [
+                  0,
+                  3959422976,
+                  1,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "read_type": {
+                  "hresult": 0,
+                  "code": 0,
+                  "data_type": 8
+                },
+                "read_name": {
+                  "hresult": 0,
+                  "code": 0,
+                  "name": "MAIN"
+                }
+              },
+              "channels": [
+                {
+                  "channel": 0,
+                  "published_size": 1418,
+                  "generated_size": 1418,
+                  "exact_current_generated_bytes": true,
+                  "published_snapshot": "published-158-0.bin"
+                },
+                {
+                  "channel": 1,
+                  "published_size": 0,
+                  "generated_size": 0,
+                  "exact_current_generated_bytes": true,
+                  "published_snapshot": "published-158-1.bin"
+                },
+                {
+                  "channel": 2,
+                  "published_size": 0,
+                  "generated_size": 0,
+                  "exact_current_generated_bytes": true,
+                  "published_snapshot": "published-158-2.bin"
+                }
+              ],
+              "generated_resource_matches": 1,
+              "status": "current",
+              "check_pass": "public"
+            },
+            {
+              "operation": "ProgramCheckTarget",
+              "id": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "check_pass": "public"
+            },
+            {
+              "operation": "Compiler.ProgramCheck",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "public"
+            },
+            {
+              "operation": "OwnedBackendModule",
+              "name": "DZDataABS_CompilerAdapter.dll",
+              "version": "1.635.0.1",
+              "path": "D:\\GXWORKS2\\DNaviZero\\DataAbsorber\\DZDataABS_CompilerAdapter.dll",
+              "check_pass": "public"
+            },
+            {
+              "operation": "ProgramCheckReportContext",
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "path": "original-public-get-progress",
+              "check_pass": "public"
+            },
+            {
+              "operation": "OwnedBackendModule",
+              "name": "DZDataABS_CompilerAdapter.dll",
+              "version": "1.635.0.1",
+              "path": "D:\\GXWORKS2\\DNaviZero\\DataAbsorber\\DZDataABS_CompilerAdapter.dll",
+              "check_pass": "public"
+            },
+            {
+              "operation": "OwnedBackendModule",
+              "name": "DZDataABS_Compiler_IEC.dll",
+              "version": "1.635.0.1",
+              "path": "D:\\GXWORKS2\\DNaviZero\\DataAbsorber\\DZDataABS_Compiler_IEC.dll",
+              "check_pass": "public"
+            },
+            {
+              "operation": "OwnedBackendModule",
+              "name": "DZDataABS_Compiler_IEC.dll",
+              "version": "1.635.0.1",
+              "path": "D:\\GXWORKS2\\DNaviZero\\DataAbsorber\\DZDataABS_Compiler_IEC.dll",
+              "check_pass": "public"
+            },
+            {
+              "operation": "OwnedBackendModule",
+              "name": "DZDataABS_SICConverter_IEC.dll",
+              "version": "1.635.0.1",
+              "path": "D:\\GXWORKS2\\DNaviZero\\DataAbsorber\\DZDataABS_SICConverter_IEC.dll",
+              "check_pass": "public"
+            },
+            {
+              "operation": "OwnedBackendModule",
+              "name": "ECCompiler_IEC.dll",
+              "version": "15.50",
+              "path": "D:\\GXWORKS2\\Easysocket\\Compiler\\ECCompiler_IEC.dll",
+              "check_pass": "public"
+            },
+            {
+              "operation": "OwnedCheckInput",
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "stage": "submitted",
+              "mask": -1,
+              "manager": "105945968",
+              "compiler_member_offset": 12,
+              "manager_records_offset": 32,
+              "rows": [
+                {
+                  "resource": "MAIN",
+                  "bytes": 1486,
+                  "file": "check-input-171-0.bin",
+                  "tag": -1,
+                  "resource_name": {
+                    "codepage": 936,
+                    "raw_hex": "4d41494e"
+                  },
+                  "framing": {
+                    "reader_module": "ECCompiler_IEC.dll",
+                    "reader_version": "15.50",
+                    "reader_rva": 237360,
+                    "code": 0,
+                    "mode": 1,
+                    "body_offset": 68,
+                    "body_bytes": 1418,
+                    "first_length": 64,
+                    "second_length": 4,
+                    "evidence": {
+                      "schema_version": 1,
+                      "origin": "structured_check_envelope"
+                    },
+                    "provenance": "original checker envelope helper; optional tables omitted; read-only"
+                  }
+                }
+              ],
+              "input_contract": {
+                "schema_version": 1,
+                "kind": "structured",
+                "status": "verified"
+              },
+              "evidence": {
+                "schema_version": 1,
+                "origin": "owned_check_input"
+              },
+              "provenance": "original ProcessManager.ProgramCheck owned code copy; read-only; no interception",
+              "check_pass": "public"
+            },
+            {
+              "operation": "ProgramCheckOriginalProgress",
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "poll": 1,
+              "hresult": 0,
+              "code": 0,
+              "percent": 0,
+              "count": 2,
+              "report_interface": "public-compiler",
+              "record_size": 100,
+              "check_pass": "public"
+            },
+            {
+              "operation": "Compiler.OriginalPublicCheckProgress",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "public"
+            },
+            {
+              "operation": "ProgramCheckOriginalReports",
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "poll": 1,
+              "percent": 0,
+              "reports": [
+                {
+                  "kind": 1,
+                  "code": 1073741825,
+                  "name": {
+                    "text": "",
+                    "is_null": false,
+                    "raw_hex_utf16le": ""
+                  },
+                  "instance_kind": 0,
+                  "instance": {
+                    "text": "",
+                    "is_null": false,
+                    "raw_hex_utf16le": ""
+                  },
+                  "program_kind": 0,
+                  "source_object_id": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ],
+                  "step": -1,
+                  "network": -1,
+                  "left": -1,
+                  "top": -1,
+                  "right": -1,
+                  "bottom": -1,
+                  "arguments": [
+                    {
+                      "text": "FX3U",
+                      "is_null": false,
+                      "raw_hex_utf16le": "4600580033005500"
+                    }
+                  ],
+                  "poll": 1,
+                  "report_index": 0,
+                  "report_interface": "public-compiler",
+                  "record_size": 100
+                },
+                {
+                  "kind": 1,
+                  "code": 1073741826,
+                  "name": {
+                    "text": "",
+                    "is_null": false,
+                    "raw_hex_utf16le": ""
+                  },
+                  "instance_kind": 0,
+                  "instance": {
+                    "text": "",
+                    "is_null": false,
+                    "raw_hex_utf16le": ""
+                  },
+                  "program_kind": 0,
+                  "source_object_id": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ],
+                  "step": -1,
+                  "network": -1,
+                  "left": -1,
+                  "top": -1,
+                  "right": -1,
+                  "bottom": -1,
+                  "arguments": [],
+                  "poll": 1,
+                  "report_index": 1,
+                  "report_interface": "public-compiler",
+                  "record_size": 100
+                }
+              ],
+              "report_interface": "public-compiler",
+              "record_size": 100,
+              "provenance": "original compiler.GetProgress40 after actual selected resource ProgramCheck; no direct raw drain or synthetic report",
+              "check_pass": "public"
+            },
+            {
+              "operation": "CompilePublicReportCleanup",
+              "poll": 1,
+              "count": 2,
+              "report_interface": "public-compiler",
+              "record_size": 100,
+              "check_pass": "public"
+            },
+            {
+              "operation": "ProgramCheckOriginalProgress",
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "poll": 2,
+              "hresult": 0,
+              "code": 0,
+              "percent": 100,
+              "count": 3,
+              "report_interface": "public-compiler",
+              "record_size": 100,
+              "check_pass": "public"
+            },
+            {
+              "operation": "Compiler.OriginalPublicCheckProgress",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "public"
+            },
+            {
+              "operation": "ProgramCheckOriginalReports",
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "poll": 2,
+              "percent": 100,
+              "reports": [
+                {
+                  "kind": 1,
+                  "code": 34,
+                  "name": {
+                    "text": "MAIN",
+                    "is_null": false,
+                    "raw_hex_utf16le": "4d00410049004e00"
+                  },
+                  "instance_kind": 6,
+                  "instance": {
+                    "text": "MAIN",
+                    "is_null": false,
+                    "raw_hex_utf16le": "4d00410049004e00"
+                  },
+                  "program_kind": 1,
+                  "source_object_id": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ],
+                  "step": 0,
+                  "network": -1,
+                  "left": -1,
+                  "top": 0,
+                  "right": -1,
+                  "bottom": -1,
+                  "arguments": [],
+                  "poll": 2,
+                  "report_index": 0,
+                  "report_interface": "public-compiler",
+                  "record_size": 100
+                },
+                {
+                  "kind": 1,
+                  "code": 35,
+                  "name": {
+                    "text": "MAIN",
+                    "is_null": false,
+                    "raw_hex_utf16le": "4d00410049004e00"
+                  },
+                  "instance_kind": 6,
+                  "instance": {
+                    "text": "MAIN",
+                    "is_null": false,
+                    "raw_hex_utf16le": "4d00410049004e00"
+                  },
+                  "program_kind": 0,
+                  "source_object_id": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ],
+                  "step": 0,
+                  "network": -1,
+                  "left": -1,
+                  "top": 0,
+                  "right": -1,
+                  "bottom": -1,
+                  "arguments": [
+                    {
+                      "text": "0",
+                      "is_null": false,
+                      "raw_hex_utf16le": "3000"
+                    },
+                    {
+                      "text": "0",
+                      "is_null": false,
+                      "raw_hex_utf16le": "3000"
+                    }
+                  ],
+                  "poll": 2,
+                  "report_index": 1,
+                  "report_interface": "public-compiler",
+                  "record_size": 100
+                },
+                {
+                  "kind": 1,
+                  "code": 25,
+                  "name": {
+                    "text": "",
+                    "is_null": false,
+                    "raw_hex_utf16le": ""
+                  },
+                  "instance_kind": 0,
+                  "instance": {
+                    "text": "",
+                    "is_null": false,
+                    "raw_hex_utf16le": ""
+                  },
+                  "program_kind": 0,
+                  "source_object_id": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ],
+                  "step": -1,
+                  "network": -1,
+                  "left": -1,
+                  "top": -1,
+                  "right": -1,
+                  "bottom": -1,
+                  "arguments": [
+                    {
+                      "text": "0",
+                      "is_null": false,
+                      "raw_hex_utf16le": "3000"
+                    },
+                    {
+                      "text": "0",
+                      "is_null": false,
+                      "raw_hex_utf16le": "3000"
+                    }
+                  ],
+                  "poll": 2,
+                  "report_index": 2,
+                  "report_interface": "public-compiler",
+                  "record_size": 100
+                }
+              ],
+              "report_interface": "public-compiler",
+              "record_size": 100,
+              "provenance": "original compiler.GetProgress40 after actual selected resource ProgramCheck; no direct raw drain or synthetic report",
+              "check_pass": "public"
+            },
+            {
+              "operation": "CompilePublicReportCleanup",
+              "poll": 2,
+              "count": 3,
+              "report_interface": "public-compiler",
+              "record_size": 100,
+              "check_pass": "public"
+            },
+            {
+              "operation": "OwnedBackendModule",
+              "name": "DZDataABS_CompilerAdapter.dll",
+              "version": "1.635.0.1",
+              "path": "D:\\GXWORKS2\\DNaviZero\\DataAbsorber\\DZDataABS_CompilerAdapter.dll",
+              "check_pass": "public"
+            },
+            {
+              "operation": "OwnedBackendModule",
+              "name": "DZDataABS_Compiler_IEC.dll",
+              "version": "1.635.0.1",
+              "path": "D:\\GXWORKS2\\DNaviZero\\DataAbsorber\\DZDataABS_Compiler_IEC.dll",
+              "check_pass": "public"
+            },
+            {
+              "operation": "OwnedBackendModule",
+              "name": "DZDataABS_Compiler_IEC.dll",
+              "version": "1.635.0.1",
+              "path": "D:\\GXWORKS2\\DNaviZero\\DataAbsorber\\DZDataABS_Compiler_IEC.dll",
+              "check_pass": "public"
+            },
+            {
+              "operation": "OwnedBackendModule",
+              "name": "DZDataABS_SICConverter_IEC.dll",
+              "version": "1.635.0.1",
+              "path": "D:\\GXWORKS2\\DNaviZero\\DataAbsorber\\DZDataABS_SICConverter_IEC.dll",
+              "check_pass": "public"
+            },
+            {
+              "operation": "OwnedBackendModule",
+              "name": "ECCompiler_IEC.dll",
+              "version": "15.50",
+              "path": "D:\\GXWORKS2\\Easysocket\\Compiler\\ECCompiler_IEC.dll",
+              "check_pass": "public"
+            },
+            {
+              "operation": "OwnedCheckInput",
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "stage": "completed",
+              "mask": -1,
+              "manager": "105945968",
+              "compiler_member_offset": 12,
+              "manager_records_offset": 32,
+              "rows": [
+                {
+                  "resource": "MAIN",
+                  "bytes": 1486,
+                  "file": "check-input-185-0.bin",
+                  "tag": -1,
+                  "resource_name": {
+                    "codepage": 936,
+                    "raw_hex": "4d41494e"
+                  },
+                  "framing": {
+                    "reader_module": "ECCompiler_IEC.dll",
+                    "reader_version": "15.50",
+                    "reader_rva": 237360,
+                    "code": 0,
+                    "mode": 1,
+                    "body_offset": 68,
+                    "body_bytes": 1418,
+                    "first_length": 64,
+                    "second_length": 4,
+                    "evidence": {
+                      "schema_version": 1,
+                      "origin": "structured_check_envelope"
+                    },
+                    "provenance": "original checker envelope helper; optional tables omitted; read-only"
+                  }
+                }
+              ],
+              "input_contract": {
+                "schema_version": 1,
+                "kind": "structured",
+                "status": "verified"
+              },
+              "evidence": {
+                "schema_version": 1,
+                "origin": "owned_check_input"
+              },
+              "provenance": "original ProcessManager.ProgramCheck owned code copy; read-only; no interception",
+              "check_pass": "public"
+            },
+            {
+              "operation": "OwnedBackendModule",
+              "name": "DZDataABS_Workspace.dll",
+              "version": "1.635.0.1",
+              "path": "D:\\GXWORKS2\\DNaviZero\\DataAbsorber\\DZDataABS_Workspace.dll",
+              "check_pass": "public"
+            },
+            {
+              "operation": "Workspace.GetPublishedCodeSize",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "public"
+            },
+            {
+              "operation": "Workspace.GetPublishedCode",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "public"
+            },
+            {
+              "operation": "Workspace.ReadObjectType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "public"
+            },
+            {
+              "operation": "Workspace.ReadObjectName",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "public"
+            },
+            {
+              "operation": "PublishedResourceCodeRead",
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "name": "MAIN",
+              "hresult": 0,
+              "code": 0,
+              "sizes": [
+                1418,
+                0,
+                0
+              ],
+              "check_pass": "public"
+            },
+            {
+              "operation": "PublishedResourceCodeCorrespondence",
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "resource": {
+                "id": [
+                  0,
+                  3959422976,
+                  1,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "read_type": {
+                  "hresult": 0,
+                  "code": 0,
+                  "data_type": 8
+                },
+                "read_name": {
+                  "hresult": 0,
+                  "code": 0,
+                  "name": "MAIN"
+                }
+              },
+              "channels": [
+                {
+                  "channel": 0,
+                  "published_size": 1418,
+                  "generated_size": 1418,
+                  "exact_current_generated_bytes": true,
+                  "published_snapshot": "published-189-0.bin"
+                },
+                {
+                  "channel": 1,
+                  "published_size": 0,
+                  "generated_size": 0,
+                  "exact_current_generated_bytes": true,
+                  "published_snapshot": "published-189-1.bin"
+                },
+                {
+                  "channel": 2,
+                  "published_size": 0,
+                  "generated_size": 0,
+                  "exact_current_generated_bytes": true,
+                  "published_snapshot": "published-189-2.bin"
+                }
+              ],
+              "generated_resource_matches": 1,
+              "status": "current",
+              "check_pass": "public"
+            },
+            {
+              "operation": "ProgramCheckTargetOutcome",
+              "target": [
+                0,
+                3959422976,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "public_check": "completed-accepted",
+              "native_error_observations": 0,
+              "native_warning_observations": 0,
+              "terminal_progress_observed": true,
+              "native_resource_end_marker_observed": true,
+              "public_adapter_projection": "original-public-get-progress",
+              "check_pass": "public"
+            },
+            {
+              "operation": "ProgramCheckPollingFinished",
+              "targets": 1,
+              "checked_targets": 1,
+              "skipped_targets": 0,
+              "projection_failed_targets": 0,
+              "validation_failed": false,
+              "completed": true,
+              "check_pass": "public"
+            },
+            {
+              "operation": "Workspace.FindSourceOwner",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectName",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.FindSourceBody",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectName",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetParent",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.CountObject",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetObjectIDList",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadChildType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadChildType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetSourceLanguage",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadSourceParent",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "NativeBodySelection",
+              "name": "MAIN",
+              "stage": "after-check",
+              "program_kind": 1,
+              "source_object": {
+                "status": "verified-source-object",
+                "parent": [
+                  0,
+                  3221225472,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "lookup_type": 32,
+                "name": "MAIN",
+                "lookup": {
+                  "hresult": 0,
+                  "code": 0,
+                  "id": [
+                    0,
+                    3758104836,
+                    1,
+                    16777216,
+                    1,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "owner_lookup": {
+                  "hresult": 0,
+                  "code": 0,
+                  "lookup_type": 26,
+                  "id": [
+                    0,
+                    3758104832,
+                    1,
+                    16777216,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "body": {
+                  "id": [
+                    0,
+                    3758104836,
+                    1,
+                    16777216,
+                    1,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ],
+                  "read_type": {
+                    "hresult": 0,
+                    "code": 0,
+                    "data_type": 32
+                  },
+                  "read_name": {
+                    "hresult": 0,
+                    "code": 0,
+                    "name": "Program"
+                  }
+                },
+                "owner": {
+                  "id": [
+                    0,
+                    3758104832,
+                    1,
+                    16777216,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ],
+                  "read_type": {
+                    "hresult": 0,
+                    "code": 0,
+                    "data_type": 26
+                  },
+                  "read_name": {
+                    "hresult": 0,
+                    "code": 0,
+                    "name": "MAIN"
+                  }
+                },
+                "body_parent": {
+                  "hresult": 0,
+                  "code": 0,
+                  "id": [
+                    0,
+                    3758104832,
+                    1,
+                    16777216,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "language": {
+                  "hresult": 0,
+                  "code": 0,
+                  "object_id": [
+                    0,
+                    3758104832,
+                    1,
+                    16777216,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ],
+                  "value": 1,
+                  "expected": 1
+                }
+              },
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetPOUBodySize",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetPOUBodyData",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "NativeBodyRead",
+              "stage": "after-check",
+              "body": [
+                0,
+                3758104836,
+                1,
+                16777216,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "bytes": 1438,
+              "file": "source-after-check-0.bin",
+              "evidence": {
+                "schema_version": 1,
+                "origin": "source_body"
+              },
+              "provenance": "original Workspace.GetPOUBodyData(1692); source bytes, not compiled PCode",
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadDeclarationCollection:13",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.CountObject",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.GetObjectIDList",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectName",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadDeclarationParent",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadDeclarationParent",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectName",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.CountObject",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "NativeDeclarationOwnerRead",
+              "stage": "after-check",
+              "role": "global",
+              "library": "",
+              "status": "observed",
+              "project_id": [
+                0,
+                3221225472,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "owner": {
+                "id": [
+                  0,
+                  3758292992,
+                  1,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "read_type": {
+                  "hresult": 0,
+                  "code": 0,
+                  "data_type": 14
+                },
+                "read_name": {
+                  "hresult": 0,
+                  "code": 0,
+                  "name": "Global1"
+                }
+              },
+              "owner_parent": {
+                "hresult": 0,
+                "code": 0,
+                "id": [
+                  0,
+                  3758227456,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              },
+              "collection": {
+                "id": [
+                  0,
+                  3758227456,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "read_type": {
+                  "hresult": 0,
+                  "code": 0,
+                  "data_type": 13
+                },
+                "read_name": {
+                  "hresult": 0,
+                  "code": 0,
+                  "name": ""
+                }
+              },
+              "collection_parent": {
+                "hresult": 0,
+                "code": 0,
+                "id": [
+                  0,
+                  3221225472,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              },
+              "namespace_object": null,
+              "namespace_parent": null,
+              "namespace_collection": null,
+              "namespace_collection_parent": null,
+              "rows": [],
+              "provenance": "original collection, type, parent and variable field getters; read-only",
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadDeclarationCollection:768",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectType",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadObjectName",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.ReadDeclarationParent",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "Workspace.CountObject",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "OwnedBackendModule",
+              "name": "ECCodeGeneratorFX2.dll",
+              "version": "15.31",
+              "path": "D:\\GXWORKS2\\Easysocket\\CodeGenerator\\ECCodegeneratorFX2.dll",
+              "check_pass": "common"
+            },
+            {
+              "scope_cpu": "FX3U/FX3UC",
+              "profile": "fx3u",
+              "module": "ECCodeGeneratorFX2.dll",
+              "version": "15.31",
+              "native_cpu": 520,
+              "native_versions": [],
+              "operation": "NativeCodeLexicalRead",
+              "resource": "MAIN",
+              "body_bytes": 1418,
+              "calls": {
+                "object_new": true,
+                "open": 0,
+                "set_version": null,
+                "decode": 0,
+                "close": 0
+              },
+              "prefixes": [
+                {
+                  "input_bytes": 16,
+                  "return_code": 0,
+                  "steps": 0
+                },
+                {
+                  "input_bytes": 19,
+                  "return_code": 0,
+                  "steps": 1
+                },
+                {
+                  "input_bytes": 24,
+                  "return_code": 0,
+                  "steps": 1
+                },
+                {
+                  "input_bytes": 29,
+                  "return_code": 0,
+                  "steps": 6
+                },
+                {
+                  "input_bytes": 34,
+                  "return_code": 0,
+                  "steps": 6
+                },
+                {
+                  "input_bytes": 39,
+                  "return_code": 0,
+                  "steps": 6
+                },
+                {
+                  "input_bytes": 44,
+                  "return_code": 0,
+                  "steps": 11
+                },
+                {
+                  "input_bytes": 49,
+                  "return_code": 0,
+                  "steps": 11
+                },
+                {
+                  "input_bytes": 54,
+                  "return_code": 0,
+                  "steps": 11
+                },
+                {
+                  "input_bytes": 59,
+                  "return_code": 0,
+                  "steps": 16
+                },
+                {
+                  "input_bytes": 64,
+                  "return_code": 0,
+                  "steps": 16
+                },
+                {
+                  "input_bytes": 69,
+                  "return_code": 0,
+                  "steps": 16
+                },
+                {
+                  "input_bytes": 74,
+                  "return_code": 0,
+                  "steps": 21
+                },
+                {
+                  "input_bytes": 79,
+                  "return_code": 0,
+                  "steps": 21
+                },
+                {
+                  "input_bytes": 84,
+                  "return_code": 0,
+                  "steps": 21
+                },
+                {
+                  "input_bytes": 104,
+                  "return_code": 0,
+                  "steps": 21
+                },
+                {
+                  "input_bytes": 107,
+                  "return_code": 0,
+                  "steps": 22
+                },
+                {
+                  "input_bytes": 112,
+                  "return_code": 0,
+                  "steps": 22
+                },
+                {
+                  "input_bytes": 117,
+                  "return_code": 0,
+                  "steps": 35
+                },
+                {
+                  "input_bytes": 121,
+                  "return_code": 0,
+                  "steps": 35
+                },
+                {
+                  "input_bytes": 125,
+                  "return_code": 0,
+                  "steps": 35
+                },
+                {
+                  "input_bytes": 129,
+                  "return_code": 0,
+                  "steps": 35
+                },
+                {
+                  "input_bytes": 134,
+                  "return_code": 0,
+                  "steps": 48
+                },
+                {
+                  "input_bytes": 138,
+                  "return_code": 0,
+                  "steps": 48
+                },
+                {
+                  "input_bytes": 142,
+                  "return_code": 0,
+                  "steps": 48
+                },
+                {
+                  "input_bytes": 146,
+                  "return_code": 0,
+                  "steps": 48
+                },
+                {
+                  "input_bytes": 151,
+                  "return_code": 0,
+                  "steps": 61
+                },
+                {
+                  "input_bytes": 155,
+                  "return_code": 0,
+                  "steps": 61
+                },
+                {
+                  "input_bytes": 159,
+                  "return_code": 0,
+                  "steps": 61
+                },
+                {
+                  "input_bytes": 163,
+                  "return_code": 0,
+                  "steps": 61
+                },
+                {
+                  "input_bytes": 168,
+                  "return_code": 0,
+                  "steps": 74
+                },
+                {
+                  "input_bytes": 172,
+                  "return_code": 0,
+                  "steps": 74
+                },
+                {
+                  "input_bytes": 176,
+                  "return_code": 0,
+                  "steps": 74
+                },
+                {
+                  "input_bytes": 180,
+                  "return_code": 0,
+                  "steps": 74
+                },
+                {
+                  "input_bytes": 196,
+                  "return_code": 0,
+                  "steps": 74
+                },
+                {
+                  "input_bytes": 199,
+                  "return_code": 0,
+                  "steps": 75
+                },
+                {
+                  "input_bytes": 204,
+                  "return_code": 0,
+                  "steps": 75
+                },
+                {
+                  "input_bytes": 209,
+                  "return_code": 0,
+                  "steps": 84
+                },
+                {
+                  "input_bytes": 214,
+                  "return_code": 0,
+                  "steps": 84
+                },
+                {
+                  "input_bytes": 218,
+                  "return_code": 0,
+                  "steps": 84
+                },
+                {
+                  "input_bytes": 223,
+                  "return_code": 0,
+                  "steps": 97
+                },
+                {
+                  "input_bytes": 227,
+                  "return_code": 0,
+                  "steps": 97
+                },
+                {
+                  "input_bytes": 231,
+                  "return_code": 0,
+                  "steps": 97
+                },
+                {
+                  "input_bytes": 235,
+                  "return_code": 0,
+                  "steps": 97
+                },
+                {
+                  "input_bytes": 240,
+                  "return_code": 0,
+                  "steps": 106
+                },
+                {
+                  "input_bytes": 245,
+                  "return_code": 0,
+                  "steps": 106
+                },
+                {
+                  "input_bytes": 249,
+                  "return_code": 0,
+                  "steps": 106
+                },
+                {
+                  "input_bytes": 254,
+                  "return_code": 0,
+                  "steps": 119
+                },
+                {
+                  "input_bytes": 258,
+                  "return_code": 0,
+                  "steps": 119
+                },
+                {
+                  "input_bytes": 262,
+                  "return_code": 0,
+                  "steps": 119
+                },
+                {
+                  "input_bytes": 266,
+                  "return_code": 0,
+                  "steps": 119
+                },
+                {
+                  "input_bytes": 288,
+                  "return_code": 0,
+                  "steps": 119
+                },
+                {
+                  "input_bytes": 300,
+                  "return_code": 0,
+                  "steps": 119
+                },
+                {
+                  "input_bytes": 303,
+                  "return_code": 0,
+                  "steps": 120
+                },
+                {
+                  "input_bytes": 307,
+                  "return_code": 0,
+                  "steps": 120
+                },
+                {
+                  "input_bytes": 310,
+                  "return_code": 0,
+                  "steps": 121
+                },
+                {
+                  "input_bytes": 314,
+                  "return_code": 0,
+                  "steps": 121
+                },
+                {
+                  "input_bytes": 317,
+                  "return_code": 0,
+                  "steps": 122
+                },
+                {
+                  "input_bytes": 321,
+                  "return_code": 0,
+                  "steps": 122
+                },
+                {
+                  "input_bytes": 324,
+                  "return_code": 0,
+                  "steps": 123
+                },
+                {
+                  "input_bytes": 328,
+                  "return_code": 0,
+                  "steps": 123
+                },
+                {
+                  "input_bytes": 331,
+                  "return_code": 0,
+                  "steps": 124
+                },
+                {
+                  "input_bytes": 335,
+                  "return_code": 0,
+                  "steps": 124
+                },
+                {
+                  "input_bytes": 338,
+                  "return_code": 0,
+                  "steps": 125
+                },
+                {
+                  "input_bytes": 342,
+                  "return_code": 0,
+                  "steps": 125
+                },
+                {
+                  "input_bytes": 347,
+                  "return_code": 0,
+                  "steps": 142
+                },
+                {
+                  "input_bytes": 353,
+                  "return_code": 0,
+                  "steps": 142
+                },
+                {
+                  "input_bytes": 358,
+                  "return_code": 0,
+                  "steps": 142
+                },
+                {
+                  "input_bytes": 362,
+                  "return_code": 0,
+                  "steps": 142
+                },
+                {
+                  "input_bytes": 366,
+                  "return_code": 0,
+                  "steps": 142
+                },
+                {
+                  "input_bytes": 378,
+                  "return_code": 0,
+                  "steps": 142
+                },
+                {
+                  "input_bytes": 381,
+                  "return_code": 0,
+                  "steps": 143
+                },
+                {
+                  "input_bytes": 385,
+                  "return_code": 0,
+                  "steps": 143
+                },
+                {
+                  "input_bytes": 388,
+                  "return_code": 0,
+                  "steps": 144
+                },
+                {
+                  "input_bytes": 392,
+                  "return_code": 0,
+                  "steps": 144
+                },
+                {
+                  "input_bytes": 395,
+                  "return_code": 0,
+                  "steps": 145
+                },
+                {
+                  "input_bytes": 399,
+                  "return_code": 0,
+                  "steps": 145
+                },
+                {
+                  "input_bytes": 402,
+                  "return_code": 0,
+                  "steps": 146
+                },
+                {
+                  "input_bytes": 406,
+                  "return_code": 0,
+                  "steps": 146
+                },
+                {
+                  "input_bytes": 409,
+                  "return_code": 0,
+                  "steps": 147
+                },
+                {
+                  "input_bytes": 413,
+                  "return_code": 0,
+                  "steps": 147
+                },
+                {
+                  "input_bytes": 416,
+                  "return_code": 0,
+                  "steps": 148
+                },
+                {
+                  "input_bytes": 420,
+                  "return_code": 0,
+                  "steps": 148
+                },
+                {
+                  "input_bytes": 425,
+                  "return_code": 0,
+                  "steps": 165
+                },
+                {
+                  "input_bytes": 432,
+                  "return_code": 0,
+                  "steps": 165
+                },
+                {
+                  "input_bytes": 437,
+                  "return_code": 0,
+                  "steps": 165
+                },
+                {
+                  "input_bytes": 441,
+                  "return_code": 0,
+                  "steps": 165
+                },
+                {
+                  "input_bytes": 445,
+                  "return_code": 0,
+                  "steps": 165
+                },
+                {
+                  "input_bytes": 465,
+                  "return_code": 0,
+                  "steps": 165
+                },
+                {
+                  "input_bytes": 468,
+                  "return_code": 0,
+                  "steps": 166
+                },
+                {
+                  "input_bytes": 472,
+                  "return_code": 0,
+                  "steps": 166
+                },
+                {
+                  "input_bytes": 475,
+                  "return_code": 0,
+                  "steps": 167
+                },
+                {
+                  "input_bytes": 479,
+                  "return_code": 0,
+                  "steps": 167
+                },
+                {
+                  "input_bytes": 482,
+                  "return_code": 0,
+                  "steps": 168
+                },
+                {
+                  "input_bytes": 486,
+                  "return_code": 0,
+                  "steps": 168
+                },
+                {
+                  "input_bytes": 489,
+                  "return_code": 0,
+                  "steps": 169
+                },
+                {
+                  "input_bytes": 493,
+                  "return_code": 0,
+                  "steps": 169
+                },
+                {
+                  "input_bytes": 496,
+                  "return_code": 0,
+                  "steps": 170
+                },
+                {
+                  "input_bytes": 500,
+                  "return_code": 0,
+                  "steps": 170
+                },
+                {
+                  "input_bytes": 503,
+                  "return_code": 0,
+                  "steps": 171
+                },
+                {
+                  "input_bytes": 507,
+                  "return_code": 0,
+                  "steps": 171
+                },
+                {
+                  "input_bytes": 512,
+                  "return_code": 0,
+                  "steps": 188
+                },
+                {
+                  "input_bytes": 516,
+                  "return_code": 0,
+                  "steps": 188
+                },
+                {
+                  "input_bytes": 521,
+                  "return_code": 0,
+                  "steps": 188
+                },
+                {
+                  "input_bytes": 525,
+                  "return_code": 0,
+                  "steps": 188
+                },
+                {
+                  "input_bytes": 529,
+                  "return_code": 0,
+                  "steps": 188
+                },
+                {
+                  "input_bytes": 532,
+                  "return_code": 0,
+                  "steps": 189
+                },
+                {
+                  "input_bytes": 537,
+                  "return_code": 0,
+                  "steps": 189
+                },
+                {
+                  "input_bytes": 540,
+                  "return_code": 0,
+                  "steps": 190
+                },
+                {
+                  "input_bytes": 544,
+                  "return_code": 0,
+                  "steps": 190
+                },
+                {
+                  "input_bytes": 564,
+                  "return_code": 0,
+                  "steps": 190
+                },
+                {
+                  "input_bytes": 567,
+                  "return_code": 0,
+                  "steps": 191
+                },
+                {
+                  "input_bytes": 571,
+                  "return_code": 0,
+                  "steps": 191
+                },
+                {
+                  "input_bytes": 574,
+                  "return_code": 0,
+                  "steps": 192
+                },
+                {
+                  "input_bytes": 578,
+                  "return_code": 0,
+                  "steps": 192
+                },
+                {
+                  "input_bytes": 581,
+                  "return_code": 0,
+                  "steps": 193
+                },
+                {
+                  "input_bytes": 585,
+                  "return_code": 0,
+                  "steps": 193
+                },
+                {
+                  "input_bytes": 588,
+                  "return_code": 0,
+                  "steps": 194
+                },
+                {
+                  "input_bytes": 592,
+                  "return_code": 0,
+                  "steps": 194
+                },
+                {
+                  "input_bytes": 595,
+                  "return_code": 0,
+                  "steps": 195
+                },
+                {
+                  "input_bytes": 599,
+                  "return_code": 0,
+                  "steps": 195
+                },
+                {
+                  "input_bytes": 602,
+                  "return_code": 0,
+                  "steps": 196
+                },
+                {
+                  "input_bytes": 606,
+                  "return_code": 0,
+                  "steps": 196
+                },
+                {
+                  "input_bytes": 611,
+                  "return_code": 0,
+                  "steps": 213
+                },
+                {
+                  "input_bytes": 615,
+                  "return_code": 0,
+                  "steps": 213
+                },
+                {
+                  "input_bytes": 620,
+                  "return_code": 0,
+                  "steps": 213
+                },
+                {
+                  "input_bytes": 624,
+                  "return_code": 0,
+                  "steps": 213
+                },
+                {
+                  "input_bytes": 628,
+                  "return_code": 0,
+                  "steps": 213
+                },
+                {
+                  "input_bytes": 631,
+                  "return_code": 0,
+                  "steps": 214
+                },
+                {
+                  "input_bytes": 636,
+                  "return_code": 0,
+                  "steps": 214
+                },
+                {
+                  "input_bytes": 639,
+                  "return_code": 0,
+                  "steps": 215
+                },
+                {
+                  "input_bytes": 643,
+                  "return_code": 0,
+                  "steps": 215
+                },
+                {
+                  "input_bytes": 663,
+                  "return_code": 0,
+                  "steps": 215
+                },
+                {
+                  "input_bytes": 666,
+                  "return_code": 0,
+                  "steps": 216
+                },
+                {
+                  "input_bytes": 670,
+                  "return_code": 0,
+                  "steps": 216
+                },
+                {
+                  "input_bytes": 673,
+                  "return_code": 0,
+                  "steps": 217
+                },
+                {
+                  "input_bytes": 677,
+                  "return_code": 0,
+                  "steps": 217
+                },
+                {
+                  "input_bytes": 680,
+                  "return_code": 0,
+                  "steps": 218
+                },
+                {
+                  "input_bytes": 684,
+                  "return_code": 0,
+                  "steps": 218
+                },
+                {
+                  "input_bytes": 687,
+                  "return_code": 0,
+                  "steps": 219
+                },
+                {
+                  "input_bytes": 691,
+                  "return_code": 0,
+                  "steps": 219
+                },
+                {
+                  "input_bytes": 694,
+                  "return_code": 0,
+                  "steps": 220
+                },
+                {
+                  "input_bytes": 698,
+                  "return_code": 0,
+                  "steps": 220
+                },
+                {
+                  "input_bytes": 701,
+                  "return_code": 0,
+                  "steps": 221
+                },
+                {
+                  "input_bytes": 705,
+                  "return_code": 0,
+                  "steps": 221
+                },
+                {
+                  "input_bytes": 710,
+                  "return_code": 0,
+                  "steps": 238
+                },
+                {
+                  "input_bytes": 714,
+                  "return_code": 0,
+                  "steps": 238
+                },
+                {
+                  "input_bytes": 719,
+                  "return_code": 0,
+                  "steps": 238
+                },
+                {
+                  "input_bytes": 723,
+                  "return_code": 0,
+                  "steps": 238
+                },
+                {
+                  "input_bytes": 727,
+                  "return_code": 0,
+                  "steps": 238
+                },
+                {
+                  "input_bytes": 730,
+                  "return_code": 0,
+                  "steps": 239
+                },
+                {
+                  "input_bytes": 735,
+                  "return_code": 0,
+                  "steps": 239
+                },
+                {
+                  "input_bytes": 738,
+                  "return_code": 0,
+                  "steps": 240
+                },
+                {
+                  "input_bytes": 742,
+                  "return_code": 0,
+                  "steps": 240
+                },
+                {
+                  "input_bytes": 762,
+                  "return_code": 0,
+                  "steps": 240
+                },
+                {
+                  "input_bytes": 765,
+                  "return_code": 0,
+                  "steps": 241
+                },
+                {
+                  "input_bytes": 769,
+                  "return_code": 0,
+                  "steps": 241
+                },
+                {
+                  "input_bytes": 772,
+                  "return_code": 0,
+                  "steps": 242
+                },
+                {
+                  "input_bytes": 776,
+                  "return_code": 0,
+                  "steps": 242
+                },
+                {
+                  "input_bytes": 779,
+                  "return_code": 0,
+                  "steps": 243
+                },
+                {
+                  "input_bytes": 783,
+                  "return_code": 0,
+                  "steps": 243
+                },
+                {
+                  "input_bytes": 786,
+                  "return_code": 0,
+                  "steps": 244
+                },
+                {
+                  "input_bytes": 790,
+                  "return_code": 0,
+                  "steps": 244
+                },
+                {
+                  "input_bytes": 793,
+                  "return_code": 0,
+                  "steps": 245
+                },
+                {
+                  "input_bytes": 797,
+                  "return_code": 0,
+                  "steps": 245
+                },
+                {
+                  "input_bytes": 800,
+                  "return_code": 0,
+                  "steps": 246
+                },
+                {
+                  "input_bytes": 804,
+                  "return_code": 0,
+                  "steps": 246
+                },
+                {
+                  "input_bytes": 809,
+                  "return_code": 0,
+                  "steps": 263
+                },
+                {
+                  "input_bytes": 813,
+                  "return_code": 0,
+                  "steps": 263
+                },
+                {
+                  "input_bytes": 818,
+                  "return_code": 0,
+                  "steps": 263
+                },
+                {
+                  "input_bytes": 822,
+                  "return_code": 0,
+                  "steps": 263
+                },
+                {
+                  "input_bytes": 826,
+                  "return_code": 0,
+                  "steps": 263
+                },
+                {
+                  "input_bytes": 829,
+                  "return_code": 0,
+                  "steps": 264
+                },
+                {
+                  "input_bytes": 834,
+                  "return_code": 0,
+                  "steps": 264
+                },
+                {
+                  "input_bytes": 837,
+                  "return_code": 0,
+                  "steps": 265
+                },
+                {
+                  "input_bytes": 841,
+                  "return_code": 0,
+                  "steps": 265
+                },
+                {
+                  "input_bytes": 863,
+                  "return_code": 0,
+                  "steps": 265
+                },
+                {
+                  "input_bytes": 875,
+                  "return_code": 0,
+                  "steps": 265
+                },
+                {
+                  "input_bytes": 878,
+                  "return_code": 0,
+                  "steps": 266
+                },
+                {
+                  "input_bytes": 882,
+                  "return_code": 0,
+                  "steps": 266
+                },
+                {
+                  "input_bytes": 885,
+                  "return_code": 0,
+                  "steps": 267
+                },
+                {
+                  "input_bytes": 889,
+                  "return_code": 0,
+                  "steps": 267
+                },
+                {
+                  "input_bytes": 892,
+                  "return_code": 0,
+                  "steps": 268
+                },
+                {
+                  "input_bytes": 896,
+                  "return_code": 0,
+                  "steps": 268
+                },
+                {
+                  "input_bytes": 899,
+                  "return_code": 0,
+                  "steps": 269
+                },
+                {
+                  "input_bytes": 903,
+                  "return_code": 0,
+                  "steps": 269
+                },
+                {
+                  "input_bytes": 906,
+                  "return_code": 0,
+                  "steps": 270
+                },
+                {
+                  "input_bytes": 910,
+                  "return_code": 0,
+                  "steps": 270
+                },
+                {
+                  "input_bytes": 913,
+                  "return_code": 0,
+                  "steps": 271
+                },
+                {
+                  "input_bytes": 917,
+                  "return_code": 0,
+                  "steps": 271
+                },
+                {
+                  "input_bytes": 922,
+                  "return_code": 0,
+                  "steps": 288
+                },
+                {
+                  "input_bytes": 928,
+                  "return_code": 0,
+                  "steps": 288
+                },
+                {
+                  "input_bytes": 933,
+                  "return_code": 0,
+                  "steps": 288
+                },
+                {
+                  "input_bytes": 937,
+                  "return_code": 0,
+                  "steps": 288
+                },
+                {
+                  "input_bytes": 941,
+                  "return_code": 0,
+                  "steps": 288
+                },
+                {
+                  "input_bytes": 953,
+                  "return_code": 0,
+                  "steps": 288
+                },
+                {
+                  "input_bytes": 956,
+                  "return_code": 0,
+                  "steps": 289
+                },
+                {
+                  "input_bytes": 960,
+                  "return_code": 0,
+                  "steps": 289
+                },
+                {
+                  "input_bytes": 963,
+                  "return_code": 0,
+                  "steps": 290
+                },
+                {
+                  "input_bytes": 967,
+                  "return_code": 0,
+                  "steps": 290
+                },
+                {
+                  "input_bytes": 970,
+                  "return_code": 0,
+                  "steps": 291
+                },
+                {
+                  "input_bytes": 974,
+                  "return_code": 0,
+                  "steps": 291
+                },
+                {
+                  "input_bytes": 977,
+                  "return_code": 0,
+                  "steps": 292
+                },
+                {
+                  "input_bytes": 981,
+                  "return_code": 0,
+                  "steps": 292
+                },
+                {
+                  "input_bytes": 984,
+                  "return_code": 0,
+                  "steps": 293
+                },
+                {
+                  "input_bytes": 988,
+                  "return_code": 0,
+                  "steps": 293
+                },
+                {
+                  "input_bytes": 991,
+                  "return_code": 0,
+                  "steps": 294
+                },
+                {
+                  "input_bytes": 995,
+                  "return_code": 0,
+                  "steps": 294
+                },
+                {
+                  "input_bytes": 1000,
+                  "return_code": 0,
+                  "steps": 311
+                },
+                {
+                  "input_bytes": 1006,
+                  "return_code": 0,
+                  "steps": 311
+                },
+                {
+                  "input_bytes": 1011,
+                  "return_code": 0,
+                  "steps": 311
+                },
+                {
+                  "input_bytes": 1015,
+                  "return_code": 0,
+                  "steps": 311
+                },
+                {
+                  "input_bytes": 1019,
+                  "return_code": 0,
+                  "steps": 311
+                },
+                {
+                  "input_bytes": 1039,
+                  "return_code": 0,
+                  "steps": 311
+                },
+                {
+                  "input_bytes": 1042,
+                  "return_code": 0,
+                  "steps": 312
+                },
+                {
+                  "input_bytes": 1046,
+                  "return_code": 0,
+                  "steps": 312
+                },
+                {
+                  "input_bytes": 1049,
+                  "return_code": 0,
+                  "steps": 313
+                },
+                {
+                  "input_bytes": 1053,
+                  "return_code": 0,
+                  "steps": 313
+                },
+                {
+                  "input_bytes": 1056,
+                  "return_code": 0,
+                  "steps": 314
+                },
+                {
+                  "input_bytes": 1060,
+                  "return_code": 0,
+                  "steps": 314
+                },
+                {
+                  "input_bytes": 1063,
+                  "return_code": 0,
+                  "steps": 315
+                },
+                {
+                  "input_bytes": 1067,
+                  "return_code": 0,
+                  "steps": 315
+                },
+                {
+                  "input_bytes": 1070,
+                  "return_code": 0,
+                  "steps": 316
+                },
+                {
+                  "input_bytes": 1074,
+                  "return_code": 0,
+                  "steps": 316
+                },
+                {
+                  "input_bytes": 1077,
+                  "return_code": 0,
+                  "steps": 317
+                },
+                {
+                  "input_bytes": 1081,
+                  "return_code": 0,
+                  "steps": 317
+                },
+                {
+                  "input_bytes": 1086,
+                  "return_code": 0,
+                  "steps": 334
+                },
+                {
+                  "input_bytes": 1090,
+                  "return_code": 0,
+                  "steps": 334
+                },
+                {
+                  "input_bytes": 1095,
+                  "return_code": 0,
+                  "steps": 334
+                },
+                {
+                  "input_bytes": 1099,
+                  "return_code": 0,
+                  "steps": 334
+                },
+                {
+                  "input_bytes": 1103,
+                  "return_code": 0,
+                  "steps": 334
+                },
+                {
+                  "input_bytes": 1106,
+                  "return_code": 0,
+                  "steps": 335
+                },
+                {
+                  "input_bytes": 1111,
+                  "return_code": 0,
+                  "steps": 335
+                },
+                {
+                  "input_bytes": 1114,
+                  "return_code": 0,
+                  "steps": 336
+                },
+                {
+                  "input_bytes": 1118,
+                  "return_code": 0,
+                  "steps": 336
+                },
+                {
+                  "input_bytes": 1138,
+                  "return_code": 0,
+                  "steps": 336
+                },
+                {
+                  "input_bytes": 1141,
+                  "return_code": 0,
+                  "steps": 337
+                },
+                {
+                  "input_bytes": 1145,
+                  "return_code": 0,
+                  "steps": 337
+                },
+                {
+                  "input_bytes": 1148,
+                  "return_code": 0,
+                  "steps": 338
+                },
+                {
+                  "input_bytes": 1152,
+                  "return_code": 0,
+                  "steps": 338
+                },
+                {
+                  "input_bytes": 1155,
+                  "return_code": 0,
+                  "steps": 339
+                },
+                {
+                  "input_bytes": 1159,
+                  "return_code": 0,
+                  "steps": 339
+                },
+                {
+                  "input_bytes": 1162,
+                  "return_code": 0,
+                  "steps": 340
+                },
+                {
+                  "input_bytes": 1166,
+                  "return_code": 0,
+                  "steps": 340
+                },
+                {
+                  "input_bytes": 1169,
+                  "return_code": 0,
+                  "steps": 341
+                },
+                {
+                  "input_bytes": 1173,
+                  "return_code": 0,
+                  "steps": 341
+                },
+                {
+                  "input_bytes": 1176,
+                  "return_code": 0,
+                  "steps": 342
+                },
+                {
+                  "input_bytes": 1180,
+                  "return_code": 0,
+                  "steps": 342
+                },
+                {
+                  "input_bytes": 1185,
+                  "return_code": 0,
+                  "steps": 359
+                },
+                {
+                  "input_bytes": 1189,
+                  "return_code": 0,
+                  "steps": 359
+                },
+                {
+                  "input_bytes": 1194,
+                  "return_code": 0,
+                  "steps": 359
+                },
+                {
+                  "input_bytes": 1198,
+                  "return_code": 0,
+                  "steps": 359
+                },
+                {
+                  "input_bytes": 1202,
+                  "return_code": 0,
+                  "steps": 359
+                },
+                {
+                  "input_bytes": 1205,
+                  "return_code": 0,
+                  "steps": 360
+                },
+                {
+                  "input_bytes": 1210,
+                  "return_code": 0,
+                  "steps": 360
+                },
+                {
+                  "input_bytes": 1213,
+                  "return_code": 0,
+                  "steps": 361
+                },
+                {
+                  "input_bytes": 1217,
+                  "return_code": 0,
+                  "steps": 361
+                },
+                {
+                  "input_bytes": 1237,
+                  "return_code": 0,
+                  "steps": 361
+                },
+                {
+                  "input_bytes": 1240,
+                  "return_code": 0,
+                  "steps": 362
+                },
+                {
+                  "input_bytes": 1244,
+                  "return_code": 0,
+                  "steps": 362
+                },
+                {
+                  "input_bytes": 1247,
+                  "return_code": 0,
+                  "steps": 363
+                },
+                {
+                  "input_bytes": 1251,
+                  "return_code": 0,
+                  "steps": 363
+                },
+                {
+                  "input_bytes": 1254,
+                  "return_code": 0,
+                  "steps": 364
+                },
+                {
+                  "input_bytes": 1258,
+                  "return_code": 0,
+                  "steps": 364
+                },
+                {
+                  "input_bytes": 1261,
+                  "return_code": 0,
+                  "steps": 365
+                },
+                {
+                  "input_bytes": 1265,
+                  "return_code": 0,
+                  "steps": 365
+                },
+                {
+                  "input_bytes": 1268,
+                  "return_code": 0,
+                  "steps": 366
+                },
+                {
+                  "input_bytes": 1272,
+                  "return_code": 0,
+                  "steps": 366
+                },
+                {
+                  "input_bytes": 1275,
+                  "return_code": 0,
+                  "steps": 367
+                },
+                {
+                  "input_bytes": 1279,
+                  "return_code": 0,
+                  "steps": 367
+                },
+                {
+                  "input_bytes": 1284,
+                  "return_code": 0,
+                  "steps": 384
+                },
+                {
+                  "input_bytes": 1288,
+                  "return_code": 0,
+                  "steps": 384
+                },
+                {
+                  "input_bytes": 1293,
+                  "return_code": 0,
+                  "steps": 384
+                },
+                {
+                  "input_bytes": 1297,
+                  "return_code": 0,
+                  "steps": 384
+                },
+                {
+                  "input_bytes": 1301,
+                  "return_code": 0,
+                  "steps": 384
+                },
+                {
+                  "input_bytes": 1304,
+                  "return_code": 0,
+                  "steps": 385
+                },
+                {
+                  "input_bytes": 1309,
+                  "return_code": 0,
+                  "steps": 385
+                },
+                {
+                  "input_bytes": 1312,
+                  "return_code": 0,
+                  "steps": 386
+                },
+                {
+                  "input_bytes": 1316,
+                  "return_code": 0,
+                  "steps": 386
+                },
+                {
+                  "input_bytes": 1336,
+                  "return_code": 0,
+                  "steps": 386
+                },
+                {
+                  "input_bytes": 1339,
+                  "return_code": 0,
+                  "steps": 387
+                },
+                {
+                  "input_bytes": 1343,
+                  "return_code": 0,
+                  "steps": 387
+                },
+                {
+                  "input_bytes": 1346,
+                  "return_code": 0,
+                  "steps": 388
+                },
+                {
+                  "input_bytes": 1350,
+                  "return_code": 0,
+                  "steps": 388
+                },
+                {
+                  "input_bytes": 1353,
+                  "return_code": 0,
+                  "steps": 389
+                },
+                {
+                  "input_bytes": 1357,
+                  "return_code": 0,
+                  "steps": 389
+                },
+                {
+                  "input_bytes": 1360,
+                  "return_code": 0,
+                  "steps": 390
+                },
+                {
+                  "input_bytes": 1364,
+                  "return_code": 0,
+                  "steps": 390
+                },
+                {
+                  "input_bytes": 1367,
+                  "return_code": 0,
+                  "steps": 391
+                },
+                {
+                  "input_bytes": 1371,
+                  "return_code": 0,
+                  "steps": 391
+                },
+                {
+                  "input_bytes": 1374,
+                  "return_code": 0,
+                  "steps": 392
+                },
+                {
+                  "input_bytes": 1378,
+                  "return_code": 0,
+                  "steps": 392
+                },
+                {
+                  "input_bytes": 1383,
+                  "return_code": 0,
+                  "steps": 409
+                },
+                {
+                  "input_bytes": 1387,
+                  "return_code": 0,
+                  "steps": 409
+                },
+                {
+                  "input_bytes": 1392,
+                  "return_code": 0,
+                  "steps": 409
+                },
+                {
+                  "input_bytes": 1396,
+                  "return_code": 0,
+                  "steps": 409
+                },
+                {
+                  "input_bytes": 1400,
+                  "return_code": 0,
+                  "steps": 409
+                },
+                {
+                  "input_bytes": 1403,
+                  "return_code": 0,
+                  "steps": 410
+                },
+                {
+                  "input_bytes": 1408,
+                  "return_code": 0,
+                  "steps": 410
+                },
+                {
+                  "input_bytes": 1411,
+                  "return_code": 0,
+                  "steps": 411
+                },
+                {
+                  "input_bytes": 1415,
+                  "return_code": 0,
+                  "steps": 411
+                },
+                {
+                  "input_bytes": 1418,
+                  "return_code": 0,
+                  "steps": 412
+                }
+              ],
+              "completed": true,
+              "evidence": {
+                "schema_version": 1,
+                "origin": "code_lexical_read"
+              },
+              "provenance": "original ChangePToILcode and GetStepSize; retained generated primary bytes after check; not execution",
+              "input_file": "native-il-input-0.bin",
+              "provided_bytes": 1419,
+              "consumed_bytes": 1418,
+              "output_bytes": 2195,
+              "output_file": "native-il-output-0.bin",
+              "check_pass": "common"
+            },
+            {
+              "operation": "WriteGuiApplicationConfiguration",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "SaveProject",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "FinalizeVendorSaveState",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            },
+            {
+              "operation": "ExportOneFileProject",
+              "hresult": 0,
+              "code": 0,
+              "check_pass": "common"
+            }
+          ],
+          "compile_status": "completed_accepted",
+          "check_status": "completed_accepted",
+          "public_adapter_projection": "original_public_get_progress",
+          "project": [
+            0,
+            3221225472,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "requested_check_mask": -1,
+          "reference_status": "not_started",
+          "public_diagnostic_conversion_requested": false,
+          "raw_recheck_status": "not_requested"
+        },
+        "creation": null,
+        "calls": [
+          {
+            "operation": "CoInitializeEx",
+            "hresult": 1,
+            "code": 0
+          },
+          {
+            "operation": "CoCreateInstance:0bf65a7e-5f7d-4c34-927a-a24ef88a7c8a",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Navigator.Initialize",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Navigator.SetApplicationParameterEX4",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Navigator.SetSupportFunctionInfo",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Navigator.SetParameterVersionInfo",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "CoCreateInstance:97de49af-71ee-4f89-b6c3-f8bc47b6f5ad",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "QueryInterface:2a4da64f-0505-4b64-9414-e5c97594ba51",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Inside.SetDNaviServer",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "CoCreateInstance:98651bdf-9fc8-4a3e-abd3-69892b52a82c",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "QueryInterface:a1b152dd-01e5-4764-893b-91ed0759ef35",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "CommInside.SetDNaviServer",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "CommInside.SetWorkspace",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Inside.SetCommABSPointer",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.SetDisplayStyle",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.SetMFCDLLMode",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.Initialize",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetCommonManager",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.SetDABOperationSetting",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetProjectOperation",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "QueryInterface:d4368a41-d713-4013-86f3-9ea1a3922930",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "GetProjectNameOfOneFileProject",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "ImportOneFileProject",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "MaterializeVendorSaveState",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "GetProjectAttributesForOpenProject",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Navigator.SetSupportControllerTypeInfo",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Navigator.SetLanguageString",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Navigator.SetCpuTypeString",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Navigator.ReserveProject",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Inside.SetReservID",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "OpenProjectEX2",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "QueryInterface:1ef736c6-f881-4bfa-9fe4-0601bbadff23",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetProjectCodePage",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.FindSourceOwner",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectName",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.FindSourceBody",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectName",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetParent",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.CountObject",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetObjectIDList",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadChildType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadChildType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetSourceLanguage",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadSourceParent",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetPOUBodySize",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetPOUBodyData",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadDeclarationCollection:13",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.CountObject",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetObjectIDList",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectName",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadDeclarationParent",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadDeclarationParent",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectName",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.CountObject",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadDeclarationCollection:768",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectName",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadDeclarationParent",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.CountObject",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetSourceResourceCollection",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.CountObject",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetObjectIDList",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectName",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadResourceParent",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.CountObject",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetObjectIDList",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectName",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetParent",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.CountObject",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetObjectIDList",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectName",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetParent",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetProjectCompiler",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "QueryInterface:99db1d02-f474-430d-bc1f-03abf0c7064b",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Compiler.ToBackward",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Compiler.Reinitialize",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Compiler.PrepareBuildData",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Compiler.Build",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Compiler.BuildProgress",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.FindSourceOwner",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectName",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.FindSourceBody",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectName",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetParent",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.CountObject",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetObjectIDList",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadChildType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadChildType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetSourceLanguage",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadSourceParent",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetPOUBodySize",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetPOUBodyData",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadDeclarationCollection:13",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.CountObject",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetObjectIDList",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectName",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadDeclarationParent",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadDeclarationParent",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectName",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.CountObject",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadDeclarationCollection:768",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectName",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadDeclarationParent",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.CountObject",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Compiler.GetPCode",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.UpdatePCodeBeforeProgramCheck",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetProgramCheckCollection",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.CountObject",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetObjectIDList",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectName",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetResourceContextCompiler",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "QueryInterface:99db1d02-f474-430d-bc1f-03abf0c7064b",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "QueryInterface:00000000-0000-0000-c000-000000000046",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "QueryInterface:00000000-0000-0000-c000-000000000046",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectName",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetPublishedCodeSize",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetPublishedCode",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectName",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Compiler.ProgramCheck",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Compiler.OriginalPublicCheckProgress",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Compiler.OriginalPublicCheckProgress",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetPublishedCodeSize",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetPublishedCode",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectName",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.FindSourceOwner",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectName",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.FindSourceBody",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectName",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetParent",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.CountObject",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetObjectIDList",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadChildType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadChildType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetSourceLanguage",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadSourceParent",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetPOUBodySize",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetPOUBodyData",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadDeclarationCollection:13",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.CountObject",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.GetObjectIDList",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectName",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadDeclarationParent",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadDeclarationParent",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectName",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.CountObject",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadDeclarationCollection:768",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectType",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadObjectName",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.ReadDeclarationParent",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "Workspace.CountObject",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "WriteGuiApplicationConfiguration",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "SaveProject",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "FinalizeVendorSaveState",
+            "hresult": 0,
+            "code": 0
+          },
+          {
+            "operation": "ExportOneFileProject",
+            "hresult": 0,
+            "code": 0
+          }
+        ]
+      },
+      "nonzero_steps": [],
+      "body_rewritten_by_native_compile": true,
+      "project": {
+        "path": "D:\\gxworks-agent\\tmp_accept_final\\project.gxw",
+        "size": 924160,
+        "sha256": "fb27397beb25ed46bb5a46d08bfb01e4f5af4683a7fe4f09ca89e98b1b274c41"
+      }
+    },
+    "save": {
+      "status": "passed",
+      "project": {
+        "path": "D:\\gxworks-agent\\tmp_accept_final\\project.gxw",
+        "size": 924160,
+        "sha256": "8934ebd963e3dbfa8f4a4615291aa65cd64549a9abf1c288b0d29eb681a2be82"
+      }
+    },
+    "cold_reopen": {
+      "status": "passed",
+      "identity": {
+        "process_id": 32252,
+        "window_handle": 55446098,
+        "process_started": "134371440675437002",
+        "executable": "D:\\GXWORKS2\\GPPW2\\GD2.exe",
+        "software_version": "1.635.0.1",
+        "project_path": "D:\\gxworks-agent\\tmp_accept_final\\project.gxw",
+        "cpu_menu": "FX3U/FX3UC",
+        "path_binding": "native_full_caption",
+        "native_ui_language": "zh-CN",
+        "project_codepage": 936,
+        "project_language_observation": {
+          "status": "observed",
+          "codepage_candidates": [
+            936,
+            54936
+          ],
+          "status_text": "简体中文"
+        }
+      },
+      "new_process": true,
+      "saved_file_unchanged": true,
+      "previous_process": {
+        "process_id": 10548,
+        "exit_code": 0,
+        "closed": true
+      }
+    },
+    "native_export": {
+      "status": "passed",
+      "export_completed": true,
+      "program": {
+        "path": "D:\\gxworks-agent\\tmp_accept_final\\native-program.csv",
+        "size": 11270,
+        "sha256": "c2fc506d941c3c3b8b79edd98d0a1e43dc5a4427bec92a8b25d5c8af559bfa8e"
+      },
+      "comparison": {
+        "status": "passed",
+        "expected_count": 133,
+        "actual_count": 133,
+        "differences": [],
+        "target_matches": true
+      }
+    }
+  },
+  "cpu": "FX3U/FX3UC",
+  "program": "MAIN",
+  "source": {
+    "path": "D:\\gxworks-agent\\tmp_native_fresh\\project.gxw",
+    "size": 918016,
+    "sha256": "a7f4c21f88c6670dfb5d225b9ba5be025db228c9c4b18cdec407860656fc07a8"
+  },
+  "source_program": "MAIN.Program.pou",
+  "comparison_origin": "decoded_input_source",
+  "expected_program": {
+    "path": "D:\\gxworks-agent\\tmp_accept_final\\source-listing.csv",
+    "size": 11168,
+    "sha256": "5f6f899705644e00c659e9e8540268af67c9e51f7991b5c859270f08afbe3446"
+  },
+  "working_project": {
+    "path": "D:\\gxworks-agent\\tmp_accept_final\\project.gxw",
+    "size": 918016,
+    "sha256": "a7f4c21f88c6670dfb5d225b9ba5be025db228c9c4b18cdec407860656fc07a8"
+  },
+  "gx_compile_status": "passed",
+  "export_comparison_status": "passed",
+  "finished_at": "2026-10-22T12:01:15.461629+00:00"
+}

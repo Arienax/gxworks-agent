@@ -1,0 +1,42 @@
+{
+ "pou_keys": [
+  "declarations",
+  "execution_source",
+  "kind",
+  "labels",
+  "language",
+  "model",
+  "name",
+  "program",
+  "source_status",
+  "task_bindings"
+ ],
+ "n_pous": 1,
+ "kinds": {
+  "1.Program.pou": [
+   "program",
+   "fbd",
+   "available"
+  ]
+ },
+ "top_keys": [
+  "_configuration_storage",
+  "codepage",
+  "compilation",
+  "configuration",
+  "cpu",
+  "execution",
+  "globals",
+  "issues",
+  "origin",
+  "pous",
+  "resources",
+  "selected_source",
+  "status",
+  "structures",
+  "tasks"
+ ],
+ "decl_sample": [],
+ "iface": [],
+ "return_type": null
+}

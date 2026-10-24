@@ -1,0 +1,182 @@
+{
+ "Arienax/gxworks-agent": {
+  "size": 8167,
+  "description": "三菱 PLC 编程与工程助手。  MCP server and AI workbench for Mitsubishi PLC programming with GX Works2. Generate Ladder and Structured Text, edit native FBD, and review versioned projects with CPU-aware RAG and diagnostics."
+ },
+ "Serhioromano/gxw2-libraries": {
+  "size": 6978,
+  "description": "Libraries for GX Works 2 (Tested with Coolmay PLCs)"
+ },
+ "jonghyeon9084/plc_project": {
+  "size": 39178,
+  "description": "PLC 기반 식품 자동 분류·창고 관리 | GX Works2 · Ladder · HMI | 동작 시간 11.8% 단축"
+ },
+ "clei32879-gif/electrical-copilot": {
+  "size": 464,
+  "description": "电气工程师 AI Copilot — 本地运行的电气工程师智能体工作台：AI 编写/读懂梯形图、直出多品牌 PLC 工程文件（信捷 .xdp / 三菱 / 汇川 / 西门子 / 松下 / 台达）、电气图设计与理解、智能选型、梯形图仿真器"
+ },
+ "TuanNgoNo1/Digital-Twin-BaiTH2": {
+  "size": 117113,
+  "description": "Bài TH2 hệ thống Digital Twin (GxWorks 2 - Unity - Gateway) - 6000.3.11f1"
+ },
+ "gotree94/GX_Works2_MELSEC_Q_PLC_Servo_M": {
+  "size": 5,
+  "description": "GX Works2를 활용한 MELSEC Q PLC - 서보까지 할수 있다(중급)"
+ },
+ "gotree94/GX_Works2_MELSEC_Q_PLC_From_Basic_To_TouchP_GOT-TOP": {
+  "size": 5,
+  "description": "GX Works2를 활용한 MELSEC Q PLC 기초부터 터치패널(GOT-TOP) 화용하기"
+ },
+ "gotree94/GX_Works2_MELSEC_Q_PLC-Servo_Basic": {
+  "size": 5,
+  "description": "GX Works2를 활용한 MELSEC Q PLC - 서보까지 할수 있다"
+ },
+ "gotree94/GX_Works2_MelsecProgramming": {
+  "size": 5,
+  "description": "GX Works2를 사용하는 Melsec 프로그래밍 완전정복"
+ },
+ "tia-forge/awesome-plc-ai": {
+  "size": 17,
+  "description": "A curated list of AI tools, agents and MCP bridges for PLC engineering — writing, reviewing, verifying and documenting control code for Siemens TIA Portal, CODESYS, TwinCAT, Studio 5000, GX Works and friends."
+ },
+ "jiaojiaojiao7749/PLC-Traffic-Signal-Light": {
+  "size": 4,
+  "description": "三色交通信号灯PLC梯形图程序（GX Works2）- 支持红绿黄灯自动循环控制"
+ },
+ "jiaojiaojiao7749/PLC-Traffic-Signal": {
+  "size": 9,
+  "description": "PLC交通信号灯控制系统 - GX Works2梯形图程序"
+ },
+ "plcmanjp/plc-io-check-helper": {
+  "size": 597,
+  "description": "PLC IO Check Helper (Android) 제품 안내, 다운로드 가이드 | Mitsubishi MELSEC PLC I/O 점검 모니터링 앱"
+ },
+ "s516486730-ui/Robot-RAG-Demo-PLC-": {
+  "size": 63219,
+  "description": "工控专用轻量化RAG故障检索工具，仅单份知识库文件：伺服PLC故障手册.txt，不再新增其他设备文档，覆盖伺服驱动器全报警代码、伺服电机无报警排查、EtherCAT/Modbus总线通讯、三菱FX定位模块、PLC硬件报警、现场通用排查规范。 基于LangChain+Chroma向量库+智谱GLM大模型，提供Gradio网页可视化 + 控制台双交互，适配低版本Gradio无兼容报错。"
+ },
+ "brooksg44/ISU-FX2N": {
+  "size": 2094,
+  "description": "Open-source FX2N-compatible PLC runtime for the Raspberry Pi Pico WH (FX programming protocol + Modbus)"
+ },
+ "lx666-qq/Automatic-vending-machinePLC": {
+  "size": 787,
+  "description": "基于 PC（GXMCGS组态软件）-PLC(三菱FX2N) 两级架构的双品类自动售货机控制系统"
+ },
+ "Dino-MLC-Board/DINO-PLC-V2": {
+  "size": 24510,
+  "description": "This is FX2N Library for DINO PLC V2"
+ },
+ "suratin27/MiniPLC_FX2N": {
+  "size": 1028,
+  "description": "This is MiniPLC-32u FX2N Library"
+ },
+ "Chupakabra303/FX_PLC_STM32duino": {
+  "size": 66,
+  "description": "Reverse engineering FX1N FX2N FX3U PLC for STM32duino"
+ },
+ "galopago/stm32-industrial-control-boards": {
+  "size": 8867,
+  "description": "Pin mapping for STM32 based industrial control boards advertised as compatible with FX1N, FX2N, FX3U PLC software."
+ },
+ "xventus/CF2N-FX2N-23MR": {
+  "size": 94767,
+  "description": "Washing machine based on CF2N FX2N 23MR"
+ },
+ "huvert/PID_test": {
+  "size": 2784,
+  "description": "PID regulator for GX Works 2 PLC type: FX2N med analogkort FX0N-3A. "
+ },
+ "aixiwang/myplc": {
+  "size": 64,
+  "description": "Fx2N compatible PLC running on windows with motion control support"
+ },
+ "brucedii/STM32_OS": {
+  "size": 0,
+  "description": "stm32平台，UCOS操作系统，实现FX2N驱动代码"
+ },
+ "snsdpen-luke/kyouiku": {
+  "size": 6210,
+  "description": "工業高校 電子計測制御31 の教材。三菱系PLCラダー図シミュレータ「ラダー工房」"
+ },
+ "iteaj/aiots": {
+  "size": 58852,
+  "description": "aiots(iot)是一款springboot和netty开发的通用ai物联网平台 、主要用于工业物联网，用于业务系统方便快速的采集和控制设备。现已支持modbus、plc(西门子、欧姆龙、三菱、汇川、罗克韦尔、松下)、串口、mqtt、dlt645、opcua等工业协议以及提供自定义设备驱动的能力,(交流群：696454214)"
+ },
+ "purinzan/gx3-cli-mcp": {
+  "size": 2145,
+  "description": "Trace a GX Works3 ladder without opening GX Works3 — read-only CLI + MCP server so anyone (or an AI agent) can find why a coil never turns on."
+ },
+ "agentthink/gts-line-control": {
+  "size": 666,
+  "description": "基于 .NET 8 的多设备产线控制平台，专配固高 GTS 运动控制卡：Modbus/OPC UA/MQTT/S7/三菱全协议通讯，Halcon 视觉触发，MES 双协议上报，一条 JSON 工作流跑通产线。"
+ },
+ "PeiKeSmart/DH.NMelsec": {
+  "size": 25916,
+  "description": "三菱PLC协议"
+ },
+ "purinzan/ladder-fabricator": {
+  "size": 275,
+  "description": "Open-source JSON AST renderer for MELSEC and KEYENCE PLC ladder diagrams in SVG, PNG, text, and structured JSON."
+ },
+ "KrupaPatil19/PLC-Automatic-Conveyor-Control": {
+  "size": 638,
+  "description": "PLC-based conveyor control and object counting using Mitsubishi FX5U and GX Works3."
+ },
+ "Prapti28/PLC-Automated-Mixers": {
+  "size": 2342,
+  "description": "PLC-based sequential control of three mixers using ladder logic and timers, with timed starting intervals of 7s, 3.6s, and 5s. Developed using Mitsubishi GX Works3 to demonstrate industrial automation and timer-based control."
+ },
+ "ShubhamAgre28/PLC-Forward-Reverse-Motor-Control": {
+  "size": 2864,
+  "description": "Industrial automation capstone: Bidirectional motor control with electrical interlocking using Mitsubishi GX Works3 ladder logic (FX5U PLC)."
+ },
+ "n-car/node-fxplc": {
+  "size": 119,
+  "description": "Node.js library for communication with Mitsubishi FX PLCs via MELSEC protocol (TCP/Serial)"
+ },
+ "Bibin-VR/GXBridge-MCP": {
+  "size": 7,
+  "description": "Control Mitsubishi GX Works3 and your PLC with AI — an MCP server for any agent"
+ },
+ "plcmanjp/melsec-mc-kotlin": {
+  "size": 208,
+  "description": "Pure Kotlin/JVM Mitsubishi MELSEC MC Protocol 3E/4E client and CLI (TCP/UDP, Binary/ASCII)."
+ },
+ "score915/mc-protocol-3e": {
+  "size": 21,
+  "description": "MC protocol / SLMP 3E binary client for Mitsubishi MELSEC and KEYENCE KV PLCs. Supports D/DM word and M/MR bit read/write, CPU model/status diagnostics, and vendor/port auto-detection."
+ },
+ "NewLifeX/NewLife.Melsec": {
+  "size": 26259,
+  "description": "三菱PLC协议"
+ },
+ "mokouliszt/iqr_device_validator": {
+  "size": 32,
+  "description": "Mitsubishi MELSEC iQ-R series device string validator."
+ },
+ "rom/mitsubishicheck": {
+  "size": 88,
+  "description": "Tool to check Mitsubishi security for their PLC and using MELSEC"
+ },
+ "KunYi/Retro_FXPLC": {
+  "size": 21445,
+  "description": "An AI Plan about Melsec FX Series PLC Simulator "
+ },
+ "KrystianD/fxplc": {
+  "size": 183,
+  "description": "Python connector for low-level Mitsubishi PLC MELSEC FX series (FX-232AW) serial protocol with builtin HTTP server."
+ },
+ "senrust/pymcprotocol": {
+  "size": 88,
+  "description": "MC Protocol(MELSEC Communication Protocol) implementation by Python"
+ },
+ "NothinRandom/pymelsec": {
+  "size": 78,
+  "description": "Python3 Implementation of MELSEC Communication"
+ },
+ "plcpeople/mcprotocol": {
+  "size": 34,
+  "description": "node.js implementation of the MC (MELSEC communication) protocol to exchange data with Mitsubishi FX programmable controllers."
+ }
+}

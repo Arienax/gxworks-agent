@@ -7,6 +7,7 @@ invalidates schema and derived query caches together.
 from __future__ import annotations
 
 from pathlib import Path
+from contextlib import closing
 import sqlite3
 import threading
 from urllib.parse import quote
@@ -139,7 +140,7 @@ def index_path():
     # Renaming/copying the historical full-text corpus must not re-enable it.
     from knowledge.fact_corpus import CORPUS_KIND
     try:
-        with sqlite3.connect(path.resolve().as_uri() + "?mode=ro&immutable=1", uri=True) as check:
+        with closing(sqlite3.connect(path.resolve().as_uri() + "?mode=ro&immutable=1", uri=True)) as check:
             row = check.execute("SELECT value FROM meta WHERE key='corpus_kind'").fetchone()
         return path if row and row[0] == CORPUS_KIND else None
     except sqlite3.Error:

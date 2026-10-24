@@ -22,11 +22,12 @@ def mcp_tool(schema):
     function = schema["function"]
     return Tool(name=function["name"], description=function.get("description", ""),
                 input_schema=copy.deepcopy(dict(function["parameters"])),
-                output_schema=output_schema(function["name"]),
+                output_schema=(None if function["name"] in {"search_plc_manual", "get_generation_context", "get_fbd_catalog"}
+                               else output_schema(function["name"])),
                 annotations={"readOnlyHint": function["name"] in {
                     "get_current_project", "get_current_program_info", "read_network", "search_plc_manual",
                     "get_diagnostics", "validate_current_program", "list_gxworks2_sessions", "list_simulator_targets",
-                    "inspect_gxworks2_csv_files",
+                    "inspect_gxworks2_csv_files", "get_generation_context", "get_fbd_catalog",
                     "read_native_device_assignments", "compare_native_compiled_code", "locate_native_code_steps",
                     "read_fbd_libraries",
                     "read_fbd_definition",
@@ -58,6 +59,19 @@ def to_mcp_result(result: ToolResult, *, context=None, available_tools=None) -> 
         else result.content
     )
     audit = {"call_id": result.call_id, "tool": result.name}
+    from application.read_delivery import PAGED_READ_TOOLS, MAX_READ_BYTES, MAX_READ_TOKENS, serialized_size
+    if result.name in PAGED_READ_TOOLS:
+        # Text is the universally consumed model channel. Do not ship a second
+        # full copy in structuredContent; clients parse this same JSON document.
+        from shared.project_info import MCP_SERVER_INFO
+        response = CallToolResult(content=[TextContent(type='text', text=text)], is_error=result.is_error,
+            meta={'io.modelcontextprotocol/serverInfo': copy.deepcopy(MCP_SERVER_INFO)})
+        size = serialized_size(response.model_dump(by_alias=True, exclude_none=True))
+        if size['estimated_tokens'] > MAX_READ_TOKENS or size['utf8_bytes'] > MAX_READ_BYTES:
+            failure = {'ok': False, 'tool': result.name, 'error': {
+                'code': 'READ_OBJECT_TOO_LARGE', 'message': '最终 MCP 返回超过读取上限；未截断对象。'}}
+            return CallToolResult(content=[TextContent(type='text', text=json.dumps(failure, ensure_ascii=False))], is_error=True)
+        return response
     if context is not None:
         audit.update(project_id=context.project_id, version_id=context.version_id)
     return CallToolResult(

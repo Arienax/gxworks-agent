@@ -467,24 +467,45 @@ def write_gui_system_variables(raw: bytes | None, ranges: dict, *, cpu: str | No
 
 
 def gui_application_save_plan(raw: bytes, source: dict) -> bytes | None:
-    """Prepare the observed FX3U GUI mirror for an isolated native save.
+    """Preserve GUI settings, mirroring only source-bound allocation changes.
 
-    The workspace setter updates .prj only. The GUI reads Gppw2.gpj separately;
-    writing a format-version-only file silently restores its host defaults.
+    An ordinary source save must not reinterpret another CPU's host settings or
+    reject an unchanged device selector. Only FX3U's D/M mirror is observed.
+    Legacy factory projects need that mirror initialized from their workspace;
+    inactive R/W/B backups are not requests to enable those selectors.
     """
-    from .container_writer import validate_cfb_streams
-    outer = validate_cfb_streams(raw)
-    nested = validate_cfb_streams(outer['_hdb'])
-    mapping = project_stream_mapping(outer)
-    streams = {name:nested[key] for name,key in mapping.items() if key in nested}
-    metadata = [value for name,value in streams.items() if name.endswith('.prj')]
-    if len(metadata)!=1 or read_project_text_context(metadata[0])['cpu']!='FX3U/FX3UC':
+    _, metadata, application = _project_allocation_records(raw)
+    cpu = read_project_text_context(metadata)['cpu']
+    if cpu != 'FX3U/FX3UC':
+        # Native export retains an existing application file, or registers its
+        # format-only bootstrap. Q/L/other FX host fields are not FX3U controls.
         return None
-    ranges = dict(read_project_system_variables(metadata[0])['ranges'])
+    ranges = {}
+    if application is None:
+        workspace = read_project_system_variables(metadata)['ranges']
+        ranges = {name: pair for name, pair in workspace.items() if name not in {'R', 'W', 'B'}}
     if source.get('operation') == 'configure_project':
         for edit in source['ranges']:
-            ranges[edit['device']] = tuple(value & 0xffffffff for value in edit['after'])
-    return write_gui_system_variables(streams.get('Gppw2.gpj'), ranges, cpu='FX3U/FX3UC')
+            after = tuple(value & 0xffffffff for value in edit['after'])
+            before = tuple(value & 0xffffffff for value in edit.get('before', ()))
+            if after != before:
+                ranges[edit['device']] = after
+    if not ranges:
+        return None  # Preserve every byte, including unobserved selector modes.
+    return write_gui_system_variables(application, ranges, cpu=cpu)
+
+
+def require_gui_project_entries(raw: bytes) -> None:
+    """Reject factory containers that have no registered GUI project envelope."""
+    from .container_writer import validate_cfb_streams
+    from .integrity import read_project_hdb
+    outer = validate_cfb_streams(raw)
+    mapping = project_stream_mapping(outer)
+    if 'Project.gd2' not in mapping or 'Project.gd2' not in outer:
+        raise GXWFormatError('GX Works2 GUI project entry Project.gd2 is missing')
+    application = mapping.get('Gppw2.gpj')
+    if application is None or not read_project_hdb(outer).payloads.get(application):
+        raise GXWFormatError('GX Works2 GUI application entry Gppw2.gpj is missing')
 
 
 def project_gui_configuration(raw: bytes) -> dict:

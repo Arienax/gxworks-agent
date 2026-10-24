@@ -437,52 +437,21 @@ def export_object_model(program, declarations=None, *, sources=None):
     return model
 
 
-def source_checks(context):
+def source_checks(context, *, semantic=None):
     """Check saved graph bindings and known types without requiring compilation.
 
     Serialized intrinsic connectors and unresolved device widths remain explicit
     findings.  They must not erase a known type conflict on another net.
     """
-    from .connectivity import build_connectivity_graph
-    from .topology import _terminal_type
-    from .declarations import _type_parts
+    from .fbd_validation import inspect_graph
     findings = [dict(issue) for issue in context.object_model()['issues']]
     for name,document in context.declarations.items():
         if name==context.sources.local_table or document.scope=='global':
             findings.extend(dict(code='fbd_retain_execution_unverified',severity='unverified',stream=name,
                 name=row.name,message='VAR_RETAIN is preserved; reset and power-cycle retention execution is unverified')
                 for row in document.rows if row.class_code==10)
-    descriptors = {}
-    for node in context.program.nodes:
-        try:
-            if node.kind in (NodeKind.FUNCTION,NodeKind.FUNCTION_BLOCK):
-                descriptors[node.offset] = context.sources.callable(node)['ports']
-            elif node.kind in (NodeKind.INPUT,NodeKind.OUTPUT,NodeKind.INOUT):
-                value = _terminal_type(node.symbol,context.sources,context.sources.cpu)
-                descriptors[node.offset] = [{'data_type':value} for _ in node.ports]
-            elif node.kind in GRAPH_CONTACT_NODE_KINDS | COIL_NODE_KINDS | {NodeKind.JUMP,NodeKind.RETURN}:
-                descriptors[node.offset] = [{'data_type':'BOOL'} for _ in node.ports]
-        except (GXWFormatError,ValueError) as error:
-            if node.kind in (NodeKind.INPUT,NodeKind.OUTPUT,NodeKind.INOUT):
-                findings.append(dict(code='fbd_terminal_type_unverified',severity='unverified',
-                    node_offset=node.offset,symbol=node.symbol,message=str(error)))
-            continue
-    for net in build_connectivity_graph(context.program).nets:
-        known = []
-        for port in net.ports:
-            rows = descriptors.get(port.node_offset,())
-            value = rows[port.port_index].get('data_type') if port.port_index < len(rows) else None
-            if isinstance(value,str) and not value.upper().startswith('ANY'):
-                known.append((port.node_offset,port.port_index,value))
-        types = set()
-        for _,_,value in known:
-            base,bounds = _type_parts(value)
-            types.add((base,tuple(bounds)))
-        if len(types)>1:
-            findings.append(dict(code='fbd_net_type_conflict',severity='error',block=net.block_index,
-                net=net.index,message='connected graph ports have incompatible known types',
-                ports=[dict(node_offset=offset,port_index=index,data_type=value)
-                       for offset,index,value in known]))
+    semantic = semantic if semantic is not None else inspect_graph(context.program, context.sources)
+    findings.extend(row for row in semantic['findings'] if row not in findings)
     from .structured_pou import structured_block_text
     destinations = {}
     for index,block in enumerate(context.program.blocks):
@@ -495,7 +464,8 @@ def source_checks(context):
             findings.append(dict(code='fbd_jump_target_unresolved',severity='error',
                 node_offset=node.offset,message='jump requires one current network label: '+node.symbol))
     return dict(structure='passed',status='failed' if any(item.get('severity')=='error' for item in findings)
-                else 'unverified' if findings else 'passed',findings=findings)
+                else 'unverified' if findings else 'passed',findings=findings,
+                execution=semantic['execution'], resolved_types=semantic['resolved_types'])
 
 
 def _uint(value):
@@ -786,10 +756,8 @@ def build_object_program(source, model, *, sources=None, original_sources=None, 
                 return node.port_point(index)
             points = [endpoint(item.get("from"), 'out'), *[_point(p) for p in item.get("via", [])],
                       endpoint(item.get("to"), 'in')]
-            if save_policy == 'checked' and all(isinstance(value, str) and not value.upper().startswith('ANY') for value in endpoint_types):
-                from .declarations import _type_parts
-                if _type_parts(endpoint_types[0]) != _type_parts(endpoint_types[1]):
-                    raise GXWFormatError('named wire port types are incompatible')
+            # Type admission is shared with coordinate wiring and transactions
+            # after the complete graph/declarations have been assembled.
         else:
             points = [_point(item.get("start")), _point(item.get("end"))]
         if kind=='junction' and points[0]!=points[-1]:
@@ -840,7 +808,12 @@ def prepare_object_project(model, *, baseline=None, save_policy='checked', decla
     raw = default_baseline() if baseline is None else baseline
     if 'networks' in model:
         from .ladder_lowering import fbd_topology_to_object_model
-        model = fbd_topology_to_object_model(model, read_project_context(raw, model.get('program')))
+        lowering_context = read_project_context(raw, model.get('program'))
+        if declarations:
+            final_documents = {**lowering_context.declarations, **declarations}
+            lowering_context = replace(lowering_context, declarations=final_documents,
+                sources=lowering_context.sources.with_declarations(final_documents))
+        model = fbd_topology_to_object_model(model, lowering_context)
     if model.get('schema_version') == 2:
         context = read_project_context(raw, model.get('program'))
         source, documents, program_names, sources = context.program, context.declarations, context.programs, context.sources
@@ -942,6 +915,13 @@ def prepare_object_project(model, *, baseline=None, save_policy='checked', decla
         current = current.with_declarations({**documents, **changed})
         if save_policy=='checked':
             current.source_prototype(node)
+    if not defer_project_checks:
+        from .fbd_validation import inspect_graph, require_graph_checks
+        before_context = read_project_context(raw, source.logical_name)
+        before = source_checks(before_context)
+        after_context = replace(before_context, program=program, declarations={**documents, **changed}, sources=current)
+        after = source_checks(after_context, semantic=inspect_graph(program, current))
+        require_graph_checks(before['findings'], after['findings'], save_policy=save_policy)
     return prepare_project_write(raw, program, declarations=changed, sync_fb_declarations=False)
 
 

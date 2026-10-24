@@ -68,12 +68,41 @@
 
 ### FBD 与项目定义
 
-1. 调用 `get_fbd_catalog` 获取可用功能块、端口方向与 `parameter_schema`。
-2. 按需调用 `read_fbd_project`（读取网络与连接）、`read_fbd_definition`（读取工程内结构体与 FB 定义）或 `read_fbd_libraries`（查看用户库）。
-3. 调用 `create_fbd_candidate` 提交修改：
-   - 生成或修改图形：使用 `generate` / `edit`，优先通过具名网络、`calls`、端口与 `IN_OUT` 配对提交。
-   - 导入用户库定义：绑定已保存的目标版本，使用 `operation="import_library"`，传入来源 GXW 的 `data_base64` 与实际 `library_name`。只导入所选库的定义、接口和库内类型；保留目标项目的源码集合、任务绑定、调用者正文及声明，不复制来源工程的调用程序、任务或项目全局声明。新增库定义与目标调用程序分别校验。
-   - 原生编译并保存 FBD 工程：对已保存版本调用 `operation="compile"`。
+1. 选择实际 CPU 的 FBD 工程；外部 GXW 先导入为保存版本。生成或修改前调用 `get_generation_context`，带完整的 `user_requirement`。默认 `catalog_scope="task"` 按需求和源码依赖选择接口。
+2. 使用返回的 `generation_input`，重点读取下表。单独的 `get_fbd_catalog` 默认返回全目录，不能代替这些规则；缺少指定块时，用 `templates` 精确补取，并保留 `missing_templates`。需要将新增接口及依赖纳入生成时，用同一需求和明确 `templates` 重新获取上下文。
+3. 按 `output_contract` 提交。无保存版本时用 `create_fbd_candidate(operation="generate", model=...)`。已有版本默认提供 `edit_gxw_project`；只改一个图时也可采用 `output_contract.alternatives` 中的单图合同，操作值原样取自合同。
+
+| `generation_input` 字段 | 使用方式 |
+| --- | --- |
+| `language_rules`、`device_address_rules` | 按 FBD 常量、类型和当前 CPU 地址规则生成；保留默认分配、可配置范围、型号条件和来源冲突。编号合法不代表本工程已分配，也不扩大原生访问权限。 |
+| `catalog`、`parameter_schema`、`call_interface`、`structures` | 使用完整端口与复合类型；`IN_OUT` 按实际接口使用 `in.NAME` / `out.NAME`。不要凭块名猜端口或替换未知类型。 |
+| `source_context`、`call_bindings` | 读取受影响 ST 正文、接口及全部调用者；同一 FB 实例的多次调用共享状态。修改接口时更新全部受影响调用者。 |
+| `project_options`、`task_scopes`、`supported_paths` | 使用本工程条件和实际支持路径。新建 POU、库正文转移和 Ladder 转换分别判断，模板可用不代表这些操作都可用。 |
+| `context_gaps`、`unknown_boundaries` | 如实保留当前未解析项；必需语言或地址规则缺失会阻止上下文生成，不能用手写假设补齐。 |
+
+联合提交沿用工具现有 schema，例如：
+
+```json
+{
+  "tool":"edit_gxw_project",
+  "arguments":{
+    "version_id":"${current_version_id}",
+    "save_policy":"checked",
+    "edits":[
+      {"source_name":"${实际ST源码身份}","command":{"st_text":"${完整目标ST正文}"}},
+      {"source_name":"${实际FBD调用者身份}","command":{"model":{"program":"${实际FBD调用者身份}","networks":[
+        {"calls":[{"id":"${原调用ID}","type":"${实际FB类型}","instance":"${实际实例名}","arguments":{"${实际输入端口}":"${输入表达式}","${实际输出端口}":"${可写输出}"}}]}
+      ]}}}
+    ]
+  }
+}
+```
+
+示例只展示参数位置；提交时使用完整目标网络，包含全部应保留的网络、端口实参和实际连线。改 ST 接口时提供完整 `declarations` 列表；省略则保留原表。将其余受影响调用者一起放入 `edits`。`edit_gxw_project` 不接受 `generation_context_id`；单图候选工具接受时才转交该 ID。
+
+参数图可用 `calls` 或具名 `nodes`/`wires`，Core 处理分块与布线。保留 `source_block`、`title`、`block_comment`、图内注释及不可参数化的保留块；需要显式调用顺序时使用 `execution_order`。EN 关闭、IN 为 FALSE 与复位不等价。新增非法 FBD 字面量在 `checked` 和 `draft` 下都拒绝；不把 `INT#0` 自动改写，也不自动将 TIME 取整。其他已知新增源码错误由 `checked` 拒绝；旧工程错误与本次新增诊断分别报告。
+
+查看图形、项目定义和用户库分别调用 `read_fbd_project`、`read_fbd_definition`、`read_fbd_libraries`。导入用户库时使用 `create_fbd_candidate(operation="import_library")`，绑定已保存的目标版本，传入来源 GXW 的 `data_base64` 与实际 `library_name`。当前只转移已覆盖的 ST 实现、接口和库内类型，FBD 库正文转移不受支持；目标源码、任务、调用者及声明保留。需要原生编译并保存时才对已保存版本调用 `operation="compile"`。
 
 `import`、`edit`、`generate` 的 `native_save` 必须是布尔值，只表示本次调用的选择：显式 `true` 请求原生保存，省略或 `false` 使用离线写入。历史版本曾原生保存不会授权本次保存；源码和声明未变时不会重复原生保存。`create_fb`、`create_program` 和 `import_library` 不接受该选项，继续使用各自的原生创建或导入路径。保存及回读成功仍不表示候选已确认、原生编译通过或运行通过。
 
@@ -155,3 +184,6 @@
 ```
 
 采样期间或结束后可通过 `get_simulator_trace(view_ref)` 查看采样进度、波形数据与时间轴页面地址，需要提前结束采样时调用 `stop_simulator_trace(view_ref)`。
+
+
+所有上述 `search_plc_manual`、`get_generation_context`、`get_fbd_catalog` 步骤均先完成 `delivery.next` 续读并合并 `objects`；本文字段路径均针对解析后的 `document`。工程版本或事实库更新后重新获取上下文，不复用旧游标。

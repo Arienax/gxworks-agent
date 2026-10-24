@@ -380,46 +380,9 @@ def _binding_signature(binding):
 
 
 def _graph_state(program, sources):
-    """Use existing callable, terminal and typed-connection contracts."""
-    from .connectivity import build_connectivity_graph
-    from .topology import _terminal_type, validate_typed_connections
-    from plc.validation import ValidationProfileUnavailableError
-    contracts, endpoints, findings = {}, {}, []
-    for node in program.nodes:
-        ports = None
-        if node.kind in (NodeKind.FUNCTION, NodeKind.FUNCTION_BLOCK):
-            try:
-                ports = sources.callable(node)['ports']
-            except GXWFormatError as error:
-                findings.append(dict(code='FBD_CALL_BINDING', severity='error', node_offset=node.offset, message=str(error)))
-            else:
-                contracts[node.offset] = [(p['name'], p['data_type'], p['side'], p['class_code']) for p in ports]
-        elif node.kind in (NodeKind.INPUT, NodeKind.OUTPUT):
-            try:
-                value_type = _terminal_type(node.symbol, sources, sources.cpu)
-            except (GXWFormatError, ValidationProfileUnavailableError) as error:
-                findings.append(dict(code='FBD_TERMINAL_COVERAGE', severity='unverified', node_offset=node.offset, message=str(error)))
-            else:
-                ports = [dict(side='out' if node.kind == NodeKind.INPUT else 'in', data_type=value_type) for _ in node.ports]
-        elif node.kind in CONTACT_NODE_KINDS | COIL_NODE_KINDS:
-            ports = [dict(side='in' if port.local_x == 0 else 'out', data_type='BOOL') for port in node.ports]
-        if ports is not None:
-            for index, port in enumerate(ports):
-                endpoints[(node.offset, index)] = port
-    for net in build_connectivity_graph(program).nets:
-        keys = [(port.node_offset, port.port_index) for port in net.ports]
-        if any(key not in endpoints or str(endpoints[key].get('data_type', '')).upper().startswith('ANY') for key in keys):
-            findings.append(dict(code='FBD_NET_COVERAGE', severity='unverified', net=net.index,
-                                 message='net contains an unresolved or generic source type'))
-            continue
-        named = {f'n{offset}.p{index}': endpoints[(offset, index)] for offset, index in keys}
-        outputs = [name for name, port in named.items() if port['side'] == 'out']
-        inputs = [name for name, port in named.items() if port['side'] == 'in']
-        try:
-            validate_typed_connections(named, [dict(**{'from': left, 'to': right}) for left in outputs for right in inputs])
-        except GXWFormatError as error:
-            findings.append(dict(code='FBD_NET_TYPE', severity='error', net=net.index, message=str(error)))
-    return contracts, findings
+    from .fbd_validation import inspect_graph
+    result = inspect_graph(program, sources)
+    return result['contracts'], result['findings']
 
 
 def _finding_key(finding):
@@ -456,10 +419,11 @@ def _check_st_reference_bindings(text, before_sources, after_sources):
 
 def _check_graphs(baseline, streams, groups, sources, documents, programs):
     from .object_model import read_project_context, source_checks
-    def current_findings(context):
+    from .fbd_validation import inspect_graph, introduced_findings
+    def current_findings(context, semantic):
         return [dict(row, severity=row.get('severity', 'unverified'),
                      message=row.get('message', row.get('code', 'unresolved source object')))
-                for row in source_checks(context)['findings']]
+                for row in source_checks(context, semantic=semantic)['findings']]
     checks = []
     for logical in groups:
         if streams[logical][source_payload_offset(streams[logical])] != 208:
@@ -467,6 +431,7 @@ def _check_graphs(baseline, streams, groups, sources, documents, programs):
         context = read_project_context(baseline, logical)
         before_sources = context.sources
         after_sources = before_sources.with_declarations(documents)
+        after_sources.source_streams = streams
         candidate = programs.get(logical, context.program)
         original_nodes = {node.offset: node for node in context.program.nodes}
         # Removal/type edits may not silently retarget existing graph references
@@ -485,23 +450,20 @@ def _check_graphs(baseline, streams, groups, sources, documents, programs):
                     raise GXWFormatError('declaration edit leaves a graph reference without its original binding: ' + name)
                 if (_binding_signature(old) != _binding_signature(new) and logical not in programs):
                     raise GXWFormatError('declaration type/class change requires a joint graph update: ' + name)
-        prior_contracts, prior_findings = _graph_state(context.program, before_sources)
-        contracts, findings = _graph_state(candidate, after_sources)
-        for target, extra in ((prior_findings, current_findings(context)),
-                              (findings, current_findings(replace(context, program=candidate,
-                                  declarations=documents, sources=after_sources)))):
-            target.extend(row for row in extra if row not in target)
+        prior = inspect_graph(context.program, before_sources)
+        current = inspect_graph(candidate, after_sources)
+        prior_contracts, contracts = prior['contracts'], current['contracts']
+        prior_findings = current_findings(context, prior)
+        findings = current_findings(replace(context, program=candidate,
+                                    declarations=documents, sources=after_sources), current)
         if logical not in programs and any(offset in prior_contracts and signature != prior_contracts[offset]
                                            for offset, signature in contracts.items()):
             raise GXWFormatError('function-block interface change requires a joint caller graph update: ' + logical)
-        old_errors = {_finding_key(finding) for finding in prior_findings if finding['severity'] == 'error'}
-        introduced = [finding for finding in findings if finding['severity'] == 'error' and _finding_key(finding) not in old_errors]
-        if introduced:
-            raise GXWFormatError('declaration edit failed current FBD binding checks: ' + '; '.join(finding['message'] for finding in introduced))
+        introduced = introduced_findings(prior_findings, findings)
         status = 'failed' if any(f['severity'] == 'error' for f in findings) else 'unverified' if findings else 'passed'
         checks.append(dict(source=logical, language='fbd', status=status, syntax='not_applicable', semantic=status,
                            findings=findings, introduced_errors=introduced,
-                           native_compile='not_run', execution='not_run'))
+                           native_compile='not_run', execution='not_run', execution_dependencies=current['execution']))
     return checks
 
 
@@ -830,7 +792,7 @@ def check_project_draft(baseline: bytes, *, source_replacements=None, declaratio
         kind = streams[name][source_payload_offset(streams[name])]
         try:
             if kind == 208:
-                checks.extend(_check_graphs(baseline, streams, {name: groups[name]}, sources, documents, programs))
+                checks.extend(_check_graphs(baseline, draft_streams, {name: groups[name]}, sources, documents, programs))
             elif kind in (1, 240):
                 checks.extend(_token_checks(draft_streams, {name: groups[name]}, sources, documents,
                     text_encoding=config['text_encoding'], bind_sources=selected))
@@ -841,12 +803,15 @@ def check_project_draft(baseline: bytes, *, source_replacements=None, declaratio
         if issue.get('code') == 'declaration_source_gap':
             checks.append(_source_check_error(issue['stream'], 'declarations', 'DECLARATION_SOURCE_GAP',
                 issue['message'], severity='unverified'))
-    if save_policy == 'checked':
-        errors = [(row['source'], finding) for row in checks for finding in row.get('introduced_errors', row.get('findings', ()))
-                  if finding['severity'] == 'error']
-        if errors:
-            raise GXWFormatError('offline source failed syntax/semantic or FBD binding checks: ' + '; '.join(
-                name + ': ' + finding['message'] for name, finding in errors))
+    errors = [(row['source'], finding) for row in checks
+              for finding in row.get('introduced_errors', row.get('findings', ()))
+              if finding['severity'] == 'error' and (save_policy == 'checked' or finding['code'] in
+                  {'fbd_literal_syntax', 'fbd_literal_range', 'fbd_constant_type'})]
+    if errors:
+        error = GXWFormatError('offline source failed syntax/semantic or FBD binding checks: ' + '; '.join(
+            name + ': ' + finding['message'] for name, finding in errors))
+        error.findings = [dict(finding, source_name=name) for name, finding in errors]
+        raise error
     return checks
 
 

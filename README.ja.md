@@ -181,6 +181,6 @@ cd gxworks-agent
 
 ## 資料とライセンス
 
-[リリースの変更点](CHANGELOG.md) · [貢献ガイド](CONTRIBUTING.md) · [Issue](https://github.com/Arienax/gxworks-agent/issues) · [セキュリティ](SECURITY.md)
+[リリースの変更点](CHANGELOG.md) · [Issue](https://github.com/Arienax/gxworks-agent/issues)
 
 プロジェクト貢献者が権利を持つ Core、Web、MCP、ネイティブアダプターのソースコードには [Apache License 2.0](LICENSE) を適用します。詳細は[ライセンス範囲](LICENSE-SCOPE.md)と[第三者の権利表記](THIRD_PARTY_NOTICES.md)を参照してください。各貢献者は自身の著作権を保持し、過去に配布されたリリースにはそれぞれの配布時点のライセンスが適用されます。

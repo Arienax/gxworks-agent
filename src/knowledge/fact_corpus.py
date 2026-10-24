@@ -9,7 +9,6 @@ from __future__ import annotations
 from knowledge import index_access
 
 from knowledge.record_projection import (
-    MAX_TOP_K,
     chunk_result,
     select_ranked,
 )
@@ -28,6 +27,7 @@ SOURCE_KEYS = frozenset({"id", "manual_id", "manual_number", "revision", "pdf_pa
 PRESENTATION_KEYS = frozenset({"text", "manual_text", "layout_text", "raw_text", "bbox",
     "source_span", "source_spans", "value_spans", "context_span", "row_span", "geometry_reference"})
 _TOKEN = re.compile(r"[A-Za-z0-9_$][A-Za-z0-9_$.:/+*<>=!(),\[\]{}|&%~?\-]*\Z")
+_OPERATOR_FORM = re.compile(r'(?:\*\*|[+\-*/&]|<>|<=|>=|=|<|>)(?:P)?(?:_U|_E)?\Z')
 _TYPE_LABEL = re.compile(r"(?:signed|unsigned|binary|bit|word|float|double|16|32|64)(?:[- ](?:bit|word|integer|binary|float|16|32|64)){0,4}\Z", re.I)
 _MEASUREMENT = re.compile(r"[+-]?\d+(?:\.\d+)?\s*(?:V|A|Hz|kHz|MHz|ms|us|s|mm|rpm)(?:\s+(?:AC|DC))?\Z", re.I)
 
@@ -47,7 +47,8 @@ def typed_value(value):
     if value is None or isinstance(value, (bool, int, float)):
         return value
     if isinstance(value, str):
-        if (not value or _TOKEN.fullmatch(value) or _TYPE_LABEL.fullmatch(value) or _MEASUREMENT.fullmatch(value)
+        if (not value or _TOKEN.fullmatch(value) or _OPERATOR_FORM.fullmatch(value)
+                or _TYPE_LABEL.fullmatch(value) or _MEASUREMENT.fullmatch(value)
                 or re.fullmatch(r'-[A-Za-z0-9][A-Za-z0-9_-]*', value)):
             return value
         raise UnresolvedExpression("unclassified_expression")
@@ -283,7 +284,10 @@ def resolve(kind, targets, *, plc_model, task_type="analysis", connection=_DEFAU
             if projected is not None:
                 projected.update(json.loads(row["payload_json"]).get("metadata", {}))
                 result.append(projected)
-    return select_ranked(result, MAX_TOP_K)
+    # These rows are explicit identities and their applicable source variants.
+    # Related-result limits belong to the supplemental retrieval lane; they
+    # must never erase a later requested target or a CPU/source condition here.
+    return select_ranked(result, len(result))
 
 
 def is_authored_record(row):

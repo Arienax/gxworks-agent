@@ -181,6 +181,6 @@ cd gxworks-agent
 
 ## 资料与许可
 
-[版本更新记录](CHANGELOG.md) · [贡献指南](CONTRIBUTING.md) · [问题反馈](https://github.com/Arienax/gxworks-agent/issues) · [安全政策](SECURITY.md)
+[版本更新记录](CHANGELOG.md) · [问题反馈](https://github.com/Arienax/gxworks-agent/issues)
 
 项目贡献者拥有权利的 Core、Web、MCP 与原生适配器源码采用 [Apache License 2.0](LICENSE) 开源，具体适用范围见[许可范围](LICENSE-SCOPE.md)与[第三方声明](THIRD_PARTY_NOTICES.md)。各贡献者保留其版权；此前已发布的版本仍适用其发布时的许可证。

@@ -2,7 +2,7 @@
 from __future__ import annotations
 from typing import Literal
 from pydantic import ConfigDict, Field, JsonValue, StrictBool, model_validator
-from .response_types import (JsonObject, EngineeringObject, EngineeringMap, PublicResource,
+from .response_types import (JsonObject, EngineeringObject, EngineeringMap, EngineeringValue, PublicResource,
     ExtensibleResource, PublicObject, NullablePublicObject, _require_public)
 from .program_contracts import (ProgramDocument, PLCProgram, LadderDocument, FBDModel, SFCModel,
     FBDNode, FBDLabel, FBDCatalog, FBDEditorView, FBDInspection, FBDDraftPreview, SFCSource,
@@ -702,10 +702,41 @@ class SourceSnapshotEnvelope(ExtensibleResource):
     error: NativeToolError | None = None
 
 
+class ReadContinuation(PublicResource):
+    tool: Literal['search_plc_manual', 'get_generation_context', 'get_fbd_catalog']
+    arguments: JsonObject
+
+
+class ReadDelivery(PublicResource):
+    version: Literal[1]
+    document_id: str
+    page: int
+    complete: bool
+    scope: Literal['read_sequence']
+    limits: dict[str, int]
+    next: ReadContinuation | None
+    assembly: str
+    coverage: JsonObject | None = None
+
+
+class PagedReadData(PublicResource):
+    context_schema_version: Literal[3]
+    document: EngineeringObject
+    objects: EngineeringMap[EngineeringValue]
+    delivery: ReadDelivery
+
+
+class ManualSearchEnvelope(ExtensibleResource):
+    ok: bool
+    tool: Literal['search_plc_manual']
+    data: PagedReadData | None = None
+    error: NativeToolError | None = None
+
+
 class CatalogEnvelope(ExtensibleResource):
     ok: bool
     tool: Literal["get_fbd_catalog"]
-    data: FBDCatalog | None = None
+    data: PagedReadData | FBDCatalog | None = None
     error: NativeToolError | None = None
 
 
@@ -713,9 +744,32 @@ class GenerationCatalog(FBDCatalog):
     empty_model: FBDModel | FBDParameterModel
 
 
+class FBDGenerationSTSource(ExtensibleResource):
+    source_name: str
+    st_text: str | None = None
+    declarations: list[FBDLabel] | None = None
+
+
+class FBDGenerationCaller(ExtensibleResource):
+    source_name: str
+    parameter_model: FBDParameterModel | None = None
+
+
+class FBDGenerationSourceContext(ExtensibleResource):
+    declarations: EngineeringMap[list[FBDLabel]] | None = None
+    structures: EngineeringMap[list[FBDLabel]] | None = None
+    st_sources: list[FBDGenerationSTSource] | None = None
+    fbd_callers: list[FBDGenerationCaller] | None = None
+
+
 class GenerationInput(ExtensibleResource):
     previous: FBDModel | FBDParameterModel | None = None
     parameter_schema: EngineeringObject | None = None
+    declaration_tables: EngineeringMap[str] | None = None
+    existing_declarations: EngineeringMap[list[FBDLabel]] | None = None
+    call_interface: EngineeringMap[list[FBDLabel]] | None = None
+    structures: EngineeringMap[list[FBDLabel]] | None = None
+    source_context: FBDGenerationSourceContext | None = None
 
 
 class GenerationOutputContract(ExtensibleResource):
@@ -727,6 +781,15 @@ class GenerationOutputContract(ExtensibleResource):
     input_shape: str | None = None
     schema_document: EngineeringObject | None = Field(default=None, alias="schema")
     model_schema: EngineeringObject | None = None
+    model_schema_ref: str | None = None
+    schema_ref: str | None = None
+    version_id: str | None = None
+    program: str | None = None
+    editable_sources: list[str] | None = None
+    required_fields: list[str] | None = None
+    requires_any: list[str] | None = None
+    save_policy: Literal['draft', 'checked'] | None = None
+    alternatives: list[GenerationOutputContract] | None = None
 
 
 class GenerationContextToolData(ExtensibleResource):
@@ -744,7 +807,7 @@ class GenerationContextToolData(ExtensibleResource):
 class GenerationContextEnvelope(ExtensibleResource):
     ok: bool
     tool: Literal["get_generation_context"]
-    data: GenerationContextToolData | None = None
+    data: PagedReadData | GenerationContextToolData | None = None
     error: NativeToolError | None = None
 
 
@@ -756,7 +819,7 @@ class MetadataToolEnvelope(ExtensibleResource):
 
 
 ToolEnvelope = (ProgramInfoEnvelope | NetworkEnvelope | DiagnosticsEnvelope | SourceSnapshotEnvelope
-                | CatalogEnvelope | GenerationContextEnvelope | NativeCheckEnvelope | MetadataToolEnvelope)
+                | CatalogEnvelope | GenerationContextEnvelope | ManualSearchEnvelope | NativeCheckEnvelope | MetadataToolEnvelope)
 
 
 class AgentToolResult(PublicResource):

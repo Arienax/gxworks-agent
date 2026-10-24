@@ -39,8 +39,10 @@ def validate_typed_connections(endpoints, connections):
         if left.get('side') != 'out' or right.get('side') != 'in':
             raise GXWFormatError('topology port direction mismatch')
         a, b = left.get('data_type'), right.get('data_type')
-        if (not isinstance(a, str) or not isinstance(b, str)
-                or _type_parts(a) != _type_parts(b) or a.upper().startswith('ANY')):
+        from plc.fbd_semantics import type_domain
+        left_types = left.get('types', type_domain(a, {}))
+        right_types = right.get('types', type_domain(b, {}))
+        if left_types is not None and right_types is not None and not set(left_types).intersection(right_types):
             raise GXWFormatError('topology port type is incompatible or unresolved')
         seen.add((source, target))
         writers[target] = source
@@ -48,21 +50,14 @@ def validate_typed_connections(endpoints, connections):
 
 
 def _terminal_type(symbol, sources, plc_model):
-    structure = sources.structure_value(symbol)
-    if structure is not None:
-        return structure["data_type"]
-    label = sources.label(symbol)
-    if label is not None:
-        return label[1].data_type
-    if symbol.upper() in {"TRUE", "FALSE"}:
-        return "BOOL"
-    typed = re.fullmatch(r"(BOOL|INT|DINT|WORD|DWORD|REAL|TIME|T|STRING)#.+", symbol, re.I)
-    if typed:
-        return "TIME" if typed[1].upper() == "T" else typed[1].upper()
-    if re.fullmatch(r"[XYMS]\d+", symbol, re.I):
-        device_address(symbol, plc_model)
-        return "BOOL"
-    # A raw D/T/C value has no unique source type; no guessed word/time cast.
+    value = sources.actual_value(symbol)
+    if value.get('data_type'):
+        return value['data_type']
+    types = value.get('types')
+    if types and len(types) == 1:
+        return types[0]
+    if types:
+        return 'ANY'  # The graph checker resolves the complete contextual domain.
     raise GXWFormatError("terminal type is not resolved from the current source: " + symbol)
 
 
@@ -247,19 +242,21 @@ def assemble_topology(context, topology, *, plc_model, base_model=None, layout_o
             raise GXWFormatError("topology instance symbol is required")
         if template["kind"] == "function_block":
             sources.definition(template["type_name"], "FUNCTION_BLOCK")
-            if symbol.casefold() in call_symbols or any(n["symbol"].casefold() == symbol.casefold() for n in model["nodes"] if n["template"].startswith("function_block:")):
-                raise GXWFormatError("stateful callable instances must have independent identity")
             call_symbols.add(symbol.casefold())
         elif template["kind"] == "function":
             sources.definition(template["symbol"], "FUNCTION")
         elif template["kind"] not in {"input", "output"}:
             raise GXWFormatError("initial topology scope includes source callables and typed terminals")
         ports = deepcopy(template["ports"])
+        for port in ports:
+            data_type = port.get('data_type')
+            if data_type and not data_type.startswith('ANY'):
+                port['types'] = [sources.value_type_identity(data_type)]
         if template["kind"] in {"input", "output"}:
-            value_type = _terminal_type(symbol, sources, plc_model)
+            actual = sources.actual_value(symbol)
             for port in ports:
-                port.update(side="out" if template["kind"] == "input" else "in", data_type=value_type)
-        if any(p.get("side") not in {"in", "out"} or not p.get("data_type") for p in ports):
+                port.update(side="out" if template["kind"] == "input" else "in", data_type=actual.get('data_type'), types=actual['types'])
+        if any(p.get("side") not in {"in", "out"} for p in ports):
             raise GXWFormatError("topology requires resolved source port directions and types")
         node = {**deepcopy(instance), "x": next_x, "y": origin[1] + index * 10,
                 "width": template["width"], "height": template["height"], "ports": deepcopy(template["ports"])}

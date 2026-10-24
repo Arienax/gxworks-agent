@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "operation": "native_ladder_acceptance",
+  "status": "passed",
+  "started_at": "2026-10-22T12:49:22.927984+00:00",
+  "active_stage": "native_export",
+  "simulation": "not_run",
+  "stages": {
+    "compile": {
+      "status": "passed",
+      "component": "native_workspace_adapter",
+      "command": "compile_project",
+      "native_workspace_status": "observed",
+      "native_compile": "completed_accepted",
+      "source_bodies": "matched",
+      "program_body_verified_equal": true,
+      "failed_calls": [],
+      "project_rewritten_by_native_compile": true,
+      "program_stream_reserialised": true,
+      "project": {
+        "path": "D:\\gxworks-agent\\tmp_accept_final4\\project.gxw",
+        "size": 924160,
+        "sha256": "c6e91fc0c68169c156d350d15e3cbf93af03285a6f33e3138915b67e38a2014c"
+      }
+    },
+    "open": {
+      "status": "passed",
+      "identity": {
+        "process_id": 101012,
+        "window_handle": 2032164,
+        "process_started": "134371469773933129",
+        "executable": "D:\\GXWORKS2\\GPPW2\\GD2.exe",
+        "software_version": "1.635.0.1",
+        "project_path": "D:\\gxworks-agent\\tmp_accept_final4\\project.gxw",
+        "cpu_menu": "FX3U/FX3UC",
+        "path_binding": "native_full_caption",
+        "native_ui_language": "zh-CN",
+        "project_codepage": 936,
+        "project_language_observation": {
+          "status": "observed",
+          "codepage_candidates": [
+            936,
+            54936
+          ],
+          "status_text": "简体中文"
+        }
+      },
+      "library_updates": []
+    },
+    "save": {
+      "status": "passed",
+      "project": {
+        "path": "D:\\gxworks-agent\\tmp_accept_final4\\project.gxw",
+        "size": 924160,
+        "sha256": "9024a0954cb3be52439366104e780ee760b384240397af3912cda75422484811"
+      }
+    },
+    "cold_reopen": {
+      "status": "passed",
+      "identity": {
+        "process_id": 63740,
+        "window_handle": 3545576,
+        "process_started": "134371469913458820",
+        "executable": "D:\\GXWORKS2\\GPPW2\\GD2.exe",
+        "software_version": "1.635.0.1",
+        "project_path": "D:\\gxworks-agent\\tmp_accept_final4\\project.gxw",
+        "cpu_menu": "FX3U/FX3UC",
+        "path_binding": "native_full_caption",
+        "native_ui_language": "zh-CN",
+        "project_codepage": 936,
+        "project_language_observation": {
+          "status": "observed",
+          "codepage_candidates": [
+            936,
+            54936
+          ],
+          "status_text": "简体中文"
+        }
+      },
+      "new_process": true,
+      "saved_file_unchanged": true,
+      "previous_process": {
+        "process_id": 101012,
+        "exit_code": 0,
+        "closed": true
+      }
+    },
+    "native_export": {
+      "status": "passed",
+      "export_completed": true,
+      "program": {
+        "path": "D:\\gxworks-agent\\tmp_accept_final4\\native-program.csv",
+        "size": 11270,
+        "sha256": "c2fc506d941c3c3b8b79edd98d0a1e43dc5a4427bec92a8b25d5c8af559bfa8e"
+      },
+      "comparison": {
+        "status": "passed",
+        "expected_count": 133,
+        "actual_count": 133,
+        "differences": [],
+        "target_matches": true
+      }
+    }
+  },
+  "cpu": "FX3U/FX3UC",
+  "program": "MAIN",
+  "source": {
+    "path": "D:\\gxworks-agent\\tmp_native_fresh\\project.gxw",
+    "size": 918016,
+    "sha256": "a7f4c21f88c6670dfb5d225b9ba5be025db228c9c4b18cdec407860656fc07a8"
+  },
+  "source_program": "MAIN.Program.pou",
+  "comparison_origin": "decoded_input_source",
+  "expected_program": {
+    "path": "D:\\gxworks-agent\\tmp_accept_final4\\source-listing.csv",
+    "size": 11168,
+    "sha256": "5f6f899705644e00c659e9e8540268af67c9e51f7991b5c859270f08afbe3446"
+  },
+  "working_project": {
+    "path": "D:\\gxworks-agent\\tmp_accept_final4\\project.gxw",
+    "size": 918016,
+    "sha256": "a7f4c21f88c6670dfb5d225b9ba5be025db228c9c4b18cdec407860656fc07a8"
+  },
+  "gx_compile_status": "passed",
+  "export_comparison_status": "passed",
+  "finished_at": "2026-10-22T12:49:59.616497+00:00"
+}

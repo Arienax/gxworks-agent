@@ -43,6 +43,13 @@ _DEBUG_TOOLS = frozenset({
 
 
 def _model_tool_value(name, value):
+    from application.read_delivery import PAGED_READ_TOOLS, DELIVERY_VERSION
+    if (name in PAGED_READ_TOOLS and isinstance(value, Mapping)
+            and (value.get('data', {}).get('delivery') or {}).get('version') == DELIVERY_VERSION):
+        # Produced only by the registry after the ordinary public projection.
+        # A second generic projection would corrupt engineering map keys in
+        # the object table and invalidate the measured final envelope.
+        return copy.deepcopy(value)
     public = _public_value(value)
     # Selection belongs to the registered tool owner, never to a payload flag.
     document = {"get_current_program_info": "program", "read_network": "program",

@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "operation": "native_ladder_acceptance",
+  "status": "interrupted",
+  "started_at": "2026-10-22T11:14:05.043141+00:00",
+  "active_stage": "compile",
+  "simulation": "not_run",
+  "stages": {
+    "open": {
+      "status": "passed",
+      "identity": {
+        "process_id": 90992,
+        "window_handle": 5642636,
+        "process_started": "134371412522795966",
+        "executable": "D:\\GXWORKS2\\GPPW2\\GD2.exe",
+        "software_version": "1.635.0.1",
+        "project_path": "D:\\gxworks-agent\\tmp_native_accept_demo\\project.gxw",
+        "cpu_menu": "FX3U/FX3UC",
+        "path_binding": "native_file_owner_and_abbreviated_caption",
+        "native_ui_language": "zh-CN",
+        "project_codepage": 936,
+        "project_language_observation": {
+          "status": "observed",
+          "codepage_candidates": [
+            936,
+            54936
+          ],
+          "status_text": "简体中文"
+        }
+      },
+      "library_updates": []
+    },
+    "compile": {
+      "status": "unverified"
+    },
+    "save": {
+      "status": "not_run"
+    },
+    "cold_reopen": {
+      "status": "not_run"
+    },
+    "native_export": {
+      "status": "not_run"
+    }
+  },
+  "cpu": "FX3U/FX3UC",
+  "program": "MAIN",
+  "source": {
+    "path": "D:\\gxworks-agent\\tmp_rebuild\\clone_演示程序.gxw",
+    "size": 918016,
+    "sha256": "a7f4c21f88c6670dfb5d225b9ba5be025db228c9c4b18cdec407860656fc07a8"
+  },
+  "source_program": "MAIN.Program.pou",
+  "comparison_origin": "decoded_input_source",
+  "expected_program": {
+    "path": "D:\\gxworks-agent\\tmp_native_accept_demo\\source-listing.csv",
+    "size": 11168,
+    "sha256": "5f6f899705644e00c659e9e8540268af67c9e51f7991b5c859270f08afbe3446"
+  },
+  "working_project": {
+    "path": "D:\\gxworks-agent\\tmp_native_accept_demo\\project.gxw",
+    "size": 918016,
+    "sha256": "a7f4c21f88c6670dfb5d225b9ba5be025db228c9c4b18cdec407860656fc07a8"
+  },
+  "error": {
+    "type": "NativeEngineeringDriverError",
+    "message": "没有出现本次全部编译确认页。",
+    "observation": {
+      "dialogs": []
+    }
+  },
+  "gx_compile_status": "unverified",
+  "export_comparison_status": "not_run",
+  "finished_at": "2026-10-22T11:15:24.233390+00:00"
+}

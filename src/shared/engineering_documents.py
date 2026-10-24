@@ -94,12 +94,33 @@ DATA_PATHS["generation_context"] += tuple((*prefix, *path)
     for prefix in (("current_model",), ("generation_input", "previous"))
     for path in (*_PROGRAM_MAPS, *_PARAMETER_MAPS))
 DATA_PATHS["generation_context"] += (("generation_input", "parameter_schema"),
-    ("output_contract", "schema"), ("output_contract", "model_schema"))
+    ("output_contract", "schema"), ("output_contract", "model_schema"),
+    ("output_contract", "alternatives", "*", "model_schema"),
+    ("generation_input", "declaration_tables"))
 NAMED_RECORD_PATHS["generation_context"] = tuple(
     ("catalog", *path) for path in NAMED_RECORD_PATHS["catalog"])
 NAMED_RECORD_PATHS["generation_context"] += tuple((*prefix, *path)
     for prefix in (("current_model",), ("generation_input", "previous"))
     for path in (*_PROGRAM_RECORDS, ("networks", "*", "nodes", "*", "port_edits")))
+
+# FBD generation carries declarations and caller graphs in addition to the
+# selected graph. Their user-owned names retain the same data/metadata boundary.
+_FBD_CALLER = ("generation_input", "source_context", "fbd_callers", "*", "parameter_model")
+DATA_PATHS["generation_context"] += tuple((*_FBD_CALLER, *path)
+    for path in (*_PROGRAM_MAPS, *_PARAMETER_MAPS))
+NAMED_RECORD_PATHS["generation_context"] += tuple((*_FBD_CALLER, *path)
+    for path in (*_PROGRAM_RECORDS, ("networks", "*", "nodes", "*", "port_edits")))
+_FBD_DECLARATION_MAPS = (("generation_input", "existing_declarations"),
+    ("generation_input", "call_interface"), ("generation_input", "structures"),
+    ("generation_input", "source_context", "declarations"),
+    ("generation_input", "source_context", "structures"))
+NAMED_RECORD_PATHS["generation_context"] += _FBD_DECLARATION_MAPS
+_FBD_DECLARATION_ROWS = tuple((*path, "*", "*") for path in _FBD_DECLARATION_MAPS) + (
+    ("generation_input", "source_context", "st_sources", "*", "declarations", "*"),)
+DATA_PATHS["generation_context"] += tuple((*path, field)
+    for path in _FBD_DECLARATION_ROWS for field in _LABEL_TEXT_FIELDS)
+NAMED_RECORD_PATHS["generation_context"] += tuple((*path, "member_devices")
+    for path in _FBD_DECLARATION_ROWS)
 
 # A diff carries the same field owners as its corresponding source document.
 DATA_PATHS["preview_diff"] = tuple(("property_changes", path[0], side, *path[1:])

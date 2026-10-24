@@ -333,7 +333,7 @@ class WorkbenchService:
             result = self.projects.runtime.invoke(ToolCall(command['call_id'], command['name'],
                 command.get('arguments', {})), context)
             envelope = public_tool_result_data(result)
-            return {'data': envelope, 'content': json.dumps(envelope, ensure_ascii=False),
+            return {'data': envelope, 'content': '' if command['name'] in {'get_generation_context', 'get_fbd_catalog', 'search_plc_manual'} else json.dumps(envelope, ensure_ascii=False),
                     'is_error': result.is_error, 'call_id': command['call_id'], 'name': command['name']}
         request_key = hashlib.sha256((command["project_id"] + ":" + command["call_id"]).encode()).hexdigest()
         path = self.state_dir / "agent_calls" / (request_key + ".json")
@@ -355,7 +355,7 @@ class WorkbenchService:
             scope = self._command_scope(command, context)
             result = self.projects.runtime.invoke(ToolCall(command["call_id"], command["name"], command.get("arguments", {})), context)
             envelope = public_tool_result_data(result)
-            response = {"data": envelope, "content": json.dumps(envelope, ensure_ascii=False), "is_error": result.is_error,
+            response = {"data": envelope, "content": '' if command['name'] in {'get_generation_context', 'get_fbd_catalog', 'search_plc_manual'} else json.dumps(envelope, ensure_ascii=False), "is_error": result.is_error,
                         "call_id": command["call_id"], "name": command["name"]}
             pending = (result.data.get("data") or {}).get("pending_action")
             if not result.is_error and result.data.get("status") == "confirmation_required" and pending:

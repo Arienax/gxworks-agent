@@ -90,7 +90,9 @@ def _build_knowledge_query(*values, char_limit=None):
             if id(value) in visited:
                 continue
             visited.add(id(value))
-            children = value.values() if isinstance(value, dict) else value
+            # A declaration's INT/WORD type is not a reference to the instruction
+            # with that name. Actual opcode/template and source body fields stay.
+            children = (item for key, item in value.items() if key != 'data_type') if isinstance(value, dict) else value
             pending.extend(reversed(list(children)))
         elif isinstance(value, (str, int, float)) and not isinstance(value, bool):
             add(value)
@@ -138,6 +140,8 @@ def _build_model_context(model: str, confirmed_context=None, compact=False) -> s
     }
     profile["special_m"] = m.get("special_m", {})
     profile["special_d"] = m.get("special_d", {})
+    from plc.device_profiles import device_address_rules
+    profile['device_address_rules'] = device_address_rules(model)
     confirmed_hardware = None
     confirmed_hardware_context = None
     if isinstance(confirmed_context, dict):

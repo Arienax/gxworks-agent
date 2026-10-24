@@ -16,7 +16,6 @@ import shutil
 ROOT_FILES = (
     "LICENSE", "LICENSE-SCOPE.md", "THIRD_PARTY_NOTICES.md",
     "README.md", "README.zh-CN.md", "README.ja.md", "CHANGELOG.md",
-    "CONTRIBUTING.md", "SECURITY.md", "CODE_OF_CONDUCT.md", "ACCESSIBILITY.md",
     "build-web.bat", "start-web.cmd", "gxworks-agent-mcp.cmd", "gxworks-agent-mcp",
     "requirements/web.txt", "requirements/mcp.txt", "requirements/context.txt",
     "scripts/build_web_source.ps1", "scripts/start_web.ps1",

@@ -11,6 +11,8 @@ import re
 
 from knowledge.instruction_document import extract_model_badge_marks
 
+SCOPE_EXTRACTOR_VERSION = 2
+
 
 def _inside(obj, box, tolerance=1):
     return (obj['x0'] >= box[0] - tolerance and obj['x1'] <= box[2] + tolerance
@@ -63,12 +65,14 @@ def ql_header_symbols(words):
             rows.setdefault(round(word['top']), []).append(word)
     for _,parts in sorted(rows.items(), reverse=True):
         line = ' '.join(w['text'] for w in sorted(parts,key=lambda w:w['x0'])).strip()
+        line = re.sub(r'\s*\.\s*', '.', line)
         if re.fullmatch(r'[A-Z0-9_.$+<>=!*/,()\-\s]+',line) and re.search(r'[A-Z]{2}',line):
             names = []
-            for match in re.finditer(r'([A-Z][A-Z0-9_.$+<>=!\-]*)(\(P\))?',line):
-                names.append(match[1])
-                if match[2]:
-                    names.append(match[1]+'P')
+            for match in re.finditer(r'([A-Z][A-Z0-9_.$+<>=!\-]*(?:\(P\)[A-Z0-9_.$+<>=!\-]*)?)', line):
+                name = match[1]
+                names.append(name.replace('(P)', ''))
+                if '(P)' in name:
+                    names.append(name.replace('(P)', 'P'))
             return list(dict.fromkeys(names))
     return []
 
@@ -124,6 +128,16 @@ def _ql_icons(words, curves, layout):
         return None
     word = labels[0]
     cells = layout['cells']
+    # Some pages translate the complete icon strip by about one point. Locate
+    # its first enclosing icon, then preserve the configured relative cells.
+    first_boxes = [o for o in curves if len(o.get('pts', [])) == 9
+                   and 24 < o['x1'] - o['x0'] < 28
+                   and _inside(word, [o['x0'], o['top'], o['x1'], o['bottom']])]
+    offsets = {round(o['x0'] - cells[0]['x0'], 2) for o in first_boxes}
+    if len(offsets) != 1 or abs(next(iter(offsets))) > 3:
+        return None
+    offset = next(iter(offsets))
+    cells = [{**cell, 'x0': cell['x0'] + offset, 'x1': cell['x1'] + offset} for cell in cells]
     for cell in cells:
         # High/performance uses two lines and individually positioned glyphs
         # in some revisions. Confirm the complete label within its own cell.
@@ -148,6 +162,45 @@ def _ql_icons(words, curves, layout):
                     _inside(o, [cell['x0']-1, top-15, cell['x1']+1, top+5]) for o in curves)
         conditional = any(w['text'] == 'Ver.' and
                           _inside(w, [cell['x0']-1, top-15, cell['x1']+1, top+3]) for w in words)
+        if cross and conditional:
+            return None
+        state = 'unsupported' if cross else 'conditional' if conditional else 'supported'
+        marks.extend({'model': model, 'state': state} for model in cell['models'])
+    return marks
+
+
+def _iqf_icons(words, curves, lines, layout):
+    """Read the four CPU availability badges defined by the iQ-F legend."""
+    cells = layout['cells']
+    anchors = [w for w in words if w['text'] == cells[0]['label']
+               and 45 < w['top'] < 240 and 45 < w['x0'] < 85]
+    rows = []
+    for anchor in anchors:
+        labels = [[w for w in words if w['text'] == cell['label']
+                   and abs(w['top'] - anchor['top']) < 3
+                   and cell['x0'] - 3 < w['x0'] < cell['x1'] + 3] for cell in cells]
+        if all(len(matches) == 1 for matches in labels):
+            rows.append([matches[0] for matches in labels])
+    if len(rows) != 1:
+        return None
+    marks = []
+    for cell, word in zip(cells, rows[0]):
+        boxes = {(round(o['x0'], 2), round(o['top'], 2), round(o['x1'], 2), round(o['bottom'], 2))
+                 for o in curves if len(o.get('pts', [])) == 9
+                 and 40 < o['x1'] - o['x0'] < 45 and 15 < o['bottom'] - o['top'] < 20
+                 and _inside(word, [o['x0'], o['top'], o['x1'], o['bottom']])}
+        if len(boxes) != 1:
+            return None
+        box = next(iter(boxes))
+        mark_area = [box[0] - 1, box[1] - 15, box[2] + 1, box[3] + 1]
+        cross = any(len(o.get('pts', [])) == 13 and 9 < o['x1'] - o['x0'] < 14
+                    and 9 < o['bottom'] - o['top'] < 14 and _inside(o, mark_area) for o in curves)
+        cross = cross or any(w['text'] in {'×', '\uf0c8', '[GLYPH-F0C8]'}
+                             and _inside(w, mark_area) for w in words)
+        diagonals = [o for o in lines if 3 < o['x1'] - o['x0'] < 14
+                     and 3 < o['bottom'] - o['top'] < 14 and _inside(o, mark_area)]
+        cross = cross or len({_points_key(o) for o in diagonals}) >= 2
+        conditional = any(w['text'] == 'Ver.' and _inside(w, mark_area) for w in words)
         if cross and conditional:
             return None
         state = 'unsupported' if cross else 'conditional' if conditional else 'supported'
@@ -194,6 +247,8 @@ def extract_header_applicability(words, rectangles, curves, lines, layout):
         marks = _fx_matrix(words, curves, lines, layout)
     elif kind == 'ql_icons':
         marks = _ql_icons(words, curves, layout)
+    elif kind == 'iqf_icons':
+        marks = _iqf_icons(words, curves, lines, layout)
     elif kind == 'legacy_shading':
         marks = _legacy_shading(words, rectangles, layout)
     elif layout.get('model_badges'):
@@ -240,6 +295,8 @@ def apply_manual_scope(connection, spec, source, *, pdf_path=None, page_headers=
                                 'evidence_pages': sorted(set(prior['evidence_pages'] + [page_number]))}
         elif prior:
             prior['evidence_pages'] = sorted(set(prior['evidence_pages'] + [page_number]))
+            if prior.get('opcodes') or header.get('opcodes'):
+                prior['opcodes'] = list(dict.fromkeys([*prior.get('opcodes', []), *header.get('opcodes', [])]))
         else:
             anchors[outline] = {**header, 'evidence_pages':[page_number]}
     if page_headers is not None:
@@ -248,6 +305,7 @@ def apply_manual_scope(connection, spec, source, *, pdf_path=None, page_headers=
                 add_header(outline, header, page_number)
     elif layout:
         import pdfplumber
+        artifact_columns = {row[1] for row in connection.execute('PRAGMA table_info(page_artifacts)')}
         with pdfplumber.open(str(pdf_path or spec.path)) as pdf:
             for row in connection.execute('SELECT pdf_page,outline_path FROM page_artifacts WHERE manual_id=? ORDER BY pdf_page', (spec.id,)):
                 page_number, outline = row
@@ -256,11 +314,20 @@ def apply_manual_scope(connection, spec, source, *, pdf_path=None, page_headers=
                 page = pdf.pages[page_number-1]
                 words = page.extract_words(x_tolerance=2, y_tolerance=3)
                 header = extract_header_applicability(words, page.rects, page.curves, page.lines, layout)
+                if 'visual_json' in artifact_columns:
+                    stored = connection.execute('SELECT visual_json FROM page_artifacts WHERE manual_id=? AND pdf_page=?',
+                                                (spec.id, page_number)).fetchone()
+                    visual = json.loads(stored[0] or '{}')
+                    visual.pop('source_applicability', None)
+                    if header is not None:
+                        visual['source_applicability'] = header
+                    connection.execute('UPDATE page_artifacts SET visual_json=? WHERE manual_id=? AND pdf_page=?',
+                                       (json.dumps(visual, ensure_ascii=False), spec.id, page_number))
                 if header is not None:
                     add_header(outline, header, page_number)
                 page.flush_cache()
     stats = {'headers': len(anchors), 'scoped_chunks': 0, 'conditional_chunks': 0, 'unknown_chunks': 0,
-             'applicability_layout': layout}
+             'applicability_layout': layout, 'extractor_version': SCOPE_EXTRACTOR_VERSION}
     for row in connection.execute('SELECT id,outline_path FROM chunks WHERE manual_id=?', (spec.id,)).fetchall():
         chunk_id, outline = row
         parents = [key for key in anchors if outline == key or outline.startswith(key + ' > ')]

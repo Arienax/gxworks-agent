@@ -320,14 +320,21 @@ def generate_candidate(output, snapshot, context, images, job):
     if snapshot.get('program'):
         context = source_context(context, snapshot['program'])
     generation = _get_generation_context(context, {
-        'user_requirement': snapshot.get('text', ''), 'execution_mode': 'background'})
+        'user_requirement': snapshot.get('text', ''), 'execution_mode': 'background',
+        'catalog_scope': snapshot.get('catalog_scope') or 'task',
+        'templates': snapshot.get('catalog_templates')})
     source_project = read_offline_project(context.native_snapshot)
+    fbd_target = (context.version or {}).get('target_mode') == 'fbd'
     generation['project_comments'], generation['comment_tables'], _ = source_project.comments()
-    generation['declaration_tables'] = source_project.declaration_tables()
-    generation['project_sources'] = source_project.sources()
-    generation['selected_source'] = read_source(context.native_snapshot, (context.version or {}).get('program_name'))
+    if not fbd_target:
+        # An FBD context already carries these engineering facts from the shared
+        # builder; re-adding them here would duplicate the same tables.
+        generation['declaration_tables'] = source_project.declaration_tables()
+        generation['project_sources'] = source_project.sources()
+        generation['selected_source'] = read_source(context.native_snapshot,
+                                                    (context.version or {}).get('program_name'))
     tool = generation['output_contract']['tool']
-    if (context.version or {}).get('target_mode') == 'fbd':
+    if fbd_target:
         tool = 'edit_gxw_project'
     if tool not in {'patch_program', 'create_st_candidate', 'create_sfc_candidate', 'create_fbd_candidate', 'edit_gxw_project'}:
         raise GXWFormatError('selected source does not expose an existing offline edit contract')
@@ -353,10 +360,35 @@ def generate_candidate(output, snapshot, context, images, job):
         'Do not create engineering-level POUs, FB definitions, declaration tables, resources or tasks; '
         'do not change task registration or request native operations. '
         'patch_program arguments must contain the nested patch object.')
+    from application.fbd_context import compile_envelope
+    from application.model_api import bound_provider_profile
+    wire_generation = generation
+    if fbd_target:
+        # The MCP result retains its compatibility fields. The model needs the
+        # shared engineering input only once, not duplicate catalogs, graphs,
+        # prompts and internal delivery receipts surrounding the same input.
+        wire_generation = {key: generation[key] for key in (
+            'project_id', 'plc_model', 'target_mode', 'current_version_id', 'generation_input')}
+    envelope = {'context': wire_generation, 'tool_schema': schema,
+                'existing_declaration_tool': declaration_tool, 'project_transaction_tool': transaction_tool}
+    # Only the presentation-only sections of a Ladder edit are optional here. The
+    # FBD context is already measured and pruned by compose_fbd_context, where the
+    # ST bodies, callers, interfaces, type closure and project conditions are
+    # mandatory units. Only its already-classified auxiliary interfaces can be
+    # removed if the final tool-schema envelope needs additional space.
+    optional_paths = [] if fbd_target else [('context', 'selected_source', 'svg'),
+                                            ('context', 'selected_source', 'model'),
+                                            ('context', 'project_comments')]
+    envelope, budget_report = compile_envelope(
+        envelope, instructions=instructions, optional_paths=optional_paths,
+        model_profile=bound_provider_profile(), image_count=len(images or ()),
+        plc_model=context.plc_model, request=str(snapshot.get('text') or ''),
+        task_type='edit', optional_templates=(
+            generation.get('generation_handoff', {}).get('catalog_report', {}).get('optional_templates', ())
+            if fbd_target else ()))
     response = _request_model([{'role': 'system', 'content': instructions},
-        _user_message_with_images(json.dumps({'context': generation, 'tool_schema': schema,
-            'existing_declaration_tool': declaration_tool, 'project_transaction_tool': transaction_tool},
-            ensure_ascii=False), images)], model_name=snapshot.get('model', {}).get('model'),
+        _user_message_with_images(json.dumps(envelope, ensure_ascii=False), images),
+        ], model_name=snapshot.get('model', {}).get('model'),
         effort=None, stream=True, on_reasoning_chunk=lambda value: job.emit('reasoning', {'text': value}),
         on_content_chunk=lambda value: job.emit('content', {'text': value}),
         response_contract=ResponseContract('gxw_existing_edit', 'json', human_paths=('summary', 'unsupported')))
@@ -412,7 +444,8 @@ def generate_candidate(output, snapshot, context, images, job):
            'accept_sfc_candidate': '_sfc_candidate'}[pending['type']]
     payload = unpack_candidate(pending[key], output)
     payload['metadata'].update(summary=answer['summary'],
-        generation_handoff={'workflow': 'existing_gxw_offline', 'tool': tool})
+        generation_handoff={'workflow': 'existing_gxw_offline', 'tool': tool,
+                            'budget_report': budget_report})
     return payload
 
 
