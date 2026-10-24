@@ -2538,9 +2538,14 @@ _PWM_STOP_QUALIFICATION_CLAUSES = {'condition_precautions_p817_r4_c0': 'Operatio
 def _review_pwm_clause(kind, clause, *, section, block, declared):
     """Bind PWM qualifications to the original section, tables and antecedents.
 
-    This is manual knowledge, not a simulator implementation. Stop diagrams
-    with overlapping inclusive 5 us boundaries deliberately remain unresolved.
+    This is manual knowledge, not a simulator implementation. Individual stop
+    statements may be source checked without inventing boundary composition.
     """
+    from tools.fact_fx5_pwm_stop_review import review_pwm_stop_clause
+    stop_review = review_pwm_stop_clause(kind, clause, section=section,
+                                        block=block, declared=declared)
+    if stop_review is not None:
+        return stop_review
     forms = {'16 bit binary pulse width modulation': ('PWM', 813, 819, 816, 818),
              '32 bit binary pulse width modulation': ('DPWM', 820, 826, 824, 825)}
     scope = forms.get(section.get('section'))
@@ -2582,6 +2587,8 @@ def _review_pwm_clause(kind, clause, *, section, block, declared):
                 {'kind': 'PWM_runtime_register_validation', 'fields': ['ON_time', 'period'], 'validity': 'invalid', 'error': True},
                 {'kind': 'value_outside_interval', 'subject': {'context': 'pwm.pulse_count'}, 'minimum': 0, 'maximum': 2147483647,
                  'inclusive': True, 'error': True}], ['s1', 's2', 'd'])
+            from tools.fact_fx5_pwm_diagnostics import pwm_diagnostic_code_relations
+            result['value_updates']['diagnostic_code_relations'] = pwm_diagnostic_code_relations(form)
             result['value_updates'].update(error_codes=['3600H'] + [format(0x3610 + ch, '04X') + 'H' for ch in range(1, 13)],
                 error_code_binding='3600H_configuration_and_3611H_to_361CH_correspond_to_selected_channel',
                 merged_source_row=True, pulse_count_is_not_operand_s2=True)
@@ -2682,14 +2689,16 @@ def _review_pwm_clause(kind, clause, *, section, block, declared):
                 and '[FX5U/FX5UC CPU module and high-speed pulse input/output module]' in text):
             # A source layout merged the timing table into the first stop
             # paragraph. Keep a distinct input constraint for that table.
+            from tools.fact_fx5_pwm_table import parse_pwm_hardware_table
             result['split_pwm_hardware_table'] = True
+            result['split_pwm_hardware_rows'] = parse_pwm_hardware_table(_PWM_HARDWARE_TABLE)
         return result
 
     if (form == 'PWM' and page == precaution_page and clause == _PWM_HARDWARE_TABLE
         and '[FX5S/FX5UJ CPU module]' in text
         and '[FX5U/FX5UC CPU module and high-speed pulse input/output module]' in text):
-        from plc.pwm_contract import PWM_AB_MINIMUM_TIMES
-        rows = [dict(row) for row in PWM_AB_MINIMUM_TIMES]
+        from tools.fact_fx5_pwm_table import parse_pwm_hardware_table
+        rows = parse_pwm_hardware_table(clause)
         return reviewed([{'kind': 'PWM_hardware_minimum_times', 'ON_time': {'operand': 's1'},
             'period': {'operand': 's2'}, 'rows': rows, 'dash_cell': 'no_module_output_entry',
             'unit_conversion': 'parameter_selected_time_to_us'}], ['s1', 's2', 'd'])
@@ -2914,6 +2923,18 @@ def _review_auxiliary_clause(kind, clause, *, section, block, value, declared):
                               'subjects': value.get('subjects', [])}], 'constraints.documented_restriction')
 
     if kind == 'error':
+        if (clause == 'These instructions are used more than once.'
+                and section.get('first_page') == 871 and block.get('page') == 873
+                and block.get('codes') == ['1811H']
+                and {'s', 'n1', 'n2', 'n3', 'd'}.issubset(declared)
+                and 'These instructions can only be used once in any program.' in _flat(section.get('text', ''))
+                and re.search(r'ENO\s*:=\s*SORTTBL\(EN,\s*s,\s*n1,\s*n2,\s*n3,\s*d\)', _flat(section.get('text', '')))):
+            return reviewed([{'kind': 'sort_instance_limit', 'maximum': 1,
+                              'scope': 'program', 'operation_error': True}],
+                            operand_binding_required=False, subjects=[],
+                            numeric_values=[], source_formulas=[],
+                            context_binding='resolved',
+                            core_execution_capability='not_established')
         scalar_negative = re.fullmatch(r'The value stored in a device specified in (?P<subject>\([sdnm][0-9]?\)) is negative\.', clause)
         if scalar_negative:
             subject = _subjects(scalar_negative['subject'])[0]
@@ -4390,25 +4411,29 @@ def condition_specs(section, record, *, include_other_forms=False):
                         if len(subjects) == 1 and (rule.get('subject') == {'role': 'unbound_source_value'} or
                                                   (rule['kind'] in {'allowed_interval', 'value_outside_interval'} and not rule.get('subject'))):
                             rule['subject'] = subjects[0]
-                review = (review_processing_clause(clause, section=section, block=block, value=value, declared=declared)
-                          if kind == 'processing_qualifications' else
-                          _review_auxiliary_clause(kind, clause, section=section, block=block, value=value, declared=declared))
-                if kind == 'precautions':
-                    precaution_review = review_precaution_clause(clause, section=section, block=block, value=value, declared=declared)
-                    if precaution_review and (precaution_review.get('full_clause_review') or review is None):
-                        review = precaution_review
-                if kind == 'execution_timing' and (review is None or not review.get('full_clause_review')):
-                    execution_review = review_execution_clause(clause, section=section, block=block, value=value, declared=declared)
-                    if execution_review:
-                        review = execution_review
-                if review is None and kind in {'execution_timing', 'footnote', 'precautions'}:
-                    # Physical timing paragraphs can also contain the primary
-                    # shift/transfer relation. Reuse the same exact authored
-                    # clause review instead of duplicating its semantics.
-                    review = review_processing_clause(clause, section=section, block=block, value=value, declared=declared)
-                pwm_review = _review_pwm_clause(kind, clause, section=section, block=block, declared=declared)
-                if pwm_review is not None:
-                    review = pwm_review
+                from tools.fact_fx5_backlog_review import review_backlog_clause
+                review = review_backlog_clause(kind, clause, section=section, block=block,
+                                               value=value, declared=declared)
+                if review is None:
+                    review = (review_processing_clause(clause, section=section, block=block, value=value, declared=declared)
+                              if kind == 'processing_qualifications' else
+                              _review_auxiliary_clause(kind, clause, section=section, block=block, value=value, declared=declared))
+                    if kind == 'precautions':
+                        precaution_review = review_precaution_clause(clause, section=section, block=block, value=value, declared=declared)
+                        if precaution_review and (precaution_review.get('full_clause_review') or review is None):
+                            review = precaution_review
+                    if kind == 'execution_timing' and (review is None or not review.get('full_clause_review')):
+                        execution_review = review_execution_clause(clause, section=section, block=block, value=value, declared=declared)
+                        if execution_review:
+                            review = execution_review
+                    if review is None and kind in {'execution_timing', 'footnote', 'precautions'}:
+                        # Physical timing paragraphs can also contain the primary
+                        # shift/transfer relation. Reuse the same exact authored
+                        # clause review instead of duplicating its semantics.
+                        review = review_processing_clause(clause, section=section, block=block, value=value, declared=declared)
+                    pwm_review = _review_pwm_clause(kind, clause, section=section, block=block, declared=declared)
+                    if pwm_review is not None:
+                        review = pwm_review
                 if review:
                     value.update(review.get('value_updates') or {})
                     value['rules'] = review['rules']
@@ -4546,6 +4571,11 @@ def condition_specs(section, record, *, include_other_forms=False):
                                      'constraints.documented_restriction' if verified else 'constraints.source_qualifications',
                         'value': value, 'status': 'source_verified' if verified else 'declared_unverified',
                         'languages': _source_languages(section, block['page'], clause), 'page': block['page'], 'pages': block['pages']}
+                if review and review.get('additional_sources'):
+                    spec['additional_sources'] = [dict(reference, pdf_pages=list(reference['pdf_pages']))
+                                                  for reference in review['additional_sources']]
+                if review and review.get('depends_on_keys'):
+                    spec['depends_on_keys'] = list(dict.fromkeys(review['depends_on_keys']))
                 if review and review.get('additional_pages'):
                     spec['pages'] = sorted(set(spec['pages']) | set(review['additional_pages']))
                 if review and review.get('languages'):
@@ -4608,7 +4638,6 @@ def condition_specs(section, record, *, include_other_forms=False):
                     spec['conditions'] = conditions
                 specs.append(spec)
                 if review and review.get('split_pwm_hardware_table'):
-                    from plc.pwm_contract import PWM_AB_MINIMUM_TIMES
                     table = copy.deepcopy(spec)
                     table['key'] += '_hardware_table'
                     table['dimension'] = 'constraints.documented_restriction'
@@ -4621,13 +4650,14 @@ def condition_specs(section, record, *, include_other_forms=False):
                         'source_page': block['page'], 'source_kind': 'precautions', 'source_line': block.get('line', 0),
                         'clause_index': clause_index, 'source_block': 'precautions', 'split_from': spec['key'],
                         'rules': [{'kind': 'PWM_hardware_minimum_times', 'ON_time': {'operand': 's1'},
-                                   'period': {'operand': 's2'}, 'rows': [dict(row) for row in PWM_AB_MINIMUM_TIMES],
+                                   'period': {'operand': 's2'}, 'rows': copy.deepcopy(review['split_pwm_hardware_rows']),
                                    'unit_conversion': 'parameter_selected_time_to_us'}]}
                     specs.append(table)
                 if subjects and value.get('binding_basis') != 'explicit_antecedent_in_same_source_row':
                     context_subjects, context_key = list(subjects), spec['key']
                 if value.get('antecedent_key'):
-                    spec['depends_on_keys'] = [value['antecedent_key']]
+                    spec['depends_on_keys'] = list(dict.fromkeys([
+                        *spec.get('depends_on_keys', []), value['antecedent_key']]))
     for spec in specs:
         dependencies = []
         if spec['value'].get('control_function_selector_reference'):
@@ -4647,6 +4677,8 @@ def condition_specs(section, record, *, include_other_forms=False):
             dependencies.extend(note['key'] for note in matches)
         if dependencies:
             spec['depends_on_keys'] = list(dict.fromkeys([*spec.get('depends_on_keys', []), *dependencies]))
+    from tools.fact_fx5_supplemental_sources import bind_condition_source_catalog
+    bind_condition_source_catalog(specs, section.get('cross_manual_source_catalog', {}))
     specs = _formal_numeric_specs(section, record, specs)
     return _structured_ladder_condition_specs(section, specs)
 
@@ -4738,7 +4770,8 @@ def condition_inventory(section, record=None):
     scopes = {}
     for kind in CONDITION_SCOPES:
         selected = [spec for spec in specs if spec['value']['source_kind'] == kind and
-                    spec['value']['source_role'] not in {'source_navigation', 'worked_example'}]
+                    spec['value']['source_role'] not in {'source_navigation', 'worked_example',
+                                                       'source_group_summary'}]
         unresolved = [spec for spec in selected if not spec['value']['technical_relation_resolved']
                       or spec['value'].get('context_binding') == 'not_fully_resolved'
                       or spec['value'].get('unresolved_glyphs')
@@ -4760,7 +4793,7 @@ def condition_inventory(section, record=None):
             conflicts.append({'key': spec['key'], 'page': spec['page'], 'source_line': value['source_line'],
                               'source_kind': value['source_kind'], 'dimension': spec['dimension'],
                               'rules': value.get('rules', []), 'source_disposition': 'source_conflict'})
-        if value['source_role'] in {'source_navigation', 'worked_example'}:
+        if value['source_role'] in {'source_navigation', 'worked_example', 'source_group_summary'}:
             non_conditions.append({'page': spec['page'], 'line': value['source_line'],
                                    'role': value['source_role'], 'source_kind': value['source_kind']})
             continue

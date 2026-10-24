@@ -17,7 +17,7 @@ from plc.instruction_effects import execute_behavior
 from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
 from plc.ir import analyze_instruction_access, canonical_sha256, ir_to_ladder, is_plc_ir, lower_rung_instructions
 from plc.runtime_semantics import control_runtime_facts, first_scan_fact, timer_runtime_fact
-from plc.specification.behavior import initialization_values, normalize_behavior_constraints
+from plc.specification.behavior import initialization_values, normalize_behavior_constraints, normalize_execution_context
 
 MAX_SCANS = 8
 MAX_TRACES = 4096
@@ -657,7 +657,7 @@ def check_bounded_traces(program, spec, traces, *, version_binding=None, max_tra
     if model_reason:
         for check in checks.values():
             check['reasons'].append(model_reason)
-        return {'schema_version': 1, 'stage': 'Core_bounded_scan_check', 'status': 'unverified',
+        return {'schema_version': 1, 'stage': 'Core_bounded_scan_check', 'status': 'unverified', 'execution_status': 'unverified',
                 'program_version': binding, 'checks': list(checks.values()), 'violations': [],
                 'coverage': {'traces_tested': 0, 'maximum_scans': 0, 'automatic_trace_limit': min(max_traces, MAX_TRACES),
                              'scan_limit': min(max_scans, MAX_SCANS), 'budget_exhausted': False,
@@ -674,6 +674,7 @@ def check_bounded_traces(program, spec, traces, *, version_binding=None, max_tra
     applications, unsupported_index = {}, {}
     constraint_violations = []
     peripheral_traces = []
+    frames_without_clock = 0
     from simulator.st_execution import ExecutionBudget
     execution_budget = ExecutionBudget()
     groups = [(False, traces), (True, frozen_time_traces)]
@@ -687,6 +688,7 @@ def check_bounded_traces(program, spec, traces, *, version_binding=None, max_tra
                 for check in checks.values():
                     check['reasons'].append('trace_initial_or_scan_bound_invalid')
                 continue
+            frames_without_clock += sum('timestamp_ms' not in frame for frame in frames)
             machine = ScanMachine(ladder, plc_model=model, initial=trace['initial'],
                                   execution_context=trace.get('execution_context', context),
                                   previous_inputs=trace.get('previous_inputs'), previous_enables=trace.get('previous_enables'),
@@ -722,6 +724,8 @@ def check_bounded_traces(program, spec, traces, *, version_binding=None, max_tra
                     observation = machine.scan(frame, first_scan=boot)
                     if observation.get('peripherals'):
                         peripheral_traces.append({'trace_id': trace.get('id', index), 'scan': scan_index,
+                                                  'timestamp_ms': frame.get('timestamp_ms'),
+                                                  'time_source': 'explicit_trace' if 'timestamp_ms' in frame else 'not_provided',
                                                   'peripherals': observation['peripherals']})
                 except Exception as error:
                     exceptions.append({'trace_id': trace.get('id', index), 'scan': scan_index,
@@ -823,14 +827,17 @@ def check_bounded_traces(program, spec, traces, *, version_binding=None, max_tra
     statuses = {c['status'] for c in checks.values()}
     status = 'violated' if 'violated' in statuses or constraint_violations else 'unverified' if not checks or 'unverified' in statuses else 'no_violation_found_in_tested_scope'
     return {'schema_version': 1, 'stage': 'Core_bounded_scan_check', 'status': status, 'program_version': binding,
+            'execution_status': ('failed' if constraint_violations else 'unverified' if unsupported or exceptions or truncated or not tested else 'executed_in_tested_scope'),
             'checks': list(checks.values()), 'violations': [v for c in checks.values() for v in c['violations']],
             'constraint_violations': constraint_violations,
             'peripheral_observations': peripheral_traces,
             'coverage': {'traces_tested': tested, 'maximum_scans': maximum_scans, 'automatic_trace_limit': min(max_traces, MAX_TRACES),
-                         'scan_limit': min(max_scans, MAX_SCANS), 'budget_exhausted': truncated, 'frozen_time_traces': len(frozen_time_traces)},
+                         'scan_limit': min(max_scans, MAX_SCANS), 'budget_exhausted': truncated, 'frozen_time_traces': len(frozen_time_traces),
+                         'frames_without_explicit_clock': frames_without_clock},
             'unsupported_or_missing': unsupported, 'checker_exceptions': exceptions,
             'assumptions': ['only declared initial memory is known', 'source-scoped exact CPU control subset',
                             'timer elapsed time is explicit; never inferred from scan count', 'bounded instruction-order execution; no native PLC acceptance'],
+            'default_simulation_assumptions': copy.deepcopy(context.get('simulation', {})),
             'first_scan_fact': first, 'activation_blocked': status == 'violated'}
 
 
@@ -838,6 +845,11 @@ def finite_behavior_traces(spec, *, max_traces=MAX_TRACES):
     """Finite bit combinations and 2-8 scan motifs, not random default memory."""
     from plc.construction import expression_devices
     rows = [r for r in normalize_behavior_constraints(spec.get('behavior_constraints', [])) if r['status'] == 'confirmed']
+    context = normalize_execution_context((spec.get('selected_approach') or {}).get(
+        'construction_plan', {}).get('execution_context', {}))
+    simulation = context.get('simulation', {})
+    timestamps = simulation.get('clock', {}).get('timestamps_ms', [])
+    declared_initial = simulation.get('initial_memory', {})
     initial = {}
     from plc.specification.conditions import external_input_bindings
     external = {canonical_device(row['address']) for row in external_input_bindings(spec.get('io_bindings', []))
@@ -874,8 +886,19 @@ def finite_behavior_traces(spec, *, max_traces=MAX_TRACES):
                 if produced > limit:
                     return
                 produced += 1
-                yield {'id': f'finite.{produced}', 'initial': copy.deepcopy(old),
-                       'frames': [{'inputs': copy.deepcopy(frame)} for frame in sequence], 'starts_in_run': True}
+                # The clock is supplied independently of scan order. A short
+                # clock does not manufacture later times or remove test scans;
+                # those frames remain untimed and time-sensitive behavior unknown.
+                frames = [{'inputs': copy.deepcopy(frame),
+                           **({'timestamp_ms': timestamps[i]} if i < len(timestamps) else {})}
+                          for i, frame in enumerate(sequence)]
+                yield {'id': f'finite.{produced}',
+                       'initial': copy.deepcopy({**old, **declared_initial}),
+                       'execution_context': copy.deepcopy(context), 'frames': frames,
+                       'simulation_assumptions': {'clock': copy.deepcopy(simulation.get('clock')),
+                                                  'initial_memory': copy.deepcopy(declared_initial),
+                                                  'time_source': 'explicit_timestamps' if timestamps else 'not_provided'},
+                       'starts_in_run': True}
 
 
 def check_confirmed_behavior(program, spec, *, version_binding=None, traces=None, frozen_time_traces=()):

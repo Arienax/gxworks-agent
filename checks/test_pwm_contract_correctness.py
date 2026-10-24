@@ -12,13 +12,18 @@ from plc.instruction_definition import InstructionFactGroup, UnknownInstructionS
 from test_pwm_contract import context
 
 
-def witness():
-    return {'id': 'fx5prog:synthetic:relation', 'dimension': 'constraints.documented_error',
-            'status': 'source_verified', 'verification': 'source_checked',
-            'sources': [{'manual_number': 'JY997D55801', 'revision': 'AB'}],
-            'scope': {'models': ['FX5U'], 'forms': ['PWM'], 'languages': ['ladder']},
-            'value': {'rules': [{'kind': 'operand_relation', 'left': {'operand': 's1'},
-                                'operator': '>', 'right': {'operand': 's2'}, 'error': True}]}}
+def witness(kind='operand_relation'):
+    # Use public reviewed semantic fixtures, not invented provenance. Mutations
+    # below remain synthetic and exercise the same source-safety regressions.
+    from plc.pwm_fact_source import snapshot_facts
+    return next(f for f in snapshot_facts('PWM', 'FX5U')
+                if any(r['kind'] == kind for r in f['value'].get('rules', [])))
+
+
+def prerequisite_facts():
+    from plc.pwm_fact_source import snapshot_facts
+    return [f for f in snapshot_facts('PWM', 'FX5U')
+            if f['dimension'] in {'identity.applicability', 'parameters.typed_operands'}]
 
 
 def derived(source, suffix='operand_relation'):
@@ -28,7 +33,12 @@ def derived(source, suffix='operand_relation'):
 
 def check(source, *, version='v1', extra=(), include_source=True):
     d = derived(source)
-    report = check_fact_constraints(([source] if include_source else []) + [d] + list(extra),
+    from plc.pwm_fact_source import snapshot_facts
+    closure = [f for f in snapshot_facts('PWM', 'FX5U')
+               if f['dimension'] in {'identity.applicability', 'parameters.typed_operands'}]
+    if not include_source:
+        closure = [f for f in closure if f['dimension'] != 'identity.applicability']
+    report = check_fact_constraints(closure + ([source] if include_source else []) + [d] + list(extra),
         {'S1': 20, 'S2': 10, '$OPERANDS': ['K20', 'K10', 'Y0']}, target='PWM',
         plc_model='FX5U', language='ladder', version=version, context=context())
     return next(r for r in report['checks'] if r['fact_id'] == d['id'])['status']
@@ -55,9 +65,9 @@ class PWMContractCorrectness(unittest.TestCase):
         self.assertEqual(check(s, version='v2'), 'failed')
 
     def test_derived_dependency_is_real_not_just_a_label(self):
-        s = witness(); s['depends_on'] = ['prerequisite']
+        s = witness(); s['depends_on'].append('prerequisite')
         d = derived(s)
-        self.assertEqual(d['depends_on'], ['prerequisite'])
+        self.assertEqual(set(d['depends_on']), set(s['depends_on']))
         self.assertEqual(d['sources'], s['sources'])
         self.assertEqual(check(s), 'unverified')
         dep = {'id': 'prerequisite', 'dimension': 'identity.applicability', 'value': {},
@@ -74,8 +84,8 @@ class PWMContractCorrectness(unittest.TestCase):
         self.assertEqual(check(s), 'failed')
 
     def test_resource_fields_are_not_interchangeable(self):
-        s = witness(); r = {'kind': 'resource_in_use', 'resource': 'pulse_output_destination',
-                            'owner': 'positioning_instruction', 'subject': {'operand': 'd'}}
+        s = witness('resource_in_use'); r = {'kind': 'resource_in_use', 'resource': 'pulse_output_destination',
+                            'owner': 'positioning_instruction', 'subject': {'operand': 'd'}, 'effects': {'PWM_output': 'not_executed'}}
         s['value']['rules'] = [r]
         self.assertEqual(derived(s, 'resource')['status'], 'source_verified')
         for key, value in [('resource', 'unrelated'), ('owner', 'unrelated'), ('subject', {'operand': 's1'})]:
@@ -111,15 +121,15 @@ class PWMContractCorrectness(unittest.TestCase):
         c['pwm']['unused_channel_available'] = False
         for rule in variants:
             source = witness(); source['value']['rules'] = [rule]
-            report = check_fact_constraints([identity, source],
+            report = check_fact_constraints(prerequisite_facts() + [identity, source],
                 {'S1': 20, 'S2': 10, '$OPERANDS': ['K20', 'K10', 'Y0']}, target='PWM',
                 plc_model='FX5U', language='ladder', context=c)
             self.assertEqual(report['status'], 'unverified', rule)
             self.assertFalse(any(r['status'] == 'failed' for r in report['checks']), rule)
         source = witness(); source['value']['rules'] = [{
             'kind': 'resource_in_use', 'resource': 'pulse_output_destination',
-            'owner': 'positioning_instruction', 'subject': {'operand': 'd'}}]
-        report = check_fact_constraints([identity, source],
+            'owner': 'positioning_instruction', 'subject': {'operand': 'd'}, 'effects': {'PWM_output': 'not_executed'}}]
+        report = check_fact_constraints(prerequisite_facts() + [identity, source],
             {'S1': 10, 'S2': 20, '$OPERANDS': ['K10', 'K20', 'Y0']}, target='PWM',
             plc_model='FX5U', language='ladder', context=c)
         self.assertEqual(report['status'], 'failed')
@@ -141,7 +151,7 @@ class PWMContractCorrectness(unittest.TestCase):
             c = context()
             values = {'S1': 10, 'S2': 20, '$OPERANDS': ['K10', 'K20', destination]}
             def report(g):
-                return check_fact_constraints([identity, g], values, target='PWM',
+                return check_fact_constraints(prerequisite_facts() + [identity, g], values, target='PWM',
                     plc_model='FX5U', language='ladder', context=c)
             self.assertEqual(report(source)['status'], 'failed')
             changed = copy.deepcopy(source)
@@ -153,9 +163,9 @@ class PWMContractCorrectness(unittest.TestCase):
             self.assertEqual(report(changed)['status'], 'unverified')
 
     def test_complete_rule_shapes_reject_extra_conditions_and_rebound_operands(self):
-        relation = witness()['value']['rules'][0]
+        relation = next(r for r in witness()['value']['rules'] if r['kind'] == 'operand_relation')
         resource = {'kind': 'resource_in_use', 'resource': 'pulse_output_destination',
-                    'owner': 'positioning_instruction', 'subject': {'operand': 'd'}}
+                    'owner': 'positioning_instruction', 'subject': {'operand': 'd'}, 'effects': {'PWM_output': 'not_executed'}}
         hardware = {'kind': 'PWM_hardware_minimum_times', 'ON_time': {'operand': 's1'},
                     'period': {'operand': 's2'}, 'rows': list(PWM_AB_MINIMUM_TIMES),
                     'dash_cell': 'no_module_output_entry', 'unit_conversion': 'parameter_selected_time_to_us'}
@@ -180,7 +190,7 @@ class PWMContractCorrectness(unittest.TestCase):
             changed = copy.deepcopy(rule); changed['when'] = {'external_condition': True}
             source = witness(); source['value']['rules'] = [changed]
             c = context(); c['pwm']['resource_owner'] = 'positioning_instruction'
-            report = check_fact_constraints([identity, source],
+            report = check_fact_constraints(prerequisite_facts() + [identity, source],
                 {'S1': 20, 'S2': 10, '$OPERANDS': ['K20', 'K10', 'Y0']}, target='PWM',
                 plc_model='FX5U', language='ladder', context=c)
             self.assertEqual(report['status'], 'unverified', rule['kind'])

@@ -29,6 +29,73 @@
   },
   "reviewed_groups": [
     {
+      "models": [
+        "FX5S",
+        "FX5UJ",
+        "FX5UC"
+      ],
+      "facts": {
+        "scope": "Source-checked Boolean Ladder control only. No timer/counter, first-scan relay, transfer or native runtime inheritance from FX5U.",
+        "control": {
+          "forms": [
+            "LD",
+            "LDI",
+            "AND",
+            "ANI",
+            "OR",
+            "ORI",
+            "ANB",
+            "ORB",
+            "MPS",
+            "MRD",
+            "MPP",
+            "OUT"
+          ],
+          "immediate_memory_writes": true,
+          "disabled_coil": false,
+          "shared_condition": "saved_accumulator",
+          "sources": [
+            {
+              "manual_number": "JY997D55801",
+              "revision": "AB",
+              "pdf_pages": [
+                20,
+                37,
+                118,
+                119,
+                120,
+                127,
+                128,
+                129,
+                130,
+                134,
+                135
+              ],
+              "printed_pages": [
+                18,
+                35,
+                116,
+                117,
+                118,
+                125,
+                126,
+                127,
+                128,
+                132,
+                133
+              ],
+              "reviewed_models": [
+                "FX5S",
+                "FX5UJ",
+                "FX5UC"
+              ],
+              "review_basis": "Explicit supported-CPU badges on instruction pages and processing/operation-result tables; no family inheritance."
+            }
+          ]
+        }
+      }
+    },
+    {
       "models": ["FX1S", "FX1N", "FX2N", "FX3S", "FX2C"],
       "facts": {
         "scope": "Reviewed Boolean control and direct-word transfers only; no startup, timer, counter, hardware I/O or native runtime certification.",

@@ -374,6 +374,8 @@ def fact_record_coverage(record, *, limits=False):
     packet = authored_packet(record)
     if not packet:
         return True  # Original evidence fixtures keep their existing boundary.
+    if packet.get('fact_selection', {}).get('gaps'):
+        return False
     value = packet.get('value', {})
     facts = value.get('facts', [])
     if packet.get('kind') not in {'instruction', 'language'}:
@@ -424,7 +426,7 @@ _ASPECT_PATTERNS = (
 
 def requested_aspects(query, *, language=None, aspects=None):
     text = str(query or '')
-    explicit = aspects
+    explicit = [aspects] if isinstance(aspects, str) else aspects
     aspects = list(dict.fromkeys(explicit)) if explicit is not None else [
         name for name, pattern in _ASPECT_PATTERNS if re.search(pattern, text, re.I)]
     if explicit is None and language == 'st' and 'st_call' not in aspects:
@@ -504,6 +506,8 @@ def instruction_aspect_gap_reasons(packet, aspect, *, state, model, language):
 def _aspect_state(packet, aspect, *, model, language, query):
     """Require every requested slot and the shared atomic dependency closure."""
     from plc.instruction_definition import DefinitionError, select_fact_dependencies
+    if packet.get('fact_selection', {}).get('gaps'):
+        return 'unresolved'
     value = packet.get('value') or {}
     # Owners can merge several source packets.  A different CPU's unresolved
     # signature must not replace the requested CPU's known declaration.
@@ -753,6 +757,8 @@ def _instruction_aspects(records, aspects, *, plc_model, language, query):
             # conceal a conflicting claim in another packet.
             combined = {'target': next((packet.get('target') for packet in applicable), ''), 'value': {'facts': []}}
             for packet in applicable:
+                if packet.get('fact_selection', {}).get('gaps'):
+                    combined.setdefault('fact_selection', {}).setdefault('gaps', []).extend(packet['fact_selection']['gaps'])
                 value = packet.get('value') or {}
                 _merge_fact_rows(combined['value']['facts'], value.get('facts', ()))
                 if value.get('call_available') is True or 'call_available' not in combined['value']:
@@ -1560,7 +1566,8 @@ def _adjudicated_rows(rows, targets, plc_model):
     return [item[2] for item in merged], True
 
 
-def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generate"):
+def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generate", language=None,
+                                aspects=None, query=None, project_mode=None, instance_context=None, version=None):
     """Resolve canonical/variant opcodes directly through ``instructions``.
 
     No call to ``retrieve_knowledge`` is permitted here.
@@ -1572,7 +1579,12 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
     authored = resolve("instruction", targets, plc_model=plc_model, task_type=task_type, connection=connection)
     if authored is not None:
         admitted, decided = _adjudicated_rows(authored, targets, plc_model)
-        return admitted if decided else authored
+        from knowledge.fact_selection import project_instruction_records
+        selected_aspects = (generation_aspects(query, language=language) if task_type in {'generate', 'edit'} and aspects is None
+                            else requested_aspects(query, language=language, aspects=aspects))
+        return project_instruction_records(admitted if decided else authored, plc_model=plc_model,
+            language=language, aspects=selected_aspects, project_mode=project_mode,
+            instance_context=instance_context, version=version, query=query)
     table = schema.get("instructions") if schema is not None else None
     table_available = bool(
         connection is not None

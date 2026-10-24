@@ -23,7 +23,8 @@ CORPUS_KIND = "authored_plc_facts_v1"
 PUBLICATION_STATUS = "fact_representation_reviewed"
 # This is a representation review, never a claim of a vendor copyright licence.
 SOURCE_KEYS = frozenset({"id", "manual_id", "manual_number", "revision", "pdf_page",
-                         "pdf_pages", "opcode", "target_model", "official_url"})
+                         "pdf_pages", "opcode", "target_model", "official_url",
+                         "source_kind", "pdf_sha256", "page_text_sha256", "coverage"})
 PRESENTATION_KEYS = frozenset({"text", "manual_text", "layout_text", "raw_text", "bbox",
     "source_span", "source_spans", "value_spans", "context_span", "row_span", "geometry_reference"})
 _TOKEN = re.compile(r"[A-Za-z0-9_$][A-Za-z0-9_$.:/+*<>=!(),\[\]{}|&%~?\-]*\Z")

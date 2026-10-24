@@ -319,6 +319,7 @@ def _sections(source):
     instruction in its own group.
     """
     tables = _tables(source)
+    source_catalog = _cross_manual_source_catalog(source)
     sections = {}
     for row in _rows(source, 'SELECT pdf_page, chapter, section, outline_path, section_key, '
                              'clean_text, layout_text, CASE WHEN pdf_page IN (1309,1310,1312) '
@@ -352,6 +353,7 @@ def _sections(source):
         entry['chapter_number'] = int(match.group('chapter')) if match else 0
         entry['first_page'] = min(entry['pages'])
         entry['last_page'] = max(entry['pages'])
+        entry['cross_manual_source_catalog'] = source_catalog
         ordered.append(entry)
     return ordered
 
@@ -998,12 +1000,15 @@ def _candidates(section, parsed, universe):
 # references
 # --------------------------------------------------------------------------- #
 def _chunk_reference(row):
-    return {'id': row['chunk_uid'], 'source_kind': 'chunk',
+    reference = {'id': row['chunk_uid'], 'source_kind': 'chunk',
             'manual_id': row.get('manual_id', MANUAL_ID),
             'manual_number': row.get('manual_number', MANUAL_NUMBER),
             'revision': row.get('revision', REVISION),
             'pdf_pages': list(range(row['pdf_page'],
                                     (row['pdf_page_end'] or row['pdf_page']) + 1))}
+    from tools.fact_fx5_supplemental_sources import supplemental_reference_metadata
+    reference.update(supplemental_reference_metadata(reference))
+    return reference
 
 
 def _covering_chunks(source, page_start, page_end, *, manual_id=MANUAL_ID):
@@ -1013,11 +1018,56 @@ def _covering_chunks(source, page_start, page_end, *, manual_id=MANUAL_ID):
                  (manual_id, page_end, page_start))
 
 
+def _cross_manual_source_catalog(source):
+    """Real DB references, shared by all sections; supplemental pages are pinned."""
+    from tools.fact_fx5_supplemental_sources import validate_supplemental_page
+    catalog = {}
+    for row in _rows(source, 'SELECT chunk_uid,pdf_page,pdf_page_end,manual_id,manual_number,revision FROM chunks'):
+        ref = _chunk_reference(row)
+        for page in ref['pdf_pages']:
+            try:
+                validate_supplemental_page(source, ref, page)
+            except ValueError:
+                continue
+            catalog.setdefault('%s:%s' % (ref['manual_id'], page), []).append(ref)
+    return catalog
+
+
+def _condition_source_references(source, spec, cache):
+    # Inventory has already downgraded unsupported claims. Recheck all declared
+    # refs before publication, retaining only evidence that actually exists.
+    references = []
+    missing = []
+    for declared in spec.get('additional_sources', ()):
+        from tools.fact_fx5_supplemental_sources import validate_source_declaration
+        try:
+            validate_source_declaration(declared)
+        except ValueError:
+            missing.append(declared)
+            continue
+        for page in declared['pdf_pages']:
+            single = dict(declared, pdf_pages=[page])
+            try:
+                matches = _additional_source_references(source, {'additional_sources': [single]}, cache)
+            except ValueError:
+                missing.append(single)
+                continue
+            references.extend(ref for ref in matches if ref not in references)
+    if missing:
+        from tools.fact_fx5_supplemental_sources import bind_condition_source_catalog
+        bind_condition_source_catalog([spec], _cross_manual_source_catalog(source))
+    return references
+
+
 def _additional_source_references(source, claim, cache):
     references = []
     for declared in claim.get('additional_sources', ()):
+        from tools.fact_fx5_supplemental_sources import validate_source_declaration
+        validate_source_declaration(declared)
         manual_id = declared['manual_id']
         for page in declared['pdf_pages']:
+            from tools.fact_fx5_supplemental_sources import validate_supplemental_page
+            validate_supplemental_page(source, declared, page)
             key = (manual_id, page)
             if key not in cache:
                 cache[key] = [_chunk_reference(chunk) for chunk in
@@ -1029,6 +1079,16 @@ def _additional_source_references(source, claim, cache):
                                  % (manual_id, page))
             references.extend(reference for reference in matches if reference not in references)
     return references
+
+
+def validate_condition_source_inventory(source, specs):
+    """Attach DB-verified cross-manual evidence to source-only condition specs.
+
+    Source-only review callers must run this before publishing inventory totals.
+    Missing/changed declarations are downgraded exactly as in authored builds.
+    """
+    from tools.fact_fx5_supplemental_sources import bind_condition_source_catalog
+    return bind_condition_source_catalog(specs, _cross_manual_source_catalog(source))
 
 
 def _page_references(source, section):
@@ -1897,6 +1957,9 @@ def reviewed_fx5_programming_residual(source, entries=None):
                             for chunk in _covering_chunks(source, page, page)]
                     condition_sources.extend(reference for reference in extra_page_references[page]
                                              if reference not in condition_sources)
+                condition_sources.extend(reference for reference in
+                                         _condition_source_references(source, spec, extra_page_references)
+                                         if reference not in condition_sources)
                 fact = _fact(condition_ids[spec['key']], spec['dimension'], spec['value'],
                              condition_sources, models, languages=spec.get('languages'),
                              status=spec['status'])
@@ -1959,6 +2022,9 @@ def reviewed_fx5_programming_residual(source, entries=None):
                             for chunk in _covering_chunks(source, page, page)]
                     condition_sources.extend(reference for reference in extra_page_references[page]
                                              if reference not in condition_sources)
+                condition_sources.extend(reference for reference in
+                                         _condition_source_references(source, spec, extra_page_references)
+                                         if reference not in condition_sources)
                 fact = _fact(identities[key], spec['dimension'], spec['value'], condition_sources, models,
                              languages=spec.get('languages'), status=spec['status'])
                 fact['scope']['forms'] = [target]
