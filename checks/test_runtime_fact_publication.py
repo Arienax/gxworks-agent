@@ -109,7 +109,7 @@ class RuntimePublicationTests(unittest.TestCase):
             result=subprocess.run(command,capture_output=True,text=True)
             self.assertEqual(result.returncode,0,result.stderr)
             with gzip.open(evidence,"rt") as stream: self.assertEqual(json.load(stream),raw)
-            self.assertEqual({p.name for p in output.iterdir()},{"instruction_definitions.json.gz","plc_facts.sqlite","receipt.json"})
+            self.assertEqual({p.name for p in output.iterdir()},{"instruction_definitions.json.gz","plc_facts.sqlite","instruction_definitions.manifest.json","receipt.json"})
             self.assertNotEqual(subprocess.run(command,capture_output=True).returncode,0)
 
 

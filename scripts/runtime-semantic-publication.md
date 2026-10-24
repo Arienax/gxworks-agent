@@ -38,9 +38,10 @@ Pipeline:
    hydrate only that owner before existing aspect/language/dependency selection.
 
 Legacy unpooled definitions and SQLite chunks remain readable. Missing or altered
-pool references fail closed. The Registry still materializes its existing typed
+pool references fail closed. The legacy pooled-JSON Registry path still materializes its existing typed
 fact inventory; disk pooling alone is NOT evidence of lower steady-state Registry
-memory. Measure JSON load, Registry load and build peaks separately.
+memory. The manifest path below uses selected-owner loading instead. Measure
+JSON load, Registry load and build peaks separately.
 
 During Registry loading each unique catalog object is hash-validated once into a
 load-owned immutable parsed-tree snapshot. Fact hydration returns detached values;
@@ -65,3 +66,71 @@ Synthetic regression entry points:
 PYTHONPATH=src python -m unittest discover -s checks -p 'test_runtime_fact*.py'
 PYTHONPATH=src python -m unittest discover -s checks -p test_fact_task_projection.py
 ```
+
+## Random-access candidate store
+
+The owner store is now consumed by the actual `InstructionRegistry`, not only by
+an isolated retrieval experiment. A sibling `instruction_definitions.manifest.json`
+selects the read-only SQLite store. A malformed selected manifest fails closed;
+it never silently falls back to the legacy whole-JSON definition package.
+The resource collector includes the manifest and database together. It still
+performs an offline complete public-content audit before packaging.
+
+For an explicit local candidate, set `GXW2_INSTRUCTION_OWNER_MANIFEST` to the
+candidate manifest path. Normal catalog seeds and existing CPU admission remain
+in effect; this selects the definition source only. Missing/bad explicit paths
+are errors. Leaving the variable unset preserves normal resource selection.
+Do not replace deployed resources merely to run a candidate comparison.
+
+The `owner-field-pool-v2` transport adds an exact shared-field table for scope,
+conditions, dependencies, source references, value references, dimension, status
+and verification. Fact IDs and unknown fields remain owner-local. It preserves
+missing versus empty values and ordered lists. Hash collisions, altered objects,
+missing references, dependency gaps and cycles fail closed. This is reversible
+structural sharing, not a claim that distinct owner-qualified facts are duplicate
+knowledge. Search indexes contain actual technical values and conditions, not
+source/value hashes or serialization wrappers.
+
+The Registry reads identity headers at startup and hydrates a requested owner
+only when its definition or typed fact contract is needed. Generation menus read
+lightweight admission metadata without loading all fact graphs. Caller results
+are detached; cached checking contexts become invalid when the manifest/database
+changes. SQLite is opened read-only with `query_only` enabled. The manifest's
+streamed database hash authenticates the complete physical snapshot at open;
+selected owner packets and referenced objects have additional validation.
+
+A bounded streaming migration entry point is
+`scripts/build_instruction_owner_store.py`. It reads schema-1 entries or one
+schema-2 family at a time and writes exact pools incrementally in SQLite; it does
+not retain all owners/catalogs in Python. Inspect its current `--help` and input
+review requirements before use. Unknown root metadata and private documents must
+not be silently discarded. The older `build_runtime_projection.py` still loads
+the input JSON and is NOT the bounded-memory full-package conversion path.
+
+Offline audit (this deliberately scans all owners, unlike application startup):
+
+```sh
+python tools/audit_runtime_fact_package.py --owner-manifest /local/candidate/instruction_definitions.manifest.json --owner-breakdown --output /local/new-audit.json
+```
+
+The tested 4,896-owner subset shrank from 217,853,952 to 118,165,504 SQLite bytes
+using exact field sharing and removal of search-index transport noise. All
+168,172 projected facts and their dependency/status/scope graphs round-trip
+exactly. These are subset measurements, not acceptance of the user's full
+87,754-owner package. FX5UC/UJ/S manual facts and offline coverage do not establish
+support in the current GX Works2 engineering workflow; that remains pending.
+
+For a raw compiler schema-1/2 package, opt into the existing strict projection
+explicitly and retain its complete withholding trail outside the runtime folder:
+
+```sh
+python scripts/build_instruction_owner_store.py --input /private/instruction_definitions.json.gz --output-dir /local/new-owner-candidate --project-raw --private-audit-dir /private/new-owner-projection-audit
+```
+
+This streaming mode applies `project_definition` per owner and preserves the
+original input unchanged. It does not perform semantic merges or promote review
+statuses. The private gzip JSONL audit records withheld identities/reasons and
+per-owner input/output hashes. Without `--project-raw`, only already-authored,
+reviewed input is accepted for exact transport migration. Final audit and the
+conventional manifest are produced only after every owner validates. A candidate
+is not a replacement for the missing original mixed-corpus publication pipeline.

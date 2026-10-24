@@ -3,6 +3,8 @@
 The complete gzip document is never decompressed to disk or materialized in RAM.
 JSON parsing retains at most one entry/family, with an explicit size guard.
 Distinct identities live in a temporary SQLite file, not a growing Python set.
+Owner manifests use the verified read-only store API, one hydrated owner at a
+time; their size guard runs after hydration, not as a hard peak-RAM bound.
 """
 from __future__ import annotations
 import argparse
@@ -117,47 +119,59 @@ def canonical(value):
 def family_entries(family, profiles):
     """Resolve one owner at a time using the production literal diff semantics."""
     from plc.instruction_definition_storage import _apply, _owner_tokens
-    owned = set()
+    selections = []
     for selection in family['owners']:
         models, forms = profiles.get(selection['model_profile']), selection['forms']
         if not isinstance(models, list) or not models or len(set(models)) != len(models):
             raise ValueError('Invalid model profile')
         if not isinstance(forms, list) or not forms or len(set(forms)) != len(forms):
             raise ValueError('Invalid form selection')
-        for form in forms:
-            for model in models:
-                if not isinstance(form, str) or not isinstance(model, str):
-                    raise ValueError('Nonliteral owner')
-                if (form, model) in owned:
-                    raise ValueError('Duplicate owner selection')
-                owned.add((form, model))
+        if any(not isinstance(value, str) for value in forms + models):
+            raise ValueError('Nonliteral owner')
+        form_set, model_set = set(forms), set(models)
+        if any(form_set & prior_forms and model_set & prior_models
+               for prior_forms, prior_models in selections):
+            raise ValueError('Duplicate owner selection')
+        selections.append((form_set, model_set))
     overridden = set()
     for override in family.get('model_diffs', []):
         for form in override['forms']:
             marker = (form, override['model'])
-            if marker not in owned or marker in overridden:
+            if (not any(form in forms and override['model'] in models for forms, models in selections)
+                    or marker in overridden):
                 raise ValueError('Unowned or overlapping model difference')
             overridden.add(marker)
-    if set(family.get('form_diffs', {})) - {f for f, _ in owned}:
+    all_forms = set().union(*(forms for forms, _ in selections))
+    if set(family.get('form_diffs', {})) - all_forms:
         raise ValueError('Unowned form difference')
-    for form, model in sorted(owned):
-        value = _apply(family['common'], family.get('form_diffs', {}).get(form, {}))
-        for override in family.get('model_diffs', []):
-            if override['model'] == model and form in override['forms']:
-                value = _apply(value, override['changes'])
-        value = _owner_tokens(value, model, form, restore=True)
-        raw_facts = value.get('facts', {})
-        if not isinstance(raw_facts, dict):
-            raise ValueError('Invalid compact fact map')
-        if any(k != f.get('id') for k, f in raw_facts.items()):
-            raise ValueError('Fact map key does not match its ID')
-        value['facts'] = list(raw_facts.values())
-        yield {'vendor': family['vendor'], 'opcode': form, 'target_model': model, **value}
+    # Never materialize the forms x models Cartesian product just to iterate it.
+    for form in sorted(all_forms):
+        models = set().union(*(models for forms, models in selections if form in forms))
+        for model in sorted(models):
+            value = _apply(family['common'], family.get('form_diffs', {}).get(form, {}))
+            for override in family.get('model_diffs', []):
+                if override['model'] == model and form in override['forms']:
+                    value = _apply(value, override['changes'])
+            value = _owner_tokens(value, model, form, restore=True)
+            raw_facts = value.get('facts', {})
+            if not isinstance(raw_facts, dict):
+                raise ValueError('Invalid compact fact map')
+            if any(k != f.get('id') for k, f in raw_facts.items()):
+                raise ValueError('Fact map key does not match its ID')
+            value['facts'] = list(raw_facts.values())
+            yield {'vendor': family['vendor'], 'opcode': form, 'target_model': model, **value}
 
 
 
 class OwnerBreakdown:
     """Bounded descriptive bins; never infer support or provenance from names."""
+    ADMISSION_REASONS = frozenset({
+        'form_not_registered', 'cpu_replacement_required',
+        'target_not_in_declared_scope', 'admitted',
+        'admitted_with_empty_declared_scope',
+    })
+    DECLARED_SCOPES = frozenset({'unavailable', 'empty', 'explicit'})
+
     def __init__(self):
         self.models = {}
 
@@ -175,12 +189,41 @@ class OwnerBreakdown:
             key = '<overflow>'
         counter[key] += 1
 
+    @staticmethod
+    def enum_field(mapping, name, allowed):
+        if name not in mapping:
+            return '<missing>'
+        value = mapping[name]
+        return value if isinstance(value, str) and value in allowed else '<other-or-invalid>'
+
+    def admission(self, row, entry):
+        # These are literal compiler annotations, not a second admission engine.
+        # Unknown/free-text values and replacement identities never leave this audit.
+        self.add(row['call_admission_reason'], self.enum_field(
+            entry, 'call_admission_reason', self.ADMISSION_REASONS))
+        details = entry.get('call_admission_details')
+        state = '<missing>' if 'call_admission_details' not in entry else 'object' if isinstance(details, dict) else '<non-object>'
+        self.add(row['call_admission_details_state'], state)
+        if not isinstance(details, dict):
+            self.add(row['call_admission_declared_scope'], '<missing>' if state == '<missing>' else '<non-object-details>')
+            self.add(row['call_admission_replacement_opcode_state'], '<missing>' if state == '<missing>' else '<non-object-details>')
+            return
+        self.add(row['call_admission_declared_scope'], self.enum_field(
+            details, 'declared_scope', self.DECLARED_SCOPES))
+        replacement = details.get('replacement_opcode')
+        replacement_state = '<missing>' if 'replacement_opcode' not in details else 'technical-token-present' if isinstance(replacement, str) and re.fullmatch(r'[A-Za-z0-9_.+/-]{1,64}', replacement) else '<other-or-invalid>'
+        self.add(row['call_admission_replacement_opcode_state'], replacement_state)
+        row['counts']['owners_with_unreported_admission_detail_fields'] += bool(
+            set(details) - {'declared_scope', 'replacement_opcode'})
+
     def owner(self, entry):
         model = self.label(entry.get('target_model'))
         if model not in self.models and len(self.models) >= 96:
             model = '<overflow>'
         row = self.models.setdefault(model, {
             'counts': Counter(), 'call_available': Counter(), 'support_status': Counter(),
+            'call_admission_reason': Counter(), 'call_admission_details_state': Counter(),
+            'call_admission_declared_scope': Counter(), 'call_admission_replacement_opcode_state': Counter(),
             'fact_namespace_instances': Counter(), 'source_manual_reference_occurrences': Counter()})
         counts = row['counts']
         facts = entry.get('facts', [])
@@ -197,6 +240,7 @@ class OwnerBreakdown:
         label = 'true' if call is True else 'false' if call is False else '<missing>' if 'call_available' not in entry else '<non-boolean>'
         self.add(row['call_available'], label)
         self.add(row['support_status'], self.label(entry.get('support_status')))
+        self.admission(row, entry)
         for fact in facts:
             ident = fact.get('id')
             # A delimiter-free ID is not emitted: it might be a complete identity.
@@ -225,6 +269,10 @@ class OwnerBreakdown:
                 'interpretation': [
                     'Counts describe stored owner instances, not executable instruction registrations.',
                     'call_available/support_status are literal entry fields; missing values are not inferred.',
+                    'call_admission_reason/details are literal compiler annotations; absent fields remain missing, never reconstructed from call_available.',
+                    'Compiler admission is not engineering-tool support, native compilation evidence or hardware validity; false does not remove knowledge.',
+                    'admitted_with_empty_declared_scope records legacy permissive admission, not verified support for every CPU.',
+                    'Admission details report only declared_scope and replacement-token presence; free text, replacement identities and unknown fields are not emitted.',
                     'Namespace and manual IDs identify labels, not CPU applicability or validity.',
                     'FX5-like namespace on a Q owner is counted without automatically declaring invalid cross-model reuse.',
                     'Source-reference counts are occurrences, not unique evidence or proof of reviewed authorship.',
@@ -342,6 +390,85 @@ def audit_package(path, *, max_unit_bytes=64 * 1024 * 1024, owner_breakdown=Fals
                            'Parsing is bounded by one entry/family, not one fact. Oversized units fail closed.']}
 
 
+def audit_owner_store(path, *, max_unit_bytes=64 * 1024 * 1024, owner_breakdown=False):
+    """Offline full-owner audit through the store API, not a startup benchmark."""
+    from plc.instruction_owner_store import OwnerDefinitionStore, SERIALIZATION
+    started = time.perf_counter()
+    store = OwnerDefinitionStore(path)
+    counts, statuses, dimensions, field_bytes = Counter(), Counter(), Counter(), Counter()
+    provenance = OwnerBreakdown() if owner_breakdown else None
+    maximum = 0
+    try:
+        manifest = json.loads(store.manifest_path.read_text(encoding='utf-8'))
+        manifest_sha = hashlib.sha256(store.manifest_path.read_bytes()).hexdigest()
+        with tempfile.TemporaryDirectory(prefix='runtime-owner-audit-') as temporary:
+            db = sqlite3.connect(str(Path(temporary) / 'identities.sqlite'))
+            try:
+                db.executescript('PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; PRAGMA cache_size=-4096;'
+                    'CREATE TABLE bare_ids(id TEXT PRIMARY KEY); CREATE TABLE source_refs(id TEXT PRIMARY KEY);')
+                for header in store.iter_owner_headers():
+                    entry = store.get_entry(header['opcode'], cpu=header['target_model'], vendor=header['vendor'])
+                    if entry is None:
+                        raise ValueError('Owner header has no stored definition')
+                    size = len(canonical(entry).encode('utf-8'))
+                    maximum = max(maximum, size)
+                    if size > max_unit_bytes:
+                        raise ValueError('Hydrated owner exceeds max-unit limit')
+                    facts = entry.get('facts', [])
+                    counts['owners'] += 1
+                    counts['owner_qualified_fact_instances'] += len(facts)
+                    counts['expanded_owner_json_bytes'] += size
+                    counts['maximum_facts_per_owner'] = max(counts['maximum_facts_per_owner'], len(facts))
+                    if provenance is not None:
+                        provenance.owner(entry)
+                    ids = {fact['id'] for fact in facts}
+                    for fact in facts:
+                        db.execute('INSERT OR IGNORE INTO bare_ids VALUES (?)', (fact['id'],))
+                        statuses[fact.get('status', '<missing>')] += 1
+                        dimensions[fact.get('dimension', '<missing>')] += 1
+                        for key, value in fact.items():
+                            field_bytes[key] += len(canonical(value).encode('utf-8'))
+                        for dependency in fact.get('depends_on', []):
+                            counts['dependency_references'] += 1
+                            counts['dependencies_not_found_within_owner'] += dependency not in ids
+                        for source in fact.get('sources', []):
+                            counts['source_reference_occurrences'] += 1
+                            db.execute('INSERT OR IGNORE INTO source_refs VALUES (?)',
+                                (hashlib.sha256(canonical(source).encode()).hexdigest(),))
+                    del entry, facts, ids
+                    fact = source = value = None  # Do not retain the previous owner's payload.
+                counts['distinct_bare_fact_ids'] = db.execute('SELECT count(*) FROM bare_ids').fetchone()[0]
+                counts['unique_exact_source_reference_objects'] = db.execute('SELECT count(*) FROM source_refs').fetchone()[0]
+            finally:
+                db.close()
+        if not store.current() or counts['owners'] != store.owner_count:
+            raise ValueError('Owner store changed or owner count differs')
+        stats = store.stats()
+        try:
+            import resource
+            peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            if sys.platform == 'darwin':
+                peak //= 1024
+        except ImportError:
+            peak = None
+        return {**({'owner_provenance': provenance.report()} if provenance is not None else {}),
+            'audit_schema': 1, 'serialization': SERIALIZATION, 'offline_full_owner_scan': True,
+            'manifest_sha256': manifest_sha, 'manifest_bytes': store.manifest_path.stat().st_size,
+            'database_bytes': manifest['database']['bytes'], 'database_sha256': manifest['database']['sha256'],
+            'counts': dict(counts), 'status_counts': dict(statuses), 'dimension_counts': dict(dimensions),
+            'fact_field_value_json_bytes': dict(field_bytes), 'store_validation_stats': stats,
+            'maximum_hydrated_owner_json_bytes': maximum, 'max_unit_limit_bytes': max_unit_bytes,
+            'elapsed_seconds': time.perf_counter() - started, 'peak_rss_kib': peak,
+            'limitations': [
+                'This is an offline scan of every owner through the verified read-only store API, not lazy runtime startup.',
+                'Size is checked after one owner is hydrated; max-unit is not a hard peak-RAM bound for this mode.',
+                'Database size is physical SQLite size, not compressed size or proof that storage expansion is solved.',
+                'Counts do not prove compiler admission, engineering-tool support, native compilation or hardware validity.',
+                'No fact prose or owner identities are emitted; language-feature payloads are not scanned by this owner audit.']}
+    finally:
+        store.close()
+
+
 def audit_sqlite(path, *, max_unit_bytes=64 * 1024 * 1024):
     """Count structured facts in each stored chunk JSON, not definition entries.
 
@@ -428,16 +555,17 @@ def audit_sqlite(path, *, max_unit_bytes=64 * 1024 * 1024):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--definitions', type=Path)
+    parser.add_argument('--owner-manifest', type=Path, help='Audit every owner through a verified sibling SQLite store manifest')
     parser.add_argument('--sqlite', type=Path)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--max-unit-mib', type=int, default=64)
-    parser.add_argument('--owner-breakdown', action='store_true', help='Include bounded per-model owner, namespace and source-label counts')
+    parser.add_argument('--owner-breakdown', action='store_true', help='Include bounded per-model owners, literal compiler admission annotations, namespaces and source-label counts')
     args = parser.parse_args()
     if args.max_unit_mib <= 0:
         parser.error('--max-unit-mib must be positive')
-    if not args.definitions and not args.sqlite:
-        parser.error('Provide --definitions, --sqlite or both')
-    if any(args.output.resolve() == p.resolve() for p in (args.definitions, args.sqlite) if p is not None):
+    if not args.definitions and not args.sqlite and not args.owner_manifest:
+        parser.error('Provide --definitions, --owner-manifest, --sqlite or a combination')
+    if any(args.output.resolve() == p.resolve() for p in (args.definitions, args.sqlite, args.owner_manifest) if p is not None):
         parser.error('Output must not overwrite the input package')
     if args.output.exists():
         parser.error('Output already exists; choose a new audit filename')
@@ -445,6 +573,8 @@ def main():
         result = {'audit_schema': 1}
         if args.definitions:
             result['definitions'] = audit_package(args.definitions, max_unit_bytes=args.max_unit_mib * 1024 * 1024, owner_breakdown=args.owner_breakdown)
+        if args.owner_manifest:
+            result['owner_store'] = audit_owner_store(args.owner_manifest, max_unit_bytes=args.max_unit_mib * 1024 * 1024, owner_breakdown=args.owner_breakdown)
         if args.sqlite:
             result['sqlite_chunks'] = audit_sqlite(args.sqlite, max_unit_bytes=args.max_unit_mib * 1024 * 1024)
     except (ValueError, OSError, KeyError, TypeError, sqlite3.Error) as exc:

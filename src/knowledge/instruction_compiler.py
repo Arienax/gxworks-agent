@@ -52,6 +52,29 @@ def instruction_heading_names(heading):
     return re.split(r'\s*[,/・]\s*', match[1]) if match else []
 
 
+def call_admission_explanation(form, model):
+    """Explain existing Registry CPU admission, not project/hardware validity.
+
+    The caller retains the original supports_cpu boolean. In particular an
+    empty declaration is a legacy permissive default, not verified all-CPU
+    applicability. Reasons use the resolved CPU-specific spec, never base_spec.
+    """
+    if form is None:
+        return 'form_not_registered', {'declared_scope': 'unavailable'}
+    spec = form.spec
+    scope = 'explicit' if spec.cpu_support else 'empty'
+    details = {'declared_scope': scope}
+    replacement = spec.replacement_for_cpu(model)
+    if replacement:
+        details['replacement_opcode'] = replacement
+        return 'cpu_replacement_required', details
+    if not spec.supports_cpu(model):
+        return 'target_not_in_declared_scope', details
+    if not spec.cpu_support:
+        return 'admitted_with_empty_declared_scope', details
+    return 'admitted', details
+
+
 def _legacy_facts(form, model):
     """Project already-owned facts, keeping verification field-specific."""
     spec, coverage = form.spec, form.spec.contract_coverage()
@@ -458,6 +481,7 @@ def compile_instruction_definitions(index_path, source_catalog, registry, *, sou
             if form is None and not ownership:
                 continue
             admitted = bool(form is not None and form.spec.supports_cpu(model))
+            admission_reason, admission_details = call_admission_explanation(form, model)
             facts = _legacy_facts(form, model) if admitted else []
             authority = instruction_source_authority(opcode, model)
             preferred = authority.get('manual_id') if authority else None
@@ -538,6 +562,8 @@ def compile_instruction_definitions(index_path, source_catalog, registry, *, sou
                                     identity in raw_by_id for identity in build_source_ids)
                                 else LEGACY_UNVERIFIED),
                             'registry_member': opcode in known, 'call_available': admitted,
+                            'call_admission_reason': admission_reason,
+                            'call_admission_details': admission_details,
                             'support_status': 'existing_declared_scope' if admitted else 'definition_only',
                             'facts': facts, 'source_materials': materials, 'uninterpreted_content': unexplained,
                             'conflicts': [*operand_conflicts, *chart_conflicts], 'gaps': gaps,

@@ -411,6 +411,45 @@ class InstructionResolution:
         return self.base_spec.mnemonic
 
 
+def _validated_definition_documents(rows):
+    if not isinstance(rows, list):
+        raise ValueError("Definition documents must be an array")
+    result = {}
+    for document in rows:
+        if (not isinstance(document, Mapping) or not isinstance(document.get("id"), str)
+                or not document['id'] or document['id'] in result):
+            raise ValueError("Invalid or duplicate definition document")
+        result[document['id']] = copy.deepcopy(document)
+    return result
+
+
+class _DefinitionOwnerView(Mapping):
+    """Identity/header view with detached, on-demand technical contents."""
+    __slots__ = ("_header", "_load")
+
+    def __init__(self, header, load):
+        self._header = dict(header)
+        self._load = load
+
+    def materialize(self):
+        entry = self._load()
+        if not isinstance(entry, Mapping):
+            raise ValueError("Missing compiled instruction owner")
+        return entry
+
+    def __getitem__(self, key):
+        if key in self._header:
+            return copy.deepcopy(self._header[key])
+        return self.materialize()[key]
+
+    def __iter__(self):
+        return iter(self.materialize())
+
+    def __len__(self):
+        return len(self.materialize())
+
+
+
 class InstructionRegistry:
     """Immutable-by-convention lookup table for vendor instruction metadata."""
 
@@ -423,6 +462,9 @@ class InstructionRegistry:
         self.definition_inventory: Tuple[Mapping[str, Any], ...] = ()
         self._definition_owners: Dict[Tuple[str, str, str], Mapping[str, Any]] = {}
         self.definition_documents: Mapping[str, Mapping[str, Any]] = {}
+        self._definition_owner_store = None
+        self._loaded_definition_contracts = set()
+        self._definition_contract_bases = {}
         for spec in specs:
             self.register(spec)
 
@@ -503,13 +545,14 @@ class InstructionRegistry:
         self._variant_index = variants
         return variants
 
-    def resolve_form(
+    def resolve_catalog_form(
         self,
         mnemonic: Any,
         *,
         vendor: str = "mitsubishi",
         cpu: Optional[str] = None,
     ) -> Optional[InstructionResolution]:
+        """Resolve registered metadata without materializing new fact owners."""
         normalized_vendor = str(vendor or "mitsubishi").strip().lower()
         token = str(mnemonic or "").strip().upper()
         key = (normalized_vendor, token)
@@ -525,6 +568,53 @@ class InstructionRegistry:
             spec=self._cpu_contracts.get((normalized_vendor, token, str(cpu or "").strip().upper()), exact),
             base_spec=exact,
         )
+
+    def resolve_form(self, mnemonic: Any, *, vendor: str = "mitsubishi", cpu: Optional[str] = None):
+        """Resolve a call and materialize only its exact definition contract."""
+        form = self.resolve_catalog_form(mnemonic, vendor=vendor, cpu=cpu)
+        if form is None:
+            return None
+        spec = self._with_definition_facts(form.spec, form.opcode, cpu,
+                                           str(vendor or "mitsubishi").strip().lower())
+        return replace(form, spec=spec) if spec is not form.spec else form
+
+    @property
+    def loaded_definition_owner_count(self):
+        """Number of exact owners materialized into callable typed contracts."""
+        return len(self._loaded_definition_contracts)
+
+    def _with_definition_facts(self, spec, opcode, cpu, vendor):
+        key = (vendor, opcode, str(cpu or "").strip().upper())
+        owner = self._definition_owners.get(key)
+        if owner is None or not spec.supports_cpu(cpu):
+            return spec
+        if not self.fact_bundle_current():
+            raise ValueError("Fact definitions changed; reload the checking context")
+        if key in self._loaded_definition_contracts:
+            return spec
+        entry = owner.materialize() if isinstance(owner, _DefinitionOwnerView) else owner
+        facts = tuple(InstructionFactGroup.from_mapping(f) for f in entry.get("facts", []))
+        if any(f.scope.get("models") != [entry['target_model']]
+               or f.scope.get("forms") != [entry['opcode']] for f in facts):
+            raise ValueError("Compiled facts must have exact CPU/form scopes")
+        attached = replace(spec, definition_facts=facts,
+                           source_materials=tuple(copy.deepcopy(entry.get("source_materials", []))),
+                           uninterpreted_content=tuple(copy.deepcopy(entry.get("uninterpreted_content", []))))
+        self._definition_contract_bases[key] = spec
+        self._cpu_contracts[key] = attached
+        self._loaded_definition_contracts.add(key)
+        return attached
+
+    def _clear_definition_contracts(self):
+        # Restore only the prior definition fields: subsequent capability
+        # overlays must not be lost when replacing/withdrawing a fact bundle.
+        for key, base in self._definition_contract_bases.items():
+            current = self._cpu_contracts.get(key)
+            if current is not None:
+                self._cpu_contracts[key] = replace(current, definition_facts=base.definition_facts,
+                    source_materials=base.source_materials, uninterpreted_content=base.uninterpreted_content)
+        self._definition_contract_bases.clear()
+        self._loaded_definition_contracts.clear()
 
     def resolve(
         self,
@@ -639,11 +729,8 @@ class InstructionRegistry:
         # No mutable input catalog or process-global trust cache is reused.
         source_catalog = VerifiedCatalog(payload.pop("source_catalog")) if pooled else None
         value_catalog = VerifiedCatalog(payload.pop("value_catalog")) if pooled and "value_catalog" in payload else None
-        pending, inventory, seen = {}, [], set()
+        inventory, seen = [], set()
         for entry in payload["entries"]:
-            if pooled and isinstance(entry, Mapping):
-                entry = dict(entry, facts=[resolve_fact_sources(f, source_catalog, value_catalog)
-                                          for f in entry.get("facts", [])])
             if not isinstance(entry, Mapping):
                 raise ValueError("Invalid compiled instruction entry")
             opcode, model = entry.get("opcode"), entry.get("target_model")
@@ -656,23 +743,26 @@ class InstructionRegistry:
             seen.add(key)
             if not pooled and any("source_refs" in f or "value_ref" in f for f in entry.get("facts", [])):
                 raise ValueError("Pooled fact references require a declared transport")
-            facts = tuple(InstructionFactGroup.from_mapping(f) for f in entry.get("facts", []))
-            if any(f.scope.get("models") != [model] or f.scope.get("forms") != [opcode] for f in facts):
-                raise ValueError("Compiled facts must have exact CPU/form scopes")
+            for raw in entry.get("facts", []):
+                fact = resolve_fact_sources(raw, source_catalog, value_catalog) if pooled else raw
+                parsed = InstructionFactGroup.from_mapping(fact)
+                if parsed.scope.get("models") != [model] or parsed.scope.get("forms") != [opcode]:
+                    raise ValueError("Compiled facts must have exact CPU/form scopes")
             materials, uninterpreted = entry.get("source_materials", []), entry.get("uninterpreted_content", [])
             if any(not isinstance(items, list) or any(not isinstance(item, Mapping) for item in items)
                    for items in (materials, uninterpreted)):
                 raise ValueError("Invalid compiled source processing receipt")
-            form = self.resolve_form(opcode, vendor=vendor, cpu=model)
-            # Pooled facts were just hydrated into detached, load-private trees.
-            # Retain that owned inventory rather than copying it a second time;
-            # typed contract facts above still own independent mutable values.
-            inventory.append(dict(entry) if pooled else copy.deepcopy(dict(entry)))
-            if form is None or not form.spec.supports_cpu(model):
-                continue
-            pending[key] = replace(form.spec, definition_facts=facts,
-                                   source_materials=tuple(copy.deepcopy(materials)),
-                                   uninterpreted_content=tuple(copy.deepcopy(uninterpreted)))
+            if pooled:
+                def load_owner(raw_entry=entry):
+                    result = copy.deepcopy({k: v for k, v in raw_entry.items() if k != "facts"})
+                    result["facts"] = [resolve_fact_sources(f, source_catalog, value_catalog)
+                                       for f in raw_entry.get("facts", [])]
+                    return result
+                header = {k: entry[k] for k in ("vendor", "opcode", "target_model",
+                          "call_available", "registry_member", "support_status") if k in entry}
+                inventory.append(_DefinitionOwnerView(header, load_owner))
+            else:
+                inventory.append(copy.deepcopy(dict(entry)))
         features = {}
         for feature in payload.get('language_facts', []):
             target = feature.get('target')
@@ -686,20 +776,73 @@ class InstructionRegistry:
                 if group.scope.get('forms') != [target] or group.scope.get('languages') != [language]:
                     raise ValueError('Language fact needs its exact feature/language scope')
             features[target] = {**copy.deepcopy(feature), 'language': language}
+        documents = _validated_definition_documents(payload.get("documents", []))
         after = path.stat()
         if (before.st_mtime_ns, before.st_size) != (after.st_mtime_ns, after.st_size):
             raise ValueError('Fact definitions changed while loading')
-        self._cpu_contracts.update(pending)
+        self._clear_definition_contracts()
+        if self._definition_owner_store is not None:
+            self._definition_owner_store.close()
+        self._definition_owner_store = None
         self.definition_inventory = tuple(inventory)
         self._definition_owners = {(e.get('vendor', 'mitsubishi').lower(), e['opcode'].upper(), e['target_model'].upper()): e
                                    for e in inventory}
-        self.definition_documents = {d['id']: copy.deepcopy(d) for d in payload.get('documents', [])}
+        self.definition_documents = documents
         self.language_facts = tuple(features.values())
         self._language_features = features
         self.fact_bundle_version = payload.get('fact_bundle_version')
         self._fact_resource = (path.resolve(), after.st_mtime_ns, after.st_size)
 
+    def load_instruction_owner_store(self, path: Path) -> None:
+        """Load an indexed publication manifest without expanding owner facts."""
+        from plc.instruction_owner_store import OwnerDefinitionStore
+        store = OwnerDefinitionStore(path)
+        try:
+            metadata = store.metadata
+            inventory, owners = [], {}
+            for header in store.iter_owner_headers():
+                vendor, opcode, model = header.get("vendor", "mitsubishi"), header.get("opcode"), header.get("target_model")
+                if any(not isinstance(value, str) or not value for value in (vendor, opcode, model)):
+                    raise ValueError("Compiled entry needs a literal form and model")
+                key = (vendor.lower(), opcode.upper(), model.upper())
+                if key in owners:
+                    raise ValueError("Duplicate compiled instruction owner")
+                view = _DefinitionOwnerView(header, lambda key=key: store.load_owner(key))
+                owners[key] = view
+                inventory.append(view)
+            features = {}
+            for feature in metadata.get("language_facts", []):
+                target = feature.get("target")
+                language = feature.get("language", str(target).partition('.')[0].lower())
+                if (not isinstance(target, str) or not target or target in features
+                        or language not in {"st", "fbd"} or not target.startswith(language.upper() + '.')):
+                    raise ValueError("Invalid language feature identity")
+                for raw in feature.get("facts", []):
+                    fact = InstructionFactGroup.from_mapping(raw)
+                    if fact.scope.get("forms") != [target] or fact.scope.get("languages") != [language]:
+                        raise ValueError("Language fact needs its exact feature/language scope")
+                features[target] = {**copy.deepcopy(feature), "language": language}
+            documents = _validated_definition_documents(metadata.get("documents", []))
+            if not store.current():
+                raise ValueError("Fact definitions changed while loading")
+        except Exception:
+            store.close()
+            raise
+        self._clear_definition_contracts()
+        if self._definition_owner_store is not None:
+            self._definition_owner_store.close()
+        self._definition_owner_store = store
+        self.definition_inventory = tuple(inventory)
+        self._definition_owners = owners
+        self.definition_documents = documents
+        self.language_facts = tuple(features.values())
+        self._language_features = features
+        self.fact_bundle_version = metadata.get("fact_bundle_version")
+        self._fact_resource = None
+
     def fact_bundle_current(self):
+        if self._definition_owner_store is not None:
+            return self._definition_owner_store.current()
         bound = getattr(self, '_fact_resource', None)
         if bound is None:
             return True  # An explicitly constructed synthetic Registry.
@@ -731,9 +874,26 @@ class InstructionRegistry:
             return SimpleNamespace(opcode=token, base_mnemonic=token)
         return None
 
+    def definition_header(self, opcode, *, cpu, vendor="mitsubishi"):
+        """Inspect admission metadata without reading technical owner facts."""
+        key = (str(vendor).lower(), str(opcode).strip().upper(), str(cpu).strip().upper())
+        entry = self._definition_owners.get(key)
+        if entry is None:
+            return None
+        if not self.fact_bundle_current():
+            raise ValueError("Fact definitions changed; reload the checking context")
+        if self._definition_owner_store is not None:
+            return self._definition_owner_store.get_owner_header(key)
+        if isinstance(entry, _DefinitionOwnerView):
+            return copy.deepcopy(entry._header)
+        return {k: copy.deepcopy(entry[k]) for k in ("vendor", "opcode", "target_model",
+                "call_available", "registry_member", "support_status") if k in entry}
+
     def definition_entry(self, opcode, *, cpu, vendor='mitsubishi'):
         """Inspect an exact compiled owner without admitting it as a call."""
         entry = self._definition_owners.get((str(vendor).lower(), str(opcode).strip().upper(), str(cpu).strip().upper()))
+        if isinstance(entry, _DefinitionOwnerView):
+            return entry.materialize()
         return copy.deepcopy(dict(entry)) if entry is not None else None
 
     def load_contract_promotions(self, path: Path) -> None:
@@ -1388,6 +1548,21 @@ def load_default_instruction_registry() -> InstructionRegistry:
             capabilities = directory / "instruction_capabilities.json"
             if capabilities.is_file():
                 registry.load_capability_contract(capabilities)
+            # Opt in to a candidate owner store without replacing the catalogue
+            # that supplies opcode registration and CPU capability contracts.
+            if "GXW2_INSTRUCTION_OWNER_MANIFEST" in os.environ:
+                configured_manifest = os.environ["GXW2_INSTRUCTION_OWNER_MANIFEST"].strip()
+                if not configured_manifest:
+                    raise ValueError("GXW2_INSTRUCTION_OWNER_MANIFEST must name a manifest")
+                registry.load_instruction_owner_store(Path(configured_manifest).expanduser())
+                return registry
+            manifest = directory / "instruction_definitions.manifest.json"
+            if not (manifest.exists() or manifest.is_symlink()):
+                from shared.paths import resource_path
+                manifest = resource_path("knowledge/runtime/instruction_definitions.manifest.json")
+            if manifest.exists() or manifest.is_symlink():
+                registry.load_instruction_owner_store(manifest)
+                return registry
             definitions = directory / "instruction_definitions.json.gz"
             if not definitions.exists():
                 definitions = directory / "instruction_definitions.json"
@@ -1414,9 +1589,10 @@ def generation_app_instr_mnemonics(cpu=None):
     model = str(cpu or "").strip().upper() or None
     result = []
     for mnemonic in DEFAULT_INSTRUCTION_REGISTRY.known_mnemonics():
-        spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(mnemonic, cpu=model)
-        if spec is None:
+        form = DEFAULT_INSTRUCTION_REGISTRY.resolve_catalog_form(mnemonic, cpu=model)
+        if form is None:
             continue
+        spec = form.spec
         if mnemonic in GENERATION_TYPED_OUTPUT_OPCODES:
             continue
         if spec.category in GENERATION_FORBIDDEN_APP_INSTR_CATEGORIES:
@@ -1427,7 +1603,7 @@ def generation_app_instr_mnemonics(cpu=None):
             # A form the compiled build did not admit as a call must not be offered
             # to the generator either; the shared spec cannot answer this, because
             # an empty CPU scope there means "not narrowed", not "admitted".
-            owner = DEFAULT_INSTRUCTION_REGISTRY.definition_entry(mnemonic, cpu=model)
+            owner = DEFAULT_INSTRUCTION_REGISTRY.definition_header(mnemonic, cpu=model)
             if isinstance(owner, Mapping) and "call_available" in owner and not owner["call_available"]:
                 continue
         result.append(mnemonic)
