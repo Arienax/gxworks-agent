@@ -4,8 +4,10 @@ import json
 from pathlib import Path
 import tempfile
 import sqlite3
+import subprocess
+import sys
 import unittest
-from tools.audit_runtime_fact_package import JSONUnits, audit_package, audit_sqlite
+from tools.audit_runtime_fact_package import JSONUnits, audit_package, audit_sqlite, audit_owner_store
 from plc.instruction_definition_storage import compact_definitions
 
 
@@ -71,6 +73,78 @@ class RuntimePackageAudit(unittest.TestCase):
         self.assertLess(len(json.dumps(report, indent=2).encode()), 1024 * 1024)
         self.assertEqual(report['by_model']['CPU0']['counts']['facts_models_scope_excludes_owner'], 35)
         self.assertIn('<overflow>', report['by_model']['CPU0']['fact_namespace_instances'])
+
+    def admission_report(self, **fields):
+        from tools.audit_runtime_fact_package import OwnerBreakdown
+        bins = OwnerBreakdown()
+        bins.owner({'target_model': 'FX5U', 'opcode': 'X', 'facts': [], **fields})
+        return bins.report()['by_model']['FX5U']
+
+    def test_legacy_admission_is_missing_not_inferred_from_false(self):
+        r = self.admission_report(call_available=False)
+        self.assertEqual(r['call_available'], {'false': 1})
+        self.assertEqual(r['call_admission_reason'], {'<missing>': 1})
+        self.assertEqual(r['call_admission_details_state'], {'<missing>': 1})
+        self.assertEqual(r['call_admission_declared_scope'], {'<missing>': 1})
+        self.assertEqual(r['call_admission_replacement_opcode_state'], {'<missing>': 1})
+
+    def test_all_declared_compiler_admission_reasons_counted_literally(self):
+        from tools.audit_runtime_fact_package import OwnerBreakdown
+        for reason in OwnerBreakdown.ADMISSION_REASONS:
+            with self.subTest(reason=reason):
+                r = self.admission_report(call_admission_reason=reason)
+                self.assertEqual(r['call_admission_reason'], {reason: 1})
+                self.assertEqual(r['call_available'], {'<missing>': 1})
+
+    def test_admission_empty_scope_is_not_promoted_to_cpu_support(self):
+        r = self.admission_report(call_available=True,
+            call_admission_reason='admitted_with_empty_declared_scope',
+            call_admission_details={'declared_scope': 'empty'})
+        self.assertEqual(r['call_admission_declared_scope'], {'empty': 1})
+        self.assertEqual(r['support_status'], {'<missing>': 1})
+        self.assertEqual(r['counts']['empty_owners'], 1)
+
+    def test_admission_replacement_summary_does_not_expose_identity_or_prose(self):
+        r = self.admission_report(call_available=False,
+            call_admission_reason='cpu_replacement_required',
+            call_admission_details={'declared_scope': 'explicit',
+                'replacement_opcode': 'PRIVATE_REPLACEMENT',
+                'private_note': 'Never export this source text'})
+        self.assertEqual(r['call_admission_replacement_opcode_state'], {'technical-token-present': 1})
+        self.assertEqual(r['counts']['owners_with_unreported_admission_detail_fields'], 1)
+        for text in ['PRIVATE_REPLACEMENT', 'private_note', 'Never export']:
+            self.assertNotIn(text, json.dumps(r))
+
+    def test_admission_invalid_annotations_fail_closed_without_free_text(self):
+        r = self.admission_report(call_admission_reason='Confidential source sentence',
+            call_admission_details={'declared_scope': 'another secret', 'replacement_opcode': ['PRIVATE']})
+        self.assertEqual(r['call_admission_reason'], {'<other-or-invalid>': 1})
+        self.assertEqual(r['call_admission_declared_scope'], {'<other-or-invalid>': 1})
+        self.assertEqual(r['call_admission_replacement_opcode_state'], {'<other-or-invalid>': 1})
+        self.assertNotIn('secret', json.dumps(r))
+        self.assertNotIn('Confidential', json.dumps(r))
+
+    def test_admission_non_object_details_not_reported_as_absent(self):
+        for value in [None, 'private prose', [], False]:
+            with self.subTest(value=value):
+                r = self.admission_report(call_admission_reason=None, call_admission_details=value)
+                self.assertEqual(r['call_admission_reason'], {'<other-or-invalid>': 1})
+                self.assertEqual(r['call_admission_details_state'], {'<non-object>': 1})
+                self.assertEqual(r['call_admission_declared_scope'], {'<non-object-details>': 1})
+                self.assertNotIn('private prose', json.dumps(r))
+
+    def test_admission_breakdown_flat_and_compact_agree(self):
+        payload = self.sample()
+        payload['entries'][0].update(call_available=False,
+            call_admission_reason='target_not_in_declared_scope',
+            call_admission_details={'declared_scope': 'explicit'})
+        reports = []
+        with tempfile.TemporaryDirectory() as d:
+            for n, value in enumerate([payload, compact_definitions(payload)]):
+                p = Path(d) / (str(n) + '.json')
+                p.write_text(json.dumps(value))
+                reports.append(audit_package(p, owner_breakdown=True)['owner_provenance'])
+        self.assertEqual(reports[0], reports[1])
 
     def test_flat_counts_distinguish_owner_instances(self):
         r = self.audit(self.sample())
@@ -157,6 +231,62 @@ class RuntimePackageAudit(unittest.TestCase):
             sqlite3.connect(p).close()
             with self.assertRaisesRegex(ValueError, 'no chunks'):
                 audit_sqlite(p)
+
+    def test_owner_manifest_audit_matches_legacy_counts_and_is_read_only(self):
+        from checks.test_instruction_owner_store import build
+        with tempfile.TemporaryDirectory() as d:
+            raw, database, manifest = build(d)
+            before = database.read_bytes(), manifest.read_bytes()
+            legacy = Path(d) / 'legacy.json'
+            legacy.write_text(json.dumps(raw))
+            old = audit_package(legacy, owner_breakdown=True)
+            new = audit_owner_store(manifest, owner_breakdown=True)
+            self.assertEqual(new['counts'], old['counts'])
+            self.assertEqual(new['owner_provenance'], old['owner_provenance'])
+            self.assertEqual(new['store_validation_stats']['hydrated_owner_count'], 2)
+            self.assertTrue(new['offline_full_owner_scan'])
+            self.assertEqual(before, (database.read_bytes(), manifest.read_bytes()))
+            self.assertNotIn('synthetic:owner-test', json.dumps(new))
+
+    def test_owner_manifest_digest_failure_is_not_a_partial_success(self):
+        from checks.test_instruction_owner_store import build
+        with tempfile.TemporaryDirectory() as d:
+            _, database, manifest = build(d)
+            data = json.loads(manifest.read_text())
+            data['database']['sha256'] = '0' * 64
+            manifest.write_text(json.dumps(data))
+            with self.assertRaisesRegex(ValueError, 'integrity'):
+                audit_owner_store(manifest)
+
+    def test_owner_manifest_missing_source_rejected_even_with_new_database_hash(self):
+        from checks.test_instruction_owner_store import build, refresh_manifest
+        with tempfile.TemporaryDirectory() as d:
+            _, database, manifest = build(d)
+            with sqlite3.connect(database) as connection:
+                connection.execute('DELETE FROM runtime_sources')
+            refresh_manifest(database, manifest)
+            with self.assertRaisesRegex(ValueError, 'source'):
+                audit_owner_store(manifest)
+
+    def test_owner_manifest_size_guard_is_explicitly_after_hydration(self):
+        from checks.test_instruction_owner_store import build
+        with tempfile.TemporaryDirectory() as d:
+            _, _, manifest = build(d)
+            with self.assertRaisesRegex(ValueError, 'Hydrated owner exceeds max-unit'):
+                audit_owner_store(manifest, max_unit_bytes=1)
+
+    def test_owner_manifest_cli_is_available_without_legacy_bundle(self):
+        from checks.test_instruction_owner_store import build
+        with tempfile.TemporaryDirectory() as d:
+            _, _, manifest = build(d)
+            output = Path(d) / 'audit.json'
+            script = Path(__file__).resolve().parents[1] / 'tools/audit_runtime_fact_package.py'
+            completed = subprocess.run([sys.executable, str(script), '--owner-manifest', str(manifest),
+                '--owner-breakdown', '--output', str(output)], capture_output=True, text=True)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            result = json.loads(output.read_text())
+            self.assertEqual(result['owner_store']['counts']['owners'], 2)
+            self.assertNotIn('definitions', result)
 
 
 if __name__ == '__main__':

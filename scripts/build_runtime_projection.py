@@ -18,7 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 from knowledge.fact_corpus import project_definition
 from knowledge.runtime_fact_projection import project_runtime_definitions, intern_runtime_sources
-from knowledge.runtime_fact_publication import write_runtime_sqlite, project_language_features
+from knowledge.runtime_fact_publication import write_runtime_sqlite, project_language_features, write_owner_manifest
 from plc.instruction_definition_storage import expand_definitions
 
 
@@ -46,7 +46,7 @@ def main():
     args.output_dir.mkdir(parents=True, exist_ok=True)
     if args.private_evidence.resolve().is_relative_to(args.output_dir.resolve()):
         parser.error('--private-evidence must be outside the runtime output directory')
-    outputs = [args.output_dir / name for name in ('instruction_definitions.json.gz', 'plc_facts.sqlite', 'receipt.json')]
+    outputs = [args.output_dir / name for name in ('instruction_definitions.json.gz', 'plc_facts.sqlite', 'instruction_definitions.manifest.json', 'receipt.json')]
     outputs += [args.private_evidence, args.private_evidence.with_name(args.private_evidence.name + '.projection-map.gz'),
                 args.private_evidence.with_name(args.private_evidence.name + '.strict-withheld.gz')]
     if any(path.exists() for path in outputs):
@@ -84,7 +84,8 @@ def main():
         for block in iter(lambda: stream.read(1048576), b''):
             digest.update(block)
     from knowledge import fact_corpus, runtime_fact_projection, runtime_fact_publication
-    for module in (fact_corpus, runtime_fact_projection, runtime_fact_publication):
+    from plc import instruction_owner_store
+    for module in (fact_corpus, runtime_fact_projection, runtime_fact_publication, instruction_owner_store):
         digest.update(module.__name__.encode())
         digest.update(Path(module.__file__).read_bytes())
     digest.update(Path(__file__).read_bytes())
@@ -98,9 +99,10 @@ def main():
     pooled = intern_runtime_sources(projected, intern_values=True)
     del projected
     metrics = dump_gzip(args.output_dir / 'instruction_definitions.json.gz', pooled)
-    sqlite_metrics = write_runtime_sqlite(pooled, args.output_dir / 'plc_facts.sqlite')
+    sqlite_metrics = write_runtime_sqlite(pooled, args.output_dir / 'plc_facts.sqlite',field_pooling=True)
+    owner_manifest = write_owner_manifest(pooled, args.output_dir / 'plc_facts.sqlite', args.output_dir / 'instruction_definitions.manifest.json')
     receipt.update(raw_input_facts=raw_facts, strict_withheld=strict_withheld, language_withheld=language_withheld_count, language_input_facts=language_input_facts,
-                   language_output_facts=language_output_facts, runtime_storage=metrics, sqlite=sqlite_metrics,
+                   language_output_facts=language_output_facts, runtime_storage=metrics, sqlite=sqlite_metrics, owner_store=owner_manifest,
                    private_evidence=evidence_metrics, peak_rss_kib=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss if resource else None,
                    scope='provided_instruction_definitions_only', publication_accepted=False)
     (args.output_dir / 'receipt.json').write_text(json.dumps(receipt, ensure_ascii=False, indent=2)+'\n')

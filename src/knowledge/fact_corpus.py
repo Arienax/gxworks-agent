@@ -134,7 +134,7 @@ def project_definition(entry, *, value_projection=None):
     """Project one literal model/form owner, preserving status and dependencies."""
     result = {key: copy.deepcopy(entry[key]) for key in (
         "vendor", "opcode", "target_model", "registry_member", "call_available", "support_status",
-        "semantic_completeness", "gaps") if key in entry}
+        "semantic_completeness", "gaps", "call_admission_reason", "call_admission_details") if key in entry}
     accepted, withheld = [], []
     for fact in entry.get("facts", []):
         try:
