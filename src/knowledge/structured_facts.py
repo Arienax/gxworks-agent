@@ -260,58 +260,100 @@ def _contradictory_fact_values(left, right):
     return left != right
 
 
-def _merge_fact_rows(left, incoming):
-    """Keep source variants and their dependencies distinct, without duplicate IDs."""
-    by_id = {fact['id']: fact for fact in left if fact.get('id')}
+_MERGE_COMPARISON_IGNORED = frozenset({'id', 'sources', 'status', 'verification'})
+
+
+def _merge_comparable_fact(fact):
+    return {key: value for key, value in fact.items()
+            if key not in _MERGE_COMPARISON_IGNORED}
+
+
+class _FactMergeIndex:
+    """Per-accumulator lookup; store references, not copies of the facts."""
+
+    __slots__ = ('by_id', 'by_family', 'next_suffix')
+
+    def __init__(self, facts):
+        # Match the legacy dict's last-value/first-key-order behavior if the
+        # incoming accumulator happens to contain duplicate IDs.
+        self.by_id = {fact['id']: fact for fact in facts if fact.get('id')}
+        self.by_family = {}
+        for identity, fact in self.by_id.items():
+            family = identity.split(':variant:')[0]
+            self.by_family.setdefault(family, []).append(fact)
+        self.next_suffix = {}
+
+    def add(self, fact):
+        identity = fact.get('id')
+        self.by_id[identity] = fact
+        if identity:
+            family = identity.split(':variant:')[0]
+            self.by_family.setdefault(family, []).append(fact)
+
+    def allocate_variant(self, family):
+        # Preserve the smallest available suffix >= 2. Since IDs are only
+        # added, the next search can resume where the previous one stopped.
+        suffix = self.next_suffix.get(family, 2)
+        while family + ':variant:' + str(suffix) in self.by_id:
+            suffix += 1
+        self.next_suffix[family] = suffix + 1
+        return family + ':variant:' + str(suffix)
+
+
+def _merge_fact_rows(left, incoming, *, _index=None):
+    """Merge source variants without repeated owner-wide ID scans or copies.
+
+    The optional index is owned by the accumulator. Callers combining several
+    batches must reuse it until the accumulator's facts list is replaced.
+    """
+    index = _index if _index is not None else _FactMergeIndex(left)
     remap, added = {}, []
     for original in incoming:
-        fact = copy.deepcopy(original)
-        identity = fact.get('id')
-        existing = by_id.get(identity)
+        identity = original.get('id')
+        existing = index.by_id.get(identity)
         if existing is not None:
             family = identity.split(':variant:')[0]
-            siblings = [row for key, row in by_id.items()
-                        if key == family or key.startswith(family + ':variant:')]
-            comparison = lambda row: {k: v for k, v in row.items()
-                                      if k not in {'id', 'sources', 'status', 'verification'}}
-            equal = next((row for row in siblings if comparison(row) == comparison(fact)), None)
+            siblings = index.by_family.get(family, ())
+            comparable = _merge_comparable_fact(original)
+            equal = next((row for row in siblings
+                          if _merge_comparable_fact(row) == comparable), None)
             if equal is not None:
-                existing = equal
-                if identity != existing['id']:
-                    remap[identity] = existing['id']
-                sources = existing.setdefault('sources', [])
-                for source in fact.get('sources', ()):
+                if identity != equal['id']:
+                    remap[identity] = equal['id']
+                sources = equal.setdefault('sources', [])
+                for source in original.get('sources', ()):
                     if source not in sources:
                         sources.append(copy.deepcopy(source))
-                statuses = {existing.get('status'), fact.get('status')}
+                statuses = {equal.get('status'), original.get('status')}
                 if 'conflict' in statuses:
-                    existing['status'] = 'conflict'
-                    existing['verification'] = 'not_performed'
+                    equal['status'] = 'conflict'
+                    equal['verification'] = 'not_performed'
                 elif 'not_applicable' not in statuses:
-                    # Another equal, unreviewed witness does not invalidate an
-                    # independently source-checked claim. No different value,
-                    # condition, scope or dependency can enter this branch.
+                    # An equal, unreviewed witness does not invalidate an
+                    # independently source-checked claim.
                     strength = ('source_verified', 'candidate_evidence', 'declared_unverified', 'unknown')
-                    chosen = next((status for status in strength if status in statuses), existing.get('status'))
-                    existing['status'] = chosen
-                    existing['verification'] = 'source_checked' if chosen == 'source_verified' else 'not_performed'
+                    chosen = next((status for status in strength if status in statuses), equal.get('status'))
+                    equal['status'] = chosen
+                    equal['verification'] = 'source_checked' if chosen == 'source_verified' else 'not_performed'
                 continue
-            suffix = 2
-            while family + ':variant:' + str(suffix) in by_id:
-                suffix += 1
-            fact['id'] = family + ':variant:' + str(suffix)
+
+            # Only new or genuinely distinct variants need an owned deep copy.
+            fact = copy.deepcopy(original)
+            fact['id'] = index.allocate_variant(family)
             remap[identity] = fact['id']
             for prior in siblings:
-                same_condition = all(prior.get(k) == fact.get(k) for k in ('dimension', 'scope', 'conditions'))
+                same_condition = all(prior.get(k) == fact.get(k)
+                                     for k in ('dimension', 'scope', 'conditions'))
                 if same_condition and _contradictory_fact_values(prior.get('value'), fact.get('value')):
                     prior['status'] = fact['status'] = 'conflict'
-        by_id[fact.get('id')] = fact
+        else:
+            fact = copy.deepcopy(original)
+        index.add(fact)
         added.append(fact)
     for fact in added:
         if fact.get('depends_on'):
             fact['depends_on'] = [remap.get(key, key) for key in fact['depends_on']]
     left.extend(added)
-
 
 def merge_exact_records(records, *, plc_model):
     """Union applicable fact packets before ranking; catalogue rows add no slots.
@@ -322,7 +364,7 @@ def merge_exact_records(records, *, plc_model):
     """
     from plc.target_identity import target_members
     members = set(target_members(plc_model))
-    merged, groups = [], {}
+    merged, groups, fact_indexes = [], {}, {}
     for original in records:
         packet = authored_packet(original)
         if packet.get('kind') != 'instruction':
@@ -344,7 +386,13 @@ def merge_exact_records(records, *, plc_model):
                 accumulated['value'] = copy.deepcopy(right)
                 accumulated['gaps'] = copy.deepcopy(packet.get('gaps', []))
                 left = accumulated['value']
-            _merge_fact_rows(left.setdefault('facts', []), right.get('facts', ()))
+                # A directory placeholder was replaced with a new list.
+                fact_indexes.pop(key, None)
+            facts = left.setdefault('facts', [])
+            index = fact_indexes.get(key)
+            if index is None:
+                index = fact_indexes[key] = _FactMergeIndex(facts)
+            _merge_fact_rows(facts, right.get('facts', ()), _index=index)
             for field, value in right.items():
                 if field not in left:
                     left[field] = copy.deepcopy(value)
@@ -756,11 +804,12 @@ def _instruction_aspects(records, aspects, *, plc_model, language, query):
             # CPU. Resolve their claims together so a complete packet cannot
             # conceal a conflicting claim in another packet.
             combined = {'target': next((packet.get('target') for packet in applicable), ''), 'value': {'facts': []}}
+            index = _FactMergeIndex(combined['value']['facts'])
             for packet in applicable:
                 if packet.get('fact_selection', {}).get('gaps'):
                     combined.setdefault('fact_selection', {}).setdefault('gaps', []).extend(packet['fact_selection']['gaps'])
                 value = packet.get('value') or {}
-                _merge_fact_rows(combined['value']['facts'], value.get('facts', ()))
+                _merge_fact_rows(combined['value']['facts'], value.get('facts', ()), _index=index)
                 if value.get('call_available') is True or 'call_available' not in combined['value']:
                     combined['value']['call_available'] = value.get('call_available')
                     combined['value']['registry_contract'] = copy.deepcopy(value.get('registry_contract') or {})
