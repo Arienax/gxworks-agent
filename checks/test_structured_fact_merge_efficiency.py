@@ -144,6 +144,15 @@ class IndexedFactMergeTests(unittest.TestCase):
         self.assertTrue(any(item['status'] == 'conflict' for item in merged))
         self.assertTrue(any(item.get('conditions') for item in merged))
 
+    def test_falsy_and_sparse_variant_ids_keep_legacy_allocation(self):
+        base = [fact('', 1), fact('A:variant:2', 2), fact('A:variant:4', 4)]
+        batches = [
+            [fact('', 1), fact('A', 1)],
+            [fact('', 2), fact('A', 3), fact('A', 5)],
+            [fact('A', 6)],
+        ]
+        assert_same_batches(self, base, batches)
+
     def test_randomized_staged_merge_matches_preoptimization(self):
         rng = random.Random(20261025)
         statuses = ('source_verified', 'candidate_evidence', 'declared_unverified',
