@@ -93,6 +93,35 @@ class LazyDefinitionOwnersTests(unittest.TestCase):
         self.assertFalse(r.definition_header('BLOCKED',cpu='FX5U')['call_available'])
         self.assertNotIn('call_available',r.definition_header('UNDECIDED',cpu='FX5U'))
 
+    def test_language_metadata_preserved_and_literal_cpu_filtering_in_both_loaders(self):
+        from knowledge.runtime_fact_publication import write_runtime_sqlite, write_owner_manifest
+        raw=fixture();fact=copy.deepcopy(raw['entries'][0]['facts'][0])
+        fact['scope']={'forms':['ST.CALL'],'languages':['st'],'models':['FX3U','FX3UC']}
+        feature={'target':'ST.CALL','models':['FX3U','FX3UC'],'aliases':['call syntax'],
+                 'facts':[fact],'references':[{'models':['FX3U'],'opcode':'KNOWN',
+                 'parameters':{'In':'LEFT'},'sources':[{'manual_id':'synthetic'}]}]}
+        raw['language_facts']=[feature]
+        related=copy.deepcopy(raw['entries'][0]);related['target_model']='FX3U';related['call_available']=False
+        related['facts'][0]['scope']['models']=['FX3U'];raw['entries'].append(related)
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);path=root/'definitions.json';path.write_text(json.dumps(raw))
+            pooled=intern_runtime_sources(raw,intern_values=True)
+            database=root/'plc_facts.sqlite';manifest=root/'instruction_definitions.manifest.json'
+            write_runtime_sqlite(pooled,database);write_owner_manifest(pooled,database,manifest)
+            for mode in ('json','manifest'):
+                r=registry()
+                if mode=='json':r.load_instruction_definitions(path)
+                else:r.load_instruction_owner_store(manifest)
+                self.assertEqual(r.language_facts,(feature,))
+                self.assertNotIn('language',r.language_feature('ST.CALL',language='st'))
+                self.assertIsNone(r.language_feature('ST.CALL',language='fbd'))
+                self.assertIsNone(r.language_feature('ST.CALL',cpu='Q00'))
+                self.assertEqual(len(r.language_feature('ST.CALL',cpu='FX3U')['references']),1)
+                self.assertEqual(r.language_feature('ST.CALL',cpu='FX3UC')['references'],[])
+                result=r.language_feature('ST.CALL');result['aliases'].append('mutated')
+                self.assertEqual(r.language_feature('ST.CALL'),feature)
+                if r._definition_owner_store:r._definition_owner_store.close()
+
     def test_real_manifest_reads_only_requested_owner(self):
         from knowledge.runtime_fact_publication import write_runtime_sqlite, write_owner_manifest
         with tempfile.TemporaryDirectory() as temp:

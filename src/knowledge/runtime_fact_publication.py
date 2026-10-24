@@ -34,6 +34,110 @@ def _json(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False)
 
 
+def validate_language_feature(feature, *, published=False):
+    """Validate production language-owner metadata without inferring fields.
+
+    A missing language stays missing. Its target namespace and every fact's
+    explicit language scope must agree. Model lists are upper bounds, not
+    replacements for narrower fact/reference applicability.
+    """
+    import re
+    from knowledge.fact_corpus import typed_value, source_reference, public_authority_decision
+    from plc.instruction_definition import InstructionFactGroup
+    allowed = {'target', 'language', 'models', 'aliases', 'references', 'facts'}
+    if not isinstance(feature, dict) or set(feature) - allowed:
+        raise ValueError('Unreviewed language feature metadata')
+    target = feature.get('target')
+    if not isinstance(target, str) or not re.fullmatch(r'(ST|FBD)\.[A-Z0-9_.]+', target):
+        raise ValueError('Invalid exact language feature target')
+    language = target.partition('.')[0].lower()
+    if 'language' in feature and feature['language'] != language:
+        raise ValueError('Language feature namespace mismatch')
+    def strings(value, name, tokens=False):
+        if not isinstance(value, list) or any(not isinstance(x,str) or not x or (tokens and not re.fullmatch(r'[A-Za-z0-9_.+-]+',x)) for x in value) or len(value)!=len(set(value)):
+            raise ValueError('Invalid language '+name)
+    if 'models' in feature:strings(feature['models'],'models',True)
+    if 'aliases' in feature:
+        strings(feature['aliases'],'aliases')
+        if any(any(ord(c)<32 for c in alias) for alias in feature['aliases']):raise ValueError('Invalid language alias control character')
+    facts=feature.get('facts',[])
+    if not isinstance(facts,list):raise ValueError('Language facts must be a list')
+    ids=set();graph={};by_id={}
+    for fact in facts:
+        allowed_fact={'id','dimension','value','status','sources','depends_on','members','scope','verification','conditions','authority_decision','note','note_kind'}
+        if not isinstance(fact,dict) or set(fact)-allowed_fact or not isinstance(fact.get('id'),str) or not fact['id'] or fact['id'] in ids:
+            raise ValueError('Invalid or unreviewed language fact metadata')
+        if 'note_kind' in fact and fact['note_kind']!='explanation':raise ValueError('Unreviewed language note')
+        scope=fact.get('scope',{})
+        if not isinstance(scope,dict) or scope.get('forms')!=[target] or scope.get('languages')!=[language]:
+            raise ValueError('Language fact must retain exact feature/language scope')
+        strings(scope.get('models',[]),'fact models',True)
+        if 'models' in feature and (not scope.get('models') or not set(scope['models'])<=set(feature['models'])):
+            raise ValueError('Language fact exceeds feature model scope')
+        ids.add(fact['id']);graph[fact['id']]=set(fact.get('depends_on',[]));by_id[fact['id']]=fact
+        if published:
+            InstructionFactGroup.from_mapping(fact)
+            for key,default in [('value',{}),('scope',{}),('conditions',[])]:
+                if typed_value(fact.get(key,default))!=fact.get(key,default):raise ValueError('Unprojected language technical value')
+            if any(source_reference(source)!=source for source in fact.get('sources',[])):raise ValueError('Unprojected language source')
+            if fact.get('status') in {'source_verified','candidate_evidence'} and (not fact.get('sources') or any(not s for s in fact['sources'])):raise ValueError('Missing public language source')
+            if fact.get('authority_decision') and public_authority_decision(fact['authority_decision'])!=fact['authority_decision']:raise ValueError('Unprojected language authority')
+    if published:
+        if any(deps-ids for deps in graph.values()):raise ValueError('Missing language dependency')
+        for identity,deps in graph.items():
+            for dep in deps:
+                for axis in ('models','forms','languages'):
+                    required=set(by_id[identity]['scope'].get(axis,[]));available=set(by_id[dep]['scope'].get(axis,[]))
+                    if required and available and not required<=available:raise ValueError('Inapplicable language dependency')
+        while graph:
+            ready={identity for identity,deps in graph.items() if not deps}
+            if not ready:raise ValueError('Cyclic language fact dependencies')
+            graph={identity:deps-ready for identity,deps in graph.items() if identity not in ready}
+    references=feature.get('references',[])
+    if not isinstance(references,list):raise ValueError('Language references must be a list')
+    for ref in references:
+        if not isinstance(ref,dict) or set(ref)!={'models','opcode','parameters','sources'}:raise ValueError('Unreviewed language reference metadata')
+        strings(ref['models'],'reference models',True)
+        if not ref['models'] or ('models' in feature and not set(ref['models'])<=set(feature['models'])):raise ValueError('Language reference exceeds feature model scope')
+        if not isinstance(ref['opcode'],str) or not re.fullmatch(r'[A-Z][A-Z0-9_<>+*/=!.\-]*',ref['opcode']):raise ValueError('Invalid related instruction identity')
+        if not isinstance(ref['parameters'],dict) or typed_value(ref['parameters'])!=ref['parameters'] or any(not isinstance(v,str) or not v for v in ref['parameters'].values()):raise ValueError('Invalid related parameter binding')
+        if not isinstance(ref['sources'],list) or not ref['sources'] or any(not isinstance(s,dict) or not s for s in ref['sources']):raise ValueError('Missing language reference source')
+        if published and any(source_reference(s)!=s or not source_reference(s) for s in ref['sources']):raise ValueError('Unprojected language reference source')
+
+
+def _language_conflict_explanations(facts):
+    """Keep explicit conflict explanations as notes, never executable prose."""
+    import copy
+    import re
+    from knowledge.fact_corpus import typed_value, UnresolvedExpression
+    result=copy.deepcopy(facts);changes=[]
+    for fact in result:
+        value=fact.get('value',{})
+        conflicts=value.get('source_conflicts',{}) if isinstance(value,dict) else {}
+        if not isinstance(conflicts,dict):continue
+        for name,conflict in conflicts.items():
+            if not isinstance(conflict,dict) or not isinstance(conflict.get('reason'),str):continue
+            reason=conflict['reason']
+            try:
+                typed_value(reason)
+                continue
+            except UnresolvedExpression:
+                pass
+            if (set(conflict)!={'models','reason'} or not isinstance(name,str)
+                    or not re.fullmatch(r'[A-Z][A-Z0-9_]*',name)
+                    or not isinstance(conflict['models'],list)
+                    or not set(conflict['models'])<=set(fact.get('scope',{}).get('models',[]))):
+                raise ValueError('Unclassified language conflict explanation')
+            path='source_conflicts.'+name+'.reason'
+            note=(fact.get('note','').strip()+'\n'+path+': '+reason).strip()
+            fact['note']=note;fact['note_kind']='explanation'
+            conflict['reason']={'kind':'explanation_reference','note_ref':path}
+            changes.append({'fact_id':fact['id'],'field':'value.'+path,'original':reason,
+                            'projected':copy.deepcopy(conflict['reason']),
+                            'destination':'note','semantics':'source_conflict_preserved_not_resolved'})
+    return result,changes
+
+
 def project_language_features(features):
     """Strictly project exact language features, without instruction aggregation.
 
@@ -46,29 +150,11 @@ def project_language_features(features):
         raise ValueError('Language features must be a list')
     output, withheld, seen = [], [], set()
     for feature in features:
-        if not isinstance(feature, dict) or set(feature) - {'target', 'language', 'facts'}:
-            raise ValueError('Unreviewed language feature metadata')
-        target = feature.get('target')
-        language = feature.get('language', str(target).partition('.')[0].lower())
-        if (not isinstance(target, str) or not target or target in seen
-                or language not in {'st', 'fbd'} or not target.startswith(language.upper()+'.')):
-            raise ValueError('Invalid or duplicate exact language feature')
+        validate_language_feature(feature)
+        target = feature['target']
+        if target in seen:raise ValueError('Duplicate language feature target')
         seen.add(target)
-        facts = feature.get('facts', [])
-        if not isinstance(facts, list):
-            raise ValueError('Language facts must be a list')
-        ids = set()
-        for fact in facts:
-            if not isinstance(fact, dict) or not isinstance(fact.get('id'), str) or fact['id'] in ids:
-                raise ValueError('Invalid or duplicate language fact')
-            allowed_fact = {'id', 'dimension', 'value', 'status', 'sources', 'depends_on', 'members',
-                            'scope', 'verification', 'conditions', 'authority_decision', 'note', 'note_kind'}
-            if set(fact) - allowed_fact or ('note_kind' in fact and fact['note_kind'] != 'explanation'):
-                raise ValueError('Unreviewed language fact metadata')
-            ids.add(fact['id'])
-            scope = fact.get('scope', {})
-            if not isinstance(scope, dict) or scope.get('forms') != [target] or scope.get('languages') != [language]:
-                raise ValueError('Language fact must retain exact feature/language scope')
+        facts, fact_changes = _language_conflict_explanations(feature.get('facts', []))
         projected, rejected = project_definition({'facts': facts})
         accepted = projected['facts']
         # The generic representation projector does not itself certify sources.
@@ -100,9 +186,24 @@ def project_language_features(features):
             pending = {identity: deps-ready for identity, deps in pending.items() if identity not in ready}
         for fact in accepted:
             InstructionFactGroup.from_mapping(fact)
-        output.append({'target': target, 'language': language, 'facts': accepted})
-        if rejected:
-            withheld.append({'target': target, 'language': language, 'withheld': rejected})
+        import copy
+        from knowledge.fact_corpus import source_reference
+        result = copy.deepcopy(feature)
+        result['facts'] = accepted
+        reference_changes=[]
+        for index, reference in enumerate(result.get('references', [])):
+            original=copy.deepcopy(reference['sources'])
+            reference['sources']=[source_reference(source) for source in original]
+            if any(not source for source in reference['sources']):raise ValueError('Missing public language reference source')
+            if original != reference['sources']:
+                reference_changes.append({'reference_index':index,'field':'sources','original':original,'projected':copy.deepcopy(reference['sources'])})
+        validate_language_feature(result, published=True)
+        output.append(result)
+        if rejected or reference_changes or fact_changes:
+            audit={'target':target,'withheld':rejected}
+            if 'language' in feature:audit['language']=feature['language']
+            if reference_changes or fact_changes:audit['metadata_projection']=[*reference_changes,*fact_changes]
+            withheld.append(audit)
     return output, withheld
 
 
@@ -153,6 +254,80 @@ def hydrate_owner_packet(connection, owner, *, load_counts=None):
     return packet
 
 
+def _write_language_feature(connection, feature):
+    """Index canonical/alias identities; store each full feature only once."""
+    import re
+    from knowledge.fact_corpus import PUBLICATION_STATUS
+    validate_language_feature(feature, published=True)
+    encoded=_json(feature)
+    connection.execute('INSERT INTO runtime_language_features VALUES (?,?,?)',(feature['target'],encoded,hashlib.sha256(encoded.encode()).hexdigest()))
+    models=feature.get('models',sorted({m for fact in feature.get('facts',[]) for m in fact['scope'].get('models',[])}))
+    aliases=list(dict.fromkeys([feature['target'],*feature.get('aliases',[])]))
+    for model in models:
+        selected=[f for f in feature.get('facts',[]) if model in f['scope'].get('models',[])]
+        refs=[r for r in feature.get('references',[]) if model in r['models']]
+        identity='language:'+hashlib.sha256(_json([feature['target'],model]).encode()).hexdigest()
+        technical={'target':feature['target'],'aliases':feature.get('aliases',[]),'model':model,
+                   'facts':[{k:f[k] for k in ('dimension','value','scope','conditions') if k in f} for f in selected],
+                   'references':[{k:r[k] for k in ('opcode','parameters','models')} for r in refs]}
+        text=' '.join(sorted(set(re.findall(r'[\w.$:+/-]+',_json(technical)))))
+        metadata={'runtime_language':feature['target'],'runtime_language_model':model,'content_origin':'authored_fact',
+                  'distribution_status':PUBLICATION_STATUS,'fact_kind':'language','fact_target':feature['target'],'source_lane':'fact','plc_models':[model]}
+        connection.execute('INSERT INTO chunks VALUES (?,?,?,?,?,?,?,?)',(identity,text,_json(metadata),_json([model]),'','language','authored_fact',PUBLICATION_STATUS))
+        for alias in aliases:
+            name=alias.upper()
+            connection.execute('INSERT OR IGNORE INTO entity_index VALUES (?,?)',(name,identity))
+            fact_id=identity+':alias:'+hashlib.sha256(name.encode()).hexdigest()
+            connection.execute('INSERT OR IGNORE INTO facts VALUES (?,?,?,?,?,?)',(fact_id,'language',name,model,identity,'{}'))
+
+
+def _check_language_reference_owners(connection):
+    for (text,) in connection.execute('SELECT payload_json FROM runtime_language_features'):
+        feature=json.loads(text)
+        for ref in feature.get('references',[]):
+            for model in ref['models']:
+                if connection.execute('SELECT 1 FROM runtime_owner_index WHERE vendor=? AND opcode=? AND target_model=?',('mitsubishi',ref['opcode'],model)).fetchone() is None:
+                    raise ValueError('Language feature dependency owner is missing: '+feature['target']+'/'+model+'/'+ref['opcode'])
+
+
+def hydrate_language_packet(connection, target, model):
+    """Restore only this model's feature facts and explicit instruction bindings."""
+    import copy
+    row=connection.execute('SELECT payload_json,sha256 FROM runtime_language_features WHERE target=?',(target,)).fetchone()
+    if row is None or hashlib.sha256(row[0].encode()).hexdigest()!=row[1]:raise ValueError('Missing or altered language feature')
+    feature=json.loads(row[0]);validate_language_feature(feature,published=True)
+    models=feature.get('models',sorted({m for fact in feature.get('facts',[]) for m in fact['scope'].get('models',[])}))
+    if model not in models:raise ValueError('Language feature outside requested model')
+    value=copy.deepcopy(feature)
+    value['facts']=[fact for fact in value.get('facts',[]) if model in fact['scope'].get('models',[])]
+    ids={fact['id'] for fact in value['facts']}
+    if any(set(fact.get('depends_on',[]))-ids for fact in value['facts']):raise ValueError('Inapplicable language dependency')
+    if 'references' in value:value['references']=[ref for ref in value['references'] if model in ref['models']]
+    related=[]
+    for ref in value.get('references',[]):
+        index=connection.execute('SELECT owner,packet_sha256 FROM runtime_owner_index WHERE vendor=? AND opcode=? AND target_model=?',('mitsubishi',ref['opcode'],model)).fetchone()
+        if index is None:raise ValueError('Language feature dependency owner is missing')
+        raw=connection.execute('SELECT payload_json FROM runtime_definitions WHERE owner=?',(index[0],)).fetchone()
+        if raw is None or hashlib.sha256(raw[0].encode()).hexdigest()!=index[1]:raise ValueError('Altered language instruction dependency')
+        entry=hydrate_owner_packet(connection,index[0])['value']
+        from plc.instruction_definition import InstructionFactGroup
+        if entry.get('opcode')!=ref['opcode'] or entry.get('target_model')!=model:raise ValueError('Wrong related instruction identity')
+        graph={}
+        for fact in entry.get('facts',[]):
+            group=InstructionFactGroup.from_mapping(fact)
+            if group.id in graph or group.scope.get('models')!=[model] or group.scope.get('forms')!=[ref['opcode']]:raise ValueError('Wrong related instruction scope')
+            graph[group.id]=set(group.depends_on)
+        if any(deps-set(graph) for deps in graph.values()):raise ValueError('Missing related instruction dependency')
+        while graph:
+            ready={identity for identity,deps in graph.items() if not deps}
+            if not ready:raise ValueError('Cyclic related instruction dependency')
+            graph={identity:deps-ready for identity,deps in graph.items() if identity not in ready}
+        related.append({'opcode':entry['opcode'],'parameters':copy.deepcopy(ref['parameters']),'facts':entry['facts'],
+                        'gaps':entry.get('gaps',[]),'call_available':entry.get('call_available',False)})
+    value['related_instructions']=related
+    return {'kind':'language','target':target,'scope':{'models':[model]},'content_origin':'authored_fact','value':value}
+
+
 def write_runtime_sqlite(payload, path, *, field_pooling=False):
     """Create a NEW instruction-only index; never overwrite an existing index."""
     from knowledge.fact_corpus import CORPUS_KIND, PUBLICATION_STATUS
@@ -194,8 +369,7 @@ def write_runtime_sqlite(payload, path, *, field_pooling=False):
         connection.executemany('INSERT INTO runtime_values VALUES (?,?)',
             ((key, _json(value)) for key, value in payload.get('value_catalog', {}).items()))
         for feature in payload.get('language_facts', []):
-            encoded = _json(feature)
-            connection.execute('INSERT INTO runtime_language_features VALUES (?,?,?)', (feature['target'], encoded, hashlib.sha256(encoded.encode()).hexdigest()))
+            _write_language_feature(connection, feature)
         count = 0
         for entry in payload['entries']:
             owner = owner_key(entry)
@@ -228,6 +402,7 @@ def write_runtime_sqlite(payload, path, *, field_pooling=False):
             connection.execute('INSERT INTO facts VALUES (?,?,?,?,?,?)',
                 (identity, 'instruction', opcode, model, identity, '{}'))
             count += len(entry.get('facts', []))
+        _check_language_reference_owners(connection)
         connection.execute("INSERT INTO chunks_fts(chunks_fts) VALUES ('rebuild')")
         connection.commit()
         return {'owners': len(payload['entries']), 'stored_facts': count,
@@ -376,13 +551,12 @@ class OwnerStoreWriter:
     def add_language_feature(self, feature):
         if self._closed or self._finalized:raise ValueError('Writer is closed')
         self._public(feature)
-        projected,withheld=project_language_features([feature])
-        if withheld or projected != [feature]:raise ValueError('Language feature needs prior strict review; transport cannot silently change it')
-        encoded=_json(feature)
-        self._db.execute('INSERT INTO runtime_language_features VALUES (?,?,?)',(feature['target'],encoded,hashlib.sha256(encoded.encode()).hexdigest()))
+        validate_language_feature(feature, published=True)
+        _write_language_feature(self._db, feature)
 
     def finalize(self, manifest_path):
         if self._closed or self._finalized:raise ValueError('Writer is closed')
+        _check_language_reference_owners(self._db)
         self._db.execute("INSERT INTO chunks_fts(chunks_fts) VALUES ('rebuild')")
         counts={name:self._db.execute('SELECT count(*) FROM '+table).fetchone()[0] for name,table in [('sources','runtime_sources'),('values','runtime_values'),('exact_field_objects','runtime_fact_fields')]}
         self._db.commit();self._finalized=True

@@ -32,12 +32,40 @@ _OPERATOR_FORM = re.compile(r'(?:\*\*|[+\-*/&]|<>|<=|>=|=|<|>)(?:P)?(?:_U|_E)?\Z
 _TYPE_LABEL = re.compile(r"(?:signed|unsigned|binary|bit|word|float|double|16|32|64)(?:[- ](?:bit|word|integer|binary|float|16|32|64)){0,4}\Z", re.I)
 _MEASUREMENT = re.compile(r"[+-]?\d+(?:\.\d+)?\s*(?:V|A|Hz|kHz|MHz|ms|us|s|mm|rpm)(?:\s+(?:AC|DC))?\Z", re.I)
 
+# Formal literal spellings, not a PLC compiler/admission rule. Keep # confined
+# to recognized bases/units instead of widening the generic technical token.
+_BASED_LITERAL = re.compile(r'(?:2#[01]+(?:_[01]+)*|8#[0-7]+(?:_[0-7]+)*|16#[0-9A-Fa-f]+(?:_[0-9A-Fa-f]+)*)\Z')
+_TIME_LITERAL = re.compile(r'T#[+-]?[0-9]+(?:\.[0-9]+)?(?:ms|s|m|h|d)\Z', re.I)
+
+
+def _schema_technical_string(value, path):
+    # Human-readable spellings are admitted only at their explicit technical
+    # schema slots. Free prose elsewhere must still withhold the whole fact.
+    if path == ('target_product',):
+        return value == 'GX Works2'
+    if path == ('constant_input_formal_classes',):
+        return value == 'VAR_INPUT CONSTANT'
+    if path == ('block_open',):
+        return value == '(*'
+    if path == ('block_close',):
+        return value == '*)'
+    if path == ('examples', 'string'):
+        # Literal examples only: matched quotes, no control characters, physical
+        # newlines or path/escape syntax. More dialect escapes need own review.
+        if len(value) < 2 or value[0] not in {"'", '"'} or value[-1] != value[0]:
+            return False
+        quote, body = value[0], value[1:-1]
+        if any(ord(char) < 32 or 127 <= ord(char) <= 159 or char in {chr(92), '/', '\u2028', '\u2029'} for char in body):
+            return False
+        return quote not in body.replace(quote + quote, '')
+    return False
+
 
 class UnresolvedExpression(ValueError):
     pass
 
 
-def typed_value(value):
+def typed_value(value, *, _path=()):
     """Keep formal values exactly; reject unclassified linguistic conditions.
 
     A rejected child rejects the complete value. Never partially strip a
@@ -50,16 +78,18 @@ def typed_value(value):
     if isinstance(value, str):
         if (not value or _TOKEN.fullmatch(value) or _OPERATOR_FORM.fullmatch(value)
                 or _TYPE_LABEL.fullmatch(value) or _MEASUREMENT.fullmatch(value)
+                or _BASED_LITERAL.fullmatch(value) or _TIME_LITERAL.fullmatch(value)
+                or _schema_technical_string(value, _path)
                 or re.fullmatch(r'-[A-Za-z0-9][A-Za-z0-9_-]*', value)):
             return value
         raise UnresolvedExpression("unclassified_expression")
     if isinstance(value, list):
-        return [typed_value(item) for item in value]
+        return [typed_value(item, _path=_path) for item in value]
     if isinstance(value, dict):
         if any(not isinstance(key, str) or not re.fullmatch(r'[A-Za-z0-9_$.:/+*<>=!(),\[\]{}|&%~?\-]+', key)
                for key in value if key not in PRESENTATION_KEYS):
             raise UnresolvedExpression('unclassified_field_name')
-        return {key: typed_value(item) for key, item in value.items() if key not in PRESENTATION_KEYS}
+        return {key: typed_value(item, _path=(*_path, key)) for key, item in value.items() if key not in PRESENTATION_KEYS}
     raise UnresolvedExpression("unsupported_value")
 
 

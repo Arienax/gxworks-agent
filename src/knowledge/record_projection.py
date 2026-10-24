@@ -83,6 +83,12 @@ def chunk_result(row, meta, path, plc_model, task_type, connection=None):
             from knowledge.runtime_fact_publication import hydrate_owner_packet
             result["text"] = json.dumps(hydrate_owner_packet(connection, authored["runtime_owner"]),
                                         ensure_ascii=False, separators=(",", ":"))
+        if authored.get("runtime_language") is not None:
+            if connection is None:
+                return None
+            from knowledge.runtime_fact_publication import hydrate_language_packet
+            result["text"] = json.dumps(hydrate_language_packet(connection, authored["runtime_language"], authored["runtime_language_model"]),
+                                        ensure_ascii=False, separators=(",", ":"))
     return result
 
 

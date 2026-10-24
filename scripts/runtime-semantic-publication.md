@@ -6,9 +6,14 @@ full-corpus builder, and must not replace a mixed instruction/device/error corpu
 No upload or publication is performed. Runtime acceptance remains a separate gate.
 Unknown root fields and unknown language-feature metadata fail closed. Exact
 ST/FBD language features reuse strict fact projection, preserve their own scope
-and dependency graph, and stay inline in the definition bundle without
-instruction aggregation. Language facts are not indexed in the instruction-only
-SQLite. Source withdrawal and dependent withholding are recorded privately.
+and dependency graph without instruction aggregation. The owner-store SQLite
+indexes language features separately as `kind=language`, supports exact CPU-scoped
+target/alias selection, and hydrates referenced instruction owners when selected.
+Feature aliases, declared models, reference parameters and reference model bindings
+are preserved; an absent `language` field stays absent rather than being guessed.
+Source locators are projected under the existing publication policy, with private
+lineage and withholding evidence retained. Source withdrawal and dependent
+withholding are recorded privately.
 
 ```sh
 python scripts/build_runtime_projection.py \
@@ -134,3 +139,21 @@ per-owner input/output hashes. Without `--project-raw`, only already-authored,
 reviewed input is accepted for exact transport migration. Final audit and the
 conventional manifest are produced only after every owner validates. A candidate
 is not a replacement for the missing original mixed-corpus publication pipeline.
+
+## Language preflight and failed attempts
+
+The streaming owner-store converter validates and projects bounded language
+metadata before creating the SQLite database or per-owner audit ledger. Unknown
+metadata remains an error; compatibility does not relax CPU, dependency, review
+status or private-prose restrictions. The same projected language representation
+is used for writing and loading, so validation is not an independent permissive
+shortcut.
+
+In explicit `--project-raw` mode, a failed attempt writes a private
+`projection-failure.json` when the separate audit directory permits it. It records
+the phase, progress and error without overwriting an existing failure report.
+Existing partial artifacts are retained, not deleted or silently enabled; the
+conventional manifest is published only after the offline audit and receipts pass.
+Retry only with fresh output and private-audit directories after fixing the error.
+The original input stays unchanged. Passing a small production-language fixture
+does not establish acceptance of the full 87,754-owner package.
