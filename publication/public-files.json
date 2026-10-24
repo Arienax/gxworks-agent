@@ -29,6 +29,7 @@
     "checks/test_pwm_source_pipeline.py",
     "checks/test_pwm_workflow.py",
     "checks/test_storage_migration.py",
+    "checks/test_structured_fact_merge_efficiency.py",
     "docs/fact-task-projection.md",
     "docs/pwm-source-contract.md",
     "gxworks-agent-mcp",
