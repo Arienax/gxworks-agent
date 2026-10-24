@@ -101,8 +101,19 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None, langu
     if re.search(r'\bST\b|结构化文本', str(query), re.I):
         requested_languages.add('st')
     st_context = 'st' in requested_languages
-    for feature in getattr(DEFAULT_INSTRUCTION_REGISTRY, 'language_facts', ()):
-        language = feature.get('language', feature['target'].partition('.')[0].lower())
+    applicable_features = {}
+    feature_languages = {}
+    for original in getattr(DEFAULT_INSTRUCTION_REGISTRY, 'language_facts', ()):
+        feature = DEFAULT_INSTRUCTION_REGISTRY.language_feature(original['target'], cpu=plc_model)
+        if feature is None:
+            continue
+        languages = ({feature['language']} if 'language' in feature else
+                     {item for fact in feature.get('facts', []) for item in fact.get('scope', {}).get('languages', [])})
+        if len(languages) != 1:
+            continue
+        language = next(iter(languages))
+        applicable_features[feature['target']] = feature
+        feature_languages[feature['target']] = language
         if requested_languages and language not in requested_languages:
             continue
         for alias in feature.get('aliases', []):
@@ -117,10 +128,10 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None, langu
                 break
     language_features.sort(key=lambda target: feature_scores[target], reverse=True)
     remaining_by_language, selected_features = {}, []
-    feature_by_target = {feature['target']: feature for feature in getattr(DEFAULT_INSTRUCTION_REGISTRY, 'language_facts', ())}
+    feature_by_target = applicable_features
     for target in language_features:
         feature = feature_by_target[target]
-        language = feature.get('language', target.partition('.')[0].lower())
+        language = feature_languages[target]
         remaining = remaining_by_language.get(language, str(query))
         aliases = feature['aliases']
         if not any(alias in remaining if alias == '**' else alias_occurs(remaining, alias) for alias in aliases):

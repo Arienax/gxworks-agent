@@ -423,6 +423,23 @@ def _validated_definition_documents(rows):
     return result
 
 
+def _validated_language_features(rows):
+    """Validate reviewed feature structure without synthesizing owner metadata."""
+    from knowledge.runtime_fact_publication import validate_language_feature
+    if not isinstance(rows, list):
+        raise ValueError("Language features must be an array")
+    result = {}
+    for feature in rows:
+        validate_language_feature(feature, published=False)
+        target = feature['target']
+        if target in result:
+            raise ValueError("Duplicate language feature identity")
+        for fact in feature.get('facts', []):
+            InstructionFactGroup.from_mapping(fact)
+        result[target] = copy.deepcopy(feature)
+    return result
+
+
 class _DefinitionOwnerView(Mapping):
     """Identity/header view with detached, on-demand technical contents."""
     __slots__ = ("_header", "_load")
@@ -763,19 +780,7 @@ class InstructionRegistry:
                 inventory.append(_DefinitionOwnerView(header, load_owner))
             else:
                 inventory.append(copy.deepcopy(dict(entry)))
-        features = {}
-        for feature in payload.get('language_facts', []):
-            target = feature.get('target')
-            if not isinstance(target, str) or not target or target in features:
-                raise ValueError('Invalid or duplicate language feature')
-            language = feature.get('language', target.partition('.')[0].lower())
-            if language not in {'st', 'fbd'} or not target.startswith(language.upper() + '.'):
-                raise ValueError('Language feature needs a supported, matching language identity')
-            for fact in feature.get('facts', []):
-                group = InstructionFactGroup.from_mapping(fact)
-                if group.scope.get('forms') != [target] or group.scope.get('languages') != [language]:
-                    raise ValueError('Language fact needs its exact feature/language scope')
-            features[target] = {**copy.deepcopy(feature), 'language': language}
+        features = _validated_language_features(payload.get('language_facts', []))
         documents = _validated_definition_documents(payload.get("documents", []))
         after = path.stat()
         if (before.st_mtime_ns, before.st_size) != (after.st_mtime_ns, after.st_size):
@@ -810,18 +815,7 @@ class InstructionRegistry:
                 view = _DefinitionOwnerView(header, lambda key=key: store.load_owner(key))
                 owners[key] = view
                 inventory.append(view)
-            features = {}
-            for feature in metadata.get("language_facts", []):
-                target = feature.get("target")
-                language = feature.get("language", str(target).partition('.')[0].lower())
-                if (not isinstance(target, str) or not target or target in features
-                        or language not in {"st", "fbd"} or not target.startswith(language.upper() + '.')):
-                    raise ValueError("Invalid language feature identity")
-                for raw in feature.get("facts", []):
-                    fact = InstructionFactGroup.from_mapping(raw)
-                    if fact.scope.get("forms") != [target] or fact.scope.get("languages") != [language]:
-                        raise ValueError("Language fact needs its exact feature/language scope")
-                features[target] = {**copy.deepcopy(feature), "language": language}
+            features = _validated_language_features(metadata.get('language_facts', []))
             documents = _validated_definition_documents(metadata.get("documents", []))
             if not store.current():
                 raise ValueError("Fact definitions changed while loading")
@@ -852,14 +846,34 @@ class InstructionRegistry:
         except OSError:
             return False
 
-    def language_feature(self, target, *, language=None):
-        """Resolve one language-owned feature without crossing dialect scopes."""
+    def language_feature(self, target, *, language=None, cpu=None):
+        """Inspect scoped language knowledge; never admit a related instruction.
+
+        Missing owner language stays missing. Explicit language filtering uses
+        the validated fact scopes, not a newly synthesized metadata field.
+        CPU filtering is literal and cannot widen a feature, fact or reference.
+        """
         feature = getattr(self, '_language_features', {}).get(str(target).upper())
-        if feature is not None and language is not None:
-            owner = feature.get('language', feature['target'].partition('.')[0].lower())
-            if owner != str(language).lower():
+        if feature is None:
+            return None
+        if language is not None:
+            languages = ({feature['language']} if 'language' in feature else
+                         {item for fact in feature.get('facts', [])
+                          for item in fact.get('scope', {}).get('languages', [])})
+            if str(language).lower() not in languages:
                 return None
-        return copy.deepcopy(feature) if feature is not None else None
+        result = copy.deepcopy(feature)
+        if cpu is not None:
+            model = str(cpu).strip().upper()
+            upper = set(feature.get('models', [])) if 'models' in feature else {
+                item for fact in feature.get('facts', []) for item in fact.get('scope', {}).get('models', [])}
+            if model not in upper:
+                return None
+            result['facts'] = [fact for fact in result.get('facts', [])
+                               if model in fact.get('scope', {}).get('models', [])]
+            if 'references' in result:
+                result['references'] = [ref for ref in result['references'] if model in ref.get('models', [])]
+        return result
 
     def resolve_fact_form(self, mnemonic, *, cpu=None):
         """Identify a catalogue owner without admitting a callable instruction."""

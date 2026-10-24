@@ -46,9 +46,11 @@ def _ledger_line(stream, value):
     stream.write('\n')
 
 
-def build_owner_store(input_path, output_dir, *, max_unit_bytes=64 * 1024 * 1024,
-                      project_raw=False, private_audit_dir=None):
+def _build_owner_store(input_path, output_dir, *, max_unit_bytes=64 * 1024 * 1024,
+                       project_raw=False, private_audit_dir=None, progress=None):
     started = time.perf_counter()
+    progress = progress if progress is not None else {}
+    progress['phase'] = 'input_inspection'
     input_path, output_dir = Path(input_path).resolve(), Path(output_dir).resolve()
     before = _identity(input_path)
     digest = hashlib.sha256()
@@ -73,8 +75,25 @@ def build_owner_store(input_path, output_dir, *, max_unit_bytes=64 * 1024 * 1024
     if not project_raw and set(metadata) - allowed:
         raise ValueError('Unknown root metadata needs a reviewed preservation policy')
     features = metadata.pop('language_facts', [])
+    progress.update(phase='language_preflight', input_sha256=digest.hexdigest())
     if not isinstance(features, list):
         raise ValueError('language_facts must be a bounded list')
+    progress['input_language_features'] = len(features)
+    # Root metadata is already bounded. Validate/project it before opening a
+    # database or owner ledger, and retain the result rather than projecting a
+    # second time after expensive owner traversal.
+    published_languages, language_rejections = project_language_features(features)
+    if not project_raw and (language_rejections or _object_digest(published_languages) != _object_digest(features)):
+        raise ValueError('Language features need prior strict review; use explicit raw projection with private evidence')
+    language_records = []
+    if project_raw:
+        for index, feature in enumerate(features):
+            target = feature.get('target')
+            language_records.append({'kind': 'language_projection', 'feature_index': index,
+                'original_feature_sha256': _object_digest(feature),
+                'projected_feature_sha256': [_object_digest(value) for value in published_languages if value.get('target') == target],
+                'withheld': [value for value in language_rejections if value.get('target') == target]})
+    progress['phase'] = 'output_preparation'
     generated_version = not bool(metadata.get('fact_bundle_version'))
     if generated_version:
         metadata['fact_bundle_version'] = 'owner-store-migration:' + digest.hexdigest()
@@ -86,11 +105,15 @@ def build_owner_store(input_path, output_dir, *, max_unit_bytes=64 * 1024 * 1024
         private_dir.mkdir(parents=True, exist_ok=True)
         ledger_path = private_dir / 'projection-receipts.jsonl.gz'
         private_summary = private_dir / 'projection-summary.json'
-        if ledger_path.exists() or private_summary.exists():
+        if ledger_path.exists() or private_summary.exists() or (private_dir / 'projection-failure.json').exists():
             raise ValueError('Private evidence already exists; choose new audit paths')
         import knowledge.fact_corpus as projector
         projector_sha = hashlib.sha256(Path(projector.__file__).read_bytes()).hexdigest()
-        version = hashlib.sha256((digest.hexdigest() + projector_sha).encode()).hexdigest()
+        import knowledge.runtime_fact_publication as language_projector
+        language_projector_sha = hashlib.sha256(Path(language_projector.__file__).read_bytes()).hexdigest()
+        language_projection_sha = _object_digest(published_languages)
+        version = hashlib.sha256((digest.hexdigest() + projector_sha + language_projector_sha
+                                  + language_projection_sha).encode()).hexdigest()
         metadata = {'schema_version': 1, 'method': 'instruction-material-compiler-v1',
             'corpus_kind': 'authored_plc_facts_v1', 'fact_bundle_version': 'strict-owner-projection:' + version}
         generated_version = True
@@ -105,13 +128,21 @@ def build_owner_store(input_path, output_dir, *, max_unit_bytes=64 * 1024 * 1024
     writer = OwnerStoreWriter(database, metadata, field_pooling=True)
     ledger = None
     withheld_reasons = Counter()
-    raw_facts = projected_facts = withheld_facts = changed_owners = language_withheld = published_features = 0
+    raw_facts = projected_facts = withheld_facts = changed_owners = published_features = 0
+    language_withheld = sum(bool(item.get('withheld')) for item in language_rejections)
+    progress['owners_processed'] = 0
     try:
         if project_raw:
             ledger = gzip.open(ledger_path, 'xt', encoding='utf-8')
             _ledger_line(ledger, {'kind': 'input_reference', 'input_path': str(input_path),
                 'input_sha256': digest.hexdigest(), 'must_retain_original_input': True,
-                'projector_sha256': projector_sha, 'original_root_metadata': dict(inspected)})
+                'projector_sha256': projector_sha,
+                'language_projector_sha256': language_projector_sha,
+                'language_projection_sha256': language_projection_sha,
+                'original_root_metadata': dict(inspected)})
+            for record in language_records:
+                _ledger_line(ledger, record)
+        progress['phase'] = 'owner_projection'
         for entry in iter_definition_owners(input_path, inspected, max_unit_bytes=max_unit_bytes):
             raw_facts += len(entry.get('facts', []))
             if project_raw:
@@ -130,31 +161,22 @@ def build_owner_store(input_path, output_dir, *, max_unit_bytes=64 * 1024 * 1024
                     'projected_fact_count': len(entry.get('facts', [])), 'withheld': withheld})
             writer.add_entry(entry)
             projected_facts += len(entry.get('facts', []))
-        for index, feature in enumerate(features):
-            if project_raw:
-                published, withheld = project_language_features([feature])
-                language_withheld += len(withheld)
-                _ledger_line(ledger, {'kind': 'language_projection', 'feature_index': index,
-                    'original_feature_sha256': _object_digest(feature),
-                    'projected_feature_sha256': [_object_digest(value) for value in published], 'withheld': withheld})
-            else:
-                published = [feature]
-            for value in published:
-                writer.add_language_feature(value)
-                published_features += 1
+            progress['owners_processed'] += 1
+        progress['phase'] = 'language_write'
+        for feature in published_languages:
+            writer.add_language_feature(feature)
+            published_features += 1
+        progress['phase'] = 'finalize'
         transport = writer.finalize(pending_manifest)
     finally:
         writer.close()
         if ledger is not None:
             ledger.close()
+    progress['phase'] = 'post_build_audit'
     audit = audit_owner_store(pending_manifest, max_unit_bytes=max_unit_bytes, owner_breakdown=True)
     if audit['counts']['owners'] != transport['sqlite']['owners']:
         raise ValueError('Post-build owner audit count differs')
     _write_json(audit_path, {'audit_schema': 1, 'owner_store': audit})
-    # Conventional local manifest appears only after every owner passed audit.
-    with manifest.open('xb') as target:
-        target.write(pending_manifest.read_bytes())
-    pending_manifest.unlink()
     try:
         import resource
         peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
@@ -185,14 +207,50 @@ def build_owner_store(input_path, output_dir, *, max_unit_bytes=64 * 1024 * 1024
             'One stored family, bounded metadata and one expanded owner are retained; Python object overhead is not a hard byte cap.',
             'The post-build audit scans every owner offline; it is not a lazy-startup benchmark.',
             'Physical storage expansion and full-corpus publication acceptance need separate validation.']}
+    progress['phase'] = 'publication_receipts'
     _write_json(receipt_path, receipt)
     if project_raw:
         _write_json(private_summary, {'input_path': str(input_path), 'input_sha256': digest.hexdigest(),
             'must_retain_original_input': True, 'projection_ledger': ledger_path.name,
-            'projector_sha256': projector_sha, 'withheld_fact_instances': withheld_facts,
+            'projector_sha256': projector_sha, 'language_projector_sha256': language_projector_sha,
+            'language_projection_sha256': language_projection_sha,
+            'withheld_fact_instances': withheld_facts,
             'language_withheld_records': language_withheld,
             'note': 'Original objects remain in the referenced input; only admitted formal projection is equivalent to this store.'})
+    # Publish the conventional activation name only after all owners, audit and
+    # receipts succeeded. Failed partial outputs are retained, never enabled.
+    progress['phase'] = 'publish_manifest'
+    with manifest.open('xb') as target:
+        target.write(pending_manifest.read_bytes())
+    pending_manifest.unlink()
     return receipt
+
+
+def build_owner_store(input_path, output_dir, *, max_unit_bytes=64 * 1024 * 1024,
+                      project_raw=False, private_audit_dir=None):
+    """Build a candidate; preserve failures privately without overwriting files."""
+    progress = {'phase': 'input_inspection', 'owners_processed': 0}
+    try:
+        return _build_owner_store(input_path, output_dir, max_unit_bytes=max_unit_bytes,
+            project_raw=project_raw, private_audit_dir=private_audit_dir, progress=progress)
+    except Exception as error:
+        # This is an optional private diagnostic, not a publication receipt.
+        # Never delete failed artifacts, overwrite an earlier failure, or write
+        # private error details into the runtime directory.
+        if project_raw and private_audit_dir:
+            private_dir, output = Path(private_audit_dir).resolve(), Path(output_dir).resolve()
+            if not (private_dir.is_relative_to(output) or output.is_relative_to(private_dir)):
+                try:
+                    private_dir.mkdir(parents=True, exist_ok=True)
+                    _write_json(private_dir / 'projection-failure.json', {
+                        'audit_schema': 1, 'status': 'failed', 'release_accepted': False,
+                        **progress, 'error_type': type(error).__name__, 'error': str(error)[:1000],
+                        'conventional_manifest_present': (output / MANIFEST_NAME).exists(),
+                        'partial_artifacts_retained': True,
+                        'note': 'This attempt failed. Do not enable partial outputs; retain evidence and retry into new output/audit directories.'})
+                except OSError:
+                    pass  # The original failure must not be masked by diagnostics.
+        raise
 
 
 def main():

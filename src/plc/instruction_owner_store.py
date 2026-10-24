@@ -180,7 +180,10 @@ class OwnerDefinitionStore:
             for text, digest in self._db.execute('SELECT payload_json,sha256 FROM runtime_language_features ORDER BY target'):
                 if hashlib.sha256(text.encode()).hexdigest() != digest:
                     raise ValueError('Altered language feature')
-                features.append(json.loads(text))
+                feature = json.loads(text)
+                from knowledge.runtime_fact_publication import validate_language_feature
+                validate_language_feature(feature, published=True)
+                features.append(feature)
             return features
 
     def load_owner(self, key):
