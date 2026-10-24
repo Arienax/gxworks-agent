@@ -4,6 +4,7 @@ __pycache__/
 .venv/
 .venv-mcp/
 .runtime/
+.workbuddy/
 node_modules/
 web/node_modules/
 web/dist/
