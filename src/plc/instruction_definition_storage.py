@@ -127,6 +127,9 @@ def expand_definitions(payload):
     if not isinstance(payload, Mapping):
         raise ValueError("Definition document must be an object")
     if payload.get("schema_version") == 1:
+        if payload.get("source_serialization"):
+            from knowledge.runtime_fact_projection import expand_runtime_sources
+            return expand_runtime_sources(payload)
         return copy.deepcopy(payload)
     if (payload.get("schema_version") != 2 or payload.get("serialization") != "common+form_diff+model_diff-v1"
             or payload.get("verification_inheritance") is not False):

@@ -79,6 +79,12 @@ def public_source_ref(source):
 
 def source_reference(source):
     result = {key: copy.deepcopy(value) for key, value in source.items() if key in SOURCE_KEYS}
+    if "source_ref" in source:
+        reference = source["source_ref"]
+        if (not isinstance(reference, str) or not _TOKEN.fullmatch(reference)
+                or reference != public_source_ref(source)):
+            raise UnresolvedExpression("invalid_public_source_reference")
+        result["source_ref"] = reference
     identity = result.get("id")
     if identity is not None and BUILD_LOCAL_ID.fullmatch(str(identity).strip()):
         # A bare number is a row id of some development index; publish an identity
@@ -281,7 +287,7 @@ def resolve(kind, targets, *, plc_model, task_type="analysis", connection=_DEFAU
             "ORDER BY CASE WHEN f.id LIKE 'definition:%' OR f.id LIKE 'function:definition:%' THEN 0 ELSE 1 END,f.id",
             (kind, *names, *members)).fetchall()
         for row in rows:
-            projected = chunk_result(row, {"corpus_kind": CORPUS_KIND}, index_access.index_path(), plc_model, task_type)
+            projected = chunk_result(row, {"corpus_kind": CORPUS_KIND}, index_access.index_path(), plc_model, task_type, connection=connection)
             if projected is not None:
                 projected.update(json.loads(row["payload_json"]).get("metadata", {}))
                 result.append(projected)

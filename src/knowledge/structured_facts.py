@@ -976,7 +976,7 @@ def _chunk_results(chunk_ids, *, plc_model, task_type, fact_kind, fact_target, a
     results = []
     for chunk_id in ordered_ids:
         row = rows.get(("id", str(chunk_id)))
-        result = chunk_result(row, meta, path, plc_model, task_type)
+        result = chunk_result(row, meta, path, plc_model, task_type, connection=connection)
         if result is None:
             continue
         original_text = str(index_access.row_value(row, TEXT_COLUMNS, result.get("text") or ""))
