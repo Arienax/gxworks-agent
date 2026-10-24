@@ -482,6 +482,7 @@ def _normalize_error(error: Exception) -> ModelProviderError:
         "protocol": "模型未返回有效候选结果，请重试或更换模型。",
         "image_not_supported": "当前模型不支持图片输入，请切换到带视觉能力的模型。",
         "image_payload_too_large": "图片编码后的请求体过大，请减少图片数量或压缩图片。",
+        "context_budget_exceeded": "最终模型请求超过输入预算；请缩小本次范围或选择更大窗口的模型。内容未发送或截断。",
         "provider_error": "模型服务调用失败，请检查配置或稍后重试。",
     }
     if code not in messages:
@@ -682,6 +683,13 @@ class OpenAICompatibleProvider:
                     "当前模型或参数组合不支持图片输入。",
                     code="image_not_supported",
                 )
+            from model_runtime.context_budget import final_request_budget
+            report = final_request_budget({**self.profile, 'capabilityContract': runtime.contract.to_dict()}, resolved)
+            if report['fits'] is False:
+                raise ModelProviderError(
+                    f"最终模型请求超过输入预算：{report['estimated_input_tokens']} > "
+                    f"{report['usable_input_tokens']} 估算 token；未发送或截断内容。",
+                    code='context_budget_exceeded')
             if on_resolved is not None:
                 from model_runtime.usage import request_summary
                 on_resolved(request_summary(runtime, effective, options=resolved,

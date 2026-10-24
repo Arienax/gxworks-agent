@@ -1,6 +1,6 @@
 # 来源与维护
 
-本 Skill 基于 `Arienax/gxworks-agent` 公开仓库（`main@e5f6ca03455c97e0feb7328a21493dcdbf7fa620`，2026-10-23）整理，采用 Agent Skills 的 `SKILL.md` + `references/` 目录结构。
+本 Skill 原始公开来源为 `Arienax/gxworks-agent` 的 `main@e5f6ca03455c97e0feb7328a21493dcdbf7fa620`。2026-10-24 依据本地工作树补充 FBD 规则、上下文和 MCP 联合提交合同；本次修改尚未发布，不将工作树内容归于旧提交。
 
 ## 对应源码模块
 
@@ -8,6 +8,12 @@
 | --- | --- |
 | `src/agent_runtime/tool_policy.py` | 共享工具名、来源工具集合、发现与原生检查分类。 |
 | `src/agent_runtime/tool_catalog.py` | 生成、编辑、各语言工具与原生工程操作的描述及 schema 入口。 |
+| `src/agent_runtime/generation_tools.py` | FBD 生成合同：新图形走单图候选，已保存源码提供联合事务和单图备选。 |
+| `src/application/fbd_context.py` | 必需语言/地址规则、任务目录、完整接口与关联源码、预算及实际支持路径。 |
+| `src/application/gxw_files.py` | ST 正文/接口、FBD 调用者和声明在同一离线事务内提交。 |
+| `src/plc/fbd_semantics.py`、`src/gxw/fbd_validation.py` | FBD 字面量、端口类型、连线与写入前静态检查。 |
+| `src/plc/device_profiles.py`、`resources/plc_models.json` | CPU 地址编号、默认分配、配置条件及独立原生访问边界。 |
+| `src/knowledge/structured_facts.py`、`retriever.py` | 当前型号事实和精确地址规则进入最终模型上下文。 |
 | `src/agent_runtime/native_tools.py` | FBD 本次 `native_save` 参数校验、用户库导入与 ST 后台 `edit_*` 路由。 |
 | `src/application/fbd.py` | FBD 候选保存策略、未变更时的保存处理与实际保存结果。 |
 | `src/gxw/library_transfer.py` | 用户库导入后的目标项目源码、任务、调用者及声明保护。 |

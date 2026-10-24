@@ -47,8 +47,71 @@ def render_wire_messages(system_prompt, history=()):
         role = raw.get("role")
         if role not in {"user", "assistant"}:
             continue
-        messages.append({"role": role, "content": str(raw.get("content", ""))})
+        content = str(raw.get('content', ''))
+        if role == 'user':
+            try:
+                payload = json.loads(content)
+            except (TypeError, ValueError):
+                pass
+            else:
+                if isinstance(payload, dict) and payload.get('context_schema_version') == 3:
+                    content = structured_context_text(payload)
+        messages.append({"role": role, "content": content})
     return messages
+
+
+def structured_context_text(payload):
+    """Keep one complete copy of repeated engineering objects on the wire."""
+    seen = {}
+    def walk(value, path='#'):
+        if isinstance(value, (Mapping, list)):
+            marker = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+            if len(marker.encode('utf-8')) > 256:
+                if marker in seen:
+                    return {'$ref': seen[marker], '$context_reference': True}
+                seen[marker] = path
+        if _schema_path(path):
+            # JSON Schema owns its own reference root. Share the whole schema,
+            # never turn its internal nodes into references to the context.
+            return copy.deepcopy(value)
+        if isinstance(value, Mapping):
+            return {key: walk(item, path + '/' + str(key).replace('~', '~0').replace('/', '~1'))
+                    for key, item in value.items()}
+        if isinstance(value, list):
+            return [walk(item, path + '/' + str(i)) for i, item in enumerate(value)]
+        return copy.deepcopy(value)
+    return json.dumps(walk(payload), ensure_ascii=False, separators=(',', ':'))
+
+
+def _schema_path(path):
+    key = str(path).rsplit('/', 1)[-1]
+    return key == 'schema' or key.endswith('_schema')
+
+
+def expand_context_document(document):
+    """Resolve local JSON pointers for deterministic application consumers."""
+    def resolve(value, visiting=frozenset(), path='#'):
+        if isinstance(value, Mapping):
+            if (set(value) == {'$ref', '$context_reference'} and value['$context_reference'] is True
+                    and str(value['$ref']).startswith('#/')):
+                pointer = value['$ref']
+                if pointer in visiting:
+                    raise ValueError('cyclic context reference')
+                target = document
+                for part in pointer[2:].split('/'):
+                    key = part.replace('~1', '/').replace('~0', '~')
+                    target = target[int(key)] if isinstance(target, list) else target[key]
+                if _schema_path(path) or _schema_path(pointer):
+                    return copy.deepcopy(target)
+                return resolve(target, visiting | {pointer}, pointer)
+            if _schema_path(path):
+                return copy.deepcopy(value)
+            return {key: resolve(item, visiting, path + '/' + str(key).replace('~', '~0').replace('/', '~1'))
+                    for key, item in value.items()}
+        if isinstance(value, list):
+            return [resolve(item, visiting, path + '/' + str(index)) for index, item in enumerate(value)]
+        return copy.deepcopy(value)
+    return resolve(document)
 
 
 def normalize_wire_packet(value):

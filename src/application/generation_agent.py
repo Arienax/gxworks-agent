@@ -104,44 +104,34 @@ def _compact_wire_renderer(plc_model, *, example_block=None, direct=False):
             render_context_checkpoint, render_wire_messages,
         )
         from plc.specification.provenance import SOURCE_PRECEDENCE
-        from shared.model_context import technical_value, technical_context_text
+        from shared.model_context import technical_value, technical_context_text, technical_knowledge_coverage
         core_spec = runtime_spec
         runtime_spec = technical_value(runtime_spec)
+        coverage = technical_knowledge_coverage(evidence_text)
         evidence_text = technical_context_text(evidence_text)
 
-        confirmed = json.dumps(
-            runtime_spec, ensure_ascii=False, separators=(",", ":"), sort_keys=True
-        )
-        # Prefix caches reuse tokens before the first differing token. Keep
-        # shared policy and unchanged technical evidence before project values;
-        # two specs with the same evidence then share that whole prefix. This
-        # changes only rendering order, not authority, selection or budgeting.
+        from shared.model_context import technical_context_units
+        # Rules belong in the system message. Project facts and knowledge are
+        # structured once in the user message measured by ContextCompiler.
         system_prompt = (
             (_DIRECT_PROTOCOL if direct else _COMPACT_PROTOCOL)
             + (_DIRECT_SOURCE_PRECEDENCE if direct else SOURCE_PRECEDENCE)
-            + f"\n# Selected PLC\n{model}\n"
-            + compact_capability_prompt(model, runtime_spec)
-            + str(evidence_text or "")
-            + examples.text
-            + ("\n# User facts (no generated confirmation specification)\n" if direct else "\n# Confirmed project specification\n")
-            + confirmed
-            + operation_intent_prompt(core_spec, target_model=model)
-            + construction_prompt({**core_spec, 'plc_model':model}, delivery=_construction_delivery())
-            + render_context_checkpoint(context_checkpoint)
-            + generation_execution_prompt(
-                core_spec,
-                evidence_text=evidence_text,
-                task_type="generate",
-                plc_model=model,
-                raw_request=direct,
-            )
-        )
-        return {
-            "messages": render_wire_messages(
-                system_prompt,
-                [{"role": "user", "content": generation_request}],
-            )
+            + generation_execution_prompt(core_spec, evidence_text=evidence_text,
+                task_type="generate", plc_model=model, raw_request=direct))
+        payload = {
+            'context_schema_version': 3, 'plc_model': model,
+            'request': generation_request, 'confirmed_spec': runtime_spec,
+            'knowledge': technical_context_units(evidence_text), 'knowledge_coverage': coverage,
+            'output_schema': direct_response_schema() if direct else _compact_response_schema(),
+            'capability_constraints': compact_capability_prompt(model, runtime_spec),
+            'examples': examples.text,
+            'operation_bindings': operation_intent_prompt(core_spec, target_model=model),
+            'construction_bindings': construction_prompt(
+                {**core_spec, 'plc_model': model}, delivery=_construction_delivery()),
+            'historical_context': render_context_checkpoint(context_checkpoint),
         }
+        return {'messages': render_wire_messages(system_prompt,
+            [{'role': 'user', 'content': json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}])}
 
     return render
 

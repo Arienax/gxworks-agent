@@ -36,9 +36,14 @@ def require_fbd_generation_support(plc_model):
 
 @lru_cache(maxsize=1)
 def _templates():
+    from .project_metadata import require_gui_project_entries
     with ZipFile(BytesIO(lzma.decompress(template_bytes('blank-fbd-projects.zip.xz')))) as archive:
         manifest = json.loads(archive.read('manifest.json'))
-        return {row['cpu']: (row, archive.read(row['file'])) for row in manifest['models']}
+        templates = {row['cpu']: (row, archive.read(row['file'])) for row in manifest['models']}
+    for cpu, (_, raw) in templates.items():
+        if cpu not in _UNSUPPORTED_FBD_GENERATION:
+            require_gui_project_entries(raw)
+    return templates
 
 
 def blank_fbd_models():

@@ -49,29 +49,36 @@ _REVIEW_STATES = frozenset({
 
 
 def _technical_facts(groups):
-    """Keep prerequisite meaning while removing backend fact identities."""
+    """Deliver each full fact once and preserve prerequisite references."""
     by_id = {fact['id']: fact for fact in groups if fact.get('id')}
+    local_ids = {identity: 'fact-' + str(index + 1) for index, identity in enumerate(by_id)}
+    referenced = {key for fact in groups for key in fact.get('depends_on', ())}
+    for key in sorted(referenced - set(local_ids)):
+        local_ids[key] = 'fact-' + str(len(local_ids) + 1)
     facts, unresolved, seen = [], [], set()
     for fact in groups:
         dimension = str(fact.get('dimension') or '')
-        if dimension == 'identity.source_model_mark':
-            continue
-        if fact.get('status') in {'unknown', 'conflict', 'not_applicable'}:
-            unresolved.append(dimension)
+        if dimension == 'identity.source_model_mark' and fact.get('id') not in referenced:
             continue
         item = {key: technical_value(fact[key]) for key in
-                ('dimension', 'value', 'scope', 'conditions', 'requires') if key in fact}
+                ('dimension', 'value', 'scope', 'conditions', 'requires', 'note') if key in fact}
+        if fact.get('id'):
+            item['id'] = local_ids[fact['id']]
+        if fact.get('status'):
+            item['knowledge_status'] = fact['status']
+        elif fact.get('knowledge_status'):
+            item['knowledge_status'] = fact['knowledge_status']
+        if fact.get('status') in {'unknown', 'conflict'}:
+            unresolved.append(dimension)
         dependencies = []
         for identity in fact.get('depends_on', ()):
             dependency = by_id.get(identity)
             if dependency is None:
                 unresolved.append('missing_prerequisite')
-                continue
-            value = dependency.get('value', {})
-            dependencies.append({'dimension': dependency.get('dimension'),
-                **{key: technical_value(value[key]) for key in ('phase', 'rule') if key in value}})
+                item.setdefault('missing_prerequisites', []).append(local_ids[identity])
+            dependencies.append(identity)
         if dependencies:
-            item['requires'] = dependencies
+            item['depends_on'] = [local_ids[key] for key in dependencies]
         identity = json.dumps(item, sort_keys=True, ensure_ascii=False)
         if identity not in seen:
             seen.add(identity)
@@ -101,7 +108,7 @@ def technical_value(value):
                 continue
             if key in _DEBUG_FIELDS or str(key).startswith('_'):
                 continue
-            if (key == 'status' or str(key).endswith('_status')) and isinstance(item, str) and item in _REVIEW_STATES:
+            if key != 'knowledge_status' and (key == 'status' or str(key).endswith('_status')) and isinstance(item, str) and item in _REVIEW_STATES:
                 continue
             if key == 'source_qualifications':
                 if item:
@@ -124,6 +131,8 @@ def technical_fact_packet(packet):
     if packet.get('content_origin') == 'original_case' and isinstance(value, Mapping):
         value = {key: value[key] for key in ('requirement', 'models', 'family', 'program') if key in value}
     result['value'] = value
+    if packet.get('status'):
+        result['knowledge_status'] = packet['status']
     if packet.get('gaps'):
         result['unresolved_aspects'] = technical_value(packet['gaps'])
     return result
@@ -132,6 +141,34 @@ def technical_fact_packet(packet):
 def technical_block(value):
     return '[PLC KNOWLEDGE]\n' + json.dumps(technical_value(value), ensure_ascii=False,
         separators=(',', ':'), sort_keys=True) + '\n[/PLC KNOWLEDGE]'
+
+
+def technical_context_units(context):
+    """Structured complete knowledge units, without repeating instruction prose."""
+    units, seen = [], set()
+    for body in re.findall(r'(?s)\[PLC KNOWLEDGE\]\s*(.*?)\s*\[/PLC KNOWLEDGE\]', str(context or '')):
+        value = json.loads(body)
+        marker = json.dumps(value, sort_keys=True, ensure_ascii=False)
+        if marker not in seen:
+            seen.add(marker)
+            units.append(value)
+    if not units and str(context or '').strip():
+        units.append({'text': str(context).strip()})
+    return units
+
+
+def technical_knowledge_coverage(context):
+    """Keep a retrieval failure visible without exposing its local diagnostics."""
+    manifest = getattr(context, 'manifest', {})
+    if isinstance(manifest.get('retrieval_coverage'), Mapping):
+        return copy.deepcopy(manifest['retrieval_coverage'])
+    status = manifest.get('status')
+    if status in {'unavailable', 'failed', 'error'}:
+        return {'status': 'unavailable', 'reason': 'retrieval_failed', 'targets': [],
+                'delivery': 'not_available'}
+    if status == 'excluded':
+        return {'status': 'not_requested', 'reason': manifest.get('reason'), 'targets': []}
+    return None
 
 
 def technical_knowledge_text(record):

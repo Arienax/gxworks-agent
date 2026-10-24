@@ -373,12 +373,7 @@ def check_fact_constraints(groups, values, *, target, plc_model, language=None, 
             return outcome(group, status, 'scope_context_missing' if status == 'unverified' else '')
         visiting.add(identity)
         try:
-            if group.status != 'source_verified' or group.verification != 'source_checked':
-                return outcome(group, 'not_applicable' if group.status == 'not_applicable' else 'unverified',
-                               'source_conflict' if group.status == 'conflict' else 'constraint_not_source_checked')
             unknown = False
-            if any(source.get('conditions') or source.get('applicability') for source in group.sources):
-                return outcome(group, 'unverified', 'source_conditions_require_binding')
             for condition in group.conditions:
                 try:
                     if not _condition(condition, values, context):
@@ -387,6 +382,14 @@ def check_fact_constraints(groups, values, *, target, plc_model, language=None, 
                     unknown = True
             if unknown:
                 return outcome(group, 'unverified', 'condition_not_resolved')
+            # Applicability is distinct from the rule's verification. A
+            # formally excluded SFC/structured overload does not constrain an
+            # ordinary Ladder call; an unresolved condition never excludes it.
+            if group.status != 'source_verified' or group.verification != 'source_checked':
+                return outcome(group, 'not_applicable' if group.status == 'not_applicable' else 'unverified',
+                               'source_conflict' if group.status == 'conflict' else 'constraint_not_source_checked')
+            if any(source.get('conditions') or source.get('applicability') for source in group.sources):
+                return outcome(group, 'unverified', 'source_conditions_require_binding')
             dependencies = [visit(dependency) for dependency in group.depends_on]
             if any(status != 'passed' for status in dependencies):
                 return outcome(group, 'unverified', 'constraint_dependency_unresolved')
@@ -548,8 +551,16 @@ def check_fact_constraints(groups, values, *, target, plc_model, language=None, 
                         okay = False
                 return outcome(group, 'passed' if okay else 'failed', '' if okay else value['rule'])
             if group.dimension == 'constraints.numeric_ranges':
+                ranges = value.get('ranges')
+                if not isinstance(ranges, list) or not ranges or any(
+                        not isinstance(boundary, Mapping)
+                        or type(boundary.get('operand_index')) is not int
+                        or boundary['operand_index'] < 0
+                        or not any(boundary.get(key) is not None for key in ('minimum', 'maximum'))
+                        for boundary in ranges):
+                    return outcome(group, 'unverified', 'numeric_range_operand_binding_missing')
                 unknown = False
-                for boundary in value.get('ranges', []):
+                for boundary in ranges:
                     number = values.get('$' + str(boundary['operand_index']), UNKNOWN)
                     if type(number) is float and not math.isfinite(number):
                         return outcome(group, 'failed', 'non_finite_numeric_value')
@@ -595,20 +606,22 @@ def check_instruction_constraints(opcode, values, *, plc_model, language=None, v
 
 
 def check_language_constraints(target, values, *, plc_model, version=None, context=None,
-                               phase='input', registry=None):
+                               phase='input', registry=None, language='st'):
     if registry is None:
         from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
         registry = DEFAULT_INSTRUCTION_REGISTRY
     target, plc_model = str(target).strip().upper(), str(plc_model).strip().upper()
+    language = str(language).strip().lower()
     members = _cpu_members(plc_model)
     if len(members) > 1:
         return _combined_reports([check_language_constraints(target, values, plc_model=model,
-            version=version, context=context, phase=phase, registry=registry) for model in members], target=target, model=plc_model)
+            version=version, context=context, phase=phase, registry=registry, language=language)
+            for model in members], target=target, model=plc_model)
     if not registry.fact_bundle_current():
         return _stale_report(target)
-    entry = registry.language_feature(target)
+    entry = registry.language_feature(target, language=language)
     if entry is None:
-        return {'status': 'unverified', 'checks': [], 'findings': [{'code': 'ST_RULE_COVERAGE',
+        return {'status': 'unverified', 'checks': [], 'findings': [{'code': language.upper() + '_RULE_COVERAGE',
                 'severity': 'unverified', 'message': 'language_feature_not_defined:' + target}], 'target': target}
     context = {'numeric_engine': 'cpu_manual', **(context or {})}
     values = dict(values)
@@ -624,12 +637,12 @@ def check_language_constraints(target, values, *, plc_model, version=None, conte
             values['EXP_RESULT'] = UNKNOWN
             values['EVALUATED_RESULT'] = UNKNOWN
     report = check_fact_constraints(entry.get('facts', []), values, target=target, plc_model=plc_model,
-                                    language='st', version=version, context=context, phase=phase)
+                                    language=language, version=version, context=context, phase=phase)
     for reference in entry.get('references', []):
         if plc_model not in reference.get('models', [plc_model]):
             continue
         bound = {name.upper(): values.get(source, UNKNOWN) for name, source in reference['parameters'].items()}
-        child = check_instruction_constraints(reference['opcode'], bound, plc_model=plc_model, language='st',
+        child = check_instruction_constraints(reference['opcode'], bound, plc_model=plc_model, language=language,
             version=version, context=context, phase=phase, registry=registry)
         report['checks'].extend(child['checks'])
         report['findings'].extend(child['findings'])
@@ -779,7 +792,8 @@ def inspect_ladder_constraints(ladder, *, plc_model, context=None):
     from plc.ir import lower_rung_instructions
     from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
     reports = []
-    context = {**(context or {}), 'program_accesses': instruction_program_accesses(ladder, plc_model=plc_model)}
+    context = {**(context or {}), 'project_mode': 'native_ladder', 'program_context': 'ladder',
+               'program_accesses': instruction_program_accesses(ladder, plc_model=plc_model)}
     for index, rung in enumerate(ladder.get('rungs', [])):
         for instruction in lower_rung_instructions(rung):
             form = DEFAULT_INSTRUCTION_REGISTRY.resolve_form(instruction['op'], cpu=plc_model)

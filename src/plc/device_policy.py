@@ -40,6 +40,12 @@ def device_address(value: Any, plc_model: str = "FX3U", *, access: Access = "rea
     if parsed is None or (native and (parsed[0] not in native_prefixes or "." in address)):
         raise DevicePolicyError(f"invalid {model} device address {value!r}")
     prefix, index = parsed
+    if native:
+        limits = profile.get('native_device_limits')
+        regions = profile.get('native_device_regions', {}).get(prefix)
+        if (limits is not None and (prefix not in limits or limits[prefix] is not None and index > limits[prefix])
+                or regions and not any(low <= index <= high for low, high in regions)):
+            raise DevicePolicyError(f'{model} {address} is outside the registered native-operation range')
     if access == "feedback" and (not native or prefix not in profile.get("native_feedback_prefixes", [])):
         raise DevicePolicyError("simulated feedback requires a source-scoped native device class",
                                 code="FEEDBACK_DEVICE_NOT_ALLOWED")

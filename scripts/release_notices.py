@@ -11,8 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def stage(package: Path, component: str):
     for name in ('LICENSE', 'LICENSE-SCOPE.md', 'THIRD_PARTY_NOTICES.md',
-                 'README.md', 'README.zh-CN.md', 'README.ja.md', 'CHANGELOG.md',
-                 'CONTRIBUTING.md', 'SECURITY.md'):
+                 'README.md', 'README.zh-CN.md', 'README.ja.md', 'CHANGELOG.md'):
         shutil.copyfile(ROOT / name, package / name)
     if component == 'full':
         assets = package / 'resources/assets'

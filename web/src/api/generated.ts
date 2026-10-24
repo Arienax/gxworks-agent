@@ -1390,7 +1390,7 @@ export interface components {
             /** Content */
             content: string;
             /** Data */
-            data: components["schemas"]["ProgramInfoEnvelope"] | components["schemas"]["NetworkEnvelope"] | components["schemas"]["DiagnosticsEnvelope"] | components["schemas"]["SourceSnapshotEnvelope"] | components["schemas"]["CatalogEnvelope"] | components["schemas"]["GenerationContextEnvelope"] | components["schemas"]["NativeCheckEnvelope"] | components["schemas"]["MetadataToolEnvelope"];
+            data: components["schemas"]["ProgramInfoEnvelope"] | components["schemas"]["NetworkEnvelope"] | components["schemas"]["DiagnosticsEnvelope"] | components["schemas"]["SourceSnapshotEnvelope"] | components["schemas"]["CatalogEnvelope"] | components["schemas"]["GenerationContextEnvelope"] | components["schemas"]["ManualSearchEnvelope"] | components["schemas"]["NativeCheckEnvelope"] | components["schemas"]["MetadataToolEnvelope"];
             /** Execution Job Id */
             execution_job_id?: string | null;
             /** Is Error */
@@ -1510,7 +1510,8 @@ export interface components {
         };
         /** CatalogEnvelope */
         CatalogEnvelope: {
-            data?: components["schemas"]["FBDCatalog"] | null;
+            /** Data */
+            data?: components["schemas"]["PagedReadData"] | components["schemas"]["FBDCatalog"] | null;
             error?: components["schemas"]["NativeToolError"] | null;
             /** Ok */
             ok: boolean;
@@ -2213,6 +2214,42 @@ export interface components {
             };
             /** Workspace Source */
             workspace_source: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** FBDGenerationCaller */
+        FBDGenerationCaller: {
+            parameter_model?: components["schemas"]["FBDParameterModel"] | null;
+            /** Source Name */
+            source_name: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** FBDGenerationSTSource */
+        FBDGenerationSTSource: {
+            /** Declarations */
+            declarations?: components["schemas"]["FBDLabel"][] | null;
+            /** Source Name */
+            source_name: string;
+            /** St Text */
+            st_text?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** FBDGenerationSourceContext */
+        FBDGenerationSourceContext: {
+            /** Declarations */
+            declarations?: {
+                [key: string]: components["schemas"]["FBDLabel"][];
+            } | null;
+            /** Fbd Callers */
+            fbd_callers?: components["schemas"]["FBDGenerationCaller"][] | null;
+            /** St Sources */
+            st_sources?: components["schemas"]["FBDGenerationSTSource"][] | null;
+            /** Structures */
+            structures?: {
+                [key: string]: components["schemas"]["FBDLabel"][];
+            } | null;
         } & {
             [key: string]: components["schemas"]["JsonValue"];
         };
@@ -2978,7 +3015,8 @@ export interface components {
         };
         /** GenerationContextEnvelope */
         GenerationContextEnvelope: {
-            data?: components["schemas"]["GenerationContextToolData"] | null;
+            /** Data */
+            data?: components["schemas"]["PagedReadData"] | components["schemas"]["GenerationContextToolData"] | null;
             error?: components["schemas"]["NativeToolError"] | null;
             /** Ok */
             ok: boolean;
@@ -3029,12 +3067,29 @@ export interface components {
         };
         /** GenerationInput */
         GenerationInput: {
+            /** Call Interface */
+            call_interface?: {
+                [key: string]: components["schemas"]["FBDLabel"][];
+            } | null;
+            /** Declaration Tables */
+            declaration_tables?: {
+                [key: string]: string;
+            } | null;
+            /** Existing Declarations */
+            existing_declarations?: {
+                [key: string]: components["schemas"]["FBDLabel"][];
+            } | null;
             /** Parameter Schema */
             parameter_schema?: {
                 [key: string]: components["schemas"]["JsonValue"];
             } | null;
             /** Previous */
             previous?: components["schemas"]["FBDModel"] | components["schemas"]["FBDParameterModel"] | null;
+            source_context?: components["schemas"]["FBDGenerationSourceContext"] | null;
+            /** Structures */
+            structures?: {
+                [key: string]: components["schemas"]["FBDLabel"][];
+            } | null;
         } & {
             [key: string]: components["schemas"]["JsonValue"];
         };
@@ -3071,24 +3126,42 @@ export interface components {
         };
         /** GenerationOutputContract */
         GenerationOutputContract: {
+            /** Alternatives */
+            alternatives?: components["schemas"]["GenerationOutputContract"][] | null;
+            /** Editable Sources */
+            editable_sources?: string[] | null;
             /** Input Shape */
             input_shape?: string | null;
             /** Model Schema */
             model_schema?: {
                 [key: string]: components["schemas"]["JsonValue"];
             } | null;
+            /** Model Schema Ref */
+            model_schema_ref?: string | null;
             /** Operation */
             operation?: string | null;
+            /** Program */
+            program?: string | null;
             /** Protocol */
             protocol?: string | null;
+            /** Required Fields */
+            required_fields?: string[] | null;
+            /** Requires Any */
+            requires_any?: string[] | null;
+            /** Save Policy */
+            save_policy?: ("draft" | "checked") | null;
             /** Schema */
             schema?: {
                 [key: string]: components["schemas"]["JsonValue"];
             } | null;
+            /** Schema Ref */
+            schema_ref?: string | null;
             /** Schema Version */
             schema_version?: number | null;
             /** Tool */
             tool?: string | null;
+            /** Version Id */
+            version_id?: string | null;
         } & {
             [key: string]: components["schemas"]["JsonValue"];
         };
@@ -3827,6 +3900,20 @@ export interface components {
             project_id: string;
             /** Service Url */
             service_url: string;
+        };
+        /** ManualSearchEnvelope */
+        ManualSearchEnvelope: {
+            data?: components["schemas"]["PagedReadData"] | null;
+            error?: components["schemas"]["NativeToolError"] | null;
+            /** Ok */
+            ok: boolean;
+            /**
+             * Tool
+             * @constant
+             */
+            tool: "search_plc_manual";
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
         };
         /** MetadataToolEnvelope */
         MetadataToolEnvelope: {
@@ -5265,6 +5352,23 @@ export interface components {
         } & {
             [key: string]: components["schemas"]["JsonValue"];
         };
+        /** PagedReadData */
+        PagedReadData: {
+            /**
+             * Context Schema Version
+             * @constant
+             */
+            context_schema_version: 3;
+            delivery: components["schemas"]["ReadDelivery"];
+            /** Document */
+            document: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /** Objects */
+            objects: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+        };
         /** PlanBinding */
         PlanBinding: {
             /** Ir Sha256 */
@@ -6145,6 +6249,48 @@ export interface components {
             status: string;
         } & {
             [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ReadContinuation */
+        ReadContinuation: {
+            /** Arguments */
+            arguments: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /**
+             * Tool
+             * @enum {string}
+             */
+            tool: "search_plc_manual" | "get_generation_context" | "get_fbd_catalog";
+        };
+        /** ReadDelivery */
+        ReadDelivery: {
+            /** Assembly */
+            assembly: string;
+            /** Complete */
+            complete: boolean;
+            /** Coverage */
+            coverage?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Document Id */
+            document_id: string;
+            /** Limits */
+            limits: {
+                [key: string]: number;
+            };
+            next: components["schemas"]["ReadContinuation"] | null;
+            /** Page */
+            page: number;
+            /**
+             * Scope
+             * @constant
+             */
+            scope: "read_sequence";
+            /**
+             * Version
+             * @constant
+             */
+            version: 1;
         };
         /** ReadNetworkData */
         ReadNetworkData: {

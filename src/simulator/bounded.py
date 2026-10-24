@@ -169,6 +169,8 @@ class ScanMachine:
         require_constraints(check_instruction_constraints(op, values, plc_model=self.model,
             language='st' if parameter_values is not None else 'ladder', phase=phase,
             version=self.execution_context.get('software_version'), context={**self.execution_context,
+                'project_mode': 'st' if parameter_values is not None else 'native_ladder',
+                'program_context': 'st' if parameter_values is not None else 'ladder',
                 'hardware': self.execution_context.get('hardware') or self.execution_context.get('hardware_profile', {}),
                 'consume_step': self.execution_budget.charge,
                 'memory_reader': lambda base, offset: _leaf(decimal_region_address(base, offset), self.memory, plc_model=self.model)}))
