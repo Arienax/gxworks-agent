@@ -23,10 +23,10 @@ def default_source(meta, path):
         value = meta.get(key)
         if value is not None and str(value).strip():
             return str(value).strip()
-    return path.stem
+    return path.stem if path is not None else "authored_facts"
 
 
-def chunk_result(row, meta, path, plc_model, task_type):
+def chunk_result(row, meta, path, plc_model, task_type, connection=None):
     if row is None or not row_in_scope(row, plc_model, task_type):
         return None
     text = row_value(row, TEXT_COLUMNS)
@@ -77,6 +77,12 @@ def chunk_result(row, meta, path, plc_model, task_type):
                 or authored.get("content_origin") not in {"authored_fact", "original_case"}):
             return None
         result.update(authored)
+        if authored.get("runtime_owner") is not None:
+            if connection is None:
+                return None
+            from knowledge.runtime_fact_publication import hydrate_owner_packet
+            result["text"] = json.dumps(hydrate_owner_packet(connection, authored["runtime_owner"]),
+                                        ensure_ascii=False, separators=(",", ":"))
     return result
 
 

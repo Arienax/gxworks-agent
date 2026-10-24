@@ -614,17 +614,36 @@ class InstructionRegistry:
         before = path.stat()
         if path.suffix == ".gz":
             import gzip
-            payload = json.loads(gzip.decompress(path.read_bytes()).decode("utf-8"))
+            with gzip.open(path, "rt", encoding="utf-8") as stream:
+                payload = json.load(stream)
         else:
             payload = json.loads(path.read_text(encoding="utf-8"))
         from plc.instruction_definition_storage import expand_definitions
-        payload = expand_definitions(payload)
+        if not isinstance(payload, Mapping) or payload.get("schema_version") != 1:
+            payload = expand_definitions(payload)
+        from knowledge.runtime_fact_projection import SOURCE_SERIALIZATION, VALUE_SERIALIZATION, VerifiedCatalog, resolve_fact_sources
+        pooled = payload.get("source_serialization")
+        if ("source_serialization" in payload or "source_catalog" in payload) and pooled != SOURCE_SERIALIZATION:
+            raise ValueError("Unsupported fact source serialization")
+        if pooled and not isinstance(payload.get("source_catalog"), Mapping):
+            raise ValueError("Invalid fact source catalog")
+        if ("value_catalog" in payload or "value_serialization" in payload) and (
+                not pooled or payload.get("value_serialization") != VALUE_SERIALIZATION
+                or not isinstance(payload.get("value_catalog"), Mapping)):
+            raise ValueError("Unsupported fact value serialization")
         if (not isinstance(payload, Mapping) or payload.get("schema_version") != 1
                 or payload.get("method") != "instruction-material-compiler-v1"
                 or not isinstance(payload.get("entries"), list)):
             raise ValueError("Unsupported compiled instruction definitions")
+        # A load-owned immutable snapshot validates each unique object once.
+        # No mutable input catalog or process-global trust cache is reused.
+        source_catalog = VerifiedCatalog(payload.pop("source_catalog")) if pooled else None
+        value_catalog = VerifiedCatalog(payload.pop("value_catalog")) if pooled and "value_catalog" in payload else None
         pending, inventory, seen = {}, [], set()
         for entry in payload["entries"]:
+            if pooled and isinstance(entry, Mapping):
+                entry = dict(entry, facts=[resolve_fact_sources(f, source_catalog, value_catalog)
+                                          for f in entry.get("facts", [])])
             if not isinstance(entry, Mapping):
                 raise ValueError("Invalid compiled instruction entry")
             opcode, model = entry.get("opcode"), entry.get("target_model")
@@ -635,6 +654,8 @@ class InstructionRegistry:
             if key in seen:
                 raise ValueError("Duplicate compiled instruction owner")
             seen.add(key)
+            if not pooled and any("source_refs" in f or "value_ref" in f for f in entry.get("facts", [])):
+                raise ValueError("Pooled fact references require a declared transport")
             facts = tuple(InstructionFactGroup.from_mapping(f) for f in entry.get("facts", []))
             if any(f.scope.get("models") != [model] or f.scope.get("forms") != [opcode] for f in facts):
                 raise ValueError("Compiled facts must have exact CPU/form scopes")
@@ -643,7 +664,10 @@ class InstructionRegistry:
                    for items in (materials, uninterpreted)):
                 raise ValueError("Invalid compiled source processing receipt")
             form = self.resolve_form(opcode, vendor=vendor, cpu=model)
-            inventory.append(copy.deepcopy(dict(entry)))
+            # Pooled facts were just hydrated into detached, load-private trees.
+            # Retain that owned inventory rather than copying it a second time;
+            # typed contract facts above still own independent mutable values.
+            inventory.append(dict(entry) if pooled else copy.deepcopy(dict(entry)))
             if form is None or not form.spec.supports_cpu(model):
                 continue
             pending[key] = replace(form.spec, definition_facts=facts,

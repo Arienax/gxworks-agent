@@ -619,7 +619,7 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
 
     for fallback_rank, reference in enumerate(metadata_refs):
         row = rows.get((reference["kind"], str(reference["value"])))
-        result = _chunk_result(row, meta, path, plc_model, task_type)
+        result = _chunk_result(row, meta, path, plc_model, task_type, connection=connection)
         merge_candidate(
             result,
             reference["match_type"],
@@ -629,14 +629,14 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
 
     for kind, value, entity, entity_rank in exact_refs:
         row = rows.get((kind, str(value)))
-        result = _chunk_result(row, meta, path, plc_model, task_type)
+        result = _chunk_result(row, meta, path, plc_model, task_type, connection=connection)
         if result is None:
             continue
         merge_candidate(result, "entity", entity, entity_rank)
 
     for kind, value, rank, bm25_score in fts_refs:
         row = rows.get((kind, str(value)))
-        result = _chunk_result(row, meta, path, plc_model, task_type)
+        result = _chunk_result(row, meta, path, plc_model, task_type, connection=connection)
         if result is None:
             continue
         coverage, matched_terms = _fts_match_quality(query, result, bm25_score)
@@ -656,7 +656,7 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
 
     for chunk_id, cosine, rank in dense_refs:
         row = rows.get(("id", str(chunk_id)))
-        result = _chunk_result(row, meta, path, plc_model, task_type)
+        result = _chunk_result(row, meta, path, plc_model, task_type, connection=connection)
         if result is None:
             continue
         merge_candidate(
