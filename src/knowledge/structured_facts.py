@@ -279,14 +279,15 @@ class _FactMergeIndex:
         self.by_id = {fact['id']: fact for fact in facts if fact.get('id')}
         self.by_family = {}
         for identity, fact in self.by_id.items():
-            family = identity.split(':variant:')[0]
-            self.by_family.setdefault(family, []).append(fact)
+            if isinstance(identity, str):
+                family = identity.split(':variant:')[0]
+                self.by_family.setdefault(family, []).append(fact)
         self.next_suffix = {}
 
     def add(self, fact):
         identity = fact.get('id')
         self.by_id[identity] = fact
-        if identity:
+        if isinstance(identity, str):
             family = identity.split(':variant:')[0]
             self.by_family.setdefault(family, []).append(fact)
 
@@ -354,6 +355,7 @@ def _merge_fact_rows(left, incoming, *, _index=None):
         if fact.get('depends_on'):
             fact['depends_on'] = [remap.get(key, key) for key in fact['depends_on']]
     left.extend(added)
+
 
 def merge_exact_records(records, *, plc_model):
     """Union applicable fact packets before ranking; catalogue rows add no slots.
