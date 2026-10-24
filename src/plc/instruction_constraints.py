@@ -436,6 +436,31 @@ def check_fact_constraints(groups, values, *, target, plc_model, language=None, 
                                'source_conflict' if group.status == 'conflict' else 'constraint_not_source_checked')
             if any(source.get('conditions') or source.get('applicability') for source in group.sources):
                 return outcome(group, 'unverified', 'source_conditions_require_binding')
+            # A derived PWM predicate proves only its selected relation. Its
+            # witness scope/conditions and prerequisite facts still apply; a
+            # provenance ID alone must never turn missing evidence into failure.
+            if group.id.startswith('pwm-formal:') and 'live_source_witnesses' in group.value:
+                witness_ids = group.value['live_source_witnesses']
+                if not isinstance(witness_ids, (list, tuple)) or not witness_ids:
+                    return outcome(group, 'unverified', 'source_witness_missing')
+                for witness_id in witness_ids:
+                    witness = by_id.get(witness_id)
+                    if witness is None:
+                        return outcome(group, 'unverified', 'source_witness_missing')
+                    witness_scope = _scope(witness, target=target, model=plc_model,
+                                           language=language, version=version)
+                    if witness_scope != 'passed':
+                        return outcome(group, witness_scope, 'source_witness_scope')
+                    if (witness.status != 'source_verified' or witness.verification != 'source_checked'
+                            or any(s.get('conditions') or s.get('applicability') for s in witness.sources)):
+                        return outcome(group, 'unverified', 'source_witness_unverified')
+                    try:
+                        if not all(_condition(c, values, context) for c in witness.conditions):
+                            return outcome(group, 'not_applicable', 'source_witness_condition')
+                    except (DefinitionError, TypeError, ValueError):
+                        return outcome(group, 'unverified', 'source_witness_condition_unresolved')
+                    if any(visit(dependency) != 'passed' for dependency in witness.depends_on):
+                        return outcome(group, 'unverified', 'source_witness_dependency_unresolved')
             dependencies = [visit(dependency) for dependency in group.depends_on]
             if any(status != 'passed' for status in dependencies):
                 return outcome(group, 'unverified', 'constraint_dependency_unresolved')

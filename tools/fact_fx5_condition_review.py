@@ -4510,7 +4510,9 @@ def condition_specs(section, record, *, include_other_forms=False):
                 if unresolved_context:
                     value['context_binding'] = 'not_fully_resolved'
                 if kind == 'error':
-                    value['error_codes'] = block['codes']
+                    # Reviewed merged rows can recover codes absent from the raw parser.
+                    # Do not overwrite that independently checked result.
+                    value['error_codes'] = list(((review or {}).get('value_updates') or {}).get('error_codes', block['codes']))
                     value['error_domain'] = block['error_domain']
                     value['diagnostic_registers'] = block['diagnostic_registers']
                     if block.get('operand_type_conditions'):

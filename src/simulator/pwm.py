@@ -11,6 +11,7 @@ import copy
 import math
 import re
 from plc.instruction_definition import UnknownInstructionSemantics
+from plc.device_identity import canonical_reference_device
 
 
 class PWMPeripheral:
@@ -20,7 +21,7 @@ class PWMPeripheral:
         self.events = []
         self.last_attempt = None
         self.attempts = {}
-        self.failed_scan = None
+        self.invalidated_owners = {}
 
     @property
     def enabled(self):
@@ -33,8 +34,7 @@ class PWMPeripheral:
         except (UnknownInstructionSemantics, ValueError, KeyError, IndexError) as error:
             self.last_attempt = {'scan': self.machine.scan_index, 'status': 'unverified', 'reason': str(error)}
             self.attempts[self.owner_id(location)] = copy.deepcopy(self.last_attempt)
-            self.failed_scan = self.machine.scan_index
-            self.invalidate_observables(location)
+            self.invalidate_failed_request(args, location)
             raise
         self.last_attempt = {'scan': self.machine.scan_index, 'status': 'accepted_bounded_contract'}
         self.attempts[self.owner_id(location)] = copy.deepcopy(self.last_attempt)
@@ -58,6 +58,9 @@ class PWMPeripheral:
         if len(args) != 3:
             raise UnknownInstructionSemantics('pwm_operand_arity_unverified')
         context = copy.deepcopy(m.execution_context)
+        # This dispatcher consumes Ladder instructions. Caller metadata cannot
+        # disable its mandatory predicates by claiming another language.
+        context['language'] = 'ladder'
         bindings = context['pwm'].pop('bindings', None)
         if bindings is not None:
             if not isinstance(bindings, Mapping) or not isinstance(bindings.get(owner), Mapping):
@@ -115,8 +118,9 @@ class PWMPeripheral:
                 op = instruction['op']
                 if op in {'PWM', 'DPWM'}:
                     continue
-                if reserved.intersection(access[1]):
-                    raise UnknownInstructionSemantics('pwm_resource_conflict:' + ','.join(sorted(reserved.intersection(access[1]))))
+                writes = {canonical_reference_device(address) for address in access[1]}
+                if reserved.intersection(writes):
+                    raise UnknownInstructionSemantics('pwm_resource_conflict:' + ','.join(sorted(reserved.intersection(writes))))
                 if not access[1] and not (op in {'END', 'NOP', 'MPS', 'MRD', 'MPP', 'ANB', 'ORB', 'ANI', 'ORI'}
                                          or re.fullmatch(r'(LD|AND|OR)(I|P|F|=|==|<>|>=|<=|>|<)?', op)):
                     raise UnknownInstructionSemantics('pwm_peer_write_scope_unverified:' + op)
@@ -180,21 +184,66 @@ class PWMPeripheral:
                 m.write('SD' + str(base + offset + 1), value >> 16, location)
         m.gap('pwm_physical_waveform_and_full_graph_unverified', location)
 
-    def invalidate_observables(self, location, *, channel=None, include_settings=True):
-        # Unknown propagation is not a successful device effect. Failed
-        # admission must not leave stale initial monitor/settings as evidence.
+    def invalidate_failed_request(self, args, location):
+        """Invalidate only the known or possible footprint of this owner.
+
+        This is uncertainty propagation, not a validated hardware mapping. A
+        rejected migration can affect both historical and candidate resources.
+        If binding is missing, conservatively consider the CPU subset, never
+        unrelated external-module channels 5..12.
+        """
+        from simulator.bounded import _leaf
+        owner = self.owner_id(location)
+        channels, outputs = set(), set()
+        for channel, state in self.channels.items():
+            if state['owner_id'] == owner:
+                channels.add(channel)
+                outputs.add(state['request']['output_device'])
+        raw = self.machine.execution_context.get('pwm', {})
+        pwm = dict(raw) if isinstance(raw, Mapping) else {}
+        bindings = pwm.pop('bindings', None)
+        binding_known = bindings is None
+        if isinstance(bindings, Mapping) and isinstance(bindings.get(owner), Mapping):
+            pwm.update(bindings[owner])
+            binding_known = True
+        candidate_channels, candidate_outputs = set(), set()
+        if binding_known:
+            channel = pwm.get('channel')
+            if type(channel) is int and 1 <= channel <= 4:
+                candidate_channels.add(channel)
+            output = canonical_reference_device(pwm.get('output_device'))
+            if isinstance(output, str) and re.fullmatch(r'Y[0-7]', output):
+                candidate_outputs.add(output)
+        destination = canonical_reference_device(args[2]) if len(args) > 2 else None
+        if isinstance(destination, str) and re.fullmatch(r'Y[0-7]', destination):
+            candidate_outputs.add(destination)
+        elif destination is not None:
+            try:
+                channel = _leaf(destination, self.machine.memory, bits=16, signed=False,
+                                plc_model=self.machine.model)
+            except (UnknownInstructionSemantics, ValueError, TypeError, KeyError, IndexError):
+                channel = None
+            if type(channel) is int and 1 <= channel <= 4:
+                candidate_channels.add(channel)
+        channels.update(candidate_channels or range(1, 5))
+        outputs.update(candidate_outputs or ('Y' + str(i) for i in range(8)))
+        for channel in channels:
+            self.invalidate_observables(location, channel=channel)
+        for output in outputs:
+            self.machine.write(output, None, location, 'bit')
+        for channel, state in self.channels.items():
+            if channel in channels or state['request']['output_device'] in outputs:
+                self.invalidated_owners[state['owner_id']] = self.machine.scan_index
+
+    def invalidate_observables(self, location, *, channel, include_settings=True):
+        # Scope is explicit: callers cannot accidentally invalidate all channels.
         m = self.machine
-        channels = [channel] if channel is not None else range(1, 13)
-        for ch in channels:
-            base = 5300 + 16 * (ch - 1)
-            offsets = range(2, 8) if include_settings else (6, 7)
-            for offset in offsets:
-                m.write('SD' + str(base + offset), None, location)
-            for start in (5300, 5316, 5332):
-                m.write('SM' + str(start + ch - 1), None, location, 'bit')
-        if channel is None:
-            for output in range(8):
-                m.write('Y' + str(output), None, location, 'bit')
+        base = 5300 + 16 * (channel - 1)
+        offsets = range(2, 8) if include_settings else (6, 7)
+        for offset in offsets:
+            m.write('SD' + str(base + offset), None, location)
+        for start in (5300, 5316, 5332):
+            m.write('SM' + str(start + channel - 1), None, location, 'bit')
 
     def snapshot(self):
         channels = copy.deepcopy(self.channels)
@@ -202,7 +251,7 @@ class PWMPeripheral:
             attempt = self.attempts.get(state['owner_id'])
             current = bool(attempt and attempt['status'] == 'accepted_bounded_contract'
                            and attempt['scan'] == self.machine.scan_index - 1
-                           and self.failed_scan != self.machine.scan_index - 1
+                           and self.invalidated_owners.get(state['owner_id']) != self.machine.scan_index - 1
                            and state['scan'] == attempt['scan']
                            and self.machine.memory.get('SM8034') is state['stop_bit'])
             state['current_observation_status'] = 'accepted_bounded_contract' if current else 'unverified'
