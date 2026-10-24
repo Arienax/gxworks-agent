@@ -1887,11 +1887,17 @@ def review_execution_clause(clause, *, section, block, value, declared):
         return reviewed([{'kind': 'documented_rising_edge_output', 'input': 'X0', 'form': 'PLS', 'output': 'M0',
                           'ON_event': 'X0_OFF_to_ON', 'ON_duration_operation_cycles': 1}], native=True, content_role='worked_example')
     if page == 158 and full(r'Sc \| Sc Sc: 1 scan'):
+        layout = ' '.join(_page_layout(section, page).split())
+        if not all(witness in layout for witness in (
+                'PLF command turns from ON to OFF',
+                'This instruction turns ON the specified device for one scan when the PLF command turns OFF from ON, and turns OFF in other cases.',
+                'ON X5 OFF X5 ON PLF | M0 M0 OFF Sc | Sc Sc: 1 scan')):
+            return None
         return reviewed([{'kind': 'documented_falling_edge_output', 'input': 'X5', 'form': 'PLF', 'output': 'M0',
-                          'diagram_ON_event': 'X5_ON_to_OFF', 'ON_duration_scans': 1},
-                         {'kind': 'source_conflict', 'conflict': 'PLF_processing_sentence_says_rising_edge_but_heading_and_waveform_say_falling',
-                          'processing_sentence_edge': 'OFF_to_ON', 'heading_and_diagram_edge': 'ON_to_OFF', 'resolution': 'not_established'}],
-                        native=True, content_role='worked_example', status='conflict')
+                          'diagram_ON_event': 'X5_ON_to_OFF', 'ON_duration_scans': 1,
+                          'processing_sentence_edge': 'ON_to_OFF',
+                          'source_wording': 'turns_OFF_from_ON'}],
+                        native=True, content_role='worked_example')
     if page in {410, 423} and full(r'(?:\(d\) \| \(s\) )?(?:Before|After) transfer \| [01] \| ∙∙∙ \| 1'):
         invert = page == 410
         return reviewed([{'kind': 'documented_bit_transfer_example', 'source': _operand('s'), 'destination': _operand('d'),
