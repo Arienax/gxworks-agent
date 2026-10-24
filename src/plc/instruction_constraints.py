@@ -64,6 +64,16 @@ def _context_value(context, path):
 def _condition(condition, values, context):
     if not isinstance(condition, Mapping):
         raise UnknownInstructionSemantics('condition_not_formalized')
+    if condition.get('kind') == 'operand_form' and set(condition) == {'kind', 'required_operands'}:
+        roles = context.get('$OPERAND_ROLES')
+        if roles is None:
+            raise UnknownInstructionSemantics('operand_form_binding_required')
+        return all(str(name).upper() in roles for name in condition['required_operands'])
+    if condition.get('kind') == 'cpu_model' and set(condition) == {'kind', 'models'}:
+        model = context.get('$PLC_MODEL')
+        if model is None:
+            raise UnknownInstructionSemantics('cpu_model_binding_required')
+        return model in condition['models']
     if set(condition) == {'context', 'equals'}:
         actual = _context_value(context, condition['context'])
         if actual is UNKNOWN or actual is None:
@@ -345,6 +355,42 @@ def check_fact_constraints(groups, values, *, target, plc_model, language=None, 
         if group.id in by_id:
             raise DefinitionError('Duplicate constraint fact identity')
         by_id[group.id] = group
+    # Bind only an observed, source-checked signature for this exact scope.
+    # Caller-supplied internal keys cannot forge a signature or CPU condition.
+    context.pop('$OPERAND_ROLES', None)
+    context['$PLC_MODEL'] = plc_model
+    signatures = []
+    for group in by_id.values():
+        if (group.dimension == 'parameters.typed_operands'
+                and group.status == 'source_verified' and group.verification == 'source_checked'
+                and not group.conditions
+                and not any(s.get('conditions') or s.get('applicability') for s in group.sources)
+                and _scope(group, target=target, model=plc_model, language=language, version=version) == 'passed'):
+            operands = group.value.get('operands', [])
+            if operands and all(isinstance(item, Mapping) and isinstance(item.get('name'), str) for item in operands):
+                signatures.append(tuple(item['name'].upper() for item in operands))
+    if signatures and len(set(signatures)) == 1:
+        context['$OPERAND_ROLES'] = signatures[0]
+        for index, name in enumerate(signatures[0]):
+            if name not in values and '$' + str(index) in values:
+                values[name] = values['$' + str(index)]
+    if target in {'PWM', 'DPWM'} and plc_model in {'FX5S', 'FX5UJ', 'FX5U', 'FX5UC'}:
+        from plc.pwm_contract import bind_pwm_values, derive_pwm_formal_facts
+        source_bound = any(group.dimension == 'identity.applicability'
+            and group.status == 'source_verified' and group.verification == 'source_checked'
+            and not group.conditions and group.value.get('model_states', {}).get(plc_model) == 'supported'
+            and _scope(group, target=target, model=plc_model, language=language, version=version) == 'passed'
+            and any(s.get('manual_number') == 'JY997D55801' and s.get('revision') == 'AB' for s in group.sources)
+            for group in by_id.values())
+        formal_bound = any(group.id.startswith('pwm-formal:') for group in by_id.values())
+        if source_bound or formal_bound:
+            values = bind_pwm_values(target, plc_model, values, context)
+        if source_bound:
+            for raw in derive_pwm_formal_facts(target, plc_model, language, list(by_id.values())):
+                group = InstructionFactGroup.from_mapping(raw)
+                if group.id in by_id and by_id[group.id] != group:
+                    raise DefinitionError('Conflicting derived PWM constraint identity')
+                by_id[group.id] = group
     checks, findings, visiting, cached = [], [], set(), {}
 
     def outcome(group, status, reason=''):
@@ -404,6 +450,12 @@ def check_fact_constraints(groups, values, *, target, plc_model, language=None, 
                 except (DefinitionError, TypeError, ValueError, OverflowError):
                     return outcome(group, 'unverified', 'constraint_input_unknown_or_unrepresentable')
                 return outcome(group, 'passed' if okay else 'failed', '' if okay else value.get('rule', 'constraint_violated'))
+            if (target in {'PWM', 'DPWM'} and group.id.startswith('fx5prog:')
+                    and plc_model in {'FX5S', 'FX5UJ', 'FX5U', 'FX5UC'}):
+                from plc.pwm_contract import evaluate_pwm_source_constraint
+                authored = evaluate_pwm_source_constraint(group, values, context, plc_model)
+                if authored is not None:
+                    return outcome(group, *authored)
             additional = _additional_constraint(group.dimension, value, values, context, plc_model)
             if additional is not None:
                 return outcome(group, *additional)
@@ -581,7 +633,11 @@ def check_fact_constraints(groups, values, *, target, plc_model, language=None, 
     for identity in roots:
         cached[identity] = visit(identity)
     statuses = [row['status'] for row in checks]
-    return {'status': 'failed' if 'failed' in statuses else 'unverified' if 'unverified' in statuses else 'passed',
+    execution_qualifications = [g.id for g in by_id.values()
+        if g.dimension == 'execution.source_qualifications'
+        and _scope(g, target=target, model=plc_model, language=language, version=version) != 'not_applicable']
+    return {'execution_coverage': 'unverified' if execution_qualifications else 'not_assessed',
+            'execution_qualifications': execution_qualifications, 'status': 'failed' if 'failed' in statuses else 'unverified' if 'unverified' in statuses else 'passed',
             'checks': checks, 'findings': findings, 'phase': phase, 'target': target}
 
 

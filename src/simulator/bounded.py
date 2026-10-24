@@ -108,6 +108,9 @@ class ScanMachine:
         from simulator.st_execution import ExecutionBudget
         self.execution_budget = execution_budget or ExecutionBudget()
         self._st_executions = {}
+        from simulator.pwm import PWMPeripheral
+        self.pwm = PWMPeripheral(self)
+        self._pwm_frame_timestamp_missing = True
 
     def bit(self, address):
         address = canonical_reference_device(address)
@@ -176,6 +179,8 @@ class ScanMachine:
                 'memory_reader': lambda base, offset: _leaf(decimal_region_address(base, offset), self.memory, plc_model=self.model)}))
 
     def _application(self, op, args, enabled, location, prior, *, parameter_values=None, writer=None):
+        if op in {'PWM', 'DPWM'} and self.pwm.enabled:
+            return self.pwm.execute(op, args, enabled, location, parameter_values=parameter_values)
         if enabled is True:
             self._check_constraints(op, args, parameter_values=parameter_values)
         if parameter_values is not None:
@@ -270,6 +275,7 @@ class ScanMachine:
         timer_drives = {}
         edge_samples = {}
         timestamp = frame.get('timestamp_ms')
+        self._pwm_frame_timestamp_missing = timestamp is None
         if timestamp is not None:
             if type(timestamp) not in {int,float} or timestamp < 0 or self.timestamp_ms is not None and timestamp < self.timestamp_ms:
                 raise ValueError('explicit_clock_not_monotonic')
@@ -300,7 +306,7 @@ class ScanMachine:
                         continue
                     if record_kind != 'instruction':
                         raise UnknownInstructionSemantics('source_record_' + record_kind + '_unverified')
-                    if not self.facts.get('control') and not (op.startswith('ST_') or op in
+                    if not self.facts.get('control') and not (op.startswith('ST_') or (op in {'PWM', 'DPWM'} and self.pwm.enabled) or op in
                             {'LD','LDI','AND','ANI','OR','ORI','ORB','ANB','MPS','MRD','MPP','END','NOP',*self.facts.get('transfers',{})}):
                         raise UnknownInstructionSemantics('cpu_control_form_unverified:' + op)
                     if op == 'ST_PROGRAM':
@@ -457,6 +463,9 @@ class ScanMachine:
                         if value is None:
                             self.gap('pulse_history_unverified', location)
                         continue
+                    if op in {'PWM', 'DPWM'} and self.pwm.enabled:
+                        self.pwm.execute(op, args, accumulator, location)
+                        continue
                     if accumulator is False:
                         continue
                     if accumulator is None:
@@ -513,7 +522,7 @@ class ScanMachine:
                         self.memory = {key: None for key in self.memory}
                         self.scan_index += 1
                         return {'before': before, 'after': copy.deepcopy(self.memory),
-                                'writes': copy.deepcopy(self.writes), 'group_snapshots': group_snapshots}
+                                'writes': copy.deepcopy(self.writes), 'group_snapshots': group_snapshots, 'peripherals': {'pwm': self.pwm.snapshot()} if self.pwm.enabled else {}}
                     if op.startswith(('LD', 'AND', 'OR')):
                         accumulator = None
                     else:
@@ -532,7 +541,7 @@ class ScanMachine:
                             self.gap('unknown_instruction_write_scope', location)
         self.previous.update(edge_samples)
         self.scan_index += 1
-        return {'before': before, 'after': copy.deepcopy(self.memory), 'writes': copy.deepcopy(self.writes), 'group_snapshots': group_snapshots}
+        return {'before': before, 'after': copy.deepcopy(self.memory), 'writes': copy.deepcopy(self.writes), 'group_snapshots': group_snapshots, 'peripherals': {'pwm': self.pwm.snapshot()} if self.pwm.enabled else {}}
 
 
 def _evaluate(expression, memory, plc_model='FX3U'):
@@ -664,6 +673,7 @@ def check_bounded_traces(program, spec, traces, *, version_binding=None, max_tra
         instructions = [st_instructions]
     applications, unsupported_index = {}, {}
     constraint_violations = []
+    peripheral_traces = []
     from simulator.st_execution import ExecutionBudget
     execution_budget = ExecutionBudget()
     groups = [(False, traces), (True, frozen_time_traces)]
@@ -710,6 +720,9 @@ def check_bounded_traces(program, spec, traces, *, version_binding=None, max_tra
                 boot = bool(trace.get('starts_in_run', True) and scan_index == 0)
                 try:
                     observation = machine.scan(frame, first_scan=boot)
+                    if observation.get('peripherals'):
+                        peripheral_traces.append({'trace_id': trace.get('id', index), 'scan': scan_index,
+                                                  'peripherals': observation['peripherals']})
                 except Exception as error:
                     exceptions.append({'trace_id': trace.get('id', index), 'scan': scan_index,
                                        'reason': 'checker_exception', 'exception_type': type(error).__name__})
@@ -812,6 +825,7 @@ def check_bounded_traces(program, spec, traces, *, version_binding=None, max_tra
     return {'schema_version': 1, 'stage': 'Core_bounded_scan_check', 'status': status, 'program_version': binding,
             'checks': list(checks.values()), 'violations': [v for c in checks.values() for v in c['violations']],
             'constraint_violations': constraint_violations,
+            'peripheral_observations': peripheral_traces,
             'coverage': {'traces_tested': tested, 'maximum_scans': maximum_scans, 'automatic_trace_limit': min(max_traces, MAX_TRACES),
                          'scan_limit': min(max_scans, MAX_SCANS), 'budget_exhausted': truncated, 'frozen_time_traces': len(frozen_time_traces)},
             'unsupported_or_missing': unsupported, 'checker_exceptions': exceptions,

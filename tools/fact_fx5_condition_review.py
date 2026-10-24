@@ -2514,6 +2514,240 @@ def _review_string_error(clause, *, section, declared):
                               'source_formulas': [], 'numeric_values': [], 'comparisons': [], 'ranges': [], 'unresolved_glyphs': []}}
 
 
+_PWM_HARDWARE_TABLE = 'Output number (s1) ON time (s2) Period CPU module Y0 to Y2 2 [GLYPH-F06D]s more 5 [GLYPH-F06D]s more Y3 to Y7 200 [GLYPH-F06D]s more 400 [GLYPH-F06D]s more Output number (s1) ON time (s2) Period CPU module High-speed pulse input/ output module Y0 to Y3 Y0 to Y2 2 [GLYPH-F06D]s more 5 [GLYPH-F06D]s more Y4 to Y7 [GLYPH-F0C9] 200 [GLYPH-F06D]s more 400 [GLYPH-F06D]s more'
+
+_PWM_DIAGRAM_LABELS = {
+    (817, 'ON time setting is 5 μs or less ON time setting is 5 μs or more ON time setting is 5 μs or more ON time setting is 5 μs or more ON time setting is 5 μs or more ON time setting is 5 μs or less 5 μs or less Output stop command is issued within 5 μs of the ON width time. 5 μs or more Output stop command is issued in 5 μs or more of the ON width time.'): 'ON',
+    (817, 'Period Period'): 'ON',
+    (818, 'OFF time setting OFF time setting is 5 μs or less | is 5 μs or less'): 'OFF',
+    (818, 'OFF time setting | OFF time setting is 5 μs or more | is 5 μs or more'): 'OFF',
+    (818, 'Output stop command is issued in 5 μs or more of the OFF width time. 5 μs or more Period'): 'OFF',
+    (818, 'OFF time setting | OFF time setting is 5 μs or more | is 5 μs or more'): 'OFF',
+    (824, 'ON time setting is 5 μs or less ON time setting is 5 μs or more ON time setting is 5 μs or more ON time setting is 5 μs or more ON time setting is 5 μs or more ON time setting is 5 μs or less 5 μs or less Output stop command is issued within 5 μs of the ON width time. 5 μs or more Output stop command is issued in 5 μs or more of the ON width time.'): 'ON',
+    (824, 'Period Period'): 'ON',
+    (825, 'Operations when the DPWM output is stopped (while the output pulse is off)'): 'OFF',
+    (825, 'OFF time setting is 5 μs or more OFF time setting is 5 μs or more OFF time setting is 5 μs or more OFF time setting is 5 μs or more OFF time setting is 5 μs or less OFF time setting is 5 μs or less Output stop command is issued within 5 μs of the OFF width time. 5 μs or less 5 μs or more Output stop command is issued in 5 μ s or more of the OFF width time.'): 'OFF',
+    (825, 'Output stop command Period Period Period'): 'OFF',
+}
+
+
+_PWM_MERGED_ERROR_ROWS = {'PWM': 'A channel number that is not selected in the parameter setting are specified for the output destination specified by (d). (The PWM output is not executed.) 3611H(CH1) | The ON time specified by (s1) is larger than the period specified by (s2). 3612H(CH2) | (The PWM output stops.) 3613H(CH3) Values of an SD device for setting pulse width and period of this instruction are incorrect. 3614H(CH4) (The PWM output stops.) 3615H(CH5) 3616H(CH6) | The ON time or period is less than "1". 3617H(CH7) | The SD device specified for the number of output pulses stores a value outside the available range (0 to 2147483647). 3618H(CH8) 3619H(CH9) 361AH(CH10) 361BH(CH11) 361CH(CH12)', 'DPWM': 'A channel number or a Y device that is not selected in the parameter setting are specified for the output destination specified by (d). (The PWM output is not executed.) 3611H(CH1) | The ON time specified by (s1) is larger than the period specified by (s2). 3612H(CH2) | (The PWM output stops.) 3613H(CH3) In (s1) and (s2), a negative value is specified. 3614H(CH4) (The PWM output stops.) 3615H(CH5) 3616H(CH6) | Values of an SD device for setting pulse width and period of this instruction are incorrect. 3617H(CH7) | (The PWM output stops.) 3618H(CH8) | The ON time or period is less than "1". 3619H(CH9) The SD device specified for the number of output pulses stores a value outside the available range (0 to 2147483647). 361AH(CH10) 361BH(CH11) 361CH(CH12)'}
+
+_PWM_STOP_QUALIFICATION_CLAUSES = {'condition_precautions_p817_r4_c0': 'Operations when the PWM output is stopped (while the output pulse is on) Period Output stop command If an output stop command is issued while the ON time setting is 5 μs or less, outputting pulses stops after the set ON time elapses.', 'condition_precautions_p817_r4_c1': 'When the ON time setting is 5μs or more and 5 μs or less time has elapsed when an output stop command is issued, outputting pulses stops in 5 μs from the stop command.', 'condition_precautions_p817_r4_c3': 'When the ON time setting is 5 μs or more and 5 μs or more time has elapsed when an output stop command is issued, outputting pulses stops with the stop command.', 'condition_precautions_p818_r10_c0': 'When the OFF time setting is 5 μs or more and 5 μs or more time has elapsed when an output stop command is issued, outputting pulses stops with the stop command.', 'condition_precautions_p818_r5_c0': 'Operations when the PWM output is stopped (while the output pulse is off) Output stop command Period If an output stop command is issued while the OFF time setting is 5 μs or less, outputting pulses stops after the set OFF time elapses.', 'condition_precautions_p818_r7_c0': 'Output stop command is issued within 5 μs of the OFF width time. 5 μs or less Period When the OFF time setting is 5 μs or more and 5 μs or less time has elapsed when an output stop command is issued, outputting pulses stops in 5 μs from the stop command.', 'condition_precautions_p824_r5_c0': 'Operations when the DPWM output is stopped (while the output pulse is on) Output number (s1) ON time (s2) Period CPU module Y0 to Y2 2 [GLYPH-F06D]s more 5 [GLYPH-F06D]s more Y3 to Y7 200 [GLYPH-F06D]s more 400 [GLYPH-F06D]s more Output number (s1) ON time (s2) Period CPU module High-speed pulse input/ output module Y0 to Y3 Y0 to Y2 2 [GLYPH-F06D]s more 5 [GLYPH-F06D]s more Y4 to Y7 [GLYPH-F0C9] 200 [GLYPH-F06D]s more 400 [GLYPH-F06D]s more Period Output stop command If an output stop command is issued while the ON time setting is 5 μs or less, outputting pulses stops after the set ON time elapses.', 'condition_precautions_p824_r5_c1': 'When the ON time setting is 5μs or more and 5 μs or less time has elapsed when an output stop command is issued, outputting pulses stops in 5 μs from the stop command.', 'condition_precautions_p824_r5_c3': 'When the ON time setting is 5 μs or more and 5 μs or more time has elapsed when an output stop command is issued, outputting pulses stops with the stop command.', 'condition_precautions_p825_r10_c3': 'When the OFF time setting is 5 μs or more and 5 μs or more time has elapsed when an output stop command is issued, outputting pulses stops with the stop command.', 'condition_precautions_p825_r10_c4': 'When the OFF time setting is 5 μs or more and 5 μs or less time has elapsed when an output stop command is issued, outputting pulses stops in 5 μs from the stop command.', 'condition_precautions_p825_r10_c5': 'If an output stop command is issued while the OFF time setting is 5 μs or less, outputting pulses stops after the set OFF time elapses.'}
+
+def _review_pwm_clause(kind, clause, *, section, block, declared):
+    """Bind PWM qualifications to the original section, tables and antecedents.
+
+    This is manual knowledge, not a simulator implementation. Stop diagrams
+    with overlapping inclusive 5 us boundaries deliberately remain unresolved.
+    """
+    forms = {'16 bit binary pulse width modulation': ('PWM', 813, 819, 816, 818),
+             '32 bit binary pulse width modulation': ('DPWM', 820, 826, 824, 825)}
+    scope = forms.get(section.get('section'))
+    if scope is None or not section.get('outline', '').startswith('PART 3 CPU MODULE INSTRUCTIONS >'):
+        return None
+    form, first, error_page, precaution_page, final_page = scope
+    if not {'s1', 's2', 'd'}.issubset(declared) or first != section.get('first_page'):
+        return None
+    page = block['page']
+    text = _flat(section.get('text', ''))
+    source = _flat(block.get('text', ''))
+    models = ['FX5S', 'FX5UJ', 'FX5U', 'FX5UC']
+    if not all(model in text for model in models) or not re.search(r'ENO\s*:=\s*' + form + r'\(EN,\s*s1,\s*s2,\s*d\)', text):
+        return None
+
+    def reviewed(rules, operands=(), dimension=None, **extra):
+        return {'rules': rules, 'full_clause_review': True, 'forms': [form],
+                'languages': list(LANGUAGES), 'dimension': dimension,
+                'additional_pages': [first],
+                'value_updates': {'subjects': [{'operand': name} for name in operands],
+                    'operand_binding_required': bool(operands), 'context_binding': 'resolved',
+                    'numeric_values': [], 'ranges': [], 'comparisons': [], 'source_formulas': [],
+                    'unresolved_glyphs': [], 'unbound_condition_markers': [],
+                    'unparsed_input_qualification': False, 'device_state_conditions': [],
+                    'operand_device_conditions': [], 'cpu_models': models,
+                    'knowledge_kind': 'manual_behavior', 'core_execution_capability': 'not_established',
+                    'binding_basis': 'PWM_section_operands_and_local_source_context'}, **extra}
+
+    if kind == 'error' and page == error_page and block.get('domain') == 'operation_error':
+        if block.get('codes') == ['3600H'] and clause == _PWM_MERGED_ERROR_ROWS[form]:
+            # The source row includes a merged CH1..CH12 error-code column.
+            # Never bind its pulse-count interval to s2, negative tests to d,
+            # or the <1 clause only to the channel printed beside that line.
+            result = reviewed([
+                {'kind': 'PWM_channel_configuration', 'when': 'channel_not_selected_for_PWM_in_parameters', 'operation_error': True},
+                {'kind': 'operand_relation', 'left': {'operand': 's1'}, 'operator': '>', 'right': {'operand': 's2'}, 'error': True},
+                {'kind': 'any_value_less_than', 'subjects': [{'operand': 's1'}, {'operand': 's2'}], 'value': 1, 'error': True,
+                 'logical_connective': 'OR', 'zero_example_qualification': 'unresolved'},
+                {'kind': 'PWM_runtime_register_validation', 'fields': ['ON_time', 'period'], 'validity': 'invalid', 'error': True},
+                {'kind': 'value_outside_interval', 'subject': {'context': 'pwm.pulse_count'}, 'minimum': 0, 'maximum': 2147483647,
+                 'inclusive': True, 'error': True}], ['s1', 's2', 'd'])
+            result['value_updates'].update(error_codes=['3600H'] + [format(0x3610 + ch, '04X') + 'H' for ch in range(1, 13)],
+                error_code_binding='3600H_configuration_and_3611H_to_361CH_correspond_to_selected_channel',
+                merged_source_row=True, pulse_count_is_not_operand_s2=True)
+            return result
+        if clause == ('The output destination specified by (d) is already used by another instruction '
+                      '(positioning instruction). (The PWM output is not executed.)') and block.get('codes') == ['1810H']:
+            return reviewed([{'kind': 'resource_in_use', 'resource': 'pulse_output_destination',
+                'subject': {'operand': 'd'}, 'owner': 'positioning_instruction',
+                'effects': {'PWM_output': 'not_executed'}}], ['d'])
+        if clause.rstrip('.') == ('A Y device is specified as the output destination specified by (d), '
+                                  'and there is no unused channel number in the parameter setting') and block.get('codes') == ['1810H']:
+            return reviewed([{'kind': 'conditional_result', 'when': {'all': [
+                {'operand': 'd', 'device_class': 'Y'}, {'parameter_unused_channel_available': False}]},
+                'result': {'operation_error': True, 'output_effect': 'not_established'}}], ['d'])
+        if clause == 'Y10 or later is specified as the output destination specified by (d). (The PWM output stops.)' and block.get('codes') == ['3405H']:
+            return reviewed([{'kind': 'conditional_result', 'when': {'operand': 'd', 'device_class': 'Y',
+                'minimum_address': 'Y10', 'address_notation': 'octal', 'inclusive': True},
+                'result': {'PWM_output': 'stops'}}], ['d'])
+
+    if kind == 'footnote' and page == first and block.get('domain') == 'applicable_devices':
+        bit_note = ('Only Y can be used for a bit device. When a bit device is specified, specify one of Y0 to Y7. '
+            'The high-speed pulse input/output module bit device (Y) cannot be specified. '
+            'If Y is specified, outputs are enabled when there is an unused channel number in the parameter setting '
+            'and the specified Y number is not used. The nibble of a bit device cannot be specified.')
+        if block.get('number') == 1 and source == bit_note:
+            return reviewed([
+                {'kind': 'allowed_device_classes', 'subject': {'operand': 'd'}, 'when': {'representation': 'bit_device'},
+                 'allowed': ['Y'], 'allowed_addresses': ['Y' + str(n) for n in range(8)], 'hardware': 'CPU_module'},
+                {'kind': 'disallowed_device_form', 'subject': {'operand': 'd'}, 'forms': ['digit_specified_bit', 'high_speed_pulse_IO_module_bit_device']},
+                {'kind': 'conditional_result', 'when': {'all': [{'operand': 'd', 'device_class': 'Y'},
+                 {'parameter_unused_channel_available': True}, {'specified_Y_number_in_use': False}]},
+                 'result': {'outputs_enabled': True}}], ['d'])
+        channel_note = ('When a word device or constant is specified, specify one of the ' +
+            ('channel' if form == 'PWM' else 'CH') + ' numbers. Specify K1 to K4 (axis 1 to 4) for the CPU module, '
+            'and K5 to K12 (axis 5 to 12) for the high-speed pulse input/output module.')
+        if block.get('number') == 2 and source == channel_note:
+            return reviewed([{'kind': 'allowed_interval', 'subject': {'operand': 'd'},
+                'when': {'representation_any_of': ['word_device', 'constant'], 'hardware': hardware},
+                'quantity': 'channel_number', 'minimum': low, 'maximum': high, 'inclusive': True}
+                for hardware, low, high in [('CPU_module', 1, 4), ('high_speed_pulse_IO_module', 5, 12)]], ['d'])
+
+    if (kind == 'footnote' and page == first + 2 and block.get('number') == 3
+        and block.get('domain') == 'processing_details' and clause ==
+        'When this instruction is executed, the pulse width and period specified (s1) and (s2) are set to an SD device. '
+        '• After the pulse output is started from each channel, the pulse output monitor turns on.'):
+        # Check both tables, not the following monitor-register table or a guessed stride.
+        bindings = [{'channel': ch,
+                     'ON_time': {'operand': 's1', 'register_pair': [f'SD{5303+16*(ch-1)}', f'SD{5302+16*(ch-1)}']},
+                     'period': {'operand': 's2', 'register_pair': [f'SD{5305+16*(ch-1)}', f'SD{5304+16*(ch-1)}']}}
+                    for ch in range(1, 13)]
+        layouts = {int(p): _flat(t.replace('|', ' ')) for p, t in section.get('page_layouts', [])}
+        on_page, period_page = layouts.get(first + 1, ''), layouts.get(first + 2, '')
+        on_table = on_page.partition('ON time R/W')[2].split('Pulse output')[0]
+        period_table = period_page.partition('Period R/W')[2].split('*1 When')[0]
+        monitor_table = period_page.partition('ON timing OFF timing')[2].split('• This instruction stores')[0]
+        def pairs(table):
+            return [(int(ch), [upper, lower]) for ch, upper, lower in
+                    re.findall(r'CH(\d+) (SD\d+), (SD\d+)', table)]
+        table_bound = (pairs(on_table) == [(b['channel'], b['ON_time']['register_pair']) for b in bindings]
+                       and pairs(period_table) == [(b['channel'], b['period']['register_pair']) for b in bindings]
+                       and [(int(ch), device) for ch, device in re.findall(r'CH(\d+) (SM\d+)', monitor_table)]
+                           == [(ch, f'SM{5299+ch}') for ch in range(1, 13)]
+                       and all(('When ' + ('this' if form == 'PWM' else 'the DPWM') + ' instruction is') in table
+                               and 'executed*3' in table for table in [on_table, period_table])
+                       and 'Time with a unit selected on the parameter setting screen' in on_page)
+        if table_bound:
+            result = reviewed([{'kind': 'conditional_data_storage', 'when': {'instruction_executed': form},
+                'destination_channel': {'operand': 'd'}, 'bindings': bindings,
+                'unit': 'parameter_selected_us_or_ms', 'register_pair_order': 'source_printed_order'},
+                {'kind': 'conditional_result', 'when': {'event': 'channel_pulse_output_started'},
+                 'result': {'pulse_output_monitor_state': 'ON', 'channel_registers': [
+                     {'channel': ch, 'device': f'SM{5299+ch}'} for ch in range(1, 13)]}}], ['s1', 's2', 'd'],
+                'parameters.control_status_storage')
+            result['additional_pages'].append(first + 1)
+            return result
+
+    if (kind == 'footnote' and page == first + 2
+            and block.get('number') == 2 and block.get('domain') == 'processing_details'
+            and clause == 'Parameter setting values are set to an SD device at STOP to RUN.'):
+        return reviewed([{'kind': 'parameter_shadow_update', 'source': 'configured_parameters',
+                          'storage': 'SD', 'event': 'stop_to_run'}], dimension='parameters.control_status_storage', additional_pages=[])
+
+    if kind != 'precautions':
+        return None
+    normalize_stop = lambda t: re.sub(r'\s+', '', t.replace('[GLYPH-F06D]', 'μ').replace('µ', 'μ'))
+    stop_keys = [key for key, source_clause in _PWM_STOP_QUALIFICATION_CLAUSES.items()
+                 if ('_p' + str(page) + '_') in key and normalize_stop(source_clause) == normalize_stop(clause)]
+    if stop_keys:
+        result = reviewed([], dimension='execution.source_qualifications')
+        result['full_clause_review'] = False
+        result['preserve_unverified_dimension'] = True
+        result['additional_pages'] = []
+        result['value_updates'].update(unparsed_input_qualification=True,
+            context_binding='not_fully_resolved', semantic_role='stop_delay_execution_qualification',
+            exact_timing='not_established', conservative_stop_delay_upper_bound_us=5)
+        if (form == 'DPWM' and page == 824 and _PWM_HARDWARE_TABLE in clause
+                and '[FX5S/FX5UJ CPU module]' in text
+                and '[FX5U/FX5UC CPU module and high-speed pulse input/output module]' in text):
+            # A source layout merged the timing table into the first stop
+            # paragraph. Keep a distinct input constraint for that table.
+            result['split_pwm_hardware_table'] = True
+        return result
+
+    if (form == 'PWM' and page == precaution_page and clause == _PWM_HARDWARE_TABLE
+        and '[FX5S/FX5UJ CPU module]' in text
+        and '[FX5U/FX5UC CPU module and high-speed pulse input/output module]' in text):
+        from plc.pwm_contract import PWM_AB_MINIMUM_TIMES
+        rows = [dict(row) for row in PWM_AB_MINIMUM_TIMES]
+        return reviewed([{'kind': 'PWM_hardware_minimum_times', 'ON_time': {'operand': 's1'},
+            'period': {'operand': 's2'}, 'rows': rows, 'dash_cell': 'no_module_output_entry',
+            'unit_conversion': 'parameter_selected_time_to_us'}], ['s1', 's2', 'd'])
+
+    # The old rule silently translated "and" to "either". Neither connective
+    # interpretation has enough evidence; prevent a verified derivative too.
+    if page == 824 and form == 'DPWM' and clause == (
+        'When a negative value is specified for the ON time by (s1) and the period by (s2), '
+        'an operation error occurs. (In 16-bit instruction PWM, no error occurs.)'):
+        result = reviewed([], ['s1', 's2'])
+        result['full_clause_review'] = False
+        # Neither operand negative makes either reading of the authored AND
+        # antecedent false. Keep the uncertain clause applicable whenever
+        # either operand is negative; independent p826 supplies the OR error.
+        scalar = {'kind': 'int', 'bits': 64, 'signed': True}
+        result['conditions'] = [{'predicate': {'op': 'or', 'type': {'kind': 'bool'}, 'args': [
+            {'op': 'lt', 'type': {'kind': 'bool'}, 'args': [
+                {'op': 'parameter', 'name': name, 'type': scalar},
+                {'op': 'constant', 'value': 0, 'type': scalar}]} for name in ['S1', 'S2']]}}]
+        result['value_updates'].update(unparsed_input_qualification=True,
+            context_binding='not_fully_resolved', logical_connective='not_established',
+            review_uncertainty='negative_operand_conjunction_requires_clarification')
+        return result
+
+    if (page == final_page and clause == 'The PWM output stops when SM8034 is on, and starts when SM8034 is off.'):
+        return reviewed([{'kind': 'conditional_result', 'when': {'device': 'SM8034', 'state': state},
+            'result': {'PWM_output': effect}} for state, effect in [('ON', 'stops'), ('OFF', 'starts')]],
+            ['d'], 'effects.documented_result')
+    if page == final_page and clause == 'PWM output does not stop, even if a pulse stop command for positioning is driven.':
+        return reviewed([{'kind': 'conditional_result', 'when': {'event': 'positioning_pulse_stop_command_driven'},
+            'result': {'PWM_output_stop_caused_by_this_command': False}}], ['d'], 'effects.documented_result')
+    if page == final_page and clause == (
+        'When specifying the number of output pulses, executing the ' + form + ' instruction, and then outputting pulses again '
+        'after the pulse output stops due to the completion of output of the specified number of pulses, turn OFF the contact '
+        'which drove the ' + form + ' instruction.'):
+        return reviewed([{'kind': 'conditional_result', 'when': {'all': [
+            {'pulse_count_mode': 'finite'}, {'instruction_executed': form},
+            {'output_stopped_because': 'specified_pulse_count_completed'}, {'intent': 'output_pulses_again'}]},
+            'result': {'required_action': {'drive_contact_of': form, 'state': 'OFF'}}}], ['d'])
+    driver = 'HIOEN' if form == 'PWM' else 'DHIOEN'
+    if page == final_page and clause == ('When driving PWM output by the ' + driver + ' instruction, use the ' + driver + ' instruction to turn PWM output off.'):
+        return reviewed([{'kind': 'conditional_result', 'when': {'PWM_output_driver': driver},
+            'result': {'required_stop_instruction': driver}}], ['d'])
+    equality = 'When the period setting is equivalent to the ON time setting, the output always remains ON.'
+    continued = 'The output ON state continues even after "Period ' + ('x' if form == 'PWM' else '[GLYPH-F0B4]') + ' Number of output pulses" is finished in this condition.'
+    if page == final_page and clause in {equality, continued} and equality in source and continued in source:
+        return reviewed([{'kind': 'conditional_result', 'when': {'left': {'operand': 's2'}, 'operator': '=',
+            'right': {'operand': 's1'}}, 'result': {'output_state': 'ON', 'continuous': True,
+            'persists_after': {'operation': 'multiply', 'arguments': [{'operand': 's2'}, {'quantity': 'number_of_output_pulses'}]}}}],
+            ['s1', 's2', 'd'], 'effects.documented_result')
+
+    navigation = _PWM_DIAGRAM_LABELS.get((page, clause))
+    if navigation and 'Operations when the ' + form + ' output is stopped (while the output pulse is ' + navigation.lower() + ')' in text:
+        return reviewed([{'kind': 'source_navigation', 'target': 'PWM_output_stop_timing_diagram',
+            'output_phase': navigation}], dimension='resources.section_structure', content_role='source_navigation')
+    return None
+
+
 def _review_auxiliary_clause(kind, clause, *, section, block, value, declared):
     """Complete technical relations in the non-primary-effect source scopes.
 
@@ -3838,6 +4072,51 @@ def _signature_bindings(section, record):
     return bindings
 
 
+def _zero_transfer_witnesses(section, record, specs, name, language):
+    """A table's productive count range does not exclude a reviewed zero no-op.
+
+    Join only a complete, unconditional, same-section source relation. This is
+    not an opcode allowlist or an executable implementation of the no-op.
+    """
+    witnesses = []
+    owner = str(record.get('opcode') or '').upper()
+    section_pages = set(section.get('pages') or ())
+    for candidate in specs:
+        value = candidate.get('value') or {}
+        if (candidate.get('status') != 'source_verified' or
+                language not in candidate.get('languages', ()) or
+                not value.get('full_source_relation_complete') or
+                value.get('condition_extraction_basis') != 'complete_authored_rule' or
+                value.get('operand_binding') != 'resolved' or
+                value.get('context_binding') != 'resolved' or candidate.get('depends_on_keys') or
+                value.get('unresolved_items') or value.get('unresolved_glyphs') or
+                not set(candidate.get('pages') or ()).issubset(section_pages) or
+                not candidate.get('pages')):
+            continue
+        forms = candidate.get('scope_forms') or value.get('source_forms') or value.get('form_conditions')
+        if forms and owner not in {str(form).upper() for form in forms}:
+            continue
+        eligible = True
+        for condition in candidate.get('conditions') or ():
+            if condition.get('kind') == 'operand_form':
+                eligible &= set(condition.get('required_operands') or ()) == {name}
+            elif condition.get('kind') == 'declared_form':
+                eligible &= owner in {str(form).upper() for form in condition.get('forms') or ()}
+            else:
+                eligible = False
+        rules = value.get('rules') or []
+        if not eligible or len(rules) != 1:
+            continue
+        rule = rules[0]
+        if (set(rule) == {'kind', 'subject', 'value', 'operation_error', 'processing'} and
+                rule.get('kind') == 'zero_transfer_count' and
+                rule.get('subject') == {'operand': name} and
+                type(rule.get('value')) is int and rule['value'] == 0 and
+                rule.get('operation_error') is False and rule.get('processing') is False):
+            witnesses.append(candidate)
+    return witnesses
+
+
 def _formal_numeric_specs(section, record, specs):
     """Reuse the reviewed call order; never substitute ST order for Ladder.
 
@@ -3923,6 +4202,21 @@ def _formal_numeric_specs(section, record, specs):
                 clone['value']['ranges'] = [{'operand_index': index, 'minimum': item['minimum'], 'maximum': item['maximum']}
                                              for item in intervals]
                 clone['value']['rule'] = 'fx5_documented_scalar_input_range'
+                witnesses = _zero_transfer_witnesses(section, record, specs, name, language)
+                if (witnesses and all(type(item['minimum']) is int and item['minimum'] == 1
+                                     and type(item['maximum']) is int and item['maximum'] >= 1
+                                     for item in intervals)):
+                    # Preserve source_ranges and the productive source rule;
+                    # only the admissible runtime domain includes the zero case.
+                    for boundary in clone['value']['ranges']:
+                        boundary['minimum'] = 0
+                    clone['value']['numeric_domain_basis'] = 'productive_range_union_source_verified_zero_noop'
+                    clone['value']['zero_noop_sources'] = [
+                        {'key': item['key'], 'pages': list(item['pages']), 'operand': name,
+                         'value': 0, 'operation_error': False, 'processing': False}
+                        for item in witnesses]
+                    clone['pages'] = sorted(set(clone['pages']) | {
+                        page for item in witnesses for page in item['pages']})
             else:
                 clone['dimension'] = 'parameters.storage_domain'
                 clone['value']['domain_role'] = 'output_value' if direction == 'output' else 'stored_bit_pattern'
@@ -4112,6 +4406,9 @@ def condition_specs(section, record, *, include_other_forms=False):
                     # shift/transfer relation. Reuse the same exact authored
                     # clause review instead of duplicating its semantics.
                     review = review_processing_clause(clause, section=section, block=block, value=value, declared=declared)
+                pwm_review = _review_pwm_clause(kind, clause, section=section, block=block, declared=declared)
+                if pwm_review is not None:
+                    review = pwm_review
                 if review:
                     value.update(review.get('value_updates') or {})
                     value['rules'] = review['rules']
@@ -4253,7 +4550,7 @@ def condition_specs(section, record, *, include_other_forms=False):
                     spec['languages'] = [language for language in spec['languages'] if language in review['languages']]
                 if not spec['languages']:
                     raise ValueError('The authored clause language contradicts its manual section')
-                if review and review.get('dimension') and verified:
+                if review and review.get('dimension') and (verified or review.get('preserve_unverified_dimension')):
                     spec['dimension'] = review['dimension']
                 elif verified and kind != 'error':
                     relation_kinds = {rule['kind'] for rule in value.get('rules', [])}
@@ -4308,6 +4605,23 @@ def condition_specs(section, record, *, include_other_forms=False):
                 if conditions:
                     spec['conditions'] = conditions
                 specs.append(spec)
+                if review and review.get('split_pwm_hardware_table'):
+                    from plc.pwm_contract import PWM_AB_MINIMUM_TIMES
+                    table = copy.deepcopy(spec)
+                    table['key'] += '_hardware_table'
+                    table['dimension'] = 'constraints.documented_restriction'
+                    table['status'] = 'source_verified'
+                    table['conditions'] = [{'kind': 'operand_form', 'required_operands': ['s1', 's2', 'd']}]
+                    table['value'] = {'knowledge_kind': 'manual_behavior', 'condition_extraction_basis': 'complete_authored_rule',
+                        'technical_relation_resolved': True, 'full_source_relation_complete': True,
+                        'context_binding': 'resolved', 'operand_binding': 'resolved', 'operand_binding_required': True,
+                        'subjects': [{'operand': n} for n in ['s1', 's2', 'd']], 'unresolved_items': [],
+                        'source_page': block['page'], 'source_kind': 'precautions', 'source_line': block.get('line', 0),
+                        'clause_index': clause_index, 'source_block': 'precautions', 'split_from': spec['key'],
+                        'rules': [{'kind': 'PWM_hardware_minimum_times', 'ON_time': {'operand': 's1'},
+                                   'period': {'operand': 's2'}, 'rows': [dict(row) for row in PWM_AB_MINIMUM_TIMES],
+                                   'unit_conversion': 'parameter_selected_time_to_us'}]}
+                    specs.append(table)
                 if subjects and value.get('binding_basis') != 'explicit_antecedent_in_same_source_row':
                     context_subjects, context_key = list(subjects), spec['key']
                 if value.get('antecedent_key'):
