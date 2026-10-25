@@ -10,6 +10,7 @@ import json
 import sqlite3
 from pathlib import Path
 from knowledge.runtime_fact_projection import SOURCE_SERIALIZATION, VALUE_SERIALIZATION, resolve_fact_sources
+from knowledge.exact_search_storage import create_search_pool, insert_chunk
 
 
 _SCHEMA_SQL = '''
@@ -213,14 +214,14 @@ def owner_key(entry):
 
 def hydrate_owner_packet(connection, owner, *, load_counts=None):
     version = connection.execute("SELECT value FROM meta WHERE key='runtime_serialization'").fetchone()
-    if version is None or version[0] not in {'owner-source-pool-v1','owner-field-pool-v2'}:
+    if version is None or version[0] not in {'owner-source-pool-v1','owner-field-pool-v2','owner-field-row-v3'}:
         raise ValueError('Unsupported runtime owner transport')
     row = connection.execute('SELECT payload_json FROM runtime_definitions WHERE owner=?', (owner,)).fetchone()
     if row is None:
         raise ValueError('Missing runtime owner')
     packet = json.loads(row[0])
     facts = packet['value']['facts']
-    if version[0] == 'owner-field-pool-v2':
+    if version[0] in {'owner-field-pool-v2','owner-field-row-v3'}:
         from knowledge.fact_field_codec import unpack_fact_fields, FIELD_SERIALIZATION
         marker = connection.execute("SELECT value FROM meta WHERE key='field_serialization'").fetchone()
         if marker is None or marker[0] != FIELD_SERIALIZATION:
@@ -235,7 +236,13 @@ def hydrate_owner_packet(connection, owner, *, load_counts=None):
                     raise ValueError('Missing or altered exact fact field')
                 fields[identity] = json.loads(row[0])
             return fields[identity]
-        facts = [unpack_fact_fields(fact,resolve_field) for fact in facts]
+        if version[0]=='owner-field-row-v3':
+            from knowledge.fact_field_codec import unpack_fact_row, FACT_ROW_SERIALIZATION
+            row_marker=connection.execute("SELECT value FROM meta WHERE key='fact_row_serialization'").fetchone()
+            if row_marker is None or row_marker[0]!=FACT_ROW_SERIALIZATION:raise ValueError('Unsupported exact fact row transport')
+            facts=[unpack_fact_row(fact,resolve_field) for fact in facts]
+        else:
+            facts = [unpack_fact_fields(fact,resolve_field) for fact in facts]
         if load_counts is not None:load_counts['field_load_count'] = len(fields)
     catalog, values = {}, {}
     for ref in {ref for fact in facts for ref in fact.get('source_refs', [])}:
@@ -273,7 +280,7 @@ def _write_language_feature(connection, feature):
         text=' '.join(sorted(set(re.findall(r'[\w.$:+/-]+',_json(technical)))))
         metadata={'runtime_language':feature['target'],'runtime_language_model':model,'content_origin':'authored_fact',
                   'distribution_status':PUBLICATION_STATUS,'fact_kind':'language','fact_target':feature['target'],'source_lane':'fact','plc_models':[model]}
-        connection.execute('INSERT INTO chunks VALUES (?,?,?,?,?,?,?,?)',(identity,text,_json(metadata),_json([model]),'','language','authored_fact',PUBLICATION_STATUS))
+        insert_chunk(connection,(identity,text,_json(metadata),_json([model]),'','language','authored_fact',PUBLICATION_STATUS))
         for alias in aliases:
             name=alias.upper()
             connection.execute('INSERT OR IGNORE INTO entity_index VALUES (?,?)',(name,identity))
@@ -328,7 +335,7 @@ def hydrate_language_packet(connection, target, model):
     return {'kind':'language','target':target,'scope':{'models':[model]},'content_origin':'authored_fact','value':value}
 
 
-def write_runtime_sqlite(payload, path, *, field_pooling=False):
+def write_runtime_sqlite(payload, path, *, field_pooling=False, search_pooling=False):
     """Create a NEW instruction-only index; never overwrite an existing index."""
     from knowledge.fact_corpus import CORPUS_KIND, PUBLICATION_STATUS
     if (payload.get('source_serialization') != SOURCE_SERIALIZATION
@@ -354,6 +361,7 @@ def write_runtime_sqlite(payload, path, *, field_pooling=False):
             from knowledge.fact_field_codec import pack_fact_fields, FIELD_SERIALIZATION
             meta['field_serialization'] = FIELD_SERIALIZATION
         connection.executemany('INSERT INTO meta VALUES (?,?)', meta.items())
+        if search_pooling:create_search_pool(connection)
         field_ids = {}
         def intern_field(field, value):
             encoded = _json({'field':field,'value':value})
@@ -395,7 +403,7 @@ def write_runtime_sqlite(payload, path, *, field_pooling=False):
                 technical({key:fact[key] for key in ('dimension','scope','conditions','members') if key in fact})
                 technical(payload['value_catalog'][fact['value_ref']] if 'value_ref' in fact else fact.get('value',{}))
             search = ' '.join(sorted(tokens))
-            connection.execute('INSERT INTO chunks VALUES (?,?,?,?,?,?,?,?)',
+            insert_chunk(connection,
                 (identity, search, _json(metadata), _json([model]), opcode, 'instruction',
                  'authored_fact', PUBLICATION_STATUS))
             connection.execute('INSERT INTO entity_index VALUES (?,?)', (opcode, identity))
@@ -440,7 +448,7 @@ class OwnerStoreWriter:
     caller controls bounded input iteration; this writer retains one owner.
     It performs exact reversible transport, not semantic regrouping.
     """
-    def __init__(self, path, metadata, *, field_pooling=True):
+    def __init__(self, path, metadata, *, field_pooling=True, search_pooling=False, fact_rows=False):
         from knowledge.fact_corpus import CORPUS_KIND
         from knowledge.fact_field_codec import FIELD_SERIALIZATION
         import copy
@@ -456,11 +464,14 @@ class OwnerStoreWriter:
         self.metadata = copy.deepcopy(metadata)
         self.metadata.pop('language_facts',None)
         self.field_pooling = bool(field_pooling)
+        self.fact_rows = bool(fact_rows)
+        if self.fact_rows and not self.field_pooling:raise ValueError('Fact rows require exact field pooling')
         with self.path.open('xb'):
             pass
         self._db = sqlite3.connect(self.path)
         self._db.execute('PRAGMA cache_size=-4096')
         self._db.execute('PRAGMA temp_store=FILE')
+        self._db.execute('PRAGMA temp.cache_size=-2048')
         self._db.executescript(_SCHEMA_SQL)
         self._closed = False
         self._finalized = False
@@ -469,7 +480,13 @@ class OwnerStoreWriter:
                 'corpus_scope':'provided_instruction_definitions_only','fact_bundle_version':metadata['fact_bundle_version'],
                 'owner_store_serialization':'instruction-owner-store-v1','definition_metadata':_json(self.metadata)}
         if self.field_pooling:meta['field_serialization'] = FIELD_SERIALIZATION
+        if self.fact_rows:
+            from knowledge.fact_field_codec import FACT_ROW_SERIALIZATION
+            meta['runtime_serialization']='owner-field-row-v3'
+            meta['fact_row_serialization']=FACT_ROW_SERIALIZATION
+            self._db.execute('CREATE TEMP TABLE seen_fact_ids(id TEXT PRIMARY KEY) WITHOUT ROWID')
         self._db.executemany('INSERT INTO meta VALUES(?,?)',meta.items())
+        if search_pooling:create_search_pool(self._db)
 
     def _intern(self, table, value):
         encoded = _json(value)
@@ -535,7 +552,13 @@ class OwnerStoreWriter:
             value={key:item for key,item in fact.items() if key not in {'sources','value'}}
             value['source_refs']=[self._intern('runtime_sources',source) for source in fact.get('sources',[])]
             if 'value' in fact:value['value_ref']=self._intern('runtime_values',fact['value'])
-            packed.append(pack_fact_fields(value,self._intern_field) if self.field_pooling else value)
+            if self.fact_rows:
+                from knowledge.fact_field_codec import pack_fact_row, POOLED_FIELDS
+                first=self._db.execute('INSERT OR IGNORE INTO seen_fact_ids VALUES (?)',(value['id'],)).rowcount
+                fields=POOLED_FIELDS if first else POOLED_FIELDS|{'id'}
+                packed.append(pack_fact_row(value,self._intern_field,fields=fields))
+            else:
+                packed.append(pack_fact_fields(value,self._intern_field) if self.field_pooling else value)
         owner=owner_key(entry);model,opcode=entry['target_model'],entry['opcode']
         identity='definition:'+hashlib.sha256(owner.encode()).hexdigest()
         packet={'kind':'instruction','target':opcode,'scope':{'models':[model]},'content_origin':'authored_fact','value':{**entry,'facts':packed}}
@@ -543,7 +566,7 @@ class OwnerStoreWriter:
         self._db.execute('INSERT INTO runtime_definitions VALUES (?,?)',(owner,encoded))
         self._db.execute('INSERT INTO runtime_owner_index VALUES (?,?,?,?,?)',(entry['vendor'].lower(),opcode.upper(),model.upper(),owner,hashlib.sha256(encoded.encode()).hexdigest()))
         metadata={'runtime_owner':owner,'content_origin':'authored_fact','distribution_status':PUBLICATION_STATUS,'fact_kind':'instruction','fact_target':opcode,'source_lane':'fact','plc_models':[model]}
-        self._db.execute('INSERT INTO chunks VALUES (?,?,?,?,?,?,?,?)',(identity,' '.join(sorted(tokens)),_json(metadata),_json([model]),opcode,'instruction','authored_fact',PUBLICATION_STATUS))
+        insert_chunk(self._db,(identity,' '.join(sorted(tokens)),_json(metadata),_json([model]),opcode,'instruction','authored_fact',PUBLICATION_STATUS))
         self._db.execute('INSERT INTO entity_index VALUES (?,?)',(opcode,identity))
         self._db.execute('INSERT INTO facts VALUES (?,?,?,?,?,?)',(identity,'instruction',opcode,model,identity,'{}'))
         self._owners+=1;self._facts+=len(facts)

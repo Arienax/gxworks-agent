@@ -77,18 +77,23 @@ class OwnerDefinitionStore:
                        'source_load_count': 0, 'value_load_count': 0, 'field_load_count':0, 'owner_cache_hits': 0}
         try:
             meta = dict(self._db.execute('SELECT key,value FROM meta'))
+            from knowledge.exact_search_storage import validate_search_schema
+            validate_search_schema(self._db)
             if (meta.get('owner_store_serialization') != SERIALIZATION
-                    or meta.get('runtime_serialization') not in {'owner-source-pool-v1','owner-field-pool-v2'}
+                    or meta.get('runtime_serialization') not in {'owner-source-pool-v1','owner-field-pool-v2','owner-field-row-v3'}
                     or meta.get('corpus_kind') != manifest['corpus_kind']
                     or meta.get('fact_bundle_version') != manifest['fact_bundle_version']):
                 raise ValueError('Owner database version mismatch')
             required = {'runtime_owner_index', 'runtime_definitions', 'runtime_sources',
                         'runtime_values', 'runtime_language_features'}
-            if meta.get('runtime_serialization') == 'owner-field-pool-v2':
+            if meta.get('runtime_serialization') in {'owner-field-pool-v2','owner-field-row-v3'}:
                 from knowledge.fact_field_codec import FIELD_SERIALIZATION
                 if meta.get('field_serialization') != FIELD_SERIALIZATION:
                     raise ValueError('Unsupported exact fact field transport')
                 required.add('runtime_fact_fields')
+                if meta.get('runtime_serialization')=='owner-field-row-v3':
+                    from knowledge.fact_field_codec import FACT_ROW_SERIALIZATION
+                    if meta.get('fact_row_serialization')!=FACT_ROW_SERIALIZATION:raise ValueError('Unsupported exact fact row transport')
             tables = {row[0] for row in self._db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             if not required <= tables:
                 raise ValueError('Missing owner store tables')
