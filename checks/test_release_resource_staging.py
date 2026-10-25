@@ -95,6 +95,34 @@ with patch.object(build_release, 'TEMPLATE_NAMES', ()), patch.object(build_relea
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue((output/'inputs/resources/knowledge/runtime/instruction_definitions.manifest.json').is_file())
 
+    def test_spec_prefix_collector_without_pythonpath(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)/'source'; catalog,_=self.prepare(root, 'canonical')
+            (catalog/'fx3u_step_widths.json').write_text('{}')
+            spec=Path(__file__).resolve().parents[1]/'packaging/pyinstaller/release.spec'
+            code="""
+import ast, sys, types
+from pathlib import Path
+# Stub only PyInstaller's import; do not run or claim a binary freeze.
+package=types.ModuleType('PyInstaller'); utils=types.ModuleType('PyInstaller.utils')
+hooks=types.ModuleType('PyInstaller.utils.hooks')
+for name in ('copy_metadata','get_package_paths','collect_submodules'):
+    setattr(hooks,name,lambda *args: None)
+sys.modules.update({'PyInstaller':package,'PyInstaller.utils':utils,'PyInstaller.utils.hooks':hooks})
+spec=Path(sys.argv[1]); tree=ast.parse(spec.read_text()); nodes=[]
+for node in tree.body:
+    if isinstance(node,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='component' for t in node.targets):break
+    nodes.append(node)
+namespace={'SPECPATH':str(spec.parent)}
+exec(compile(ast.Module(body=nodes,type_ignores=[]),str(spec),'exec'),namespace)
+selected=namespace['runtime_instruction_data'](Path(sys.argv[2]))
+assert any(Path(source).name=='instruction_definitions.manifest.json' for source,destination in selected)
+assert any(Path(source).suffix=='.sqlite' for source,destination in selected)
+"""
+            env=dict(os.environ);env.pop('PYTHONPATH',None)
+            result=subprocess.run([sys.executable,'-c',code,str(spec),str(root)],env=env,cwd=tmp,capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+
     def test_bad_manifest_does_not_fall_back_to_legacy(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)/'source'; output=Path(tmp)/'build'
