@@ -248,6 +248,19 @@ class ImportService:
         project_preparation = None
         created_project = False
         if not session.project_open and create_project_path is not None:
+            if project_path:
+                # A named target that is not the project about to be created would
+                # be silently replaced by the default one, so refuse instead.
+                requested = os.path.normcase(os.path.abspath(str(project_path).strip()))
+                target = os.path.normcase(os.path.abspath(str(create_project_path).strip()))
+                if requested != target:
+                    return ImportResult(
+                        False, "check_project",
+                        "指定了工程路径，但当前没有打开的工程、将要新建的是另一个文件；"
+                        "未继续写入。",
+                        ImportErrorCode.PROJECT_PATH_UNKNOWN,
+                        csv_path=validation.path,
+                    )
             report("prepare_project", f"正在新建并保存独立的{profile.cpu}梯形图工程…")
             try:
                 project_preparation = self.automation.create_simple_project(

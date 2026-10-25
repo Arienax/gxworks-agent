@@ -27,7 +27,7 @@ class FakeValidation:
     valid: bool = True
     path: str = ""
     errors: list = field(default_factory=list)
-    plc_info: dict = field(default_factory=dict)
+    plc_info: str = "三菱 GX Works2 兼容"
 
 
 @dataclass
@@ -85,7 +85,32 @@ def _abbreviate(path):
     return "..." + str(path)[2:]
 
 
-def _run(caption, *, backup_root, project_path=None, project_search_roots=(), csv_path=None):
+def service_module_restore(original):
+    from gxworks2 import import_service as service_module
+
+    service_module._native_file_owner = original
+
+
+def _owner_patch(owner):
+    """Swap the Restart Manager predicate so cases do not need a live GX window.
+
+    ``owner=None`` models a session that cannot answer (no pid/start time);
+    ``True``/``False`` model a process that does/does not hold the file.
+    """
+
+    from gxworks2 import import_service as service_module
+
+    original = service_module._native_file_owner
+    if owner is None:
+        service_module._native_file_owner = lambda session: None
+    else:
+        service_module._native_file_owner = lambda session: (lambda path: bool(owner))
+    return original
+
+
+def _run(caption, *, backup_root, project_path=None, project_search_roots=(),
+         csv_path=None, owner=True, create_project_path=None, project_open=True,
+         import_context=None):
     automation = FakeAutomation(
         {
             "project_open": True,
@@ -95,22 +120,27 @@ def _run(caption, *, backup_root, project_path=None, project_search_roots=(), cs
         }
     )
     service = ImportService(
-        FakeFinder(FakeSession(project_name=caption)),
+        FakeFinder(FakeSession(project_name=caption, project_open=project_open)),
         automation,
         FakeCSVManager(),
         backup_root,
     )
+    original = _owner_patch(owner)
     try:
         result = service.import_current_program(
             csv_path or str(Path(backup_root) / "program.csv"),
             save_project=False,
             project_path=project_path,
             project_search_roots=project_search_roots,
+            create_project_path=create_project_path,
+            import_context=import_context,
         )
     except RuntimeError:
         # The fake stops at the native import; reaching it means the backup
         # stage already succeeded, which is what these cases observe.
         return None, automation
+    finally:
+        service_module_restore(original)
     return result, automation
 
 
@@ -237,47 +267,33 @@ def test_two_matching_projects_under_the_search_root_are_refused():
 def test_a_backup_the_window_does_not_hold_is_refused():
     """Restart Manager proof: a shared caption suffix alone must not authorise."""
 
-    from gxworks2 import import_service as service_module
-
-    original = service_module._native_file_owner
-    service_module._native_file_owner = lambda session: (lambda path: False)
-    try:
-        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as project_dir:
-            root = Path(directory)
-            target = Path(project_dir) / "project.gxw"
-            target.write_bytes(b"project")
-            result, automation = _run(
-                _abbreviate(target), backup_root=root, project_path=str(target)
-            )
-            assert result is not None
-            assert result.error_code is ImportErrorCode.PROJECT_PATH_UNKNOWN
-            assert "占用" in result.message
-            assert list(root.rglob("*.gxw")) == []
-            assert automation.imported is False
-    finally:
-        service_module._native_file_owner = original
+    with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as project_dir:
+        root = Path(directory)
+        target = Path(project_dir) / "project.gxw"
+        target.write_bytes(b"project")
+        result, automation = _run(
+            _abbreviate(target), backup_root=root, project_path=str(target), owner=False
+        )
+        assert result is not None
+        assert result.error_code is ImportErrorCode.PROJECT_PATH_UNKNOWN
+        assert "占用" in result.message
+        assert list(root.rglob("*.gxw")) == []
+        assert automation.imported is False
 
 
 def test_the_backup_records_which_evidence_tied_it():
-    from gxworks2 import import_service as service_module
-
-    original_owner = service_module._native_file_owner
-    service_module._native_file_owner = lambda session: (lambda path: True)
-    try:
-        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as project_dir:
-            root = Path(directory)
-            target = Path(project_dir) / "project.gxw"
-            target.write_bytes(b"project")
-            result, _ = _run_succeeding(
-                _abbreviate(target), backup_root=root, project_path=str(target)
-            )
-            assert result is not None
-            protection = result.details["version_protection"]
-            assert protection["project_path_source"] == "explicit"
-            assert protection["project_path_binding"] == "file-owner"
-            assert protection["project_path"] == str(target)
-    finally:
-        service_module._native_file_owner = original_owner
+    with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as project_dir:
+        root = Path(directory)
+        target = Path(project_dir) / "project.gxw"
+        target.write_bytes(b"project")
+        result, _ = _run_succeeding(
+            _abbreviate(target), backup_root=root, project_path=str(target)
+        )
+        assert result is not None
+        protection = result.details["version_protection"]
+        assert protection["project_path_source"] == "explicit"
+        assert protection["project_path_binding"] == "file-owner"
+        assert protection["project_path"] == str(target)
 
 
 def _run_succeeding(caption, *, backup_root, project_path=None):
@@ -307,9 +323,50 @@ def _run_succeeding(caption, *, backup_root, project_path=None):
         SucceedingCSVManager(),
         backup_root,
     )
-    result = service.import_current_program(
-        str(Path(backup_root) / "program.csv"),
-        save_project=False,
-        project_path=project_path,
-    )
+    original = _owner_patch(True)
+    try:
+        result = service.import_current_program(
+            str(Path(backup_root) / "program.csv"),
+            save_project=False,
+            project_path=project_path,
+        )
+    finally:
+        service_module_restore(original)
     return result, automation
+
+
+def test_without_owner_proof_a_truncated_caption_is_refused():
+    """The maintainer's repro: caption-only fallback backed up the wrong file."""
+
+    with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as project_dir:
+        root = Path(directory)
+        target = Path(project_dir) / "project.gxw"
+        target.write_bytes(b"project")
+        result, automation = _run(
+            _abbreviate(target), backup_root=root, project_path=str(target), owner=None
+        )
+        assert result is not None
+        assert result.error_code is ImportErrorCode.PROJECT_PATH_UNKNOWN
+        assert "占用证明" in result.message
+        assert list(root.rglob("*.gxw")) == [], "拿不到占用证明时不得备份"
+        assert automation.imported is False
+
+
+def test_a_named_target_is_not_replaced_by_an_auto_created_project():
+    with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as project_dir:
+        root = Path(directory)
+        target = Path(project_dir) / "requested.gxw"
+        target.write_bytes(b"requested")
+        auto = Path(project_dir) / "gx_import.gxw"
+        result, automation = _run(
+            "(工程未设置)",
+            backup_root=root,
+            project_path=str(target),
+            create_project_path=str(auto),
+            project_open=False,
+            import_context={"plc_model": "FX3U"},
+        )
+        assert result is not None
+        assert result.error_code is ImportErrorCode.PROJECT_PATH_UNKNOWN
+        assert "另一个文件" in result.message
+        assert automation.imported is False

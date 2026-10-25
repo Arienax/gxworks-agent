@@ -72,7 +72,9 @@ def test_caption_agreement_is_three_state():
 def test_an_explicit_path_must_be_corroborated_by_the_window():
     with tempfile.TemporaryDirectory() as directory:
         target = _touch(directory, "target.gxw")
-        accepted = resolve_project_path(_abbreviate(target), explicit=str(target))
+        accepted = resolve_project_path(
+            _abbreviate(target), explicit=str(target), owns=lambda path: True
+        )
         assert accepted.source == EXPLICIT
         assert accepted.path == target
 
@@ -126,7 +128,9 @@ def test_an_abbreviated_caption_without_candidates_is_refused():
 def test_a_candidate_must_match_the_caption_tail():
     with tempfile.TemporaryDirectory() as directory:
         unrelated = _touch(Path(directory) / "elsewhere", "target.gxw")
-        resolution = resolve_project_path(ABBREVIATED, candidates=[str(unrelated)])
+        resolution = resolve_project_path(
+            ABBREVIATED, candidates=[str(unrelated)], owns=lambda path: True
+        )
         assert not resolution, "同名但目录不符的候选不能被采纳"
         assert resolution.candidates == (unrelated,)
         assert "不一致" in resolution.reason
@@ -135,7 +139,9 @@ def test_a_candidate_must_match_the_caption_tail():
 def test_a_unique_candidate_matching_the_tail_is_used():
     with tempfile.TemporaryDirectory() as directory:
         target = _touch(Path(directory) / "repos" / "plc", "target.gxw")
-        resolution = resolve_project_path(_abbreviate(target), candidates=[str(target)])
+        resolution = resolve_project_path(
+            _abbreviate(target), candidates=[str(target)], owns=lambda path: True
+        )
         assert resolution.source == CANDIDATE
         assert resolution.path == target
 
@@ -145,7 +151,8 @@ def test_ambiguous_candidates_are_not_guessed():
         left = _touch(Path(first) / "plc", "target.gxw")
         right = _touch(Path(second) / "plc", "target.gxw")
         resolution = resolve_project_path(
-            r"...\plc\target.gxw", candidates=[str(left), str(right)]
+            r"...\plc\target.gxw", candidates=[str(left), str(right)],
+            owns=lambda path: True,
         )
         assert not resolution
         assert len(resolution.candidates) == 2
@@ -202,19 +209,20 @@ def test_a_full_path_caption_naming_another_file_is_refused():
         assert "不是同一个工程" in refused.reason
 
 
-def test_a_bare_name_caption_only_corroborates_the_file_name():
-    """Known limitation, pinned so a later change cannot widen it silently.
-
-    A caption with neither a directory nor a ``...`` prefix only carries a file
-    name, so corroboration degrades to a name comparison.  GX Works2 does not
-    produce such a caption for a saved project, so this is accepted rather than
-    guessed further.
-    """
+def test_a_bare_name_caption_requires_owner_proof():
+    """A file name alone cannot identify a file; ownership is the deciding evidence."""
 
     with tempfile.TemporaryDirectory() as directory:
         target = _touch(Path(directory) / "elsewhere", "target.gxw")
-        resolution = resolve_project_path("target.gxw", explicit=str(target))
-        assert resolution.path == target
+
+        refused = resolve_project_path("target.gxw", explicit=str(target))
+        assert not refused, "只有文件名、又没有占用证明时不能采纳"
+        assert "占用证明" in refused.reason
+
+        accepted = resolve_project_path(
+            "target.gxw", explicit=str(target), owns=lambda path: path == target
+        )
+        assert accepted.path == target
 
 
 def test_candidate_discovery_stops_at_the_limit():
@@ -274,7 +282,7 @@ def test_ownership_strength_is_reported():
         assert proven.path == target
         assert proven.binding == BINDING_OWNER
 
-        caption_only = resolve_project_path(_abbreviate(target), explicit=str(target))
+        caption_only = resolve_project_path(str(target), explicit=str(target))
         assert caption_only.path == target
         assert caption_only.binding == BINDING_CAPTION
 
@@ -291,7 +299,7 @@ def test_candidates_must_be_held_by_the_window():
 
 
 def test_a_bare_name_caption_without_a_match_says_it_has_no_directory():
-    resolution = resolve_project_path("target.gxw")
+    resolution = resolve_project_path("target.gxw", owns=lambda path: True)
     assert not resolution
     assert "没有目录" in resolution.reason
     assert "截断" not in resolution.reason, "裸文件名与截断标题是两种不同情况"

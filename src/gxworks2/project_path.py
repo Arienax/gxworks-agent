@@ -191,10 +191,11 @@ def resolve_project_path(
 ) -> ProjectPathResolution:
     """Return the project file for ``caption`` using the trust order above.
 
-    ``owns`` proves that the window's process holds a candidate file open; it is
-    the only check that survives a shared caption suffix.  Pass ``None`` when
-    ownership cannot be queried and the result will be reported as
-    caption-bound instead of owner-bound.
+    ``owns`` proves that the window's process holds a candidate file open.  It is
+    the only check that survives a shared caption suffix, so it is required
+    whenever the caption carries less than a complete path: a truncated tail or a
+    bare file name cannot identify the file on its own.  Without it those cases
+    are refused rather than reported as caption-bound.
     """
 
     text = str(caption or "").strip()
@@ -229,6 +230,17 @@ def resolve_project_path(
                     f"（窗口：{text}，指定：{named.name}）"
                 ),
             )
+        if not ntpath.isabs(text) and owns is None:
+            # A truncated tail or a bare name cannot identify the file, and no
+            # owner proof is available to settle it.  Refusing is the only safe
+            # answer: the backup would protect a file nothing writes to.
+            return ProjectPathResolution(
+                source=EXPLICIT,
+                reason=(
+                    "无法取得当前 GX Works2 进程对该文件的占用证明；"
+                    "仅凭被截断的窗口标题不能确定将被写入的工程，未继续写入。"
+                ),
+            )
         if owns is not None and not owns(named):
             return ProjectPathResolution(
                 source=EXPLICIT,
@@ -252,6 +264,16 @@ def resolve_project_path(
         return ProjectPathResolution(reason="当前窗口没有已保存的工程。")
 
     abbreviated = text.startswith(ABBREVIATION_PREFIX)
+    candidates = tuple(candidates or ())
+    if candidates and owns is None:
+        # Candidates are only ever matched by a caption suffix, which is exactly
+        # what ownership exists to disambiguate.
+        return ProjectPathResolution(
+            reason=(
+                "无法取得当前 GX Works2 进程对候选工程的占用证明；"
+                "不能仅凭窗口标题选择工程，未继续写入。"
+            )
+        )
     matched, mismatched, unowned = [], [], []
     for item in candidates:
         candidate = _as_project_file(item)
@@ -262,7 +284,7 @@ def resolve_project_path(
         if abbreviated and not caption_matches_path(text, candidate):
             mismatched.append(candidate)
             continue
-        if owns is not None and not owns(candidate):
+        if not owns(candidate):
             unowned.append(candidate)
             continue
         matched.append(candidate)
