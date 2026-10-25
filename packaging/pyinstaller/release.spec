@@ -6,6 +6,7 @@ from PyInstaller.utils.hooks import copy_metadata, get_package_paths, collect_su
 
 root = Path(SPECPATH).resolve().parents[1]
 sys.path.insert(0, str(root))
+sys.path.insert(0, str(root / "src"))
 from scripts.runtime_knowledge_resources import runtime_knowledge_data, runtime_instruction_data, runtime_viewer_data
 
 component = os.environ['GX_RELEASE_COMPONENT']
