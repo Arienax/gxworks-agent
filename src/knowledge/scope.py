@@ -179,6 +179,15 @@ def source_subquery(
             structured_clauses.append(f"COALESCE({_quote_identifier('fact_kind')},'')<>?")
             values.append(kind)
             continue
+        # Authored runtime chunks carry kind in the normalized facts index,
+        # not necessarily as a physical chunks column (including pooled views).
+        facts = schema.get('facts')
+        if facts and {'kind', 'chunk_id'} <= set(facts['columns']):
+            structured_clauses.append(
+                f"{owner_identifier} NOT IN (SELECT chunk_id FROM {_quote_identifier(facts['name'])} "
+                "WHERE kind=? AND chunk_id IS NOT NULL)")
+            values.append(kind)
+            continue
         owner_name = owner_tables.get(kind)
         owner = schema.get(owner_name) if owner_name else None
         if not owner or "chunk_id" not in owner["columns"]:
@@ -213,15 +222,19 @@ def runtime_status():
         from knowledge.index_access import index_path as _index_path
         import sqlite3
         plan = retrieval_plan("", "format_repair")
+        from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+        owner_path = DEFAULT_INSTRUCTION_REGISTRY.selected_owner_database_path()
+        owner_status = {"status": "selected_pair_current" if owner_path is not None else "not_selected",
+                        "fact_bundle_version": DEFAULT_INSTRUCTION_REGISTRY.fact_bundle_version if owner_path is not None else None}
         path = _index_path()
         if path is None or not path.is_file():
-            return {"status": "unavailable", "failure": {"code": "index_missing", "error_type": "FileNotFoundError"}}
+            return {"status": "unavailable", "selected_owner": owner_status, "failure": {"code": "index_missing", "error_type": "FileNotFoundError"}}
         connection = sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True, timeout=0.2)
         try:
             connection.execute("SELECT 1 FROM chunks LIMIT 1").fetchone()
         finally:
             connection.close()
-        return {"status": "available", "engine": plan["engine"], "haystack_version": version("haystack-ai")}
+        return {"status": "available", "selected_owner": owner_status, "engine": plan["engine"], "haystack_version": version("haystack-ai")}
     except Exception as error:
         return {"status": "unavailable", "failure": retrieval_failure(error)}
 

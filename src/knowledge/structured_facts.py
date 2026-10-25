@@ -166,9 +166,10 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None, langu
     }
 
 
-def _runtime():
+def _runtime(kind=None):
 
-    path = index_access.index_path()
+    from knowledge.fact_corpus import runtime_index_path
+    path = runtime_index_path(kind)
     identity = index_access.index_identity(path)
     if identity[0] == "missing":
         return index_access, None, None, None, {}
@@ -201,7 +202,7 @@ def resolve_positioning_records(targets, *, plc_model, task_type="analysis"):
     if connection is None or schema is None:
         return []
     authored = resolve("positioning", ["DIRECTION_OUTPUT_ASSIGNMENT"],
-                       plc_model=plc_model, task_type=task_type, connection=connection)
+                       plc_model=plc_model, task_type=task_type, connection=connection, domain_results=True)
     if authored is not None:
         results = []
         for target in requested:
@@ -936,7 +937,7 @@ def _declared_instruction_alias_targets(query, *, plc_model=None):
     """
     from knowledge.analysis_router import instruction_reference_text
     query = instruction_reference_text(query)
-    _index, _path, connection, schema, _meta = _runtime()
+    _index, _path, connection, schema, _meta = _runtime('instruction')
     if connection is not None and _meta.get('corpus_kind') == 'authored_plc_facts_v1':
         from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
         targets = []
@@ -1586,8 +1587,7 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
     from knowledge.fact_corpus import resolve
     from knowledge.source_authority import instruction_source_authority
 
-    _index, _path, connection, schema, _meta = _runtime()
-    authored = resolve("instruction", targets, plc_model=plc_model, task_type=task_type, connection=connection)
+    authored = resolve("instruction", targets, plc_model=plc_model, task_type=task_type)
     if authored is not None:
         admitted, decided = _adjudicated_rows(authored, targets, plc_model)
         from knowledge.fact_selection import project_instruction_records
@@ -1596,6 +1596,7 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
         return project_instruction_records(admitted if decided else authored, plc_model=plc_model,
             language=language, aspects=selected_aspects, project_mode=project_mode,
             instance_context=instance_context, version=version, query=query)
+    _index, _path, connection, schema, _meta = _runtime()
     table = schema.get("instructions") if schema is not None else None
     table_available = bool(
         connection is not None
@@ -1695,7 +1696,7 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
         source_records = _instruction_contract_source_records(
             step_target, plc_model=plc_model, task_type=task_type,
         )
-        source_by_id = {record["id"]: record for record in source_records}
+        source_by_id = {record.get("retrieval_chunk_id", record["id"]): record for record in source_records}
         source_scopes = {(record["manual_id"], record["revision"]) for record in source_records}
         if table_available and source_by_id:
             placeholders = ",".join("?" for _ in source_by_id)
@@ -1716,7 +1717,7 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
             if chunk and ((chunk[0].get("manual_id"), chunk[0].get("revision")) not in source_scopes
                           or chunk_id in source_by_id):
                 inputs.append((row, chunk[0]))
-        inputs.extend(({}, record) for record in source_records if record["id"] not in input_seen)
+        inputs.extend(({}, record) for record in source_records if record.get("retrieval_chunk_id", record["id"]) not in input_seen)
         # Prefer the exact selected form and the most complete structured record.
         # Manual priority only resolves otherwise-equivalent official sources;
         # there is no query-dependent score or opcode-specific boost here.
@@ -1876,7 +1877,7 @@ def _device_range_records(devices, *, plc_model, task_type, connection):
         if parts and parts[0] == 'T' and parts[1].isdigit():
             requests.append((canonical_reference_device(device), parts[0], int(parts[1])))
     families = list(dict.fromkeys(family for _, family, _ in requests))
-    rows = resolve('device_family', families, plc_model=plc_model, task_type=task_type, connection=connection) or []
+    rows = resolve('device_family', families, plc_model=plc_model, task_type=task_type, connection=connection, domain_results=True) or []
     results = []
     for address, family, number in requests:
         for row in rows:
@@ -1922,7 +1923,7 @@ def _device_address_records(devices, *, plc_model, task_type, connection):
     # not discard a later address in a request containing many device classes.
     rows = [row for family in dict.fromkeys(parts[0] for _, parts in requests)
             for row in (resolve('device_family', [family], plc_model=cpu,
-                        task_type=task_type, connection=connection) or [])]
+                        task_type=task_type, connection=connection, domain_results=True) or [])]
     results = []
     for address, (prefix, digits, bit) in requests:
         for row in rows:
@@ -1964,7 +1965,7 @@ def resolve_device_records(devices, *, plc_model="FX3U", task_type="analysis", q
     from plc.device_definitions import device_definition_targets, resolve_device_definition
     _index, _path, connection, schema, _meta = _runtime()
     authored_targets = list(dict.fromkeys([*(devices or ()), *device_definition_targets(query, plc_model)]))
-    authored = resolve("device", authored_targets, plc_model=plc_model, task_type=task_type, connection=connection)
+    authored = resolve("device", authored_targets, plc_model=plc_model, task_type=task_type, connection=connection, domain_results=True)
     if authored is not None:
         for row in authored:
             resolved = resolve_device_definition(row['fact_target'], plc_model, context=hardware_context)
@@ -2131,7 +2132,7 @@ def resolve_device_family_records(families, *, plc_model="FX3U", task_type="anal
     from knowledge.fact_corpus import resolve
     from knowledge.device_evidence import resolve_section_records
     _index, _, connection, schema, _ = _runtime()
-    authored = resolve("device_family", families, plc_model=plc_model, task_type=task_type, connection=connection)
+    authored = resolve("device_family", families, plc_model=plc_model, task_type=task_type, connection=connection, domain_results=True)
     if authored is not None:
         from plc.target_support import normalize_target_cpu
         cpu = normalize_target_cpu(plc_model)
@@ -2208,7 +2209,7 @@ def resolve_process_records(needs, *, plc_model="FX3U", task_type="generate"):
         for need in needs or ():
             target = str(need.get('target', '')).upper()
             kind, key = ('device_family', 'T') if target == 'TIMER' else ('device_family', 'C') if target == 'COUNTER' else ('process', target)
-            rows = resolve(kind, [key], plc_model=plc_model, task_type=task_type, connection=authored_connection) or []
+            rows = resolve(kind, [key], plc_model=plc_model, task_type=task_type, connection=authored_connection, domain_results=True) or []
             # Family catalogue presence is insufficient for process behavior.
             rows = [row for row in rows if row.get('runtime_dimension')]
             for row in rows:
@@ -2319,7 +2320,7 @@ def resolve_error_records(codes, *, plc_model="FX3U", task_type="debug"):
     """Resolve explicit error codes through ``error_records`` only."""
     from knowledge.fact_corpus import resolve
     _index, _path, connection, schema, _meta = _runtime()
-    authored = resolve("error", codes, plc_model=plc_model, task_type=task_type, connection=connection)
+    authored = resolve("error", codes, plc_model=plc_model, task_type=task_type, connection=connection, domain_results=True)
     if authored is not None:
         return authored
     if connection is None or schema is None:

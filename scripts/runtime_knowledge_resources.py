@@ -65,16 +65,16 @@ def _inspect_public_value(value):
             _inspect_public_value(child)
 
 
-def runtime_instruction_data(root):
+def runtime_instruction_data(root, *, native_encoding_source=None):
     root = Path(root)
     directory = root / 'resources/instructions/mitsubishi'
     manifest = root / 'resources/knowledge/runtime/instruction_definitions.manifest.json'
     local_manifest = directory / 'instruction_definitions.manifest.json'
-    if local_manifest.exists():
+    if local_manifest.exists() or local_manifest.is_symlink():
         manifest = local_manifest
-    use_store = manifest.exists()
+    use_store = manifest.exists() or manifest.is_symlink()
     names = [name for name in INSTRUCTION_FILES if not (use_store and name == 'instruction_definitions.json.gz')]
-    result = [(str(directory / name), 'resources/instructions/mitsubishi') for name in names]
+    result = [(str(Path(native_encoding_source) if native_encoding_source is not None and name == 'fx3u_step_widths.json' else directory / name), 'resources/instructions/mitsubishi') for name in names]
     for source, _ in result:
         if not Path(source).is_file():
             raise FileNotFoundError(source)
@@ -93,9 +93,8 @@ def runtime_instruction_data(root):
             assert_fact_database(store.database_path)
         finally:
             store.close()
-        if manifest == local_manifest:
-            result.extend([(str(manifest), 'resources/instructions/mitsubishi'),
-                           (str(store.database_path), 'resources/instructions/mitsubishi')])
+        destination = 'resources/instructions/mitsubishi' if manifest == local_manifest else 'knowledge/runtime'
+        result.extend([(str(manifest), destination), (str(store.database_path), destination)])
         return result
     with gzip.open(directory / 'instruction_definitions.json.gz', 'rt', encoding='utf-8') as stream:
         payload = json.load(stream)
@@ -105,17 +104,17 @@ def runtime_instruction_data(root):
     return result
 
 
-def runtime_knowledge_data(root):
+def runtime_knowledge_data(root, *, native_encoding_source=None):
     root = Path(root)
     for relative, _ in FILES:
         if not (root / relative).is_file():
             raise FileNotFoundError(relative)
     assert_fact_database(root / FILES[0][0])
-    runtime_instruction_data(root)
+    instruction_data = runtime_instruction_data(root, native_encoding_source=native_encoding_source)
     result = [(str(root / relative), destination) for relative, destination in FILES]
     manifest = root / 'resources/knowledge/runtime/instruction_definitions.manifest.json'
-    if manifest.exists():
-        result.append((str(manifest), 'knowledge/runtime'))
+    if manifest.exists() or manifest.is_symlink():
+        result.extend((source, destination) for source, destination in instruction_data if destination == 'knowledge/runtime')
     return result
 
 
@@ -151,6 +150,7 @@ def audit_packaged_knowledge(package):
         allowed.add('knowledge/runtime/instruction_definitions.manifest.json')
         from plc.instruction_owner_store import OwnerDefinitionStore
         store = OwnerDefinitionStore(package / 'knowledge/runtime/instruction_definitions.manifest.json')
+        allowed.add('knowledge/runtime/' + store.database_path.name)
         store.close()
     actual = {p.relative_to(package).as_posix() for p in (package / "knowledge").rglob("*") if p.is_file()}
     if actual != allowed:
