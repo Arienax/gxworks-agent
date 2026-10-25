@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 import time
 
+from .project_path import UNSAVED_PROJECT_NAMES
 from .diagnostics import (
     GXAutomationError,
     classify_automation_error,
@@ -1770,12 +1771,7 @@ class PywinautoGXWorks2UIAutomation(GXWorks2UIAutomation):
 
     def save_project(self, session):
         project_name = str(getattr(session, "project_name", "") or "").strip().casefold()
-        if project_name in {
-            "(工程未设置)",
-            "工程未设置",
-            "(project not set)",
-            "project not set",
-        }:
+        if project_name in UNSAVED_PROJECT_NAMES:
             return {
                 "success": False,
                 "save_required": True,

@@ -232,3 +232,84 @@ def test_two_matching_projects_under_the_search_root_are_refused():
         assert result.error_code is ImportErrorCode.PROJECT_PATH_UNKNOWN
         assert len(result.details["project_path_candidates"]) == 2
         assert list(root.rglob("*.gxw")) == []
+
+
+def test_a_backup_the_window_does_not_hold_is_refused():
+    """Restart Manager proof: a shared caption suffix alone must not authorise."""
+
+    from gxworks2 import import_service as service_module
+
+    original = service_module._native_file_owner
+    service_module._native_file_owner = lambda session: (lambda path: False)
+    try:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as project_dir:
+            root = Path(directory)
+            target = Path(project_dir) / "project.gxw"
+            target.write_bytes(b"project")
+            result, automation = _run(
+                _abbreviate(target), backup_root=root, project_path=str(target)
+            )
+            assert result is not None
+            assert result.error_code is ImportErrorCode.PROJECT_PATH_UNKNOWN
+            assert "占用" in result.message
+            assert list(root.rglob("*.gxw")) == []
+            assert automation.imported is False
+    finally:
+        service_module._native_file_owner = original
+
+
+def test_the_backup_records_which_evidence_tied_it():
+    from gxworks2 import import_service as service_module
+
+    original_owner = service_module._native_file_owner
+    service_module._native_file_owner = lambda session: (lambda path: True)
+    try:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as project_dir:
+            root = Path(directory)
+            target = Path(project_dir) / "project.gxw"
+            target.write_bytes(b"project")
+            result, _ = _run_succeeding(
+                _abbreviate(target), backup_root=root, project_path=str(target)
+            )
+            assert result is not None
+            protection = result.details["version_protection"]
+            assert protection["project_path_source"] == "explicit"
+            assert protection["project_path_binding"] == "file-owner"
+            assert protection["project_path"] == str(target)
+    finally:
+        service_module._native_file_owner = original_owner
+
+
+def _run_succeeding(caption, *, backup_root, project_path=None):
+    """Drive the flow past the native import so the success record is observable."""
+
+    class SucceedingCSVManager(FakeCSVManager):
+        def prepare_import_program(self, csv_path, destination):
+            Path(destination).write_bytes(b"staged")
+            return str(destination)
+
+    class SucceedingAutomation(FakeAutomation):
+        def import_program_csv(self, session, csv_path):
+            self.imported = True
+            return {"success": True, "message": "ok"}
+
+    automation = SucceedingAutomation(
+        {
+            "project_open": True,
+            "program_ready": True,
+            "automation_available": True,
+            "project_name": caption,
+        }
+    )
+    service = ImportService(
+        FakeFinder(FakeSession(project_name=caption)),
+        automation,
+        SucceedingCSVManager(),
+        backup_root,
+    )
+    result = service.import_current_program(
+        str(Path(backup_root) / "program.csv"),
+        save_project=False,
+        project_path=project_path,
+    )
+    return result, automation

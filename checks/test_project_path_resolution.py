@@ -19,10 +19,15 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from gxworks2.project_path import (  # noqa: E402
+    BINDING_CAPTION,
+    BINDING_OWNER,
     CAPTION,
     CANDIDATE,
+    CONFLICT,
     EXPLICIT,
-    caption_describes,
+    MATCH,
+    SILENT,
+    caption_agreement,
     caption_matches_path,
     discover_candidates,
     resolve_project_path,
@@ -55,11 +60,13 @@ def test_an_abbreviated_caption_only_verifies_a_path():
     assert caption_matches_path("", LONG_FILE) is False
 
 
-def test_caption_describes_accepts_full_abbreviated_and_bare_names():
-    assert caption_describes(str(LONG_FILE), LONG_FILE) is True
-    assert caption_describes(LONG_FILE.name, LONG_FILE) is True
-    assert caption_describes("(工程未设置)", LONG_FILE) is True
-    assert caption_describes(str(LONG_DIR / "other.gxw"), LONG_FILE) is False
+def test_caption_agreement_is_three_state():
+    assert caption_agreement(str(LONG_FILE), LONG_FILE) == MATCH
+    assert caption_agreement(LONG_FILE.name, LONG_FILE) == MATCH
+    assert caption_agreement(str(LONG_DIR / "other.gxw"), LONG_FILE) == CONFLICT
+    # "No assertion" must never be reported as agreement.
+    assert caption_agreement("(工程未设置)", LONG_FILE) == SILENT
+    assert caption_agreement("", LONG_FILE) == SILENT
 
 
 def test_an_explicit_path_must_be_corroborated_by_the_window():
@@ -229,10 +236,10 @@ def test_the_mcp_schema_exposes_an_optional_project_path():
 
 
 def test_the_web_execution_proposal_carries_an_optional_project_path():
-    try:
-        from integrations.web.schemas import ExecutionProposal
-    except ModuleNotFoundError:
-        return  # pydantic 属于 Web 依赖；未安装时跳过
+    import pytest
+
+    pytest.importorskip("pydantic", reason="pydantic 属于 Web 依赖，缺失时应显式跳过")
+    from integrations.web.schemas import ExecutionProposal
 
     base = dict(action="gx_import", project_id="p", version_id="v", request_id="r")
     assert ExecutionProposal(**base).project_path is None
@@ -244,3 +251,77 @@ def test_the_web_execution_proposal_carries_an_optional_project_path():
             assert type(error).__name__ == "ValidationError"
         else:
             raise AssertionError(f"{invalid[:12]!r} 应被拒绝")
+
+
+def test_an_explicit_path_the_window_does_not_hold_is_refused():
+    """A shared caption suffix is not proof: the window must actually hold it."""
+
+    with tempfile.TemporaryDirectory() as directory:
+        target = _touch(directory, "target.gxw")
+        refused = resolve_project_path(
+            _abbreviate(target), explicit=str(target), owns=lambda path: False
+        )
+        assert not refused
+        assert "占用" in refused.reason
+
+
+def test_ownership_strength_is_reported():
+    with tempfile.TemporaryDirectory() as directory:
+        target = _touch(directory, "target.gxw")
+        proven = resolve_project_path(
+            _abbreviate(target), explicit=str(target), owns=lambda path: path == target
+        )
+        assert proven.path == target
+        assert proven.binding == BINDING_OWNER
+
+        caption_only = resolve_project_path(_abbreviate(target), explicit=str(target))
+        assert caption_only.path == target
+        assert caption_only.binding == BINDING_CAPTION
+
+
+def test_candidates_must_be_held_by_the_window():
+    with tempfile.TemporaryDirectory() as directory:
+        target = _touch(Path(directory) / "plc", "target.gxw")
+        refused = resolve_project_path(
+            _abbreviate(target), candidates=[str(target)], owns=lambda path: False
+        )
+        assert not refused
+        assert "占用" in refused.reason
+        assert refused.candidates == (target,)
+
+
+def test_a_bare_name_caption_without_a_match_says_it_has_no_directory():
+    resolution = resolve_project_path("target.gxw")
+    assert not resolution
+    assert "没有目录" in resolution.reason
+    assert "截断" not in resolution.reason, "裸文件名与截断标题是两种不同情况"
+
+
+def test_candidate_discovery_accepts_a_single_root():
+    with tempfile.TemporaryDirectory() as directory:
+        target = _touch(Path(directory) / "plc", "target.gxw")
+        assert discover_candidates("target.gxw", str(Path(directory) / "plc")) == (target,)
+
+
+def test_the_import_tool_carries_project_path_into_the_pending_action():
+    import types
+
+    from agent_runtime.native_tools import _request_gxworks2_import
+
+    context = types.SimpleNamespace(
+        version={
+            "target_mode": "ladder",
+            "artifacts": {"program_csv": "p.csv", "comment_csv": "c.csv"},
+            "program_name": "MAIN",
+        },
+        project_id="proj",
+        project={"name": "demo"},
+        version_id="v1",
+        plc_model="FX3U",
+    )
+    pending = _request_gxworks2_import(context, {"project_path": str(LONG_FILE)})
+    assert pending["pending_action"]["project_path"] == str(LONG_FILE)
+    assert pending["requires_confirmation"] is True
+
+    plain = _request_gxworks2_import(context, {})
+    assert "project_path" not in plain["pending_action"]

@@ -1,5 +1,6 @@
 from dataclasses import asdict, replace
 from pathlib import Path
+import os
 import shutil
 import tempfile
 import time
@@ -9,6 +10,38 @@ from .models import ImportErrorCode, ImportResult
 from .project_path import UNSAVED_PROJECT_NAMES as _UNSAVED_PROJECT_NAMES
 from .project_path import caption_label, discover_candidates, resolve_project_path
 from .project_profiles import native_project_profile
+
+
+def _native_file_owner(session):
+    """Prove the window's process holds a file, when that can be asked at all.
+
+    A caption only carries a suffix, so two projects can share it.  Restart
+    Manager answers "who has this file open", which is the only evidence that
+    survives a shared suffix.  Returns ``None`` when the platform or the session
+    cannot answer, and the resolver then reports a weaker, caption-bound result.
+    """
+
+    if os.name != "nt":
+        return None
+    process_id = int(getattr(session, "process_id", 0) or 0)
+    started = str(getattr(session, "process_started", "") or "").strip()
+    if not process_id or not started:
+        return None
+
+    def owns(path):
+        from .engineering_files import _NativeFileUse
+
+        try:
+            handle = _NativeFileUse(path)
+        except Exception:
+            # An unanswerable query is not proof of ownership.
+            return False
+        try:
+            return bool(handle.owns(process_id, started))
+        finally:
+            handle.close()
+
+    return owns
 
 
 def _unsaved_project_identity(session, project_name, import_context=None):
@@ -277,9 +310,12 @@ class ImportService:
             project_identity=effective_project_identity,
         )
         backup_path = ""
+        path_resolution = None
         try:
             if not created_project:
-                caption = state.get("project_path") or project_name
+                # inspect_project never supplies a path; the caption is the only
+                # identity GX Works2 exposes, and it is a display string.
+                caption = project_name
                 # A brand new project has no file to protect. With an explicit
                 # path there is something to verify, so the resolver decides and
                 # refuses when the window cannot corroborate it.
@@ -293,23 +329,27 @@ class ImportService:
                         candidates = discover_candidates(
                             caption_label(caption), project_search_roots
                         )
-                    resolution = resolve_project_path(
-                        caption, explicit=project_path, candidates=candidates
+                    path_resolution = resolve_project_path(
+                        caption,
+                        explicit=project_path,
+                        candidates=candidates,
+                        owns=_native_file_owner(session),
                     )
-                    if not resolution:
-                        reason = resolution.reason or "无法确定当前工程的保存位置。"
+                    if not path_resolution:
+                        reason = path_resolution.reason or "无法确定当前工程的保存位置。"
                         return ImportResult(
                             False, "backup", f"导入前GXW备份失败：{reason}",
                             ImportErrorCode.PROJECT_PATH_UNKNOWN,
                             csv_path=validation.path, project_name=project_name,
                             details={
-                                "project_path_source": resolution.source,
+                                "project_path_source": path_resolution.source,
+                                "project_path_binding": path_resolution.binding,
                                 "project_path_candidates": [
-                                    str(item) for item in resolution.candidates
+                                    str(item) for item in path_resolution.candidates
                                 ],
                             },
                         )
-                    source = resolution.path
+                    source = path_resolution.path
                     report("backup", "正在备份当前GXW工程文件…")
                     folder = self.csv_manager.backup_folder(self.backup_root, source.stem)
                     destination = folder / source.name
@@ -345,6 +385,11 @@ class ImportService:
             "target_program_semantic_sha256": target_semantic_hash,
             "target_comment_semantic_sha256": target_comment_hash,
         }
+        if path_resolution is not None:
+            # Auditable either way: which evidence tied the backup to this window.
+            protection_details["project_path"] = str(path_resolution.path)
+            protection_details["project_path_source"] = path_resolution.source
+            protection_details["project_path_binding"] = path_resolution.binding
 
         try:
             staged_import_path = self.csv_manager.prepare_import_program(

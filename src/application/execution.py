@@ -476,8 +476,10 @@ class GXExecutionCoordinator:
                 create_project_path=directory / "gx_import.gxw",
                 # A long project path reaches us as an abbreviated caption, so the
                 # operator may name the file explicitly; without it the service
-                # refuses instead of guessing which project to write into.
+                # refuses instead of guessing which project to write into. The
+                # workspace is the only root this process can trust as bounded.
                 project_path=payload.get("project_path"),
+                project_search_roots=(self.store.base_dir,),
                 synchronize_comments=True, verify_roundtrip=False, save_project=True,
                 pre_import_policy=pre_import_policy,
                 progress=progress,

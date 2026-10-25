@@ -8,18 +8,24 @@ used directly as a path nor be turned back into one.  It is used here to
 
 What is being resolved is not "which file does the user mean" but "which file
 will this import modify".  The target is always the project open in the window;
-the path only decides which file gets backed up first.  A path the window does
-not corroborate would protect the wrong file while the open project is written
-to, so it is refused instead of adopted.
+the path only decides which file gets backed up first.  Backing up a file the
+window does not hold would leave the real target unprotected, so anything
+unproven is refused instead of adopted.
+
+An abbreviated caption only carries a suffix, so it cannot distinguish
+``D:\\work\\plc\\line.gxw`` from ``D:\\backup\\plc\\line.gxw``.  Callers that can
+prove ownership - GX Works2 holds the file open - pass ``owns`` and get a
+stronger binding; without it the result is reported as caption-bound, which is
+weaker evidence and is recorded as such.
 
 Trust order, strongest first:
 
-1. ``explicit``  - the caller named the file and the caption agrees with it.
+1. ``explicit``  - the caller named the file, the caption agrees, and (when
+   ``owns`` is available) the window's process holds it.
 2. ``caption``   - the caption is itself a complete absolute ``.gxw`` path.
 3. ``candidates``- exactly one known ``.gxw`` matches the caption.
 
-Anything else resolves to ``None`` with a reason.  Guessing is deliberately not
-an option: writing into the wrong project is worse than refusing to write.
+Anything else resolves to ``None`` with a reason.
 """
 
 from __future__ import annotations
@@ -28,7 +34,7 @@ import ntpath
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Optional, Tuple
+from typing import Callable, Iterable, Optional, Tuple
 
 ABBREVIATION_PREFIX = "..."
 UNSAVED_PROJECT_NAMES = frozenset(
@@ -48,6 +54,14 @@ CAPTION = "caption"
 CANDIDATE = "candidate"
 UNKNOWN = "unknown"
 
+BINDING_OWNER = "file-owner"
+BINDING_CAPTION = "caption"
+BINDING_NONE = "none"
+
+MATCH = "match"
+CONFLICT = "conflict"
+SILENT = "silent"
+
 
 @dataclass(frozen=True)
 class ProjectPathResolution:
@@ -57,6 +71,7 @@ class ProjectPathResolution:
     source: str = UNKNOWN
     reason: str = ""
     candidates: Tuple[Path, ...] = ()
+    binding: str = BINDING_NONE
 
     def __bool__(self) -> bool:
         return self.path is not None
@@ -66,11 +81,11 @@ def caption_matches_path(caption, path) -> bool:
     """True when an abbreviated caption can only describe ``path``.
 
     This is a guard, never a source of information: it answers "could this
-    window be showing that file", not "which file is that".
+    window be showing that file", not "which file is that".  A suffix match does
+    not distinguish two paths that share the visible tail.
     """
 
-    text = caption if isinstance(caption, str) else ""
-    text = text.strip()
+    text = str(caption or "").strip()
     if not text.startswith(ABBREVIATION_PREFIX):
         return False
     tail = text[len(ABBREVIATION_PREFIX) :]
@@ -93,23 +108,23 @@ def caption_label(caption) -> str:
     return "" if label.casefold() in UNSAVED_PROJECT_NAMES else label
 
 
-def caption_describes(caption, path) -> bool:
-    """True when the caption is consistent with ``path`` being active.
+def caption_agreement(caption, path) -> str:
+    """How the caption relates to ``path``: ``MATCH``, ``CONFLICT`` or ``SILENT``.
 
-    Accepts a complete path, an abbreviated caption, or a bare project name.
-    An empty or unsaved caption asserts nothing; callers that need proof must
-    treat that as unknown rather than as agreement.
+    ``SILENT`` means the caption asserts nothing (empty or unsaved).  It is a
+    third state on purpose: treating "no assertion" as agreement is how a wrong
+    path gets adopted.
     """
 
     text = str(caption or "").strip()
     if not text or text.casefold() in UNSAVED_PROJECT_NAMES:
-        return True
+        return SILENT
     target = str(path)
     if text.startswith(ABBREVIATION_PREFIX):
-        return caption_matches_path(text, target)
+        return MATCH if caption_matches_path(text, target) else CONFLICT
     if ntpath.isabs(text):
-        return ntpath.normcase(text) == ntpath.normcase(target)
-    return text.casefold() == ntpath.basename(target).casefold()
+        return MATCH if ntpath.normcase(text) == ntpath.normcase(target) else CONFLICT
+    return MATCH if text.casefold() == ntpath.basename(target).casefold() else CONFLICT
 
 
 def _as_project_file(value) -> Optional[Path]:
@@ -139,6 +154,8 @@ def discover_candidates(label, roots, *, max_depth: int = 4, limit: int = 256) -
     wanted = str(label or "").strip().casefold()
     if not wanted:
         return ()
+    if isinstance(roots, (str, Path)):
+        roots = (roots,)
     found = []
     for root in roots or ():
         base = Path(str(root)).expanduser()
@@ -165,11 +182,24 @@ def discover_candidates(label, roots, *, max_depth: int = 4, limit: int = 256) -
     return _unique(found)
 
 
-def resolve_project_path(caption, *, explicit=None, candidates: Iterable = ()) -> ProjectPathResolution:
-    """Return the project file for ``caption`` using the trust order above."""
+def resolve_project_path(
+    caption,
+    *,
+    explicit=None,
+    candidates: Iterable = (),
+    owns: Optional[Callable[[Path], bool]] = None,
+) -> ProjectPathResolution:
+    """Return the project file for ``caption`` using the trust order above.
+
+    ``owns`` proves that the window's process holds a candidate file open; it is
+    the only check that survives a shared caption suffix.  Pass ``None`` when
+    ownership cannot be queried and the result will be reported as
+    caption-bound instead of owner-bound.
+    """
 
     text = str(caption or "").strip()
     silent = not text or text.casefold() in UNSAVED_PROJECT_NAMES
+    binding = BINDING_OWNER if owns is not None else BINDING_CAPTION
 
     if explicit is not None and str(explicit).strip():
         named = _as_project_file(explicit)
@@ -191,7 +221,7 @@ def resolve_project_path(caption, *, explicit=None, candidates: Iterable = ()) -
                     "未继续写入。"
                 ),
             )
-        if not caption_describes(text, named):
+        if caption_agreement(text, named) == CONFLICT:
             return ProjectPathResolution(
                 source=EXPLICIT,
                 reason=(
@@ -199,7 +229,15 @@ def resolve_project_path(caption, *, explicit=None, candidates: Iterable = ()) -
                     f"（窗口：{text}，指定：{named.name}）"
                 ),
             )
-        return ProjectPathResolution(path=named, source=EXPLICIT)
+        if owns is not None and not owns(named):
+            return ProjectPathResolution(
+                source=EXPLICIT,
+                reason=(
+                    "无法确认指定的工程文件正被当前 GX Works2 进程占用；"
+                    "同一标题尾部可能对应多个同名工程，未继续写入。"
+                ),
+            )
+        return ProjectPathResolution(path=named, source=EXPLICIT, binding=binding)
 
     caption_path = _as_project_file(text)
     if caption_path is not None:
@@ -207,14 +245,14 @@ def resolve_project_path(caption, *, explicit=None, candidates: Iterable = ()) -
             return ProjectPathResolution(
                 source=CAPTION, reason=f"窗口标题指向的工程文件不存在：{caption_path}"
             )
-        return ProjectPathResolution(path=caption_path, source=CAPTION)
+        return ProjectPathResolution(path=caption_path, source=CAPTION, binding=BINDING_CAPTION)
 
     label = caption_label(text)
     if not label:
         return ProjectPathResolution(reason="当前窗口没有已保存的工程。")
 
     abbreviated = text.startswith(ABBREVIATION_PREFIX)
-    matched, mismatched = [], []
+    matched, mismatched, unowned = [], [], []
     for item in candidates:
         candidate = _as_project_file(item)
         if candidate is None or candidate.name.casefold() != label.casefold():
@@ -224,15 +262,27 @@ def resolve_project_path(caption, *, explicit=None, candidates: Iterable = ()) -
         if abbreviated and not caption_matches_path(text, candidate):
             mismatched.append(candidate)
             continue
+        if owns is not None and not owns(candidate):
+            unowned.append(candidate)
+            continue
         matched.append(candidate)
     matched = _unique(matched)
     if len(matched) == 1:
-        return ProjectPathResolution(path=matched[0], source=CANDIDATE)
+        return ProjectPathResolution(path=matched[0], source=CANDIDATE, binding=binding)
     if len(matched) > 1:
         return ProjectPathResolution(
             source=CANDIDATE,
             reason="找到多个同名工程，无法确定当前窗口对应哪一个；请显式指定工程路径。",
             candidates=matched,
+        )
+    if unowned:
+        return ProjectPathResolution(
+            source=CANDIDATE,
+            reason=(
+                "找到同名工程，但没有一个被当前 GX Works2 进程占用；"
+                "请显式指定工程路径。"
+            ),
+            candidates=_unique(unowned),
         )
     if mismatched:
         return ProjectPathResolution(
@@ -243,9 +293,16 @@ def resolve_project_path(caption, *, explicit=None, candidates: Iterable = ()) -
             ),
             candidates=_unique(mismatched),
         )
+    if abbreviated:
+        return ProjectPathResolution(
+            reason=(
+                "窗口标题只给出被截断的工程名，未包含完整路径；"
+                "请显式指定工程路径，或把工程另存到较短的路径后重试。"
+            )
+        )
     return ProjectPathResolution(
         reason=(
-            "窗口标题只给出被截断的工程名，未包含完整路径；"
-            "请显式指定工程路径，或把工程另存到较短的路径后重试。"
+            "窗口标题只给出文件名、没有目录，无法确定是哪一个同名工程；"
+            "请显式指定工程路径。"
         )
     )
