@@ -474,6 +474,10 @@ class GXExecutionCoordinator:
             imported = _mapping(bundle["importer"](
                 paths[0], comment_csv_path=paths[1], start_if_needed=True,
                 create_project_path=directory / "gx_import.gxw",
+                # A long project path reaches us as an abbreviated caption, so the
+                # operator may name the file explicitly; without it the service
+                # refuses instead of guessing which project to write into.
+                project_path=payload.get("project_path"),
                 synchronize_comments=True, verify_roundtrip=False, save_project=True,
                 pre_import_policy=pre_import_policy,
                 progress=progress,

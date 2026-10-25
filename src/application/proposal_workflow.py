@@ -140,6 +140,10 @@ class ProposalWorkflow:
                 raise ValueError('An explicit batch plan is only supported for native engineering')
             if manual_backup:
                 payload["manual_backup_acknowledged"] = True
+            if command.get("project_path") and command["action"] == "gx_import":
+                # Carried into execution, which only uses it to locate the file
+                # to back up; the import target stays the open GX session.
+                payload["project_path"] = command["project_path"]
             plan_id = command.get("plan_id")
             if command["action"] in ("simulation", "debug"):
                 record_id(plan_id)

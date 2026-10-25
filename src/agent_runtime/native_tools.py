@@ -49,7 +49,7 @@ def _request_native_engineering(context: ToolContext, arguments: Mapping[str, An
 
 
 def _request_gxworks2_import(
-    context: ToolContext, _arguments: Mapping[str, Any]
+    context: ToolContext, arguments: Mapping[str, Any]
 ) -> Dict[str, Any]:
     version = context.version
     if not isinstance(version, Mapping):
@@ -78,8 +78,24 @@ def _request_gxworks2_import(
             "revision": version.get("revision"),
             "program_name": str(version.get("program_name") or "MAIN"),
             "plc_model": context.plc_model,
+            **_requested_project_path(arguments),
         },
     }
+
+
+def _requested_project_path(arguments: Mapping[str, Any]) -> Dict[str, str]:
+    """Accept only an absolute .gxw path; the resolver repeats this check."""
+
+    requested = arguments.get("project_path")
+    if requested is None:
+        return {}
+    text = str(requested).strip()
+    if not text or not Path(text).expanduser().is_absolute() or not text.casefold().endswith(".gxw"):
+        raise ToolPreconditionError(
+            "INVALID_ARGUMENTS",
+            "project_path 必须是 .gxw 文件的绝对路径。",
+        )
+    return {"project_path": text}
 
 
 def _get_fbd_catalog(context: ToolContext, arguments: Mapping[str, Any]) -> Dict[str, Any]:

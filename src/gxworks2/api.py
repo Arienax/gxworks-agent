@@ -76,6 +76,8 @@ def import_current_program(
     save_project=False,
     pre_import_policy="project_file",
     create_project_path=None,
+    project_path=None,
+    project_search_roots=(),
 ):
     """Validate CSV, back up an existing GXW, and import without CSV exports.
 
@@ -108,6 +110,8 @@ def import_current_program(
         save_project=save_project,
         pre_import_policy=pre_import_policy,
         create_project_path=create_project_path,
+        project_path=project_path,
+        project_search_roots=project_search_roots,
     )
 
 

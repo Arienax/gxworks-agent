@@ -314,6 +314,7 @@
     "src/gxworks2/native_export.py",
     "src/gxworks2/native_locale.py",
     "src/gxworks2/project_import.py",
+    "src/gxworks2/project_path.py",
     "src/gxworks2/project_profiles.py",
     "src/gxworks2/simulation.py",
     "src/gxworks2/sync_service.py",

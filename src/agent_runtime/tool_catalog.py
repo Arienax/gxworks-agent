@@ -43,6 +43,21 @@ from agent_runtime.native_tools import (
 
 
 _EMPTY_OBJECT_SCHEMA = {"type": "object", "properties": {}, "additionalProperties": False}
+_IMPORT_PROJECT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "project_path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "description": (
+                "要写入的 .gxw 工程绝对路径。省略时按当前 GX Works2 窗口解析；"
+                "当窗口标题只给出被截断的工程名时，解析会失败并拒绝写入，而不是猜测目标工程。"
+            ),
+        }
+    },
+    "additionalProperties": False,
+}
 
 
 def project_definitions(generation):
@@ -269,8 +284,8 @@ def generation_definitions(generation):
 def native_definitions(generation):
     yield ToolDefinition(
         "import_current_program_to_gxworks2",
-        "请求把当前所选梯形图版本导入已打开的 GX Works2 工程。该工具只生成确认请求；用户明确确认后才会由既有高层导入服务执行。",
-        _EMPTY_OBJECT_SCHEMA,
+        "请求把当前所选梯形图版本导入已打开的 GX Works2 工程。该工具只生成确认请求；用户明确确认后才会由既有高层导入服务执行。可选 project_path 显式指定目标 .gxw；省略时按窗口解析，无法唯一确定时拒绝写入。",
+        _IMPORT_PROJECT_SCHEMA,
         _request_gxworks2_import,
         confirmation_required=True,
     )

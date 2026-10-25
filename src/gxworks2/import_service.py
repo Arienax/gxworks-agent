@@ -6,15 +6,9 @@ import time
 
 from .baseline_store import ImportBaselineStore
 from .models import ImportErrorCode, ImportResult
+from .project_path import UNSAVED_PROJECT_NAMES as _UNSAVED_PROJECT_NAMES
+from .project_path import caption_label, discover_candidates, resolve_project_path
 from .project_profiles import native_project_profile
-
-
-_UNSAVED_PROJECT_NAMES = {
-    "(工程未设置)",
-    "工程未设置",
-    "(project not set)",
-    "project not set",
-}
 
 
 def _unsaved_project_identity(session, project_name, import_context=None):
@@ -71,6 +65,8 @@ class ImportService:
         save_project=False,
         pre_import_policy="project_file",
         create_project_path=None,
+        project_path=None,
+        project_search_roots=(),
     ):
         """Back up an existing GXW and import each CSV once, without exporting."""
         # Legacy policy names remain accepted, but never select CSV exports or
@@ -103,6 +99,7 @@ class ImportService:
                 progress=report, import_context=import_context, project_identity=project_identity,
                 synchronize_comments=synchronize_comments, save_project=save_project,
                 staging_folder=Path(directory), create_project_path=create_project_path,
+                project_path=project_path, project_search_roots=project_search_roots,
             )
         finished = time.monotonic()
         if current_stage is not None:
@@ -117,7 +114,7 @@ class ImportService:
     def _import_current_program(
         self, csv_path, *, comment_csv_path, start_if_needed, progress, import_context,
         project_identity, synchronize_comments, save_project, staging_folder,
-        create_project_path,
+        create_project_path, project_path=None, project_search_roots=(),
     ):
         def report(stage, message):
             if progress is not None:
@@ -282,13 +279,37 @@ class ImportService:
         backup_path = ""
         try:
             if not created_project:
-                candidate = str(state.get("project_path") or project_name).strip()
-                if candidate.casefold() not in _UNSAVED_PROJECT_NAMES:
-                    source = Path(candidate).expanduser()
-                    if not source.is_absolute() or source.suffix.casefold() != ".gxw":
-                        raise RuntimeError("无法确认当前工程的完整GXW路径，请打开目标GXW文件后重试。")
-                    if not source.is_file():
-                        raise FileNotFoundError(f"当前GXW工程文件不存在：{source}")
+                caption = state.get("project_path") or project_name
+                # A brand new project has no file to protect. With an explicit
+                # path there is something to verify, so the resolver decides and
+                # refuses when the window cannot corroborate it.
+                nothing_saved = (
+                    not project_path
+                    and str(caption).strip().casefold() in _UNSAVED_PROJECT_NAMES
+                )
+                if not nothing_saved:
+                    candidates = ()
+                    if not project_path and project_search_roots:
+                        candidates = discover_candidates(
+                            caption_label(caption), project_search_roots
+                        )
+                    resolution = resolve_project_path(
+                        caption, explicit=project_path, candidates=candidates
+                    )
+                    if not resolution:
+                        reason = resolution.reason or "无法确定当前工程的保存位置。"
+                        return ImportResult(
+                            False, "backup", f"导入前GXW备份失败：{reason}",
+                            ImportErrorCode.PROJECT_PATH_UNKNOWN,
+                            csv_path=validation.path, project_name=project_name,
+                            details={
+                                "project_path_source": resolution.source,
+                                "project_path_candidates": [
+                                    str(item) for item in resolution.candidates
+                                ],
+                            },
+                        )
+                    source = resolution.path
                     report("backup", "正在备份当前GXW工程文件…")
                     folder = self.csv_manager.backup_folder(self.backup_root, source.stem)
                     destination = folder / source.name

@@ -63,11 +63,10 @@ class _NativeFileUse:
 
 
 def _abbreviated_project_path(title_path, path):
-    import ntpath
-    return (isinstance(title_path, str) and title_path.startswith('...')
-            and len(title_path) > 3
-            and ntpath.normcase(str(path)).endswith(ntpath.normcase(title_path[3:]))
-            and title_path.casefold().endswith(ntpath.basename(str(path)).casefold()))
+    """Kept as a stable name; the rule itself lives with the path resolver."""
+
+    from .project_path import caption_matches_path
+    return caption_matches_path(title_path, path)
 
 
 def _label_csv(raw):

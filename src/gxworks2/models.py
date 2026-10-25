@@ -12,6 +12,7 @@ class ImportErrorCode(str, Enum):
     TARGET_PROJECT_NOT_OPEN = "target_project_not_open"
     TARGET_PROGRAM_NOT_READY = "target_program_not_ready"
     BACKUP_FAILED = "backup_failed"
+    PROJECT_PATH_UNKNOWN = "project_path_unknown"
     EXTERNAL_MODIFICATION_DETECTED = "external_modification_detected"
     BASELINE_READ_FAILED = "baseline_read_failed"
     BASELINE_WRITE_FAILED = "baseline_write_failed"

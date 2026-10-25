@@ -60,7 +60,7 @@
 
 | 工具 | 范围 | 适用场景 | 参数要点 | 主要产出与说明 |
 | --- | --- | --- | --- | --- |
-| `import_current_program_to_gxworks2` | 共享 | 将当前选中的 Ladder 版本导入 GX Works2 | 无参数（需已选中保存版本） | 按服务端审批策略执行导入，返回操作回执。 |
+| `import_current_program_to_gxworks2` | 共享 | 将当前选中的 Ladder 版本导入 GX Works2 | 需已选中保存版本；可选 `project_path`（`.gxw` 绝对路径，必须与当前窗口显示的是同一个工程，否则拒绝） | 按服务端审批策略执行导入，返回操作回执。 |
 | `execute_native_engineering` | 共享 | 执行后台原生工程批次或驱动持续前台会话 | `plan`（含 `mode`、`session_action`、`session_id`、`controls`、`steps` 等） | 支持在隔离后台或同一个持续打开的 GX Works2 窗口中推进多步工程修改、编译与保存。 |
 | `get_native_engineering_session` | 共享 | 查询持续原生工程会话状态与修订号 | 可选 `session_id` | 返回当前会话的活动 `revision`、`saved_revision`、`version_revision` 与待处理步骤。 |
 | `pause_native_engineering_session` | 共享 | 请求持续原生会话在当前步骤完成后暂停 | `session_id` | 在当前原生操作完成后安全暂停会话，便于审阅或后续恢复。 |
