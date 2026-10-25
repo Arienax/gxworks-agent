@@ -218,6 +218,9 @@ def schema(connection):
     if cached is not None and getattr(_thread_state, "schema_connection", None) is connection:
         return cached
 
+    if connection.execute("SELECT 1 FROM sqlite_master WHERE name='meta'").fetchone():
+        from knowledge.exact_search_storage import validate_search_schema
+        validate_search_schema(connection)
     table_rows = connection.execute(
         "SELECT name FROM sqlite_master WHERE type IN ('table', 'view')"
     ).fetchall()
@@ -307,6 +310,9 @@ def fetch_chunks(connection, schema, references):
         )
         for row in connection.execute(sql, by_rowid).fetchall():
             found[("rowid", str(row["_chunk_rowid"]))] = row
+    if connection.execute("SELECT 1 FROM sqlite_master WHERE name='meta'").fetchone():
+        from knowledge.exact_search_storage import validate_search_rows
+        validate_search_rows(connection, found.values())
     return found
 
 

@@ -97,3 +97,37 @@ def unpack_fact_fields(fact, resolve):
         _json_tree(row["value"])
         result[field] = copy.deepcopy(row["value"])
     return result
+
+
+# This is a transport shape only. The owner-store version explicitly chooses it;
+# the existing exact-fact-fields-v1 object decoder remains unchanged.
+FACT_ROW_SERIALIZATION = "exact-fact-row-v1"
+
+
+def pack_fact_row(fact, intern, *, fields=POOLED_FIELDS):
+    """Return [exact_field_refs, inline_fields] without losing absent fields.
+
+    The caller may select ``id`` after observing an exact repeated ID. The codec
+    does not infer identities, rewrite dependencies or decide pooling policy.
+    Inline fields include every unknown field and are detached from the input.
+    """
+    packed = pack_fact_fields(fact, intern, fields=fields)
+    refs = packed.pop("field_refs")
+    return [refs, packed]
+
+
+def unpack_fact_row(row, resolve):
+    """Restore a detached fact from the explicitly versioned two-slot row.
+
+    Never accept a v1 object as a row, extra/missing slots, a reserved inline
+    field_refs key, or an ambiguous inline/pooled field. Reference validation
+    and exact JSON type checks are shared with the established field codec.
+    """
+    if not isinstance(row, list) or len(row) != 2:
+        raise FactFieldCodecError("Fact row must have exactly two array slots")
+    refs, inline = row
+    if not isinstance(refs, list) or not isinstance(inline, Mapping):
+        raise FactFieldCodecError("Fact row requires reference array and inline object")
+    if "field_refs" in inline:
+        raise FactFieldCodecError("Reserved field references in inline fact row")
+    return unpack_fact_fields({**inline, "field_refs": refs}, resolve)

@@ -2,7 +2,8 @@
 import copy
 import json
 import unittest
-from knowledge.fact_field_codec import pack_fact_fields, unpack_fact_fields, FactFieldCodecError
+from knowledge.fact_field_codec import (pack_fact_fields, unpack_fact_fields, FactFieldCodecError,
+    pack_fact_row, unpack_fact_row, FACT_ROW_SERIALIZATION, FIELD_SERIALIZATION, POOLED_FIELDS)
 
 
 class Pool:
@@ -73,6 +74,56 @@ class FactFieldCodecTests(unittest.TestCase):
         for ref in (True,None,'1',0):
             with self.subTest(ref=ref),self.assertRaises(FactFieldCodecError):
                 pack_fact_fields({'scope':{}},lambda *_:ref)
+
+
+class FactRowCodecTests(unittest.TestCase):
+    def test_explicit_distinct_transport_and_old_codec_unchanged(self):
+        self.assertNotEqual(FACT_ROW_SERIALIZATION, FIELD_SERIALIZATION)
+        pool=Pool();fact={'id':'single','scope':{'models':['FX3U']}}
+        old=pack_fact_fields(fact,pool.intern);new=pack_fact_row(fact,pool.intern)
+        self.assertEqual(unpack_fact_fields(old,pool.resolve),fact)
+        self.assertEqual(unpack_fact_row(new,pool.resolve),fact)
+        with self.assertRaises(FactFieldCodecError):unpack_fact_row(old,pool.resolve)
+        with self.assertRaises(FactFieldCodecError):unpack_fact_fields(new,pool.resolve)
+
+    def test_repeat_id_opt_in_exact_owner_conditions_and_dependencies(self):
+        pool=Pool();rows=[];facts=[];seen=set()
+        for identity,model in [('shared','Q00'),('unique','L02'),('shared','FX3U')]:
+            fact={'id':identity,'scope':{'models':[model]},'status':'conflict',
+                  'depends_on':['other','prior'],'conditions':[{'value':True},{'value':1}],
+                  'unknown':{'ordered':[3,2,1]},'verification':'unverified'}
+            fields=POOLED_FIELDS | ({'id'} if identity in seen else set())
+            rows.append(pack_fact_row(fact,pool.intern,fields=fields));facts.append(fact);seen.add(identity)
+        self.assertEqual(rows[0][1]['id'],'shared');self.assertEqual(rows[1][1]['id'],'unique')
+        self.assertNotIn('id',rows[2][1])
+        self.assertEqual([v['value'] for v in pool.rows.values() if v['field']=='id'],['shared'])
+        self.assertEqual([unpack_fact_row(r,pool.resolve) for r in rows],facts)
+
+    def test_missing_null_empty_and_numeric_types_exact(self):
+        pool=Pool()
+        for fact in ({},{'id':None},{'id':''},{'conditions':None},{'conditions':[]},
+                     {'conditions':{}},{'conditions':[True,1,1.0]},
+                     {'parameters':{'typed_operands':[],'order':['b','a'],'arity':2}}):
+            restored=unpack_fact_row(pack_fact_row(fact,pool.intern),pool.resolve)
+            self.assertEqual(json.dumps(restored,sort_keys=True),json.dumps(fact,sort_keys=True))
+
+    def test_mutation_isolation(self):
+        pool=Pool();fact={'id':'a','scope':{'models':['Q00']},'unknown':{'items':[]}}
+        row=pack_fact_row(fact,pool.intern);restored=unpack_fact_row(row,pool.resolve)
+        restored['scope']['models'].append('Q01');restored['unknown']['items'].append(1)
+        row[1]['unknown']['items'].append(2)
+        self.assertEqual(fact['unknown']['items'],[])
+        self.assertEqual(unpack_fact_row(row,pool.resolve)['scope']['models'],['Q00'])
+
+    def test_malformed_rows_refs_unknown_fields_and_collisions(self):
+        pool=Pool();pool.intern('id','a')
+        for row in ({},None,(),[],[[]],[[],{},0],[{},{}],[[],[]],
+                    [[],{'field_refs':[]}],[[True],{}],[[0],{}],[[999],{}],
+                    [[1,1],{}],[[1],{'id':'b'}],[[],{1:'bad'}]):
+            with self.subTest(row=row),self.assertRaises(FactFieldCodecError):
+                unpack_fact_row(row,pool.resolve)
+        with self.assertRaises(FactFieldCodecError):
+            unpack_fact_row([[1],{}],lambda _: {'field':'unreviewed_field','value':None})
 
 
 if __name__=='__main__':unittest.main()

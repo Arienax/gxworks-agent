@@ -18,6 +18,8 @@ TABLE_COLUMNS = {
     'runtime_fact_fields': ('payload_json',),
     'runtime_language_features': ('payload_json',),
     'chunks': ('text', 'metadata_json'),
+    'runtime_search_documents': ('text','sha256'),
+    'runtime_chunk_bindings': ('metadata_json',),
     'facts': ('payload_json',),
     'entity_index': (),
     'meta': ('value',),

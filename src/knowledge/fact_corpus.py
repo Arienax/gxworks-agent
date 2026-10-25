@@ -316,6 +316,8 @@ def resolve(kind, targets, *, plc_model, task_type="analysis", connection=_DEFAU
             "AND f.plc_model IN (" + ",".join("?" for _ in members) + ") "
             "ORDER BY CASE WHEN f.id LIKE 'definition:%' OR f.id LIKE 'function:definition:%' THEN 0 ELSE 1 END,f.id",
             (kind, *names, *members)).fetchall()
+        from knowledge.exact_search_storage import validate_search_rows
+        validate_search_rows(connection, rows)
         for row in rows:
             projected = chunk_result(row, {"corpus_kind": CORPUS_KIND}, index_access.index_path(), plc_model, task_type, connection=connection)
             if projected is not None:
