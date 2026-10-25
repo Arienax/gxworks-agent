@@ -408,3 +408,4 @@ def test_a_complete_caption_path_that_does_not_exist_is_refused():
         assert not refused
         assert refused.source == CAPTION
         assert "不存在" in refused.reason
+

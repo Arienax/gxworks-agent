@@ -1,5 +1,6 @@
 from dataclasses import asdict, replace
 from pathlib import Path
+import ntpath
 import os
 import shutil
 import tempfile
@@ -350,7 +351,11 @@ class ImportService:
                 )
                 if not nothing_saved:
                     candidates = ()
-                    if not project_path and project_search_roots:
+                    # A caption that is already a complete path resolves without
+                    # candidates, so walking the workspace would be pure waste on
+                    # every short-path import.
+                    if (not project_path and project_search_roots
+                            and not ntpath.isabs(str(caption).strip())):
                         candidates = discover_candidates(
                             caption_label(caption), project_search_roots
                         )
@@ -384,6 +389,7 @@ class ImportService:
                     # Keep the evidence even if a later stage fails: the report is
                     # about which file was protected, not about the import result.
                     path_details = {
+                        "project_identity": identity,
                         "project_path": str(source),
                         "project_path_source": path_resolution.source,
                         "project_path_binding": path_resolution.binding,

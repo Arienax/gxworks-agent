@@ -422,3 +422,63 @@ def test_a_failed_import_still_reports_which_evidence_tied_the_backup():
         assert protection["project_path_source"] == "explicit"
         assert protection["project_path_binding"] == "file-owner"
         assert protection["project_path"] == str(target)
+
+
+def test_a_complete_caption_does_not_walk_the_workspace():
+    """Short-path projects are the common case; the walk is not free."""
+
+    from gxworks2 import import_service as service_module
+
+    def explode(*args, **kwargs):
+        raise AssertionError("完整标题不应触发工作区遍历")
+
+    original = service_module.discover_candidates
+    service_module.discover_candidates = explode
+    try:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as project_dir:
+            root = Path(directory)
+            target = Path(project_dir) / "short.gxw"
+            target.write_bytes(b"project")
+            result, _ = _run(
+                str(target),
+                backup_root=root,
+                project_search_roots=[str(root)],
+            )
+            assert result is not None
+            assert list(root.rglob("*.gxw")), "完整标题仍应正常备份"
+    finally:
+        service_module.discover_candidates = original
+
+
+def test_the_csv_preparation_failure_keeps_the_full_audit_record():
+    """version_protection must have the same shape wherever the import stops."""
+
+    class BrokenHash(FakeCSVManager):
+        def program_semantic_sha256(self, path):
+            raise RuntimeError("CSV 无法解析")
+
+    with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as project_dir:
+        root = Path(directory)
+        target = Path(project_dir) / "project.gxw"
+        target.write_bytes(b"project")
+        original = _owner_patch(True)
+        try:
+            service = ImportService(
+                FakeFinder(FakeSession(project_name=_abbreviate(target))),
+                FakeAutomation({"project_open": True, "program_ready": True,
+                                "automation_available": True,
+                                "project_name": _abbreviate(target)}),
+                BrokenHash(),
+                root,
+            )
+            result = service.import_current_program(
+                str(root / "program.csv"), save_project=False, project_path=str(target)
+            )
+        finally:
+            service_module_restore(original)
+
+        assert result.stage == "prepare_import"
+        protection = result.details["version_protection"]
+        assert set(protection) == {
+            "project_identity", "project_path", "project_path_source", "project_path_binding",
+        }
