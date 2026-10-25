@@ -478,6 +478,17 @@ def project_source_record(connection, schema, record, *, plc_model):
     Broad RRF keeps its original rank and source identity. This only projects
     the selected source; it adds no semantic score or device permission.
     """
+    domain = record.get('retrieval_domain')
+    if domain in {'selected_owner', 'installed_other'}:
+        from pathlib import Path
+        from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+        selected = DEFAULT_INSTRUCTION_REGISTRY.selected_owner_database_path()
+        bound = next((row[2] for row in connection.execute('PRAGMA database_list') if row[1] == 'main'), '')
+        if selected is None or not bound:
+            return None
+        actual = 'selected_owner' if Path(bound).resolve() == selected else 'installed_other'
+        if actual != domain:
+            return None  # Never use an original row key against the other domain.
     if record.get('table_binding_status')!='cpu_columns_require_projection':return record
     if not schema.get('device_sections'):return None
     first=record.get('pdf_page')
@@ -485,7 +496,7 @@ def project_source_record(connection, schema, record, *, plc_model):
     if not first:return None
     # Bundled chunks expose printed page_end separately; get the actual PDF
     # span from its original source row, including multiple blocks on a page.
-    source=connection.execute('SELECT pdf_page,pdf_page_end FROM chunks WHERE id=?',(record['id'],)).fetchone()
+    source=connection.execute('SELECT pdf_page,pdf_page_end FROM chunks WHERE id=?',(record.get('retrieval_chunk_id',record['id']),)).fetchone()
     if source:first,last=source['pdf_page'],source['pdf_page_end']
     rows=connection.execute("SELECT * FROM device_sections WHERE manual_id=? AND pdf_page BETWEEN ? AND ? AND table_binding_status='cpu_column_with_notes' ORDER BY pdf_page,id",
                             (record.get('manual_id'),first,last)).fetchall()
@@ -497,7 +508,7 @@ def project_source_record(connection, schema, record, *, plc_model):
         seen.add(row['text']);parts.append(row['section']+'\n'+row['text'])
         evidence.append(json.loads(row['source_excerpt_json']))
         models.update(row['plc_models'].split(','))
-    return {**record,'source_chunk_id':str(record['id']),
+    return {**record,'source_chunk_id':record.get('source_chunk_id',str(record.get('retrieval_chunk_id',record['id']))),
         'text':f"SOURCE: {record['source']}\nCPU source columns: {', '.join(sorted(models))}\n"
                'Original source projection; no individual address/access certification.\n\n'+'\n\n'.join(parts),
         'plc_models':','.join(sorted(models)),'table_binding_status':'cpu_column_projection',

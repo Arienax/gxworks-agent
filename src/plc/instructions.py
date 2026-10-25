@@ -834,6 +834,19 @@ class InstructionRegistry:
         self.fact_bundle_version = metadata.get("fact_bundle_version")
         self._fact_resource = None
 
+    def selected_owner_database_path(self):
+        """Return the startup-selected, authenticated owner DB without rehashing.
+
+        A selected but withdrawn pair is an error, never permission to consult
+        a different installed instruction corpus.
+        """
+        store = self._definition_owner_store
+        if store is None:
+            return None
+        if not store.current():
+            raise ValueError('Selected instruction owner bundle changed; reload the checking context')
+        return store.database_path
+
     def fact_bundle_current(self):
         if self._definition_owner_store is not None:
             return self._definition_owner_store.current()

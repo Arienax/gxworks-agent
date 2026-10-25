@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from knowledge.index_access import (
     quote_identifier, row_value, CHUNK_ID_COLUMNS, TEXT_COLUMNS, SOURCE_COLUMNS,
@@ -26,7 +27,7 @@ def default_source(meta, path):
     return path.stem if path is not None else "authored_facts"
 
 
-def chunk_result(row, meta, path, plc_model, task_type, connection=None):
+def chunk_result(row, meta, path, plc_model, task_type, connection=None, *, qualify_result=True):
     if row is None or not row_in_scope(row, plc_model, task_type):
         return None
     text = row_value(row, TEXT_COLUMNS)
@@ -89,6 +90,19 @@ def chunk_result(row, meta, path, plc_model, task_type, connection=None):
             from knowledge.runtime_fact_publication import hydrate_language_packet
             result["text"] = json.dumps(hydrate_language_packet(connection, authored["runtime_language"], authored["runtime_language_model"]),
                                         ensure_ascii=False, separators=(",", ":"))
+    # Chunk IDs belong to one database, not a global namespace. Once a
+    # separate owner pair is selected, qualify result identities consistently
+    # here for BOTH exact and broad consumers; never change fact/dependency IDs.
+    if qualify_result and path is not None:
+        from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+        selected = DEFAULT_INSTRUCTION_REGISTRY.selected_owner_database_path()
+        if selected is not None:
+            domain = 'selected_owner' if Path(path).resolve() == selected else 'installed_other'
+            original_id = str(result['id'])
+            result['retrieval_domain'] = domain
+            result['retrieval_chunk_id'] = original_id
+            result.setdefault('source_chunk_id', original_id)
+            result['id'] = 'runtime-record:' + json.dumps([domain, original_id], separators=(',', ':'))
     return result
 
 

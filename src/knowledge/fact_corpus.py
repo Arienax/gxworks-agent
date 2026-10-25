@@ -16,6 +16,7 @@ from knowledge.record_projection import (
 import copy
 import json
 import math
+from pathlib import Path
 import re
 import sqlite3
 
@@ -226,13 +227,23 @@ def project_definition(entry, *, value_projection=None):
     return result, withheld
 
 
-def runtime_connection():
-    path = index_access.index_path()
+def runtime_index_path(kind=None):
+    """Keep owner knowledge on the Registry pair and other domains installed."""
+    if kind in {'instruction', 'language'}:
+        from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+        path = DEFAULT_INSTRUCTION_REGISTRY.selected_owner_database_path()
+        if path is not None:
+            return path
+    return index_access.index_path()
+
+
+def runtime_connection(kind=None):
+    path = runtime_index_path(kind)
     if path is None:
         return None
     connection = index_access.connection(path, index_access.index_identity(path))
     meta = index_access.load_meta(connection, index_access.schema(connection))
-    if meta.get('corpus_kind') == CORPUS_KIND:
+    if kind in {'instruction', 'language'} and meta.get('corpus_kind') == CORPUS_KIND:
         from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
         version = meta.get('fact_bundle_version')
         expected = getattr(DEFAULT_INSTRUCTION_REGISTRY, 'fact_bundle_version', None)
@@ -251,7 +262,7 @@ def model_corpus_status(plc_model):
     members = target_members(plc_model)
     result = {"plc_model": plc_model, "members": list(members)}
     try:
-        path = index_access.index_path()
+        path = runtime_index_path('instruction')
         if path is None:
             return {**result, "status": "index_unavailable"}
         connection = index_access.connection(path, index_access.index_identity(path))
@@ -274,10 +285,12 @@ def model_corpus_status(plc_model):
             "missing_members": missing}
 
 
-def resolve(kind, targets, *, plc_model, task_type="analysis", connection=_DEFAULT_CONNECTION):
+def resolve(kind, targets, *, plc_model, task_type="analysis", connection=_DEFAULT_CONNECTION, domain_results=None):
     """Exact projection over the same database and scope used by broad RRF."""
+    if domain_results is None:
+        domain_results = connection is _DEFAULT_CONNECTION
     if connection is _DEFAULT_CONNECTION:
-        connection = runtime_connection()
+        connection = runtime_connection(kind)
     elif connection is not None:
         try:
             marker = connection.execute("SELECT value FROM meta WHERE key='corpus_kind'").fetchone()
@@ -288,11 +301,13 @@ def resolve(kind, targets, *, plc_model, task_type="analysis", connection=_DEFAU
     if connection is None:
         return None  # Legacy research fixtures are separate from the runtime corpus.
     marker = connection.execute("SELECT value FROM meta WHERE key='fact_bundle_version'").fetchone()
-    if marker:
+    if marker and kind in {'instruction', 'language'}:
         from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
         expected = getattr(DEFAULT_INSTRUCTION_REGISTRY, 'fact_bundle_version', None)
         if expected and (marker[0] != expected or not DEFAULT_INSTRUCTION_REGISTRY.fact_bundle_current()):
             raise ValueError('Runtime knowledge and Core fact bundles differ; reload the checking context')
+    databases = connection.execute('PRAGMA database_list').fetchall()
+    source_path = next((Path(row[2]) for row in databases if row[1] == 'main' and row[2]), None)
     result = []
     from plc.target_identity import reference_target_identity, target_members
     model = reference_target_identity(plc_model)
@@ -319,7 +334,7 @@ def resolve(kind, targets, *, plc_model, task_type="analysis", connection=_DEFAU
         from knowledge.exact_search_storage import validate_search_rows
         validate_search_rows(connection, rows)
         for row in rows:
-            projected = chunk_result(row, {"corpus_kind": CORPUS_KIND}, index_access.index_path(), plc_model, task_type, connection=connection)
+            projected = chunk_result(row, {"corpus_kind": CORPUS_KIND}, source_path, plc_model, task_type, connection=connection, qualify_result=domain_results)
             if projected is not None:
                 projected.update(json.loads(row["payload_json"]).get("metadata", {}))
                 result.append(projected)

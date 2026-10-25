@@ -915,6 +915,41 @@ def retrieve_broad_knowledge(
         return []
     path = index_access.index_path()
     identity = _index_identity(path)
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+    owner_path = DEFAULT_INSTRUCTION_REGISTRY.selected_owner_database_path()
+    if owner_path is not None and _index_identity(owner_path) != identity:
+        # The existing retrieval pipeline ranks each corpus independently. Fuse
+        # domain ranks, never raw BM25 scores from unrelated corpus statistics.
+        # A candidate failure aborts this selection rather than exposing stale
+        # instruction/language roots from the installed mixed corpus.
+        owner_identity = _index_identity(owner_path)
+        try:
+            owner_connection = _connection(owner_path, owner_identity)
+            other_kinds = {str(row[0]).casefold() for row in owner_connection.execute(
+                "SELECT DISTINCT kind FROM facts WHERE kind NOT IN ('instruction','language')")}
+            lanes = []
+            for lane_identity, exclusions, domain in (
+                (owner_identity, set(normalized_structured_excluded) | other_kinds, 'selected_owner'),
+                (identity, set(normalized_structured_excluded) | {'instruction', 'language'}, 'installed_other'),
+            ):
+                encoded = _retrieve_cached(lane_identity, normalized_query, normalized_model,
+                    normalized_task, normalized_top_k, None,
+                    **({"source_lanes": tuple(sorted(source_lanes))} if source_lanes is not None else {}),
+                    exclude_chunk_types=normalized_excluded,
+                    exclude_structured_kinds=tuple(sorted(exclusions)))
+                lane = json.loads(encoded)
+                for rank, result in enumerate(lane):
+                    result['domain_rank'] = rank
+                    result['retrieval_domain'] = domain
+                    result['score'] = round(1.0 / (_RRF_K + rank + 1.0), 8)
+                lanes.append(lane)
+            ordered = sorted([item for lane in lanes for item in lane],
+                key=lambda item: (item['domain_rank'],
+                    0 if item['retrieval_domain'] == 'selected_owner' else 1, str(item.get('id',''))))
+            return _select_ranked(ordered, normalized_top_k)
+        except (OSError, sqlite3.Error, TypeError, ValueError, KeyError, IndexError):
+            _close_thread_connection()
+            return []
     try:
         frozen = _retrieve_cached(
             identity,

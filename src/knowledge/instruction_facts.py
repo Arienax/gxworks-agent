@@ -324,7 +324,8 @@ def _related_units(seed, plc_model, task_type):
     manual_id, section = seed.get("manual_id"), seed.get("section")
     if not manual_id or not section:
         return []
-    path = index_access.index_path()
+    from knowledge.fact_corpus import runtime_index_path
+    path = runtime_index_path('instruction') if seed.get('retrieval_domain') == 'selected_owner' else index_access.index_path()
     identity = index_access.index_identity(path)
     if identity[0] == "missing":
         return []
@@ -345,13 +346,13 @@ def _related_units(seed, plc_model, task_type):
         parent_column = index_access.first_column(columns, ("parent_chunk_id", "parent_id"))
         if parent_column:
             conditions.append(f"{quote(parent_column)}=?")
-            args.append(seed.get("id"))
+            args.append(seed.get("retrieval_chunk_id", seed.get("id")))
         sql = (f"SELECT rowid AS _chunk_rowid, * FROM {quote(table['name'])} "
                f"WHERE manual_id=? AND ({' OR '.join(conditions)}) ORDER BY rowid LIMIT 24")
         rows = connection.execute(sql, args).fetchall()
         if parent_column:
-            original = index_access.fetch_chunks(connection, schema, [("id", seed.get("id"))])
-            row = original.get(("id", str(seed.get("id"))))
+            original = index_access.fetch_chunks(connection, schema, [("id", seed.get("retrieval_chunk_id", seed.get("id")))])
+            row = original.get(("id", str(seed.get("retrieval_chunk_id", seed.get("id")))))
             parent = row[parent_column] if row is not None else None
             if parent:
                 rows.extend(index_access.fetch_chunks(connection, schema, [("id", parent)]).values())
@@ -655,7 +656,8 @@ def _completion_sources(seed, plc_model, task_type):
     """
     from knowledge.structured_facts import resolve_device_records
 
-    path = index_access.index_path()
+    from knowledge.fact_corpus import runtime_index_path
+    path = runtime_index_path('instruction') if seed.get('retrieval_domain') == 'selected_owner' else index_access.index_path()
     identity = index_access.index_identity(path)
     if identity[0] == "missing":
         return []
@@ -666,7 +668,7 @@ def _completion_sources(seed, plc_model, task_type):
             return []
         record = connection.execute(
             "SELECT completion_flags_json FROM " + index_access.quote_identifier(table["name"]) + " WHERE chunk_id=? LIMIT 1",
-            (seed.get("id"),)).fetchone()
+            (seed.get("retrieval_chunk_id", seed.get("id")),)).fetchone()
         flags = json.loads(record[0] or "[]") if record else []
     except (OSError, sqlite3.Error, ValueError, TypeError):
         return []
