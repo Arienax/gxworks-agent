@@ -1887,6 +1887,20 @@
             "title": "Project Id",
             "type": "string"
           },
+          "project_path": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "要写入的 .gxw 工程绝对路径；省略时按当前 GX Works2 窗口解析，无法唯一确定时拒绝写入。",
+            "title": "Project Path"
+          },
           "request_id": {
             "maxLength": 128,
             "minLength": 1,

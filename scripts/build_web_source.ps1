@@ -35,7 +35,7 @@ try {
         }
 
         if (-not (Test-Path -LiteralPath $venvPython -PathType Leaf)) {
-            Write-Step "[1/4] Creating Python Web environment in .venv ..."
+            Write-Step "[1/5] Creating Python Web environment in .venv ..."
             $bootstrapExe = $null
             $bootstrapPrefix = @()
 
@@ -70,7 +70,7 @@ try {
                 throw "Failed to create .venv."
             }
         } else {
-            Write-Step "[1/4] Using existing Python Web environment: .venv"
+            Write-Step "[1/5] Using existing Python Web environment: .venv"
         }
 
         & $venvPython -c "import sys; raise SystemExit(0 if sys.version_info >= (3,10) else 1)"
@@ -96,7 +96,7 @@ try {
             }
         } finally { $env:PYTHONPATH = $previousPythonPath }
     } else {
-        Write-Step "[1/4] Skipping Python setup (--frontend-only)."
+        Write-Step "[1/5] Skipping Python setup (--frontend-only)."
     }
 
     $node = Get-Command node.exe -ErrorAction SilentlyContinue
@@ -110,15 +110,21 @@ try {
 
     Push-Location $web
     try {
-        Write-Step "[2/4] Installing locked frontend dependencies ..."
+        Write-Step "[2/5] Installing locked frontend dependencies ..."
         & $npm.Source ci
         if ($LASTEXITCODE -ne 0) { throw "npm ci failed." }
 
-        Write-Step "[3/4] Regenerating TypeScript API types from web\openapi.json ..."
+        if (-not $FrontendOnly) {
+            Write-Step "[3/5] Exporting web\openapi.json from the Web app ..."
+            & $venvPython (Join-Path $root "tools\export_web_openapi.py")
+            if ($LASTEXITCODE -ne 0) { throw "OpenAPI export failed." }
+        }
+
+        Write-Step "[4/5] Regenerating TypeScript API types from web\openapi.json ..."
         & $npm.Source run types
         if ($LASTEXITCODE -ne 0) { throw "npm run types failed." }
 
-        Write-Step "[4/4] Type-checking and building the Vite frontend ..."
+        Write-Step "[5/5] Type-checking and building the Vite frontend ..."
         & $npm.Source run build
         if ($LASTEXITCODE -ne 0) { throw "npm run build failed." }
     } finally {

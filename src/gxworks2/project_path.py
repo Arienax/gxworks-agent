@@ -14,14 +14,15 @@ unproven is refused instead of adopted.
 
 An abbreviated caption only carries a suffix, so it cannot distinguish
 ``D:\\work\\plc\\line.gxw`` from ``D:\\backup\\plc\\line.gxw``.  Callers that can
-prove ownership - GX Works2 holds the file open - pass ``owns`` and get a
-stronger binding; without it the result is reported as caption-bound, which is
-weaker evidence and is recorded as such.
+prove ownership - GX Works2 holds the file open - pass ``owns``; without that
+proof a truncated or bare caption is refused.  A caption that already names the
+file completely needs no proof, because nothing is left to disambiguate.
 
 Trust order, strongest first:
 
-1. ``explicit``  - the caller named the file, the caption agrees, and (when
-   ``owns`` is available) the window's process holds it.
+1. ``explicit``  - the caller named the file, the caption agrees, and the
+   window's process holds it - except when the caption is already a complete
+   path, which needs no further proof.
 2. ``caption``   - the caption is itself a complete absolute ``.gxw`` path.
 3. ``candidates``- exactly one known ``.gxw`` matches the caption.
 
@@ -182,6 +183,22 @@ def discover_candidates(label, roots, *, max_depth: int = 4, limit: int = 256) -
     return _unique(found)
 
 
+def _remedy(owns) -> str:
+    """What the operator can actually do, given whether proof is obtainable.
+
+    When the session can prove ownership, naming the file is a real way out; when
+    it cannot, no explicit path would ever be accepted, so only the short-path
+    advice is honest.
+    """
+
+    if owns is None:
+        return "请把工程另存到较短路径后重试。"
+    return (
+        "请显式指定与窗口标题一致的工程路径（该文件必须正被 GX Works2 持有），"
+        "或把工程另存到较短路径后重试。"
+    )
+
+
 def resolve_project_path(
     caption,
     *,
@@ -200,7 +217,6 @@ def resolve_project_path(
 
     text = str(caption or "").strip()
     silent = not text or text.casefold() in UNSAVED_PROJECT_NAMES
-    binding = BINDING_OWNER if owns is not None else BINDING_CAPTION
 
     if explicit is not None and str(explicit).strip():
         named = _as_project_file(explicit)
@@ -230,7 +246,15 @@ def resolve_project_path(
                     f"（窗口：{text}，指定：{named.name}）"
                 ),
             )
-        if not ntpath.isabs(text) and owns is None:
+        if ntpath.isabs(text):
+            # The caption already names the file completely, so ownership adds no
+            # information.  Demanding it here would refuse an unambiguous path on
+            # shares where the query is unavailable.
+            return ProjectPathResolution(
+                path=named, source=EXPLICIT, binding=BINDING_CAPTION
+            )
+
+        if owns is None:
             # A truncated tail or a bare name cannot identify the file, and no
             # owner proof is available to settle it.  Refusing is the only safe
             # answer: the backup would protect a file nothing writes to.
@@ -238,18 +262,20 @@ def resolve_project_path(
                 source=EXPLICIT,
                 reason=(
                     "无法取得当前 GX Works2 进程对该文件的占用证明；"
-                    "仅凭被截断的窗口标题不能确定将被写入的工程，未继续写入。"
+                    "仅凭被截断的窗口标题不能确定将被写入的工程。"
+                    + _remedy(None)
                 ),
             )
-        if owns is not None and not owns(named):
+        if not owns(named):
             return ProjectPathResolution(
                 source=EXPLICIT,
                 reason=(
                     "无法确认指定的工程文件正被当前 GX Works2 进程占用；"
-                    "同一标题尾部可能对应多个同名工程，未继续写入。"
+                    "同一标题尾部可能对应多个同名工程。"
+                    + _remedy(owns)
                 ),
             )
-        return ProjectPathResolution(path=named, source=EXPLICIT, binding=binding)
+        return ProjectPathResolution(path=named, source=EXPLICIT, binding=BINDING_OWNER)
 
     caption_path = _as_project_file(text)
     if caption_path is not None:
@@ -271,7 +297,7 @@ def resolve_project_path(
         return ProjectPathResolution(
             reason=(
                 "无法取得当前 GX Works2 进程对候选工程的占用证明；"
-                "不能仅凭窗口标题选择工程，未继续写入。"
+                "不能仅凭窗口标题选择工程。" + _remedy(owns)
             )
         )
     matched, mismatched, unowned = [], [], []
@@ -290,19 +316,22 @@ def resolve_project_path(
         matched.append(candidate)
     matched = _unique(matched)
     if len(matched) == 1:
-        return ProjectPathResolution(path=matched[0], source=CANDIDATE, binding=binding)
+        return ProjectPathResolution(path=matched[0], source=CANDIDATE, binding=BINDING_OWNER)
     if len(matched) > 1:
         return ProjectPathResolution(
             source=CANDIDATE,
-            reason="找到多个同名工程，无法确定当前窗口对应哪一个；请显式指定工程路径。",
+            reason=(
+                "找到多个同名工程，无法确定当前窗口对应哪一个。"
+                + _remedy(owns)
+            ),
             candidates=matched,
         )
     if unowned:
         return ProjectPathResolution(
             source=CANDIDATE,
             reason=(
-                "找到同名工程，但没有一个被当前 GX Works2 进程占用；"
-                "请显式指定工程路径。"
+                "找到同名工程，但没有一个被当前 GX Works2 进程占用。"
+                + _remedy(owns)
             ),
             candidates=_unique(unowned),
         )
@@ -310,21 +339,21 @@ def resolve_project_path(
         return ProjectPathResolution(
             source=CANDIDATE,
             reason=(
-                "找到同名工程，但其路径与窗口标题显示的目录不一致；"
-                "请显式指定工程路径，或把工程另存到较短的路径后重试。"
+                "找到同名工程，但其路径与窗口标题显示的目录不一致。"
+                + _remedy(owns)
             ),
             candidates=_unique(mismatched),
         )
     if abbreviated:
         return ProjectPathResolution(
             reason=(
-                "窗口标题只给出被截断的工程名，未包含完整路径；"
-                "请显式指定工程路径，或把工程另存到较短的路径后重试。"
+                "窗口标题只给出被截断的工程名，未包含完整路径。"
+                + _remedy(owns)
             )
         )
     return ProjectPathResolution(
         reason=(
-            "窗口标题只给出文件名、没有目录，无法确定是哪一个同名工程；"
-            "请显式指定工程路径。"
+            "窗口标题只给出文件名、没有目录，无法确定是哪一个同名工程。"
+            + _remedy(owns)
         )
     )

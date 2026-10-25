@@ -122,7 +122,9 @@ def test_an_abbreviated_caption_without_candidates_is_refused():
     assert not resolution
     assert resolution.path is None
     # The message has to tell the operator what to do next.
-    assert "显式指定工程路径" in resolution.reason
+    assert "另存到较短路径" in resolution.reason
+    # No owner query was supplied, so naming a path could never be verified.
+    assert "显式指定" not in resolution.reason
 
 
 def test_a_candidate_must_match_the_caption_tail():
@@ -241,6 +243,7 @@ def test_the_mcp_schema_exposes_an_optional_project_path():
     project_path = _IMPORT_PROJECT_SCHEMA["properties"]["project_path"]
     assert project_path["type"] == "string"
     assert project_path["minLength"] == 1
+    assert "持有" in project_path["description"], "描述必须说明该文件正被 GX 持有"
 
 
 def test_the_web_execution_proposal_carries_an_optional_project_path():
@@ -333,3 +336,75 @@ def test_the_import_tool_carries_project_path_into_the_pending_action():
 
     plain = _request_gxworks2_import(context, {})
     assert "project_path" not in plain["pending_action"]
+
+
+def test_an_exact_caption_does_not_need_owner_proof():
+    """Same file, with and without explicit: both must succeed.
+
+    Demanding proof for a caption that already names the file completely would
+    refuse an unambiguous path on shares where Restart Manager cannot answer.
+    """
+
+    with tempfile.TemporaryDirectory() as directory:
+        target = _touch(directory, "target.gxw")
+        caption = str(target)
+
+        without_explicit = resolve_project_path(caption)
+        assert without_explicit.path == target
+        assert without_explicit.binding == BINDING_CAPTION
+
+        with_explicit = resolve_project_path(caption, explicit=str(target), owns=lambda path: False)
+        assert with_explicit.path == target, "完整标题不需要占用证明"
+        assert with_explicit.binding == BINDING_CAPTION
+
+
+def test_a_failing_owner_query_is_not_proof():
+    import types
+
+    from gxworks2 import import_service as service_module
+
+    class BrokenUse:
+        def __init__(self, path):
+            self.path = path
+
+        def owns(self, process_id, started):
+            raise RuntimeError("RmGetList 状态不可确认")
+
+        def close(self):
+            pass
+
+    from gxworks2 import engineering_files
+
+    previous = engineering_files._NativeFileUse
+    engineering_files._NativeFileUse = BrokenUse
+    try:
+        session = types.SimpleNamespace(process_id=42, process_started="134373883884707931")
+        owns = service_module._native_file_owner(session)
+        assert owns is not None
+        assert owns(Path(r"D:/work/repos/plc/target.gxw")) is False
+    finally:
+        engineering_files._NativeFileUse = previous
+
+
+def test_the_advice_matches_whether_ownership_can_be_queried():
+    """The remedy has to be one the operator can actually follow."""
+
+    with tempfile.TemporaryDirectory() as directory:
+        target = _touch(directory, "target.gxw")
+        caption = _abbreviate(target)
+
+        without_query = resolve_project_path(caption, explicit=str(target))
+        assert "另存到较短路径" in without_query.reason
+        assert "显式指定" not in without_query.reason
+
+        not_owned = resolve_project_path(caption, explicit=str(target), owns=lambda path: False)
+        assert "显式指定" in not_owned.reason and "持有" in not_owned.reason
+
+
+def test_a_complete_caption_path_that_does_not_exist_is_refused():
+    with tempfile.TemporaryDirectory() as directory:
+        missing = Path(directory) / "gone.gxw"
+        refused = resolve_project_path(str(missing))
+        assert not refused
+        assert refused.source == CAPTION
+        assert "不存在" in refused.reason

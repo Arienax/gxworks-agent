@@ -1891,6 +1891,11 @@ export interface components {
             plan_id?: string | null;
             /** Project Id */
             project_id: string;
+            /**
+             * Project Path
+             * @description 要写入的 .gxw 工程绝对路径；省略时按当前 GX Works2 窗口解析，无法唯一确定时拒绝写入。
+             */
+            project_path?: string | null;
             /** Request Id */
             request_id: string;
             /** Version Id */

@@ -151,7 +151,8 @@ def test_an_abbreviated_caption_is_refused_with_a_structured_reason():
         assert result is not None
         assert result.error_code is ImportErrorCode.PROJECT_PATH_UNKNOWN
         assert result.stage == "backup"
-        assert "显式指定工程路径" in result.message
+        assert "另存到较短路径" in result.message
+        assert "显式指定" in result.message, "占用证明可用时应给出显式路径这条出路"
         # Nothing was copied and nothing reached the native import.
         assert list(root.rglob("*.gxw")) == []
         assert automation.imported is False
@@ -348,6 +349,7 @@ def test_without_owner_proof_a_truncated_caption_is_refused():
         assert result is not None
         assert result.error_code is ImportErrorCode.PROJECT_PATH_UNKNOWN
         assert "占用证明" in result.message
+        assert "显式指定" not in result.message, "无法取得证明时，显式路径也是死路，不能建议"
         assert list(root.rglob("*.gxw")) == [], "拿不到占用证明时不得备份"
         assert automation.imported is False
 
@@ -370,3 +372,53 @@ def test_a_named_target_is_not_replaced_by_an_auto_created_project():
         assert result.error_code is ImportErrorCode.PROJECT_PATH_UNKNOWN
         assert "另一个文件" in result.message
         assert automation.imported is False
+
+
+def test_a_home_relative_target_matches_the_auto_created_path():
+    """The auto-create comparison must expand `~` the same way the resolver does."""
+
+    import os
+
+    with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as directory:
+        previous = os.environ.get("USERPROFILE")
+        os.environ["USERPROFILE"] = home
+        try:
+            target = Path(home) / "requested.gxw"
+            target.write_bytes(b"requested")
+            result, _ = _run(
+                "(工程未设置)",
+                backup_root=directory,
+                project_path="~/requested.gxw",
+                create_project_path=str(target),
+                project_open=False,
+                import_context={"plc_model": "FX3U"},
+            )
+        finally:
+            if previous is None:
+                os.environ.pop("USERPROFILE", None)
+            else:
+                os.environ["USERPROFILE"] = previous
+
+        assert result is not None
+        assert result.error_code is not ImportErrorCode.PROJECT_PATH_UNKNOWN, (
+            "expanduser 之后两者是同一个文件，不应被判成另一个工程"
+        )
+        assert result.stage == "prepare_project"
+
+
+def test_a_failed_import_still_reports_which_evidence_tied_the_backup():
+    """The backup report is about what was protected, not about the import result."""
+
+    with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as project_dir:
+        root = Path(directory)
+        target = Path(project_dir) / "project.gxw"
+        target.write_bytes(b"project")
+        result, automation = _run(
+            _abbreviate(target), backup_root=root, project_path=str(target)
+        )
+        assert automation.imported is False
+        assert result.stage == "import"
+        protection = result.details["version_protection"]
+        assert protection["project_path_source"] == "explicit"
+        assert protection["project_path_binding"] == "file-owner"
+        assert protection["project_path"] == str(target)

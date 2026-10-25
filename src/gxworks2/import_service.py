@@ -18,7 +18,8 @@ def _native_file_owner(session):
     A caption only carries a suffix, so two projects can share it.  Restart
     Manager answers "who has this file open", which is the only evidence that
     survives a shared suffix.  Returns ``None`` when the platform or the session
-    cannot answer, and the resolver then reports a weaker, caption-bound result.
+    cannot answer; the resolver then refuses a truncated or bare caption, because
+    caption text alone cannot identify the file.
     """
 
     if os.name != "nt":
@@ -37,9 +38,15 @@ def _native_file_owner(session):
             # An unanswerable query is not proof of ownership.
             return False
         try:
-            return bool(handle.owns(process_id, started))
-        finally:
-            handle.close()
+            try:
+                return bool(handle.owns(process_id, started))
+            finally:
+                handle.close()
+        except Exception:
+            # The query itself failed (unknown status, table kept changing). That
+            # is not proof, and it has to become a structured refusal rather than
+            # escaping as an opaque backup failure.
+            return False
 
     return owns
 
@@ -251,8 +258,12 @@ class ImportService:
             if project_path:
                 # A named target that is not the project about to be created would
                 # be silently replaced by the default one, so refuse instead.
-                requested = os.path.normcase(os.path.abspath(str(project_path).strip()))
-                target = os.path.normcase(os.path.abspath(str(create_project_path).strip()))
+                requested = os.path.normcase(
+                    str(Path(str(project_path).strip()).expanduser().resolve())
+                )
+                target = os.path.normcase(
+                    str(Path(str(create_project_path).strip()).expanduser().resolve())
+                )
                 if requested != target:
                     return ImportResult(
                         False, "check_project",
@@ -324,6 +335,7 @@ class ImportService:
         )
         backup_path = ""
         path_resolution = None
+        path_details = {}
         try:
             if not created_project:
                 # inspect_project never supplies a path; the caption is the only
@@ -369,6 +381,13 @@ class ImportService:
                     # Keep the saved project intact before any native import.
                     shutil.copy2(source, destination)
                     backup_path = str(destination)
+                    # Keep the evidence even if a later stage fails: the report is
+                    # about which file was protected, not about the import result.
+                    path_details = {
+                        "project_path": str(source),
+                        "project_path_source": path_resolution.source,
+                        "project_path_binding": path_resolution.binding,
+                    }
         except Exception as error:
             return ImportResult(
                 False, "backup", f"导入前GXW备份失败：{error}",
@@ -389,8 +408,10 @@ class ImportService:
                 False, "prepare_import", f"无法准备待发送的CSV：{error}",
                 ImportErrorCode.CSV_INVALID, csv_path=validation.path,
                 backup_path=backup_path, project_name=project_name,
+                details={"version_protection": path_details},
             )
         protection_details = {
+            **path_details,
             "project_identity": identity,
             "baseline_found": None,
             "baseline_checked": False,
@@ -398,11 +419,6 @@ class ImportService:
             "target_program_semantic_sha256": target_semantic_hash,
             "target_comment_semantic_sha256": target_comment_hash,
         }
-        if path_resolution is not None:
-            # Auditable either way: which evidence tied the backup to this window.
-            protection_details["project_path"] = str(path_resolution.path)
-            protection_details["project_path_source"] = path_resolution.source
-            protection_details["project_path_binding"] = path_resolution.binding
 
         try:
             staged_import_path = self.csv_manager.prepare_import_program(
@@ -425,6 +441,7 @@ class ImportService:
                 csv_path=validation.path,
                 backup_path=str(backup_path),
                 project_name=project_name,
+                details={"version_protection": protection_details},
             )
         if not import_state.get("success"):
             return ImportResult(
@@ -435,7 +452,7 @@ class ImportService:
                 csv_path=validation.path,
                 backup_path=str(backup_path),
                 project_name=project_name,
-                details={"gxworks2": import_state},
+                details={"gxworks2": import_state, "version_protection": protection_details},
             )
 
         comment_import_state = None
