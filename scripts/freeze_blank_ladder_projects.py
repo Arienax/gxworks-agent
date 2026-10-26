@@ -17,8 +17,8 @@ record the CPU it is filed under, so a mislabelled file fails here rather than b
 
 After --write, the archive exists but is not yet delivered: add
 src/gxw/templates/blank-ladder-projects.zip.xz to template_data's allow-list (already
-present), publication/public-files.json, tools/check_public_boundary.py,
-tools/export_open_source.py and tools/release_smoke.py, then run those checks.
+present), then run the template and release checks. Public export includes
+runtime templates automatically; no per-file publication registration is needed.
 """
 from __future__ import annotations
 
