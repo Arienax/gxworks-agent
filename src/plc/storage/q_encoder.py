@@ -390,6 +390,14 @@ def _header_choices(op, arity=None, *, profile):
     return tuple(dict.fromkeys(result))
 
 
+def source_instruction_arities(opcode, *, cpu):
+    """Stored header signatures; never instruction admission or execution support."""
+    profile = storage_profile(cpu)
+    if profile not in {'q', 'q02', 'q03udv', 'l', 'l02'}:
+        return frozenset()
+    return frozenset(count for _header, count in _header_choices(str(opcode).upper(), profile=profile))
+
+
 def _parameter_rule(family, variant, index):
     for row in TABLES['operand_rules']:
         if row['family'] == family and (family < 0x40 or row['variant'] == variant):

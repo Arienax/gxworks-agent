@@ -180,6 +180,21 @@ namespace PlcAi.NativeAdapter
             return result.ToArray();
         }
 
+        void ProjectPouParent(ObjectId owner, ObjectId project, ObjectId collection, int pouType)
+        {
+            int code; ObjectId parent;
+            Check("Workspace.GetPOUParent", Slot<ParentCall>(workspace, 40)(workspace, owner, out parent, out code), code);
+            if (Same(parent, collection)) return;
+            // Simple+labels uses separate Program and FB collections while
+            // GetPOUCollection exposes their combined membership. Verify the
+            // actual collection and its project instead of discarding it.
+            int expectedType = pouType == 0x1000000 ? 0x1000000 : pouType == 0x1000002 ? 0x1000001 : -1;
+            if (expectedType < 0) throw new InvalidOperationException("native_pou_parent_kind_uncovered:" + pouType);
+            Facts(parent, expectedType, ""); Parent(parent, project);
+            if (!Children(parent).Exists(delegate(ObjectId child) { return Same(child, owner); }))
+                throw new InvalidOperationException("native_pou_parent_membership_differs");
+        }
+
         object[] ScopeVerifySources(ObjectId project, object[] expected)
         {
             int code; ObjectId collection;
@@ -191,8 +206,9 @@ namespace PlcAi.NativeAdapter
                 var row = Fields(item, "name", "program_kind", "pou_type", "body"); object selection; ObjectId owner;
                 ObjectId body = SourceIdentity(project, Text(row["name"]), NativeRequest.Integer(row["program_kind"]), "scope_creation", out selection);
                 Check("Workspace.GetPOUOwner", Slot<ParentCall>(workspace, 40)(workspace, body, out owner, out code), code);
-                Parent(owner, collection); int type;
+                int type;
                 Check("Workspace.GetPOUType", Slot<IdIntegerCall>(workspace, 1668)(workspace, owner, out type, out code), code);
+                ProjectPouParent(owner, project, collection, type);
                 if (type != NativeRequest.Integer(row["pou_type"]) || !Equal(ReadBody(body), Body(row["body"]))
                         || !owners.Exists(delegate(ObjectId value) { return Same(value, owner); })
                         || verified.Exists(delegate(ObjectId value) { return Same(value, owner); }))
@@ -322,8 +338,9 @@ namespace PlcAi.NativeAdapter
                 var row = Fields(item, "name", "program_kind", "pou_type", "body"); object selection; ObjectId owner;
                 ObjectId body = SourceIdentity(projectId, Text(row["name"]), NativeRequest.Integer(row["program_kind"]), "before_task_binding", out selection);
                 Check("Workspace.GetPOUOwner", Slot<ParentCall>(workspace, 40)(workspace, body, out owner, out code), code);
-                Parent(owner, collection); int type;
+                int type;
                 Check("Workspace.GetPOUType", Slot<IdIntegerCall>(workspace, 1668)(workspace, owner, out type, out code), code);
+                ProjectPouParent(owner, projectId, collection, type);
                 if (type != NativeRequest.Integer(row["pou_type"]) || !Equal(ReadBody(body), Body(row["body"]))
                         || !owners.Exists(delegate(ObjectId value) { return Same(value, owner); })
                         || verified.Exists(delegate(ObjectId value) { return Same(value, owner); }))

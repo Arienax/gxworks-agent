@@ -100,6 +100,9 @@ class ScanMachine:
         self.instructions = instructions if instructions is not None else [
             [(instruction, analyze_instruction_access(instruction['op'], instruction['args'], plc_model=plc_model))
              for instruction in lower_rung_instructions(rung)] for rung in ladder.get('rungs', [])]
+        from plc.ordered_source import ordered_circuit_rows
+        self._ordered_starts = {(rows[0]['_rung_index'], rows[0]['_instruction_index'])
+                                for _, rows, _ in ordered_circuit_rows(ladder.get('rungs', [])) if rows}
         from plc.instruction_constraints import instruction_program_accesses
         self.execution_context.setdefault('program_accesses', instruction_program_accesses(ladder, plc_model=plc_model))
         self.applications = applications if applications is not None else {}
@@ -280,8 +283,10 @@ class ScanMachine:
             if type(timestamp) not in {int,float} or timestamp < 0 or self.timestamp_ms is not None and timestamp < self.timestamp_ms:
                 raise ValueError('explicit_clock_not_monotonic')
             self.timestamp_ms = timestamp
+        accumulator, logic_stack, saved = True, [], []
         for rung_index, rung in enumerate(self.ladder.get('rungs', [])):
-            accumulator, logic_stack, saved = True, [], []
+            if 'ordered_instructions' not in rung:
+                accumulator, logic_stack, saved = True, [], []
             st_stack, st_enable = [], True
             # A branch connected directly to the left bus has its own TRUE
             # enable. It cannot inherit a preceding independent branch's guard.
@@ -289,6 +294,8 @@ class ScanMachine:
                             if not rung.get('header_element') and not rung.get('shared_inputs')
                             and not branch.get('inputs')}
             for step, (instruction, access) in enumerate(self.instructions[rung_index]):
+                if (rung_index, step) in self._ordered_starts:
+                    accumulator, logic_stack, saved = True, [], []
                 self.execution_context['current_instruction'] = (rung_index, instruction.get('path'))
                 op, args = instruction['op'], instruction['args']
                 if instruction.get('path') in root_outputs:

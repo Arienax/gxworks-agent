@@ -20,6 +20,12 @@ def _native_validation_sources(raw):
     if len(metadata) != 1:
         raise GXWFormatError('native validation requires one project configuration')
     context = read_project_text_context(metadata[0])
+    from plc.target_identity import is_parameter_only
+    # The native Q remote-I/O project stores this generic label in .prj,
+    # rather than the complete New-dialog menu identity. Do not invent a CPU.
+    if is_parameter_only(context['cpu']) or context['cpu'] == 'RemoteI/O':
+        raise GXWFormatError('CPU ' + context['cpu']
+            + ' is parameter-only; native program operations are unavailable')
     groups, _ = project_source_groups(outer['projectdatalist.xml'])
     sfc_groups, _ = project_source_groups(outer['projectdatalist.xml'], folder_type=8)
     sfc_labels = {group['labels'] for logical, group in sfc_groups.items()
@@ -69,10 +75,16 @@ def _native_validation_source_body(raw):
     return workspace_body(raw)
 
 
-def _native_compilation_method(programs):
+def _native_compilation_method(programs, *, cpu=None):
     from .source_header import source_payload_offset
     kinds = {raw[source_payload_offset(raw)] for raw in programs}
-    return 'Compiler.ChangeSFCProgram' if kinds == {240} else None if 240 in kinds else 'Compiler.Build'
+    if kinds == {240}:
+        return 'Compiler.ChangeSFCProgram'
+    if 240 in kinds:
+        from plc.target_identity import target_family
+        if cpu is None or target_family(cpu) != 'Q':
+            return None
+    return 'Compiler.Build'
 
 
 def _native_validation_sfc_children(raw):
@@ -161,12 +173,13 @@ def native_validation_source_plan(raw, *, include_logical_names=False):
         if profile is None or not profile.program_supported:
             from .models import GXWFormatError
             raise GXWFormatError('simple Ladder source has no known programmable native CPU identity')
-    if any(row['program_kind'] == 1 for row in programs) and (libraries or any(row['program_kind'] != 1 for row in programs)):
-        from .models import GXWFormatError
-        raise GXWFormatError('mixed simple Ladder and structured source validation is not established')
     if sfc and (libraries or any(row['program_kind'] != 240 for row in programs)):
+        from plc.target_identity import target_family
         from .models import GXWFormatError
-        raise GXWFormatError('mixed SFC and structured source conversion is not established')
+        if target_family(context['cpu']) != 'Q':
+            raise GXWFormatError('mixed SFC source conversion is not established for CPU '
+                + context['cpu'] + '; program_kinds=' + repr(sorted({row['program_kind'] for row in programs}))
+                + '; library_kinds=' + repr(sorted({row['program_kind'] for row in libraries})))
     return {'cpu': context['cpu'], 'codepage': context['codepage'],
         'programs': [
         {'name': row['name'], 'program_kind': row['program_kind'],
@@ -251,7 +264,7 @@ def bind_native_ladder_candidate(raw, program_ir, logical_name):
     lexical forms cannot become a successful candidate binding.
     """
     from .models import GXWFormatError
-    from .token_listing import decode_token_program
+    from .token_listing import decode_token_program, TokenInstruction, TokenText, TokenLabel
     from .token_pou import frame_token_pou
     from plc.device_identity import canonical_operand, canonical_reference_device
     from plc.ir import ir_to_ladder, lower_rung_instructions
@@ -269,17 +282,27 @@ def bind_native_ladder_candidate(raw, program_ir, logical_name):
     # These are binary lexical grammars, not instruction/device permission
     # profiles. Exact CPU selection and the native source getters remain bound
     # independently, and any opaque token prevents a candidate match.
-    lexical_profile = 'fx3u' if source_cpu.series[0] == 'FXCPU' else 'q03udv'
+    from .token_profiles import source_token_profile
+    lexical_profile = source_token_profile(context['cpu'])
     listing = decode_token_program(frame_token_pou(selected[0]['raw']), profile=lexical_profile,
                                    text_encoding=context['text_encoding'])
-    actual = listing.instruction_ir()
-    if len(listing.records) != len(listing.instructions):
+    if any(not isinstance(row, (TokenInstruction, TokenText, TokenLabel)) for row in listing.records):
         raise GXWFormatError('unsupported source records prevent a complete simple Ladder candidate binding')
-    expected = [{key: row[key] for key in ('op', 'args')}
-                for rung in ir_to_ladder(program_ir)['rungs'] for row in lower_rung_instructions(rung)]
-    expected.append({'op': 'END', 'args': []})
+    actual = [({'kind': 'label', 'text': row.text,
+                'raw_hex': b''.join(token.raw for token in row.tokens).hex()}
+               if isinstance(row, TokenLabel) else {'op': row.mnemonic, 'args': list(row.args)})
+              for row in listing.records if not isinstance(row, TokenText)]
+    expected = [row for rung in ir_to_ladder(program_ir)['rungs'] for row in lower_rung_instructions(rung)
+                if row.get('kind', 'instruction') not in {'statement', 'note'}]
+    terminal = next((row for row in reversed(expected) if row.get('kind', 'instruction') == 'instruction'), None)
+    saved_terminal = next((row for row in reversed(actual) if 'op' in row), None)
+    if saved_terminal and saved_terminal['op'] == 'END' and (terminal is None or terminal['op'] != 'END'):
+        expected.append({'op': 'END', 'args': []})
     def canonical(rows):
-        return [{'op': row['op'], 'args': [canonical_reference_device(canonical_operand(arg)) for arg in row['args']]} for row in rows]
+        return [({'kind': 'label', 'text': row.get('text'), 'raw_hex': row.get('raw_hex')}
+                 if row.get('kind') == 'label' else
+                 {'op': row['op'], 'args': [canonical_reference_device(canonical_operand(arg)) for arg in row['args']]})
+                for row in rows]
     if canonical(actual) != canonical(expected):
         raise GXWFormatError('saved simple Ladder instruction list differs from the current candidate')
     return {'status': 'current', 'cpu': context['cpu'], 'program': logical_name,

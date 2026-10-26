@@ -221,6 +221,7 @@ def read_ordered_program(project, program=None, *, revision=1):
     listing = decode_token_listing(project.streams[selected['source_name']],
         profile=source_token_profile(project.context['cpu']), text_encoding=project.context['text_encoding'])
     records, source_records, unknown = [], [], []
+    has_labels = False
     for index, record in enumerate(listing.records):
         offset = record.tokens[0].offset
         item = {'record_index': index, 'source_offset': offset,
@@ -239,9 +240,10 @@ def read_ordered_program(project, program=None, *, revision=1):
             item.update(kind='label' if isinstance(record, TokenLabel) else 'opaque')
             if isinstance(record, TokenLabel):
                 item['text'] = record.text
+                has_labels = True
             else:
                 item['reason'] = record.reason
-            unknown.append(item)
+                unknown.append(item)
         source_records.append(item)
     networks = []
     for index, (note, rows, _leading) in enumerate(_split_networks(records), 1):
@@ -251,8 +253,9 @@ def read_ordered_program(project, program=None, *, revision=1):
         networks.append({'id': f'N{index:04d}', 'comment': note, 'raw_instructions': instructions,
                          'parse_status': 'ordered'})
     if networks and listing.instructions and listing.instructions[-1].mnemonic == 'END':
-        networks[-1]['raw_instructions'].append(copy.deepcopy(source_records[-1]))
-    if unknown:
+        networks[-1]['raw_instructions'].append(copy.deepcopy(next(
+            row for row in reversed(source_records) if row.get('op') == 'END')))
+    if unknown or has_labels:
         # Network boundaries are a display projection. Partition *every* source
         # record in its original order, including labels and opaque barriers.
         # Never rebuild an editable source from the known-instruction subset.
@@ -275,7 +278,7 @@ def read_ordered_program(project, program=None, *, revision=1):
         'issues': issues, 'program_ir': ir, 'plc_model': model,
         'coverage': {'parse_status': 'partial' if unknown else 'complete', 'network_count': len(networks),
             'parsed_network_count': len(networks) if not unknown else 0, 'unknown_instructions': unknown,
-            'semantic_status': 'unverified' if unknown else 'static_only', 'runtime_verified': False}}
+            'semantic_status': 'unverified' if unknown or has_labels else 'static_only', 'runtime_verified': False}}
 
 
 def inspect_offline_project(raw, program=None):

@@ -41,13 +41,19 @@ def verify_native_compilation_save(before, saved, validation, cold, observation)
         and gui.get('word_device') == 0 and gui.get('bit_device') == 3)
     if current['cpu'] == 'FX3U/FX3UC' and gui['status'] != 'matched' and not legacy_timer_gap:
         raise GXWFormatError('saved GUI allocation configuration differs from the current workspace')
-    for result in (validation, cold):
+    for phase, result in (('save', validation), ('cold_reopen', cold)):
         if (result.get('compilation',{}).get('acceptance') != 'accepted'
                 or result.get('compilation',{}).get('completed') is not True
                 or result.get('compilation',{}).get('diagnostics_complete') is not True
                 or result.get('public_check') != {'status':'passed','completed':True}
                 or result.get('current_source_check') != 'established'):
-            raise GXWFormatError('native compile save requires current completed compilation and public check')
+            codes = sorted({row['code'] for row in result.get('compilation', {}).get('diagnostics', [])
+                            if isinstance(row, dict) and type(row.get('code')) is int})
+            diagnostics = '; diagnostics=' + ','.join(f'0x{code & 0xffffffff:08x}' for code in codes) if codes else ''
+            raise GXWFormatError('native compile save requires current completed compilation and public check: '
+                + phase + '; compilation=' + str(result.get('compilation', {}).get('acceptance'))
+                + '; public_check=' + str(result.get('public_check', {}).get('status'))
+                + '; source_check=' + str(result.get('current_source_check')) + diagnostics)
     calls = observation.get('calls',[])
     if (observation.get('native_version')!='1.635.0.1' or observation.get('cpu')!=previous['cpu']
             or observation.get('status')!='observed' or observation.get('protocol_version')!=1
@@ -133,13 +139,20 @@ def _created_root_type(sources, data_type):
     return base.upper() not in BASIC_TYPES and _created_inout_type(sources, data_type)
 
 
+def _native_local_source_groups(metadata):
+    groups, issues = project_source_groups(metadata)
+    sfc, gaps = project_source_groups(metadata, folder_type=8)
+    if groups.keys() & sfc.keys():
+        raise GXWFormatError('ambiguous ordinary and SFC source ownership')
+    return {**groups, **sfc}, [*issues, *gaps]
+
+
 def _native_project_source_inventory(raw: bytes) -> tuple[dict, list[dict]]:
     """The current paired local source inventory shared by native edit plans."""
     from .native_diagnostics import _native_validation_sources
+    from .diagnostic_sources import _native_validation_source_body
     outer = validate_cfb_streams(raw)
-    mapping = project_stream_mapping(outer)
-    nested = validate_cfb_streams(outer['_hdb'])
-    groups, issues = project_source_groups(outer['projectdatalist.xml'])
+    groups, issues = _native_local_source_groups(outer['projectdatalist.xml'])
     if issues:
         raise GXWFormatError('native operation requires current unambiguous source ownership')
     project, programs = _native_validation_sources(raw)
@@ -147,9 +160,8 @@ def _native_project_source_inventory(raw: bytes) -> tuple[dict, list[dict]]:
         raise GXWFormatError('native operation requires current paired source and declaration roles')
     return project, [
         {'name': row['name'], 'program_kind': row['program_kind'],
-         'pou_type': parse_declarations(nested[mapping[groups[row['logical_name']]['labels']]],
-                                       logical_name=groups[row['logical_name']]['labels']).owner_pou_type,
-         'body': base64.b64encode(workspace_body(row['raw'])).decode('ascii')}
+         'pou_type': row['declarations'].owner_pou_type,
+         'body': base64.b64encode(_native_validation_source_body(row['raw'])).decode('ascii')}
         for row in programs]
 
 
@@ -311,7 +323,7 @@ def _native_fact(value, kind, name=None):
 
 def _native_source_identity(source, name, language):
     try:
-        owner, body = _native_fact(source['owner'], 26, name), _native_fact(source['body'], 32)
+        owner, body = _native_fact(source['owner'], 60 if language == 240 else 26, name), _native_fact(source['body'], 32)
         read_language = source['language']
         if (source['status'] != 'verified-source-object' or source['name'] != name
                 or source['lookup_type'] != 32 or source['lookup']['id'] != body
@@ -330,11 +342,14 @@ def _native_source_identity(source, name, language):
 
 
 def _verify_scope_sources(programs, inventory, groups, payloads):
+    from .diagnostic_sources import _native_validation_source_body
     if not isinstance(inventory, list) or len(inventory) != len(programs):
         raise GXWFormatError('native scope source inventory is incomplete')
     saved = {}
     for logical, group in groups.items():
-        labels = parse_declarations(payloads[group['labels']], logical_name=group['labels'])
+        kind = payloads[logical][source_payload_offset(payloads[logical])]
+        labels = parse_declarations(payloads[group['labels']], logical_name=group['labels'],
+                                    source_kind=240 if kind == 240 else None)
         if labels.owner_name in saved:
             raise GXWFormatError('saved scope has ambiguous POU ownership')
         saved[labels.owner_name] = (logical, group, labels)
@@ -349,7 +364,7 @@ def _verify_scope_sources(programs, inventory, groups, payloads):
         logical, group, labels = saved[name]
         if (name in verified or type(item['pou_type']) is not int or item['pou_type'] != row['pou_type']
                 or labels.owner_pou_type != row['pou_type'] or group['folder'] != owner[4]
-                or workspace_body(payloads[logical]) != base64.b64decode(row['body'])):
+                or _native_validation_source_body(payloads[logical]) != base64.b64decode(row['body'])):
             raise GXWFormatError('saved scope source differs from the current native identity/body/type')
         verified.add(name)
 
@@ -413,12 +428,23 @@ def verify_native_scope_creation(baseline: bytes, name: str, raw: bytes, observa
     containers = [validate_cfb_streams(value) for value in (baseline, raw)]
     before, after = [{logical: nested[stream] for logical, stream in project_stream_mapping(container).items()
                       if stream in nested} for container in containers for nested in [validate_cfb_streams(container['_hdb'])]]
-    groups, issues = project_source_groups(containers[1]['projectdatalist.xml'])
+    groups, issues = _native_local_source_groups(containers[1]['projectdatalist.xml'])
     saved_resources, saved_tasks = _native_scope_inventory(raw)
     old_resources, _ = _native_scope_inventory(baseline)
     added = name + ('.res' if scope_kind == 'resource' else '.tsk')
+    previous_groups, _ = _native_local_source_groups(containers[0]['projectdatalist.xml'])
+    from .diagnostic_sources import _native_validation_sources
+    _, previous_programs = _native_validation_sources(baseline)
+    previous_documents = {row['declaration_name']: row['declarations'] for row in previous_programs}
+    old_mapping, new_mapping = map(project_stream_mapping, containers)
+    names = _saved_object_names(containers[0]['projectdatalist.xml'], old_mapping,
+        containers[1]['projectdatalist.xml'], {logical: stream for logical, stream in new_mapping.items() if logical != added},
+        previous_groups, previous_documents)
+    before = {names[logical]: value for logical, value in before.items()}
     if issues or after.keys() - before.keys() != {added} or before.keys() - after.keys():
-        raise GXWFormatError('native scope creation changed unexpected materialized source membership')
+        raise GXWFormatError('native scope creation changed unexpected materialized source membership: added='
+            + repr(sorted(after.keys() - before.keys())) + ', removed=' + repr(sorted(before.keys() - after.keys()))
+            + ', directory_issues=' + repr(issues))
     if (saved_resources.keys() != old_resources.keys() | ({added} if scope_kind == 'resource' else set())
             or any(set(saved_resources[logical]['tasks']) != set(group['tasks']) |
                    ({added} if scope_kind == 'task' and logical == resource + '.res' else set())
@@ -494,6 +520,7 @@ def verify_native_scope_creation(baseline: bytes, name: str, raw: bytes, observa
         raise GXWFormatError('native task creation did not persist its observed resource name-cache update')
     configuration_status = ('current' if all(config_observations) else 'not_observed') if config_observations else 'not_applicable'
     report = {'schema_version': 1, 'operation': 'native_scope_creation', 'scope_kind': scope_kind, 'created_name': name,
+        'registered_object_renames': [dict(before=old, after=new) for old, new in names.items() if old != new],
         'resource': plan['resource'], 'native_workspace': observation, 'native_task_configuration': configuration_status,
         'created_task_configuration': next(({field: row[field] for field in ('event_name', 'interval', 'priority')}
             for row in saved_tasks if row['task'] == name and scope_kind == 'task'), None),

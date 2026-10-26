@@ -99,7 +99,8 @@ def prepare_offline_edit(baseline: bytes, edits, *, declaration_edits=None,
 
     # ST interface and declaration updates precede graph construction. Their
     # callers are checked once, below, against the complete transaction.
-    for source, command in sorted(bound, key=lambda pair: pair[0]['language'] != 'st'):
+    fbd_replacements = {}
+    for source, command in sorted(bound, key=lambda pair: {'st': 0, 'fbd': 2}.get(pair[0]['language'], 1)):
         logical, language = source['source_name'], source['language']
         operation = command.pop('operation', 'edit')
         if language == 'st':
@@ -130,7 +131,10 @@ def prepare_offline_edit(baseline: bytes, edits, *, declaration_edits=None,
             model.pop('declaration_edits', None)
             prepared = prepare_object_project(model, baseline=working,
                 save_policy=save_policy, defer_project_checks=True)
-            working = write_prepared_project(prepared).data
+            for name, replacement in prepared.replacements.items():
+                if name in fbd_replacements:
+                    raise GXWFormatError('conflicting FBD source replacements: ' + name)
+                fbd_replacements[name] = replacement
         elif language == 'ladder':
             from .offline_project import edit_ladder_project
             if operation != 'edit' or set(command) - {'instruction_edits', 'source_name'}:
@@ -151,6 +155,8 @@ def prepare_offline_edit(baseline: bytes, edits, *, declaration_edits=None,
         else:
             raise GXWFormatError('source language has no offline editor: ' + logical)
 
+    if fbd_replacements:
+        working = write_project_replacements(working, fbd_replacements).data
     after = read_offline_project(working)
     if after.mapping != original.mapping or set(after.streams) != set(original.streams):
         raise GXWFormatError('offline transaction changed registered engineering objects')

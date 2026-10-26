@@ -324,7 +324,7 @@ def correlate_native_compile_declaration(report, *, cpu, binding):
 
 
 def bind_native_compile_source_context(programs, *, project_id, native_version, events, snapshots,
-                                       selection, compilation):
+                                       selection, compilation, cpu=None):
     """Bind completed Build reports to original source reads around that Build.
 
     Rejected compilation can have current source positions even though it has
@@ -341,7 +341,7 @@ def bind_native_compile_source_context(programs, *, project_id, native_version, 
             or compilation.get('completed') is not True or compilation.get('diagnostics_complete') is not True
             or compilation.get('acceptance') not in ('accepted', 'rejected')
             or len(builds) != 1 or len(ends) != 1 or not builds[0] < ends[0]
-            or events[builds[0]].get('operation') != _native_compilation_method(programs.values())
+            or events[builds[0]].get('operation') != _native_compilation_method(programs.values(), cpu=cpu)
             or ends[0] >= check_start):
         return {**unresolved, 'reason': 'current source selection or complete original compilation is unavailable'}
     stages = []
@@ -451,13 +451,18 @@ def _native_task_source_bindings(tasks, local_programs, source_bodies, events, r
             row = {'resource': task['resource'], 'task': task['task'], 'pou': name,
                    'status': 'unresolved', 'public_check_promoted': False}
             roots = roots_by_task.get((task['resource'], task['task'], name), ())
+            def valid_root(reference):
+                library, language = reference.get('library'), reference.get('program_kind')
+                if not isinstance(library, str) or type(language) is not int:
+                    return False
+                if not library and name in local_programs:
+                    from .source_header import source_payload_offset
+                    source = local_programs[name]
+                    return language == source[source_payload_offset(source)]
+                return language in (193, 208)
             scopes = {(reference.get('library'), reference.get('program_kind')) for reference in roots
-                      if isinstance(reference.get('library'), str)
-                      and type(reference.get('program_kind')) is int
-                      and reference.get('program_kind') in (193, 208)}
-            if (len(scopes) > 1 or any(not isinstance(reference.get('library'), str)
-                    or type(reference.get('program_kind')) is not int
-                    or reference.get('program_kind') not in (193, 208) for reference in roots)):
+                      if valid_root(reference)}
+            if len(scopes) > 1 or any(not valid_root(reference) for reference in roots):
                 row['reason'] = 'compiled task root has conflicting source namespaces or languages'
                 bindings.append(row)
                 continue

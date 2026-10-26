@@ -194,6 +194,48 @@ def read_project_text_context(raw: bytes) -> dict:
                 handling="partially-decoded")
 
 
+def read_project_settings(project_raw: bytes, info_raw: bytes | None) -> dict:
+    """Read saved project type and label selection, independently of POU folders.
+
+    Native New/save controls distinguish Simple with and without labels from
+    Structured projects in .pji. Source folder roles alone do not distinguish
+    these states. Unobserved selector values remain unknown.
+    """
+    context = read_project_text_context(project_raw)
+    kind = struct.unpack_from('<I', project_raw, context['codepage_offset'] - 4)[0]
+    result = {'native_project_type': {1: 'simple', 2: 'structured'}.get(kind), 'use_labels': None}
+    if info_raw is None:
+        return result
+    offset, values = 0, []
+    for _ in range(2):
+        if offset + 4 > len(info_raw):
+            raise GXWFormatError('truncated project info string length')
+        count = struct.unpack_from('<I', info_raw, offset)[0]
+        end = offset + 4 + count * 2
+        if not 1 <= count <= 8192 or end > len(info_raw):
+            raise GXWFormatError('unbounded project info string')
+        try:
+            value = info_raw[offset + 4:end].decode('utf-16le')
+        except UnicodeError as error:
+            raise GXWFormatError('undecodable project info string') from error
+        if not value.endswith('\0') or '\0' in value[:-1]:
+            raise GXWFormatError('unsupported project info string terminator')
+        values.append(value[:-1])
+        offset = end
+    if values[1] != context['cpu']:
+        raise GXWFormatError('project info CPU differs from saved project metadata')
+    if offset + 8 > len(info_raw):
+        raise GXWFormatError('truncated project type and label selectors')
+    kind, labels = struct.unpack_from('<II', info_raw, offset)
+    project_type = {1: 'simple', 2: 'structured'}.get(kind)
+    if project_type is not None:
+        if result['native_project_type'] not in (None, project_type):
+            raise GXWFormatError('project type differs between saved metadata records')
+        result['native_project_type'] = project_type
+    result['use_labels'] = bool(labels) if labels in (0, 1) else None
+    return result
+
+
 def read_project_system_variables(raw: bytes) -> dict:
     """Read the saved 88-byte native range record; do not infer CPU defaults.
 

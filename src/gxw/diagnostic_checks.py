@@ -68,10 +68,11 @@ def _session_outcomes(check_sessions):
             if (len(arguments) == 2 and all(isinstance(value, str) and value.isascii() and value.isdigit()
                     and len(value) <= 10 for value in arguments)):
                 expected_counts = [int(value) for value in arguments]
-        # SFC returns source-child names for errors in the selected resource's
-        # report stream. Its resource end marker counts those diagnostics too.
+        # Original compilers can name POUs or SFC children in a resource's
+        # report stream. Its resource end marker counts all of those rows.
         source_named_diagnostics = session['public'] and any(
-            source_named_check_diagnostics(row) for row in session['owned_inputs'])
+            source_named_check_diagnostics(row, resource=session['name'], reports=session['reports'])
+            for row in session['owned_inputs'])
         observed_counts = [sum(row.get('kind') == kind and (source_named_diagnostics
             or row.get('name', {}).get('text') == session['name'])
             for row in session['reports']) for kind in (2, 3)]
@@ -357,6 +358,10 @@ def analyze_native_check(events, observations, generated, *, selection=None, reo
     requested = events.has('Workspace.GetProgramCheckCollection') or bool(started)
     if not requested:
         public_status = 'not_requested'
+    not_applicable = any(row.get('reason') == 'no_executable_resources'
+                         for row in events.rows('ProgramCheckNotApplicable')) and not planned and not generated
+    if not_applicable:
+        public_status = 'not_applicable'
     observed_reads = reads + query_reads
     checker_reads = [row for row in reads if row['origin'] == 'native-checker']
     if not observed_reads or all(row['origin'] == 'auxiliary-publication' for row in observed_reads):
@@ -413,7 +418,8 @@ def analyze_native_check(events, observations, generated, *, selection=None, reo
             'public_adapter_projection': 'not_called' if raw_outcomes else 'not_observed'},
         'targets': {'planned': [list(t) for t in planned], 'started': [list(t) for t in started],
                     'backend_completed': [list(t) for t in completed_backend]},
-        'public_check': {'status': public_status, 'completed': whole_completed},
+        'public_check': {'status': public_status, 'completed': whole_completed,
+                         **({'reason': 'no_executable_resources'} if not_applicable else {})},
         'diagnostic_projection': {'status': 'failed' if projection_failures or failed_public_poll else
             'completed' if whole_completed else 'not_completed', 'failures': projection_failures,
             'source_body_binding': source_binding, 'source_audits': source_audits or [],

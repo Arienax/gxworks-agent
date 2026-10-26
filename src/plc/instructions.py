@@ -21,6 +21,7 @@ import re
 import sys
 from dataclasses import dataclass, field, replace
 from enum import Enum
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Tuple
 
@@ -39,6 +40,34 @@ class InstructionCategory(str, Enum):
     ACTION = "action"
     BRANCH_CONTROL = "branch_control"
     PROGRAM_CONTROL = "program_control"
+
+
+def condition_connector(opcode):
+    """Accumulator connector of a stored contact/comparison, not execution support.
+
+    Q/L use the same LD/AND/OR modifiers for word, double-word, floating,
+    string and time comparisons. Catalogue completeness must not change the
+    boundaries of their original circuits.
+    """
+    name = str(opcode or '').strip().upper()
+    if name in {'ANI', 'ORI'}:
+        return 'AND' if name == 'ANI' else 'OR'
+    match = re.fullmatch(r'(LD|AND|OR)(?:I|P|F|PI|FI|PCHK|(?:ED|DT|TM|D|E|\$)?(?:<>|>=|<=|=|>|<))?', name)
+    return match[1] if match else None
+
+
+@lru_cache(maxsize=4096)
+def source_instruction_arities(opcode, cpu):
+    """Reuse the native storage catalogue when reading Q/L source signatures.
+
+    These facts fill source-reading gaps without promoting unreviewed entries
+    into the generation or execution catalogue.
+    """
+    from plc.target_identity import target_family, is_parameter_only
+    if target_family(cpu) not in {'Q', 'L'} or is_parameter_only(cpu):
+        return frozenset()
+    from plc.storage.q_encoder import source_instruction_arities as stored_arities
+    return stored_arities(opcode, cpu=cpu)
 
 
 class SemanticKind(str, Enum):
@@ -473,6 +502,7 @@ class InstructionRegistry:
     def __init__(self, specs: Iterable[InstructionSpec] = ()) -> None:
         self._specs: Dict[Tuple[str, str], InstructionSpec] = {}
         self._cpu_contracts: Dict[Tuple[str, str, str], InstructionSpec] = {}
+        self._source_forms: Dict[Tuple[str, str, int], InstructionSpec] = {}
         self._variant_index: Optional[
             Dict[Tuple[str, str], InstructionResolution]
         ] = None
@@ -642,6 +672,19 @@ class InstructionRegistry:
     ) -> Optional[InstructionSpec]:
         resolved = self.resolve_form(mnemonic, vendor=vendor, cpu=cpu)
         return resolved.spec if resolved is not None else None
+
+    def resolve_source_form(self, mnemonic, operand_count, *, cpu):
+        """Read saved-source operand roles without admitting generated code.
+
+        The saved CPU's lexical catalogue must also contain this exact arity.
+        Manual roles do not certify CPU applicability, execution or hardware.
+        """
+        from plc.target_identity import target_family
+        token = str(mnemonic or '').strip().upper()
+        source = self._source_forms.get((target_family(cpu), token, operand_count))
+        if source is not None and operand_count in source_instruction_arities(token, cpu):
+            return source
+        return self.resolve(token, cpu=cpu)
 
     def load_target_contracts(self, entries) -> None:
         """Build-time reviewed manual contracts, scoped to a literal CPU/form.
@@ -1455,6 +1498,7 @@ class InstructionRegistry:
     def from_files(cls, paths: Sequence[Path]) -> "InstructionRegistry":
         entries = []
         target_contracts = []
+        source_forms = []
         modifier_rules: Dict[Tuple[str, str], Mapping[str, Any]] = {}
         for path in paths:
             payload = json.loads(path.read_text(encoding="utf-8"))
@@ -1466,6 +1510,7 @@ class InstructionRegistry:
                     f"{path}: unsupported instruction catalogue schema {schema_version}"
                 )
             vendor = str(payload.get("vendor") or "mitsubishi").strip().lower()
+            source_forms.extend(payload.get('source_forms', []))
             contracts = payload.get("cpu_contracts", [])
             if not isinstance(contracts, list):
                 raise ValueError(f"{path}: cpu_contracts must be an array")
@@ -1516,6 +1561,19 @@ class InstructionRegistry:
                 f"modifier rule targets unknown instruction {vendor}:{mnemonic}"
             )
         registry = cls(specs)
+        for form in source_forms:
+            operands = form['operands']
+            for token in form['symbols']:
+                key = (form['family'], token, len(operands))
+                if key in registry._source_forms:
+                    raise ValueError('duplicate saved-source instruction form: ' + str(key))
+                spec = InstructionSpec.from_mapping(dict(
+                    mnemonic=token, category=form.get('category', 'action'), semantic_kind='vendor',
+                    arity=dict(min=len(operands), max=len(operands)), operands=operands,
+                    source_materials=[dict(manual_id=form['manual_id'], pdf_page=form['pdf_page'])]))
+                registry._source_forms[key] = replace(spec, verified_fields=tuple(
+                    ['arity', 'operand_order', 'operand_roles'] +
+                    (['operand_types'] if form.get('operand_types_verified') else [])))
         registry.load_target_contracts(target_contracts)
         return registry
 

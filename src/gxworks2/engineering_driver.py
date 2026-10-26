@@ -194,7 +194,10 @@ class NativeEngineeringDriver:
             observation['project_opened'] = current.project_open
             if self.evidence_directory:
                 path = self.evidence_directory / 'startup-failure.png'
-                self._window().capture_as_image().save(str(path))
+                capture = self._window().capture_as_image()
+                if capture is None:
+                    raise NativeEngineeringDriverError('启动失败页面的窗口截图未返回图像；请检查窗口尺寸、桌面可访问性及 Pillow。')
+                capture.save(str(path))
                 observation['image'] = str(path)
         except Exception as capture_error:
             observation['startup_observation_error'] = str(capture_error)

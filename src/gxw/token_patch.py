@@ -44,6 +44,17 @@ class PreparedTokenRecords:
     records: tuple[bytes, ...]
 
 
+def _terminal_end_index(records, message):
+    """END terminates executable records; saved annotations can follow it."""
+    ends = [index for index, record in enumerate(records)
+            if isinstance(record, TokenInstruction) and record.mnemonic == 'END']
+    if not ends:
+        return None
+    if len(ends) != 1 or any(not isinstance(record, TokenText) for record in records[ends[0] + 1:]):
+        raise GXWFormatError(message)
+    return ends[0]
+
+
 def edit_token_records(listing, edits, *, text_encoding, plc_model=None,
                        storage_context=None, allow_end_boundary=False,
                        allow_draft=False) -> PreparedTokenRecords:
@@ -157,13 +168,9 @@ def edit_token_records(listing, edits, *, text_encoding, plc_model=None,
     new_labels = Counter(record.text for record in reread.records if isinstance(record, TokenLabel))
     if any(count > 1 and count > old_labels[name] for name, count in new_labels.items()):
         raise GXWFormatError('instruction edits introduce a duplicate source label')
-    old_ends = [index for index, record in enumerate(listing.records)
-                if isinstance(record, TokenInstruction) and record.mnemonic == 'END']
-    new_ends = [index for index, record in enumerate(reread.records)
-                if isinstance(record, TokenInstruction) and record.mnemonic == 'END']
-    if old_ends and old_ends != [len(listing.records) - 1]:
-        raise GXWFormatError('source does not have one bound terminal END')
-    if new_ends != ([len(reread.records) - 1] if old_ends else []):
+    old_end = _terminal_end_index(listing.records, 'source does not have one bound terminal END')
+    new_end = _terminal_end_index(reread.records, 'modified instruction source failed terminal END binding')
+    if (old_end is None) != (new_end is None):
         raise GXWFormatError('modified instruction source failed terminal END binding')
     return PreparedTokenRecords(body, tuple(chunks))
 
@@ -192,11 +199,11 @@ def splice_token_records(source: bytes, *, expected_sha256: str, logical_name: s
         raise GXWFormatError("unresolved record splice program")
     raw = project.streams[logical_name]
     before = decode_token_listing(raw, text_encoding=text_encoding)
-    ends = [i for i, r in enumerate(before.records) if isinstance(r, TokenInstruction) and r.mnemonic == "END"]
-    if ends != [len(before.records) - 1]:
+    terminal_index = _terminal_end_index(before.records, 'record splice requires a single terminal END')
+    if terminal_index is None:
         raise GXWFormatError("record splice requires a single terminal END")
     boundaries = {r.tokens[0].offset: i for i, r in enumerate(before.records)}
-    terminal = before.records[-1].tokens[0].offset
+    terminal = before.records[terminal_index].tokens[0].offset
     plans, previous_end = [], -1
     for edit in sorted(edits, key=lambda e: e.offset):
         old, new = bytes(edit.expected_raw), bytes(edit.replacement_raw)

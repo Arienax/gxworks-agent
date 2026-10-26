@@ -626,6 +626,17 @@ class PywinautoGXWorks2UIAutomation(GXWorks2UIAutomation):
         if control.selected_text() != value:
             raise RuntimeError("GX Works2原生选项发生变化。")
 
+    @staticmethod
+    def _set_native_check(control, checked):
+        # BM_SETCHECK alone changes the painted box but does not run GX's
+        # label handler. Its language list and project options need BN_CLICKED.
+        if not control.is_enabled():
+            raise RuntimeError('GX Works2原生复选项当前不可修改。')
+        (control.check if checked else control.uncheck)()
+        control.notify_parent(0)  # BN_CLICKED
+        if bool(control.get_check_state()) != bool(checked):
+            raise RuntimeError('GX Works2原生复选项未保留所选状态。')
+
     def _require_native_program_source(self, session):
         # A remote-I/O parameter project can retain an old MDI MAIN and CPU
         # status text from the preceding project. Its current navigation has
@@ -1651,7 +1662,7 @@ class PywinautoGXWorks2UIAutomation(GXWorks2UIAutomation):
             raise RuntimeError("此CPU没有可用的简单工程类型。")
         labels = dialog.child_window(control_id=10068, class_name="Button")
         if labels.is_enabled() and labels.get_check_state():
-            labels.uncheck()
+            self._set_native_check(labels, False)
         languages = [text for text in language.item_texts() if text in {"梯形图", "Ladder"}]
         if len(languages) != 1:
             raise RuntimeError("GX Works2新建窗口没有明确的梯形图语言。")

@@ -367,7 +367,8 @@ class AdvancedSVGLadder:
 
     def _ordered_source(self, rungs, *, highlight_rung_ids=None):
         """Draw source junctions directly; outputs never consume a condition."""
-        from plc.ordered_source import project_ordered_graph
+        from plc.ordered_source import project_ordered_graph, ordered_display_rungs
+        rungs = ordered_display_rungs(rungs)
         plans = [project_ordered_graph(rung) for rung in rungs]
         elements = [self._source_output(event) for plan in plans for event in plan
                     if event['kind'] in {'output', 'end'}]
@@ -453,8 +454,11 @@ class AdvancedSVGLadder:
             bounds = {'top': top, 'height': bottom - top + 20, 'display_number': index,
                       'raw_rung_id': rung.get('rung_id'), 'json_path': f'$.rungs[{index-1}]'}
             self.rung_bounds[rung.get('rung_id')] = bounds
+            for source_id in rung.get('_source_rung_ids', []):
+                self.rung_bounds[source_id] = bounds
+                self.rung_raw_to_display[source_id] = index
             self.rung_bounds_by_display[index] = bounds
-            if str(rung.get('rung_id')) in highlighted:
+            if any(str(source_id) in highlighted for source_id in rung.get('_source_rung_ids', [rung.get('rung_id')])):
                 self.shapes.insert(start_shape, f'<rect x="{left+4}" y="{top}" width="{edge-left-8}" '
                                    f'height="{bounds["height"]}" rx="6" fill="#cca700" fill-opacity="0.14" '
                                    'stroke="#cca700" stroke-width="2" />')
