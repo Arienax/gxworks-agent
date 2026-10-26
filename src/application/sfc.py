@@ -149,7 +149,7 @@ class SFCService:
         if program is None:
             program = version.get('program_name') if version.get('target_mode') == 'sfc' else None
         selected = read_sfc_project_context(raw, program).program_name
-        graph = self._graph_reads.get((project_id, version_id, selected)) or wb.projects.sfc_graph(project_id, version_id)
+        graph = self._graph_reads.get((project_id, version_id, selected)) or wb.projects.sfc_graph(project_id, version_id, selected)
         return raw, selected, graph
 
     def read(self, project_id, version_id, program=None, native=False):
@@ -159,6 +159,7 @@ class SFCService:
             if native and read_snapshot(raw, selected, native_graph=graph)['model']['graph']['position_resolution'] != 'native-source-bound':
                 with _native_workspace() as workspace:
                     graph = workspace.read_sfc_graph(raw, selected, timeout=None)
+                wb.projects.record_sfc_graph(project_id, version_id, selected, graph)
                 self._graph_reads[(project_id, version_id, selected)] = graph
             return read_snapshot(raw, selected, native_graph=graph)
 

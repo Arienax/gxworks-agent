@@ -119,7 +119,10 @@ class MCPToolAdapter:
             return _error(call, "INVALID_ARGUMENTS", str(error))
         try:
             independent = name in DISCOVERY_TOOL_NAMES - {"get_current_project"} or bool(decoded.get("source_ref"))
-            context = build_tool_context({}) if independent else self.context_provider.get_context()
+            definition = self.runtime.registry._tools[name]
+            get_context = (getattr(self.context_provider, 'get_model_context', self.context_provider.get_context)
+                           if definition.context_requirement == 'model' else self.context_provider.get_context)
+            context = build_tool_context({}) if independent else get_context()
             context = replace(context, inspection=self.inspection)
         except Exception:
             logger.exception("Unable to load context for call_id=%s tool=%s", call_id, name)

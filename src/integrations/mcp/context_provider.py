@@ -68,3 +68,9 @@ class SessionToolContextProvider:
             return self.projects.tool_context(self.project_id, self.version_id)
         except (KeyError, ValueError, OSError) as error:
             raise ContextUnavailableError(str(error)) from error
+
+    def get_model_context(self) -> ToolContext:
+        try:
+            return self.projects.tool_context(self.project_id, self.version_id, requirement='model')
+        except (KeyError, ValueError, OSError) as error:
+            raise ContextUnavailableError(str(error)) from error

@@ -143,6 +143,8 @@ def program_definitions(generation):
             '默认校验当前程序；native=true 在隔离工作区检查当前版本已绑定的 GXW 快照，分别返回编译、公开检查、底层重检、诊断和当前源码对应状态。仅有源码或 '
             'CSV 不能启动原生检查；简单 Ladder 必须有明确原生 CPU，并完整回读源码词法、与当前候选的指令逐项匹配，覆盖外保留为未验证。program 仅标识请'
             '求的 POU 上下文，实际检查范围以 selection 和 targets 为准。不会操作 GX 界面、PLC 或写入项目版本。'
+            '原生检查不会保存编译产物；compilation.acceptance=accepted 仅表示编译器接受副本，实际保存状态见 save.completed/exported。'
+            '公开 compile_project 仅执行本地 Core 编译；保存原生编译产物须在 GX Works2 或独立原生工作区接口中另行编译、保存并检查冷重开结果。'
         ),
         {"type": "object", "properties": {
             "native": {"type": "boolean", "description": "显式启动已保存 GXW 的离线原生检查；默认 false。"},

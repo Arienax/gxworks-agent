@@ -41,6 +41,8 @@ The FX/Q/L model catalogue participates in file capability checks, returning sup
 
 Modifying source or declarations marks earlier compilation results stale; run an explicit native compilation check whenever compiler verification is needed.
 
+`validate_project(native=true)` compiles and checks an isolated copy. `compilation.acceptance=accepted` means the compiler accepted that copy. It does not write compiled artifacts back: `save.completed` and `save.exported` remain `false`, so the downloaded project may still appear pending compilation in GX Works2. The public `compile_project` tool also performs only local Core compilation. To persist native compiled artifacts, compile and save in GX Works2, or use the separate workspace API `NativeWorkspaceSourceSave.compile_project` and inspect its save and cold reopen results. Compilation, code checking, saving, and PLC execution have separate outcomes.
+
 <a name="ladder"></a>
 
 ## Ladder: from engineering context to deliverable artifacts
@@ -172,6 +174,8 @@ Release packages include the FX3U baseline project, node and token-grammar templ
 Executable packages bundle the reviewed runtime fact corpus and project-authored examples for RAG, excluding vendor manual PDFs and raw manual-text indexes. Runtime knowledge data is distributed separately from the source repository; when running from source, you can copy a release package's `knowledge/` into `resources/knowledge/` and its `resources/instructions/mitsubishi/` into the matching source directory.
 
 Offline GXW file operations require no Mitsubishi installation. Native saving, native compilation/code checking, delivery to GX Works2, and native simulation require the corresponding Mitsubishi software installed locally; read-only PLC monitoring requires MX Component and a configured logical station. These Mitsubishi applications are not included.
+
+The Windows native adapter loads GX Works2 components in an x86 process; the Python host can be 64 bit. A pywinauto application bitness warning alone does not establish an operation failure. Diagnose the actual foreground automation error. If screenshot capture is unavailable, the original error is retained and the capture problem is reported separately.
 
 ## Before operating machinery
 

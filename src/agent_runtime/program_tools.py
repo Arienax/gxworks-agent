@@ -131,6 +131,8 @@ def _get_current_program_info(
     }
     program_ir = context.program_ir
     if isinstance(program_ir, Mapping):
+        from plc.ir import canonical_sha256
+        result['ir_sha256'] = canonical_sha256(program_ir)
         networks = [
             {
                 "id": str(network.get("id") or ""),

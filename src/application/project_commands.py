@@ -37,20 +37,24 @@ class ProjectCommands:
         """An existing source is admitted by its file, not the New dialog menu."""
         self.require_writable()
         from gxw.offline_project import read_offline_project
-        from gxw.project_metadata import project_source_groups
+        from gxw.project_metadata import read_project_settings
         from gxworks2.project_profiles import native_project_profile
         source = read_offline_project(raw)
         selected = source.select(program)
         profile = native_project_profile(source.context['cpu'])
         if profile is None or not profile.program_supported or selected['language'] is None:
             raise ValueError('Imported source requires a supported stored CPU and program language')
-        groups, _ = project_source_groups(source.outer['projectdatalist.xml'])
-        simple, _ = project_source_groups(source.outer['projectdatalist.xml'], folder_type=8)
-        project_type = 'structured' if selected['source_name'] in groups else 'simple'
+        metadata, = [value for name, value in source.streams.items() if name.endswith('.prj')]
+        info = [value for name, value in source.streams.items() if name.endswith('.pji')]
+        if len(info) > 1:
+            raise ValueError('Imported source requires unambiguous saved project settings')
+        settings = read_project_settings(metadata, info[0] if info else None)
         with self.lock.thread_lock:
             project = self.store.create_project(name=name, plc_model=source.context['cpu'],
-                target_mode=selected['language'], native_project_type=project_type,
-                use_labels=selected['source_name'] in groups or selected['source_name'] in simple)
+                target_mode=selected['language'], **settings)
+            # New-project defaults must not invent missing saved settings.
+            project.update(settings)
+            self.store.save_project(project)
             return self.projects.project(project['id'])
 
     def update_project(self, project_id, **values):

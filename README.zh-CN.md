@@ -41,6 +41,8 @@ GXWorks Agent 将三菱 PLC 的工程上下文、按 CPU 组织的指令事实�
 
 源码或声明修改后，之前的编译结果会自动标记为过期，需要编译器验证时可显式运行原生编译检查。
 
+`validate_project(native=true)` 在隔离副本中编译并检查，`compilation.acceptance=accepted` 表示编译器接受当前副本。它不回写编译产物；`save.completed` 和 `save.exported` 均为 `false`，下载的工程在 GX Works2 中仍可能显示待编译。公开工具 `compile_project` 也仅执行本地 Core 编译。需要保存原生编译产物时，应在 GX Works2 中编译并保存，或使用独立工作区 API `NativeWorkspaceSourceSave.compile_project`，并核对保存与冷重开结果。编译、代码检查、保存及 PLC 运行是各自独立的结果。
+
 <a name="ladder"></a>
 
 ## Ladder：从工程上下文到可交付产物
@@ -172,6 +174,8 @@ cd gxworks-agent
 成品包内置经整理的运行事实库与项目原创案例供 RAG 检索使用，不包含三菱原始手册 PDF 及原文索引。运行知识数据与源码仓库分离分发；从源码运行时，可将成品包内的 `knowledge/` 复制到 `resources/knowledge/`，并将 `resources/instructions/mitsubishi/` 复制到源码同名目录。
 
 离线 GXW 文件操作无需安装三菱软件。原生保存、原生编译与代码检查、交付到 GX Works2 及原生仿真依赖本机安装相应的三菱软件；PLC 只读监测依赖 MX Component 及已配置的逻辑站。发布包不包含任何三菱商业软件。
+
+Windows 原生适配器以 x86 进程加载 GX Works2 的原生组件，Python 主进程可以是 64 位。pywinauto 的应用位数警告本身不代表操作失败；排查前台自动化时以具体错误为准。截图不可用时保留原始异常，并单独报告窗口或桌面截图问题。
 
 ## 设备投运前
 
