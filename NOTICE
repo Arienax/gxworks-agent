@@ -8,7 +8,7 @@ Originally developed by Arienax.
 
 The project-authored source, documentation, configuration and examples in this
 repository are licensed under the Apache License, Version 2.0. See the LICENSE
-file for the license terms and LICENSING.md for what those terms cover.
+file for the license terms and LICENSE-SCOPE.md for what those terms cover.
 This NOTICE records the original project and author attribution and does not
 modify the License. Redistribution is governed by Section 4 of the LICENSE.
 Third-party components keep their own licenses and notices; see
@@ -24,7 +24,7 @@ GXWorks Agent
 本项目由 Arienax 原创开发。
 
 仓库中由项目自研的源码、文档、配置与示例采用 Apache License 2.0，许可条款见
-LICENSE，覆盖范围见 LICENSING.md。本 NOTICE 用于记录原项目与作者署名，
+LICENSE，覆盖范围见 LICENSE-SCOPE.md。本 NOTICE 用于记录原项目与作者署名，
 不修改许可条款。再分发要求以 LICENSE 第 4 节为准。第三方组件保留其各自的
 许可与声明，见 THIRD_PARTY_NOTICES.md，以及发行包内的依赖许可目录。
 
@@ -37,7 +37,7 @@ Copyright 2026 Arienax
 本プロジェクトは Arienax が開発しました。
 
 本リポジトリの自作ソース、ドキュメント、設定、サンプルは Apache License 2.0
-で提供されます。許諾条件は LICENSE、適用範囲は LICENSING.md を参照して
+で提供されます。許諾条件は LICENSE、適用範囲は LICENSE-SCOPE.md を参照して
 ください。本 NOTICE は原作者とオリジナルプロジェクトを示すものであり、
 許諾条件を変更するものではありません。再配布の条件は LICENSE の第 4 条に
 従います。サードパーティ製コンポーネントはそれぞれのライセンスと告知に従います。

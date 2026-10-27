@@ -25,7 +25,7 @@ URL = "https://github.com/Arienax/gxworks-agent"
 def audit(package, component):
     from runtime_knowledge_resources import audit_packaged_knowledge
     audit_packaged_knowledge(package)
-    required = {"LICENSE", "NOTICE", "LICENSING.md", "THIRD_PARTY_NOTICES.md",
+    required = {"LICENSE", "NOTICE", "LICENSE-SCOPE.md", "THIRD_PARTY_NOTICES.md",
                 "THIRD_PARTY_LICENSES/README.md", "gxw/templates/fx3u.gxw",
                 "gxw/templates/blank-fbd-projects.zip.xz",
     "gxw/templates/blank-ladder-projects.zip.xz",

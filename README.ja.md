@@ -191,4 +191,4 @@ Windows のネイティブアダプターは x86 プロセスで GX Works2 の�
 
 [リリースの変更点](CHANGELOG.md) · [Issue](https://github.com/Arienax/gxworks-agent/issues)
 
-プロジェクト貢献者が権利を持つ Core、Web、MCP、ネイティブアダプターのソースコードには [Apache License 2.0](LICENSE) を適用します。詳細は[ライセンス範囲](LICENSING.md)と[第三者の権利表記](THIRD_PARTY_NOTICES.md)を参照してください。各貢献者は自身の著作権を保持し、過去に配布されたリリースにはそれぞれの配布時点のライセンスが適用されます。[NOTICE](NOTICE) にオリジナルプロジェクト、作者、リポジトリを記録しています。
+プロジェクト貢献者が権利を持つ Core、Web、MCP、ネイティブアダプターのソースコードには [Apache License 2.0](LICENSE) を適用します。詳細は[ライセンス範囲](LICENSE-SCOPE.md)と[第三者の権利表記](THIRD_PARTY_NOTICES.md)を参照してください。各貢献者は自身の著作権を保持し、過去に配布されたリリースにはそれぞれの配布時点のライセンスが適用されます。[NOTICE](NOTICE) にオリジナルプロジェクト、作者、リポジトリを記録しています。
