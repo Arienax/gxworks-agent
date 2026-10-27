@@ -86,7 +86,7 @@ jobs:
       - name: Install validation dependencies
         if: steps.scope.outputs.run == 'true'
         run: |
-          python -m pip install -c requirements/development.constraints.txt -r requirements/web.txt pytest
+          python -m pip install -c requirements/development.constraints.txt -r requirements/web.txt -r requirements/gxw-test.txt pytest
           python -m pip check
           npm ci --prefix web
       - name: Verify generated HTTP contract is current

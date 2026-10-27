@@ -141,7 +141,7 @@ class RepositoryStorageTests(unittest.TestCase):
                 self.assertTrue(storage.requires_lfs("research/" + "evidence/data." + extension))
 
     def test_git_attributes_include_root_and_nested_zips_not_witnesses(self):
-        self.add(".gitattributes", b"research/" + "evidence/**/*.zip filter=lfs diff=lfs merge=lfs -text\nresearch/results/raw/** filter=lfs diff=lfs merge=lfs -text\n")
+        self.add(".gitattributes", b"research/" + b"evidence/**/*.zip filter=lfs diff=lfs merge=lfs -text\nresearch/results/raw/** filter=lfs diff=lfs merge=lfs -text\n")
         for path, expected in (("research/" + "evidence/top.zip", "lfs"), ("research/" + "evidence/deep/a.zip", "lfs"), ("research/" + "evidence/witness.gxw", "unspecified"), ("research/results/summary.json", "unspecified"), ("research/results/raw/trace.json", "lfs")):
             with self.subTest(path=path):
                 result = self.git("check-attr", "filter", "--", path).decode()
