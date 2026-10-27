@@ -1,0 +1,63 @@
+name: Source Layout Validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'checks/**'
+      - 'scripts/**'
+      - 'tools/**'
+      - 'publication/**'
+      - 'resources/**'
+      - 'requirements.txt'
+      - 'requirements/**'
+      - '.github/workflows/**'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: source-layout-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regression:
+    name: Public source and runtime contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONUTF8: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      GXWORKS_AGENT_PRIVATE_ROOT: ${{ github.workspace }}/unavailable-private-inputs
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.14'
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements/*.txt
+      - name: Install source test dependencies
+        run: python -m pip install -c requirements/development.constraints.txt -r requirements/web.txt -r requirements/gxw-test.txt pytest
+      - name: Check source ownership and test selection
+        run: python -m pytest -q tests/test_source_layout.py tests/test_architecture_boundaries.py
+      - name: Verify public Owner Store and PWM resources
+        run: >-
+          python -m pytest -q
+          checks/test_owner_domain_selection.py
+          checks/test_structured_fact_merge_efficiency.py
+          checks/test_pwm_workflow.py
+          checks/test_pwm_source_pipeline.py
+      - name: Verify MCP paging and public schemas without collected GXW samples
+        run: >-
+          python -m pytest -q
+          tests/test_mcp_service.py tests/test_mcp.py tests/test_web_contract.py
+          -k 'paging or paged or complete_read or multi_page or cursor or business_result or largecoverage or openapi or schema'

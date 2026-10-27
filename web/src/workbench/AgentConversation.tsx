@@ -1,3 +1,6 @@
+// Copyright 2026 Arienax
+// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 import { PanelLeftOpen, PanelRightClose, PanelRightOpen, Square } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Job } from "../api/client";

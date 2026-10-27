@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """GX Works2-specific export lowering.
 
 GX Works2 simple-project ladder blocks are limited to 24 diagram rows. The

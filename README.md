@@ -1,5 +1,9 @@
 <h1 align="center">GXWorks Agent</h1>
 
+<p align="center"><strong>Originally created by <a href="https://github.com/Arienax">Arienax</a></strong> · <a href="https://github.com/Arienax/gxworks-agent">github.com/Arienax/gxworks-agent</a></p>
+
+<p align="center">© 2026 Arienax · Apache-2.0</p>
+
 <h3 align="center">MCP engineering tools and an AI workbench for Mitsubishi PLC workflows.</h3>
 
 <p align="center"><strong>Read project context · Build and review programs · Drive native GX Works2 engineering and diagnostics</strong></p>
@@ -40,6 +44,8 @@ After import, use **Program to edit** to select another source in the same file.
 The FX/Q/L model catalogue participates in file capability checks, returning support scoped to CPU, format, object, and operation. Unknown records retain their original bytes while parsed objects remain editable; edits with unresolved dependencies report the specific object and reason. This workflow focuses on offline edits to existing source objects, declarations, and comments.
 
 Modifying source or declarations marks earlier compilation results stale; run an explicit native compilation check whenever compiler verification is needed.
+
+`validate_project(native=true)` compiles and checks an isolated copy. `compilation.acceptance=accepted` means the compiler accepted that copy. It does not write compiled artifacts back: `save.completed` and `save.exported` remain `false`, so the downloaded project may still appear pending compilation in GX Works2. The public `compile_project` tool also performs only local Core compilation. To persist native compiled artifacts, compile and save in GX Works2, or use the separate workspace API `NativeWorkspaceSourceSave.compile_project` and inspect its save and cold reopen results. Compilation, code checking, saving, and PLC execution have separate outcomes.
 
 <a name="ladder"></a>
 
@@ -173,6 +179,8 @@ Executable packages bundle the reviewed runtime fact corpus and project-authored
 
 Offline GXW file operations require no Mitsubishi installation. Native saving, native compilation/code checking, delivery to GX Works2, and native simulation require the corresponding Mitsubishi software installed locally; read-only PLC monitoring requires MX Component and a configured logical station. These Mitsubishi applications are not included.
 
+The Windows native adapter loads GX Works2 components in an x86 process; the Python host can be 64 bit. A pywinauto application bitness warning alone does not establish an operation failure. Diagnose the actual foreground automation error. If screenshot capture is unavailable, the original error is retained and the capture problem is reported separately.
+
 ## Before operating machinery
 
 Before commissioning, review all generated logic against the target CPU, field wiring, motion limits, and operating modes. Back up the target GX project before import; after sending updates to the GX Works2 project, compile, inspect, and download the program through your normal GX Works2 commissioning workflow.
@@ -181,6 +189,6 @@ Implement emergency stops, safety interlocks, and overtravel protection in an in
 
 ## Guides and license
 
-[Release changes](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Issues](https://github.com/Arienax/gxworks-agent/issues) · [Security](SECURITY.md)
+[Release changes](CHANGELOG.md) · [Issues](https://github.com/Arienax/gxworks-agent/issues)
 
-Project-authored Core, Web, MCP, and native-adapter source code is licensed under the [Apache License 2.0](LICENSE); see the [license scope](LICENSE-SCOPE.md) and [third-party notices](THIRD_PARTY_NOTICES.md) for details. Contributors retain their copyright, and previously distributed releases retain their original licenses.
+Project-authored Core, Web, MCP, and native-adapter source code is licensed under the [Apache License 2.0](LICENSE); see the [license scope](LICENSING.md) and [third-party notices](THIRD_PARTY_NOTICES.md) for details. Contributors retain their copyright, and previously distributed releases retain their original licenses. [NOTICE](NOTICE) records the original project, author and repository for copyrighted project material.

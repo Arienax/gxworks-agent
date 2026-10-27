@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Shared, source-scoped constraints for retrieval, static checks and execution.
 
 Only reviewed formal predicates are executable. Missing values, scope context,
@@ -64,6 +67,16 @@ def _context_value(context, path):
 def _condition(condition, values, context):
     if not isinstance(condition, Mapping):
         raise UnknownInstructionSemantics('condition_not_formalized')
+    if condition.get('kind') == 'operand_form' and set(condition) == {'kind', 'required_operands'}:
+        roles = context.get('$OPERAND_ROLES')
+        if roles is None:
+            raise UnknownInstructionSemantics('operand_form_binding_required')
+        return all(str(name).upper() in roles for name in condition['required_operands'])
+    if condition.get('kind') == 'cpu_model' and set(condition) == {'kind', 'models'}:
+        model = context.get('$PLC_MODEL')
+        if model is None:
+            raise UnknownInstructionSemantics('cpu_model_binding_required')
+        return model in condition['models']
     if set(condition) == {'context', 'equals'}:
         actual = _context_value(context, condition['context'])
         if actual is UNKNOWN or actual is None:
@@ -330,7 +343,7 @@ def _additional_constraint(dimension, rule, values, context, model):
 
 
 def check_fact_constraints(groups, values, *, target, plc_model, language=None, version=None,
-                           context=None, phase='input'):
+                           context=None, phase='input', root_ids=None):
     """Evaluate applicable constraint roots with their complete fact closure."""
     target, plc_model = str(target).strip().upper(), str(plc_model).strip().upper()
     language = (str(language).strip().casefold() or None) if language is not None else None
@@ -345,6 +358,42 @@ def check_fact_constraints(groups, values, *, target, plc_model, language=None, 
         if group.id in by_id:
             raise DefinitionError('Duplicate constraint fact identity')
         by_id[group.id] = group
+    # Bind only an observed, source-checked signature for this exact scope.
+    # Caller-supplied internal keys cannot forge a signature or CPU condition.
+    context.pop('$OPERAND_ROLES', None)
+    context['$PLC_MODEL'] = plc_model
+    signatures = []
+    for group in by_id.values():
+        if (group.dimension == 'parameters.typed_operands'
+                and group.status == 'source_verified' and group.verification == 'source_checked'
+                and not group.conditions
+                and not any(s.get('conditions') or s.get('applicability') for s in group.sources)
+                and _scope(group, target=target, model=plc_model, language=language, version=version) == 'passed'):
+            operands = group.value.get('operands', [])
+            if operands and all(isinstance(item, Mapping) and isinstance(item.get('name'), str) for item in operands):
+                signatures.append(tuple(item['name'].upper() for item in operands))
+    if signatures and len(set(signatures)) == 1:
+        context['$OPERAND_ROLES'] = signatures[0]
+        for index, name in enumerate(signatures[0]):
+            if name not in values and '$' + str(index) in values:
+                values[name] = values['$' + str(index)]
+    if target in {'PWM', 'DPWM'} and plc_model in {'FX5S', 'FX5UJ', 'FX5U', 'FX5UC'}:
+        from plc.pwm_contract import bind_pwm_values, derive_pwm_formal_facts
+        source_bound = any(group.dimension == 'identity.applicability'
+            and group.status == 'source_verified' and group.verification == 'source_checked'
+            and not group.conditions and group.value.get('model_states', {}).get(plc_model) == 'supported'
+            and _scope(group, target=target, model=plc_model, language=language, version=version) == 'passed'
+            and any(s.get('manual_number') == 'JY997D55801' and s.get('revision') == 'AB' for s in group.sources)
+            for group in by_id.values())
+        formal_bound = any(group.id.startswith('pwm-formal:') for group in by_id.values())
+        if source_bound or formal_bound:
+            values = bind_pwm_values(target, plc_model, values, context)
+        if source_bound:
+            for raw in derive_pwm_formal_facts(target, plc_model, language, list(by_id.values())):
+                group = InstructionFactGroup.from_mapping(raw)
+                if group.id in by_id and by_id[group.id] != group:
+                    raise DefinitionError('Conflicting derived PWM constraint identity')
+                by_id[group.id] = group
     checks, findings, visiting, cached = [], [], set(), {}
 
     def outcome(group, status, reason=''):
@@ -373,12 +422,7 @@ def check_fact_constraints(groups, values, *, target, plc_model, language=None, 
             return outcome(group, status, 'scope_context_missing' if status == 'unverified' else '')
         visiting.add(identity)
         try:
-            if group.status != 'source_verified' or group.verification != 'source_checked':
-                return outcome(group, 'not_applicable' if group.status == 'not_applicable' else 'unverified',
-                               'source_conflict' if group.status == 'conflict' else 'constraint_not_source_checked')
             unknown = False
-            if any(source.get('conditions') or source.get('applicability') for source in group.sources):
-                return outcome(group, 'unverified', 'source_conditions_require_binding')
             for condition in group.conditions:
                 try:
                     if not _condition(condition, values, context):
@@ -387,6 +431,39 @@ def check_fact_constraints(groups, values, *, target, plc_model, language=None, 
                     unknown = True
             if unknown:
                 return outcome(group, 'unverified', 'condition_not_resolved')
+            # Applicability is distinct from the rule's verification. A
+            # formally excluded SFC/structured overload does not constrain an
+            # ordinary Ladder call; an unresolved condition never excludes it.
+            if group.status != 'source_verified' or group.verification != 'source_checked':
+                return outcome(group, 'not_applicable' if group.status == 'not_applicable' else 'unverified',
+                               'source_conflict' if group.status == 'conflict' else 'constraint_not_source_checked')
+            if any(source.get('conditions') or source.get('applicability') for source in group.sources):
+                return outcome(group, 'unverified', 'source_conditions_require_binding')
+            # A derived PWM predicate proves only its selected relation. Its
+            # witness scope/conditions and prerequisite facts still apply; a
+            # provenance ID alone must never turn missing evidence into failure.
+            if group.id.startswith('pwm-formal:'):
+                witness_ids = group.value.get('live_source_witnesses')
+                if not isinstance(witness_ids, (list, tuple)) or not witness_ids:
+                    return outcome(group, 'unverified', 'source_witness_missing')
+                for witness_id in witness_ids:
+                    witness = by_id.get(witness_id)
+                    if witness is None:
+                        return outcome(group, 'unverified', 'source_witness_missing')
+                    witness_scope = _scope(witness, target=target, model=plc_model,
+                                           language=language, version=version)
+                    if witness_scope != 'passed':
+                        return outcome(group, witness_scope, 'source_witness_scope')
+                    if (witness.status != 'source_verified' or witness.verification != 'source_checked'
+                            or any(s.get('conditions') or s.get('applicability') for s in witness.sources)):
+                        return outcome(group, 'unverified', 'source_witness_unverified')
+                    try:
+                        if not all(_condition(c, values, context) for c in witness.conditions):
+                            return outcome(group, 'not_applicable', 'source_witness_condition')
+                    except (DefinitionError, TypeError, ValueError):
+                        return outcome(group, 'unverified', 'source_witness_condition_unresolved')
+                    if any(visit(dependency) != 'passed' for dependency in witness.depends_on):
+                        return outcome(group, 'unverified', 'source_witness_dependency_unresolved')
             dependencies = [visit(dependency) for dependency in group.depends_on]
             if any(status != 'passed' for status in dependencies):
                 return outcome(group, 'unverified', 'constraint_dependency_unresolved')
@@ -401,6 +478,12 @@ def check_fact_constraints(groups, values, *, target, plc_model, language=None, 
                 except (DefinitionError, TypeError, ValueError, OverflowError):
                     return outcome(group, 'unverified', 'constraint_input_unknown_or_unrepresentable')
                 return outcome(group, 'passed' if okay else 'failed', '' if okay else value.get('rule', 'constraint_violated'))
+            if (target in {'PWM', 'DPWM'} and group.id.startswith('fx5prog:')
+                    and plc_model in {'FX5S', 'FX5UJ', 'FX5U', 'FX5UC'}):
+                from plc.pwm_contract import evaluate_pwm_source_constraint
+                authored = evaluate_pwm_source_constraint(group, values, context, plc_model)
+                if authored is not None:
+                    return outcome(group, *authored)
             additional = _additional_constraint(group.dimension, value, values, context, plc_model)
             if additional is not None:
                 return outcome(group, *additional)
@@ -548,8 +631,16 @@ def check_fact_constraints(groups, values, *, target, plc_model, language=None, 
                         okay = False
                 return outcome(group, 'passed' if okay else 'failed', '' if okay else value['rule'])
             if group.dimension == 'constraints.numeric_ranges':
+                ranges = value.get('ranges')
+                if not isinstance(ranges, list) or not ranges or any(
+                        not isinstance(boundary, Mapping)
+                        or type(boundary.get('operand_index')) is not int
+                        or boundary['operand_index'] < 0
+                        or not any(boundary.get(key) is not None for key in ('minimum', 'maximum'))
+                        for boundary in ranges):
+                    return outcome(group, 'unverified', 'numeric_range_operand_binding_missing')
                 unknown = False
-                for boundary in value.get('ranges', []):
+                for boundary in ranges:
                     number = values.get('$' + str(boundary['operand_index']), UNKNOWN)
                     if type(number) is float and not math.isfinite(number):
                         return outcome(group, 'failed', 'non_finite_numeric_value')
@@ -567,10 +658,25 @@ def check_fact_constraints(groups, values, *, target, plc_model, language=None, 
 
     roots = [g.id for g in by_id.values() if g.dimension.startswith('constraints.')
              and g.value.get('phase', 'input') in {phase, 'both'}]
+    if root_ids is not None:
+        selected = list(root_ids) if isinstance(root_ids, (list, tuple)) else []
+        if (not selected or any(not isinstance(i, str) for i in selected)
+                or len(set(selected)) != len(selected)
+                or any(identity not in roots for identity in selected)):
+            return {'status': 'unverified', 'target': target, 'phase': phase,
+                'checks': [], 'findings': [{'code': 'PLC_RULE_COVERAGE', 'severity': 'unverified',
+                    'message': 'invalid_or_missing_selected_constraint_root'}],
+                'root_selection': selected, 'coverage': 'selected_roots_only'}
+        roots = selected
     for identity in roots:
         cached[identity] = visit(identity)
     statuses = [row['status'] for row in checks]
-    return {'status': 'failed' if 'failed' in statuses else 'unverified' if 'unverified' in statuses else 'passed',
+    execution_qualifications = [g.id for g in by_id.values()
+        if g.dimension == 'execution.source_qualifications'
+        and _scope(g, target=target, model=plc_model, language=language, version=version) != 'not_applicable']
+    return {'root_selection': roots, 'coverage': 'all_constraint_roots' if root_ids is None else 'selected_roots_only',
+            'execution_coverage': 'unverified' if execution_qualifications else 'not_assessed',
+            'execution_qualifications': execution_qualifications, 'status': 'failed' if 'failed' in statuses else 'unverified' if 'unverified' in statuses else 'passed',
             'checks': checks, 'findings': findings, 'phase': phase, 'target': target}
 
 
@@ -595,20 +701,22 @@ def check_instruction_constraints(opcode, values, *, plc_model, language=None, v
 
 
 def check_language_constraints(target, values, *, plc_model, version=None, context=None,
-                               phase='input', registry=None):
+                               phase='input', registry=None, language='st'):
     if registry is None:
         from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
         registry = DEFAULT_INSTRUCTION_REGISTRY
     target, plc_model = str(target).strip().upper(), str(plc_model).strip().upper()
+    language = str(language).strip().lower()
     members = _cpu_members(plc_model)
     if len(members) > 1:
         return _combined_reports([check_language_constraints(target, values, plc_model=model,
-            version=version, context=context, phase=phase, registry=registry) for model in members], target=target, model=plc_model)
+            version=version, context=context, phase=phase, registry=registry, language=language)
+            for model in members], target=target, model=plc_model)
     if not registry.fact_bundle_current():
         return _stale_report(target)
-    entry = registry.language_feature(target)
+    entry = registry.language_feature(target, language=language)
     if entry is None:
-        return {'status': 'unverified', 'checks': [], 'findings': [{'code': 'ST_RULE_COVERAGE',
+        return {'status': 'unverified', 'checks': [], 'findings': [{'code': language.upper() + '_RULE_COVERAGE',
                 'severity': 'unverified', 'message': 'language_feature_not_defined:' + target}], 'target': target}
     context = {'numeric_engine': 'cpu_manual', **(context or {})}
     values = dict(values)
@@ -624,12 +732,12 @@ def check_language_constraints(target, values, *, plc_model, version=None, conte
             values['EXP_RESULT'] = UNKNOWN
             values['EVALUATED_RESULT'] = UNKNOWN
     report = check_fact_constraints(entry.get('facts', []), values, target=target, plc_model=plc_model,
-                                    language='st', version=version, context=context, phase=phase)
+                                    language=language, version=version, context=context, phase=phase)
     for reference in entry.get('references', []):
         if plc_model not in reference.get('models', [plc_model]):
             continue
         bound = {name.upper(): values.get(source, UNKNOWN) for name, source in reference['parameters'].items()}
-        child = check_instruction_constraints(reference['opcode'], bound, plc_model=plc_model, language='st',
+        child = check_instruction_constraints(reference['opcode'], bound, plc_model=plc_model, language=language,
             version=version, context=context, phase=phase, registry=registry)
         report['checks'].extend(child['checks'])
         report['findings'].extend(child['findings'])
@@ -779,7 +887,8 @@ def inspect_ladder_constraints(ladder, *, plc_model, context=None):
     from plc.ir import lower_rung_instructions
     from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
     reports = []
-    context = {**(context or {}), 'program_accesses': instruction_program_accesses(ladder, plc_model=plc_model)}
+    context = {**(context or {}), 'project_mode': 'native_ladder', 'program_context': 'ladder',
+               'program_accesses': instruction_program_accesses(ladder, plc_model=plc_model)}
     for index, rung in enumerate(ladder.get('rungs', [])):
         for instruction in lower_rung_instructions(rung):
             form = DEFAULT_INSTRUCTION_REGISTRY.resolve_form(instruction['op'], cpu=plc_model)

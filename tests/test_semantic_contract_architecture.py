@@ -1,0 +1,444 @@
+
+from tools.offline_inputs import private_path
+import copy
+from pathlib import Path
+
+import pytest
+
+from application.analysis_results import _normalize_analysis_result
+from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+from plc.review import review_ladder
+from plc.specification.confirmed import build_review_draft, canonicalize_confirmed_spec
+from plc.specification.legacy_migration import is_legacy_confirmed_spec
+from plc.specification.repair import build_contract_repair_plan
+from plc.validation import (
+    PLCJsonValidationError,
+    validate_ladder_candidate_structure,
+    validate_ladder_full,
+)
+
+
+def _ladder(opcode, operands, *, inputs=None):
+    return {
+        "device_comments": {},
+        "rungs": [
+            {
+                "rung_id": 1,
+                "header_element": None,
+                "shared_inputs": [],
+                "branches": [
+                    {
+                        "branch_id": 1,
+                        "y_offset_level": 0,
+                        "inputs": list(inputs or []),
+                        "outputs": [
+                            {
+                                "type": "APP_INSTR",
+                                "opcode": opcode,
+                                "operands": list(operands),
+                                "label": "",
+                            }
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+
+
+@pytest.mark.parametrize("opcode,operands,used,unused", [
+    ("MUL", ["D410", "K5", "D430"], ["D430", "D431"], "D432"),
+    ("DMUL", ["D410", "K5", "D430"], ["D430", "D431", "D432", "D433"], "D434"),
+    ("DDIV", ["D430", "K2", "D432"], ["D432", "D433", "D434", "D435"], "D436"),
+    ("BMOV", ["D500", "D520", "K10"], ["D520", "D529"], "D530"),
+])
+def test_device_obligations_include_definition_result_regions(opcode, operands, used, unused):
+    from plc.specification.semantic_validation import validate_confirmed_semantics
+
+    ladder = _ladder(opcode, operands)
+    before = copy.deepcopy(ladder)
+    spec = {"plc_model": "FX3U", "selected_approach": {
+        "implementation_semantics": [],
+        "explicit_user_constraints": {"required_devices": used},
+    }}
+    assert validate_confirmed_semantics(ladder, spec)["status"] == "verified"
+    assert validate_ladder_full(ladder, "FX3U", confirmed_spec=spec) == ladder
+    spec["selected_approach"]["explicit_user_constraints"]["forbidden_devices"] = [used[-1]]
+    result = validate_confirmed_semantics(ladder, spec)
+    assert any(row["expected"] == used[-1] for row in result["violations"])
+    spec["selected_approach"]["explicit_user_constraints"] = {"required_devices": [unused]}
+    assert validate_confirmed_semantics(ladder, spec)["status"] == "violated"
+    assert ladder == before
+
+
+@pytest.mark.parametrize("opcode,operands", [
+    ("BMOV", ["D500", "D520", "D100"]),
+    ("VENDOR_UNKNOWN", ["D500", "D520"]),
+])
+def test_device_obligations_do_not_guess_dynamic_or_unknown_result_regions(opcode, operands):
+    from plc.specification.semantic_validation import validate_confirmed_semantics
+
+    spec = {"plc_model": "FX3U", "selected_approach": {
+        "implementation_semantics": [],
+        "explicit_user_constraints": {"required_devices": ["D521"]},
+    }}
+    assert validate_confirmed_semantics(_ladder(opcode, operands), spec)["status"] == "violated"
+
+
+@pytest.mark.parametrize(
+    "structure",
+    ["hardware_counter", "self_hold", "register_state_machine"],
+)
+def test_all_structures_share_the_same_selected_approach_provenance(structure):
+    result = _normalize_analysis_result(
+        {
+            "summary": "控制输出",
+            "missing_info": [],
+            "assumptions": [],
+            "suggested_io": {},
+            "approaches": [
+                {
+                    "name": "候选实现",
+                    "implementation_semantics": [
+                        {
+                            "kind": "structure",
+                            "status": "required",
+                            "value": structure,
+                        }
+                    ],
+                }
+            ],
+        },
+        "FX3U",
+        "X0按下后驱动Y0",
+    )
+
+    contract = result["approaches"][0]["generation_contract"]
+    assert contract["required_structures"] == [structure]
+
+
+def test_semantic_ownership_does_not_regress_to_named_special_cases():
+    root = Path(__file__).resolve().parents[1]
+    hardware = (root / "src/plc/hardware_profiles.py").read_text(encoding="utf-8")
+    approach = (root / "src/plc/specification/approach.py").read_text(encoding="utf-8")
+    legacy = (root / "src/plc/specification/legacy_migration.py").read_text(encoding="utf-8")
+    repair = (root / "src/plc/ladder_repair.py").read_text(encoding="utf-8")
+    validation = (root / "src/plc/validation.py").read_text(encoding="utf-8")
+    review = (root / "src/plc/review.py").read_text(encoding="utf-8")
+
+    assert "_COUNTER_INTENT_RE" not in hardware
+    assert "_infer_contract_from_guide" not in approach
+    assert "_infer_contract_from_guide" in legacy
+    assert "normalize_m8029_parallel_branches" not in repair
+    for token in ("SFTL", "ZRN", "M8029"):
+        assert token not in validation
+        assert token not in review
+
+
+def test_fresh_review_draft_never_enters_legacy_guide_migration():
+    analysis = _normalize_analysis_result(
+        {
+            "summary": "fresh",
+            "missing_info": [],
+            "assumptions": [],
+            "suggested_io": {},
+            "approaches": [
+                {
+                    "name": "fresh direct",
+                    "generation_guide": "MOV K1 D0 is only explanatory text",
+                    "implementation_semantics": [
+                        {"kind": "structure", "status": "required", "value": "direct_logic"}
+                    ],
+                }
+            ],
+        },
+        "FX3U",
+        "X0 drives Y0",
+    )
+    draft = build_review_draft(analysis)
+    assert draft["schema_version"] == 3
+    assert not is_legacy_confirmed_spec(draft)
+
+    canonical = canonicalize_confirmed_spec(draft)
+    contract = canonical["selected_approach"]["generation_contract"]
+    assert contract["source"] == "analysis_semantics"
+    assert contract["required_opcodes"] == []
+    assert contract["required_structures"] == ["direct_logic"]
+
+
+def test_repair_scope_is_independent_of_generation_guide_text():
+    ladder = {
+        "device_comments": {},
+        "rungs": [
+            {
+                "rung_id": 1,
+                "header_element": None,
+                "shared_inputs": [],
+                "branches": [
+                    {
+                        "branch_id": 1,
+                        "y_offset_level": 0,
+                        "inputs": [{"type": "NO", "address": "X0", "label": ""}],
+                        "outputs": [{"type": "COIL", "address": "Y0", "label": ""}],
+                    }
+                ],
+            },
+            {
+                "rung_id": 2,
+                "header_element": None,
+                "shared_inputs": [],
+                "branches": [
+                    {
+                        "branch_id": 1,
+                        "y_offset_level": 0,
+                        "inputs": [{"type": "NO", "address": "X1", "label": ""}],
+                        "outputs": [{"type": "COIL", "address": "Y1", "label": ""}],
+                    }
+                ],
+            },
+        ],
+    }
+    base = {
+        "selected_approach": {
+            "name": "结构化方案",
+            "generation_contract": {"forbidden_devices": ["Y0"]},
+        }
+    }
+    first = copy.deepcopy(base)
+    first["selected_approach"]["generation_guide"] = (
+        "状态机 MOV D0 M8029 SFTL ZRN；尝试把第二梯级也一起修"
+    )
+    second = copy.deepcopy(base)
+    second["selected_approach"]["generation_guide"] = "完全不同的自然语言说明"
+
+    plan_a = build_contract_repair_plan(ladder, first)
+    plan_b = build_contract_repair_plan(ladder, second)
+
+    assert plan_a["repairability"] == plan_b["repairability"] == "scoped_patch"
+    assert plan_a["allowed_rung_ids"] == plan_b["allowed_rung_ids"] == [1]
+    assert plan_a["allowed_addresses"] == plan_b["allowed_addresses"]
+    assert plan_a["plan_id"] == plan_b["plan_id"]
+
+
+def test_instruction_capability_contract_owns_sftl_zrn_and_completion_rules():
+    sftl = DEFAULT_INSTRUCTION_REGISTRY.resolve("SFTL", cpu="FX3U")
+    zrn = DEFAULT_INSTRUCTION_REGISTRY.resolve("ZRN", cpu="FX3U")
+    plsr = DEFAULT_INSTRUCTION_REGISTRY.resolve("PLSR", cpu="FX3U")
+
+    assert sftl is not None
+    assert sftl.contract_coverage()["numeric_and_memory_boundaries"] == "source_verified"
+    assert sftl.disjoint_bit_ranges[0].error_code == "K6710"
+
+    assert zrn is not None and zrn.completion is not None
+    assert zrn.completion.device == "M8029"
+    assert zrn.numeric_operand_boundaries[0].operand_index == 1
+    assert zrn.numeric_operand_boundaries[0].minimum == 10
+    assert zrn.numeric_operand_boundaries[0].maximum == 32767
+    assert plsr is not None and plsr.completion is not None
+    assert plsr.completion.device == "M8029"
+
+
+def test_target_usage_reuses_existing_rules_without_cross_certifying_purpose_or_cpu():
+    from plc.instruction_resolution import resolve_instruction_lanes
+    sftl = resolve_instruction_lanes("SFTL", plc_model="FX3U")
+    source, destination, length, count = sftl["operand_slots"]
+    source_range = next(fact for fact in source["usage_facts"] if fact["facet"] == "range")
+    assert source_range["value"] == {
+        "length_position": 4, "unit": "bit", "disjoint_with_position": 2,
+        "same_device_prefix_only": True, "error_code": "K6710",
+    }
+    assert next(fact for fact in destination["usage_facts"] if fact["facet"] == "range")["value"]["length_position"] == 3
+    assert length["purpose_status"] == count["purpose_status"] == "candidate_evidence"
+    assert source_range["status"] == "source_verified"
+    assert source_range["sources"][0]["target_model"] == "FX3U"
+    assert not any(slot["usage_facts"] for slot in resolve_instruction_lanes("SFTL", plc_model="FX5U")["operand_slots"])
+    zrn = resolve_instruction_lanes("ZRN", plc_model="FX3U")["operand_slots"][1]
+    facts = {fact["facet"]: fact for fact in zrn["usage_facts"]}
+    assert facts["purpose"]["value"] == "creep speed"
+    assert facts["unit"]["value"] == "Hz"
+    assert facts["range"]["value"] == {"minimum": 10, "maximum": 32767, "absolute": True}
+    assert all(fact["status"] == "source_verified" and fact["sources"] for fact in facts.values())
+
+
+def test_operand_usage_verification_is_independent_for_every_facet_and_slot():
+    from plc.instruction_semantics import attach_operand_usage, bind_operand_slots
+    semantics = {"operand_role_status": "source_verified", "operands": [
+        {"name": "first", "role": "read"}, {"name": "second", "role": "write"},
+    ]}
+    applicability = {
+        "native_operand_order": ["S", "D"], "operand_order_status": "source_verified",
+        "operand_usage_facts": [{"position": 2, "fact": {
+            "facet": "purpose", "value": "Result region", "status": "source_verified", "sources": [{"id": "purpose-row"}],
+        }}, {"position": 2, "fact": {
+            "facet": "unit", "value": "word", "status": "declared_unverified",
+        }}],
+    }
+    slots = bind_operand_slots(semantics, applicability, ["D0", "D10"])
+    assert [slot["purpose_status"] for slot in slots] == ["unresolved", "source_verified"]
+    changed = attach_operand_usage(slots, [{"position": 1, "fact": {
+        "facet": "purpose", "value": "Input region", "status": "candidate_evidence", "sources": [{"id": "input-row"}],
+    }}])
+    assert [slot["purpose_status"] for slot in changed] == ["candidate_evidence", "source_verified"]
+    assert changed[1]["usage_facts"][1]["status"] == "declared_unverified"
+    assert slots[0]["purpose_status"] == "unresolved"
+
+
+@pytest.mark.parametrize("conflicting", [False, True])
+def test_candidate_arbitration_preserves_slot_facets_under_every_delivery_order(conflicting):
+    from itertools import permutations
+    from plc.instruction_semantics import attach_operand_usage
+    first, second = "Source region", "Destination region" if conflicting else "Source  region"
+    bindings = [{"position": position, "fact": {
+        "facet": facet, "value": value, "status": "candidate_evidence", "sources": [{"id": identity}],
+    }} for position, facet, value, identity in (
+        (1, "purpose", first, "source-a"), (1, "purpose", second, "source-b"),
+        (1, "unit", "bit", "unit-row"), (2, "purpose", "Result region", "result-row"),
+    )]
+    slots = [{"position": 1, "symbol": "S", "value": "M0", "usage_facts": []},
+             {"position": 2, "symbol": "D", "value": "M100", "usage_facts": []}]
+    expected = attach_operand_usage(slots, bindings)
+    for sequence in permutations(bindings):
+        assert attach_operand_usage(slots, sequence) == expected
+        incremental = slots
+        for binding in sequence:
+            incremental = attach_operand_usage(incremental, [binding])
+        assert incremental == expected
+        assert attach_operand_usage(expected, sequence) == expected
+    assert [(item["symbol"], item["value"]) for item in expected] == [("S", "M0"), ("D", "M100")]
+    assert expected[1]["purpose_status"] == "candidate_evidence"
+    assert next(fact for fact in expected[0]["usage_facts"] if fact["facet"] == "unit")["value"] == "bit"
+    purposes = [fact for fact in expected[0]["usage_facts"] if fact["facet"] == "purpose"]
+    if conflicting:
+        assert purposes == []
+        assert expected[0]["purpose_status"] == "unresolved"
+        assert {fact["value"] for fact in expected[0]["usage_conflicts"][0]["candidates"]} == {first, second}
+    else:
+        assert len(purposes) == 1
+        assert {row["id"] for row in purposes[0]["sources"]} == {"source-a", "source-b"}
+    assert all(item["usage_facts"] == [] for item in slots)
+
+
+@pytest.mark.parametrize("owner_status", ["source_verified", "declared_unverified"])
+def test_candidate_arbitration_obeys_existing_verification_without_promoting(owner_status):
+    from plc.instruction_semantics import attach_operand_usage
+    slots = [{"position": 1, "usage_facts": [{
+        "facet": "purpose", "value": "Owner purpose", "status": owner_status, "sources": [{"id": "owner"}],
+    }]}]
+    result = attach_operand_usage(slots, [{"position": 1, "fact": {
+        "facet": "purpose", "value": "Candidate purpose", "status": "candidate_evidence", "sources": [{"id": "candidate"}],
+    }}])[0]
+    assert result["purpose_status"] == ("source_verified" if owner_status == "source_verified" else "candidate_evidence")
+    assert [fact["value"] for fact in result["usage_facts"]] == [
+        "Owner purpose" if owner_status == "source_verified" else "Candidate purpose",
+    ]
+
+
+def test_candidate_arbitration_does_not_discard_conditions_or_assume_their_equivalence():
+    from plc.instruction_semantics import arbitrate_operand_usage
+    candidates = [{"facet": "purpose", "value": "Result region", "status": "candidate_evidence",
+                   "conditions": {"execution_form": form}, "sources": [{"id": form}]}
+                  for form in ("pulse", "continuous")]
+    resolved, conflicts = arbitrate_operand_usage(candidates)
+    assert resolved == []
+    assert {fact["conditions"]["execution_form"] for fact in conflicts[0]["candidates"]} == {"pulse", "continuous"}
+
+def test_sftl_overlap_and_zrn_numeric_boundary_are_registry_driven_hard_rules():
+    with pytest.raises(PLCJsonValidationError, match="K6710"):
+        validate_ladder_candidate_structure(
+            _ladder("SFTL", ["M0", "M1", "K4", "K2"]),
+            "FX3U",
+        )
+
+    with pytest.raises(PLCJsonValidationError, match="creep speed"):
+        validate_ladder_candidate_structure(
+            _ladder("ZRN", ["K1000", "K5", "X0", "Y0"]),
+            "FX3U",
+        )
+
+
+def test_cpu_replacement_and_completion_review_come_from_capability_contract():
+    with pytest.raises(PLCJsonValidationError, match="use DSZR"):
+        validate_ladder_candidate_structure(
+            _ladder("ZRN", ["K1000", "K200", "X0", "Y0"]),
+            "FX5U",
+        )
+
+    invalid = _ladder(
+        "ZRN",
+        ["K1000", "K200", "X0", "Y0"],
+        inputs=[{"type": "NO", "address": "M8029", "label": ""}],
+    )
+    with pytest.raises(PLCJsonValidationError, match="parallel completion branch"):
+        validate_ladder_full(invalid, "FX3U")
+
+    findings = review_ladder(invalid, plc_model="FX3U")
+    assert any(
+        item.category == "motion_completion" and item.address == "M8029"
+        for item in findings
+    )
+
+
+
+def test_fresh_execution_semantics_do_not_reconstruct_hard_constraints_from_free_prose():
+    import inspect
+    import plc.semantics as semantics
+    import plc.execution_intent as execution_intent
+
+    semantic_source = inspect.getsource(semantics)
+    assert "_RISING_PATTERNS" not in semantic_source
+    assert "_LEVEL_PATTERNS" not in semantic_source
+    spec_source = inspect.getsource(semantics.semantic_requirements_from_spec)
+    for forbidden in (
+        'confirmed_spec.get("summary"',
+        'confirmed_spec.get("user_notes"',
+        'confirmed_spec.get("selected_approach"',
+    ):
+        assert forbidden not in spec_source
+    assert "execution_intent_claims" in inspect.getsource(execution_intent.compile_execution_intent_claims)
+
+
+def test_fresh_explicit_constraints_use_grounded_claims_not_keyword_parser():
+    import inspect
+    import application.analysis_results as analysis_results
+    import plc.specification.explicit_constraint_claims as claim_compiler
+    import plc.specification.explicit_constraints as constraint_state
+
+    state_source = inspect.getsource(constraint_state)
+    analysis_source = inspect.getsource(analysis_results._apply_explicit_user_constraints)
+    for retired in (
+        "extract_explicit_user_constraints",
+        "_NEGATIVE_DIRECTIVE",
+        "_POSITIVE_DIRECTIVE",
+        "_PURPOSE_RELATION",
+        "_TARGET_PREFIX",
+        "_GLUE_WORDS",
+        "_CLEAR",
+    ):
+        assert retired not in state_source
+        assert retired not in analysis_source
+
+    compiler_source = inspect.getsource(claim_compiler.compile_explicit_constraint_claims)
+    assert "evidence_not_in_current_request" in compiler_source
+    assert "target_not_grounded_in_evidence" in compiler_source
+    assert 'scope == "global"' in compiler_source
+
+
+@pytest.mark.parametrize('mutation', [None, 'untyped', 'self_confirmed_root'])
+def test_operation_effect_candidates_use_the_analysis_protocol_boundary(mutation):
+    import copy
+    import json
+    from pathlib import Path
+    from application.analysis_results import current_analysis_protocol_violations
+    from plc.instruction_binding import normalize_operation_intents
+    case = json.loads((private_path('benchmarks/agent_b_instruction_effect_cases.jsonl')).read_text(encoding='utf-8').splitlines()[0])
+    claim = copy.deepcopy(case['confirmed_spec']['operation_intents'][0])
+    payload = {'approaches': [], 'operation_intent_claims': [claim]}
+    if mutation == 'untyped':
+        claim['enable']['type'] = 'bool'
+    elif mutation == 'self_confirmed_root':
+        payload['operation_intents'] = [claim]
+    violations = current_analysis_protocol_violations(payload)
+    assert bool(violations) == (mutation is not None)
+    if mutation is None:
+        row = normalize_operation_intents(payload['operation_intent_claims'], candidate=True)[0]
+        assert row['status'] == 'candidate' and row['provenance']['source'] == 'model_candidate'

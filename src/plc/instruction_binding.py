@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Explicit Core stage: typed, confirmed effects -> existing native calls.
 
 Binding performs expression matching, not natural-language interpretation. Model

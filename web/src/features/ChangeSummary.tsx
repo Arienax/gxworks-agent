@@ -1,3 +1,6 @@
+// Copyright 2026 Arienax
+// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 import { ConditionNormalization } from "./ConditionNormalization";
 type Fields = Record<string, unknown>;
 const fields = (value: unknown): Fields => value && typeof value === "object" && !Array.isArray(value) ? value as Fields : {};

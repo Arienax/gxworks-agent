@@ -1,5 +1,12 @@
 # Release changes
 
+## Unreleased
+
+- A root `NOTICE` records the original project, author and repository. READMEs
+  show the author at the top, first-party source files carry a short copyright
+  header, and the Web workbench adds an About view with the same attribution.
+  Release packages stage `NOTICE` and the package audit requires it.
+
 ## 0.3.3 — 2026-10-21
 
 - Existing GX Works2 projects can be read and written offline: inspect an

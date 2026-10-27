@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Current-project definition plans, independent of imported user libraries."""
 from __future__ import annotations
 
@@ -233,7 +236,7 @@ def _configuration_plan(config,streams,command,caller):
     return plan,original,expected,caller
 
 
-def _context(raw, *, require_fbd=True, allow_source_gaps=False):
+def _context(raw, *, require_fbd=False, allow_source_gaps=False):
     from .integrity import read_project_hdb
     outer = validate_cfb_streams(raw)
     nested = read_project_hdb(outer).payloads
@@ -248,9 +251,15 @@ def _context(raw, *, require_fbd=True, allow_source_gaps=False):
     if not callers and not require_fbd:
         callers = [name for name in groups if name in streams
                    and streams[name][source_payload_offset(streams[name])] == 193]
+    if not callers and not require_fbd:
+        callers = [name for name in groups if name in streams
+                   and streams[name][source_payload_offset(streams[name])] == 1]
+    if not callers and not require_fbd:
+        callers = [name for name in groups if name in streams
+                   and streams[name][source_payload_offset(streams[name])] == 240]
     if (issues and not allow_source_gaps) or not callers:
         raise GXWFormatError('definition authoring requires a current FBD caller' if require_fbd
-                             else 'definition authoring requires a current structured ST/FBD source')
+                             else 'definition authoring requires a current Ladder/ST/FBD/SFC source with declarations')
     sources = ProjectCallableSources.from_project(raw, callers[0])
     return configs[0], streams, groups, sources, callers[0]
 
@@ -341,7 +350,7 @@ def _visible_st_declaration_rows(rows):
     return result
 
 
-def definition_snapshot(raw, name=None, *, require_fbd=True):
+def definition_snapshot(raw, name=None, *, require_fbd=False):
     config, streams, groups, sources, caller = _context(raw, require_fbd=require_fbd)
     definitions = []
     for logical, group in groups.items():
@@ -527,10 +536,13 @@ def verify_st_program_readback(baseline, command, saved):
                 if text is None:
                     raise GXWFormatError('ST Program preservation requires readable current source text')
                 body = normalize(text)
-            elif kind == 208:
+            elif kind == 240:
+                from .diagnostic_sources import _native_validation_source_body, _native_validation_sfc_children
+                body = (_native_validation_source_body(source), _native_validation_sfc_children(source), source[-24:])
+            elif kind in (1, 208):
                 body = (workspace_body(source), source[-24:])
             else:
-                raise GXWFormatError('ST Program preservation covers current structured ST/FBD sources')
+                raise GXWFormatError('ST Program preservation covers current Ladder/ST/FBD/SFC sources; kind=' + str(kind))
             values = sorted((_values(row, omit=('record_id',)) for row in document.rows),
                             key=lambda row: (row['name'], row['class_code']))
             rows[document.owner_name] = dict(kind=kind, body=body, pou_type=document.owner_pou_type,
@@ -584,7 +596,7 @@ def verify_st_program_readback(baseline, command, saved):
                         compilation='not_run', execution='not_run'))
 
 
-def authoring_plan(raw, command, *, require_fbd=True):
+def authoring_plan(raw, command, *, require_fbd=False):
     """Validate engineering rows with the existing declaration/type contracts."""
     config, streams, groups, sources, caller = _context(raw, require_fbd=require_fbd)
     operation = command.get('operation')

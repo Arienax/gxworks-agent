@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Read and control the window bound to one engineering session."""
 from __future__ import annotations
 from pathlib import Path
@@ -168,7 +171,12 @@ class EngineeringWindow:
         receipt = {'completed': True, 'page': page, **details}
         if self.desktop.evidence_directory:
             path = self.desktop.evidence_directory / f'{self.desktop._captures:03d}.png'
-            self.desktop._window().capture_as_image().save(path)
+            capture = self.desktop._window().capture_as_image()
+            if capture is None:
+                raise NativeEngineeringDriverError(
+                    '原生页面已完成，但窗口截图未返回图像；请检查窗口尺寸、桌面可访问性及 Pillow。',
+                    observation={'stage': 'visible_capture', 'page': page, 'operation_completed': True})
+            capture.save(path)
             receipt['image'] = str(path)
         if self.desktop.progress:
             self.desktop.progress('visible_completion', page)

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Explicit HTTP commands; candidates and credentials never occur in read DTOs."""
 from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field

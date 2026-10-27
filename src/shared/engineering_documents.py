@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Owner-selected engineering data locations within public documents.
 
 These paths describe data contracts, never claims supplied by a payload. A
@@ -51,6 +54,9 @@ DATA_PATHS["source_snapshot"] += tuple((*prefix, *path)
 DATA_PATHS["catalog"] = (("declaration_tables",),) + tuple(("empty_model", *path) for path in _PROGRAM_MAPS)
 _PARAMETER_MAPS = (("declaration_edits", "*", "renames"), ("networks", "*", "calls", "*", "arguments"),
                    ("networks", "*", "nodes", "*", "arguments"))
+_PARAMETER_MAPS += (("networks", "*", "source_block"),
+                    ("preserved_blocks", "*", "source_block"),
+                    ("preserved_blocks", "*", "source_offset"))
 _PARAMETER_MAPS += tuple(("declaration_edits", "*", "upserts", "*", field) for field in _LABEL_TEXT_FIELDS)
 DATA_PATHS["catalog"] += (("parameter_schema",),) + tuple(
     (model, *path) for model in ("parameter_model", "empty_parameter_model") for path in _PARAMETER_MAPS)
@@ -94,12 +100,33 @@ DATA_PATHS["generation_context"] += tuple((*prefix, *path)
     for prefix in (("current_model",), ("generation_input", "previous"))
     for path in (*_PROGRAM_MAPS, *_PARAMETER_MAPS))
 DATA_PATHS["generation_context"] += (("generation_input", "parameter_schema"),
-    ("output_contract", "schema"), ("output_contract", "model_schema"))
+    ("output_contract", "schema"), ("output_contract", "model_schema"),
+    ("output_contract", "alternatives", "*", "model_schema"),
+    ("generation_input", "declaration_tables"))
 NAMED_RECORD_PATHS["generation_context"] = tuple(
     ("catalog", *path) for path in NAMED_RECORD_PATHS["catalog"])
 NAMED_RECORD_PATHS["generation_context"] += tuple((*prefix, *path)
     for prefix in (("current_model",), ("generation_input", "previous"))
     for path in (*_PROGRAM_RECORDS, ("networks", "*", "nodes", "*", "port_edits")))
+
+# FBD generation carries declarations and caller graphs in addition to the
+# selected graph. Their user-owned names retain the same data/metadata boundary.
+_FBD_CALLER = ("generation_input", "source_context", "fbd_callers", "*", "parameter_model")
+DATA_PATHS["generation_context"] += tuple((*_FBD_CALLER, *path)
+    for path in (*_PROGRAM_MAPS, *_PARAMETER_MAPS))
+NAMED_RECORD_PATHS["generation_context"] += tuple((*_FBD_CALLER, *path)
+    for path in (*_PROGRAM_RECORDS, ("networks", "*", "nodes", "*", "port_edits")))
+_FBD_DECLARATION_MAPS = (("generation_input", "existing_declarations"),
+    ("generation_input", "call_interface"), ("generation_input", "structures"),
+    ("generation_input", "source_context", "declarations"),
+    ("generation_input", "source_context", "structures"))
+NAMED_RECORD_PATHS["generation_context"] += _FBD_DECLARATION_MAPS
+_FBD_DECLARATION_ROWS = tuple((*path, "*", "*") for path in _FBD_DECLARATION_MAPS) + (
+    ("generation_input", "source_context", "st_sources", "*", "declarations", "*"),)
+DATA_PATHS["generation_context"] += tuple((*path, field)
+    for path in _FBD_DECLARATION_ROWS for field in _LABEL_TEXT_FIELDS)
+NAMED_RECORD_PATHS["generation_context"] += tuple((*path, "member_devices")
+    for path in _FBD_DECLARATION_ROWS)
 
 # A diff carries the same field owners as its corresponding source document.
 DATA_PATHS["preview_diff"] = tuple(("property_changes", path[0], side, *path[1:])
@@ -153,8 +180,12 @@ def restore_document_data(projected, original, *, kind, project_metadata):
                 return {**current, **{key: walk(
                     current[key] if key in current else project_metadata(value), value, (*path, str(key)))
                     for key, value in source.items()}}
-            return {key: walk(value, source[key], (*path, str(key))) if key in source else value
-                    for key, value in current.items()}
+            result = {key: walk(value, source[key], (*path, str(key))) if key in source else value
+                      for key, value in current.items()}
+            for key, value in source.items():
+                if key not in result and _matches((*path, str(key)), paths):
+                    result[key] = copy.deepcopy(value)
+            return result
         if isinstance(current, list) and isinstance(source, (list, tuple)):
             return [walk(value, source[index], (*path, "*")) for index, value in enumerate(current)]
         return current

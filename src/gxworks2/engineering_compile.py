@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """CompileInspector operations on an explicitly bound native desktop."""
 from __future__ import annotations
 from .engineering_errors import (NativeEngineeringDriverError)

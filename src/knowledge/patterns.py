@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """
 模式库匹配引擎 — 关键词分类 + 动态 Prompt 组装
 """

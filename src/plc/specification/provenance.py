@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Separate current engineering intent from immutable decision/evidence receipts.
 
 ConfirmedSpec v4 is a positive projection, not an archive. Receipt v1 is audit

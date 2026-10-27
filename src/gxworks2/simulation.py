@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """High-level GX Works2 simulation preparation.
 
 The public service exposes intent-level operations only.  The implementation

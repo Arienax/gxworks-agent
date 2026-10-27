@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Bounded common source prefix; descriptive fields and flags remain raw.
 
 Native project and library source objects start with two counted UTF-16 strings

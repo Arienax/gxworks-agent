@@ -1,6 +1,10 @@
+// Copyright 2026 Arienax
+// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 import { Suspense, lazy } from "react";
 import { Button, Modal } from "../components/ui";
 import { DataView } from "../workbench/ResultViews";
+import { AboutDialog } from "./AboutDialog";
 import { ReportDialog, reportDialogFields } from "./ReportDialog";
 import { SFCRequirementDialog, sFCRequirementDialogFields } from "./SFCRequirementDialog";
 import { SettingsDialog, settingsDialogFields } from "./SettingsDialog";
@@ -112,6 +116,7 @@ export function WorkbenchDialogs(props: Props) {
       >
         <DataView value={environment} />
       </Modal>
+      <AboutDialog open={modal === "about"} onClose={() => setModal("")} t={t} />
       <ReportDialog {...pickView(props, reportDialogFields)} />
       <SFCRequirementDialog {...pickView(props, sFCRequirementDialogFields)} />
     </>

@@ -1,7 +1,12 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Confirmed generation context and candidate preparation tools."""
 from __future__ import annotations
 from shared.privacy import credential_field, filesystem_field
 import copy
+import json
+from application.generation_wire import expand_context_document
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 from agent_runtime.tool_context import (
     ToolContext,
@@ -13,6 +18,19 @@ from agent_runtime.native_tools import (
     _read_fbd_project,
     _read_sfc_project,
 )
+
+
+def _source_knowledge(context, arguments, source, language, confirmed_spec):
+    from application.generation_context import _build_knowledge_context
+    from application.generation_support import _build_knowledge_query
+    from knowledge.evidence import KnowledgeQuery
+    from shared.model_context import technical_context_units, technical_knowledge_coverage
+    query = _build_knowledge_query(arguments.get('user_requirement'), source)
+    knowledge = _build_knowledge_context(KnowledgeQuery(query, precompiled=True,
+        metadata={'target_mode': language, 'capability_requirement': str(query)}),
+        plc_model=context.plc_model, task_type='edit', confirmed_context=confirmed_spec)
+    return {'knowledge': technical_context_units(knowledge),
+            'knowledge_coverage': technical_knowledge_coverage(knowledge)}
 
 
 def _get_generation_context(
@@ -90,6 +108,7 @@ def _get_generation_context(
             return {'project_id': context.project_id, 'plc_model': context.plc_model,
                 'target_mode': 'st', 'execution_mode': 'offline', 'current_version_id': context.version_id,
                 'current_context': model_project_context(snapshot), 'selected_program': selected[0]['name'],
+                **_source_knowledge(context, arguments, selected[0]['st_text'], 'st', confirmed_spec),
                 'generation_request': str(arguments.get('user_requirement') or ''),
                 'generation_instructions': 'Edit the selected existing ST callable with operation ' + operation + '. '
                     'Provide its complete st_text body. Omitted declarations retain the current table; '
@@ -134,7 +153,9 @@ def _get_generation_context(
             'target_mode': 'st', 'execution_mode': 'background',
             'workflow_mode': str(context.project.get('workflow_mode') or 'generate'),
             'current_version_id': context.version_id, 'has_confirmed_spec': isinstance(confirmed_spec, Mapping),
-            'confirmed_spec': public_spec, 'current_context': current, 'selected_program': program,
+            'confirmed_spec': public_spec, 'current_context': current,
+            'selected_program_ref': '#/current_context/pous/' + str(current['pous'].index(program)),
+            **_source_knowledge(context, arguments, program.get('st_text'), 'st', confirmed_spec),
             'generation_request': public_generation_value(str(arguments.get('user_requirement') or '')),
             'generation_instructions': 'Edit the selected ordinary ST Program in the current saved project. '
                 'Keep its existing declarations, task binding and other project sources unless explicitly requested. '
@@ -153,13 +174,50 @@ def _get_generation_context(
                 'Native compilation, current device allocation and PLC execution remain separate results.']}
     if target_mode == 'fbd':
         from application.fbd import build_fbd_generation_context
-        catalog = _get_fbd_catalog(context, {})
-        previous = _read_fbd_project(context, {})['model'] if context.fbd_baseline is not None else None
-        generation = build_fbd_generation_context(str(arguments.get('user_requirement') or ''),
-            plc_model=context.plc_model, confirmed_spec=confirmed_spec, catalog=catalog, previous=previous)
+        scope = str(arguments.get('catalog_scope') or 'task')
+        # The full table is only the selection *input* here: the shared builder
+        # narrows it for this request, so the returned nodes stay task-scoped.
+        catalog = _get_fbd_catalog(context, {'catalog_scope': 'full',
+                                            'templates': arguments.get('templates'),
+                                            'program': arguments.get('program')})
+        from application.fbd_context import has_graph
+        instances = _read_fbd_project(context, {})['model'] if context.fbd_baseline is not None else None
+        previous = catalog.get('parameter_model')
+        if not (has_graph(previous) or has_graph(instances)):
+            # An empty saved graph preserves nothing, so it is generated as a new graph
+            # instead of pretending to be an edit with a dependency closure.
+            previous, instances = None, None
         from gxw.offline_project import read_offline_project
-        comments, tables, _ = read_offline_project(context.fbd_baseline).comments() if context.fbd_baseline is not None else ({}, [], [])
-        return {'project_id': context.project_id, 'plc_model': context.plc_model, 'cpu': catalog['cpu'], 'target_mode': 'fbd',
+        comments, tables, _ = (read_offline_project(context.fbd_baseline).comments()
+                               if context.fbd_baseline is not None else ({}, [], []))
+        generation = build_fbd_generation_context(str(arguments.get('user_requirement') or ''),
+            plc_model=context.plc_model, confirmed_spec=confirmed_spec, catalog=catalog, previous=previous,
+            instances_model=instances,
+            catalog_scope=scope, templates=arguments.get('templates'),
+            device_comments=comments, comment_tables=tables,
+            source_baseline=context.fbd_baseline)
+        graph_contract = {
+            'tool': 'create_fbd_candidate', 'schema_version': 2,
+            'input_shape': 'parameters', 'model_schema_ref': '#/generation_input/parameter_schema',
+            'operation': 'edit' if previous is not None else 'generate',
+        }
+        joint = generation['generation_input']['supported_paths']['joint_multi_source_transaction']
+        output_contract = graph_contract
+        if context.version_id and joint['supported']:
+            output_contract = {
+                'tool': 'edit_gxw_project', 'input_shape': 'arguments',
+                'version_id': context.version_id, 'program': catalog['program'],
+                'required_fields': ['version_id'],
+                'requires_any': ['edits', 'declaration_edits', 'device_comments'],
+                'editable_sources': joint['editable_sources'], 'save_policy': 'draft',
+                'alternatives': [graph_contract],
+                'instructions': 'Submit ST bodies, interfaces, declarations and all affected FBD callers '
+                    'together using the existing language-specific commands in edits. '
+                    'For a single graph without dependent source edits, the alternative contract is also available. '
+                    'Use each tool\'s tools/list schema; generation_context_id belongs only to tools that accept it.',
+            }
+        data = {'project_id': context.project_id, 'plc_model': context.plc_model, 'cpu': catalog['cpu'],
+                'target_mode': 'fbd',
                 'workflow_mode': str(context.project.get('workflow_mode') or 'generate'),
                 'has_confirmed_spec': isinstance(confirmed_spec, Mapping), 'confirmed_spec': public_spec,
                 'current_version_id': context.version_id or None,
@@ -167,13 +225,13 @@ def _get_generation_context(
                 'generation_handoff': generation['generation_handoff'],
                 'generation_request': str(arguments.get('user_requirement') or ''),
                 'generation_input': generation['generation_input'],
-                'output_contract': {'tool': 'create_fbd_candidate', 'schema_version': 2,
-                                    'input_shape': 'parameters', 'model_schema': generation['generation_input']['parameter_schema'],
-                                    'operation': 'edit' if previous is not None else 'generate'},
-                'catalog': {**catalog, 'nodes': generation['generation_input']['catalog'],
-                            'empty_model': catalog.get('empty_parameter_model', dict(schema_version=2, program=catalog['program'], networks=[]))},
-                'current_model': generation['generation_input']['previous'],
-                'device_comments': comments, 'comment_tables': tables}
+                'output_contract': output_contract,
+                'catalog_ref': '#/generation_input/catalog',
+                'current_model_ref': '#/generation_input/previous',
+                'catalog_scope': scope,
+                'missing_templates': (generation['generation_handoff'].get('catalog_report') or {}).get('missing_templates') or [],
+                }
+        return data
     source = context.ladder
     if isinstance(context.program_ir, Mapping):
         from plc.ir import ir_to_ladder
@@ -188,6 +246,7 @@ def _get_generation_context(
         return {'project_id': context.project_id, 'plc_model': context.plc_model,
             'target_mode': 'ladder', 'execution_mode': 'offline',
             'current_version_id': context.version_id, 'confirmed_spec': public_spec,
+            **_source_knowledge(context, arguments, current['raw_networks'], 'ladder', confirmed_spec),
             'current_model': {'program': context.program_ir['program_name'],
                 'networks': current['raw_networks'], 'device_comments': current['device_comments'],
                 'comment_tables': current['comment_tables'], 'coverage': current['coverage'],
@@ -223,15 +282,18 @@ def _get_generation_context(
         from application.compact_protocol import PROTOCOL_VERSION
         raw = str(arguments["user_requirement"])
         direct = build_direct_generation_context(raw, context.plc_model, confirmed_spec=confirmed_spec,
-            knowledge_builder=_build_knowledge_context, wire_renderer=_compact_wire_renderer(context.plc_model, direct=True))
+            knowledge_builder=_build_knowledge_context, model_profile={},
+            wire_renderer=_compact_wire_renderer(context.plc_model, direct=True))
+        generation_input = expand_context_document(json.loads(direct.wire_packet['messages'][1]['content']))
         return {"project_id": context.project_id, "plc_model": context.plc_model, "target_mode": target_mode,
                 "workflow_mode": "direct_generation", "has_confirmed_spec": bool(confirmed_spec),
-                "confirmed_spec": public_spec, "user_facts": direct.confirmed_spec,
+                "confirmed_spec_ref": '#/generation_input/confirmed_spec',
+                "generation_input": generation_input,
                 "current_version_id": None, "generation_request": raw,
                 "generation_instructions": direct.wire_packet["messages"][0]["content"],
                 "generation_handoff": direct.handoff,
                 "output_contract": {"tool": "create_program_candidate", "protocol": PROTOCOL_VERSION,
-                                    "schema": direct_response_schema(), "needs_input": "向用户提出必要问题，解决前不得创建候选。"}}
+                                    "schema_ref": '#/generation_input/output_schema', "needs_input": "向用户提出必要问题，解决前不得创建候选。"}}
     if target_mode == "ladder" and isinstance(confirmed_spec, Mapping) and confirmed_spec:
         public_spec = project_confirmed_specification(confirmed_spec)
         if not is_edit_mode:
@@ -253,6 +315,7 @@ def _get_generation_context(
         # never rewrite application-owned schema patterns in the prompt.
         knowledge_builder=_build_knowledge_context,
         on_context=capture_context,
+        model_profile={},
     )
     receipt_id = _decision_receipt_id(context)
     if receipt_id:
@@ -263,8 +326,12 @@ def _get_generation_context(
         "target_mode": target_mode,
         "workflow_mode": str(context.project.get("workflow_mode") or "generate"),
         "has_confirmed_spec": isinstance(confirmed_spec, Mapping),
-        "confirmed_spec": public_spec,
-        "output_contract": generation_output_contract(allow_partial=is_edit_mode, plc_model=context.plc_model, target_mode=target_mode),
+        "confirmed_spec_ref": '#/generation_input/confirmed_spec',
+        "generation_input": (expand_context_document(json.loads(instructions.wire_packet['messages'][1]['content']))
+                             if hasattr(instructions, 'wire_packet') else {}),
+        "output_contract": {**{key: value for key, value in generation_output_contract(
+            allow_partial=is_edit_mode, plc_model=context.plc_model, target_mode=target_mode).items() if key != 'schema'},
+            'schema_ref': '#/generation_input/output_schema'},
         "current_version_id": context.version_id or None,
         "generation_instructions": instructions,
         "generation_handoff": public_generation_value(generation_handoff),
@@ -378,7 +445,8 @@ class GenerationToolHandlers:
         return canonical_sha256({
             "project_id": context.project_id, "version_id": context.version_id,
             "plc_model": context.plc_model,
-            "target_mode": str(context.project.get("target_mode") or "ladder"),
+            "target_mode": str((context.version or {}).get("target_mode")
+                               or context.project.get("target_mode") or "ladder"),
             "confirmed_spec": project_confirmed_specification(_confirmed_spec(context)),
             "program": public_generation_ladder(program),
         })

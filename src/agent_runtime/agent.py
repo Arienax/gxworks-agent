@@ -1,8 +1,12 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Vendor-neutral PLC Agent orchestration."""
 
 from __future__ import annotations
 
 import copy
+import json
 import re
 from shared.i18n import language_scoped, tr
 from model_runtime.responses import preserved_annotations
@@ -35,7 +39,8 @@ AGENT_SYSTEM_PROMPT = """你是 PLC AI 工作台内的工程助手。
 2. 只能使用提供的高层工程工具，不得假设存在鼠标、键盘、文件删除、PLC 写入或强制软元件工具。
 3. import_current_program_to_gxworks2 只提出确认请求，不代表已经导入。
 4. patch_program 只生成经过本地校验的候选补丁；必须告诉用户仍需查看差异并确认，不能自行接受候选版本或同步 GX Works2。
-5. 工具失败时如实说明。回答简洁，遵守应用设置的输出语言；引用手册事实时给出 source、page/section。
+5. 工具失败时如实说明。回答简洁，遵守应用设置的输出语言；知识事实保留型号、语言、条件和缺项，仅在返回包含来源时引用页码，不编造来源。
+6. 读取正文中的 document 引用 objects；先解析引用，再依据 coverage 判断知识是否完整。手册行为说明不代表 Core 已实现执行语义。知识缺失不自动转向网页搜索。
 """
 
 QUESTION_SYSTEM_PROMPT = """你是 PLC AI 工作台内的工程问答助手。
@@ -43,7 +48,8 @@ QUESTION_SYSTEM_PROMPT = """你是 PLC AI 工作台内的工程问答助手。
 涉及当前项目、所选版本或校验状态时先读取对应工具，不得猜测。
 本入口不能创建程序、修改程序、保存候选、导入 GX Works2 或执行外部操作。
 用户请求生成或修改时，说明需要切换到“创建程序”或“修改程序”；不要声称已经执行。
-工具失败如实说明；引用手册时给出 source、page/section。遵守应用设置的输出语言。
+工具失败如实说明；知识事实保留型号、语言、条件和缺项，仅在返回包含来源时引用页码，不编造来源。遵守应用设置的输出语言。
+读取正文中的 document 引用 objects；先解析引用，再依据 coverage 判断知识是否完整。手册行为说明不代表 Core 已实现执行语义。知识缺失不自动转向网页搜索。
 """
 
 _AGENT_PATTERNS = (
@@ -123,6 +129,54 @@ def _fallback_content(audit: Sequence[Mapping[str, Any]]) -> str:
     if failed:
         parts.append(str(tr("未完成：")) + ", ".join(str(item.get("tool")) for item in failed))
     return "\n".join(parts) or str(tr("工具调用已结束。"))
+
+
+def _complete_read_sequence(runtime, call, context):
+    """Web consumes one logical read without spending model rounds on pages.
+
+    MCP and HTTP keep their per-response caps. This internal Web tool message
+    contains the complete shared object table; the provider measures the final
+    request, with its actual model window, before sending anything.
+    """
+    from agent_runtime.messages import ToolResult
+    from application.read_delivery import PAGED_READ_TOOLS
+    result = runtime.invoke(call, context)
+    envelope = result.data or {}
+    if (result.is_error or call.name not in PAGED_READ_TOOLS
+            or not isinstance(envelope.get('data', {}).get('delivery'), Mapping)):
+        return result
+    merged = copy.deepcopy(envelope)
+    data = merged['data']
+    first = data['delivery']
+    if first['page'] != 0:
+        # A caller-supplied cursor may resume an earlier sequence. This helper
+        # has not collected its preceding objects and must keep the page scope.
+        return result
+    document_id, page_number, seen = first['document_id'], first['page'], set()
+    delivery = first
+    while not delivery['complete']:
+        followup = delivery.get('next') or {}
+        arguments = followup.get('arguments') or {}
+        cursor = arguments.get('cursor')
+        if followup.get('tool') != call.name or not cursor or cursor in seen:
+            raise ValueError('Invalid read continuation; knowledge delivery is incomplete')
+        seen.add(cursor)
+        result = runtime.invoke(ToolCall(call.id, call.name, arguments), context)
+        if result.is_error:
+            return result
+        page = result.data['data']
+        delivery = page['delivery']
+        page_number += 1
+        if delivery['document_id'] != document_id or delivery['page'] != page_number:
+            raise ValueError('Read continuation changed document or skipped a page')
+        data['objects'].update(copy.deepcopy(page['objects']))
+    data['delivery'] = {'version': first['version'], 'document_id': document_id,
+        'complete': True, 'scope': 'complete_read_sequence', 'pages_received': len(seen) + 1,
+        'assembly': first.get('assembly', '')}
+    if delivery.get('coverage'):
+        data['delivery']['coverage'] = copy.deepcopy(delivery['coverage'])
+    return ToolResult(call_id=call.id, name=call.name,
+        content=json.dumps(merged, ensure_ascii=False, separators=(',', ':')), data=merged)
 
 
 @language_scoped
@@ -220,7 +274,7 @@ def run_tool_agent(
         for call in calls:
             _emit_stream(on_progress, tr("已确认工具：{name}", name=call.name or tr("未知工具")))
             _emit_stream(on_progress, tr("正在执行工具：{name}", name=call.name or tr("未知工具")))
-            result = runtime.invoke(call, context)
+            result = _complete_read_sequence(runtime, call, context)
             from model_runtime.usage import tool_executed
             tool_executed(call.name, not result.is_error)
             envelope = dict(result.data or {})

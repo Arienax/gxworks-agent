@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Deterministic PLC scan-cycle and state-machine semantic analysis.
 
 The legacy ladder JSON remains the interchange format used by the model and GX

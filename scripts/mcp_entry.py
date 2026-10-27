@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Product launcher entry for GXWorks Agent MCP.
 
 This file makes source checkouts invokable without PYTHONPATH or knowledge of the
@@ -22,5 +25,10 @@ if __name__ == "__main__":
         import json
         from runtime_st_smoke import check_st_runtime
         print(json.dumps(check_st_runtime()))
+        raise SystemExit(0)
+    if sys.argv[1:] == ['--self-test-pwm']:
+        import json
+        from runtime_pwm_smoke import check_pwm_runtime
+        print(json.dumps(check_pwm_runtime()))
         raise SystemExit(0)
     raise SystemExit(main())

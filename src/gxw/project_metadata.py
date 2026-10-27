@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Lossless updates of observed GXW metadata (no XML reserialization)."""
 from __future__ import annotations
 
@@ -192,6 +195,48 @@ def read_project_text_context(raw: bytes) -> dict:
     return dict(cpu=values[1], codepage=codepage, text_encoding=encoding,
                 codepage_offset=offset + 42, metadata_sha256=hashlib.sha256(raw).hexdigest(),
                 handling="partially-decoded")
+
+
+def read_project_settings(project_raw: bytes, info_raw: bytes | None) -> dict:
+    """Read saved project type and label selection, independently of POU folders.
+
+    Native New/save controls distinguish Simple with and without labels from
+    Structured projects in .pji. Source folder roles alone do not distinguish
+    these states. Unobserved selector values remain unknown.
+    """
+    context = read_project_text_context(project_raw)
+    kind = struct.unpack_from('<I', project_raw, context['codepage_offset'] - 4)[0]
+    result = {'native_project_type': {1: 'simple', 2: 'structured'}.get(kind), 'use_labels': None}
+    if info_raw is None:
+        return result
+    offset, values = 0, []
+    for _ in range(2):
+        if offset + 4 > len(info_raw):
+            raise GXWFormatError('truncated project info string length')
+        count = struct.unpack_from('<I', info_raw, offset)[0]
+        end = offset + 4 + count * 2
+        if not 1 <= count <= 8192 or end > len(info_raw):
+            raise GXWFormatError('unbounded project info string')
+        try:
+            value = info_raw[offset + 4:end].decode('utf-16le')
+        except UnicodeError as error:
+            raise GXWFormatError('undecodable project info string') from error
+        if not value.endswith('\0') or '\0' in value[:-1]:
+            raise GXWFormatError('unsupported project info string terminator')
+        values.append(value[:-1])
+        offset = end
+    if values[1] != context['cpu']:
+        raise GXWFormatError('project info CPU differs from saved project metadata')
+    if offset + 8 > len(info_raw):
+        raise GXWFormatError('truncated project type and label selectors')
+    kind, labels = struct.unpack_from('<II', info_raw, offset)
+    project_type = {1: 'simple', 2: 'structured'}.get(kind)
+    if project_type is not None:
+        if result['native_project_type'] not in (None, project_type):
+            raise GXWFormatError('project type differs between saved metadata records')
+        result['native_project_type'] = project_type
+    result['use_labels'] = bool(labels) if labels in (0, 1) else None
+    return result
 
 
 def read_project_system_variables(raw: bytes) -> dict:
@@ -467,24 +512,45 @@ def write_gui_system_variables(raw: bytes | None, ranges: dict, *, cpu: str | No
 
 
 def gui_application_save_plan(raw: bytes, source: dict) -> bytes | None:
-    """Prepare the observed FX3U GUI mirror for an isolated native save.
+    """Preserve GUI settings, mirroring only source-bound allocation changes.
 
-    The workspace setter updates .prj only. The GUI reads Gppw2.gpj separately;
-    writing a format-version-only file silently restores its host defaults.
+    An ordinary source save must not reinterpret another CPU's host settings or
+    reject an unchanged device selector. Only FX3U's D/M mirror is observed.
+    Legacy factory projects need that mirror initialized from their workspace;
+    inactive R/W/B backups are not requests to enable those selectors.
     """
-    from .container_writer import validate_cfb_streams
-    outer = validate_cfb_streams(raw)
-    nested = validate_cfb_streams(outer['_hdb'])
-    mapping = project_stream_mapping(outer)
-    streams = {name:nested[key] for name,key in mapping.items() if key in nested}
-    metadata = [value for name,value in streams.items() if name.endswith('.prj')]
-    if len(metadata)!=1 or read_project_text_context(metadata[0])['cpu']!='FX3U/FX3UC':
+    _, metadata, application = _project_allocation_records(raw)
+    cpu = read_project_text_context(metadata)['cpu']
+    if cpu != 'FX3U/FX3UC':
+        # Native export retains an existing application file, or registers its
+        # format-only bootstrap. Q/L/other FX host fields are not FX3U controls.
         return None
-    ranges = dict(read_project_system_variables(metadata[0])['ranges'])
+    ranges = {}
+    if application is None:
+        workspace = read_project_system_variables(metadata)['ranges']
+        ranges = {name: pair for name, pair in workspace.items() if name not in {'R', 'W', 'B'}}
     if source.get('operation') == 'configure_project':
         for edit in source['ranges']:
-            ranges[edit['device']] = tuple(value & 0xffffffff for value in edit['after'])
-    return write_gui_system_variables(streams.get('Gppw2.gpj'), ranges, cpu='FX3U/FX3UC')
+            after = tuple(value & 0xffffffff for value in edit['after'])
+            before = tuple(value & 0xffffffff for value in edit.get('before', ()))
+            if after != before:
+                ranges[edit['device']] = after
+    if not ranges:
+        return None  # Preserve every byte, including unobserved selector modes.
+    return write_gui_system_variables(application, ranges, cpu=cpu)
+
+
+def require_gui_project_entries(raw: bytes) -> None:
+    """Reject factory containers that have no registered GUI project envelope."""
+    from .container_writer import validate_cfb_streams
+    from .integrity import read_project_hdb
+    outer = validate_cfb_streams(raw)
+    mapping = project_stream_mapping(outer)
+    if 'Project.gd2' not in mapping or 'Project.gd2' not in outer:
+        raise GXWFormatError('GX Works2 GUI project entry Project.gd2 is missing')
+    application = mapping.get('Gppw2.gpj')
+    if application is None or not read_project_hdb(outer).payloads.get(application):
+        raise GXWFormatError('GX Works2 GUI application entry Gppw2.gpj is missing')
 
 
 def project_gui_configuration(raw: bytes) -> dict:

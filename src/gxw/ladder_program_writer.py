@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Place a lowered Ladder program into a captured blank Ladder project.
 
 The lowering itself lives in ``gxworks2.csv_export.lower_ladder_program``; this module

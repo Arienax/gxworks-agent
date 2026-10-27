@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Registered CPU target identity: menu identities, their members and their series.
 
 Only identity lives here: which spellings name a saved CPU menu option, which concrete

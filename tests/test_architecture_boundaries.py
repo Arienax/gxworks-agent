@@ -1,0 +1,460 @@
+import ast
+from pathlib import Path
+import pytest
+from architecture_imports import core_paths, dependency_violations, module_references
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SOURCE_ROOT = ROOT / "src"
+
+def _imports(path):
+    return [module for _line, module in module_references(path, SOURCE_ROOT)]
+
+
+def _transport_field_accesses(path):
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    fields = {"choices", "delta", "reasoning_content"}
+    found = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr in fields:
+            found.append((node.lineno, node.attr))
+        elif isinstance(node, ast.Subscript):
+            key = node.slice
+            if isinstance(key, ast.Constant) and key.value in fields:
+                found.append((node.lineno, key.value))
+    return found
+
+
+def test_plc_and_gx_core_do_not_import_model_or_vendor_clients():
+    core_files = core_paths(SOURCE_ROOT)
+    forbidden_roots = {
+        "openai",
+        "anthropic",
+        "zhipuai",
+        "model_runtime.provider", "model_runtime",
+        "agent_runtime.agent",
+        "mcp",
+        "mcp_types",
+        "integrations",
+    }
+
+    violations = []
+    for path in core_files:
+        for imported in _imports(path):
+            if any(imported == prefix or imported.startswith(prefix + ".") for prefix in forbidden_roots):
+                violations.append(f"{path.relative_to(ROOT)} -> {imported}")
+    assert violations == []
+
+
+def test_provider_does_not_import_plc_gx_or_automation_implementation():
+    forbidden_roots = {"plc.ir", "plc.core", "gxworks2", "simulator", "pywinauto", "rendering"}
+    violations = [
+        imported
+        for imported in _imports(SOURCE_ROOT / 'model_runtime/provider.py')
+        if any(imported == prefix or imported.startswith(prefix + ".") for prefix in forbidden_roots)
+    ]
+    assert violations == []
+
+
+def test_agent_depends_on_runtime_not_plc_implementation():
+    imports = _imports(SOURCE_ROOT / 'agent_runtime/agent.py')
+    forbidden_roots = {"plc.core", "plc.ir", "agent_runtime.plc_tools", "gxworks2", "pywinauto"}
+    assert [
+        imported
+        for imported in imports
+        if any(imported == prefix or imported.startswith(prefix + ".") for prefix in forbidden_roots)
+    ] == []
+    assert "agent_runtime.runtime" in imports
+    assert "model_runtime.provider" in imports
+
+
+def test_only_model_provider_imports_openai_sdk():
+    violations = []
+    for path in SOURCE_ROOT.rglob("*.py"):
+        if path == SOURCE_ROOT / "model_runtime/provider.py":
+            continue
+        if any(imported.split(".", 1)[0] == "openai" for imported in _imports(path)):
+            violations.append(str(path.relative_to(ROOT)))
+    assert violations == []
+
+
+def test_agent_and_api_do_not_parse_vendor_response_fields():
+    assert _transport_field_accesses(SOURCE_ROOT / 'application/model_api.py') == []
+    assert _transport_field_accesses(SOURCE_ROOT / 'agent_runtime/agent.py') == []
+
+
+def test_mcp_adapters_do_not_import_plc_or_desktop_implementations():
+    adapter_root = SOURCE_ROOT / "integrations" / "mcp"
+    forbidden = {
+        "plc.core", "plc.ir", "plc.validation", "plc.semantics",
+        "plc.static_analysis", "plc.timing", "rendering", "inspection.engine",
+        "knowledge.retriever", "gxworks2", "simulator", "pywinauto",
+        "ui.desktop.qt", "PyQt5", "PyQt6", "main", "agent_runtime.agent", "openai",
+        "api", "model_runtime.provider", "model_runtime", "config", "storage.config", "storage.credentials",
+    }
+    violations = [
+        f"{path.relative_to(ROOT)} -> {imported}"
+        for path in adapter_root.rglob("*.py")
+        for imported in _imports(path)
+        if any(imported == prefix or imported.startswith(prefix + ".") for prefix in forbidden)
+    ]
+    assert violations == []
+    assert "agent_runtime.runtime" in _imports(adapter_root / "tool_adapter.py")
+    assert "agent_runtime.runtime" in _imports(adapter_root / "server.py")
+    assert "application.projects" in _imports(adapter_root / "context_provider.py")
+    assert "storage.session" not in _imports(adapter_root / "context_provider.py")
+
+
+def test_runtime_and_builtin_agent_do_not_depend_on_optional_mcp_sdk():
+    for name in ('agent_runtime/runtime.py', 'agent_runtime/messages.py', 'plc/generation_contract.py', 'agent_runtime/agent.py', 'agent_runtime/plc_tools.py', 'model_runtime/provider.py', 'storage/session.py'):
+        assert not {"mcp", "mcp_types", "integrations"}.intersection(
+            imported.split(".", 1)[0] for imported in _imports(SOURCE_ROOT / name)
+        )
+
+
+def test_generation_contract_uses_only_stdlib_and_authoritative_core_contracts():
+    # The selected base already derives opcode schemas from the CPU instruction
+    # registry. Keep that single source of truth instead of copying an allowlist.
+    allowed = {"__future__", "copy", "re", "typing", "dataclasses", "json", "hashlib"}
+    assert {name.split(".", 1)[0] for name in _imports(SOURCE_ROOT / "agent_runtime/messages.py")} <= allowed
+    allowed_prefixes = allowed | {"plc.instructions", "plc.instruction_binding", "plc.specification.behavior"}
+    assert all(any(name == prefix or name.startswith(prefix + ".") for prefix in allowed_prefixes)
+               for name in _imports(SOURCE_ROOT / "plc/generation_contract.py"))
+
+
+def test_external_tool_runtime_has_no_model_or_credential_dependency():
+    forbidden = {"api", "model_runtime.provider", "model_runtime", "config", "storage.config", "storage.credentials", "openai", "ui.desktop.qt", "PyQt5", "PyQt6"}
+    for name in ('agent_runtime/runtime.py', 'agent_runtime/messages.py', 'agent_runtime/plc_tools.py', 'plc/generation_contract.py'):
+        assert not [item for item in _imports(SOURCE_ROOT / name)
+                    if any(item == prefix or item.startswith(prefix + ".") for prefix in forbidden)]
+
+
+def test_model_provider_reexports_the_same_neutral_tool_types():
+    import model_runtime.provider as model_provider
+    import agent_runtime.messages as tool_messages
+
+    assert model_provider.ToolCall is tool_messages.ToolCall
+    assert model_provider.ToolResult is tool_messages.ToolResult
+
+
+def _backend_bypasses(source):
+    """Catch static imports/aliases and literal dynamic imports, not hostile reflection."""
+    tree = ast.parse(source)
+    found, aliases, modules = [], {"__import__", "import_module"}, {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module == "importlib":
+            aliases.update(a.asname or a.name for a in node.names if a.name == "import_module")
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                modules[alias.asname or alias.name.split(".")[0]] = alias.name if alias.asname else alias.name.split(".")[0]
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                modules[alias.asname or alias.name] = (node.module or "") + "." + alias.name
+    for node in ast.walk(tree):
+        names = []
+        if isinstance(node, ast.Import):
+            names = [a.name for a in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            module = (node.module or "").lstrip(".")
+            names = [module] + [module + "." + a.name for a in node.names]
+        elif isinstance(node, ast.Call) and node.args:
+            fn = getattr(node.func, "id", getattr(node.func, "attr", ""))
+            if fn in aliases and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+                names = [node.args[0].value]
+        elif isinstance(node, ast.Attribute):
+            parts, current = [], node
+            while isinstance(current, ast.Attribute):
+                parts.insert(0, current.attr)
+                current = current.value
+            if isinstance(current, ast.Name):
+                names = [".".join([modules.get(current.id, current.id), *parts])]
+        for name in names:
+            if name == "knowledge.core" or name.startswith(("knowledge.core.", "knowledge.retriever._")):
+                found.append((node.lineno, name))
+    return found
+
+
+def test_application_agents_and_integrations_use_the_scoped_retrieval_facade():
+    violations = []
+    for package in ("application", "agent_runtime", "integrations"):
+        for path in (SOURCE_ROOT / package).rglob("*.py"):
+            for line, name in _backend_bypasses(path.read_text(encoding="utf-8")):
+                violations.append(f"{path.relative_to(ROOT)}:{line} -> {name}")
+    assert not violations, "\n".join(violations)
+
+
+def test_scoped_retrieval_guard_catches_aliases_and_literal_dynamic_imports():
+    for source in (
+        "import knowledge.core as backend", "from knowledge import core as backend",
+        "from knowledge.core import retrieve_knowledge as lookup",
+        "from knowledge.retriever import _core as backend",
+        "from knowledge.retriever import _retrieve_uncached",
+        "from knowledge import retriever as r; r._core._retrieve_knowledge('x')",
+        "import knowledge.retriever as r; r._retrieve_uncached('x')",
+        "from importlib import import_module as load; load('knowledge.core')",
+        "import importlib as il; il.import_module('knowledge.core')",
+        "__import__('knowledge.core')", "import knowledge; knowledge.core.retrieve_knowledge('x')",
+    ):
+        assert _backend_bypasses(source), source
+    assert not _backend_bypasses("from knowledge.retriever import retrieve_knowledge")
+
+
+def test_production_workflows_cannot_reintroduce_effort_hints():
+    violations = []
+    for package in ("application", "agent_runtime"):
+        for path in (SOURCE_ROOT / package).rglob("*.py"):
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if isinstance(node, ast.keyword) and node.arg == "effort":
+                    if not isinstance(node.value, ast.Constant) or node.value.value is not None:
+                        violations.append((path.name, node.lineno, "non-neutral effort"))
+                if isinstance(node, ast.Dict) and any(isinstance(k, ast.Constant) and k.value == "reasoning_effort" for k in node.keys):
+                    violations.append((path.name, node.lineno, "workflow tuning"))
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    positional = node.args.posonlyargs + node.args.args
+                    defaults = list(zip(positional[-len(node.args.defaults):], node.args.defaults)) if node.args.defaults else []
+                    defaults += list(zip(node.args.kwonlyargs, node.args.kw_defaults))
+                    for arg, value in defaults:
+                        if arg.arg == "effort" and value is not None and not (isinstance(value, ast.Constant) and value.value is None):
+                            violations.append((path.name, node.lineno, "workflow effort default"))
+    assert not violations, violations
+
+
+
+def test_generation_fact_lane_owners_do_not_cross_import():
+    lane_files = {
+        "construction": SOURCE_ROOT / "application" / "construction_routing.py",
+        "operand": SOURCE_ROOT / "plc" / "instruction_semantics.py",
+        "target": SOURCE_ROOT / "plc" / "target_capabilities.py",
+        "runtime": SOURCE_ROOT / "plc" / "runtime_semantics.py",
+    }
+    forbidden = {
+        "construction": {
+            "plc.instruction_semantics",
+            "plc.target_capabilities",
+            "plc.runtime_semantics",
+            "plc.instruction_resolution",
+            "knowledge",
+        },
+        "operand": {
+            "application.construction_routing",
+            "plc.target_capabilities",
+            "plc.runtime_semantics",
+        },
+        "target": {
+            "application.construction_routing",
+            "plc.instruction_semantics",
+            "plc.runtime_semantics",
+        },
+        "runtime": {
+            "application.construction_routing",
+            "plc.instruction_semantics",
+            "plc.target_capabilities",
+        },
+    }
+
+    violations = []
+    for lane, path in lane_files.items():
+        for imported in _imports(path):
+            if any(
+                imported == prefix or imported.startswith(prefix + ".")
+                for prefix in forbidden[lane]
+            ):
+                violations.append(
+                    f"{lane}: {path.relative_to(ROOT)} -> {imported}"
+                )
+    assert violations == []
+
+    # Only the materializer may compose the three instruction lanes.
+    composer = set(_imports(SOURCE_ROOT / "plc" / "instruction_resolution.py"))
+    assert {
+        "plc.instruction_semantics",
+        "plc.target_capabilities",
+        "plc.runtime_semantics",
+    } <= composer
+
+
+def test_generation_retrieval_has_no_character_or_token_budget():
+    support = (
+        SOURCE_ROOT / "application" / "generation_support.py"
+    ).read_text(encoding="utf-8")
+    context = (
+        SOURCE_ROOT / "application" / "generation_context.py"
+    ).read_text(encoding="utf-8")
+
+    assert "_KNOWLEDGE_TASK_SETTINGS" not in support
+    assert "_KNOWLEDGE_TASK_TOP_K" in support
+    assert "retrieval_char_budget" not in context
+    assert "rag_evidence_token_budget" not in context
+
+
+def test_capability_coverage_manifest_is_current():
+    from tools.audit_capability_coverage import audit_coverage, DEFAULT_MANIFEST
+
+    if not DEFAULT_MANIFEST.is_file():
+        pytest.skip('private capability acceptance manifest is unavailable')
+
+    report = audit_coverage()
+    assert report["ok"], "\n".join(report["failures"])
+    assert report["counts"]["enforced"] > 0
+    assert (
+        report["counts"]["enforced"] + report["counts"]["tracked_gap"]
+        == report["counts"]["total"]
+    )
+
+
+def _literal_mapping_accesses(path, fields):
+    """Return literal mapping-field reads/writes that bypass a schema boundary."""
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    found = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            if node.func.attr in {"get", "pop", "setdefault"} and node.args:
+                key = node.args[0]
+                if isinstance(key, ast.Constant) and key.value in fields:
+                    found.append((node.lineno, str(key.value)))
+        elif isinstance(node, ast.Subscript):
+            key = node.slice
+            if isinstance(key, ast.Constant) and key.value in fields:
+                found.append((node.lineno, str(key.value)))
+    return found
+
+
+def test_legacy_model_profile_schema_is_confined_to_migration_boundary():
+    retired = {"parameterSupport", "generationDefaults", "requestOverrides"}
+    allowed = SOURCE_ROOT / "model_runtime" / "legacy_migration.py"
+    violations = []
+    for package in ("model_runtime", "application", "agent_runtime", "integrations"):
+        for path in (SOURCE_ROOT / package).rglob("*.py"):
+            if path == allowed:
+                continue
+            for line, field in _literal_mapping_accesses(path, retired):
+                violations.append(
+                    f"{path.relative_to(ROOT)}:{line} reads retired field {field}"
+                )
+    assert not violations, "\n".join(violations)
+
+
+def test_retired_model_capabilities_module_cannot_reenter_production():
+    retired = SOURCE_ROOT / "model_runtime" / "capabilities.py"
+    assert not retired.exists()
+    violations = []
+    for package in ("model_runtime", "application", "agent_runtime", "integrations"):
+        for path in (SOURCE_ROOT / package).rglob("*.py"):
+            for imported in _imports(path):
+                if imported == "model_runtime.capabilities" or imported.startswith(
+                    "model_runtime.capabilities."
+                ):
+                    violations.append(
+                        f"{path.relative_to(ROOT)} -> {imported}"
+                    )
+    assert not violations, "\n".join(violations)
+
+
+def test_provider_and_application_cannot_restore_raw_profile_capability_fallbacks():
+    violations = []
+    for package in ("model_runtime", "application", "agent_runtime", "integrations"):
+        for path in (SOURCE_ROOT / package).rglob("*.py"):
+            if path == SOURCE_ROOT / "model_runtime" / "legacy_migration.py":
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if not (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "get"
+                    and node.args
+                    and isinstance(node.args[0], ast.Constant)
+                    and node.args[0].value == "capabilities"
+                ):
+                    continue
+                owner = node.func.value
+                if isinstance(owner, ast.Name) and owner.id in {
+                    "profile", "source", "selected", "chosen"
+                }:
+                    violations.append(
+                        f"{path.relative_to(ROOT)}:{node.lineno} raw profile capabilities"
+                    )
+    assert not violations, "\n".join(violations)
+
+
+
+def test_fresh_builtin_model_profiles_do_not_seed_legacy_runtime_fields():
+    import json
+    from storage.config import DEFAULT_MODEL_PROFILES
+
+    retired = {
+        "capabilities", "parameterSupport", "generationDefaults", "requestOverrides"
+    }
+    assert all(not retired.intersection(profile) for profile in DEFAULT_MODEL_PROFILES)
+
+    payload = json.loads(
+        (ROOT / "resources" / "config.default.json").read_text(encoding="utf-8")
+    )
+    assert all(
+        not retired.intersection(profile)
+        for profile in payload.get("modelProfiles", [])
+    )
+
+
+
+def test_storage_preserves_but_does_not_interpret_retired_model_profile_fields():
+    path = SOURCE_ROOT / "storage" / "config.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    retired = {
+        "capabilities", "parameterSupport", "generationDefaults", "requestOverrides"
+    }
+    violations = []
+    for node in tree.body:
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if node.name == "_normalize_profile":
+            continue
+        for child in ast.walk(node):
+            if isinstance(child, ast.Call) and isinstance(child.func, ast.Attribute):
+                if child.func.attr in {"get", "pop", "setdefault"} and child.args:
+                    key = child.args[0]
+                    if isinstance(key, ast.Constant) and key.value in retired:
+                        violations.append((node.name, child.lineno, key.value))
+            elif isinstance(child, ast.Subscript):
+                key = child.slice
+                if isinstance(key, ast.Constant) and key.value in retired:
+                    violations.append((node.name, child.lineno, key.value))
+    assert not violations, violations
+
+
+@pytest.mark.parametrize("source,expected", [
+    ("import plc.specification.confirmed", "plc.specification.confirmed"),
+    ("from plc import specification", "plc.specification"),
+    ("from src import plc as domain", "plc"),
+    ("from ..specification import confirmed", "plc.specification.confirmed"),
+    ("from ...plc.specification import confirmed", "plc.specification.confirmed"),
+    ("def f():\n import gxw.models", "gxw.models"),
+    ("import importlib as loader\nloader.import_module('plc.specification')", "plc.specification"),
+    ("from importlib import import_module as load\nload('gxw.models')", "gxw.models"),
+    ("__import__('plc.specification')", "plc.specification"),
+    ("from builtins import __import__ as load\nload('gxw.models')", "gxw.models"),
+    ("import builtins as loader\nloader.__import__('plc.ir')", "plc.ir"),
+    ("__import__('src', fromlist=['plc'])", "plc"),
+    ("from importlib import import_module as load\nload('..ir', __package__)", "plc.ir"),
+])
+def test_architecture_import_parser_detects_forbidden_forms(source, expected):
+    path = SOURCE_ROOT / "plc/sub/probe.py"
+    references = {name for _, name in module_references(path, SOURCE_ROOT, source_text=source)}
+    assert expected in references
+
+
+@pytest.mark.parametrize("package", ["plc", "gxw", "gxworks2", "simulator"])
+def test_core_discovery_includes_new_nested_modules(tmp_path, package):
+    path = tmp_path / package / "new_package/added.py"
+    path.parent.mkdir(parents=True)
+    path.write_text("from model_runtime import provider\n", encoding="utf-8")
+    discovered = [p for p in core_paths(tmp_path) if p.exists()]
+    assert discovered == [path]
+    violations = dependency_violations(discovered, tmp_path, {"model_runtime"})
+    assert any(p == path and name == "model_runtime.provider" for p, _, name in violations)
+
+
+def test_architecture_prefixes_do_not_match_unrelated_module_names(tmp_path):
+    path = tmp_path / "allowed.py"
+    path.write_text("import plc_tools_external\nimport gxworks2_client_examples\n", encoding="utf-8")
+    assert dependency_violations([path], tmp_path, {"plc", "gxworks2"}) == []

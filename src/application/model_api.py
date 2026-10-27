@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 from application.analysis_response import (
     _analysis_json_payload, _validate_fresh_analysis_content, _parse_analysis_response, request_analysis_response,
 )

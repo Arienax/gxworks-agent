@@ -1,3 +1,6 @@
+// Copyright 2026 Arienax
+// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 // Japanese strings load on demand: the workbench starts in the stored locale and
 // only pulls this table when that locale is Japanese.
 export const japanese: Record<string, string> = {
@@ -1058,4 +1061,12 @@ export const japanese: Record<string, string> = {
   "选择模型配置": "モデル設定",
   "完整报告": "完全なレポート",
   "差异数据": "差分データ",
+  "关于 GXWorks Agent": "GXWorks Agent について",
+  "作者、版权与来源": "作者・著作権・出所",
+  "GXWorks Agent 将三菱 PLC 工程上下文、按 CPU 组织的指令事实与 GX Works2 原生操作整合为本地工具链。": "GXWorks Agent は、三菱電機 PLC のプロジェクト情報、CPU ごとの命令知識、GX Works2 のネイティブ操作をローカルで統合したツールチェーンです。",
+  "版权所有": "著作権",
+  "原作者": "原作者",
+  "原始仓库": "オリジナルリポジトリ",
+  "许可协议": "ライセンス",
+  "本工作台与发行包随附 NOTICE 文件，其中注明原作者与原始仓库地址。": "本ワークベンチと各配布パッケージには、原作者とオリジナルリポジトリを記載した NOTICE ファイルが同梱されます。",
 };

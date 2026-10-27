@@ -146,6 +146,9 @@
                 "$ref": "#/components/schemas/GenerationContextEnvelope"
               },
               {
+                "$ref": "#/components/schemas/ManualSearchEnvelope"
+              },
+              {
                 "$ref": "#/components/schemas/NativeCheckEnvelope"
               },
               {
@@ -551,12 +554,16 @@
           "data": {
             "anyOf": [
               {
+                "$ref": "#/components/schemas/PagedReadData"
+              },
+              {
                 "$ref": "#/components/schemas/FBDCatalog"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Data"
           },
           "error": {
             "anyOf": [
@@ -2947,6 +2954,144 @@
           "unverified_selectors"
         ],
         "title": "FBDGUIConfiguration",
+        "type": "object"
+      },
+      "FBDGenerationCaller": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        },
+        "properties": {
+          "parameter_model": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FBDParameterModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_name": {
+            "title": "Source Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_name"
+        ],
+        "title": "FBDGenerationCaller",
+        "type": "object"
+      },
+      "FBDGenerationSTSource": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        },
+        "properties": {
+          "declarations": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/FBDLabel"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declarations"
+          },
+          "source_name": {
+            "title": "Source Name",
+            "type": "string"
+          },
+          "st_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "St Text"
+          }
+        },
+        "required": [
+          "source_name"
+        ],
+        "title": "FBDGenerationSTSource",
+        "type": "object"
+      },
+      "FBDGenerationSourceContext": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        },
+        "properties": {
+          "declarations": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "$ref": "#/components/schemas/FBDLabel"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declarations"
+          },
+          "fbd_callers": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/FBDGenerationCaller"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fbd Callers"
+          },
+          "st_sources": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/FBDGenerationSTSource"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "St Sources"
+          },
+          "structures": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "$ref": "#/components/schemas/FBDLabel"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Structures"
+          }
+        },
+        "title": "FBDGenerationSourceContext",
         "type": "object"
       },
       "FBDInspection": {
@@ -5676,12 +5821,16 @@
           "data": {
             "anyOf": [
               {
+                "$ref": "#/components/schemas/PagedReadData"
+              },
+              {
                 "$ref": "#/components/schemas/GenerationContextToolData"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Data"
           },
           "error": {
             "anyOf": [
@@ -5877,6 +6026,54 @@
           "$ref": "#/components/schemas/JsonValue"
         },
         "properties": {
+          "call_interface": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "$ref": "#/components/schemas/FBDLabel"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Call Interface"
+          },
+          "declaration_tables": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declaration Tables"
+          },
+          "existing_declarations": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "$ref": "#/components/schemas/FBDLabel"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Existing Declarations"
+          },
           "parameter_schema": {
             "anyOf": [
               {
@@ -5904,6 +6101,33 @@
               }
             ],
             "title": "Previous"
+          },
+          "source_context": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FBDGenerationSourceContext"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "structures": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "$ref": "#/components/schemas/FBDLabel"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Structures"
           }
         },
         "title": "GenerationInput",
@@ -6017,6 +6241,34 @@
           "$ref": "#/components/schemas/JsonValue"
         },
         "properties": {
+          "alternatives": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/GenerationOutputContract"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alternatives"
+          },
+          "editable_sources": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Editable Sources"
+          },
           "input_shape": {
             "anyOf": [
               {
@@ -6042,6 +6294,17 @@
             ],
             "title": "Model Schema"
           },
+          "model_schema_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Schema Ref"
+          },
           "operation": {
             "anyOf": [
               {
@@ -6053,6 +6316,17 @@
             ],
             "title": "Operation"
           },
+          "program": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Program"
+          },
           "protocol": {
             "anyOf": [
               {
@@ -6063,6 +6337,49 @@
               }
             ],
             "title": "Protocol"
+          },
+          "required_fields": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required Fields"
+          },
+          "requires_any": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requires Any"
+          },
+          "save_policy": {
+            "anyOf": [
+              {
+                "enum": [
+                  "draft",
+                  "checked"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Save Policy"
           },
           "schema": {
             "anyOf": [
@@ -6077,6 +6394,17 @@
               }
             ],
             "title": "Schema"
+          },
+          "schema_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schema Ref"
           },
           "schema_version": {
             "anyOf": [
@@ -6099,6 +6427,17 @@
               }
             ],
             "title": "Tool"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
           }
         },
         "title": "GenerationOutputContract",
@@ -8645,6 +8984,48 @@
           "candidate_proposal_id"
         ],
         "title": "MCPIntegrationStatus",
+        "type": "object"
+      },
+      "ManualSearchEnvelope": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        },
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PagedReadData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NativeToolError"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "tool": {
+            "const": "search_plc_manual",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "tool"
+        ],
+        "title": "ManualSearchEnvelope",
         "type": "object"
       },
       "MetadataToolEnvelope": {
@@ -14223,6 +14604,37 @@
         "title": "PLCProgram",
         "type": "object"
       },
+      "PagedReadData": {
+        "additionalProperties": false,
+        "properties": {
+          "context_schema_version": {
+            "const": 3,
+            "title": "Context Schema Version",
+            "type": "integer"
+          },
+          "delivery": {
+            "$ref": "#/components/schemas/ReadDelivery"
+          },
+          "document": {
+            "$ref": "#/components/schemas/ReadObjectReference"
+          },
+          "objects": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Objects",
+            "type": "object"
+          }
+        },
+        "required": [
+          "context_schema_version",
+          "document",
+          "objects",
+          "delivery"
+        ],
+        "title": "PagedReadData",
+        "type": "object"
+      },
       "PlanBinding": {
         "additionalProperties": {
           "$ref": "#/components/schemas/JsonValue"
@@ -17305,6 +17717,107 @@
         "title": "PulseCaptureAssessment",
         "type": "object"
       },
+      "ReadContinuation": {
+        "additionalProperties": false,
+        "properties": {
+          "arguments": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Arguments",
+            "type": "object"
+          },
+          "tool": {
+            "enum": [
+              "search_plc_manual",
+              "get_generation_context",
+              "get_fbd_catalog"
+            ],
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool",
+          "arguments"
+        ],
+        "title": "ReadContinuation",
+        "type": "object"
+      },
+      "ReadDelivery": {
+        "additionalProperties": false,
+        "properties": {
+          "assembly": {
+            "title": "Assembly",
+            "type": "string"
+          },
+          "complete": {
+            "title": "Complete",
+            "type": "boolean"
+          },
+          "coverage": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage"
+          },
+          "document_id": {
+            "title": "Document Id",
+            "type": "string"
+          },
+          "limits": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Limits",
+            "type": "object"
+          },
+          "next": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadContinuation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "scope": {
+            "const": "read_sequence",
+            "title": "Scope",
+            "type": "string"
+          },
+          "version": {
+            "const": 1,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "document_id",
+          "page",
+          "complete",
+          "scope",
+          "limits",
+          "next",
+          "assembly"
+        ],
+        "title": "ReadDelivery",
+        "type": "object"
+      },
       "ReadNetworkData": {
         "additionalProperties": {
           "$ref": "#/components/schemas/JsonValue"
@@ -17410,6 +17923,21 @@
           "id"
         ],
         "title": "ReadNetworkSnapshot",
+        "type": "object"
+      },
+      "ReadObjectReference": {
+        "additionalProperties": false,
+        "properties": {
+          "$ref": {
+            "pattern": "^#/objects/unit-[1-9][0-9]*$",
+            "title": "$Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "$ref"
+        ],
+        "title": "ReadObjectReference",
         "type": "object"
       },
       "ReplayAssertion": {

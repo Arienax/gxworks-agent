@@ -4,15 +4,15 @@ description: >-
   为 GXWorks Agent 的 Mitsubishi PLC 工程任务选择 MCP 工具与调用顺序。
   适用于新建或修改 Ladder/ST/FBD/SFC、读取 GXW/CSV/已打开的 GX Works2 工程、
   后台原生编译检查、查询声明分配地址、观察 Simulator2 或驱动持续可见编辑。
-compatibility: >-
-  需要客户端已连接 GXWorks Agent MCP。原生编译、GX Works2 界面交互与 Simulator2
-  采样依赖 MCP 服务端所在的 Windows 环境及本地安装的 Mitsubishi 软件。
 metadata:
+  compatibility: >-
+    需要客户端已连接 GXWorks Agent MCP。原生编译、GX Works2 界面交互与 Simulator2
+    采样依赖 MCP 服务端所在的 Windows 环境及本地安装的 Mitsubishi 软件。
   source-repository: Arienax/gxworks-agent
-  source-ref: main
-  source-commit: e5f6ca03455c97e0feb7328a21493dcdbf7fa620
-  reviewed-on: '2026-10-23'
-  version: '1.0.1'
+  source-ref: local-working-tree
+  source-base-commit: e5f6ca03455c97e0feb7328a21493dcdbf7fa620
+  reviewed-on: '2026-10-24'
+  version: '1.2.0'
 ---
 
 # GXWorks MCP 任务路由
@@ -39,7 +39,8 @@ metadata:
 | 仅有原生导出的 CSV | `inspect_gxworks2_csv_files` | 传入程序 CSV、注释 CSV 和明确的 `plc_model`，直接获取只读 `source_ref`。 |
 | 新建 Ladder 程序 | 选择或创建工程 → `get_generation_context` | 新需求默认使用 `workflow=direct_generation`，按返回合同构造 Ladder JSON 后提交 `create_program_candidate`。 |
 | 修改已有 Ladder 的局部网络或指令 | `get_current_program_info` / `read_network` 或 `read_gxw_source` | 按需读取 `get_generation_context`；单程序局部修改用 `patch_program`，多源码或含声明/注释的联合修改用 `edit_gxw_project`。 |
-| FBD 生成、FB、结构体、标签或库 | `get_fbd_catalog`，按需配合 `read_fbd_project` / `read_fbd_definition` / `read_fbd_libraries` | 以目录返回的定义、端口和 `parameter_schema` 构造参数，再调用 `create_fbd_candidate`。 |
+| FBD 生成或修改 | `get_generation_context(user_requirement=...)` | 使用必需语言规则、当前 CPU 地址规则和源码依赖；按 `output_contract` 选择单图候选或 ST/FBD 联合事务。目录不足时精确补取 `get_fbd_catalog(templates=...)`，详见[流程 6](references/workflows.md#fbd-与项目定义)。 |
+| FBD 定义、标签、库的查看与维护 | `get_fbd_catalog`，配合 `read_fbd_definition` / `read_fbd_libraries` | 按实际定义和能力执行维护操作；目录命中不能代替生成上下文，也不证明库正文可以导入。 |
 | ST Program / FB / FUNCTION | `read_st_project`（新建时配合 `get_generation_context`） | 用 `create_st_candidate` 或 `edit_gxw_project` 提交；新建普通 ST Program 时绑定工程中实际存在的资源与任务。 |
 | 已有 SFC 工程内部编辑 | `read_sfc_project` | 通过 `create_sfc_candidate(operation="edit")` 或 `edit_gxw_project` 编辑步骤、转换、动作、分支与子程序。 |
 | 本地结构、语法与指令检查 | `validate_project` / `validate_current_program` / `get_diagnostics` | 执行 Core 确定性静态校验，获取结构、操作数、语法及可维护性诊断。 |
@@ -51,7 +52,15 @@ metadata:
 | 读取 Simulator2 状态与软元件 | `list_simulator_targets` → `get_simulator_status` / `read_simulator_devices` | 使用返回的 `target_ref` 读取状态和软元件值；需要建立连接时先调用 `connect_simulator`。 |
 | 信号波形采样或生成仿真方案 | `start_simulator_trace` / `prepare_simulator_scenario` | `start_simulator_trace` 对目标做只读周期采样并生成时间轴视图；`prepare_simulator_scenario` 生成类型化测试方案。 |
 | 查询异步任务或提案状态 | `get_operation_status` | 传入 `proposal_id` 或 `execution_job_id` 查询当前进度与执行回执。 |
-| 检索 CPU 指令或软元件事实 | `search_plc_manual` | 生成上下文之外仍需核对指令细节时调用；未选中工程时显式传入 `plc_model`。按 `coverage` 判读命中：`status`、`aspects`、`call_admission` 与 `facts[].status` 的含义见[手册检索结果的判读](references/result-handling.md#手册检索结果的判读)。 |
+| 检索 CPU 指令或软元件事实 | `search_plc_manual` | 生成上下文之外仍需核对指令细节时调用；未选中工程时显式传入 `plc_model`。按 `coverage` 判读命中：`status`、`aspects`、`call_admission` 与 `facts[].knowledge_status` 的含义见[手册检索结果的判读](references/result-handling.md#手册检索结果的判读)。 |
+
+## 完整读取知识与上下文
+
+`search_plc_manual`、`get_generation_context`、`get_fbd_catalog` 返回单份 JSON 正文，`data.context_schema_version=3`。先保存 `document` 和本页 `objects`；只要 `delivery.complete=false`，就原样调用 `delivery.next.tool` 与 `delivery.next.arguments`。合并同一 `document_id` 的全部 `objects` 后解析 `$ref`，再使用下文的 `generation_input`、`output_contract` 或 `results`。没有读完的页不能当作知识缺失。对象身份只在该次读取中使用。
+
+每次返回最多 6,000 个估算 token 且不超过 32 KiB UTF-8。`STALE_READ_CURSOR` 表示查询、CPU、工程版本、事实库或会话发生变化，去掉游标重读；`READ_OBJECT_TOO_LARGE` 表示完整必需对象过大，缩小明确的读取范围，不能截断源码。独立 MCP 不采用 Web 模型配置推断客户端窗口。
+
+手册查询可显式传 `language=ladder|st|fbd` 和 `aspects`（如 `execution`、`effects`、`st_call`）。`top_k` 只限制补充资料，明确指令/地址/错误码及依赖全部解析。按正文的 `coverage`/`knowledge_coverage` 与 `delivery.complete` 分清库中存在、所问知识完整与已交付；手册行为说明、调用准入、Core 执行语义和原生结果分别判断。知识缺失先检查本地来源、提炼和交付，不自动改用网页搜索。
 
 ## 各类标识的用途
 
@@ -60,7 +69,7 @@ metadata:
 - 窗口发现 `session_id`：由 `list_gxworks2_sessions` 返回，标识本机已打开的 GX Works2 窗口，用于 `read_gxworks2_snapshot`。
 - 持续工程会话 `session_id`：由 `execute_native_engineering(mode="live")` 返回，用于后续步骤的继续、暂停与修订查询（`get_native_engineering_session`）。
 - `target_ref` / `view_ref`：分别标识已连接的 Simulator2 目标与波形采样视图。
-- `generation_context_id`：由 `get_generation_context` 返回，在提交候选程序时原样传入；`program`、`source_name`、`network_id` 与声明表名同样取自读取结果。
+- `generation_context_id`：由 `get_generation_context` 返回，仅向 schema 接受该字段的候选工具原样传入；`edit_gxw_project` 使用明确的 `version_id`，不接受该字段。`program`、`source_name`、`network_id` 与声明表名同样取自读取结果。
 
 ## 常见工作流要点
 
@@ -68,9 +77,11 @@ metadata:
 
 **已有文件读写。** 只读分析直接走 `inspect_*` 或窗口快照获取 `source_ref`；需要修改并保存新版本时，先将 `.gxw` 导入为工程版本，再通过离线编辑工具在可编辑对象范围内提交修改。
 
+**FBD 规则与联合修改。** 从 `generation_input` 读取 `language_rules`、`device_address_rules`、`source_context` 和 `supported_paths`。FBD 常量使用其自身语言规则；地址编号范围、默认分配、参数限制与本工程实际分配分别处理。已保存工程需要同时修改 ST 正文/接口和 FBD 调用者时，以 `edit_gxw_project` 一次提交全部关联修改。必需规则缺失会阻止生成，不能套用其他 CPU 或 ST 语法补空白。
+
 **FBD 按次保存。** `create_fbd_candidate` 的 `import`、`edit`、`generate` 仅在本次显式传入布尔 `native_save=true` 时请求原生保存；省略或传 `false` 使用离线路径，不继承历史版本的保存选择。源码和声明没有变化时不重复原生保存。该参数不用于 `create_fb`、`create_program` 或 `import_library`，这些操作保留自身的原生创建或导入流程。
 
-**用户库导入。** 对已保存的目标版本使用 `create_fbd_candidate(operation="import_library")`，传入来源 GXW 的 `data_base64` 和选定的 `library_name`。导入库定义，保留目标项目的源码集合、任务绑定、调用者正文与声明；不复制来源工程的调用程序。新增库定义不应被当成目标调用程序的变更。
+**用户库导入。** 对已保存的目标版本使用 `create_fbd_candidate(operation="import_library")`，传入来源 GXW 的 `data_base64` 和选定的 `library_name`。当前转移已覆盖的 ST 实现、接口和库内类型；FBD 库接口可读不表示可转移其正文。保留目标项目的源码集合、任务绑定、调用者正文与声明，不复制来源工程的调用程序。
 
 **ST 后台编辑。** 先读出对象的准确逻辑身份，以 `source_name` 调用 `create_st_candidate` 的 `edit_st_program`、`edit_st_fb`、`edit_st_function` 或 `edit_st_source`。省略 `declarations` 保留原声明；给出列表则按整份列表替换，需包含所有应保留的声明，不能只提交新增或修改行。这些后台操作不扩大前台 `execute_native_engineering` 的操作集合。
 
@@ -92,3 +103,5 @@ metadata:
 - 多步调用流程与参数示例：[调用流程](references/workflows.md)。
 - 接入模式、回执判读与错误恢复：[结果与恢复](references/result-handling.md)。
 - 源码模块与维护说明：[来源说明](references/sources.md)。
+
+分页中的 `$ref` 指向同一读取的 `objects`。遇到 `{ "$concat": ... }` 时，解析其引用的数组并按顺序拼接；`{ "$merge": ... }` 则合并引用的对象。它们只拆分目录容器，完整事实、接口和源码仍为单个对象。知识结果的 `knowledge_status` 表示来源知识状态，不授予 Core 执行能力。

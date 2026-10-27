@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Bounded in-process observations for tool-based generation handoffs.
 
 A receipt says which context this runtime returned, not which text an external

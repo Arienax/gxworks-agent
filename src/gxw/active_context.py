@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Core observations of unsaved native label tables and ST editor contents.
 
 The native driver supplies a checked project/document identity. Observed row

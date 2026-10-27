@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Select a source grammar independently of native adapter admission.
 
 Profiles describe lexical storage, not instruction availability or native

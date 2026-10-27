@@ -1,3 +1,6 @@
+// Copyright 2026 Arienax
+// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 import {
   Activity,
   ArrowLeft,
@@ -12,6 +15,7 @@ import {
   FolderOpen,
   GitBranch,
   Github,
+  Info,
   ListChecks,
   LoaderCircle,
   MessageSquare,
@@ -213,6 +217,9 @@ export function ProjectSidebar(props: Props) {
           </button>
           <button onClick={() => { setSettingsTab("general"); setModal("settings"); }}>
             <Settings2 size={15} />{t("设置")}
+          </button>
+          <button onClick={() => setModal("about")}>
+            <Info size={15} />{t("关于 GXWorks Agent")}
           </button>
           <button disabled={busy} onClick={toggleTheme}>
             {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}

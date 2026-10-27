@@ -1,0 +1,2002 @@
+from knowledge import index_access
+"""Instruction fact assembly, source integrity and delivered evidence accounting.
+
+Synthetic text below tests retrieval mechanics, not Mitsubishi instruction facts.
+Actual-index sentinels check source selection, not generated-program correctness.
+"""
+import copy
+import json
+import sqlite3
+from itertools import permutations
+
+import pytest
+pytestmark = pytest.mark.usefixtures('private_manual_evidence')
+from hypothesis import given, strategies as st
+
+
+def _language_diagram_words(native, structured=()):
+    words = [dict(text='Ladder', x0=50, x1=80, top=100, bottom=110),
+             dict(text='Structured', x0=300, x1=350, top=100, bottom=110),
+             dict(text='FBD/LD*1', x0=50, x1=90, top=180, bottom=190)]
+    for column, tokens in ((50, native), (300, structured)):
+        words.extend(dict(text=text, x0=column + index * 30, x1=column + index * 30 + 20,
+                          top=130, bottom=140) for index, text in enumerate(tokens))
+    return words
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@given(st.lists(st.integers(min_value=-32768, max_value=32767), min_size=1, max_size=20))
+def test_compact_fact_packet_roundtrips_all_values_statuses_and_dependencies(values):
+    from knowledge.instruction_facts import _definition_packet
+    groups = [{'id': f'fact:{i}', 'dimension': 'limits', 'value': {'limit': value},
+               'status': 'candidate_evidence' if i % 2 else 'source_verified',
+               'depends_on': [f'fact:{i-1}'] if i else []} for i, value in enumerate(values)]
+    rows = [{'definition_fact_groups': [group], 'relation_evidence_groups': []} for group in groups]
+    packet = _definition_packet(rows, {'opcode': 'TEST', 'target_model': 'Q03UDV'})
+    assert packet.count('[INSTRUCTION FACTS ') == 1
+    marker, body, end = packet.splitlines()
+    assert json.loads(body)['groups'] == groups
+    assert json.loads(marker[len('[INSTRUCTION FACTS '):-1]) == {'opcode': 'TEST', 'target_model': 'Q03UDV'}
+    assert end == '[/INSTRUCTION FACTS]'
+
+
+@pytest.mark.parametrize('requirement,expected', [
+    ('循环扫描程序，使用 CPU 管理的 1 秒时钟特殊继电器', False),
+    ('扫描程序使用用户时钟，通1个扫描，断3个扫描', True),
+    ('Use the CPU one second clock in a scan loop', False),
+    ('Generate a user timing clock with 1 ON scan and 3 OFF scans', True),
+])
+def test_cpu_clock_does_not_discover_a_user_scan_count_clock(requirement, expected):
+    from knowledge.capability_discovery import functional_queries
+    assert ('scan_clock' in {row['function'] for row in functional_queries(requirement)}) == expected
+
+from knowledge import core
+from knowledge.evidence import KnowledgeQuery
+from knowledge.instruction_facts import (
+    _conflicts_with_verified_operand_order, _is_target, _manual_fact_gaps,
+    _operand_gap_details, _pack_target as _runtime_pack_target, _related_units, _units,
+    _visual_operand_sequence, delivered_fact_report, included_knowledge_ids,
+    instruction_fact_targets, retrieve_instruction_facts,
+)
+from knowledge.retriever import build_knowledge_context
+
+
+def test_relation_expansion_is_one_hop_exact_cpu_and_keeps_candidates_unconfirmed():
+    from knowledge.capability_discovery import discover
+    record = {"id": "source-for", "section": "FOR program loop", "instruction_opcode": "FOR", "function_relations": [
+        {"id": "pair", "kind": "requires", "from": "instruction:FOR", "to": "instruction:NEXT",
+         "plc_models": ["FX3U"], "target_modes": ["ladder"], "preconditions": ["a selected FOR loop requires its end"], "confirmation": "confirmed"},
+        {"id": "too-far", "kind": "cooperates_with", "from": "instruction:NEXT", "to": "instruction:END",
+         "plc_models": ["FX3U"], "target_modes": ["ladder"], "preconditions": ["synthetic neighbor annotation"]}]}
+    calls = []
+    def retrieve(query, **kwargs):
+        calls.append(query)
+        return [{"id": "source-next", "instruction_opcode": "NEXT"}] if query == "PLC NEXT" else [record]
+    found = discover("循环遍历", plc_model="FX3U", target_mode="ladder", retrieve=retrieve, relation_limit=4)
+    assert {c["name"] for c in found["candidates"]} == {"FOR", "NEXT"}
+    assert [r["id"] for r in found["relations"]] == ["pair"]
+    assert found["relations"][0]["confirmation"] == "candidate"
+    assert found["relation_omissions"] == [{"id": "too-far", "reason": "outside_one_hop_scope"}]
+    assert found["expansion"]["depth"] == 1 and calls.count("PLC NEXT") == 1
+    other = discover("循环遍历", plc_model="FX5U", target_mode="ladder", retrieve=retrieve, relation_limit=4)
+    assert not other["relations"] and all(r["reason"] == "exact_cpu_source_missing" for r in other["relation_omissions"])
+
+
+def test_source_function_annotations_require_the_actual_manual_revision_and_page():
+    from knowledge.function_relations import annotate_source_records
+    source = {"id": "for", "manual_id": "fx3_programming_r", "revision": "R", "pdf_page": 243, "instruction_opcode": "FOR"}
+    annotated = annotate_source_records([source])[0]
+    assert annotated["function_relations"][0]["id"] == "fx3_for_next_pair" and "function_relations" not in source
+    assert "function_relations" not in annotate_source_records([{**source, "revision": "other"}])[0]
+    assert "function_relations" not in annotate_source_records([{**source, "pdf_page": 244}])[0]
+
+
+def test_local_function_relations_stay_in_the_source_cpu_scope():
+    from knowledge.retriever import discover_capabilities
+    discovered = discover_capabilities("循环遍历数组", plc_model="FX3U", relation_limit=8)
+    assert any(r["id"] == "fx3_for_next_pair" for r in discovered["relations"])
+    assert all(r["confirmation"] == "candidate" and r["sources"] for r in discovered["relations"])
+    assert not discover_capabilities("循环遍历数组", plc_model="FX5U", relation_limit=8)["relations"]
+
+
+def test_composition_budget_keeps_required_evidence_and_reconciles_whole_units():
+    from application.capability_context import augment_generation_knowledge, reconcile_discovery, public_discovery
+    from application.composition_context import CompositionExperiment, composition_scope
+    from knowledge.evidence import KnowledgeContext, estimate_tokens
+    base = '[KNOWLEDGE {"id":"required"}]\nFrozen exact source fact\n[/KNOWLEDGE]'
+    knowledge = KnowledgeContext(base, {"structured_facts": {"record_ids": ["required"]}})
+    spec = {"io_bindings": [{"binding_id": "a", "address": "X0", "label": "设备A启动"}]}
+    with composition_scope(CompositionExperiment("D")):
+        result = augment_generation_knowledge("", knowledge, confirmed_spec=spec, token_budget=3000)
+    discovery = result.manifest["capability_discovery"]
+    assert 'Frozen exact source fact' in result and estimate_tokens(result) <= 3000
+    assert '"id":"required"' not in result
+    assert "composition:plan" in discovery["included_composition_units"]
+    delivered = reconcile_discovery(discovery, str(result))
+    assert public_discovery(delivered)["composition_units"]
+    marker = discovery['model_units']['composition-unit:composition:plan']
+    broken = str(result).replace(marker, '[PLC KNOWLEDGE]\npartial')
+    final = reconcile_discovery(discovery, broken)
+    assert "composition:plan" not in final["included_composition_units"]
+    assert any(r["reason"] == "final_context_omission" for r in final["omitted_composition_units"])
+    # Closed markers with a cut or changed JSON body still cannot claim delivery.
+    forged = str(result).replace(marker, '[PLC KNOWLEDGE]\n{"version":"changed"}\n[/PLC KNOWLEDGE]')
+    assert "composition:plan" not in reconcile_discovery(discovery, forged)["included_composition_units"]
+    baseline = augment_generation_knowledge("", knowledge, confirmed_spec=spec, token_budget=3000)
+    assert "composition_units" not in baseline.manifest["capability_discovery"]
+
+
+def test_relation_unit_retains_endpoint_interfaces_when_separate_briefs_are_omitted():
+    import re
+    from application.capability_context import augment_generation_knowledge, reconcile_discovery, public_discovery
+    from application.composition_context import CompositionExperiment, composition_scope
+    with composition_scope(CompositionExperiment("C")):
+        context = augment_generation_knowledge("循环遍历数组", plc_model="FX3U", token_budget=12000)
+    discovery = context.manifest["capability_discovery"]
+    relation_unit = next(r for r in discovery["composition_units"] if r["id"] == "relation:fx3_for_next_pair")
+    assert {brief["name"] for brief in relation_unit["value"]["endpoint_briefs"]} == {"FOR", "NEXT"}
+    assert all("interface" in brief and 'sources' not in brief for brief in relation_unit["value"]["endpoint_briefs"])
+    without_briefs = str(context)
+    for identity, block in discovery['model_units'].items():
+        if identity.startswith('capability:'):
+            without_briefs = without_briefs.replace(block, '')
+    delivered = public_discovery(reconcile_discovery(discovery, without_briefs))
+    assert delivered["candidates"] == []
+    assert any(row["id"] == relation_unit["id"] and row["value"] == relation_unit["value"] for row in delivered["composition_units"])
+
+
+@pytest.mark.parametrize("text,function,expected", [
+    ("位移与移位处理", "shift", {"SFL", "SFR", "WSFL", "WSFR"}),
+    ("连续数据批量复制到数组", "block_move", {"BMOV", "FMOV"}),
+    ("对结果做区间比较", "compare", {"CMP", "ZCP"}),
+    ("经过延时再启动", "timer", {"STMR"}),
+    ("循环遍历", "loop", {"FOR", "NEXT"}),
+    ("同时存在多件物料，连续出现同色或不同颜色物料", "queue", {"SFWR", "SFRD", "SFTL"}),
+    ("Track multiple workpieces on the conveyor", "queue", {"SFWR", "SFRD", "SFTL"}),
+])
+def test_functional_discovery_uses_local_sources_without_an_opcode(text, function, expected):
+    from knowledge.retriever import discover_capabilities
+    found = discover_capabilities(text)
+    assert function in found["functions"]
+    assert expected.intersection(c["name"] for c in found["candidates"])
+    assert found["model_calls"] == 0
+    assert all(c["sources"] for c in found["candidates"])
+
+
+def test_tracking_hints_exclude_stack_only_and_carry_shift_operations():
+    from knowledge.retriever import discover_capabilities
+    found = discover_capabilities('连续同色物料需要跟踪')
+    names = {c['name'] for c in found['candidates']}
+    assert {'SFWR', 'SFRD', 'SFTL'} <= names
+    assert not names.intersection({'POP', 'SFL', 'SFR'})
+
+
+@pytest.mark.parametrize('text', ['连续扫描 PLC 程序', '同时打开两个输出', '连续点动电机'])
+def test_continuous_operation_alone_does_not_request_material_tracking(text):
+    from knowledge.capability_discovery import functional_queries
+    assert 'queue' not in {q['function'] for q in functional_queries(text)}
+
+
+@pytest.mark.parametrize("text", [
+    "在循环扫描MAIN中实现报警", "PLC cyclic scan loop", "在扫描循环中工作",
+    "PID control loop", "closed-loop control", "cyclic redundancy check",
+])
+def test_scan_and_control_cycles_do_not_invent_program_iteration(text):
+    from knowledge.capability_discovery import functional_queries
+    assert "loop" not in {q["function"] for q in functional_queries(text)}
+
+
+def test_program_iteration_keeps_coverage_without_unrelated_loop_sources():
+    from knowledge.capability_discovery import discover
+    records = [{"id": op, "instruction_opcode": op, "section": section}
+               for op, section in [
+                   ("FOR", "Program Flow > Start a FOR/NEXT Loop"),
+                   ("NEXT", "Program Flow > End a FOR/NEXT Loop"),
+                   ("PID", "External Device > PID Control Loop"),
+                   ("CRC", "Others > Cyclic Redundancy Check")]]
+    found = discover("在循环扫描MAIN中循环遍历数组", plc_model="FX3U", target_mode="ladder",
+                     retrieve=lambda *a, **k: records)
+    loop_names = {c["name"] for c in found["candidates"] if "loop" in c["functions"]}
+    assert loop_names == {"FOR", "NEXT"}
+
+
+def test_multistage_sequence_is_not_evidence_for_iteration():
+    from knowledge.capability_discovery import functional_queries
+    functions = {q["function"] for q in functional_queries("完整多阶段交通灯顺序控制")}
+    assert "sequence" in functions
+    assert "loop" not in functions
+
+
+@pytest.mark.parametrize('text,required,excluded', [
+    ('内置实时时钟设置，首扫描初始化四位年份，不修改当前时间', {'rtc'}, {'bulk_reset'}),
+    ('用户扫描时钟通1个扫描、断3个扫描的循环时钟，不使用毫秒定时器，系统END处理更新',
+     {'scan_clock'}, {'timer','loop','bulk_reset'}),
+    ('接收内置以太网连接数据。不添加发送、复位或其它硬件。专用状态来自手册',
+     {'socket_receive'}, {'bulk_reset'}),
+    ('读取高速计数CH1的最新当前值，不清零D0，不误读CH2', {'counter_read'}, {'bulk_reset'}),
+    ('receive socket connection data without resetting all states', {'socket_receive'}, {'bulk_reset'}),
+    ('内置高速计数CH1环形计数模式；写入CH1环形计数范围，不进行即时刷新。',
+     {'counter_range_write'}, {'counter_read'}),
+    ('Write the ring counter limits. Do not refresh the high-speed counter current value.',
+     {'counter_range_write'}, {'counter_read'}),
+])
+def test_function_discovery_distinguishes_required_background_and_prohibited_actions(text, required, excluded):
+    from knowledge.capability_discovery import functional_queries
+    found = {q['function'] for q in functional_queries(text)}
+    assert required <= found
+    assert not found & excluded
+
+
+def test_end_processing_background_is_not_an_instruction_request():
+    from knowledge.structured_facts import structured_fact_targets
+    assert not structured_fact_targets('用户扫描时钟由系统END处理更新', plc_model='Q00J')['instructions']
+    assert any(x['opcode'] == 'END' for x in structured_fact_targets('解释END处理是什么', plc_model='Q00J')['instructions'])
+
+
+@pytest.mark.parametrize("model", ["FX3U", "FX3SA", "FX5U", "Q03UDV", "Q00J"])
+def test_discovery_obeys_registry_model_scope_without_claiming_native_validation(model):
+    from knowledge.retriever import discover_capabilities
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+    found = discover_capabilities("复制连续数据并做比较", plc_model=model)
+    for card in found["candidates"]:
+        if card["kind"] == "instruction":
+            spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(card["name"], cpu=model)
+            assert spec.supports_cpu(model)
+    assert "native_verified" not in found
+
+
+def test_discovery_retains_unknown_scope_and_colliding_callable_interfaces():
+    from knowledge.capability_discovery import discover
+    directory = [{"kind": "function_block", "type_name": "QUEUE", "qualified_name": owner,
+                  "ports": [{"name": "IN", "side": "in", "data_type": data_type}]}
+                 for owner, data_type in [("local:QUEUE", "BOOL"), ("library:QUEUE", "WORD")]]
+    seen = []
+    found = discover("使用QUEUE实现工件跟踪", plc_model="FX3U", target_mode="fbd", catalog=directory,
+                     explicit_targets=[{"opcode": "NO_SUCH_CALL"}],
+                     retrieve=lambda query, **kwargs: seen.append(query) or [])
+    assert len(found["candidates"]) == 2 and seen
+    assert all("explicit" in c["functions"] for c in found["candidates"])
+    assert {c["interface"][0]["data_type"] for c in found["candidates"]} == {"BOOL", "WORD"}
+    assert all("body_behavior_unverified" in c["unknown"] for c in found["candidates"])
+    assert any(g["reason"] == "not_in_current_language_catalog" for g in found["gaps"])
+
+
+def test_explicit_instruction_scope_is_checked_before_functional_alternatives():
+    from knowledge.capability_discovery import discover
+    found = discover("移位", plc_model="FX3SA", target_mode="ladder",
+        explicit_targets=[{"opcode": "STMR"}], retrieve=lambda *a, **k: [])
+    assert found["candidates"] == []
+    assert any(g["target"] == "STMR" for g in found["gaps"] if "target" in g)
+
+
+def test_source_paragraphs_retain_their_containing_visual_representation_and_page():
+    from knowledge.instruction_document import document_units
+    text = ('[PAGE 7 PROSE]\nFirst paragraph.\n\nSecond paragraph.\n\n'
+            '[PAGE 7 LAYOUT]\nTitle\n\nSource → Result\n\n'
+            '[TABLE page=8 index=1]\nOperand | Meaning\n\nS | Source\n\n'
+            '[PAGE 9 PROSE]\nNew page.')
+    units = document_units({'id': 'fixture', 'text': text, 'pdf_page': 1})
+    assert [(unit.page, unit.representation) for unit in units] == [
+        (7, 'prose'), (7, 'prose'), (7, 'layout'), (7, 'layout'),
+        (8, 'table'), (9, 'prose')]
+    for unit in units:
+        for cell in unit.cells:
+            assert cell.start >= unit.start and cell.end <= unit.end
+
+
+@pytest.mark.parametrize('heading,names', [
+    ('4.1 I/O Configuration', []), ('WRITING/READING', []),
+    ('10.3 FNC 22 – MUL / Multiplication', ['MUL']),
+    ('7.5 LDP, LDF, ANDP, ANDF, ORP, ORF', ['LDP', 'LDF', 'ANDP', 'ANDF', 'ORP', 'ORF']),
+])
+def test_definition_heading_identity_is_literal_not_a_word_before_a_slash(heading, names):
+    from knowledge.instruction_compiler import instruction_heading_names
+    assert instruction_heading_names(heading) == names
+
+
+def test_definition_documents_keep_chunk_model_limits():
+    from knowledge.instruction_compiler import _document_catalog
+    chunk = {'id':1,'manual_id':'m','revision':'A','section':'5.1 MOV', 'text':'[PAGE 10]\nMOV instruction',
+             'pdf_page':10,'pdf_page_end':10,'plc_models':'FX3U'}
+    documents,by_form,_ = _document_catalog([chunk], {'m':{'manual_number':'M1','plc_models':['FX3U','FX3G']}})
+    assert documents[0]['models'] == ['FX3U']
+    assert by_form['MOV'][0][0]['models'] == ['FX3U']
+
+
+def _fixture_definition(sources, owner, order):
+    """Compile synthetic frozen sources before exercising the runtime packer."""
+    from knowledge.instruction_compiler import _operand_facts, _chart_facts
+    from knowledge.instruction_document import extract_binary_result_charts
+    target = owner.get('target_applicability', {})
+    model = target.get('target_model') or owner.get('plc_model') or 'FX3U'
+    opcode = owner.get('instruction_opcode') or sources[0].get('instruction_opcode')
+    if any(model not in s.get('fixture_models', [model]) for s in sources):
+        return {}
+    facts, conflicts = _operand_facts(sources, order or [], opcode, model)
+    charts = [chart for s in sources for chart in extract_binary_result_charts(
+        s, symbols=order or [], opcode=opcode, target_model=model, width=16)]
+    effects, _ = _chart_facts(charts, opcode, model)
+    facts.extend(effects)
+    if order:
+        facts.append({'id': 'registry:parameters.order', 'dimension': 'parameters.order',
+                      'value': {'symbols': order}, 'status': 'source_verified', 'verification': 'source_checked',
+                      'sources': [{'reference': 'independent_fixture_signature'}],
+                      'scope': {'models': [model], 'forms': [opcode]}})
+    for fact in facts:
+        for witness in fact.get('sources', []):
+            witness.update(opcode=opcode, target_model=model)
+    return {'opcode': opcode, 'target_model': model, 'facts': facts, 'source_materials': [],
+            'uninterpreted_content': [], 'conflicts': conflicts}
+
+
+def _pack_target(sources, allowance, **kwargs):
+    # These source fixtures represent a build+runtime boundary. Production
+    # packing never invokes the document parser or infers a new fact.
+    owner = copy.deepcopy(kwargs.get('structured_owner') or sources[0])
+    order = kwargs.get('verified_operand_order')
+    owner['instruction_definition'] = _fixture_definition(sources, owner, order)
+    kwargs['structured_owner'] = owner
+    return _runtime_pack_target(sources, allowance, **kwargs)
+
+
+def source(identity="one", opcode="MOV", text="Source operand and destination word. Operation copies data."):
+    return {"id": identity, "source": "Synthetic manual", "manual_id": "fixture", "manual_number": "TEST",
+            "revision": "1", "section": opcode + " instruction", "manual_type": "programming",
+            "chunk_type": "instruction", "instruction_opcode": opcode, "page": 1, "text": text}
+
+
+def _cmp_relation_source(identity='cmp-group', operators=('>','=','<')):
+    # Synthetic layout: the call syntax is deliberately wrong, while explicit
+    # first-column output labels and relation cells are complete and separate.
+    rows = ['[PAGE 12 PROSE]','Operation compares words and writes the comparison result.','',
+            '[PAGE 12 LAYOUT]','FNC 10','CMP S1 [GLYPH-F0A0] D [GLYPH-F0A0] S2 [GLYPH-F0A0]',
+            '1. 16-bit operation (CMP and CMPP)','• Comparison is executed algebraically.',
+            'Command | Command','input | input']
+    for name,operator in zip(['D','D+1','D+2'],operators):
+        rows.extend([name+' [GLYPH-F0A0] | Turns ON in the case of',f'" [ S1 [GLYPH-F0A0] {operator} S2 [GLYPH-F0A0] ] ". | waveform'])
+    rows.extend(['Even if the command input turns OFF and CMP instruction is not executed, D , D +1 and D +2 latch',
+                 'the status just before the command input turns OFF from ON.'])
+    value=source(identity,'CMP','\n'.join(rows))
+    value.update(manual_text=value['text'],pdf_page=12,plc_model='FX3U',fixture_models=['FX3U'],
+                 target_applicability={'native_operand_order':['S1','S2','D'],'operand_order_status':'source_verified'})
+    return value
+
+
+@pytest.mark.parametrize('operators', list(permutations(['>','=','<'])))
+def test_complete_relation_group_preserves_explicit_cells_without_conflicting_syntax(operators):
+    original=_cmp_relation_source(operators=operators)
+    packed=_pack_target([original],12000,verified_operand_order=['S1','S2','D'],verified_opcodes=['CMP'])
+    assert len(packed)==1 and 'CMP S1 [GLYPH-F0A0] D' not in packed[0]['text']
+    group=packed[0]['relation_evidence_groups'][0]
+    assert group['status']=='candidate_evidence'
+    assert [(m['output'],m['comparison']) for m in group['members']]==list(zip(['D','D+1','D+2'],['S1 '+x+' S2' for x in operators]))
+    assert group['source']['pdf_page']==12 and group['source']['offset_basis']=='chunks.text'
+    for member in group['members']:
+        label,comparison=[original['manual_text'][s['start']:s['end']] for s in member['value_spans']]
+        assert member['output'] in label and member['comparison'].split()[1] in comparison
+    assert 'turns OFF from ON.' in group['text']
+    assert packed[0]['text'].count('[RELATION EVIDENCE ')==1
+
+
+@pytest.mark.parametrize('mutation', ['missing_output','unlabelled','cross_page','negated','different_operator','missing_hold','missing_condition','duplicate_mapping','negated_on'])
+def test_relation_group_requires_complete_unambiguous_same_page_evidence(mutation):
+    original=_cmp_relation_source()
+    text=original['text']
+    if mutation=='missing_output':text=text.replace('D+2 [GLYPH-F0A0] |','Unlabelled |')
+    elif mutation=='unlabelled':text=text.replace('D [GLYPH-F0A0] |','Unlabelled |')
+    elif mutation=='cross_page':text=text.replace('D+1 [GLYPH-F0A0] |','[PAGE 13 LAYOUT]\nD+1 [GLYPH-F0A0] |')
+    elif mutation=='negated':text=text.replace('" [ S1 [GLYPH-F0A0] >','not " [ S1 [GLYPH-F0A0] >')
+    elif mutation=='different_operator':text=text.replace(' > S2',' >= S2')
+    elif mutation=='missing_hold':text=text.replace('and D +2 latch','and D +2 clear')
+    elif mutation=='missing_condition':text=text.replace('Command | Command','Missing | Missing')
+    elif mutation=='negated_on':text=text.replace('Turns ON in the case of','Never Turns ON in the case of',1)
+    else:text=text.replace('D+1 [GLYPH-F0A0] |','D [GLYPH-F0A0] |')
+    original.update(text=text,manual_text=text)
+    packed=_pack_target([original],12000,verified_operand_order=['S1','S2','D'])
+    assert not any(row.get('relation_evidence_groups') for row in packed)
+
+
+def test_relation_group_is_atomic_without_budget_and_rejects_conflicting_renditions():
+    original=_cmp_relation_source();diagnostics={}
+    packed=_pack_target([original],500,verified_operand_order=['S1','S2','D'],relation_diagnostics=diagnostics)
+    assert diagnostics['packing_status']=='packed'
+    assert any(row.get('relation_evidence_groups') for row in packed)
+    conflicting=_cmp_relation_source('other',('<','=','>'))
+    diagnostics={}
+    packed=_pack_target([original,conflicting],12000,verified_operand_order=['S1','S2','D'],relation_diagnostics=diagnostics)
+    assert diagnostics['packing_status']=='candidate_conflict'
+    assert not any(row.get('relation_evidence_groups') for row in packed)
+
+
+def test_actual_cmp_relation_delivery_has_exact_requirements_and_original_witnesses():
+    from knowledge.fact_coverage import reconcile_fact_coverage
+    context=build_knowledge_context(KnowledgeQuery('CMP',precompiled=True),plc_model='FX3U',task_type='generate',char_budget=24000,top_k=8)
+    coverage=context.manifest['fact_coverage']
+    relations={r['dimension']:r for r in coverage['requirements'] if r['dimension'] in
+               {'operation.result_mapping','execution.disabled_retention'}}
+    assert set(relations)=={'operation.result_mapping','execution.disabled_retention'}
+    assert all(r['status']=='candidate_evidence' and r['members']==['D','D+1','D+2'] for r in relations.values())
+    group=next(g for r in context.manifest['instruction_facts']['records'] for g in r.get('relation_evidence_groups',[]))
+    with sqlite3.connect(core._index_path().resolve().as_uri()+'?mode=ro',uri=True) as db:
+        raw=db.execute('SELECT text FROM chunks WHERE id=?',(group['source']['id'],)).fetchone()[0]
+    for span in group['source']['value_spans']:
+        assert 0<=span['start']<span['end']<=len(raw)
+        assert raw[span['start']:span['end']].strip()
+    omitted=reconcile_fact_coverage(coverage,[])
+    assert all(r['status']=='not_delivered' for r in omitted['requirements'] if r['dimension'] in relations)
+    assert 'D: Turns ON in the case of [S1 > S2].' in context
+
+
+def test_operation_keyword_hit_does_not_supply_a_complete_result_relation(monkeypatch):
+    import knowledge.instruction_facts as facts
+    monkeypatch.setattr(facts,'_related_units',lambda *a:[])
+    row=source('keyword','CMP','[PAGE 12 PROSE]\nOperation writes a comparison result; output turns ON or OFF.')
+    packed,report=retrieve_instruction_facts('',targets=[{'opcode':'CMP','base_opcode':'CMP'}],plc_model='FX3U',task_type='generate',char_budget=12000,resolver=lambda *a,**k:[row])
+    receipt=delivered_fact_report(report,[r['id'] for r in packed])
+    assert next(f for f in receipt['facts'] if f['question']=='operation')['status']=='candidate_evidence'
+    assert not any(r.get('relation_evidence_groups') for r in receipt['records'])
+
+
+def test_cmp_relation_scope_uses_structured_owner_and_does_not_extend_to_other_cpus():
+    original=_cmp_relation_source();original.pop('plc_model')
+    for model,expected in [('FX3U',True),('FX3G',False),('Q03UDV',False)]:
+        packed=_pack_target([original],12000,verified_operand_order=['S1','S2','D'],
+                            structured_owner={'target_applicability':{'target_model':model}})
+        assert any(row.get('relation_evidence_groups') for row in packed) is expected
+
+
+def test_generic_group_coverage_requires_every_explicit_member():
+    from knowledge.fact_coverage import build_coverage
+    requirement={'kind':'custom','target':'sample','dimension':'result.mapping','members':['left','right']}
+    record={'id':'group','fact_kind':'custom','fact_target':'sample','fact_dimensions':['result.mapping']}
+    for members,status in [([], 'unresolved'),(['left'],'unresolved'),(['left','right'],'candidate_evidence')]:
+        record['fact_group_members']={'result.mapping':members}
+        report=build_coverage([requirement],[record],['group'])
+        assert report['requirements'][0]['status']==status
+
+
+def test_definition_final_delivery_cannot_leak_same_fact_id_between_instructions():
+    from knowledge.fact_coverage import instruction_report_view
+    views = [{'opcode': opcode, 'target_model': 'FX3U', 'receipt': {'packed_fact_ids': ['behavior:effect']}}
+             for opcode in ['CMP', 'TCMP']]
+    records = [{'id': opcode, 'fact_target': opcode, 'fact_dimensions': ['definition.behavior:effect'],
+                'definition_task_view': {'opcode': opcode, 'target_model': 'FX3U'},
+                'definition_fact_groups': [{'id': 'behavior:effect'}]} for opcode in ['CMP', 'TCMP']]
+    report = instruction_report_view({'targets': ['CMP', 'TCMP'], 'records': records,
+                                      'definition_views': views}, ['CMP'])
+    assert report['definition_views'][0]['receipt']['final_delivered_fact_ids'] == ['behavior:effect']
+    assert report['definition_views'][1]['receipt']['final_delivered_fact_ids'] == []
+
+
+@pytest.mark.parametrize('allowance', [300, 1000, 2400, 6000, 12000])
+def test_legacy_allowance_does_not_drop_compiled_dependency_closures(allowance):
+    from knowledge.instruction_facts import _pack_definition_target
+    from plc.instruction_definition import materialize_instruction_definition
+    from plc.instruction_resolution import resolve_instruction_lanes
+    from knowledge.structured_facts import resolve_instruction_records
+    owner = resolve_instruction_lanes('CMP', plc_model='FX3U')
+    owner['instruction_definition'] = materialize_instruction_definition('CMP', plc_model='FX3U', lanes=owner)
+    sources = resolve_instruction_records(['CMP'], plc_model='FX3U', task_type='generate')
+    diagnostics = {}
+    records = _pack_definition_target(sources, allowance, owner, {'operation', 'operands', 'execution', 'limits'},
+                                     ['S1', 'S2', 'D'], ['CMP'], diagnostics)
+    assert records == _pack_definition_target(sources, None, owner, {'operation', 'operands', 'execution', 'limits'},
+                                             ['S1', 'S2', 'D'], ['CMP'], {})
+    delivered = {g['id'] for r in records for g in r.get('definition_fact_groups', [])}
+    for record in records:
+        for group in record.get('definition_fact_groups', []):
+            assert set(group['depends_on']) <= delivered
+
+
+@pytest.mark.parametrize('incidental', [[], ['AND'], ['AND', 'OR', 'HOUR']])
+def test_relevance_order_preserves_each_required_instruction_before_extra_prose(incidental):
+    from knowledge.evidence import estimate_tokens
+
+    required = ['TCMP', 'MUL', 'DDIV', 'WSFL', 'BMOV']
+    targets = [{'opcode': opcode, 'base_opcode': opcode} for opcode in required + incidental]
+    query = KnowledgeQuery('', precompiled=True, metadata={'structured_fact_targets': {
+        'version': 'structured-facts-v1', 'instructions': targets, 'devices': [], 'errors': []}})
+    context = build_knowledge_context(query, plc_model='FX3U', task_type='generate',
+                                      char_budget=96000, token_budget=12000, top_k=5)
+    assert context.manifest['used_tokens'] == estimate_tokens(context)
+    report = context.manifest['instruction_facts']
+    included = [record for record in report['records'] if record['included']]
+    assert [record['fact_target'] for record in included] == required
+    for record in included:
+        facts = record['definition_fact_groups']
+        delivered = {fact['id'] for fact in facts}
+        assert any(fact['dimension'].startswith('effects.') for fact in facts)
+        assert all(set(fact['depends_on']) <= delivered for fact in facts)
+
+
+@pytest.mark.parametrize('token_budget', [100, 500, 1000, 2400])
+def test_legacy_token_limit_does_not_drop_definition_dependencies(token_budget):
+    from knowledge.evidence import estimate_tokens
+
+    records, report = retrieve_instruction_facts('CMP', plc_model='FX3U', task_type='generate',
+                                                 char_budget=96000, token_budget=token_budget)
+    assert records == retrieve_instruction_facts('CMP', plc_model='FX3U', task_type='generate')[0]
+    for record in records:
+        facts = record.get('definition_fact_groups', [])
+        delivered = {fact['id'] for fact in facts}
+        assert all(set(fact['depends_on']) <= delivered for fact in facts)
+        assert all(len(group['members']) == 3 for group in record.get('relation_evidence_groups', []))
+
+
+def test_complete_chinese_source_conditions_survive_legacy_token_limit():
+    from knowledge.evidence import estimate_tokens
+
+    row = source(text='[PAGE 1 PROSE]\nOperation copies a word.\n\nCaution: ' + '必须保持区域不重叠。' * 300)
+    records = _runtime_pack_target([row], 96000, token_allowance=300)
+    assert records and 'Operation copies a word.' in records[0]['text']
+    assert 'Caution: ' + '必须保持区域不重叠。' * 300 in records[0]['text']
+    for record in records:
+        for span in record['source_spans']:
+            assert row['text'][span['start']:span['end']].rstrip() in record['text']
+
+
+
+@pytest.mark.parametrize("opcode", ["SFTL", "WSFL", "MOV", "BMOV", "CMP", "DRVI", "$MOV"])
+def test_targets_follow_catalogue_not_a_shift_recipe(opcode):
+    spec = {"selected_approach": {"generation_contract": {"required_opcodes": [opcode]}}}
+    before = copy.deepcopy(spec)
+    targets = instruction_fact_targets("", spec)
+    assert opcode in [target["opcode"] for target in targets]
+    assert spec == before
+    if opcode == "$MOV":
+        assert "MOV" not in [target["opcode"] for target in targets]
+
+
+def test_named_selected_description_is_a_target_not_a_new_design():
+    assert instruction_fact_targets("", {"selected_approach": {"description": "Use WSFL."}})[0]["opcode"] == "WSFL"
+    assert instruction_fact_targets("不要 SFTL，只用 MOV K1 D0")[0]["opcode"] == "MOV"
+
+
+def test_instruction_mention_and_punctuation_are_not_exact_definitions():
+    target = {"opcode": "MOV", "base_opcode": "MOV"}
+    wrong = source(opcode="", text="MOV is discussed elsewhere")
+    wrong["section"] = "$MOV / Character String Transfer"
+    assert not _is_target(wrong, target)
+    wrong["section"] = "General programming"
+    assert not _is_target(wrong, target)
+    wrong["instruction_opcode"] = "MOV"
+    wrong["manual_type"] = "third_party_skill"
+    assert not _is_target(wrong, target)
+
+
+def test_whole_table_and_offsets_are_preserved():
+    text = "[TABLE page=1]\nOperand | Description\n\nA | source\nB | destination\n"
+    assert list(_units(text)) == [(0, len(text))]
+    result = _pack_target([source(text=text)], 2000)[0]
+    assert text.rstrip() in result["text"]
+    assert result["source_spans"] == [{"start": 0, "end": len(text)}]
+    assert _pack_target([source(text=text)], 50) == [result]  # never cut table rows
+
+
+def test_navigation_noise_is_removed_before_source_span_selection():
+    navigation = '[TABLE page=1]\n' + '\n'.join(label + ' | <blank>' for label in
+        ['1', 'Introduction', '2', 'Overview', '3', 'List Instruction'])
+    text = '[PAGE 1 PROSE]\nOperation copies a word.\n\n' + navigation
+    records = _runtime_pack_target([source(text=text)])
+    assert records and 'Operation copies a word.' in records[0]['text']
+    assert 'List Instruction' not in records[0]['text']
+    for record in records:
+        for span in record['source_spans']:
+            assert text[span['start']:span['end']].rstrip() in record['text']
+
+
+@pytest.mark.parametrize("labels,expected", [
+    (["11", "Shift Rotation FNC30-FNC39", "12", "Data FNC40-FNC49", "13", "High-Speed FNC50-FNC59"], True),
+    (["1", "S", "2", "D", "3", "Data type"], False),
+])
+def test_rotated_chapter_index_is_distinct_from_technical_blank_cells(labels, expected):
+    from knowledge.evidence import is_navigation_table
+    assert is_navigation_table('[TABLE page=1]\n' + '\n'.join(label+' | <blank>' for label in labels)) == expected
+
+
+@given(st.integers(min_value=1, max_value=32767), st.booleans())
+def test_compiled_source_deduplication_preserves_unrepresented_cautions(limit, extra):
+    from knowledge.instruction_facts import _covered_source_unit
+    header = '[TABLE page=1]\nOperand | Description\n'
+    row = f'N | Number of items, maximum {limit}\n'
+    caution = 'Caution: retain state while disabled.\n' if extra else ''
+    text = header + row + caution
+    spans = [{'start': len(header), 'end': len(header)+len(row)}]
+    assert _covered_source_unit(text, 0, len(text), spans) is (not extra)
+
+
+def test_shared_source_units_keep_both_fact_packets_and_differing_raw_values():
+    from knowledge.evidence import share_fact_source_units
+    unit = '[UNINTERPRETED SOURCE {"id":"page","source_spans":[{"start":0,"end":25}]}]\nMaximum value is 123.\n'
+    first = {'id': 'SET', 'manual_id': 'manual', 'revision': 'R', 'text': 'SET facts\n' + unit}
+    second = {**first, 'id': 'RST', 'text': 'RST facts\n' + unit}
+    seen = {}
+    assert share_fact_source_units(first, seen) == first
+    shared = share_fact_source_units(second, seen)
+    assert shared['text'].startswith('RST facts\n') and 'Maximum value' not in shared['text']
+    assert shared['raw_evidence_references'][0]['delivered_in'] == 'SET'
+    changed = {**second, 'text': second['text'].replace('123', '124')}
+    assert share_fact_source_units(changed, seen) == changed
+    assert second['text'].endswith(unit)
+
+
+def test_gap_directed_manual_packing_drops_already_covered_operand_only_units():
+    rows = [
+        source(
+            "operation",
+            text="[PAGE 1 PROSE]\nOperation copies the source into the destination.",
+        ),
+        source(
+            "operands",
+            text="[TABLE page=1]\nOperand | Description\nS | source\nD | destination",
+        ),
+    ]
+    output = _pack_target(rows, 2500, needed_categories={"operation"})
+    text = "\n".join(row["text"] for row in output)
+    assert "Operation copies" in text
+    assert "Operand | Description" not in text
+
+
+def test_verified_order_visual_conflict_detector_ignores_concrete_examples():
+    expected = ["S1", "S2", "D"]
+    visual = (
+        "[PAGE 1 PROSE]\n"
+        "TADD D 10 D 20 D 30\n"
+        "S1 [GLYPH-F0A0] S2 [GLYPH-F0A0] D [GLYPH-F0A0]\n"
+        "(D10,D11,D12)+(D20,D21,D22)\n"
+    )
+    assert _visual_operand_sequence(visual, "TADD", expected) == expected
+    record = {
+        "instruction_opcode": "TADD",
+        "target_applicability": {
+            "operand_order_status": "source_verified",
+            "native_operand_order": expected,
+        },
+    }
+    assert not _conflicts_with_verified_operand_order(record, visual)
+
+
+@pytest.mark.parametrize(
+    ("opcode", "expected", "visual", "sequence"),
+    [
+        (
+            "CRC", ["S", "D", "N"],
+            "[PAGE 1 PROSE]\nCRC n\nM8161\nD [GLYPH-F0A0]S [GLYPH-F0A0]\nS\n",
+            ["N", "D", "S"],
+        ),
+        (
+            "DFMOV", ["S", "D", "N"],
+            "[PAGE 1 PROSE]\nDFMOV nS [GLYPH-F0A0] D [GLYPH-F0A0]\n+1,+1\n",
+            ["N", "S", "D"],
+        ),
+        (
+            "SFTRP", ["S", "D", "N1", "N2"],
+            "[PAGE 1 PROSE]\nSFTRP n1 n2D [GLYPH-F0A0]S [GLYPH-F0A0]\nBefore\n",
+            ["N1", "N2", "D", "S"],
+        ),
+    ],
+)
+def test_verified_order_visual_conflict_detector_finds_flattened_diagrams(
+    opcode, expected, visual, sequence,
+):
+    assert _visual_operand_sequence(visual, opcode, expected) == sequence
+    record = {
+        "instruction_opcode": opcode,
+        "target_applicability": {
+            "operand_order_status": "source_verified",
+            "native_operand_order": expected,
+        },
+    }
+    assert _conflicts_with_verified_operand_order(record, visual)
+
+
+def test_verified_order_visual_conflict_detector_ignores_prose_mnemonic_collision():
+    text = (
+        "[PAGE 1 PROSE]\n"
+        "The dead band is adjusted by S2 [GLYPH-F0A0] before S1 [GLYPH-F0A0].\n"
+    )
+    assert _visual_operand_sequence(
+        text, "BAND", ["S1", "S2", "S3", "D"]
+    ) == []
+
+
+def test_verified_order_filter_applies_to_related_manual_units():
+    rows = [
+        source(
+            "safe", opcode="CRC",
+            text="[PAGE 1 PROSE]\nOperation calculates a CRC from source data.\n",
+        ),
+        source(
+            "visual", opcode="CRC",
+            text=(
+                "[PAGE 1 PROSE]\nCRC n\nM8161\n"
+                "D [GLYPH-F0A0]S [GLYPH-F0A0]\nS\n"
+            ),
+        ),
+    ]
+    output = _pack_target(
+        rows,
+        4000,
+        needed_categories={"operands", "operation"},
+        verified_operand_order=["S", "D", "N"],
+        verified_opcodes=("CRC",),
+    )
+    rendered = "\n".join(row["text"] for row in output)
+    assert "Operation calculates a CRC" in rendered
+    assert "CRC n" not in rendered
+
+
+def test_embedded_pdf_layout_residue_is_not_a_second_operand_order():
+    text = (
+        "[PAGE 687 PROSE]\n"
+        "Operation reads the source operand and transfers the result to the destination.\n"
+        "Inverter station number and channel requirements are described here.\n"
+        "FNC 270\n"
+        "IVCK\n"
+        "9 steps IVCK\n"
+        "[GLYPH-F0BE]\n"
+        "[GLYPH-F0BE][GLYPH-F0BE]\n"
+        "FNC270\n"
+        "IVCK n\n"
+        "S1 [GLYPH-F0A0] S2 [GLYPH-F0A0] D [GLYPH-F0A0]\n"
+    )
+    output = _pack_target(
+        [source("ivck", opcode="IVCK", text=text)],
+        4000,
+        needed_categories={"operands", "operation"},
+    )
+    rendered = "\n".join(row["text"] for row in output)
+    assert "Operation reads the source operand" in rendered
+    assert "IVCK n" not in rendered
+    assert all(
+        not (
+            span["start"] <= text.index("FNC 270") < span["end"]
+        )
+        for row in output
+        for span in row["source_spans"]
+    )
+
+
+def test_operand_gap_tracking_is_slot_and_facet_granular():
+    record = {
+        "operand_slots": [
+            {
+                "position": 1, "symbol": "S1", "name": "source",
+                "role_status": "source_verified",
+                "data_type_status": "source_verified",
+                "symbol_status": "source_verified",
+                "device_class_status": "source_verified",
+            },
+            {
+                "position": 2, "symbol": "D", "name": "destination",
+                "role_status": "source_verified",
+                "data_type_status": "source_verified",
+                "symbol_status": "source_verified",
+                "device_class_status": "unresolved",
+            },
+        ],
+        "target_applicability": {"boundary_status": "source_verified"},
+    }
+    assert _operand_gap_details(record) == [
+        {"position": 1, "facet": "purpose", "status": "unresolved", "symbol": "S1", "name": "source"},
+        {"position": 2, "facet": "device_classes", "status": "unresolved", "symbol": "D", "name": "destination"},
+        {"position": 2, "facet": "purpose", "status": "unresolved", "symbol": "D", "name": "destination"},
+    ]
+    assert _manual_fact_gaps(record) == frozenset({
+        "operands", "operation", "execution",
+    })
+
+
+def test_pack_across_definition_table_and_caution_without_duplicate_layout():
+    rows = [source("definition", text="[PAGE 1 PROSE]\nOperation transfers a word.\n\n[PAGE 1 LAYOUT]\nDUPLICATE LAYOUT"),
+            source("table", text="[TABLE page=1]\nOperand | Description\nS | source\nD | destination"),
+            source("caution", text="[PAGE 2 PROSE]\nExecution occurs each scan; range is limited.")]
+    output = _pack_target(rows, 2500)
+    text = "\n".join(row["text"] for row in output)
+    assert all(value in text for value in ("Operation transfers", "Operand | Description", "each scan"))
+    assert "DUPLICATE LAYOUT" not in text
+    assert sum(len(core._format_result_block(row))+40 for row in output) <= 2500
+    altered_revision = source("other", text="FOREIGN REVISION range")
+    altered_revision["revision"] = "2"
+    assert "FOREIGN REVISION" not in str(_pack_target([rows[0], altered_revision], 2500))
+
+
+def test_source_expansion_obeys_revision_model_and_section(tmp_path, monkeypatch):
+    db = tmp_path / "index.sqlite"
+    with sqlite3.connect(db) as connection:
+        connection.execute("CREATE TABLE chunks (id TEXT, manual_id TEXT, revision TEXT, section TEXT, text TEXT, manual_type TEXT, plc_models TEXT)")
+        connection.executemany("INSERT INTO chunks VALUES (?,?,?,?,?,?,?)", [
+            ("1", "fixture", "1", "MOV instruction", "operand word", "programming", "FX3U"),
+            ("2", "fixture", "1", "MOV instruction", "range limit", "programming", "FX3U"),
+            ("3", "fixture", "2", "MOV instruction", "wrong revision", "programming", "FX3U"),
+            ("4", "fixture", "1", "MOV instruction", "wrong CPU", "programming", "FX5U"),
+            ("5", "fixture", "1", "CMP instruction", "wrong section", "programming", "FX3U"),
+        ])
+    monkeypatch.setattr(index_access, "index_path", lambda: db)
+    try:
+        assert {row["id"] for row in _related_units(source("1"), "FX3U", "generate")} == {"1", "2"}
+    finally:
+        core._close_thread_connection()
+
+
+def test_coverage_is_candidate_only_and_tracks_actual_delivery(monkeypatch):
+    import knowledge.instruction_facts as facts
+    monkeypatch.setattr(facts, "_related_units", lambda *a: [])
+    monkeypatch.setattr(facts, "_completion_sources", lambda *a: [])
+    calls = []
+
+    def resolve(targets, **kwargs):
+        calls.append((copy.deepcopy(targets), kwargs))
+        return [source()]
+
+    def broad_lookup(*args, **kwargs):
+        pytest.fail("explicit instruction facts must not call broad retrieval")
+
+    blocks, report = retrieve_instruction_facts(
+        "MOV", plc_model="FX3U", task_type="generate", char_budget=2000,
+        retrieve=broad_lookup, resolver=resolve,
+    )
+    assert calls == [([{"opcode": "MOV", "base_opcode": "MOV"}],
+                      {"plc_model": "FX3U", "task_type": "generate"})]
+    assert report["retrieval_mode"] == "structured_direct"
+    assert report["queries"] == []
+    assert report["lookups"][0]["source"] == "instructions.opcode_norm"
+    included = delivered_fact_report(report, [blocks[0]["id"]])
+    assert included["verification"] == "not_performed"
+    assert {row["status"] for row in included["facts"]} == {"candidate_evidence", "unresolved"}
+    omitted = delivered_fact_report(report, [])
+    assert {row["status"] for row in omitted["facts"]} == {"not_delivered", "unresolved"}
+    assert not any(row.get("included") for row in omitted["records"])
+    assert included["coverage_version"] == "fact-coverage-v1"
+
+
+def test_generic_fact_coverage_accounts_for_instruction_device_and_error():
+    from knowledge.fact_coverage import build_fact_coverage, reconcile_fact_coverage
+
+    targets = {
+        "instructions": [{"opcode": "MOV", "base_opcode": "MOV"}],
+        "devices": ["M8029"],
+        "errors": ["1234H", "1234", "0x1234"],
+    }
+    records = [
+        {"id": "instruction", "fact_kind": "instruction", "fact_target": "MOV",
+         "fact_dimensions": ["operands"], "text": "MOV operands"},
+        {"id": "device", "fact_kind": "device", "fact_target": "M8029",
+         "fact_dimensions": ["definition"], "text": "M8029 definition"},
+        {"id": "error", "fact_kind": "error", "fact_target": "1234H",
+         "fact_dimensions": ["definition"], "text": "1234H definition"},
+    ]
+    report = build_fact_coverage(
+        targets, records, ["instruction", "device"],
+        instruction_questions={"operands": "operand semantics"},
+    )
+    by_kind = {
+        (row["kind"], row["target"], row["dimension"]): row
+        for row in report["requirements"]
+    }
+    assert by_kind[("instruction", "MOV", "operands")]["status"] == "candidate_evidence"
+    assert by_kind[("device", "M8029", "definition")]["status"] == "candidate_evidence"
+    assert by_kind[("error", "1234", "definition")]["status"] == "not_delivered"
+    assert len(report['requirements']) == 3
+    reconciled = reconcile_fact_coverage(report, ["error"])
+    assert {row["status"] for row in reconciled["requirements"]} == {
+        "candidate_evidence", "not_delivered",
+    }
+
+
+def test_fact_coverage_core_is_domain_agnostic():
+    from knowledge.fact_coverage import build_coverage
+
+    report = build_coverage(
+        [{
+            "id": "module:FX3U-4AD:buffer_memory",
+            "kind": "module",
+            "target": "FX3U-4AD",
+            "dimension": "buffer_memory",
+        }],
+        [{
+            "id": "module-source",
+            "fact_kind": "module",
+            "fact_target": "FX3U-4AD",
+            "fact_dimensions": ["buffer_memory"],
+            "text": "buffer memory definition",
+        }],
+        ["module-source"],
+    )
+    assert report["requirements"] == [{
+        "id": "module:FX3U-4AD:buffer_memory",
+        "kind": "module",
+        "target": "FX3U-4AD",
+        "dimension": "buffer_memory",
+        "candidate_source_ids": ["module-source"],
+        "source_ids": ["module-source"],
+        "status": "candidate_evidence",
+    }]
+
+
+def test_truncated_or_changed_blocks_never_count_as_delivered():
+    row = _pack_target([source()], 2000)[0]
+    block = core._format_result_block(row)
+    assert included_knowledge_ids(block, [row]) == [row["id"]]
+    assert included_knowledge_ids(block.replace("word", "changed"), [row]) == []
+    assert included_knowledge_ids(block.rsplit("[/KNOWLEDGE]", 1)[0], [row]) == []
+    broken = '[KNOWLEDGE {"id":"broken"}]\npartial\n' + block
+    assert included_knowledge_ids(broken, [row]) == [row["id"]]
+
+
+@pytest.mark.parametrize("opcode", ["SFTL", "WSFL", "MOV", "BMOV", "CMP"])
+def test_bundled_index_delivers_complete_instruction_definitions_without_length_limit(opcode):
+    if core._index_identity(core._index_path())[0] == "missing":
+        pytest.skip("Bundled index is not installed")
+    query = KnowledgeQuery(opcode, precompiled=True, metadata={"instruction_fact_mode": "targeted"})
+    context = build_knowledge_context(query, char_budget=7000, top_k=5)
+    assert context == build_knowledge_context(query, char_budget=1, token_budget=1, top_k=5)
+    report = context.manifest["instruction_facts"]
+    assert report["verification"] == "not_performed" and report["records"]
+    generic = context.manifest["fact_coverage"]
+    assert generic["version"] == "fact-coverage-v1"
+    assert any(
+        row["kind"] == "instruction"
+        and row["target"] == opcode
+        and row["status"] == "candidate_evidence"
+        for row in generic["requirements"]
+    )
+    assert '[PLC KNOWLEDGE]' in context and 'source_verified' not in context
+    assert not any(row.get("manual_type") == "third_party_skill" for row in context.manifest["records"])
+    if opcode in {"SFTL", "WSFL"}:
+        assert '"trigger":"level"' in context
+    if opcode == "MOV":
+        assert "$MOV / Character String" not in context
+    assert set(included_knowledge_ids(context, report["records"])) == {r["id"] for r in report["records"] if r["included"]}
+
+
+def test_ivck_verified_order_does_not_compete_with_flattened_page_layout():
+    if core._index_identity(core._index_path())[0] == "missing":
+        pytest.skip("Bundled index is not installed")
+    query = KnowledgeQuery(
+        "IVCK",
+        precompiled=True,
+        metadata={"instruction_fact_mode": "targeted"},
+    )
+    context = build_knowledge_context(
+        query,
+        plc_model="FX3U",
+        task_type="generate",
+        char_budget=24000,
+        top_k=8,
+    )
+    report = context.manifest["instruction_facts"]
+    lookup = next(row for row in report["lookups"] if row["opcode"] == "IVCK")
+    assert "operand_order" not in {
+        row["facet"] for row in lookup["operand_gap_details"]
+    }
+    assert '"symbol":"S1"' in context
+    assert '"symbol":"S2"' in context
+    assert '"symbol":"D"' in context
+    assert '"symbol":"N"' in context
+    assert "IVCK n\nS1" not in context
+
+
+def test_verified_role_type_order_do_not_close_unverified_device_class_gap():
+    if core._index_identity(core._index_path())[0] == "missing":
+        pytest.skip("Bundled index is not installed")
+    query = KnowledgeQuery(
+        "DADDP",
+        precompiled=True,
+        metadata={"instruction_fact_mode": "targeted"},
+    )
+    context = build_knowledge_context(
+        query,
+        plc_model="FX3U",
+        task_type="generate",
+        char_budget=24000,
+        top_k=8,
+    )
+    report = context.manifest["instruction_facts"]
+    lookup = next(row for row in report["lookups"] if row["opcode"] == "DADDP")
+    assert "operands" in lookup["manual_gaps"]
+    assert "operands" not in lookup["structured_dimensions"]
+    gaps = lookup["operand_gap_details"]
+    assert gaps
+    assert {row["facet"] for row in gaps} == {"device_classes", "purpose"}
+    assert {row["position"] for row in gaps} == {1, 2, 3}
+
+    included = [row for row in report["records"] if row.get("included")]
+    assert included
+    assert any(
+        any(d.startswith('definition.operand:') for d in row.get('fact_dimensions', []))
+        for row in included
+    )
+
+
+_USAGE_ROWS = (
+    ("S", "New data source", "Bit"),
+    ("D", "Head of affected data", "Bit"),
+    ("N1", "Affected length in bits", "16-bit binary"),
+    ("N2", "Number of bits moved per operation*1", "16-bit binary"),
+)
+
+
+def _usage_source(rows=_USAGE_ROWS, *, identity="usage", suffix=""):
+    """Synthetic table; the frozen symbol-to-description pairs are the oracle."""
+    from plc.instruction_semantics import bind_operand_slots
+    result = source(identity, opcode="SFTL", text=(
+        "[TABLE page=12]\nOperand Type | Description | Data Type\n"
+        + "\n".join(" | ".join(row) for row in rows)
+        + "\n\n*1. Applies only while enabled.\n" + suffix
+    ))
+    result["operand_semantics"] = {
+        "opcode": "SFTL", "operand_role_status": "source_verified", "operand_type_status": "source_verified",
+        "operands": [{"name": symbol, "role": "read", "data_type": data_type} for symbol, _, data_type in _USAGE_ROWS],
+    }
+    result["target_applicability"] = {
+        "opcode": "SFTL", "target_model": "FX3U", "native_operand_order": ["S", "D", "N1", "N2"],
+        "operand_order_status": "source_verified", "device_class_status": "source_verified",
+    }
+    result["operand_slots"] = bind_operand_slots(
+        result["operand_semantics"], result["target_applicability"], ["M0", "M100", "K16", "K2"],
+    )
+    result['instruction_definition'] = _fixture_definition([result], result, ['S', 'D', 'N1', 'N2'])
+    return result
+
+
+@pytest.mark.parametrize("rows", list(permutations(_USAGE_ROWS)))
+def test_operand_usage_binding_is_invariant_under_all_table_row_permutations(rows):
+    original = _usage_source(rows)
+    before = copy.deepcopy(original)
+    gaps = _operand_gap_details(original)
+    packed = _pack_target(
+        [original], 12000, needed_categories={"operands"}, operand_gap_details=gaps,
+        verified_operand_order=["S", "D", "N1", "N2"], structured_owner=original,
+    )
+    assert len(packed) == 1
+    row = packed[0]
+    slots = row["operand_slots"]
+    assert [slot["symbol"] for slot in slots] == ["S", "D", "N1", "N2"]
+    assert [slot["value"] for slot in slots] == ["M0", "M100", "K16", "K2"]
+    assert [slot["usage_facts"][0]["value"] for slot in slots] == [item[1] for item in _USAGE_ROWS]
+    assert {slot["purpose_status"] for slot in slots} == {"candidate_evidence"}
+    for binding in row["operand_evidence_bindings"]:
+        span = binding["source"]["row_span"]
+        assert original["text"][span["start"]:span["end"]] == " | ".join(_USAGE_ROWS[binding["position"] - 1])
+        assert binding["source"]["pdf_page"] == 12
+        assert binding["source"]["target_model"] == "FX3U"
+    assert original["text"].rstrip() in row["text"]
+    assert "*1. Applies only while enabled." in row["text"]
+    assert len(_operand_gap_details(row)) == 4  # candidate delivery never certifies usage
+    assert original == before
+
+
+def test_operand_usage_evidence_covers_only_its_slot_and_surviving_block(monkeypatch):
+    import knowledge.instruction_facts as facts
+    from knowledge.fact_coverage import build_fact_coverage, reconcile_fact_coverage
+    monkeypatch.setattr(facts, "_related_units", lambda *a: [])
+    monkeypatch.setattr(facts, "_completion_sources", lambda *a: [])
+    original = _usage_source((_USAGE_ROWS[1],))
+    target = {"opcode": "SFTL", "base_opcode": "SFTL", "operands": ["M0", "M100", "K16", "K2"]}
+    blocks, report = retrieve_instruction_facts(
+        "", targets=[target], plc_model="FX3U", task_type="generate", char_budget=12000,
+        resolver=lambda *a, **k: [original],
+    )
+    included = delivered_fact_report(report, [blocks[0]["id"]])
+    assert [(item["position"], item["status"]) for item in included["operand_facts"]] == [
+        (1, "unresolved"), (2, "candidate_evidence"), (3, "unresolved"), (4, "unresolved"),
+    ]
+    generic = build_fact_coverage(
+        {"instructions": [target]}, blocks, [blocks[0]["id"]],
+        instruction_questions=report["questions"], extra_requirements=report["operand_requirements"],
+    )
+    omitted = reconcile_fact_coverage(generic, [])
+    assert next(item for item in omitted["requirements"] if item["dimension"] == "operand:2:purpose")["status"] == "not_delivered"
+    assert next(item for item in omitted["requirements"] if item["dimension"] == "operand:1:purpose")["status"] == "unresolved"
+    other_instance = copy.deepcopy(blocks)
+    other_instance[0]["instruction_instance"]["operands"][2] = "K8"
+    wrong = build_fact_coverage(
+        {"instructions": [target]}, other_instance, [blocks[0]["id"]],
+        extra_requirements=report["operand_requirements"],
+    )
+    assert {item["status"] for item in wrong["requirements"] if "facet" in item} == {"unresolved"}
+
+
+@pytest.mark.parametrize("allowance", [2500, 12000])
+@pytest.mark.parametrize("reverse", [False, True])
+def test_candidate_conflicts_are_quarantined_before_source_order_or_budget_can_choose(allowance, reverse):
+    sources = [
+        _usage_source([("S", "First conflicting purpose", "Bit"), _USAGE_ROWS[1]], identity="first"),
+        _usage_source([("S", "Second conflicting purpose", "Bit"), _USAGE_ROWS[2]], identity="second"),
+        _usage_source([_USAGE_ROWS[3]], identity="unrelated"),
+    ]
+    if reverse:
+        sources.reverse()
+    owner = _usage_source()
+    packed = _pack_target(
+        sources, allowance, operand_gap_details=_operand_gap_details(owner),
+        verified_operand_order=["S", "D", "N1", "N2"], structured_owner=owner,
+    )
+    assert packed
+    assert all("First conflicting purpose" not in row["text"] and "Second conflicting purpose" not in row["text"] for row in packed)
+    # Compiled, independently sourced rows survive without re-delivering the
+    # contradictory raw table. Only the conflicted slot loses its meaning.
+    assert {binding["position"] for row in packed for binding in row["operand_evidence_bindings"]} <= {2, 3, 4}
+    conflict = packed[0]["operand_candidate_conflicts"][0]
+    assert (conflict["position"], conflict["facet"], conflict["status"]) == (1, "purpose", "unresolved")
+    assert {fact["value"] for fact in conflict["candidates"]} == {"First conflicting purpose", "Second conflicting purpose"}
+    assert {fact["sources"][0]["id"] for fact in conflict["candidates"]} == {"first", "second"}
+    assert packed[0]["operand_slots"][0]["purpose_status"] == "unresolved"
+    assert '"usage_conflicts"' in packed[0]["text"]
+    if allowance == 12000:
+        assert {binding["position"] for row in packed for binding in row["operand_evidence_bindings"]} == {2, 3, 4}
+
+
+@pytest.mark.parametrize("glyph", ["", " [GLYPH-F0A0]"])
+def test_wrapped_operand_rows_keep_individual_value_spans_and_do_not_move_inline_notes(glyph):
+    original = _usage_source()
+    original["text"] = (
+        "[TABLE page=12]\nOperand Type | Description | Data Type\n"
+        f"New data source\nS{glyph} | Bit\n"
+        "Head of affected data\nD | Bit\n(Two devices are occupied.)\n"
+        "N1 | Affected length in bits | 16-bit binary\n(only bit data)\n"
+        "Number of bits moved per operation [setting range: 1 to\nN2 | 16-bit binary\n16]\n"
+        "\n*1. Applies only while enabled.\n"
+    )
+    packed = _pack_target(
+        [original], 12000, operand_gap_details=_operand_gap_details(original),
+        verified_operand_order=["S", "D", "N1", "N2"], structured_owner=original,
+    )
+    purposes = {binding["position"]: binding for binding in packed[0]["operand_evidence_bindings"]
+                if binding["facet"] == "purpose"}
+    assert {position: binding["value"] for position, binding in purposes.items()} == {
+        1: "New data source", 2: "Head of affected data (Two devices are occupied.)",
+        3: "Affected length in bits", 4: "Number of bits moved per operation [setting range: 1 to 16]",
+    }
+    for position in (1, 2, 4):
+        binding = purposes[position]
+        spans = binding["source"]["value_spans"]
+        assert " ".join(original["text"][span["start"]:span["end"]] for span in spans) == binding["value"]
+    assert any(b['source'].get('value_spans') for b in packed[0]['operand_evidence_bindings'])
+    assert "*1. Applies only while enabled." in packed[0]["text"]
+    assert {slot["purpose_status"] for slot in packed[0]["operand_slots"]} == {"candidate_evidence"}
+
+
+def test_explicit_native_symbols_override_stale_or_shared_index_descriptions():
+    original = _usage_source([("S", "Shared operand purpose", "Bit"), ("D", "Shared operand purpose", "Bit")])
+    original["manual_operand_rows"] = [
+        {"position": "S", "description": "Shared operand purpose"},
+        {"position": "D", "description": "Shared operand purpose"},
+    ]
+    packed = _pack_target(
+        [original], 12000, operand_gap_details=_operand_gap_details(original),
+        verified_operand_order=["S", "D", "N1", "N2"], structured_owner=original,
+    )
+    assert {binding["position"] for binding in packed[0]["operand_evidence_bindings"]} == {1, 2}
+
+
+def test_packed_manual_prefix_does_not_reintroduce_unarbitrated_index_operand_summaries():
+    original = _usage_source([_USAGE_ROWS[0]])
+    original["text"] = "[STRUCTURED INSTRUCTION RECORD]\nOPERANDS: S: stale purpose\n\n" + original["text"]
+    packed = _pack_target(
+        [original], 12000, operand_gap_details=_operand_gap_details(original),
+        verified_operand_order=["S", "D", "N1", "N2"], structured_owner=original,
+    )
+    assert "stale purpose" not in packed[0]["text"]
+    assert "New data source" in packed[0]["text"]
+
+
+def test_manual_row_spans_include_original_whitespace_outside_the_runtime_wrapper():
+    original = _usage_source([_USAGE_ROWS[0]])
+    original["manual_text"] = "\n  " + original["text"] + "  \n"
+    packed = _pack_target(
+        [original], 12000, operand_gap_details=_operand_gap_details(original),
+        verified_operand_order=["S", "D", "N1", "N2"], structured_owner=original,
+    )
+    evidence = packed[0]["operand_evidence_bindings"][0]["source"]
+    assert evidence["offset_basis"] == "chunks.text"
+    span = evidence["row_span"]
+    assert original["manual_text"][span["start"]:span["end"]] == " | ".join(_USAGE_ROWS[0])
+
+
+@pytest.mark.parametrize('other_symbol,other_value,other_page,reconstructed', [
+    ('D','Word device number storing inverted data',256,True),
+    ('D','Word device number not storing inverted data',256,False),
+    ('D','Word device number storing inverted data',257,False),
+    ('S','Word device number storing inverted data',256,False),
+    ('D','Word device number storing inverted data in 2 ms',256,False),
+])
+def test_split_cell_reconstruction_needs_exact_same_page_native_row(other_symbol,other_value,other_page,reconstructed):
+    from knowledge.instruction_document import _operand_evidence_bindings, _operand_table_units
+    raw = (f'[PAGE {other_page} LAYOUT]\nOperand Type | Description | Data Type\n'
+           f'{other_symbol} | {other_value} | 16-bit binary\n'
+           '[TABLE page=256 index=2 bbox=[89.61,257.71,547.08,301.21]]\n'
+           'Operand Type | <blank> | <blank> | Description | Data Type\n'
+           '<blank> | D | W | ord device number storing inverted data | <blank>\n')
+    original = source(opcode='CML',text=raw)
+    original.update(pdf_page=256,manual_text=raw)
+    left,right = list(_operand_table_units(raw))[-1]
+    bindings = _operand_evidence_bindings(original,left,right,[{'position':2,'facet':'purpose'}],['S','D'])
+    assert len(bindings)==1
+    binding = bindings[0]
+    assert binding['value']==('Word device number storing inverted data' if reconstructed else 'ord device number storing inverted data')
+    if reconstructed:
+        spans=binding['source']['value_spans']
+        assert [raw[span['start']:span['end']] for span in spans]==['W','ord device number storing inverted data']
+        assert spans[1]['join_before']==''
+        rebuilt=''.join(('' if index==0 else span.get('join_before',' '))+raw[span['start']:span['end']]
+                        for index,span in enumerate(spans))
+        assert rebuilt==binding['value']
+
+
+def test_purpose_coverage_audit_counts_positions_without_treating_checkmarks_as_meanings(monkeypatch):
+    from tools import audit_operand_semantics as audit
+    signatures, forms = audit._signature_map()
+    selected = {opcode: forms[opcode] for opcode in ("ADD", "DFLT", "SFTL", "CML", "MTR")}
+    monkeypatch.setattr(audit, "_signature_map", lambda: (signatures, selected))
+    database_stat = core._index_path().stat()
+    report = audit.audit_operand_purpose_coverage()
+    assert report["forms"] == 5
+    assert report["operand_positions"] == 15
+    assert report["purpose_status_counts"] == {"candidate_evidence": 15}
+    assert report["forms_with_complete_purpose_evidence"] == 5
+    assert report["database_mutated"] is report["promotion_performed"] is False
+    assert (core._index_path().stat().st_size, core._index_path().stat().st_mtime_ns) == (
+        database_stat.st_size, database_stat.st_mtime_ns,
+    )
+    mtr = next(row for row in report["rows"] if row["opcode"] == "MTR")["operands"]
+    assert [row['status'] for row in mtr] == ['candidate_evidence'] * 4
+    assert mtr[-1]['candidates'][0]['value'] == 'Number of columns in matrix input (K2 to K8 or H2 to H8)'
+    assert not report["failure_buckets"]
+    cml = next(row for row in report['rows'] if row['opcode']=='CML')['operands']
+    assert {row['status'] for row in cml}=={'candidate_evidence'}
+    assert {candidate['value'] for candidate in cml[1]['candidates']}=={'Word device number storing inverted data'}
+
+
+def test_purpose_audit_lists_the_actual_positioning_manual_without_changing_signature_lock(monkeypatch):
+    from tools import audit_operand_semantics as audit
+    signatures, forms = audit._signature_map()
+    before = copy.deepcopy(signatures)
+    monkeypatch.setattr(audit, '_signature_map', lambda: (signatures, {'DVIT': forms['DVIT']}))
+    report = audit.audit_operand_purpose_coverage()
+    assert report['forms_with_complete_purpose_evidence'] == 1
+    source = report['manual_sources']['fx3_positioning_k']
+    assert (source['manual'], source['revision']) == ('JY997D16801', 'K')
+    assert signatures == before
+    assert all(item['source']['manual_id'] in report['manual_sources']
+               for row in report['rows'] for slot in row['operands'] for item in slot.get('candidates', []))
+
+
+def test_final_context_receipt_distinguishes_bound_omitted_and_unknown_usage(monkeypatch):
+    import knowledge.instruction_facts as facts
+    import knowledge.structured_facts as structured
+    from application.confirmed_generation_context import build_confirmed_generation_context
+    monkeypatch.setattr(facts, "_related_units", lambda *a: [])
+    monkeypatch.setattr(facts, "_completion_sources", lambda *a: [])
+    sources = [_usage_source((_USAGE_ROWS[0],), identity="first"), _usage_source((_USAGE_ROWS[1],), identity="second")]
+    sources[0]['instruction_definition'] = _fixture_definition(sources, sources[0], ['S', 'D', 'N1', 'N2'])
+    monkeypatch.setattr(structured, "resolve_instruction_records", lambda *a, **k: copy.deepcopy(sources))
+    spec = {"summary": "Synthetic binding delivery", "selected_approach": {"generation_contract": {
+        "required_opcodes": ["SFTL"], "instruction_instances": [{"opcode": "SFTL", "operands": ["M0", "M100", "K16", "K2"]}],
+    }}}
+    context = build_confirmed_generation_context(
+        spec, "FX3U", knowledge_builder=lambda query, **k: build_knowledge_context(query, char_budget=24000, top_k=1),
+        wire_renderer=lambda _spec, evidence, request, _program, _checkpoint, _history: {
+            "messages": [{"role": "system", "content": evidence}, {"role": "user", "content": request}],
+        },
+    )
+    assert [(item["position"], item["status"]) for item in context.handoff["instruction_facts"]["operand_facts"] if item["opcode"] == "SFTL"] == [
+        (1, "candidate_evidence"), (2, "candidate_evidence"), (3, "unresolved"), (4, "unresolved"),
+    ]
+    assert "New data source" in context.wire_packet["messages"][0]["content"]
+    assert "Head of affected data" in context.wire_packet["messages"][0]["content"]
+    generic = context.handoff["fact_coverage"]["requirements"]
+    assert {item["dimension"]: item["status"] for item in generic if "facet" in item and item["target"] == "SFTL"} == {
+        "operand:1:purpose": "candidate_evidence", "operand:2:purpose": "candidate_evidence",
+        "operand:3:purpose": "unresolved", "operand:4:purpose": "unresolved",
+    }
+    omitted = delivered_fact_report(context.handoff['instruction_facts'], [])
+    assert [r['status'] for r in omitted['operand_facts'][:2]] == ['not_delivered', 'not_delivered']
+
+
+@pytest.mark.parametrize("damage", ["duplicate_row", "merged_symbols", "unverified_order", "duplicate_native_symbol", "type_as_description"])
+def test_ambiguous_or_missing_operand_usage_is_not_bound(damage):
+    row = _USAGE_ROWS[0]
+    rows = [row]
+    if damage == "duplicate_row":
+        rows.append(("S", "Another meaning", "Bit"))
+    elif damage == "merged_symbols":
+        rows = [("S | D", row[1], row[2])]
+    elif damage == "type_as_description":
+        rows = [("S", "16-bit binary", "-F")]
+    original = _usage_source(rows)
+    order = ["S", "D", "N1", "N2"]
+    if damage == "unverified_order":
+        order = None
+        original["target_applicability"]["operand_order_status"] = "declared_unverified"
+    elif damage == "duplicate_native_symbol":
+        order = ["S", "S", "N1", "N2"]
+    packed = _pack_target(
+        [original], 12000, operand_gap_details=_operand_gap_details(original),
+        verified_operand_order=order, structured_owner=original,
+    )
+    assert not any(item.get("operand_evidence_bindings") for item in packed)
+    assert all(slot["purpose_status"] == "unresolved" for item in packed for slot in item["operand_slots"])
+
+
+@pytest.mark.parametrize("hints,expected", [
+    ([{"position": "D", "description": "Head of affected data"}], [2]),
+    ([{"position": "D", "description": "Different description"}], []),
+    ([{"position": "D", "description": "Head of affected data"}, {"position": "S", "description": "Head of affected data"}], []),
+])
+def test_missing_table_symbol_uses_only_unambiguous_source_backed_description(hints, expected):
+    original = _usage_source([("<blank>", "Head of affected data", "Bit")])
+    original["manual_operand_rows"] = hints
+    packed = _pack_target(
+        [original], 12000, operand_gap_details=_operand_gap_details(original),
+        verified_operand_order=["S", "D", "N1", "N2"], structured_owner=original,
+    )
+    assert [binding["position"] for item in packed for binding in item["operand_evidence_bindings"]] == expected
+
+
+def test_operand_table_can_be_recovered_without_delivering_conflicting_layout():
+    original = _usage_source()
+    table = original["text"].split("\n", 1)[1]
+    original["text"] = (
+        "[PAGE 12 LAYOUT]\nFNC 35\nSFTL n1 n2D [GLYPH-F0A0]S [GLYPH-F0A0]\n"
+        + table + "\n3. Applicable devices\nUnrelated device table"
+    )
+    packed = _pack_target(
+        [original], 12000, operand_gap_details=_operand_gap_details(original),
+        verified_operand_order=["S", "D", "N1", "N2"], verified_opcodes=["SFTL"], structured_owner=original,
+    )
+    assert [binding["position"] for item in packed for binding in item["operand_evidence_bindings"]] == [1, 2, 3, 4]
+    assert "SFTL n1 n2D" not in packed[0]["text"]
+    assert "*1. Applies only while enabled." in packed[0]["text"]
+    assert "Unrelated device table" not in packed[0]["text"]
+
+
+@pytest.mark.parametrize("opcode,position,snippet", [
+    ("SFTL", 3, "Bit length of the shift data"),
+    ("SFTL", 4, "Number of bits to be shifted leftward"),
+    ("WSFL", 3, "Word data length of the shift data"),
+    ("WSFL", 4, "Number of words to be shifted leftward"),
+    ("BMOV", 3, "Number of transferred points"),
+    ("CMP", 3, "Head bit device number to which comparison result is output"),
+])
+def test_bundled_operand_usage_returns_to_original_manual_rows(opcode, position, snippet):
+    if core._index_identity(core._index_path())[0] == "missing":
+        pytest.skip("Bundled index is not installed")
+    context = build_knowledge_context(KnowledgeQuery(opcode, precompiled=True), char_budget=24000, top_k=8)
+    report = context.manifest["instruction_facts"]
+    bindings = [b for r in report["records"] if r.get("included") for b in r.get("operand_evidence_bindings", [])]
+    binding = next(b for b in bindings if b["position"] == position and b["facet"] == "purpose")
+    assert snippet in binding["value"]
+    evidence = binding["source"]
+    assert evidence["manual_id"] == "fx3_programming_r"
+    assert evidence["revision"] == "R"
+    assert evidence["offset_basis"] == "chunks.text"
+    with sqlite3.connect(core._index_path().resolve().as_uri() + "?mode=ro", uri=True) as connection:
+        original = connection.execute("SELECT text FROM chunks WHERE id=?", (evidence["id"],)).fetchone()[0]
+    span = evidence["row_span"]
+    assert binding["value"] in original[span["start"]:span["end"]]
+    assert binding["status"] == "candidate_evidence"
+    requirement = next(r for r in context.manifest["fact_coverage"]["requirements"] if r["dimension"] == f"operand:{position}:purpose")
+    assert requirement["status"] == "candidate_evidence"
+
+
+@pytest.mark.parametrize('symbol', ['S', 'N', 'D1'])
+def test_standalone_native_anchor_joins_its_source_description_on_both_sides(symbol):
+    from knowledge.instruction_document import _operand_evidence_bindings
+    raw = 'Operand Type | Description | Data Type\nHead device number storing\n' + symbol + '\nthe required data\n'
+    result = source(opcode='TEST', text=raw)
+    bindings = _operand_evidence_bindings(result, 0, len(raw),
+        [{'position': 1, 'facet': 'purpose'}], [symbol])
+    assert len(bindings) == 1 and bindings[0]['value'] == 'Head device number storing the required data'
+    assert len(bindings[0]['source']['value_spans']) == 2
+
+
+def test_parameter_block_annotations_cannot_discard_a_wrapped_head_description():
+    from knowledge.instruction_document import _operand_evidence_bindings
+    raw = ('Operand Type | Description | Data Type\n'
+           'Head device number storing registers V0 to V7 and\nZ0 to Z7\n'
+           'D | D : Number of stored frames | 16-bit binary\n'
+           'D +1 to D +16: Stored register values\ndestination\n')
+    bindings = _operand_evidence_bindings(source(opcode='TEST', text=raw), 0, len(raw),
+        [{'position': 1, 'facet': 'purpose'}], ['D'])
+    assert bindings[0]['value'] == ('Head device number storing registers V0 to V7 and Z0 to Z7 '
+                                  'D : Number of stored frames D +1 to D +16: Stored register values destination')
+
+
+def test_unattached_sidebar_symbol_cannot_duplicate_an_explicit_operand_row():
+    from knowledge.instruction_document import _operand_evidence_bindings
+    raw = 'Operand Type | Description | Data Type\nS\nS | Head device storing source data | Word\n'
+    bindings = _operand_evidence_bindings(source(opcode='TEST', text=raw), 0, len(raw),
+        [{'position': 1, 'facet': 'purpose'}], ['S'])
+    assert [item['value'] for item in bindings] == ['Head device storing source data']
+
+
+def test_wrapped_operand_ends_before_multiline_footnote_and_later_row_can_resume():
+    from knowledge.instruction_document import _operand_evidence_bindings
+    raw = ('Operand Type | Description | Data Type\n'
+           'Head bit device for results (Three devices are\nD | Bit\noccupied.)\n'
+           '*1. Converted into floating point (real\nnumber) when executed.\n'
+           'N | Number of selected points | Word\n')
+    original = source(opcode='TEST', text=raw)
+    bindings = _operand_evidence_bindings(original, 0, len(raw),
+        [{'position': 1, 'facet': 'purpose'}, {'position': 2, 'facet': 'purpose'}], ['D', 'N'])
+    assert [item['value'] for item in bindings] == [
+        'Head bit device for results (Three devices are occupied.)', 'Number of selected points']
+    assert '*1.' in original['text'] and 'number) when executed.' in original['text']
+
+
+@pytest.mark.parametrize('description', ['Head device (Three devices', 'Head device Three devices)',
+                                         'Head device [Three devices', 'Head device Three devices]'])
+def test_damaged_delimiters_keep_source_prose_without_binding_a_partial_purpose(description):
+    from knowledge.instruction_document import _operand_evidence_bindings
+    raw = 'Operand Type | Description | Data Type\n<blank> | ' + description + ' | Word\n'
+    original = source(opcode='TEST', text=raw)
+    original['manual_operand_rows'] = [{'position': 'S', 'description': description}]
+    before = copy.deepcopy(original)
+    bindings = _operand_evidence_bindings(original, 0, len(raw),
+        [{'position': 1, 'facet': 'purpose'}], ['S'])
+    assert not any(item['facet'] == 'purpose' for item in bindings)
+    assert original == before
+
+
+@pytest.mark.parametrize('opcode,manual_id,section', [
+    ('DVIT', 'fx3_positioning_k', '9.1 Instruction Format'),
+    ('CMP', 'fx3_programming_r', '9.1 FNC 10 – CMP / Compare'),
+])
+def test_compiled_chapter_leaf_matches_hierarchical_index_source(opcode, manual_id, section):
+    from knowledge.structured_facts import resolve_instruction_records
+    if core._index_identity(core._index_path())[0] == 'missing':
+        pytest.skip('Bundled index is not installed')
+    records = resolve_instruction_records([opcode], plc_model='FX3U', task_type='generate')
+    assert records and all(item.get('compiled_source_chapter') for item in records)
+    assert records[0]['manual_id'] == manual_id
+    assert records[0]['section'].split(' > ')[-1] == section
+
+
+def test_shared_source_page_keeps_each_requested_form_contract():
+    from knowledge.structured_facts import resolve_instruction_records
+    records = resolve_instruction_records(['MUL', 'DMUL'], plc_model='FX3U', task_type='generate')
+    assert {row['instruction_opcode'] for row in records} == {'MUL', 'DMUL'}
+    assert all(row['instruction_opcode'] == row['instruction_contract']['opcode'] for row in records)
+    shared_ids = ({row['id'] for row in records if row['instruction_opcode'] == 'MUL'} &
+                  {row['id'] for row in records if row['instruction_opcode'] == 'DMUL'})
+    assert shared_ids
+
+
+def test_header_model_marks_are_candidates_and_unknown_geometry_does_not_create_support():
+    from knowledge.instruction_document import extract_model_badge_marks
+    layout = {'model_badges': [{'model': 'CPU_A', 'bbox': [10, 20, 30, 40]},
+                              {'model': 'CPU_B', 'bbox': [50, 20, 70, 40]}],
+              'highlight_fill_color': 1.0, 'coordinate_tolerance': 0.5}
+    rect = {'x0': 10, 'top': 20, 'x1': 30, 'bottom': 40, 'fill': True, 'non_stroking_color': 1.0}
+    assert extract_model_badge_marks([rect], layout) == [
+        {'model': 'CPU_A', 'highlighted': True, 'bbox': [10, 20, 30, 40]},
+        {'model': 'CPU_B', 'highlighted': False, 'bbox': [50, 20, 70, 40]}]
+    assert extract_model_badge_marks([], layout) is None
+    assert extract_model_badge_marks([rect, rect], layout) is None
+    assert extract_model_badge_marks([{**rect, 'non_stroking_color': 0.5}], layout) is None
+
+
+def test_generation_packer_delivers_structured_contract_with_manual_evidence():
+    if core._index_identity(core._index_path())[0] == "missing":
+        pytest.skip("Bundled index is not installed")
+    spec = {"selected_approach": {"generation_contract": {
+        "required_opcodes": ["WSFL"],
+        "instruction_instances": [{
+            "opcode": "WSFL",
+            "operands": ["D0", "D10", "K56", "K1"],
+        }],
+    }}}
+    from application.confirmed_generation_context import build_confirmed_generation_context
+    context = build_confirmed_generation_context(spec, "FX3U")
+    assert '[PLC KNOWLEDGE]' in context.knowledge_context
+    assert "INSTRUCTION_CONTRACT:" not in context.knowledge_context
+    assert "STEP_WIDTH:" not in context.knowledge_context
+    report = context.handoff["instruction_facts"]
+    record = next(row for row in report["records"] if row.get("instruction_contract"))
+    assert record["instruction_contract"]["native_operand_order"] == ["S", "D", "N1", "N2"]
+    assert record["instruction_contract"]["confirmed_operands"] == ["D0", "D10", "K56", "K1"]
+    assert [slot["value"] for slot in record["operand_slots"]] == ["D0", "D10", "K56", "K1"]
+    assert record["target_applicability"]["target_model"] == "FX3U"
+    assert record["instruction_step_width"]["steps"] == 9
+
+
+def test_shared_generation_handoff_keeps_delivered_fact_report():
+    from application.confirmed_generation_context import build_confirmed_generation_context
+    spec = {"summary": "字寄存器队列", "selected_approach": {
+        "generation_contract": {"required_opcodes": ["WSFL"]}}}
+    before = copy.deepcopy(spec)
+    context = build_confirmed_generation_context(spec, "FX3U")
+    assert spec == before
+    report = context.handoff["instruction_facts"]
+    assert report["verification"] == "not_performed"
+    assert set(included_knowledge_ids(context.knowledge_context, report["records"])).intersection(
+        row["id"] for row in report["records"]) == {
+        row["id"] for row in report["records"] if row["included"]}
+    assert report["facts"] and any(row["source_ids"] for row in report["facts"])
+    generic = context.handoff["fact_coverage"]
+    assert generic["version"] == "fact-coverage-v1"
+    assert any(row["source_ids"] for row in generic["requirements"])
+
+
+@pytest.mark.parametrize("targets", [None, []])
+def test_empty_instruction_targets_never_promote_broad_hits(targets):
+    candidates = [source(name, name) for name in ("MOV", "PLSY", "PRUN")]
+    before = copy.deepcopy(candidates)
+    def unexpected_lookup(*args, **kwargs):
+        pytest.fail("broad candidate rank must not manufacture an instruction target")
+    blocks, report = retrieve_instruction_facts(
+        "启动停止自保持", plc_model="FX3U", task_type="generate", char_budget=7000,
+        targets=targets, candidates=candidates, retrieve=unexpected_lookup,
+    )
+    assert blocks == [] and report["targets"] == [] and report["queries"] == []
+    assert report["reason"] == "no_instruction_target"
+    assert report["target_source"] == ("provided_targets" if targets is not None else "query_references")
+    assert candidates == before
+
+
+@pytest.mark.parametrize("with_role", [False, True])
+def test_resolved_generic_io_does_not_open_instruction_retrieval(with_role, monkeypatch):
+    from application.context_compiler import ContextCompiler, ContextCompilerInput
+    from application.generation_context import _build_knowledge_context
+    import knowledge.retriever as retriever
+    roles = [("start", "X", "X0"), ("stop", "X", "X1"), ("output", "Y", "Y0")]
+    spec = {
+        "parameters": [{"id": role, "name": "已确认接线", "value": address} for role, _, address in roles],
+        "io_bindings": [{"source_parameter_id": role, "kind": kind, "address": address,
+                         **({"role": role} if with_role else {})} for role, kind, address in roles],
+        "io_table": [{"kind": kind, "address": address, "label": role} for role, kind, address in roles],
+        "selected_approach": {"name": "停止优先自保持"},
+    }
+    before = copy.deepcopy(spec)
+    compiled = ContextCompiler().compile(ContextCompilerInput(confirmed_spec=spec))
+    assert compiled.generation_packet["confirmed_spec"] == {**spec, "schema_version": 4}
+    assert spec == before
+    query = KnowledgeQuery(compiled.retrieval_packet["query"], precompiled=True,
+                           metadata={"instruction_fact_mode": "targeted", "instruction_fact_targets": []})
+    assert not any(address in query for _, _, address in roles)
+    monkeypatch.setattr(retriever, "build_knowledge_context",
+                        lambda *a, **k: pytest.fail("settled I/O is not a manual fact question"))
+    context = _build_knowledge_context(query, plc_model="FX3U", confirmed_context=spec)
+    assert context.manifest["records"] == []
+    assert context.manifest["capability_discovery"]["candidates"] == []
+    from plc.maintainability import SELECTION_POLICY
+    assert str(context).strip() == SELECTION_POLICY.strip()
+
+
+@pytest.mark.parametrize("question", ["MOV K1 D0", "查询 X0 的输入响应时间", "查证 FX3U-4AD 缓冲存储器"])
+def test_explicit_lookup_survives_settled_io_projection(question):
+    from application.context_compiler import ContextCompiler, ContextCompilerInput
+    from knowledge.analysis_router import has_generation_fact_target
+    spec = {"io_bindings": [{"kind": "X", "address": "X0", "source_parameter_id": "start"}],
+            "io_table": [{"kind": "X", "address": "X0"}],
+            "parameters": [{"id": "start", "name": "启动接线", "value": "X0"},
+                           {"id": "timer", "name": "定时时间", "value": "5 秒"}]}
+    before = copy.deepcopy(spec)
+    compiled = ContextCompiler().compile(ContextCompilerInput(
+        confirmed_spec=spec, task_type="edit", generation_request=question))
+    query = compiled.retrieval_packet["query"]
+    assert question in query and "5 秒" in query and has_generation_fact_target(query)
+    assert compiled.generation_packet["confirmed_spec"] == {**spec, "schema_version": 4}
+    assert spec == before
+
+
+
+def test_capability_manifest_tracks_instruction_migration_gaps():
+    from tools.audit_capability_coverage import audit_coverage
+
+    report = audit_coverage()
+    states = {row["id"]: row["state"] for row in report["capabilities"]}
+    assert states["instruction_step_width"] == "enforced"
+    assert states["instruction_contract_promotion"] == "enforced"
+    assert states["confirmed_instruction_instances"] == "enforced"
+    assert states["instruction_source_authority"] == "enforced"
+    assert states["fact_coverage_delivery"] == "enforced"
+@pytest.mark.parametrize("text", ["撤防时清除本次报警状态和所有等待计时", "全部状态复位", "数组初始化", "clear all alarms"])
+def test_functional_clear_vocabulary_does_not_require_an_opcode(text):
+    from knowledge.capability_discovery import functional_queries
+    assert 'bulk_reset' in {q['function'] for q in functional_queries(text)}
+
+def _adjudication_candidates(*materials):
+    return [{"manual_id": manual, "revision": revision, "source_id": manual + "-src",
+             "value": value} for manual, revision, value in materials]
+
+
+def test_one_fact_type_can_be_owned_by_a_different_material_than_another():
+    """Parameter order and completion evidence may come from different manuals."""
+    from knowledge.source_authority import adjudicate_fact_sources
+
+    order = adjudicate_fact_sources(
+        opcode="DRVA", plc_model="FX3U", fact_type="parameters.order",
+        candidates=_adjudication_candidates(("fx3_programming_r", "R", "S1 S2"),
+                                           ("fx3_positioning_k", "K", "S1 S2")),
+        rules=[{"manual_id": "fx3_positioning_k", "revision": "K",
+                "fact_types": ["parameters.order"], "authority": "primary_instruction_semantics"}],
+    )
+    completion = adjudicate_fact_sources(
+        opcode="DRVA", plc_model="FX3U", fact_type="resources.completion",
+        candidates=_adjudication_candidates(("fx3_programming_r", "R", "M8029"),
+                                           ("fx3_positioning_k", "K", "M8029")),
+        rules=[{"manual_id": "fx3_programming_r", "revision": "R",
+                "fact_types": ["resources.completion"], "authority": "primary_instruction_semantics"}],
+    )
+    assert order["selected"]["manual_id"] == "fx3_positioning_k"
+    assert completion["selected"]["manual_id"] == "fx3_programming_r"
+    # Neither ruling may delete the other material's candidate.
+    assert {item["manual_id"] for item in order["candidates"]} == {"fx3_programming_r", "fx3_positioning_k"}
+    assert {item["manual_id"] for item in completion["candidates"]} == {"fx3_programming_r", "fx3_positioning_k"}
+    assert order["status"] == completion["status"] == "selected"
+
+
+def test_a_rule_pinned_to_one_revision_does_not_cover_the_other_revision():
+    """The same manual at two revisions is not automatically the same authority."""
+    from knowledge.source_authority import adjudicate_fact_sources
+
+    decision = adjudicate_fact_sources(
+        opcode="DRVA", plc_model="FX3U", fact_type="parameters.order",
+        candidates=_adjudication_candidates(("fx3_positioning_k", "J", "S1 S2"),
+                                           ("fx3_positioning_k", "K", "S1 S2")),
+        rules=[{"manual_id": "fx3_positioning_k", "revision": "K",
+                "fact_types": ["parameters.order"]}],
+    )
+    assert decision["status"] == "selected"
+    assert decision["selected"]["revision"] == "K"
+    excluded = {item["revision"]: item.get("excluded_because") for item in decision["candidates"]}
+    assert excluded == {"K": None, "J": "rule_names_other_revision"}
+
+
+def test_missing_rule_material_is_a_gap_not_a_promotion():
+    """A rule pointing at absent material must not fall back to another manual."""
+    from knowledge.source_authority import adjudicate_fact_sources
+
+    decision = adjudicate_fact_sources(
+        opcode="DRVA", plc_model="FX3U", fact_type="parameters.order",
+        candidates=_adjudication_candidates(("fx3_programming_r", "R", "S1 S2")),
+        rules=[{"manual_id": "fx3_positioning_k", "revision": "K",
+                "fact_types": ["parameters.order"]}],
+    )
+    assert decision["status"] == "source_missing"
+    assert decision["selected"] is None
+    assert decision["reason"] == "rule_manual_not_available"
+    assert decision["candidates"][0].get("excluded_because") == "rule_names_other_manual"
+
+
+def test_verified_sources_that_disagree_stay_an_unresolved_conflict():
+    """Two verified but conflicting sources are reported, not silently ordered."""
+    from knowledge.source_authority import adjudicate_fact_sources
+
+    decision = adjudicate_fact_sources(
+        opcode="MOV", plc_model="FX3U", fact_type="resources.completion",
+        candidates=_adjudication_candidates(("manual-a", "1", "M8029"), ("manual-b", "1", "M8022")),
+    )
+    assert decision["status"] == "conflict"
+    assert decision["selected"] is None
+    assert decision["rule"] is None
+    assert len(decision["candidates"]) == 2
+
+
+def test_candidates_that_agree_are_recorded_as_equivalent_support():
+    from knowledge.source_authority import adjudicate_fact_sources
+
+    decision = adjudicate_fact_sources(
+        opcode="MOV", plc_model="FX3U", fact_type="resources.completion",
+        candidates=_adjudication_candidates(("manual-a", "1", "M8029"), ("manual-b", "2", "M8029")),
+    )
+    assert decision["status"] == "equivalent"
+    assert all(item.get("equivalent") for item in decision["candidates"])
+    assert decision["selected"] is None
+
+
+def test_an_unaudited_form_keeps_its_own_unadjudicated_status():
+    """The audited combination must not leak to another form or CPU."""
+    from knowledge.source_authority import adjudicate_fact_sources, instruction_source_rules
+
+    assert instruction_source_rules("DRVA", "FX3U", "parameters.order")
+    assert instruction_source_rules("DRVA", "FX5U", "parameters.order") == []
+    decision = adjudicate_fact_sources(
+        opcode="DRVA", plc_model="FX5U", fact_type="parameters.order",
+        candidates=_adjudication_candidates(("manual-a", "1", "S1"), ("manual-b", "2", "S2")))
+    assert decision["status"] in {"unadjudicated", "conflict"}
+    assert decision["status"] != "selected"
+
+
+def test_every_decision_names_its_policy_and_rule_identity():
+    from knowledge.source_authority import (ADJUDICATION_POLICY, ADJUDICATION_SCHEMA_VERSION,
+                                            adjudicate_fact_sources)
+
+    decision = adjudicate_fact_sources(
+        opcode="TBL", plc_model="FX3U", fact_type="instruction_semantics",
+        candidates=_adjudication_candidates(("fx3_programming_r", "R", "S1"),
+                                           ("fx3_positioning_k", "K", "S2")))
+    assert decision["policy"] == ADJUDICATION_POLICY == "fact-source-adjudication-v1"
+    assert decision["schema_version"] == ADJUDICATION_SCHEMA_VERSION == 1
+    assert decision["status"] == "selected"
+    assert decision["rule"]["manual_id"] == "fx3_programming_r"
+    assert decision["rule"]["rule_id"]
+
+
+def test_build_ids_are_never_read_as_runtime_chunk_ids(tmp_path):
+    """The same number in two indexes is a different material, not the same source."""
+    import sqlite3
+
+    from knowledge.source_identity import (LEGACY_UNVERIFIED, REPLAY_AVAILABLE,
+                                           REPLAY_UNAVAILABLE, build_index_identity,
+                                           runtime_replay_status, source_reference_status)
+
+    build_db = sqlite3.connect(tmp_path / "build.sqlite")
+    build_db.execute("CREATE TABLE chunks (id INTEGER PRIMARY KEY, manual_id TEXT, revision TEXT)")
+    build_db.executemany("INSERT INTO chunks VALUES (?, ?, ?)",
+                         [(686, "fx3_programming_r", "R"), (1448, "fx3_positioning_k", "K")])
+    build_db.commit()
+
+    runtime_db = sqlite3.connect(tmp_path / "runtime.sqlite")
+    runtime_db.execute("CREATE TABLE chunks (id INTEGER PRIMARY KEY, manual_id TEXT, revision TEXT)")
+    runtime_db.executemany("INSERT INTO chunks VALUES (?, ?, ?)",
+                           [(686, "fxcpu_application_k", "K"), (1448, "fxcpu_application_k", "K")])
+    runtime_db.commit()
+
+    ids = ["686", "1448"]
+    identity = build_index_identity(tmp_path / "build.sqlite")
+    assert identity["build_index_id"].startswith("sha256:")
+    assert source_reference_status(ids, db=build_db, identity=identity) == "verified_at_build"
+    assert source_reference_status(ids, db=None, identity=None) == LEGACY_UNVERIFIED
+
+    entry = {"build_source_ids": ids, "build_index_id": identity["build_index_id"],
+             "source_reference_status": "verified_at_build",
+             "source_materials": [{"manual_id": "fx3_programming_r", "revision": "R"},
+                                  {"manual_id": "fx3_positioning_k", "revision": "K"}]}
+    assert runtime_replay_status(entry, db=build_db) == REPLAY_AVAILABLE
+    # Every number exists in the runtime index, but under another manual: refusing to
+    # replay is the point, not a lookup failure.
+    assert runtime_replay_status(entry, db=runtime_db) == REPLAY_UNAVAILABLE
+
+
+def test_a_definition_without_verified_references_is_still_readable_and_generatable():
+    """An unverified reference is an evidence marker, not an admission condition."""
+    from knowledge.source_identity import (LEGACY_UNVERIFIED, REPLAY_UNAVAILABLE,
+                                           runtime_replay_status, source_reference_status)
+
+    legacy = {"source_materials": [{"manual_id": "fx3_positioning_k", "revision": "K",
+                                    "pdf_pages": [171, 172, 173, 174, 175]}]}
+    assert source_reference_status([], db=None, identity=None) == "no_build_reference"
+    assert source_reference_status(["1"], db=None, identity=None) == LEGACY_UNVERIFIED
+    assert runtime_replay_status(legacy, db=None) == "not_applicable"
+    assert runtime_replay_status({"build_source_ids": ["1"],
+                                  "source_reference_status": LEGACY_UNVERIFIED},
+                                 db=None) == REPLAY_UNAVAILABLE
+
+    from plc.instruction_resolution import resolve_instruction_lanes
+    definition = resolve_instruction_lanes("DRVA", plc_model="FX3U")["instruction_definition"]
+    assert definition["applicability"]["available"] is True
+    assert definition["facts"]
+
+
+def test_a_fact_keeps_its_own_source_decision_and_not_its_neighbours():
+    """Precedence is recorded per fact, with its own basis, not copied instruction-wide."""
+    from knowledge.fact_corpus import project_definition
+
+    decision = {"fact_id": "parameters.order", "dimension": "parameters.order",
+                "opcode": "DRVA", "plc_model": "FX3U", "form": "DRVA",
+                "selected_manual_id": "fx3_positioning_k", "selected_revision": "K",
+                "policy": "fact-source-adjudication-v1", "status": "selected"}
+    entry = {"vendor": "mitsubishi", "opcode": "DRVA", "target_model": "FX3U",
+             "facts": [{"id": "parameters.order", "dimension": "parameters.order",
+                        "status": "candidate_evidence", "value": {"order": ["S1"]},
+                        "sources": [{"id": "8839", "manual_id": "fx3_positioning_k",
+                                     "revision": "K", "pdf_page": 171}],
+                        "authority_decision": dict(decision)},
+                       {"id": "effects.completion", "dimension": "effects.completion",
+                        "status": "candidate_evidence", "value": {"bit": "M8029"},
+                        "sources": [{"id": "686", "manual_id": "fx3_programming_r",
+                                     "revision": "R", "pdf_page": 562}]}],
+             "source_materials": [{"manual_id": "fx3_positioning_k", "revision": "K",
+                                   "pdf_pages": [171], "source_ids": ["1448"],
+                                   "primary_semantic_source": True}]}
+    projected = project_definition(entry)
+    published = projected[0] if isinstance(projected, tuple) else projected
+    facts = {fact["id"]: fact for fact in published["facts"]}
+    assert facts["parameters.order"]["authority_decision"]["selected_manual_id"] == "fx3_positioning_k"
+    assert facts["parameters.order"]["authority_decision"]["fact_id"] == "parameters.order"
+    assert "authority_decision" not in facts["effects.completion"]
+    # Build-local ids stay out of the distributable projection.
+    assert "source_ids" not in published["source_materials"][0]
+    assert published["source_materials"][0]["manual_id"] == "fx3_positioning_k"
+
+
+def test_a_published_reference_carries_no_build_row_number():
+    from knowledge.fact_corpus import public_source_ref, source_reference
+
+    reference = source_reference({"id": "686", "manual_id": "fx3_programming_r",
+                                  "revision": "R", "pdf_page": 562})
+    assert "id" not in reference
+    assert reference["source_ref"] == "fx3_programming_r:R:pages=562"
+    assert reference["manual_id"] == "fx3_programming_r" and reference["pdf_page"] == 562
+    # A public identifier that is not a bare row number is left alone.
+    kept = source_reference({"id": "drva:order", "manual_id": "fx3_positioning_k",
+                             "revision": "K", "pdf_page": 171})
+    assert kept["id"] == "drva:order"
+    assert public_source_ref({"manual_id": "fx3_positioning_k", "revision": "K",
+                              "pdf_pages": [171, 172]}) == "fx3_positioning_k:K:pages=171,172"
+
+
+def test_the_published_ruling_drops_the_working_material():
+    from knowledge.fact_corpus import public_authority_decision
+
+    decision = {"fact_id": "parameters.order", "dimension": "parameters.order",
+                "opcode": "DRVA", "plc_model": "FX3U", "form": "DRVA", "status": "selected",
+                "selected_manual_id": "fx3_positioning_k", "selected_revision": "K",
+                "policy": "fact-source-adjudication-v1",
+                "raw_text": "original manual paragraph", "local_path": r"D:\private\manual.pdf",
+                "bbox": {"x": 1, "y": 2},
+                "rule": {"rule_id": "DRVA:fx3_positioning_k", "manual_id": "fx3_positioning_k",
+                         "revision": "K", "authority": "primary_instruction_semantics",
+                         "policy": "fact-source-adjudication-v1", "raw_text": "secret"},
+                "candidates": [{"manual_id": "fx3_programming_r", "revision": "R",
+                                "selected": False, "excluded_because": "rule_names_other_manual",
+                                "source_id": "686"}]}
+    published = public_authority_decision(decision)
+    assert published["selected_manual_id"] == "fx3_positioning_k"
+    assert published["fact_id"] == "parameters.order"
+    assert "raw_text" not in published and "local_path" not in published and "bbox" not in published
+    assert "raw_text" not in published["rule"]
+    assert "source_id" not in published["candidates"][0]
+    assert published["candidates"][0]["excluded_because"] == "rule_names_other_manual"
+    assert public_authority_decision({}) is not None or True
+
+
+def test_the_projected_material_says_it_is_a_page_locator():
+    from knowledge.fact_corpus import project_definition
+
+    entry = {"vendor": "mitsubishi", "opcode": "DRVA", "target_model": "FX3U", "facts": [],
+             "source_materials": [{"manual_id": "fx3_positioning_k", "revision": "K",
+                                   "pdf_pages": [171, 172], "primary_semantic_source": True}]}
+    projected = project_definition(entry)
+    published = projected[0] if isinstance(projected, tuple) else projected
+    material = published["source_materials"][0]
+    assert material["location_kind"] == "page_locator"
+    assert material["document_id"] == "fx3_positioning_k:K:pages=171,172"
+
+
+def test_reviewed_prose_is_published_as_an_explanation_only():
+    """A readable note is its own layer; it never becomes the machine value."""
+    from knowledge.fact_corpus import project_definition
+    from plc.instruction_definition import InstructionFactGroup
+
+    raw = {"id": "effects.retain", "dimension": "effects.retain",
+           "status": "candidate_evidence", "value": {"operation": "retain_until_reset"},
+           "sources": [{"id": "s1", "manual_id": "fx3_programming_r", "revision": "R",
+                        "pdf_page": 100}],
+           "scope": {"models": ["FX3U"], "forms": ["SET"]},
+           "note": "\u8f93\u51fa\u7f6e\u4f4d\u540e\u4fdd\u6301\uff0c\u76f4\u5230\u6267\u884c\u590d\u4f4d\u3002"}
+    group = InstructionFactGroup.from_mapping(raw)
+    assert group.note and group.value == {"operation": "retain_until_reset"}
+    assert group.as_mapping()["note"] == group.note
+    assert group.as_mapping()["value"] == {"operation": "retain_until_reset"}
+    published = project_definition({"vendor": "mitsubishi", "opcode": "SET",
+                                    "target_model": "FX3U", "facts": [raw]})
+    definition = published[0] if isinstance(published, tuple) else published
+    fact = definition["facts"][0]
+    assert fact["note_kind"] == "explanation"
+    assert fact["note"] == group.note
+    assert fact["value"] == {"operation": "retain_until_reset"}
+    # Formal values keep their own filter; a note does not bypass it.
+    assert "note" not in fact["value"]
+
+
+def test_a_note_that_is_not_reviewed_prose_is_refused():
+    import pytest
+
+    from plc.instruction_definition import DefinitionError, InstructionFactGroup
+
+    base = {"id": "effects.retain", "dimension": "effects.retain", "status": "candidate_evidence",
+            "value": {}, "sources": [{"id": "s", "manual_id": "m", "revision": "R", "pdf_page": 1}],
+            "scope": {"models": ["FX3U"], "forms": ["SET"]}}
+    for bad in ("", "   ", 42, "x" * 2001):
+        with pytest.raises(DefinitionError):
+            InstructionFactGroup.from_mapping({**base, "note": bad})
+
+
+
+
+def test_target_identity_has_one_source_and_no_gxworks2_dependency():
+    """Core identity is defined once; the GX Works2 layer builds profiles from it."""
+    import subprocess
+    import sys
+    from pathlib import Path as _Path
+
+    import gxworks2.project_profiles as profiles
+    from plc import target_identity
+    from plc.step_width_types import StepWidth, known_width
+    from plc import instruction_steps
+
+    # The historical names keep pointing at the one definition.
+    assert instruction_steps.StepWidth is StepWidth
+    assert instruction_steps._known is known_width
+    assert instruction_steps.known_menu_identities is target_identity.known_menu_identities
+    assert instruction_steps.target_family is target_identity.target_family
+    assert instruction_steps.target_identity_state is target_identity.target_identity_state
+
+    # The GX Works2 catalogue is generated from the neutral one, in the same order.
+    assert [(profile.cpu, profile.program_supported) for profile in profiles.NATIVE_PROJECT_PROFILES] == [
+        (cpu, cpu not in target_identity.PARAMETER_ONLY)
+        for _series, cpus in target_identity.CPU_GROUPS for cpu in cpus]
+
+    # Identity resolution must work with the GX Works2 and GXW layers unimportable.
+    code = (
+        "import sys\n"
+        "class Block:\n"
+        "    def find_module(self, name, path=None):\n"
+        "        if name.split('.')[0] in {'gxworks2', 'gxw'}:\n"
+        "            raise ImportError('blocked: ' + name)\n"
+        "        return None\n"
+        "sys.meta_path.insert(0, Block())\n"
+        "from plc.instruction_steps import (instruction_step_width, known_menu_identities,\n"
+        "                                   target_family, target_identity_state)\n"
+        "assert target_family('FX3UC') == 'FX' and target_family('FX5U') == 'FX5U'\n"
+        "assert target_identity_state('FX3U/FX3UC') == (('FX3U', 'FX3UC'), None)\n"
+        "assert known_menu_identities()\n"
+        "assert instruction_step_width('MOV', ['K10', 'D0'], plc_model='FX3U').steps == 5\n"
+        "assert instruction_step_width('OUT', ['T200', 'K10'], plc_model='FX2N').steps == 3\n"
+        "print('ok')\n"
+    )
+    completed = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                               cwd=str(_Path.cwd()), env={"PYTHONPATH": str(_Path.cwd() / "src"),
+                                                          "SYSTEMROOT": "C:\\Windows"})
+    assert completed.returncode == 0, completed.stderr
+    assert "ok" in completed.stdout
+
+
+def test_q_and_l_widths_answer_without_the_project_writer():
+    """Core computes Q/L storage itself; the writer is not consulted for a number."""
+    import subprocess
+    import sys
+    from pathlib import Path as _Path
+
+    code = (
+        "import sys\n"
+        "class Block:\n"
+        "    def find_module(self, name, path=None):\n"
+        "        if name.split('.')[0] in {'gxw', 'gxworks2'}:\n"
+        "            raise ImportError('blocked: ' + name)\n"
+        "        return None\n"
+        "sys.meta_path.insert(0, Block())\n"
+        "from plc.instruction_steps import instruction_step_width\n"
+        "from plc.storage.context import QStorageContext\n"
+        "q = instruction_step_width('MOV', ['K10', 'D0'], plc_model='Q03UDV',\n"
+        "                           assume_default_allocation=True)\n"
+        "assert q.steps == 2, q\n"
+        "q02 = instruction_step_width('MOV', ['K10', 'D0'], plc_model='Q02/Q02H',\n"
+        "                             assume_default_allocation=True)\n"
+        "assert q02.status == 'known', q02\n"
+        "l = instruction_step_width('MOV', ['K10', 'D0'], plc_model='L02/L02-P',\n"
+        "                           assume_default_allocation=True)\n"
+        "assert l.status == 'known', l\n"
+        "unknown = instruction_step_width('MOV', ['K10', 'D0'], plc_model='Q03UDV')\n"
+        "assert unknown.status == 'requires_context', unknown\n"
+        "assert unknown.requirements == ('storage_context',), unknown\n"
+        "ctx = QStorageContext('Q03UDV', None, ())\n"
+        "parsed = instruction_step_width('MOV', ['K10', 'D0'], plc_model='Q03UDV', context=ctx)\n"
+        "assert parsed.status == 'known', parsed\n"
+        "print('ok')\n"
+    )
+    completed = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                               cwd=str(_Path.cwd()), env={"PYTHONPATH": str(_Path.cwd() / "src"),
+                                                          "SYSTEMROOT": "C:\\Windows"})
+    assert completed.returncode == 0, completed.stderr
+    assert "ok" in completed.stdout

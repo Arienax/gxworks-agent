@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Saved ST Program, FB and FUNCTION artifacts in the shared candidate transaction.
 
 GXW is the source of declarations, bodies and task ownership. Model intentions
@@ -166,10 +169,7 @@ def _source_snapshot(raw, *, program_name, plc_model):
     bindings = program['task_bindings']
     if program['kind'] in ('function_block', 'function') and bindings:
         raise ValueError('An ST callable cannot acquire ordinary Program task membership')
-    if program['kind'] == 'program' and len(bindings) != 1:
-        raise ValueError('ST candidate requires one current source-bound task membership')
-    if bindings:
-        binding, = bindings
+    for binding in bindings:
         tasks = [task for task in snapshot['tasks']
                  if (task['resource'], task['task']) == (binding['resource'], binding['task'])]
         if len(tasks) != 1 or [row for row in tasks[0]['programs'] if row['line'] == binding['line']] != [
@@ -281,7 +281,8 @@ def prepare_candidate(output, *, imported, program_name, plc_model, summary='ST 
              'write_report': ('write_report.json', json_bytes(report))}
     metadata = dict(target_mode='st', plc_model=plc_model, program_name=program_name, summary=summary,
         validation=dict(status='source_preserved', source_readback='matched',
-            task_membership='source_bound' if source['selected_program']['kind'] == 'program' else 'not_applicable',
+            task_membership=('source_bound' if source['selected_program']['task_bindings'] else 'unassigned')
+                if source['selected_program']['kind'] == 'program' else 'not_applicable',
             source_binding=_source_binding(source), native_save='not_run', native_source_save_required=False,
             gx_compile='not_run', execution='not_run', gui_configuration=source['gui_configuration']['status'],
             messages=['已读取保存工程中的 ST 正文、声明和对象归属；Program 任务绑定按来源保留，编译与运行分别验证。']))

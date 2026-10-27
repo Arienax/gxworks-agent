@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Canonical project-level PLC intermediate representation.
 
 The historical model-facing ladder format (``device_comments`` + ``rungs``)
@@ -30,16 +33,16 @@ IR_KIND = "plc_program_ir"
 IR_SCHEMA_VERSION = 3
 
 _DEVICE_RE = re.compile(
-    r"^(ZR|SM|SD|SB|SW|X|Y|M|D|T|C|S|L|F|B|W|R|V|Z)([0-9A-F]+)(?:\.([0-9A-F]+))?$", re.IGNORECASE
+    r"^(?:(ZR|SM|SD|SB|SW|X|Y|M|D|T|C|S|L|F|B|W|R|V|Z)([0-9A-F]+)(?:\.([0-9A-F]+))?|([VZ]))$", re.IGNORECASE
 )
 _INDEXED_DEVICE_RE = re.compile(
-    r"^(?P<base>(?:SM|SD|X|Y|M|D|T|C|S)\d+)(?P<index>[VZ]\d+)$",
+    r"^(?P<base>(?:SM|SD|X|Y|M|D|T|C|S)\d+)(?P<index>[VZ]\d*)$",
     re.IGNORECASE,
 )
 _DEVICE_TOKEN_RE = re.compile(
     r"(?<![A-Z0-9_])"
-    r"(?:(?P<base>(?:SM|SD|X|Y|M|D|T|C|S)\d+)(?P<index>[VZ]\d+)"
-    r"|(?P<simple>(?:ZR|SM|SD|SB|SW|X|Y|M|D|T|C|S|L|F|B|W|R|V|Z)[0-9A-F]+(?:\.[0-9A-F]+)?))"
+    r"(?:(?P<base>(?:SM|SD|X|Y|M|D|T|C|S)\d+)(?P<index>[VZ]\d*)"
+    r"|(?P<simple>(?:ZR|SM|SD|SB|SW|X|Y|M|D|T|C|S|L|F|B|W|R|V|Z)[0-9A-F]+(?:\.[0-9A-F]+)?|[VZ]))"
     r"(?![A-Z0-9_])",
     re.IGNORECASE,
 )
@@ -72,13 +75,19 @@ def _normalized_device(value: Any) -> str:
 def _device_tokens(value: Any) -> List[str]:
     """Return base devices plus index-register dependencies from an operand."""
 
+    from plc.ordered_source import source_label_reference
+    if source_label_reference(value):
+        return []
     text = str(value or "").upper()
     text = re.sub(r'"(?:\$\.|[^"\n])*"|\'(?:\$\.|[^\'\n])*\'', '', text)
     result: List[str] = []
-    from plc.ordered_source import indexed_literal_register, buffer_memory_reference
+    from plc.ordered_source import indexed_literal_register, buffer_memory_reference, source_extended_reference
     buffer = buffer_memory_reference(text)
     if buffer:
         return [value for value in buffer.values() if value]
+    extended = source_extended_reference(text)
+    if extended:
+        return [extended['base'], *extended['indexes'], *([extended['pointer']] if extended['indirect'] else [])]
     literal_index = indexed_literal_register(text)
     if literal_index:
         result.append(literal_index)
@@ -108,9 +117,10 @@ def _device_sort_key(value: str) -> Tuple[int, int, str]:
         "V": 9,
         "Z": 10,
     }
-    prefix = match.group(1).upper()
-    radix = 16 if prefix in {"X", "Y", "B", "W", "SB", "SW"} or re.search(r"[A-F]", match.group(2)) else 10
-    return (prefix_order.get(prefix, 99), int(match.group(2), radix) * 16 + int(match.group(3) or "0", 16), value)
+    prefix = (match.group(1) or match.group(4)).upper()
+    number = match.group(2) or '0'
+    radix = 16 if prefix in {"X", "Y", "B", "W", "SB", "SW"} or re.search(r"[A-F]", number) else 10
+    return (prefix_order.get(prefix, 99), int(number, radix) * 16 + int(match.group(3) or "0", 16), value)
 
 
 def _network_id(rung_id: Any) -> str:
@@ -378,9 +388,14 @@ def _instruction_access(
         reset_range = _zero_reset_range(operands or [], plc_model)
         if reset_range is not None:
             return reads, reset_range
-    spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(op, cpu=plc_model)
+    spec = DEFAULT_INSTRUCTION_REGISTRY.resolve_source_form(op, len(operands or []), cpu=plc_model)
     write_indexes = set(spec.write_indexes if spec is not None else ())
     read_write_indexes = set(spec.read_write_indexes if spec is not None else ())
+    if op in {'PWM', 'DPWM'} and str(plc_model).upper() in {'FX5U', 'FX5UC', 'FX5UJ', 'FX5S'} and len(operands or ()) == 3:
+        # A channel-number word is read; a literal physical Y output is an effect.
+        write_indexes.discard(2)
+        if re.fullmatch(r'Y[0-9A-F]+', str(operands[2]).strip(), re.I):
+            write_indexes.add(2)
     if spec is not None and not spec.operands:
         from plc.instruction_definition import select_fact_dependencies
         scoped = DEFAULT_INSTRUCTION_REGISTRY.resolve(op, cpu=plc_model)
@@ -401,7 +416,7 @@ def _instruction_access(
                         read_write_indexes.add(scoped.native_operand_order.index(parameter))
     for index, operand in enumerate(operands or []):
         text = str(operand or "").strip().upper()
-        from plc.ordered_source import indexed_literal_register, buffer_memory_reference
+        from plc.ordered_source import indexed_literal_register, buffer_memory_reference, source_extended_reference
         buffer = buffer_memory_reference(text)
         if buffer:
             if buffer['index']:
@@ -412,6 +427,18 @@ def _instruction_access(
                     reads.add(buffer['base'])
             else:
                 reads.add(buffer['base'])
+            continue
+        extended = source_extended_reference(text)
+        if extended:
+            reads.update(extended['indexes'])
+            if extended['indirect']:
+                reads.add(extended['pointer'])
+            if index in write_indexes:
+                writes.add(extended['base'])
+                if index in read_write_indexes:
+                    reads.add(extended['base'])
+            else:
+                reads.add(extended['base'])
             continue
         literal_index = indexed_literal_register(text)
         if literal_index:
@@ -476,18 +503,8 @@ def analyze_instruction_access(
     if op.startswith(("LD", "AND", "OR")):
         for operand in args:
             reads.update(_device_tokens(operand))
-    elif op == "OUT":
-        if args:
-            address = _normalized_device(args[0])
-            if address:
-                writes.add(address)
-        for operand in args[1:]:
-            reads.update(_device_tokens(operand))
-    elif op in {"SET", "RST", "PLS", "PLF"}:
-        if args:
-            address = _normalized_device(args[0])
-            if address:
-                writes.add(address)
+    elif op in {"OUT", "SET", "RST", "PLS", "PLF"}:
+        reads, writes = _instruction_access(op, args, plc_model=plc_model)
     elif op not in {"ANB", "ORB", "MPS", "MRD", "MPP", "INV", "NOP"}:
         reads, writes = _instruction_access(op, args, plc_model=plc_model)
     return (
@@ -573,7 +590,7 @@ def _normalize_io_map(
             continue
         prefix_match = _DEVICE_RE.fullmatch(address)
         value = {
-            "kind": str(row.get("kind") or prefix_match.group(1)).strip().upper(),
+            "kind": str(row.get("kind") or prefix_match.group(1) or prefix_match.group(4)).strip().upper(),
             "label": str(row.get("label") or row.get("description") or "").strip(),
             "source": str(row.get("source") or "confirmed").strip(),
         }
@@ -677,12 +694,15 @@ def build_plc_ir(
     for address in sorted(all_addresses, key=_device_sort_key):
         match = _DEVICE_RE.fullmatch(address)
         if match:
-            prefix = match.group(1).upper()
+            prefix = (match.group(1) or match.group(4)).upper()
         else:
-            from plc.ordered_source import buffer_memory_reference
-            if not buffer_memory_reference(address):
+            from plc.ordered_source import buffer_memory_reference, source_extended_reference
+            if buffer_memory_reference(address):
+                prefix = 'U_G'
+            elif source_extended_reference(address):
+                prefix = 'QUALIFIED'
+            else:
                 raise PLCIRValidationError('unresolved source access identity: ' + address)
-            prefix = 'U_G'
         read_by = readers.get(address, [])
         written_by = writers.get(address, [])
         if read_by and written_by:
@@ -798,7 +818,7 @@ def validate_plc_ir(
     *,
     confirmed_spec: Optional[Mapping[str, Any]] = None,
     validate_ladder: bool = True,
-    require_catalogued_instructions: bool = True,
+    require_catalogued_instructions: bool | None = None,
 ) -> Mapping[str, Any]:
     if not is_plc_ir(program):
         raise PLCIRValidationError(f"kind must be {IR_KIND!r}")
@@ -886,6 +906,9 @@ def validate_plc_ir(
     if validate_ladder:
         from plc.validation import validate_ladder_full
 
+        if require_catalogued_instructions is None:
+            require_catalogued_instructions = source.get('format') not in {
+                'instruction_sequence_v1', 'instruction_sequence_v2'}
         validate_ladder_full(
             ladder,
             plc_model=str(plc.get("cpu", "FX3U")),

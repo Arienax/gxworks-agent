@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Application-owned text and response-language policy (no Qt or network I/O).
 
 Only presentation text is translated. Protocol keys, PLC addresses, source code,

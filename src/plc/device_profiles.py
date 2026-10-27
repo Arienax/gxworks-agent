@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Model-specific device limits and reserved/read-only special devices."""
 import json
 
@@ -6,31 +9,18 @@ def _source_device_profiles():
     from shared.paths import resource_path
     models = json.loads(resource_path("plc_models.json").read_text(encoding="utf-8"))
     return {cpu: model["validation"] for cpu, model in models.items()
-            if isinstance(model, dict) and model.get("validation", {}).get("status") == "source_subset"}
+            if isinstance(model, dict) and model.get("validation", {}).get("status") in {
+                "source_subset", "source_verified"}}
 
 
 SOURCE_DEVICE_PROFILES = _source_device_profiles()
-SUPPORTED_PLC_MODELS = {"FX3U", "FX5U", *SOURCE_DEVICE_PROFILES}
+SUPPORTED_PLC_MODELS = {"FX5U", *SOURCE_DEVICE_PROFILES}
 
 # These are software limits, not a promise that every address is physically
 # installed.  X/Y on FX5U are configuration-dependent, so only their decimal
 # syntax is enforced here.  SM/SD 8000-series compatibility devices are valid
 # on FX5U even though the native special-device range is also exposed at 0-2047.
 DEVICE_LIMITS = {
-    "FX3U": {
-        "X": 0o367,
-        "Y": 0o367,
-        "M": 8511,
-        "D": 8511,
-        "T": 511,
-        "C": 255,
-        "S": 4095,
-        # FX3U index registers. V0-V7 are 16-bit index registers; Z0-Z7
-        # are accepted as index registers and may also be used as ordinary
-        # word operands. Indexed operands such as D100Z0 are validated below.
-        "V": 7,
-        "Z": 7,
-    },
     "FX5U": {
         # The physical allocation remains configuration-dependent. 1777 is
         # the decimal device-number ceiling used by the confirmed-spec and
@@ -48,6 +38,40 @@ DEVICE_LIMITS = {
     },
 }
 DEVICE_LIMITS.update({cpu: p["device_limits"] for cpu, p in SOURCE_DEVICE_PROFILES.items()})
+
+
+def device_address_rules(plc_model):
+    """The same numbering rules for checking, retrieval and generation.
+
+    Numbering limits, default allocations and native-operation limits are
+    different fields. Only numbering facts belong in a generated program's
+    language context; no native capability is inferred from them.
+    """
+    import copy
+    from plc.target_support import normalize_target_cpu
+    model = normalize_target_cpu(plc_model)
+    profile = SOURCE_DEVICE_PROFILES.get(model, {})
+    limits = DEVICE_LIMITS.get(model)
+    if limits is None:
+        return {'cpu': model, 'status': 'unavailable', 'families': {}}
+    bits = profile.get('bit_prefixes', ['X', 'Y', 'M', 'SM', 'S', 'T', 'C'])
+    families = {}
+    for prefix, maximum in limits.items():
+        radix = profile.get('radices', {}).get(prefix, 8 if model == 'FX3U' and prefix in {'X', 'Y'} else 10)
+        families[prefix] = dict(radix=radix, maximum_number=maximum,
+            regions=copy.deepcopy(profile.get('device_regions', {}).get(prefix, [[0, maximum]])),
+            value_type='bit' if prefix in bits else 'word',
+            word_bit_view=prefix in profile.get('word_bit_prefixes', []),
+            allocation=copy.deepcopy(profile.get('allocation_rules', {}).get(prefix, {'kind': 'fixed_numbering'})))
+    return {'cpu': model, 'status': 'available', 'families': families,
+            'default_allocations': copy.deepcopy(profile.get('default_allocations', {})),
+            'special_regions': copy.deepcopy(profile.get('special_regions', {})),
+            'special_access': copy.deepcopy(profile.get('special_access', {})),
+            'allocation_constraints': copy.deepcopy(profile.get('allocation_constraints', {})),
+            'model_conditions': copy.deepcopy(profile.get('model_conditions', [])),
+            'source_conflicts': copy.deepcopy(profile.get('source_conflicts', [])),
+            'sources': copy.deepcopy(profile.get('sources', [])),
+            'meaning': 'Address numbering; physical I/O installation and project allocation are separate conditions.'}
 
 
 # CPU-owned special relays may be read as contacts, but the user program must

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Route PLC facts; analysis mode is an explicit caller choice, never inferred."""
 from __future__ import annotations
 

@@ -1,3 +1,5 @@
+// Copyright 2026 Arienax
+// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
 
 const names: Record<string, string> = {
   create_global_labels: "建立全局标签表", edit_global_labels: "写入全局声明",

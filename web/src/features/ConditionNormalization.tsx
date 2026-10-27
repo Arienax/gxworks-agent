@@ -1,3 +1,6 @@
+// Copyright 2026 Arienax
+// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 type Entry = {message?: unknown; network_ids?: unknown};
 const entries = (value: unknown): Entry[] => Array.isArray(value)
   ? value.filter((item): item is Entry => !!item && typeof item === "object") : [];

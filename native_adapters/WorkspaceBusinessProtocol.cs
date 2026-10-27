@@ -1,3 +1,6 @@
+// Copyright 2026 Arienax
+// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 using System;
 using System.Collections.Generic;
 
@@ -168,7 +171,8 @@ namespace PlcAi.NativeAdapter
                 foreach(object row in Rows(source["programs"])) {
                     var program=Map(row); if(NativeRequest.Integer(program["program_kind"])==240) sfc=true; else other=true;
                 }
-                if(sfc && other) throw new ArgumentException("mixed_workspace_language_not_supported");
+                if(sfc && other && !cpu.StartsWith("Q", StringComparison.Ordinal))
+                    throw new ArgumentException("mixed_sfc_source_conversion_not_established_for_cpu:" + cpu);
                 source["lexical_reader"]=sfc ? null : LexicalProfile(cpu);
                 if(sfc) source["compilation_method"]="change_sfc_program";
             }

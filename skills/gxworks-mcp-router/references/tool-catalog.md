@@ -1,6 +1,6 @@
 # MCP 工具目录
 
-对应公开分支 `main@e5f6ca0`，涵盖 42 个共享工具与 5 个独立 `local` 会话扩展工具（`get_operation_status` 在两种模式下同名复用）。具体暴露的工具列表与完整 JSON Schema 以连接时的 `tools/list` 和服务 instructions 为准。
+依据本地应用工作树核对（2026-10-24）；原始公开来源为 `main@e5f6ca0`，本次补充尚未发布。具体暴露的工具列表与完整 JSON Schema 以连接时的 `tools/list` 和服务 instructions 为准。
 
 表中“共享”指注册在共享工具表中的工具；“local”指独立工程会话额外暴露的工程与产物管理工具。支持只读快照的工具会在注册时接受可选的 `source_ref` 参数。
 
@@ -35,22 +35,22 @@
 
 | 工具 | 范围 | 适用场景 | 参数要点 | 主要产出与说明 |
 | --- | --- | --- | --- | --- |
-| `search_plc_manual` | 共享 | 检索指定 CPU 的指令与软元件事实 | `query`；可选 `top_k`（1–8）, `debug`；未选中工程时传 `plc_model` | 返回按 CPU 过滤的指令事实、操作数约束与手册依据。 |
-| `get_generation_context` | 共享 | 生成或修改程序前获取工程上下文 | `user_requirement`；可选 `workflow`（`direct_generation`/`detailed`）, `execution_mode`（`background`/`live`） | 返回当前 CPU 的生成合同、指令事实、已有规格与 `generation_context_id`。 |
+| `search_plc_manual` | 共享 | 检索指定 CPU 的指令、FBD 语言与软元件事实 | `query`；可选 `top_k`（1–8）, `debug`；未选中工程时传 `plc_model` | 精确地址事实区分编号、默认分配及参数条件；不证明当前工程分配。 |
+| `get_generation_context` | 共享 | 生成或修改程序前获取工程上下文 | `user_requirement`；可选 `workflow`, `execution_mode`；FBD 可选 `catalog_scope`（默认 `task`）和 `templates` | FBD 返回必需语言/地址规则、完整接口、关联源码和 `supported_paths`；按 `output_contract` 提交，已有工程提供联合事务和单图备选。 |
 | `create_program_candidate` | 共享 | 提交新建或重写的 Ladder 候选程序 | `ladder`；可选 `program_name`, `generation_context_id` | 经 Core 校验后按当前接入模式保存版本、生成提案或返回候选。 |
 | `patch_program` | 共享 | 对已有 Ladder 执行局部补丁修改 | `patch`；可选 `generation_context_id` | 按 `network_id` 或 GXW 原始 `record_index` + `expected` 提交局部修改。 |
 | `read_gxw_source` | 共享 | 读取已导入 `.gxw` 中某个源码对象的编辑模型 | 可选 `program`（需已选中保存版本） | 返回该 POU 的离线编辑模型及同工程的源码目录（Program/FB/FUNCTION）。 |
-| `edit_gxw_project` | 共享 | 联合编辑 `.gxw` 内的多个源码、声明或注释 | `version_id`, `edits`；可选 `save_policy`（默认 `"draft"`） | 基于指定 `version_id` 在一次离线事务中提交多处修改并生成逐源码差异。 |
+| `edit_gxw_project` | 共享 | 联合编辑 `.gxw` 内的多个源码、声明或注释 | `version_id`；至少提供 `edits`、`declaration_edits`、`device_comments` 之一；可选 `save_policy`（默认 `"draft"`） | ST 接口/正文和全部受影响 FBD 调用者同次提交后校验。两种保存策略均拒绝新增非法 FBD 字面量；不接受 `generation_context_id`。 |
 
 ## FBD、ST 与 SFC
 
 | 工具 | 范围 | 适用场景 | 参数要点 | 主要产出与说明 |
 | --- | --- | --- | --- | --- |
-| `get_fbd_catalog` | 共享 | 查询当前 FBD 工程的能力、定义、端口与参数 schema | 可选 `program` | 返回可用块定义、端口方向及 `create_fbd_candidate` 所需的 `parameter_schema`。 |
+| `get_fbd_catalog` | 共享 | 查询当前 FBD 工程的能力、定义、端口与参数 schema | 可选 `program`, `catalog_scope`（默认 `full`）, `templates` | 精确筛选保留完整接口与依赖，未命中见 `missing_templates`；生成仍需 `get_generation_context`。 |
 | `read_fbd_project` | 共享 | 离线读取 FBD 图形、标签、端口与 SVG | 可选 `program`, `data_base64`, `source_ref` | 返回 FBD 网络结构、节点端子连接及声明信息。 |
 | `read_fbd_definition` | 共享 | 读取工程内的结构体或 FB 定义 | 可选 `source_name`, `source_ref` | 省略 `source_name` 时列出定义目录；指定时返回该定义的详细接口与实现。 |
 | `read_fbd_libraries` | 共享 | 查看 `.gxw` 中的用户库及库内定义 | 可选 `data_base64`, `library_name`, `include_source` | 只读列出用户库目录及定义详情，供后续 `import_library` 参考。 |
-| `create_fbd_candidate` | 共享 | 执行 FBD 图形编辑、定义维护、库导入或原生编译保存 | `operation` 及对应参数（见 `get_fbd_catalog.parameter_schema`）；`import`/`edit`/`generate` 可传布尔 `native_save`；`import_library` 传来源 GXW 的 `data_base64` 与 `library_name` | `native_save=true` 仅请求本次原生保存，省略或 `false` 使用离线路径，不继承历史选择。库导入保留目标源码、任务、调用者正文与声明。创建和库导入保留各自的原生路径，`compile` 单独执行编译保存。 |
+| `create_fbd_candidate` | 共享 | 执行 FBD 图形编辑、定义维护、库导入或原生编译保存 | `operation` 及对应参数以工具 schema 为准；图形 `model` 见 `parameter_schema`；`import`/`edit`/`generate` 可传布尔 `native_save` | `native_save=true` 仅请求本次原生保存。库导入用来源 GXW 的 `data_base64` 与 `library_name`，转移已覆盖的 ST 库实现，保留目标调用者；FBD 库正文转移不支持。`compile` 单独执行原生编译保存。 |
 | `read_st_project` | 共享 | 读取 ST Program、FB 与 FUNCTION | 可选 `program`, `data_base64`, `source_ref` | 返回 ST 正文、返回类型、局部/全局声明与任务绑定信息。 |
 | `create_st_candidate` | 共享 | 创建、导入或离线编辑 ST 源码与声明 | `operation`（如 `import`、`from_candidate`、`create_st_program`、`edit_st_program`、`edit_st_fb`、`edit_st_function`、`edit_st_source`）；编辑时以准确逻辑身份指定 `source_name` | `edit_*` 省略 `declarations` 保留原声明，给出列表则整体替换；新建普通 ST Program 时需指定工程内实际存在的资源与任务。 |
 | `read_sfc_project` | 共享 | 读取已有 SFC 工程结构与子程序 | 可选 `program`, `data_base64`, `source_ref`, `native`（默认 `false`） | 返回 SFC 关系图、步骤、转换、动作与子程序；`native=true` 时补充原生格点信息。 |
@@ -87,3 +87,8 @@
 - **只读发现与检查工具的本地动作**：`read_gxworks2_snapshot` 会导出临时快照文件，`connect_simulator` 会启动本地模拟器网关，`start_simulator_trace` 会启动周期采样，`validate_project(native=true)` 会在隔离目录运行原生编译检查；调用时按用户任务需求选用即可。
 
 来源：`src/agent_runtime/tool_policy.py`、`tool_catalog.py`、`inspection_tools.py`、`program_tools.py`、`src/application/engineering_session.py`。
+
+
+三个上下文读取工具均支持 `cursor`；按返回的 `delivery.next` 连续读取，不自行修改续读参数。`search_plc_manual` 另支持 `language` 和 `aspects`，`top_k` 仅限制补充相关资料。MCP 正文只有一份 JSON，不依赖 `structuredContent` 镜像。
+
+分页中的 `$ref` 指向同一读取的 `objects`。遇到 `{ "$concat": ... }` 时，解析其引用的数组并按顺序拼接；`{ "$merge": ... }` 则合并引用的对象。它们只拆分目录容器，完整事实、接口和源码仍为单个对象。知识结果的 `knowledge_status` 表示来源知识状态，不授予 Core 执行能力。

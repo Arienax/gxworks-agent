@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Headless engineering sessions using the shared application transactions.
 
 Session tools manage selection and receipts; PLC tools retain their existing
@@ -67,7 +70,7 @@ class EngineeringSession:
         if self.version_id and not self.project_id:
             raise ValueError("--version requires --project")
         if self.project_id:
-            self.service.projects.tool_context(self.project_id, self.version_id)
+            self.service.projects.tool_context(self.project_id, self.version_id, requirement='model')
         self.approval_mode = approval_mode
         self.confirm_full_access = confirm_full_access
         self._consent_initialized = False
@@ -137,7 +140,7 @@ class EngineeringSession:
     def _select_project(self, _context, arguments):
         project_id = record_id(arguments["project_id"], "project")
         version_id = record_id(arguments["version_id"], "version") if arguments.get("version_id") else None
-        self.service.projects.tool_context(project_id, version_id)
+        self.service.projects.tool_context(project_id, version_id, requirement='model')
         self.project_id, self.version_id = project_id, version_id
         return {"status": "selected", "project": self.service.projects.project(project_id),
                 "selected_project_id": project_id, "pinned_version_id": version_id}
@@ -149,7 +152,7 @@ class EngineeringSession:
 
     def _artifacts(self, _context, _arguments):
         project_id = self._require_project()
-        context = self.service.projects.tool_context(project_id, self.version_id)
+        context = self.service.projects.tool_context(project_id, self.version_id, requirement='model')
         if not context.version_id:
             raise ValueError("The selected project has no saved version")
         artifacts = self.service.projects.artifacts(project_id, context.version_id)
@@ -209,8 +212,9 @@ class EngineeringSession:
                     independent = (call.name in DISCOVERY_TOOL_NAMES - {"get_current_project"}
                                    or bool(arguments.get("source_ref")))
                     context = (build_tool_context({}) if independent or not self.project_id else
-                               self.service.projects.tool_context(self.project_id, self.version_id))
+                               self.service.projects.invocation_context(self.project_id, self.version_id, call.name))
                     context = replace(context, inspection=self.inspection,
+                                      read_revision=self.service.projects.read_revision,
                                       operation_status=self.service.operation_status,
                                       native_session_status=self.service.native_session_status,
                                       native_session_pause=self.service.native_session_pause)

@@ -8,4 +8,7 @@ mcp==2.1.1
 pywinauto==0.6.9; sys_platform == "win32"
 pywin32>=310; sys_platform == "win32"
 jsonschema>=4.18,<5
+# Shared ST syntax frontend, pinned to the same source as the MCP runtime.
+tree-sitter==0.25.2
+tree-sitter-iec61131-3-st @ https://codeload.github.com/HeytalePazguato/tree-sitter-iec61131-3-st/zip/00e24f50f8ded0d71c146659030fb66d7c4d1529
 -r context.txt

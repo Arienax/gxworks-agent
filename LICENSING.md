@@ -1,9 +1,11 @@
-# License scope / 许可范围
+# Licensing / 许可范围
 
 The project-authored source, documentation, configuration and examples in this
 repository are offered under [Apache License 2.0](LICENSE), except where a file
-states another license. Contributors retain their own copyright. This release
-does not relicense earlier copies distributed under different terms.
+states another license. Copyright 2026 Arienax; the original project and author
+attribution are recorded in [NOTICE](NOTICE). Contributors retain their own
+copyright. This release does not relicense earlier copies distributed under
+different terms.
 
 The included `src/gxw/templates/` files are blank project files saved with GX
 Works2 and the project's data needed to create and edit native engineering

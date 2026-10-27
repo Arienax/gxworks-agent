@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Deterministic FBD draft commands and presentation projections.
 
 A draft is not accepted, compiled, or saved by this module. Native templates,
@@ -8,6 +11,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import replace
+from typing import Mapping
 from uuid import uuid4
 
 from .declarations import _type_parts
@@ -21,15 +25,77 @@ def empty_model():
             "canvas_height": 12, "nodes": [], "wires": []}
 
 
+def _project_sources(raw):
+    """Per-source language, POU identity and offline edit capability, when readable."""
+    from .offline_project import read_offline_project
+    try:
+        rows = read_offline_project(raw).sources()
+    except Exception as error:
+        return None, str(error)
+    keys = ('source_name', 'name', 'language', 'unit_kind', 'capabilities')
+    return [{key: deepcopy(row.get(key)) for key in keys} for row in rows if row.get('unit_kind')], None
+
+
+def _structure_members(sources):
+    """Complete composite member rows from the current project, without truncation.
+
+    A type definition is one unit: the task closure decides which types a request
+    needs, and the chosen type then keeps every member row.
+    """
+    names = set(sources.project_structure_names) | {name for _, name in sources.library_structures}
+    documents = {}
+    for name in names:
+        try:
+            documents[name] = sources.structure(name)
+        except GXWFormatError:
+            continue  # An ambiguous owner stays absent and becomes a dependency gap.
+    result = {}
+    for name, document in sorted(documents.items()):
+        result[name] = [{'name': member.name, 'data_type': member.data_type,
+                         'initial_value': member.initial_value,
+                         'comment': member.comment,
+                         'owner_source': document.logical_name}
+                        for member in getattr(document, 'members', None) or ()]
+    return result
+
+
+def _json_safe(value):
+    """Plain JSON values for saved project facts (no tuples or raw bytes)."""
+    if isinstance(value, Mapping):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, (bytes, bytearray)):
+        return bytes(value).hex()
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return str(value)
+
+
 def editor_catalog(context=None):
     from .project_templates import fbd_generation_models, unsupported_fbd_models
     from .generation_contract import FBD_PARAMETER_MODEL_SCHEMA
     from .ladder_lowering import fbd_topology_from_context
     context = context or read_project_context(default_baseline())
     from .fb_authoring import _context
-    from .project_metadata import read_project_system_variables, project_gui_configuration
+    from .project_metadata import (read_project_system_variables, project_gui_configuration,
+                                   read_project_compile_options)
     _,streams,_,_,_=_context(context.raw)
     metadata=next(name for name in streams if name.endswith('.prj'))
+    program_sources, sources_error = _project_sources(context.raw)
+    groups = getattr(context.sources, 'source_groups', None) or {}
+    selected_source = {'source_name': context.program.logical_name,
+                       'name': context.program.logical_name,
+                       'language': 'fbd', 'unit_kind': 'program',
+                       'capabilities': None, 'capabilities_status': 'unverified'}
+    for row in program_sources or ():
+        if row.get('source_name') == context.program.logical_name:
+            selected_source = {**row, 'capabilities_status': 'available'}
+            break
+    try:
+        compile_options = read_project_compile_options(streams[metadata])
+    except Exception as error:  # an unreadable option array stays an explicit gap
+        compile_options = {'status': 'unverified', 'reason': str(error)}
     return {'nodes': context.catalog(), 'generation_plc_models': list(fbd_generation_models()),
             'unsupported_generation_plc_models': unsupported_fbd_models(),
             'empty_model': context.empty_model(), 'program': context.program.logical_name,
@@ -40,7 +106,19 @@ def editor_catalog(context=None):
                 for key,value in read_project_system_variables(streams[metadata])['ranges'].items()},
                 gui_configuration=project_gui_configuration(context.raw)),
             'empty_parameter_model': dict(schema_version=2, program=context.program.logical_name, networks=[]),
-            'declaration_tables': {name: doc.scope for name, doc in context.declarations.items()}}
+            'declaration_tables': {name: doc.scope for name, doc in context.declarations.items()},
+            # Task identity and project conditions. These describe saved source
+            # facts only; they grant no execution or compilation result.
+            'project_mode': 'structured' if groups else 'simple',
+            'graphical_language_mode': 'fbd',
+            'graphical_language_mode_status': 'shared_208_source_record',
+            'selected_source': selected_source,
+            'project_sources': program_sources,
+            'project_sources_status': 'unverified' if sources_error else 'available',
+            'project_sources_error': sources_error,
+            'compile_options': _json_safe(compile_options),
+            'structures': _structure_members(context.sources),
+            'catalog_scope': 'task'}
 
 
 def declaration_rows(model, table):

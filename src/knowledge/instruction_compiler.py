@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Compile complete indexed instruction material into registry-owned facts.
 
 Documents are joined by exact manual/revision/section, never a page window.
@@ -27,7 +30,8 @@ from plc.instruction_semantics import arbitrate_operand_usage
 METHOD = 'instruction-material-compiler-v1'
 
 
-from knowledge.source_identity import (build_index_identity, source_reference_status)
+from knowledge.source_identity import (build_index_identity, VERIFIED_AT_BUILD,
+                                       NO_BUILD_REFERENCE, LEGACY_UNVERIFIED)
 
 
 def instruction_heading_names(heading):
@@ -49,6 +53,29 @@ def instruction_heading_names(heading):
     # a slash. Require a numbered heading and names separated by punctuation.
     match = re.match(r'^\s*\d+(?:\.\d+)+\s+([A-Z][A-Z0-9_.$@+<>!=\-]*(?:\s*[,/・]\s*[A-Z][A-Z0-9_.$@+<>!=\-]*)*)\s*$', leaf)
     return re.split(r'\s*[,/・]\s*', match[1]) if match else []
+
+
+def call_admission_explanation(form, model):
+    """Explain existing Registry CPU admission, not project/hardware validity.
+
+    The caller retains the original supports_cpu boolean. In particular an
+    empty declaration is a legacy permissive default, not verified all-CPU
+    applicability. Reasons use the resolved CPU-specific spec, never base_spec.
+    """
+    if form is None:
+        return 'form_not_registered', {'declared_scope': 'unavailable'}
+    spec = form.spec
+    scope = 'explicit' if spec.cpu_support else 'empty'
+    details = {'declared_scope': scope}
+    replacement = spec.replacement_for_cpu(model)
+    if replacement:
+        details['replacement_opcode'] = replacement
+        return 'cpu_replacement_required', details
+    if not spec.supports_cpu(model):
+        return 'target_not_in_declared_scope', details
+    if not spec.cpu_support:
+        return 'admitted_with_empty_declared_scope', details
+    return 'admitted', details
 
 
 def _legacy_facts(form, model):
@@ -207,15 +234,50 @@ def _chart_facts(charts, opcode, model):
              'verification': 'not_performed'} for f in facts], []
 
 
+def _declared_instruction_names(rows, outline, section, manual):
+    """Names a section declares in literal form even when its outline omits them.
+
+    The shared document parser owns this reading; the compiler only borrows its
+    result for section ownership, never for CPU or language availability. Each
+    page of the section is offered its own text, with the whole section as the
+    context it may quote from.
+    """
+    from knowledge.instruction_document import instruction_declaration_names
+    ordered = sorted(rows, key=lambda r: (r['pdf_page'], r.get('block_index', 0), r['id']))
+    whole = '\n'.join(str(r.get('text') or '') for r in ordered)
+    manual_type = str(manual.get('manual_type') or '').strip().lower()
+    path = str(outline or section or '')
+    names = []
+    for row in ordered:
+        names.extend(instruction_declaration_names(str(row.get('text') or ''), path,
+                                                   manual_type, source_text=whole))
+    return [name for name in dict.fromkeys(names) if name]
+
+
+def _section_identity(chunk):
+    """Chapter identity: the full outline path, or the leaf title when it has none.
+
+    Two sections can share a leaf title under different parents (several FX5
+    application sections are all titled 'Outline of operation'), so the leaf
+    alone cannot key a document.
+    """
+    return str(chunk.get('outline_path') or chunk.get('section') or '').strip()
+
+
 def _document_catalog(chunks, manuals):
     grouped = defaultdict(list)
     for chunk in chunks:
         if chunk['manual_id'] in manuals:
-            grouped[(chunk['manual_id'], chunk['revision'], chunk['section'])].append(chunk)
+            grouped[(chunk['manual_id'], chunk['revision'], _section_identity(chunk))].append(chunk)
     documents, by_form = [], defaultdict(list)
-    for (manual, revision, section), rows in sorted(grouped.items()):
-        names = instruction_heading_names(section)
-        identity = f'{manual}:{revision}:{section}'
+    for (manual, revision, outline), rows in sorted(grouped.items()):
+        section = str(rows[0].get('section') or outline).strip()
+        names = instruction_heading_names(section) or instruction_heading_names(outline)
+        if not names:
+            # iQ-F style sections declare their instructions without naming them
+            # in the outline; without this they would claim no literal section.
+            names = _declared_instruction_names(rows, outline, section, manuals[manual])
+        identity = f'{manual}:{revision}:{outline}'
         record_rows = sorted(rows, key=lambda r: (r['pdf_page'], r.get('block_index', 0), r['id']))
         models = set(manuals[manual].get('plc_models', []))
         for raw in record_rows:
@@ -233,7 +295,8 @@ def _document_catalog(chunks, manuals):
                     'table': None, 'page_artifact': {'manual_id': manual, 'pdf_page': unit.page},
                 }
         document = {'id': identity, 'manual_id': manual, 'manual_number': manuals[manual]['manual_number'],
-                    'revision': revision, 'section': section, 'forms': names,
+                    'revision': revision, 'section': section, 'outline_path': outline,
+                    'forms': names,
                     'models': sorted(models),
                     'source_ids': [str(r['id']) for r in record_rows],
                     'pdf_pages': sorted({p for r in record_rows for p in range(r['pdf_page'], r['pdf_page_end'] + 1)}),
@@ -264,8 +327,8 @@ def _document_catalog(chunks, manuals):
                 for name in document['forms']:
                     by_form[name].append((document, rows_by_document[document['id']]))
                 break
-    # Follow only explicit same-manual section numbers. One hop is sufficient
-    # for the initial compilation; further references stay visible unresolved.
+    # Resolve every explicit same-manual section number. Retrieval limits do
+    # not limit the source dependency graph; ambiguous references stay visible.
     by_number = defaultdict(list)
     for document in documents:
         match = re.match(r'^(\d+(?:\.\d+)+)\s', document['section'])
@@ -276,14 +339,23 @@ def _document_catalog(chunks, manuals):
     for document in documents:
         text = '\n'.join(raw_by_id[s]['text'] for s in document['source_ids'])
         references = sorted(set(re.findall(r'(?i)(?:refer to|see)\s+(?:sub)?section\s+(\d+(?:\.\d+)+)', text)))
-        for number in references[:16]:
+        for number in references:
             targets = by_number.get((document['manual_id'], document['revision'], number), [])
             if len(targets) == 1 and targets[0]['id'] != document['id']:
                 document['explicit_references'].append({'section_number': number, 'document_id': targets[0]['id']})
             else:
                 document['unresolved_references'].append({'section_number': number, 'reason': 'missing_or_ambiguous_exact_section'})
-        if len(references) > 16:
-            document['unresolved_references'].append({'reason': 'reference_limit', 'remaining_count': len(references) - 16})
+    for document in documents:
+        visited, pending = {document['id']}, [r['document_id'] for r in document['explicit_references']]
+        dependencies = []
+        while pending:
+            identity = pending.pop(0)
+            if identity in visited:
+                continue
+            visited.add(identity)
+            dependencies.append(identity)
+            pending.extend(r['document_id'] for r in by_id[identity]['explicit_references'])
+        document['reference_dependency_ids'] = dependencies
     return documents, by_form, by_id
 
 
@@ -384,6 +456,11 @@ def compile_instruction_definitions(index_path, source_catalog, registry, *, sou
             family_owners[name].add(signature['base'])
     form_families = {name: next(iter(owners)) for name, owners in family_owners.items() if len(owners) == 1}
     raw_by_id = {str(c['id']): c for c in chunks}
+    operands_by_owner = defaultdict(list)
+    for row in instruction_rows:
+        operands_by_owner[(row['manual_id'], row['opcode'].upper())].extend(
+            json.loads(row.get('operands_json') or '[]'))
+    index_identity = build_index_identity(index_path)
     authored = defaultdict(list)
     signatures_by_form = defaultdict(list)
     for signature in signatures:
@@ -407,6 +484,7 @@ def compile_instruction_definitions(index_path, source_catalog, registry, *, sou
             if form is None and not ownership:
                 continue
             admitted = bool(form is not None and form.spec.supports_cpu(model))
+            admission_reason, admission_details = call_admission_explanation(form, model)
             facts = _legacy_facts(form, model) if admitted else []
             authority = instruction_source_authority(opcode, model)
             preferred = authority.get('manual_id') if authority else None
@@ -415,9 +493,9 @@ def compile_instruction_definitions(index_path, source_catalog, registry, *, sou
             active = [(d, rs) for d, rs in ownership if d['manual_id'] == preferred]
             records = [_record(r) for d, rs in active for r in rs]
             for record in records:
-                record['manual_operand_rows'] = [operand for row in instruction_rows if
-                    row['manual_id'] == record['manual_id'] and row['opcode'].upper() in {opcode, form.base_mnemonic if form else opcode}
-                    for operand in json.loads(row.get('operands_json') or '[]')]
+                record['manual_operand_rows'] = [operand
+                    for name in {opcode, form.base_mnemonic if form else opcode}
+                    for operand in operands_by_owner[(record['manual_id'], name)]]
             literal_signatures = [s for s in signatures_by_form[opcode] if s['manual_id'] == preferred]
             if not literal_signatures:
                 literal_signatures = [s for s in signatures_by_form[opcode]
@@ -461,7 +539,8 @@ def compile_instruction_definitions(index_path, source_catalog, registry, *, sou
             materials = [{'document_id': d['id'], 'manual_id': d['manual_id'], 'revision': d['revision'],
                           'source_ids': d['source_ids'], 'pdf_pages': d['pdf_pages'],
                           'primary_semantic_source': d['manual_id'] == preferred,
-                          'explicit_reference_ids': [r['document_id'] for r in d['explicit_references']]} for d, _ in ownership]
+                          'explicit_reference_ids': [r['document_id'] for r in d['explicit_references']],
+                          'reference_dependency_ids': d['reference_dependency_ids']} for d, _ in ownership]
             # Display order only: the adjudication below decides which material and
             # which fact actually answers, and every material stays listed.
             materials.sort(key=lambda item: (not item['primary_semantic_source'], item['manual_id']))
@@ -478,13 +557,16 @@ def compile_instruction_definitions(index_path, source_catalog, registry, *, sou
                 gaps.append('effects_not_formalized')
             build_source_ids = [str(value) for d, _ in ownership
                                 for value in d.get('source_ids') or ()]
-            index_identity = build_index_identity(index_path)
             entries.append({'vendor': 'mitsubishi', 'opcode': opcode, 'target_model': model,
                             'build_source_ids': build_source_ids,
                             'build_index_id': (index_identity or {}).get('build_index_id'),
-                            'source_reference_status': source_reference_status(
-                                build_source_ids, db=db, identity=index_identity),
+                            'source_reference_status': (NO_BUILD_REFERENCE if not build_source_ids
+                                else VERIFIED_AT_BUILD if index_identity and all(
+                                    identity in raw_by_id for identity in build_source_ids)
+                                else LEGACY_UNVERIFIED),
                             'registry_member': opcode in known, 'call_available': admitted,
+                            'call_admission_reason': admission_reason,
+                            'call_admission_details': admission_details,
                             'support_status': 'existing_declared_scope' if admitted else 'definition_only',
                             'facts': facts, 'source_materials': materials, 'uninterpreted_content': unexplained,
                             'conflicts': [*operand_conflicts, *chart_conflicts], 'gaps': gaps,
@@ -514,7 +596,8 @@ def compile_instruction_definitions(index_path, source_catalog, registry, *, sou
                'form_families': form_families,
                'registry_forms': len(known), 'manual_heading_forms': len(by_form), 'union_forms': len(forms),
                'source_catalog': catalog_state, 'source_layout_receipts': layout_receipts, 'documents': documents, 'entries': entries,
-               'reference_policy': {'max_explicit_references_per_section': 16, 'max_depth': 1, 'adjacent_page_inference': False},
+               'reference_policy': {'max_explicit_references_per_section': None, 'max_depth': None,
+                                    'cycle_policy': 'each_document_once', 'adjacent_page_inference': False},
                'source_verification': 'preserve_existing_and_per_fact_only', 'database_mutated': False}
     report = {'schema_version': 1, 'method': METHOD, 'registry_forms': len(known), 'manual_heading_forms': len(by_form),
               'union_forms': len(forms), 'target_models': sorted(models), 'entries': len(entries),

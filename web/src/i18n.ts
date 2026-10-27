@@ -1,3 +1,6 @@
+// Copyright 2026 Arienax
+// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 export type Locale = "zh-CN" | "en" | "ja";
 const words: Record<string, string> = {
   "程序详情暂不可用。": "Program details are unavailable.",
@@ -1057,6 +1060,14 @@ const words: Record<string, string> = {
   "选择模型配置": "Model profile",
   "完整报告": "Full report",
   "差异数据": "Diff data",
+  "关于 GXWorks Agent": "About GXWorks Agent",
+  "作者、版权与来源": "Author, copyright and origin",
+  "GXWorks Agent 将三菱 PLC 工程上下文、按 CPU 组织的指令事实与 GX Works2 原生操作整合为本地工具链。": "GXWorks Agent combines Mitsubishi PLC project context, CPU-scoped instruction facts and native GX Works2 operations into one local toolchain.",
+  "版权所有": "Copyright",
+  "原作者": "Original author",
+  "原始仓库": "Original repository",
+  "许可协议": "License",
+  "本工作台与发行包随附 NOTICE 文件，其中注明原作者与原始仓库地址。": "This workbench and every release package include the NOTICE file naming the original author and repository.",
 };let japanese: Record<string, string> | null = null;
 
 export const japaneseLoaded = () => japanese !== null;

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Deterministic model-aware context selection for generation and retrieval.
 
 This module owns no PLC semantics. It only selects, deduplicates and
@@ -15,83 +18,7 @@ from collections.abc import Mapping
 from knowledge.evidence import estimate_tokens
 
 
-def _contract_value(profile, name):
-    profile = profile if isinstance(profile, Mapping) else {}
-    direct = profile.get(name)
-    if isinstance(direct, (int, float)) and direct > 0:
-        return int(direct)
-    contract = profile.get("capabilityContract")
-    if isinstance(contract, Mapping):
-        caps = contract.get("capabilities")
-        raw = caps.get(name) if isinstance(caps, Mapping) else None
-        if (
-            isinstance(raw, Mapping)
-            and isinstance(raw.get("value"), (int, float))
-            and raw["value"] > 0
-        ):
-            return int(raw["value"])
-    return None
-
-
-def _positive_int(value):
-    return int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0 else None
-
-
-def _output_limit(profile):
-    """Resolve output reserve from canonical user settings, then contract bounds."""
-    profile = profile if isinstance(profile, Mapping) else {}
-    settings = profile.get("userModelSettings")
-    selected = []
-    if isinstance(settings, Mapping):
-        parameters = settings.get("parameters")
-        if isinstance(parameters, Mapping):
-            for key in ("max_completion_tokens", "max_tokens"):
-                choice = parameters.get(key)
-                if isinstance(choice, Mapping) and choice.get("mode") == "value":
-                    value = _positive_int(choice.get("value"))
-                    if value is not None:
-                        selected.append(value)
-    if selected:
-        return max(selected)
-
-    contract = profile.get("capabilityContract")
-    maxima = []
-    if isinstance(contract, Mapping):
-        params = contract.get("parameters")
-        if isinstance(params, Mapping):
-            for key in ("max_completion_tokens", "max_tokens"):
-                raw = params.get(key)
-                if not isinstance(raw, Mapping):
-                    continue
-                domain = raw.get("domain") if isinstance(raw.get("domain"), Mapping) else raw
-                value = _positive_int(
-                    domain.get("maximum") if isinstance(domain, Mapping) else None
-                )
-                if value is not None:
-                    maxima.append(value)
-    return max(maxima) if maxima else None
-
-
-def model_budget(profile):
-    window = _contract_value(profile, "context_window")
-    reserved_output = _output_limit(profile) or 8192
-    protocol_overhead = 4096
-    safety_margin = min(16384, max(2048, int(window * 0.02))) if window else 4096
-    usable = max(0, window - reserved_output - protocol_overhead - safety_margin) if window else None
-    # Model capacity is telemetry, not a RAG allocation rule.
-    budget_state = "unknown" if window is None else "unusable" if usable <= 0 else "available"
-    return {
-        "context_window": window,
-        "budget_confidence": "known" if window else "unknown",
-        "budget_state": budget_state,
-        "reserved_output_tokens": reserved_output,
-        "protocol_overhead_tokens": protocol_overhead,
-        "safety_margin_tokens": safety_margin,
-        "usable_input_tokens": usable,
-        "retrieval_query_token_budget": None,
-        "rag_evidence_token_budget": None,
-    }
-
+from model_runtime.context_budget import model_budget
 
 
 def _estimate(value):
@@ -272,11 +199,12 @@ def _wire_packet(renderer, runtime, value, evidence_text):
         return {}
     from application.generation_wire import normalize_wire_packet
     from shared.model_context import technical_value, technical_context_text
+    from knowledge.evidence import KnowledgeContext
     rendered = renderer(
         # Core prompt builders still need the original confirmation/provenance
         # for deterministic binding. Renderers project only serialized values.
         copy.deepcopy(runtime),
-        technical_context_text(evidence_text),
+        KnowledgeContext(technical_context_text(evidence_text), getattr(evidence_text, "manifest", {})),
         str(value.generation_request or ""),
         technical_value(value.current_program),
         str(value.context_checkpoint or ""),
@@ -333,10 +261,20 @@ class ContextCompiler:
     def compile(self, value: ContextCompilerInput, *, evidence_text="") -> CompiledContext:
         from plc.specification.provenance import confirmed_spec_fields, intent_context
         persistent = confirmed_spec_fields(value.confirmed_spec or {})
+        # Legacy engineering contracts still have an explicit public projection.
+        # A storage-schema filter must not erase them from the model message.
+        from plc.generation_contract import generation_specification
+        public_spec = generation_specification(value.confirmed_spec) or {}
+        for key in ('logic_contracts', 'mutex', 'same_scan_expectations',
+                    'terminal_states', 'io_allocation_raw'):
+            if key in public_spec:
+                persistent[key] = copy.deepcopy(public_spec[key])
         runtime = copy.deepcopy(persistent)
         context = (intent_context({"intent_context": value.intent_context})
                    if value.intent_context is not None else intent_context(runtime))
-        original_evidence_text = str(evidence_text or "")
+        from knowledge.evidence import KnowledgeContext
+        evidence_manifest = getattr(evidence_text, "manifest", {})
+        original_evidence_text = KnowledgeContext(str(evidence_text or ""), evidence_manifest)
         runtime_context, duplicate_requests, superseded = _clean_request_rows(context)
         compacted_ids = {
             str(item) for item in (value.compacted_request_ids or ())
@@ -382,6 +320,7 @@ class ContextCompiler:
         retrieval_query, section_report, retrieval_tokens = _pack_sections(sections)
 
         evidence_text, duplicate_evidence = deduplicate_evidence_text(evidence_text)
+        evidence_text = KnowledgeContext(evidence_text, evidence_manifest)
         source_tokens = {
             "confirmed_facts": _estimate(facts),
             "selected_method": _estimate(method),

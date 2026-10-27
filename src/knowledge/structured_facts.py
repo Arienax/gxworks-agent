@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Exact PLC fact lookup from structured index tables.
 
 This module is deliberately separate from the broad hybrid retriever. Once a
@@ -45,7 +48,7 @@ _VERSION = "structured-facts-v3-process-needs"
 from knowledge.scope import OFFICIAL_INSTRUCTION_TYPES as _OFFICIAL_INSTRUCTION_TYPES
 
 
-def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None):
+def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None, language=None):
     """Return exact fact identities without retrieving any manual prose."""
     from knowledge.analysis_router import route_analysis_request
     from knowledge.instruction_facts import instruction_fact_targets
@@ -93,8 +96,29 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None):
     language_features = []
     feature_scores = {}
     query_metadata = getattr(query, 'metadata', {})
-    st_context = isinstance(query_metadata, Mapping) and str(query_metadata.get('target_mode', '')).casefold() == 'st'
-    for feature in getattr(DEFAULT_INSTRUCTION_REGISTRY, 'language_facts', ()):
+    target_language = language or (str(query_metadata.get('target_mode', '')).casefold()
+                                  if isinstance(query_metadata, Mapping) else '')
+    requested_languages = {target_language} if target_language in {'ladder', 'st', 'fbd'} else set()
+    if re.search(r'\bFBD\b|结构化梯形图', str(query), re.I):
+        requested_languages.add('fbd')
+    if re.search(r'\bST\b|结构化文本', str(query), re.I):
+        requested_languages.add('st')
+    st_context = 'st' in requested_languages
+    applicable_features = {}
+    feature_languages = {}
+    for original in getattr(DEFAULT_INSTRUCTION_REGISTRY, 'language_facts', ()):
+        feature = DEFAULT_INSTRUCTION_REGISTRY.language_feature(original['target'], cpu=plc_model)
+        if feature is None:
+            continue
+        languages = ({feature['language']} if 'language' in feature else
+                     {item for fact in feature.get('facts', []) for item in fact.get('scope', {}).get('languages', [])})
+        if len(languages) != 1:
+            continue
+        language = next(iter(languages))
+        applicable_features[feature['target']] = feature
+        feature_languages[feature['target']] = language
+        if requested_languages and language not in requested_languages:
+            continue
         for alias in feature.get('aliases', []):
             if alias == '**':
                 matched = '**' in str(query) and (st_context or str(query).strip() == '**'
@@ -106,15 +130,19 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None):
                 feature_scores[feature['target']] = (feature['target'].count('.'), len(alias))
                 break
     language_features.sort(key=lambda target: feature_scores[target], reverse=True)
-    remaining, selected_features = str(query), []
-    feature_by_target = {feature['target']: feature for feature in getattr(DEFAULT_INSTRUCTION_REGISTRY, 'language_facts', ())}
+    remaining_by_language, selected_features = {}, []
+    feature_by_target = applicable_features
     for target in language_features:
-        aliases = feature_by_target[target]['aliases']
+        feature = feature_by_target[target]
+        language = feature_languages[target]
+        remaining = remaining_by_language.get(language, str(query))
+        aliases = feature['aliases']
         if not any(alias in remaining if alias == '**' else alias_occurs(remaining, alias) for alias in aliases):
             continue
         selected_features.append(target)
         for alias in sorted(aliases, key=len, reverse=True):
             remaining = re.sub(re.escape(alias), ' ', remaining, flags=re.I)
+        remaining_by_language[language] = remaining
     language_features = selected_features
     # Cxxxx is also a counter spelling. A compiler diagnostic request carries
     # its own namespace; it must not retrieve a counter or incidental examples.
@@ -141,9 +169,10 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None):
     }
 
 
-def _runtime():
+def _runtime(kind=None):
 
-    path = index_access.index_path()
+    from knowledge.fact_corpus import runtime_index_path
+    path = runtime_index_path(kind)
     identity = index_access.index_identity(path)
     if identity[0] == "missing":
         return index_access, None, None, None, {}
@@ -176,7 +205,7 @@ def resolve_positioning_records(targets, *, plc_model, task_type="analysis"):
     if connection is None or schema is None:
         return []
     authored = resolve("positioning", ["DIRECTION_OUTPUT_ASSIGNMENT"],
-                       plc_model=plc_model, task_type=task_type, connection=connection)
+                       plc_model=plc_model, task_type=task_type, connection=connection, domain_results=True)
     if authored is not None:
         results = []
         for target in requested:
@@ -231,6 +260,193 @@ def authored_packet(record):
     return {}
 
 
+def _contradictory_fact_values(left, right):
+    """A missing detail is not a contrary claim in another source.
+
+    Complementary records remain separate, preserving each witness's scope and
+    verification. Only fields both sources specify can establish a conflict.
+    """
+    if isinstance(left, Mapping) and isinstance(right, Mapping):
+        return any(_contradictory_fact_values(left[key], right[key])
+                   for key in left.keys() & right.keys())
+    unknown = (None, 'unknown', 'unresolved', 'not_established')
+    if any(value == marker for value in (left, right) for marker in unknown):
+        return False
+    return left != right
+
+
+_MERGE_COMPARISON_IGNORED = frozenset({'id', 'sources', 'status', 'verification'})
+
+
+def _merge_comparable_fact(fact):
+    return {key: value for key, value in fact.items()
+            if key not in _MERGE_COMPARISON_IGNORED}
+
+class _FactMergeIndex:
+    """Per-accumulator lookup; store references, not copies of the facts."""
+
+    __slots__ = ('by_id', 'by_family', 'next_suffix', 'transient_ids')
+
+    def __init__(self, facts):
+        # Match the legacy dict's last-value/first-key-order behavior if the
+        # incoming accumulator happens to contain duplicate IDs.
+        self.by_id = {fact['id']: fact for fact in facts if isinstance(fact.get('id'), str) and fact['id']}
+        self.by_family = {}
+        for identity, fact in self.by_id.items():
+            if isinstance(identity, str):
+                family = identity.split(':variant:')[0]
+                self.by_family.setdefault(family, []).append(fact)
+        self.next_suffix = {}
+        self.transient_ids = set()
+
+    def begin_batch(self):
+        # The legacy routine rebuilt by_id from the accumulator and excluded
+        # falsy IDs. Keep such IDs visible within a batch, but not across calls.
+        if not self.transient_ids:
+            return
+        for identity in self.transient_ids:
+            self.by_id.pop(identity, None)
+        if '' in self.transient_ids and '' in self.by_family:
+            self.by_family[''] = [fact for fact in self.by_family['']
+                                  if fact.get('id')]
+        self.transient_ids.clear()
+
+    def add(self, fact):
+        identity = fact.get('id')
+        if not isinstance(identity, str):
+            return
+        self.by_id[identity] = fact
+        if not identity:
+            self.transient_ids.add(identity)
+        if isinstance(identity, str):
+            family = identity.split(':variant:')[0]
+            self.by_family.setdefault(family, []).append(fact)
+
+    def allocate_variant(self, family):
+        # Preserve the smallest available suffix >= 2. Since IDs are only
+        # added, the next search can resume where the previous one stopped.
+        suffix = self.next_suffix.get(family, 2)
+        while family + ':variant:' + str(suffix) in self.by_id:
+            suffix += 1
+        self.next_suffix[family] = suffix + 1
+        return family + ':variant:' + str(suffix)
+
+
+def _merge_fact_rows(left, incoming, *, _index=None):
+    """Merge source variants without repeated owner-wide ID scans or copies.
+
+    The optional index is owned by the accumulator. Callers combining several
+    batches must reuse it until the accumulator's facts list is replaced.
+    """
+    index = _index if _index is not None else _FactMergeIndex(left)
+    index.begin_batch()
+    remap, added = {}, []
+    for original in incoming:
+        identity = original.get('id')
+        existing = index.by_id.get(identity) if isinstance(identity, str) else None
+        if existing is not None:
+            family = identity.split(':variant:')[0]
+            siblings = index.by_family.get(family, ())
+            comparable = _merge_comparable_fact(original)
+            equal = next((row for row in siblings
+                          if _merge_comparable_fact(row) == comparable), None)
+            if equal is not None:
+                if identity != equal['id']:
+                    remap[identity] = equal['id']
+                sources = equal.setdefault('sources', [])
+                for source in original.get('sources', ()):
+                    if source not in sources:
+                        sources.append(copy.deepcopy(source))
+                statuses = {equal.get('status'), original.get('status')}
+                if 'conflict' in statuses:
+                    equal['status'] = 'conflict'
+                    equal['verification'] = 'not_performed'
+                elif 'not_applicable' not in statuses:
+                    # An equal, unreviewed witness does not invalidate an
+                    # independently source-checked claim.
+                    strength = ('source_verified', 'candidate_evidence', 'declared_unverified', 'unknown')
+                    chosen = next((status for status in strength if status in statuses), equal.get('status'))
+                    equal['status'] = chosen
+                    equal['verification'] = 'source_checked' if chosen == 'source_verified' else 'not_performed'
+                continue
+
+            # Only new or genuinely distinct variants need an owned deep copy.
+            fact = copy.deepcopy(original)
+            fact['id'] = index.allocate_variant(family)
+            remap[identity] = fact['id']
+            for prior in siblings:
+                same_condition = all(prior.get(k) == fact.get(k)
+                                     for k in ('dimension', 'scope', 'conditions'))
+                if same_condition and _contradictory_fact_values(prior.get('value'), fact.get('value')):
+                    prior['status'] = fact['status'] = 'conflict'
+        else:
+            fact = copy.deepcopy(original)
+        index.add(fact)
+        added.append(fact)
+    for fact in added:
+        if fact.get('depends_on'):
+            fact['depends_on'] = [remap.get(key, key) for key in fact['depends_on']]
+    left.extend(added)
+
+
+def merge_exact_records(records, *, plc_model):
+    """Union applicable fact packets before ranking; catalogue rows add no slots.
+
+    Fact scope, conditions and dependencies survive the union. Conflicting
+    claims remain separate facts. A catalogue entry never downgrades an admitted
+    call, and a source-language signature never grants runtime execution.
+    """
+    from plc.target_identity import target_members
+    members = set(target_members(plc_model))
+    merged, groups, fact_indexes = [], {}, {}
+    for original in records:
+        packet = authored_packet(original)
+        if packet.get('kind') != 'instruction':
+            merged.append(copy.deepcopy(original))
+            continue
+        scope = copy.deepcopy(packet.get('scope') or {})
+        scope['models'] = sorted(members.intersection(scope.get('models', ())))
+        key = (packet.get('target'), json.dumps(scope, sort_keys=True))
+        if key not in groups:
+            row, packet = copy.deepcopy(original), copy.deepcopy(packet)
+            packet['scope'] = scope
+            groups[key] = (row, packet)
+            merged.append(row)
+        else:
+            row, accumulated = groups[key]
+            left, right = accumulated.setdefault('value', {}), packet.get('value') or {}
+            # Prefer a complete definition to its directory placeholder.
+            if left.get('catalogue_only') and not right.get('catalogue_only'):
+                accumulated['value'] = copy.deepcopy(right)
+                accumulated['gaps'] = copy.deepcopy(packet.get('gaps', []))
+                left = accumulated['value']
+                # A directory placeholder was replaced with a new list.
+                fact_indexes.pop(key, None)
+            facts = left.setdefault('facts', [])
+            index = fact_indexes.get(key)
+            if index is None:
+                index = fact_indexes[key] = _FactMergeIndex(facts)
+            _merge_fact_rows(facts, right.get('facts', ()), _index=index)
+            for field, value in right.items():
+                if field not in left:
+                    left[field] = copy.deepcopy(value)
+            if right.get('call_available') is True:
+                left['call_available'] = True
+                if right.get('registry_contract'):
+                    left['registry_contract'] = copy.deepcopy(right['registry_contract'])
+            if not right.get('catalogue_only'):
+                left.pop('catalogue_only', None)
+            # Keep unresolved claims from substantive definitions, not obsolete
+            # directory placeholders superseded by this exact definition.
+            if not right.get('catalogue_only'):
+                accumulated['gaps'] = [json.loads(value) for value in dict.fromkeys(
+                    json.dumps(gap, sort_keys=True, ensure_ascii=False) for gap in
+                    [*accumulated.get('gaps', ()), *packet.get('gaps', ())])]
+        row, packet = groups[key]
+        row['text'] = json.dumps(packet, ensure_ascii=False, separators=(',', ':'))
+    return merged
+
+
 def fact_record_coverage(record, *, limits=False):
     if record.get("fact_kind") == "positioning" and record.get("positioning_hardware_status") == "unverified":
         return False
@@ -240,6 +456,8 @@ def fact_record_coverage(record, *, limits=False):
     packet = authored_packet(record)
     if not packet:
         return True  # Original evidence fixtures keep their existing boundary.
+    if packet.get('fact_selection', {}).get('gaps'):
+        return False
     value = packet.get('value', {})
     facts = value.get('facts', [])
     if packet.get('kind') not in {'instruction', 'language'}:
@@ -276,16 +494,27 @@ _ASPECT_PATTERNS = (
     ('encoding', r'编码|encoding'),
     ('devices', r'允许.*软元件|哪些软元件|设备类型|operand device|device type|allowed device'),
     ('types', r'数据类型|位宽|字长|数据宽度|16\s*位|32\s*位|\btype|\bwidth|bit length'),
-    ('effects', r'效果|结果|写入|读出|行为|effect|behaviour|behavior'),
-    ('execution', r'执行条件|触发|边沿|脉冲|使能|时序|trigger|execution|edge|timing'),
+    ('effects', r'效果|结果|写入|读出|行为|保持|状态|effect|behaviour|behavior|state|retain|latch'),
+    ('execution', r'执行条件|触发|边沿|脉冲|使能|时序|扫描|跳转|首次|禁用|trigger|execution|edge|timing|pulse|scan|first execution|disable|jump'),
+    ('timing_state', r'上一(?:次)?扫描|前一扫描|上次执行|状态归属|previous\s+(?:scan|execution)|state\s+owner'),
+    ('same_scan', r'同一?扫描|同一扫描周期|same[ -]scan'),
+    ('first_execution', r'首次执行|首次扫描|first\s+(?:execution|scan)|startup'),
+    ('disabled', r'禁用|条件撤销|disable|not\s+executed|not\s+driven'),
+    ('jump', r'跳转|\bjump'),
     ('constraints', r'限制|范围|约束|注意|limit|restrict|constraint|domain|range'),
     ('st_call', r'\bST\b|结构化文本|structured text'),
 )
 
 
-def requested_aspects(query):
+def requested_aspects(query, *, language=None, aspects=None):
     text = str(query or '')
-    aspects = [name for name, pattern in _ASPECT_PATTERNS if re.search(pattern, text, re.I)]
+    explicit = [aspects] if isinstance(aspects, str) else aspects
+    aspects = list(dict.fromkeys(explicit)) if explicit is not None else [
+        name for name, pattern in _ASPECT_PATTERNS if re.search(pattern, text, re.I)]
+    if explicit is None and language == 'st' and 'st_call' not in aspects:
+        aspects.append('st_call')
+    if explicit is None and language == 'fbd' and 'fbd_call' not in aspects:
+        aspects.append('fbd_call')
     parameter_question = bool(re.search(r'操作数|参数|形参|operand|parameter', text, re.I))
     if parameter_question and not set(aspects) - {'st_call'}:
         aspects = [*aspects, 'arity', 'order', 'roles', 'types', 'purpose']
@@ -297,11 +526,152 @@ def requested_aspects(query):
     return aspects
 
 
+def generation_aspects(query, *, language):
+    """Generation always needs operands and behaviour as well as a call form."""
+    return list(dict.fromkeys(['arity', 'order', 'roles', 'types', 'effects', 'execution',
+        'constraints', *requested_aspects(query, language=language)]))
+
+
+def instruction_aspect_gap_reasons(packet, aspect, *, state, model, language):
+    """Keep reviewed source limits apart from unfinished extraction.
+
+    This describes an already-incomplete answer; it never turns a source gap
+    into support or treats a missing executor as missing manual knowledge.
+    """
+    if state in {'answered', 'not_applicable'}:
+        return []
+    facts = [fact for fact in (packet.get('value') or {}).get('facts', ())
+             if (not fact.get('scope', {}).get('models') or model in fact['scope']['models'])
+             and (not language or not fact.get('scope', {}).get('languages')
+                  or language in fact['scope']['languages'])]
+    family = ('parameters.' if aspect in {'arity', 'order', 'roles', 'types', 'devices', 'st_call', 'fbd_call',
+                                          'purpose', 'unit', 'encoding', 'operand_range', 'operand_condition'}
+              else 'execution.' if aspect in {'execution', 'timing_state', 'same_scan', 'first_execution',
+                                               'disabled', 'jump'} else aspect + '.')
+    by_id = {fact['id']: fact for fact in facts}
+    pending = [fact['id'] for fact in facts if str(fact.get('dimension', '')).startswith(family)]
+    visited, reasons = set(), set()
+    reviewed_absence = {'not_stated', 'not_stated_in_this_manual', 'section_states_repeat_contexts_only'}
+    allowed_kinds = {'source_not_stated', 'source_conflict', 'native_validation_pending',
+                     'source_present_not_extracted', 'source_review_pending', 'applicability_unresolved'}
+    while pending:
+        identity = pending.pop()
+        if identity in visited:
+            continue
+        visited.add(identity)
+        fact = by_id.get(identity)
+        if fact is None:
+            reasons.add('dependency_unresolved')
+            continue
+        pending.extend(fact.get('depends_on', ()))
+        value = fact.get('value') or {}
+        status = fact.get('status')
+        if status == 'source_verified':
+            continue
+        explicit = value.get('gap_kind') or value.get('source_disposition')
+        if isinstance(explicit, str) and explicit in allowed_kinds:
+            reasons.add(explicit)
+        elif status == 'conflict' or value.get('conflict'):
+            reasons.add('source_conflict')
+        elif (isinstance(value.get('basis'), str) and value['basis'] in reviewed_absence
+              or str(fact.get('dimension', '')).endswith('.unresolved_source')):
+            reasons.add('source_not_stated')
+        elif value.get('unresolved_items') or value.get('full_source_relation_complete') is False:
+            reasons.add('source_present_not_extracted')
+        else:
+            reasons.add('source_review_pending')
+    if not reasons:
+        reasons.add('source_present_not_extracted' if state == 'missing' else 'dependency_or_scope_unresolved')
+    return sorted(reasons)
+
+
 def _aspect_state(packet, aspect, *, model, language, query):
     """Require every requested slot and the shared atomic dependency closure."""
     from plc.instruction_definition import DefinitionError, select_fact_dependencies
+    if packet.get('fact_selection', {}).get('gaps'):
+        return 'unresolved'
     value = packet.get('value') or {}
-    if aspect == 'st_call':
+    # Owners can merge several source packets.  A different CPU's unresolved
+    # signature must not replace the requested CPU's known declaration.
+    value = {**value, 'facts': [fact for fact in value.get('facts', ())
+                               if not fact.get('scope', {}).get('models')
+                               or model in fact['scope']['models']]}
+    def known_value(value):
+        if isinstance(value, Mapping):
+            return bool(value) and all(known_value(part) for part in value.values())
+        if isinstance(value, list):
+            return all(known_value(part) for part in value)
+        return value is not None and (not isinstance(value, str) or value.casefold() not in
+                                     {'', 'unknown', 'unresolved', 'not_established'})
+    language = 'st' if aspect == 'st_call' else 'fbd' if aspect == 'fbd_call' else language
+    cpu_availability = []
+    for fact in value.get('facts', ()):
+        if fact.get('dimension') not in {'constraints.cpu_availability', 'identity.applicability'}:
+            continue
+        scope = fact.get('scope', {})
+        if (fact.get('conditions') or scope.get('models') and model not in scope['models']
+                or scope.get('languages') and language not in scope['languages']):
+            continue
+        claim = fact.get('value', {})
+        state = claim.get('model_states', {}).get(model)
+        available = claim.get('available') if state is None else {'supported': True, 'unsupported': False}.get(state)
+        if type(available) is bool and fact.get('status') == 'source_verified':
+            cpu_availability.append((fact, available))
+    if cpu_availability and any(not available for _, available in cpu_availability):
+        if any(available for _, available in cpu_availability):
+            return 'unresolved'
+        try:
+            closure = select_fact_dependencies(value['facts'], [f['id'] for f, _ in cpu_availability],
+                opcode=packet.get('target') or value.get('opcode'), model=model, language=language)
+        except (DefinitionError, KeyError, TypeError, ValueError):
+            return 'unresolved'
+        return 'not_applicable' if closure['source_verification_complete'] else 'unresolved'
+    if language:
+        availability = [f for f in value.get('facts', ())
+                        if f.get('dimension') == 'identity.language_availability'
+                        and f.get('value', {}).get('language') == language
+                        and not f.get('conditions')]
+        if any(f.get('value', {}).get('available') is False for f in availability):
+            if not all(f.get('value', {}).get('available') is False for f in availability):
+                return 'unresolved'
+            try:
+                closure = select_fact_dependencies(value['facts'], [f['id'] for f in availability],
+                    opcode=packet.get('target') or value.get('opcode'), model=model, language=language)
+            except (DefinitionError, KeyError, TypeError, ValueError):
+                return 'unresolved'
+            return 'not_applicable' if closure['source_verification_complete'] else 'unresolved'
+        # A manual can explicitly decline a function/block signature without
+        # providing a separate identity fact. Its call parameters then do not
+        # exist in this language. Literal ST operators are different: they
+        # retain expression operands even though there is no function call.
+        parameter_aspects = {'arity', 'order', 'roles', 'types', 'devices', 'st_call', 'fbd_call',
+                             'purpose', 'unit', 'encoding', 'operand_range', 'operand_condition'}
+        signatures = [f for f in value.get('facts', ())
+                      if f.get('dimension') == 'parameters.' + language + '_signature'
+                      and (not f.get('scope', {}).get('languages') or language in f['scope']['languages'])]
+        expressions = [f for f in value.get('facts', ())
+                       if f.get('dimension') == 'parameters.language_expression'
+                       and f.get('value', {}).get('available') is not False
+                       and (not f.get('scope', {}).get('languages') or language in f['scope']['languages'])]
+        if aspect in parameter_aspects and signatures and any(f.get('value', {}).get('available') is False for f in signatures):
+            if any(f.get('status') == 'conflict' for f in signatures):
+                return 'unresolved'
+            if not all(f.get('value', {}).get('available') is False for f in signatures):
+                return 'unresolved'
+            if all(f.get('value', {}).get('available') is False for f in signatures) and (
+                    aspect in {'st_call', 'fbd_call'} or not expressions):
+                if any(f.get('conditions') for f in signatures):
+                    return 'unresolved'
+                try:
+                    closure = select_fact_dependencies(value['facts'], [f['id'] for f in signatures],
+                        opcode=packet.get('target') or value.get('opcode'), model=model, language=language)
+                except (DefinitionError, KeyError, TypeError, ValueError):
+                    return 'unresolved'
+                return 'not_applicable' if closure['source_verification_complete'] and not closure['gaps'] else 'unresolved'
+    documented_call = [f for f in value.get('facts', ())
+                       if f.get('dimension') == 'parameters.st_signature'
+                       and (not f.get('scope', {}).get('languages') or 'st' in f['scope']['languages'])]
+    if aspect == 'st_call' and not documented_call:
         contract = value.get('registry_contract') or {}
         call = contract.get('st_call') or {}
         if value.get('call_available') is False:
@@ -311,17 +681,45 @@ def _aspect_state(packet, aspect, *, model, language, query):
             return 'missing'
         return ('answered' if value.get('call_available') is True
                 and contract.get('verification', {}).get('st_call') == 'source_verified' else 'unverified')
-    facts = list(value.get('facts') or ())
+    if aspect == 'st_call' and documented_call:
+        if any(fact.get('status') == 'conflict' for fact in documented_call):
+            return 'unresolved'
+        unavailable = [fact for fact in documented_call if fact.get('value', {}).get('available') is False]
+        if unavailable and len(unavailable) == len(documented_call):
+            try:
+                closure = select_fact_dependencies(value['facts'], [fact['id'] for fact in unavailable],
+                    opcode=packet.get('target') or value.get('opcode'), model=model, language='st')
+            except (DefinitionError, KeyError, TypeError, ValueError):
+                return 'unresolved'
+            return 'not_applicable' if closure['source_verification_complete'] and not closure['gaps'] else 'unresolved'
+        def complete_signature(fact):
+            signature = fact.get('value') or {}
+            parameters = signature.get('parameters')
+            return (isinstance(parameters, list) and known_value(signature.get('returns'))
+                    and type(signature.get('enable')) is bool
+                    and all(parameter.get('name') and known_value(parameter.get('type'))
+                            and parameter.get('direction') in {'input', 'output', 'in_out'}
+                            for parameter in parameters))
+        if not all(complete_signature(fact) for fact in documented_call):
+            return 'missing'
+    facts = [f for f in value.get('facts') or () if not language
+             or not f.get('scope', {}).get('languages') or language in f['scope']['languages']]
     by_dimension = {}
     for fact in facts:
         by_dimension.setdefault(fact.get('dimension'), []).append(fact)
     prefixes = {'effects': ('effects.',), 'execution': ('execution.',),
-                'constraints': ('constraints.',)}
-    aliases = {'arity': ('parameters.arity',),
-               'order': ('parameters.order', 'parameters.st_signature', 'parameters.source_order'),
-               'roles': ('parameters.roles',), 'types': ('parameters.types', 'parameters.value_type'),
-               'devices': ('parameters.devices', 'constraints.operand_devices')}
-    roots = []
+                'constraints': ('constraints.',),
+                'same_scan': ('execution.same_scan', 'effects.same_scan'),
+                'first_execution': ('execution.first_execution', 'execution.startup', 'execution.mode_change'),
+                'jump': ('execution.jump',)}
+    aliases = {'arity': ('parameters.arity', 'parameters.typed_operands'),
+               'order': ('parameters.order', 'parameters.st_signature', 'parameters.source_order', 'parameters.typed_operands'),
+               'roles': ('parameters.roles', 'parameters.typed_operands'),
+               'types': ('parameters.types', 'parameters.value_type', 'parameters.typed_operands'),
+               'devices': ('parameters.devices', 'constraints.operand_devices'),
+               'st_call': ('parameters.st_signature',),
+               'fbd_call': ('parameters.fbd_signature', 'parameters.fbd_pins', 'parameters.language_expression')}
+    roots, alternatives = [], []
     if aspect in {'purpose', 'unit', 'encoding', 'operand_range', 'operand_condition'}:
         arities = by_dimension.get('parameters.arity') or ()
         count = next((f.get('value', {}).get('maximum') for f in arities
@@ -345,32 +743,63 @@ def _aspect_state(packet, aspect, *, model, language, query):
             roots.extend(f['id'] for f in slot)
         roots.extend(f['id'] for f in arities)
     elif aspect in aliases:
-        selected = next((by_dimension[key] for key in aliases[aspect] if by_dimension.get(key)), [])
-        if not selected:
-            return 'missing'
-        roots.extend(f['id'] for f in selected)
-        # Aggregate slot arrays must cover the declared arity, not one operand.
-        facet = {'roles': 'roles', 'types': 'types', 'devices': 'prefixes'}.get(aspect)
-        if facet and any(facet in f.get('value', {}) for f in selected):
-            arities = by_dimension.get('parameters.arity') or ()
-            count = next((f.get('value', {}).get('maximum') for f in arities), None)
-            if type(count) is not int or any(len(f['value'][facet]) != count for f in selected if facet in f.get('value', {})):
-                return 'missing'
-            roots.extend(f['id'] for f in arities)
+        groups = [by_dimension[key] for key in aliases[aspect] if by_dimension.get(key)]
+        if any(f.get('status') == 'conflict' for group in groups for f in group):
+            return 'unresolved'
+        for selected in groups:
+            # A complete authored table can answer a slot even when an older
+            # registry array is incomplete. Keep both facts in the delivery;
+            # only this completeness calculation chooses a representation.
+            complete = True
+            for fact in selected:
+                if fact.get('dimension') != 'parameters.typed_operands':
+                    continue
+                operands = fact.get('value', {}).get('operands')
+                required = {'order': ('name', 'symbol'), 'roles': ('role', 'direction'),
+                            'types': ('data_type', 'type')}.get(aspect, ())
+                if (not isinstance(operands, list) or required and any(
+                        not any(known_value(operand.get(key)) for key in required) for operand in operands)):
+                    complete = False
+            option = [f['id'] for f in selected]
+            facet = {'roles': 'roles', 'types': 'types', 'devices': 'prefixes'}.get(aspect)
+            if facet and any(facet in f.get('value', {}) for f in selected):
+                arities = by_dimension.get('parameters.arity') or ()
+                count = next((f.get('value', {}).get('maximum') for f in arities), None)
+                if (type(count) is not int or any(len(f['value'][facet]) != count
+                        or not known_value(f['value'][facet]) for f in selected if facet in f.get('value', {}))):
+                    complete = False
+                option.extend(f['id'] for f in arities)
+            if complete:
+                alternatives.append(option)
+    elif aspect in {'timing_state', 'disabled'}:
+        # A generic edge/enable fact does not answer state ownership or disabled
+        # execution. Require the requested semantic slots in a verified fact.
+        slots = ({'comparison_basis', 'state_owner', 'history_owner', 'update_timing', 'previous_value'}
+                 if aspect == 'timing_state' else
+                 {'when_disabled', 'disabled_effect', 'en_false', 'when_not_executed', 'disabled_state'})
+        def has_slot(value):
+            return (isinstance(value, Mapping) and (bool(slots.intersection(value))
+                    or any(has_slot(child) for child in value.values()))
+                    or isinstance(value, list) and any(has_slot(child) for child in value))
+        selected = [fact for fact in facts if has_slot(fact.get('value'))
+                    or aspect == 'disabled' and 'disabled' in str(fact.get('dimension'))]
+        roots.extend(fact['id'] for fact in selected)
     else:
         selected = [f for f in facts if any(str(f.get('dimension', '')).startswith(prefix)
-                                           for prefix in prefixes.get(aspect, ()))]
+                                           for prefix in prefixes.get(aspect, ()))
+                    and not (aspect == 'effects' and f.get('dimension') in
+                             {'effects.source_read', 'effects.destination_write'})]
         roots.extend(f['id'] for f in selected)
         if not roots:
             return 'missing'
-    if not roots:
+    if not roots and not alternatives:
         return 'missing'
-    try:
+    def closure_state(requested):
         # An unqualified manual question may refer to a language-scoped source
         # (for example EXPT's ST constraints). Use its declared common scope,
         # rather than silently imposing Ladder on every reference question.
         by_id = {fact['id']: fact for fact in facts}
-        pending, visited, scopes = list(roots), set(), []
+        pending, visited, scopes = list(requested), set(), []
         while pending:
             identity = pending.pop()
             if identity in visited or identity not in by_id:
@@ -383,13 +812,18 @@ def _aspect_state(packet, aspect, *, model, language, query):
         languages = [language] if language else sorted(set.intersection(*scopes)) if scopes else [None]
         if not languages:
             return 'unresolved'
-        closures = [select_fact_dependencies(facts, roots, opcode=packet.get('target') or value.get('opcode'),
+        closures = [select_fact_dependencies(facts, requested, opcode=packet.get('target') or value.get('opcode'),
                                              model=model, language=lang) for lang in languages]
-    except (DefinitionError, KeyError, TypeError, ValueError):
-        return 'unresolved'
-    if any(closure['gaps'] for closure in closures):
-        return 'unresolved'
-    return 'answered' if all(closure['source_verification_complete'] for closure in closures) else 'unverified'
+        if any(closure['gaps'] for closure in closures):
+            return 'unresolved'
+        return 'answered' if all(closure['source_verification_complete'] for closure in closures) else 'unverified'
+    states = []
+    for option in alternatives or [roots]:
+        try:
+            states.append(closure_state(option))
+        except (DefinitionError, KeyError, TypeError, ValueError):
+            states.append('unresolved')
+    return next(state for state in ('answered', 'unverified', 'unresolved') if state in states)
 
 
 def _instruction_aspects(records, aspects, *, plc_model, language, query):
@@ -397,15 +831,32 @@ def _instruction_aspects(records, aspects, *, plc_model, language, query):
     packets = [authored_packet(row) for row in records]
     rows = []
     for aspect in aspects:
-        states = []
+        states, reasons = [], set()
         for member in target_members(plc_model):
-            candidates = [_aspect_state(packet, aspect, model=member, language=language, query=query)
-                          for packet in packets if member in packet.get('scope', {}).get('models', ())]
-            states.append('answered' if 'answered' in candidates else 'unresolved' if 'unresolved' in candidates
+            applicable = [packet for packet in packets if member in packet.get('scope', {}).get('models', ())]
+            # Packets with different model sets may overlap on this concrete
+            # CPU. Resolve their claims together so a complete packet cannot
+            # conceal a conflicting claim in another packet.
+            combined = {'target': next((packet.get('target') for packet in applicable), ''), 'value': {'facts': []}}
+            for packet in applicable:
+                if packet.get('fact_selection', {}).get('gaps'):
+                    combined.setdefault('fact_selection', {}).setdefault('gaps', []).extend(packet['fact_selection']['gaps'])
+                value = packet.get('value') or {}
+                _merge_fact_rows(combined['value']['facts'], value.get('facts', ()))
+                if value.get('call_available') is True or 'call_available' not in combined['value']:
+                    combined['value']['call_available'] = value.get('call_available')
+                    combined['value']['registry_contract'] = copy.deepcopy(value.get('registry_contract') or {})
+            candidates = [_aspect_state(combined, aspect, model=member, language=language, query=query)] if applicable else []
+            if candidates:
+                reasons.update(instruction_aspect_gap_reasons(combined, aspect, state=candidates[0],
+                    model=member, language='st' if aspect == 'st_call' else 'fbd' if aspect == 'fbd_call' else language))
+            states.append('answered' if 'answered' in candidates else 'not_applicable' if candidates and all(s == 'not_applicable' for s in candidates) else 'unresolved' if 'unresolved' in candidates
                           else 'unverified' if 'unverified' in candidates else 'missing')
-        state = ('answered' if states and all(s == 'answered' for s in states) else
+        state = ('not_applicable' if states and all(s == 'not_applicable' for s in states) else
+                 'answered' if states and all(s in {'answered', 'not_applicable'} for s in states) else
                  'unresolved' if 'unresolved' in states else 'unverified' if 'unverified' in states else 'missing')
-        rows.append({'aspect': aspect, 'status': state})
+        rows.append({'aspect': aspect, 'status': state,
+                     **({'gap_reasons': sorted(reasons)} if reasons else {})})
     return rows
 
 
@@ -435,13 +886,55 @@ def _device_range_coverage(query, records, address, *, plc_model):
             'runtime_execution': 'not_established'}
 
 
-def retrieval_coverage(query, records, *, plc_model, targets=None):
+def _device_family_behavior_coverage(query, records, address, *, plc_model):
+    from plc.target_identity import target_members
+    rows = [row for row in records if row.get('device_family_behavior', {}).get('address') == address]
+    if not rows:
+        return None
+    covered = {model for row in rows if authored_packet(row).get('status') == 'source_verified'
+               and row['device_family_behavior'].get('selected_ranges')
+               for model in authored_packet(row).get('scope', {}).get('models', ())}
+    complete = set(target_members(plc_model)) <= covered
+    aspects = [{'aspect': 'state_behavior', 'status': 'answered' if complete else 'unverified'},
+               {'aspect': 'device_class', 'status': 'answered' if complete else 'unverified'}]
+    if re.search(r'Core|Simulator|模拟器|执行器', str(query), re.I):
+        aspects.append({'aspect': 'runtime_execution', 'status': 'missing'})
+        complete = False
+    return {'identity_found': True, 'aspects': aspects,
+            'status': 'complete' if complete else 'incomplete',
+            'reason': '' if complete else 'requested_facts_not_established',
+            'runtime_execution': 'not_established'}
+
+
+def _device_numbering_coverage(query, records, address, *, plc_model):
+    """Address facts answer numbering questions, never special-device meaning."""
+    numbering_question = bool(re.search(r'编号|进制|地址|越界|上限|范围|numbering|radix|address|range|limit', str(query), re.I))
+    rows = [row for row in records if (row.get('device_address_rule') or {}).get('address') == address]
+    if not rows:
+        return None
+    from plc.target_identity import target_members
+    covered = {member for row in rows for member in authored_packet(row).get('scope', {}).get('models', ())}
+    complete = set(target_members(plc_model)) <= covered
+    meaning = not numbering_question or bool(re.search(r'含义|作用|读写权限|掉电|复位|执行|状态|meaning|purpose|permission|execution|state', str(query), re.I))
+    return dict(identity_found=complete, numbering_fact=copy.deepcopy(rows[0]['device_address_rule']),
+                aspects=[{'aspect': 'numbering', 'status': 'answered' if complete else 'missing'},
+                         *([{'aspect': 'device_definition', 'status': 'missing'}] if meaning else [])],
+                status='complete' if complete and not meaning else 'incomplete',
+                reason='device_definition_not_established' if meaning else '' if complete else 'model_scope_incomplete',
+                runtime_execution='not_established')
+
+
+def retrieval_coverage(query, records, *, plc_model, targets=None, language=None, aspects=None,
+                       delivered_records=None):
     from plc.target_identity import reference_target_identity
     plc_model = reference_target_identity(plc_model) or plc_model
-    targets = targets or structured_fact_targets(query, plc_model=plc_model)
+    targets = targets or structured_fact_targets(query, plc_model=plc_model, language=language)
     limits = bool(re.search(r'限制|条件|范围|约束|\blimit|restrict|constraint|domain|range', str(query), re.I))
     requirements = []
-    aspects = requested_aspects(query) or ['arity', 'order', 'roles', 'types', 'purpose',
+    language = language or ('fbd' if re.search(r'\bFBD\b', str(query), re.I) else
+                           'st' if re.search(r'\bST\b|结构化文本', str(query), re.I) else
+                           'ladder' if re.search(r'梯形图|\bladder\b', str(query), re.I) else None)
+    aspects = requested_aspects(query, language=language, aspects=aspects) or ['arity', 'order', 'roles', 'types', 'purpose',
                                           'effects', 'execution', 'constraints']
     def identity(kind, value):
         value = str(value or '').upper()
@@ -467,26 +960,52 @@ def retrieval_coverage(query, records, *, plc_model, targets=None):
                                  'reason': '' if complete else 'requested_facts_not_established' if selected else 'exact_fact_not_found'}
             if kind == 'instruction' and selected and aspects and any(authored_packet(row) for row in selected):
                 aspect_rows = _instruction_aspects(selected, aspects, plc_model=plc_model,
-                    language='st' if 'st_call' in aspects else 'ladder' if re.search(r'梯形图|\bladder\b', str(query), re.I) else None,
+                    language=language,
                     query=query)
-                answered = all(row['status'] == 'answered' for row in aspect_rows)
+                answered = all(row['status'] in {'answered', 'not_applicable'} for row in aspect_rows)
                 entry.update(aspects=aspect_rows, status='complete' if answered else 'incomplete',
                              reason='' if answered else 'requested_aspects_not_established')
                 value = authored_packet(selected[0]).get('value') or {}
                 call = (value.get('registry_contract') or {}).get('st_call') or {}
                 available = value.get('call_available')
-                entry.update(call_available=available,
+                documented_st = _instruction_aspects(selected, ['st_call'], plc_model=plc_model,
+                                                      language='st', query=query)[0]['status']
+                entry.update(call_available=available, core_call_available=available,
+                             runtime_execution='not_established_by_retrieval',
                              st_call_available=False if available is False else True if available is True and call.get('name') else None,
+                             documented_st_call_available=(True if documented_st == 'answered' else
+                                                           False if documented_st == 'not_applicable' else None),
                              st_has_enable_parameter=call.get('enable'))
             if kind == 'device':
-                range_coverage = _device_range_coverage(query, records, identity(kind, target), plc_model=plc_model)
+                family_coverage = _device_family_behavior_coverage(query, records, identity(kind, target), plc_model=plc_model)
+                range_coverage = family_coverage or _device_range_coverage(query, records, identity(kind, target), plc_model=plc_model)
                 if range_coverage:
                     entry.update(range_coverage)
+                numbering = _device_numbering_coverage(query, records, identity(kind, target), plc_model=plc_model)
+                if numbering and not range_coverage and not selected:
+                    entry.update(numbering)
+                    selected = [row for row in records if row.get('structured_fact_requested_target') == target]
+            delivered = records if delivered_records is None else delivered_records
+            entry['corpus'] = 'present' if entry['identity_found'] else 'absent'
+            entry['knowledge'] = entry['status']
+            entry['delivery'] = ('delivered' if selected and all(any(
+                row.get('id') == candidate.get('id') for candidate in delivered) for row in selected)
+                else 'pending' if selected else 'not_available')
             requirements.append(entry)
     statuses = {row['status'] for row in requirements}
     return {'status': 'unresolved' if not requirements or statuses == {'unresolved'} else
             'complete' if statuses == {'complete'} else 'incomplete', 'targets': requirements,
             'omitted_evidence_is_not_unsupported': True}
+
+
+def _selected_alias_owner_exists(registry, opcode, plc_model):
+    if registry.selected_owner_database_path() is None:
+        return True
+    from plc.target_identity import target_members
+    models = (target_members(plc_model) if plc_model else
+              {header['target_model'] for header in registry.definition_inventory
+               if header.get('opcode') == opcode})
+    return any(registry.definition_header(opcode, cpu=model) is not None for model in models)
 
 
 def _declared_instruction_alias_targets(query, *, plc_model=None):
@@ -498,18 +1017,28 @@ def _declared_instruction_alias_targets(query, *, plc_model=None):
     """
     from knowledge.analysis_router import instruction_reference_text
     query = instruction_reference_text(query)
-    _index, _path, connection, schema, _meta = _runtime()
-    if connection is not None and _meta.get('corpus_kind') == 'authored_plc_facts_v1':
+    _index, _path, connection, schema, _meta = _runtime('instruction')
+    if connection is not None and not connection.execute("SELECT 1 FROM sqlite_master WHERE name='fact_aliases'").fetchone():
+        from knowledge.index_access import index_path, index_identity
+        installed = index_path()
+        if installed is not None and installed != _path:
+            connection = index_access.connection(installed, index_identity(installed))
+            schema = index_access.schema(connection)
+            _meta = index_access.load_meta(connection, schema)
+    if connection is not None and connection.execute("SELECT 1 FROM sqlite_master WHERE name='fact_aliases'").fetchone():
         from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
         targets = []
         for row in connection.execute('SELECT DISTINCT alias,opcode,alias_type,plc_models FROM fact_aliases ORDER BY alias,opcode'):
+            if not alias_occurs(query, row['alias']):
+                continue
             if plc_model and not scope_matches(row['plc_models'], plc_model):
                 continue
             if row['alias_type'] == 'opcode' and DEFAULT_INSTRUCTION_REGISTRY.resolve_fact_form(row['alias']) is not None:
                 continue
-            if alias_occurs(query, row['alias']):
-                targets.append({'opcode': row['opcode'], 'base_opcode': row['opcode'],
-                    'target_resolution': 'declared_manual_alias', 'requested_alias': row['alias']})
+            if not _selected_alias_owner_exists(DEFAULT_INSTRUCTION_REGISTRY, row['opcode'], plc_model):
+                continue
+            targets.append({'opcode': row['opcode'], 'base_opcode': row['opcode'],
+                'target_resolution': 'declared_manual_alias', 'requested_alias': row['alias']})
         return targets
     aliases = schema.get("instruction_aliases") if schema else None
     instructions = schema.get("instructions") if schema else None
@@ -535,6 +1064,8 @@ def _declared_instruction_alias_targets(query, *, plc_model=None):
                 continue
         if len(alias) < 2 or not alias_occurs(query, alias):
             continue
+        if not _selected_alias_owner_exists(DEFAULT_INSTRUCTION_REGISTRY, opcode, plc_model):
+            continue
         targets.append({"opcode": opcode, "base_opcode": opcode,
                         "target_resolution": "declared_manual_alias", "requested_alias": alias})
     return targets
@@ -549,7 +1080,7 @@ def _chunk_results(chunk_ids, *, plc_model, task_type, fact_kind, fact_target, a
     results = []
     for chunk_id in ordered_ids:
         row = rows.get(("id", str(chunk_id)))
-        result = chunk_result(row, meta, path, plc_model, task_type)
+        result = chunk_result(row, meta, path, plc_model, task_type, connection=connection)
         if result is None:
             continue
         original_text = str(index_access.row_value(row, TEXT_COLUMNS, result.get("text") or ""))
@@ -1139,7 +1670,8 @@ def _adjudicated_rows(rows, targets, plc_model):
     return [item[2] for item in merged], True
 
 
-def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generate"):
+def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generate", language=None,
+                                aspects=None, query=None, project_mode=None, instance_context=None, version=None):
     """Resolve canonical/variant opcodes directly through ``instructions``.
 
     No call to ``retrieve_knowledge`` is permitted here.
@@ -1147,11 +1679,16 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
     from knowledge.fact_corpus import resolve
     from knowledge.source_authority import instruction_source_authority
 
-    _index, _path, connection, schema, _meta = _runtime()
-    authored = resolve("instruction", targets, plc_model=plc_model, task_type=task_type, connection=connection)
+    authored = resolve("instruction", targets, plc_model=plc_model, task_type=task_type)
     if authored is not None:
         admitted, decided = _adjudicated_rows(authored, targets, plc_model)
-        return admitted if decided else authored
+        from knowledge.fact_selection import project_instruction_records
+        selected_aspects = (generation_aspects(query, language=language) if task_type in {'generate', 'edit'} and aspects is None
+                            else requested_aspects(query, language=language, aspects=aspects))
+        return project_instruction_records(admitted if decided else authored, plc_model=plc_model,
+            language=language, aspects=selected_aspects, project_mode=project_mode,
+            instance_context=instance_context, version=version, query=query)
+    _index, _path, connection, schema, _meta = _runtime()
     table = schema.get("instructions") if schema is not None else None
     table_available = bool(
         connection is not None
@@ -1251,7 +1788,7 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
         source_records = _instruction_contract_source_records(
             step_target, plc_model=plc_model, task_type=task_type,
         )
-        source_by_id = {record["id"]: record for record in source_records}
+        source_by_id = {record.get("retrieval_chunk_id", record["id"]): record for record in source_records}
         source_scopes = {(record["manual_id"], record["revision"]) for record in source_records}
         if table_available and source_by_id:
             placeholders = ",".join("?" for _ in source_by_id)
@@ -1272,7 +1809,7 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
             if chunk and ((chunk[0].get("manual_id"), chunk[0].get("revision")) not in source_scopes
                           or chunk_id in source_by_id):
                 inputs.append((row, chunk[0]))
-        inputs.extend(({}, record) for record in source_records if record["id"] not in input_seen)
+        inputs.extend(({}, record) for record in source_records if record.get("retrieval_chunk_id", record["id"]) not in input_seen)
         # Prefer the exact selected form and the most complete structured record.
         # Manual priority only resolves otherwise-equivalent official sources;
         # there is no query-dependent score or opcode-specific boost here.
@@ -1432,7 +1969,7 @@ def _device_range_records(devices, *, plc_model, task_type, connection):
         if parts and parts[0] == 'T' and parts[1].isdigit():
             requests.append((canonical_reference_device(device), parts[0], int(parts[1])))
     families = list(dict.fromkeys(family for _, family, _ in requests))
-    rows = resolve('device_family', families, plc_model=plc_model, task_type=task_type, connection=connection) or []
+    rows = resolve('device_family', families, plc_model=plc_model, task_type=task_type, connection=connection, domain_results=True) or []
     results = []
     for address, family, number in requests:
         for row in rows:
@@ -1459,6 +1996,55 @@ def _device_range_records(devices, *, plc_model, task_type, connection):
     return results
 
 
+def _device_address_records(devices, *, plc_model, task_type, connection):
+    """Deliver exact address-numbering facts, including a rejected boundary."""
+    from knowledge.fact_corpus import resolve
+    from plc.device_identity import canonical_reference_device
+    from plc.validation import DEVICE_ADDRESS_RE, device_address_status
+    from plc.target_support import normalize_target_cpu
+    cpu = normalize_target_cpu(plc_model)
+    requests = []
+    for device in devices:
+        text = str(device).strip().upper()
+        match = DEVICE_ADDRESS_RE.fullmatch(text)
+        if match:
+            requests.append((canonical_reference_device(text), match.groups()))
+        elif text in {'V', 'Z'} and device_address_status(text, cpu) == 'valid':
+            requests.append((text, (text, '0', None)))
+    # Resolve each explicit family independently: the broad candidate cap must
+    # not discard a later address in a request containing many device classes.
+    rows = [row for family in dict.fromkeys(parts[0] for _, parts in requests)
+            for row in (resolve('device_family', [family], plc_model=cpu,
+                        task_type=task_type, connection=connection, domain_results=True) or [])]
+    results = []
+    for address, (prefix, digits, bit) in requests:
+        for row in rows:
+            packet = authored_packet(row)
+            value = packet.get('value') or {}
+            if value.get('family') == prefix and value.get('step_sequence_behavior') and not bit:
+                selected = [item for item in value.get('ranges', ())
+                            if item.get('first', -1) <= int(digits) <= item.get('last', -1)]
+                family = {**copy.deepcopy(value), 'address': address, 'selected_ranges': selected}
+                packet = copy.deepcopy(packet)
+                packet['value'] = family
+                results.append({**copy.deepcopy(row), 'id': f"{row['id']}:address:{address}",
+                    'fact_kind': 'device', 'fact_target': address,
+                    'text': json.dumps(packet, ensure_ascii=False), 'structured_fact_requested_target': address,
+                    'device_family_behavior': family, 'device_lookup_basis': 'reviewed_family_behavior',
+                    'fact_dimensions': ['device_class', 'state_behavior']})
+            if (value.get('range_basis') != 'model_address_numbering' or value.get('cpu') != cpu
+                    or value.get('family') != prefix):
+                continue
+            packet = copy.deepcopy(packet)
+            packet['value'] = {**value, 'address': address,
+                               'numbering_status': device_address_status(address, cpu)}
+            results.append({**copy.deepcopy(row), 'id': f"{row['id']}:address:{address}",
+                'text': json.dumps(packet, ensure_ascii=False), 'structured_fact_requested_target': address,
+                'device_lookup_basis': 'reviewed_address_numbering',
+                'device_address_rule': packet['value'], 'fact_dimensions': ['numbering', 'range', 'allocation']})
+    return results
+
+
 def resolve_device_records(devices, *, plc_model="FX3U", task_type="analysis", query=None, hardware_context=None):
     """Resolve device definitions and explicit property questions, before RRF.
 
@@ -1471,7 +2057,7 @@ def resolve_device_records(devices, *, plc_model="FX3U", task_type="analysis", q
     from plc.device_definitions import device_definition_targets, resolve_device_definition
     _index, _path, connection, schema, _meta = _runtime()
     authored_targets = list(dict.fromkeys([*(devices or ()), *device_definition_targets(query, plc_model)]))
-    authored = resolve("device", authored_targets, plc_model=plc_model, task_type=task_type, connection=connection)
+    authored = resolve("device", authored_targets, plc_model=plc_model, task_type=task_type, connection=connection, domain_results=True)
     if authored is not None:
         for row in authored:
             resolved = resolve_device_definition(row['fact_target'], plc_model, context=hardware_context)
@@ -1494,6 +2080,8 @@ def resolve_device_records(devices, *, plc_model="FX3U", task_type="analysis", q
                     lines.append(f'bit 0 -> connection {connection_number}')
             row['text'] = '\n'.join(lines)
         return [*_device_range_records(authored_targets, plc_model=plc_model,
+                    task_type=task_type, connection=connection),
+                *_device_address_records(authored_targets, plc_model=plc_model,
                     task_type=task_type, connection=connection), *authored]
     if connection is None or schema is None:
         return []
@@ -1636,9 +2224,16 @@ def resolve_device_family_records(families, *, plc_model="FX3U", task_type="anal
     from knowledge.fact_corpus import resolve
     from knowledge.device_evidence import resolve_section_records
     _index, _, connection, schema, _ = _runtime()
-    authored = resolve("device_family", families, plc_model=plc_model, task_type=task_type, connection=connection)
+    authored = resolve("device_family", families, plc_model=plc_model, task_type=task_type, connection=connection, domain_results=True)
     if authored is not None:
-        return authored
+        from plc.target_support import normalize_target_cpu
+        cpu = normalize_target_cpu(plc_model)
+        # A merged menu and one of its members can share source pages. Deliver
+        # only this identity's numbering profile; keep other kinds of facts.
+        rows = [row for row in authored if (authored_packet(row).get('value') or {}).get('range_basis')
+                != 'model_address_numbering' or (authored_packet(row).get('value') or {}).get('cpu') == cpu]
+        return sorted(rows, key=lambda row: (authored_packet(row).get('value') or {}).get('range_basis')
+                      != 'model_address_numbering')
     if connection is None:
         return []
     return resolve_section_records(connection, schema, families, plc_model=plc_model)
@@ -1706,7 +2301,7 @@ def resolve_process_records(needs, *, plc_model="FX3U", task_type="generate"):
         for need in needs or ():
             target = str(need.get('target', '')).upper()
             kind, key = ('device_family', 'T') if target == 'TIMER' else ('device_family', 'C') if target == 'COUNTER' else ('process', target)
-            rows = resolve(kind, [key], plc_model=plc_model, task_type=task_type, connection=authored_connection) or []
+            rows = resolve(kind, [key], plc_model=plc_model, task_type=task_type, connection=authored_connection, domain_results=True) or []
             # Family catalogue presence is insufficient for process behavior.
             rows = [row for row in rows if row.get('runtime_dimension')]
             for row in rows:
@@ -1817,7 +2412,7 @@ def resolve_error_records(codes, *, plc_model="FX3U", task_type="debug"):
     """Resolve explicit error codes through ``error_records`` only."""
     from knowledge.fact_corpus import resolve
     _index, _path, connection, schema, _meta = _runtime()
-    authored = resolve("error", codes, plc_model=plc_model, task_type=task_type, connection=connection)
+    authored = resolve("error", codes, plc_model=plc_model, task_type=task_type, connection=connection, domain_results=True)
     if authored is not None:
         return authored
     if connection is None or schema is None:

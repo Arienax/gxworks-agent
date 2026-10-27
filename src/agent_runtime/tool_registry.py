@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Tool registration, argument checks and public result envelopes."""
 from __future__ import annotations
 import copy
@@ -29,6 +32,11 @@ class ToolDefinition:
     parameters: Mapping[str, Any]
     handler: Callable[[ToolContext, Mapping[str, Any]], Mapping[str, Any]]
     confirmation_required: bool = False
+
+    @property
+    def result_schema(self):
+        from application.read_delivery import READ_RESULT_SCHEMAS
+        return READ_RESULT_SCHEMAS.get(self.name)
 
     @property
     def context_requirement(self):
@@ -64,6 +72,8 @@ class ToolRegistry:
     """Name-to-handler registry with a small JSON-schema validation subset."""
 
     _tools: Dict[str, ToolDefinition] = field(default_factory=dict)
+    _read_delivery: Any = field(default=None, init=False, repr=False)
+    public_read_validator: Any = field(default=None, repr=False)
 
     def register(self, definition: ToolDefinition) -> None:
         name = str(definition.name or "")
@@ -75,6 +85,14 @@ class ToolRegistry:
             raise ValueError(f"duplicate tool: {name}")
         from dataclasses import replace
         schema = copy.deepcopy(dict(definition.parameters or {}))
+        from application.read_delivery import PAGED_READ_TOOLS
+        if name in PAGED_READ_TOOLS:
+            schema.setdefault('properties', {})['cursor'] = {
+                'type': 'string', 'minLength': 1, 'maxLength': 100,
+                'description': '分页游标。使用 delivery.next 的完整参数继续，直到 delivery.complete=true；查询或工程/事实库变化后重新读取。'}
+            definition = replace(definition, description=definition.description +
+                ' 返回 context_schema_version=3：document 引用 objects；按 delivery.next 读取全部页并合并 objects。'
+                ' 单次最多 6000 估算 token / 32 KiB，未完成交付不能当作知识缺失或改用网页搜索。')
         if name in SOURCE_TOOL_NAMES:
             schema.setdefault("properties", {})["source_ref"] = {
                 "type": "string", "minLength": 1, "maxLength": 128,
@@ -141,6 +159,13 @@ class ToolRegistry:
             }
         try:
             context = resolve_tool_context(definition, context, decoded)
+            from application.read_delivery import PAGED_READ_TOOLS, ReadDeliveryStore, read_binding
+            if definition.name in PAGED_READ_TOOLS:
+                if self._read_delivery is None:
+                    self._read_delivery = ReadDeliveryStore()
+                binding = read_binding(context)
+                if decoded.get('cursor'):
+                    return self._read_delivery.resume(definition.name, decoded, binding)
             data = dict(definition.handler(context, decoded) or {})
             if context.analysis_source is not None:
                 data["analysis_source"] = {key: copy.deepcopy(value) for key, value in context.analysis_source.items()
@@ -156,6 +181,13 @@ class ToolRegistry:
             return {"ok": False, "tool": definition.name, "error": {
                 "code": "PERMISSION_DENIED", "message": str(error), "next_actions": []}}
         except Exception as error:  # tool errors are data, not agent-loop crashes
+            from gxw.models import GXWFormatError
+            details = {}
+            if isinstance(error, GXWFormatError) and isinstance(getattr(error, 'findings', None), list):
+                # Keep source-local static errors actionable through MCP, not
+                # just a shortened aggregate message. The shared public/model
+                # projections still remove internal metadata from these rows.
+                details['findings'] = copy.deepcopy(error.findings)
             return {
                 "ok": False,
                 "tool": definition.name,
@@ -163,9 +195,23 @@ class ToolRegistry:
                     "code": "TOOL_FAILED",
                     "message": str(error)[:1000],
                     "next_actions": [],
+                    **details,
                 },
             }
         envelope = {"ok": True, "tool": definition.name, "data": data}
+        if definition.name in PAGED_READ_TOOLS:
+            from agent_runtime.runtime import _model_tool_value
+            try:
+                try:
+                    validate_schema(definition.result_schema, data, 'result')
+                except ValueError as error:
+                    raise ToolPreconditionError('INVALID_TOOL_RESULT', '工具业务结果结构无效。') from error
+                public = _model_tool_value(definition.name, envelope)
+                if self.public_read_validator is not None:
+                    self.public_read_validator(definition.name, public['data'])
+                return self._read_delivery.prepare(public, decoded, binding)
+            except ToolPreconditionError as error:
+                return {'ok': False, 'tool': definition.name, 'error': error.payload()}
         if definition.confirmation_required:
             envelope["status"] = "confirmation_required"
         return envelope

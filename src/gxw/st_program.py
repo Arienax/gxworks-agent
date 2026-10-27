@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Current-project context and ordinary ST authoring over existing Core rules.
 
 These functions read the supplied saved project. They never choose a template,

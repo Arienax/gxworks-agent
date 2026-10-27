@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """One lazy, apartment-bound owner of the local GX desktop execution resource.
 
 Only the application's proposal approval callback calls ``submit_approved``.

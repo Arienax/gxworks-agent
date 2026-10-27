@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Headless, non-migrating project queries and one bounded file boundary."""
 from __future__ import annotations
 
@@ -5,6 +8,7 @@ import copy
 import json
 import mimetypes
 import re
+import uuid
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -54,6 +58,7 @@ class ProjectService:
         self.workspace = Path(workspace).expanduser().resolve()
         self.store = ProjectSession(base_dir=self.workspace, create=False)
         self.runtime = build_default_tool_runtime()
+        self.read_revision = uuid.uuid4().hex
         from application.program_inspection import ProgramInspectionService
         self.inspection = ProgramInspectionService()
 
@@ -180,11 +185,33 @@ class ProjectService:
                 self.artifact(project_id, version_id, key)
         return self.store.load_program_ir(project_id, version_id, persist_legacy=False)
 
-    def sfc_graph(self, project_id, version_id):
+    def sfc_graph(self, project_id, version_id, program=None):
         version = self.raw_version(project_id, version_id)
+        from .workspace import read_json
+        cache = self.store.version_dir(project_id, version_id) / 'native-validation' / 'sfc-graphs.json'
+        if cache.is_file():
+            from gxw.sfc_pou import read_sfc_project_context
+            context = read_sfc_project_context(self.artifact(project_id, version_id, 'gxw').read_bytes(),
+                program or (version.get('program_name') if version.get('target_mode') == 'sfc' else None))
+            graph = read_json(cache).get(context.program_name)
+            if graph is not None and context.native_graph(graph) is not None:
+                return graph
         if 'write_report' not in (version.get('artifacts') or {}):
             return None
         return json.loads(self.artifact(project_id, version_id, 'write_report').read_bytes()).get('sfc_graph')
+
+    def record_sfc_graph(self, project_id, version_id, program, graph):
+        """Retain a source-bound getter result without changing the saved version."""
+        from gxw.sfc_pou import read_sfc_project_context
+        from .workspace import atomic_json, read_json
+        self.raw_version(project_id, version_id)
+        context = read_sfc_project_context(self.artifact(project_id, version_id, 'gxw').read_bytes(), program)
+        if context.native_graph(graph) is None:
+            raise ProjectError('Native SFC graph does not match the selected version source.')
+        cache = self.store.version_dir(project_id, version_id) / 'native-validation' / 'sfc-graphs.json'
+        values = read_json(cache) if cache.is_file() else {}
+        values[context.program_name] = copy.deepcopy(graph)
+        atomic_json(cache, values)
 
     def _fbd_context(self, project_id, version_id):
         from gxw.object_model import read_project_context
@@ -194,12 +221,15 @@ class ProjectService:
             selected = json.loads(self.artifact(project_id, version_id, 'fbd').read_bytes())['program']
         return read_project_context(self.artifact(project_id, version_id, 'gxw').read_bytes(), selected)
 
-    def tool_context(self, project_id: str, version_id: str | None = None):
+    def tool_context(self, project_id: str, version_id: str | None = None, *, requirement=None):
         from agent_runtime.plc_tools import build_tool_context
         from plc.ir import ir_to_ladder
         project = self.raw_project(project_id)
         selected = version_id or project.get("active_version_id")
         version = self.raw_version(project_id, selected) if selected else None
+        if requirement == 'model':
+            return build_tool_context(project, version=version, inspection=self.inspection,
+                                      read_revision=self.read_revision)
         program = self.program(project_id, selected) if version and version.get("target_mode") == "ladder" else None
         if version and version.get("target_mode") == "ladder" and program is None:
             raise ProjectError("Selected ladder version has no readable program.")
@@ -212,6 +242,7 @@ class ProjectService:
         if self.raw_project(project_id) != project:
             raise ProjectError("Project changed during read; retry")
         return build_tool_context(project, version=version, program_ir=program,
+                                  read_revision=self.read_revision,
                                   ladder=ir_to_ladder(program) if program else None, fbd_baseline=fbd_baseline,
                                   native_snapshot=native_snapshot,
                                   st_text=st_text, sfc_graph=sfc_graph, inspection=self.inspection)
@@ -224,11 +255,24 @@ class ProjectService:
         program = self.program(project_id, version_id)
         if version.get("target_mode") == "ladder" and version.get("ir_sha256"):
             if not program or canonical_sha256(program) != version["ir_sha256"]:
-                raise ConflictError("Version IR changed after validation")
+                from plc.ordered_source import same_ordered_source_inputs
+                try:
+                    stored = json.loads(self.artifact(project_id, version_id, 'ir').read_bytes())
+                except (KeyError, ValueError, OSError):
+                    stored = None
+                if (stored is None or canonical_sha256(stored) != version['ir_sha256']
+                        or not same_ordered_source_inputs(stored, program)):
+                    raise ConflictError("Version IR changed after validation")
         return program
 
     def invoke(self, project_id: str, version_id: str | None, call_id: str, name: str, arguments: dict):
-        return self.runtime.invoke(ToolCall(call_id, name, arguments), self.tool_context(project_id, version_id))
+        return self.runtime.invoke(ToolCall(call_id, name, arguments), self.invocation_context(project_id, version_id, name))
+
+    def invocation_context(self, project_id, version_id, name):
+        definition = self.runtime.registry._tools.get(name)
+        if definition is not None and definition.context_requirement == 'model':
+            return self.tool_context(project_id, version_id, requirement='model')
+        return self.tool_context(project_id, version_id)
 
     def diagnostics(self, project_id: str, version_id: str) -> dict:
         return public_tool_result_data(self.invoke(project_id, version_id, "diagnostics", "get_diagnostics", {}))

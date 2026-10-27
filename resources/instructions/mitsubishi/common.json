@@ -1,6 +1,1032 @@
 {
   "schema_version": 1,
   "vendor": "mitsubishi",
+  "source_forms": [
+    {
+      "family": "Q",
+      "symbols": [
+        "MEP",
+        "MEF"
+      ],
+      "category": "condition",
+      "operands": [],
+      "manual_id": "sh080809engx",
+      "pdf_page": 148,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "OUTH"
+      ],
+      "operand_types_verified": true,
+      "operands": [
+        {
+          "name": "timer",
+          "role": "write",
+          "data_type": "bit",
+          "device_prefixes": [
+            "T",
+            "ST"
+          ]
+        },
+        {
+          "name": "preset",
+          "role": "read",
+          "data_type": "word"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 154,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "LDPI",
+        "LDFI",
+        "ANDPI",
+        "ANDFI",
+        "ORPI",
+        "ORFI"
+      ],
+      "category": "condition",
+      "operand_types_verified": true,
+      "operands": [
+        {
+          "name": "condition",
+          "role": "read",
+          "data_type": "bit"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 139,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "LDD=",
+        "LDD<>",
+        "LDD>",
+        "LDD<",
+        "LDD>=",
+        "LDD<=",
+        "ANDD=",
+        "ANDD<>",
+        "ANDD>",
+        "ANDD<",
+        "ANDD>=",
+        "ANDD<=",
+        "ORD=",
+        "ORD<>",
+        "ORD>",
+        "ORD<",
+        "ORD>=",
+        "ORD<="
+      ],
+      "category": "condition",
+      "operand_types_verified": true,
+      "operands": [
+        {
+          "name": "left",
+          "role": "read",
+          "data_type": "dword"
+        },
+        {
+          "name": "right",
+          "role": "read",
+          "data_type": "dword"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 193,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "LDE=",
+        "LDE<>",
+        "LDE>",
+        "LDE<",
+        "LDE>=",
+        "LDE<=",
+        "ANDE=",
+        "ANDE<>",
+        "ANDE>",
+        "ANDE<",
+        "ANDE>=",
+        "ANDE<=",
+        "ORE=",
+        "ORE<>",
+        "ORE>",
+        "ORE<",
+        "ORE>=",
+        "ORE<="
+      ],
+      "category": "condition",
+      "operands": [
+        {
+          "name": "left",
+          "role": "read"
+        },
+        {
+          "name": "right",
+          "role": "read"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 195,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "LD$=",
+        "LD$<>",
+        "LD$>",
+        "LD$<",
+        "LD$>=",
+        "LD$<=",
+        "AND$=",
+        "AND$<>",
+        "AND$>",
+        "AND$<",
+        "AND$>=",
+        "AND$<=",
+        "OR$=",
+        "OR$<>",
+        "OR$>",
+        "OR$<",
+        "OR$>=",
+        "OR$<="
+      ],
+      "category": "condition",
+      "operands": [
+        {
+          "name": "left",
+          "role": "read"
+        },
+        {
+          "name": "right",
+          "role": "read"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 198,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "+",
+        "+P",
+        "-",
+        "-P"
+      ],
+      "operand_types_verified": true,
+      "operands": [
+        {
+          "name": "source",
+          "role": "read",
+          "data_type": "word"
+        },
+        {
+          "name": "destination",
+          "role": "read_write",
+          "data_type": "word"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 224,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "+",
+        "+P",
+        "-",
+        "-P"
+      ],
+      "operand_types_verified": true,
+      "operands": [
+        {
+          "name": "left",
+          "role": "read",
+          "data_type": "word"
+        },
+        {
+          "name": "right",
+          "role": "read",
+          "data_type": "word"
+        },
+        {
+          "name": "destination",
+          "role": "write",
+          "data_type": "word"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 226,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "D+",
+        "D+P",
+        "D-",
+        "D-P"
+      ],
+      "operand_types_verified": true,
+      "operands": [
+        {
+          "name": "source",
+          "role": "read",
+          "data_type": "dword"
+        },
+        {
+          "name": "destination",
+          "role": "read_write",
+          "data_type": "dword"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 228,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "D+",
+        "D+P",
+        "D-",
+        "D-P"
+      ],
+      "operand_types_verified": true,
+      "operands": [
+        {
+          "name": "left",
+          "role": "read",
+          "data_type": "dword"
+        },
+        {
+          "name": "right",
+          "role": "read",
+          "data_type": "dword"
+        },
+        {
+          "name": "destination",
+          "role": "write",
+          "data_type": "dword"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 230,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "*",
+        "*P",
+        "/",
+        "/P"
+      ],
+      "operand_types_verified": true,
+      "operands": [
+        {
+          "name": "left",
+          "role": "read",
+          "data_type": "word"
+        },
+        {
+          "name": "right",
+          "role": "read",
+          "data_type": "word"
+        },
+        {
+          "name": "destination",
+          "role": "write",
+          "data_type": "dword"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 232,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "D*",
+        "D*P",
+        "D/",
+        "D/P"
+      ],
+      "operand_types_verified": true,
+      "operands": [
+        {
+          "name": "left",
+          "role": "read",
+          "data_type": "dword"
+        },
+        {
+          "name": "right",
+          "role": "read",
+          "data_type": "dword"
+        },
+        {
+          "name": "destination",
+          "role": "write",
+          "data_type": "dword",
+          "word_count": 4
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 234,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "E+",
+        "E+P",
+        "E-",
+        "E-P",
+        "E*",
+        "E*P",
+        "E/",
+        "E/P"
+      ],
+      "operands": [
+        {
+          "name": "left",
+          "role": "read"
+        },
+        {
+          "name": "right",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 40,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "$MOV",
+        "$MOVP"
+      ],
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 46,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "$+",
+        "$+P"
+      ],
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "read_write"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 41,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "$+",
+        "$+P"
+      ],
+      "operands": [
+        {
+          "name": "left",
+          "role": "read"
+        },
+        {
+          "name": "right",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 41,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "BKRST",
+        "BKRSTP"
+      ],
+      "operand_types_verified": true,
+      "operands": [
+        {
+          "name": "destination",
+          "role": "write",
+          "data_type": "bit"
+        },
+        {
+          "name": "count",
+          "role": "read",
+          "data_type": "word"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 420,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "ROR",
+        "RORP",
+        "RCR",
+        "RCRP"
+      ],
+      "operand_types_verified": true,
+      "operands": [
+        {
+          "name": "destination",
+          "role": "read_write",
+          "data_type": "word"
+        },
+        {
+          "name": "count",
+          "role": "read",
+          "data_type": "word"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 385,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "ROL",
+        "ROLP",
+        "RCL",
+        "RCLP"
+      ],
+      "operand_types_verified": true,
+      "operands": [
+        {
+          "name": "destination",
+          "role": "read_write",
+          "data_type": "word"
+        },
+        {
+          "name": "count",
+          "role": "read",
+          "data_type": "word"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 388,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "SFR",
+        "SFRP",
+        "SFL",
+        "SFLP"
+      ],
+      "operand_types_verified": true,
+      "operands": [
+        {
+          "name": "destination",
+          "role": "read_write",
+          "data_type": "word"
+        },
+        {
+          "name": "count",
+          "role": "read",
+          "data_type": "word"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 395,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "BSFR",
+        "BSFRP",
+        "BSFL",
+        "BSFLP"
+      ],
+      "operand_types_verified": true,
+      "operands": [
+        {
+          "name": "destination",
+          "role": "read_write",
+          "data_type": "bit"
+        },
+        {
+          "name": "count",
+          "role": "read",
+          "data_type": "word"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 398,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "ENCO",
+        "ENCOP"
+      ],
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        },
+        {
+          "name": "count",
+          "role": "read"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 429,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "STRDEL",
+        "STRDELP"
+      ],
+      "operands": [
+        {
+          "name": "destination",
+          "role": "read_write"
+        },
+        {
+          "name": "start",
+          "role": "read"
+        },
+        {
+          "name": "count",
+          "role": "read"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 592,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "FF"
+      ],
+      "operand_types_verified": true,
+      "operands": [
+        {
+          "name": "destination",
+          "role": "read_write",
+          "data_type": "bit"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 171,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "SFT",
+        "SFTP"
+      ],
+      "operand_types_verified": true,
+      "operands": [
+        {
+          "name": "destination",
+          "role": "read_write",
+          "data_type": "bit"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 175,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "TTMR"
+      ],
+      "operand_types_verified": true,
+      "operands": [
+        {
+          "name": "destination",
+          "role": "read_write",
+          "data_type": "word",
+          "word_count": 2
+        },
+        {
+          "name": "multiplier",
+          "role": "read",
+          "data_type": "word"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 342,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "STMR"
+      ],
+      "operands": [
+        {
+          "name": "timer",
+          "role": "read_write"
+        },
+        {
+          "name": "preset",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 344,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "LEN",
+        "LENP"
+      ],
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 553,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "RIGHT",
+        "RIGHTP",
+        "LEFT",
+        "LEFTP"
+      ],
+      "operands": [
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        },
+        {
+          "name": "count",
+          "role": "read"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 580,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "INSTR",
+        "INSTRP"
+      ],
+      "operands": [
+        {
+          "name": "needle",
+          "role": "read"
+        },
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        },
+        {
+          "name": "start",
+          "role": "read"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 588,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "FOR"
+      ],
+      "category": "program_control",
+      "operand_types_verified": true,
+      "operands": [
+        {
+          "name": "count",
+          "role": "read",
+          "data_type": "word"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 461,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "CJ"
+      ],
+      "category": "program_control",
+      "operands": [
+        {
+          "name": "destination",
+          "role": "control"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 325,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "CALL",
+        "CALLP"
+      ],
+      "category": "program_control",
+      "operands": [
+        {
+          "name": "destination",
+          "role": "control"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 466,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "MC"
+      ],
+      "category": "program_control",
+      "operands": [
+        {
+          "name": "nesting",
+          "role": "control"
+        },
+        {
+          "name": "destination",
+          "role": "write"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 177,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "MCR"
+      ],
+      "category": "program_control",
+      "operands": [
+        {
+          "name": "nesting",
+          "role": "control"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 177,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "TO",
+        "TOP",
+        "DTO",
+        "DTOP"
+      ],
+      "operands": [
+        {
+          "name": "unit",
+          "role": "control"
+        },
+        {
+          "name": "buffer",
+          "role": "control"
+        },
+        {
+          "name": "source",
+          "role": "read"
+        },
+        {
+          "name": "count",
+          "role": "read"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 513,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "RET"
+      ],
+      "category": "program_control",
+      "operands": [],
+      "manual_id": "sh080809engx",
+      "pdf_page": 471,
+      "families": [
+        "Q",
+        "L"
+      ]
+    },
+    {
+      "family": "Q",
+      "symbols": [
+        "SCJ"
+      ],
+      "category": "program_control",
+      "operands": [
+        {
+          "name": "destination",
+          "role": "control"
+        }
+      ],
+      "manual_id": "sh080809engx",
+      "pdf_page": 325,
+      "families": [
+        "Q",
+        "L"
+      ]
+    }
+  ],
   "instructions": [
     {
       "mnemonic": "LD",
@@ -1614,19 +2640,23 @@
       "semantic_kind": "function_block",
       "operands": [
         {
-          "name": "pv",
+          "name": "S1",
+          "semantic_name": "setpoint_value",
           "role": "read"
         },
         {
-          "name": "sv",
+          "name": "S2",
+          "semantic_name": "process_value",
           "role": "read"
         },
         {
-          "name": "parameter",
+          "name": "S3",
+          "semantic_name": "parameter_block",
           "role": "read"
         },
         {
-          "name": "destination",
+          "name": "D",
+          "semantic_name": "output_value",
           "role": "write"
         }
       ]

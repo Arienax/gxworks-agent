@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Bounded SFC source records with raw-preserved graph and child programs.
 
 The envelope and child ownership were checked against native frontend records.

@@ -1,5 +1,9 @@
 <h1 align="center">GXWorks Agent</h1>
 
+<p align="center"><strong>原作者: <a href="https://github.com/Arienax">Arienax</a></strong> · <a href="https://github.com/Arienax/gxworks-agent">github.com/Arienax/gxworks-agent</a></p>
+
+<p align="center">© 2026 Arienax · Apache-2.0</p>
+
 <h3 align="center">三菱電機 PLC エンジニアリング向け MCP ツールサービスと AI ワークベンチ</h3>
 
 <p align="center"><strong>設計コンテキストの取得 · プログラムの生成とレビュー · GX Works2 ネイティブ編集と診断</strong></p>
@@ -40,6 +44,8 @@ Codex、Claude Desktop、Cursor などの MCP クライアントを接続すれ�
 FX/Q/L のモデル一覧全体をファイル能力の判断に使用し、CPU、形式、オブジェクト、操作ごとに対応範囲を返します。未知レコードのバイト列を保持したまま解析済みオブジェクトの編集を行え、未解決の依存関係がある変更には対象と理由を返します。この経路は既存のソースオブジェクト、宣言、コメントのオフライン編集を対象としています。
 
 ソースや宣言を変更すると以前のコンパイル結果は期限切れ（`stale`）として扱われ、コンパイラーによる検証が必要な場合は明示的にネイティブコンパイル検査を実行します。
+
+`validate_project(native=true)` は分離したコピーをコンパイルして検査します。`compilation.acceptance=accepted` は、そのコピーをコンパイラが受理したことを示します。コンパイル成果物は書き戻さず、`save.completed` と `save.exported` はともに `false` のため、ダウンロードした工程が GX Works2 で未コンパイルと表示される場合があります。公開ツール `compile_project` もローカル Core コンパイルのみを行います。ネイティブのコンパイル成果物を保存するには、GX Works2 でコンパイルして保存するか、独立したワークスペース API `NativeWorkspaceSourceSave.compile_project` を使用し、保存とコールド再オープンの結果を確認してください。コンパイル、コード検査、保存、PLC 実行の結果は独立しています。
 
 <a name="ladder"></a>
 
@@ -173,6 +179,8 @@ cd gxworks-agent
 
 オフラインでの GXW ファイル操作に三菱電機ソフトウェアのインストールは不要です。ネイティブ保存、ネイティブコンパイル・コードチェック、GX Works2 への受け渡し、ネイティブシミュレーションには対応する三菱電機ソフトウェアがローカル環境に必要です。PLC の読み取り専用モニターには MX Component と論理局の設定が必要です。これらの三菱電機ソフトウェアはパッケージに同梱されていません。
 
+Windows のネイティブアダプターは x86 プロセスで GX Works2 のコンポーネントを読み込みます。Python ホストは 64 ビットでも使用できます。pywinauto のビット数に関する警告だけでは操作失敗と判断せず、実際のエラーを確認してください。スクリーンショットを取得できない場合も元の例外を保持し、画面取得の問題を別に報告します。
+
 ## 設備の試運転前に
 
 試運転前に、生成されたロジックを対象 CPU、実配線、機構の動作範囲、運転モードに照らして確認してください。インポート前に対象の GX プロジェクトをバックアップし、GX Works2 へプロジェクト更新を送信したあと、GX Works2 上でコンパイル・チェックおよび実機への書き込みを行ってください。
@@ -181,6 +189,6 @@ cd gxworks-agent
 
 ## 資料とライセンス
 
-[リリースの変更点](CHANGELOG.md) · [貢献ガイド](CONTRIBUTING.md) · [Issue](https://github.com/Arienax/gxworks-agent/issues) · [セキュリティ](SECURITY.md)
+[リリースの変更点](CHANGELOG.md) · [Issue](https://github.com/Arienax/gxworks-agent/issues)
 
-プロジェクト貢献者が権利を持つ Core、Web、MCP、ネイティブアダプターのソースコードには [Apache License 2.0](LICENSE) を適用します。詳細は[ライセンス範囲](LICENSE-SCOPE.md)と[第三者の権利表記](THIRD_PARTY_NOTICES.md)を参照してください。各貢献者は自身の著作権を保持し、過去に配布されたリリースにはそれぞれの配布時点のライセンスが適用されます。
+プロジェクト貢献者が権利を持つ Core、Web、MCP、ネイティブアダプターのソースコードには [Apache License 2.0](LICENSE) を適用します。詳細は[ライセンス範囲](LICENSING.md)と[第三者の権利表記](THIRD_PARTY_NOTICES.md)を参照してください。各貢献者は自身の著作権を保持し、過去に配布されたリリースにはそれぞれの配布時点のライセンスが適用されます。[NOTICE](NOTICE) にオリジナルプロジェクト、作者、リポジトリを記録しています。

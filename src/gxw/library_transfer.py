@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Source-bound user-library inventory and native import readback.
 
 Libraries travel through the vendor's library format. Caller programs, tasks

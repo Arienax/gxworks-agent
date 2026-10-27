@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """One source-bound FB call inserted into the current native FBD document.
 
 Current CSV declarations, native ports and observed conductive nets are the

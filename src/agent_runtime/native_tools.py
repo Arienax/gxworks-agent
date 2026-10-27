@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Saved native project queries and approved engineering intents."""
 from __future__ import annotations
 import copy
@@ -84,12 +87,63 @@ def _request_gxworks2_import(
 
 def _get_fbd_catalog(context: ToolContext, arguments: Mapping[str, Any]) -> Dict[str, Any]:
     from application.fbd import _target_baseline, catalog_snapshot
+    from application.fbd_context import CATALOG_SCOPES, has_graph, select_task_catalog
 
-    raw = _target_baseline(context.fbd_baseline, context.plc_model)
-    return catalog_snapshot(raw, arguments.get('program') or (context.version or {}).get('program_name')) | {
-        'limitations': ['Fresh projects use CPU-matched blank templates for 56 enabled Q/L/FX menu identities; FX1 is unsupported by the current FBD reproduction workflow; parameter-only targets have no FBD Program.',
-                        'Callable ports are bound to this project CPU and source declarations.',
-                        'GX Works2 compilation is a separate validation step.']}
+    raw = _target_baseline(context.native_snapshot or context.fbd_baseline, context.plc_model)
+    program = arguments.get('program') or (context.version or {}).get('program_name')
+    if not arguments.get('program') and context.native_snapshot is not None and (context.version or {}).get('target_mode') != 'fbd':
+        from gxw.offline_project import read_offline_project
+        candidates = [row['source_name'] for row in read_offline_project(raw).sources()
+                      if row.get('language') == 'fbd' and row.get('unit_kind') == 'program']
+        if program not in candidates:
+            if len(candidates) != 1:
+                raise ValueError('Select an existing FBD Program for this project; available: ' + ', '.join(candidates))
+            program = candidates[0]
+    snapshot = catalog_snapshot(raw, program)
+    scope = str(arguments.get('catalog_scope') or 'full')
+    if scope not in CATALOG_SCOPES:
+        raise ValueError('catalog_scope must be task or full')
+    templates = arguments.get('templates')
+    previous = snapshot.get('parameter_model') if scope == 'task' else None
+    if not has_graph(previous):
+        # A graph without objects carries no dependency information; task scope
+        # then selects from the request and the base primitives instead of
+        # inlining the whole directory.
+        previous = None
+    discovery = None
+    requirement = str(arguments.get('user_requirement') or '').strip()
+    if not templates and scope == 'task':
+        from application.capability_context import augment_generation_knowledge
+        from knowledge.evidence import context_manifest
+        try:
+            knowledge = augment_generation_knowledge(requirement, plc_model=context.plc_model,
+                target_mode='fbd', confirmed_spec=None, catalog=snapshot)
+            discovery = context_manifest(knowledge, stage='generate')['capability_discovery']
+        except Exception:  # discovery is an optimisation here, not a requirement
+            discovery = None
+    selection = select_task_catalog(snapshot, templates=templates, scope=scope, previous=previous,
+                                    request=requirement, discovery=discovery)
+    limitations = ['Fresh projects use CPU-matched blank templates for 56 enabled Q/L/FX menu identities; '
+                   'FX1 is unsupported by the current FBD reproduction workflow; parameter-only targets '
+                   'have no FBD Program.',
+                   'Callable ports are bound to this project CPU and source declarations.',
+                   'GX Works2 compilation is a separate validation step.']
+    if selection['missing_templates']:
+        limitations.append('Requested templates absent from this saved project are reported in '
+                           'missing_templates; the catalog is not widened as a fallback.')
+    if scope == 'task':
+        limitations.append('catalog_scope=task keeps only the connection primitives, common operators, '
+                           'discovered callables and the current graph references. Pass templates=[...] '
+                           'or catalog_scope=full to widen it; no unrecognised request falls back to the '
+                           'full directory.')
+    return {**snapshot, 'nodes': selection['nodes'], 'catalog_scope': selection['catalog_scope'],
+            'requested_templates': selection['requested_templates'],
+            'missing_templates': selection['missing_templates'],
+            'dependency_closure': {key: value for key, value in selection.items()
+                                   if key in ('unresolved_references', 'structure_gaps', 'expansion')},
+            'structured_types': selection.get('structured_types') or {},
+            'available_template_count': selection['available_template_count'],
+            'limitations': limitations}
 
 
 def _read_fbd_project(context: ToolContext, arguments: Mapping[str, Any]) -> Dict[str, Any]:

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """GX Works2 1.635 operational text, aligned by native resource identity.
 
 Static vocabulary does not grant model/language runtime acceptance.

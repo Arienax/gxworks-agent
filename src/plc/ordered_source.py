@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Ordered native instruction sources in the existing PLC IR.
 
 The instruction sequence is authoritative. A graphical preview may be absent;
@@ -18,6 +21,50 @@ def is_ordered_ladder(value):
 
 def source_record_kind(row):
     return row.get('kind', 'instruction')
+
+
+def source_label_reference(value):
+    """Q/L stored label spelling; its declaration and type need separate binding."""
+    return isinstance(value, str) and bool(re.fullmatch(
+        r"'[^\W\d]\w*(?:\[[^\[\]\x00\r\n]+\]|\.[^\W\d]\w*)*", value))
+
+
+def source_grouped_reference(value):
+    """A digit-specified bit region as one word operand, without runtime admission."""
+    if not isinstance(value, str):
+        return None
+    match = re.fullmatch(r'K([1-8])((?:SM|SB|[XYMLBSF])[0-9A-F]+)([ZV][0-9]+)?', value, re.I)
+    return {'digits': int(match[1]), 'base': match[2].upper(),
+            'index': match[3].upper() if match[3] else None} if match else None
+
+
+def source_extended_reference(value):
+    """Hardware-qualified or indirect source access, never an ordinary PLC device."""
+    if not isinstance(value, str):
+        return None
+    from plc.device_identity import REFERENCE_DEVICE_PATTERN
+    text = value.strip().upper()
+    indirect = text.startswith('@')
+    text = text.removeprefix('@')
+    prefix, indexes = '', []
+    if '\\' in text:
+        if text.count('\\') != 1:
+            return None
+        qualifier, text = text.split('\\')
+        match = re.fullmatch(r'(U[0-9A-F]+|J[0-9]+|BL[0-9]+|\.[0-9A-F]+)((?:ZZ|Z|V)[0-9]+)?', qualifier)
+        if not match:
+            return None
+        prefix = match[1] + '\\'
+        if match[2]:
+            indexes.append(match[2])
+    match = re.fullmatch(r'(K[1-8])?(' + REFERENCE_DEVICE_PATTERN + r'|G[0-9]+)((?:ZZ|Z|V)[0-9]+)?', text)
+    if not match or not (indirect or prefix or match[3] and match[3].startswith('ZZ')):
+        return None
+    if match[3]:
+        indexes.append(match[3])
+    pointer = prefix + (match[1] or '') + match[2]
+    return {'base': ('@' if indirect else '') + pointer, 'indexes': tuple(indexes),
+            'indirect': indirect, 'pointer': pointer, 'device': match[2], 'group': match[1]}
 
 
 def indexed_literal_register(value):
@@ -41,11 +88,148 @@ def buffer_memory_reference(value):
     """
     if not isinstance(value, str):
         return None
-    match = re.fullmatch(r'(U[0-9A-F]+)([ZV][0-9]+)?\\(G[0-9A-F]+)([ZV][0-9]+)?',
+    # Unit and bit selectors are hexadecimal; the native G token is decimal.
+    match = re.fullmatch(r'(U[0-9A-F]+)([ZV][0-9]+)?\\(G[0-9]+)([ZV][0-9]+)?(\.[0-9A-F])?',
                          value.strip().upper())
     if match is None or match[2] and match[4]:
         return None
-    return {'base': match[1] + '\\' + match[3], 'index': match[2] or match[4]}
+    return {'base': match[1] + '\\' + match[3] + (match[5] or ''), 'index': match[2] or match[4]}
+
+
+def split_ordered_circuits(records):
+    """Group complete circuits while preserving their original statement rows.
+
+    The joined note is for display. Leading statements remain separate so a
+    source-bound writer does not duplicate them when re-emitting instructions.
+    """
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY, InstructionCategory, condition_connector
+
+    def _is_root_input(op):
+        return condition_connector(op) == 'LD'
+
+    def _is_condition(op):
+        return (condition_connector(op) or op in {'ANB', 'ORB', 'INV', 'MEP', 'MEF'}
+                or DEFAULT_INSTRUCTION_REGISTRY.category_of(op) == InstructionCategory.CONDITION)
+
+    _BRANCH_SYSTEM_OPS = {'MPS', 'MRD', 'MPP'}
+
+    networks = []
+    current = []
+    pending_statements = []
+    pending_records = []
+    current_statements = []
+    leading_statements = []
+    has_action = False
+    logic_depth = 0
+    mps_depth = 0
+    mps_seen = False
+    after_mpp = False
+    after_mpp_action = False
+
+    def finish() -> None:
+        nonlocal current, current_statements, leading_statements, has_action, mps_depth, logic_depth
+        nonlocal mps_seen, after_mpp, after_mpp_action
+        if current:
+            note = "\n".join(item for item in current_statements if item).strip()
+            networks.append((note, current, list(leading_statements)))
+        current = []
+        current_statements = []
+        leading_statements = []
+        has_action = False
+        logic_depth = 0
+        mps_depth = 0
+        mps_seen = False
+        after_mpp = False
+        after_mpp_action = False
+
+    for record in records:
+        if record.get('kind') in {'opaque', 'label'}:
+            current.append(record)
+            continue
+        if not record.get('op', ''):
+            text = record.get('statement') or record.get('text') or ''
+            if text:
+                (current_statements if current else pending_statements).append(text)
+            if record.get('kind') in {'statement', 'note'}:
+                (current if current else pending_records).append(record)
+            continue
+
+        if record.get('op', '') == "END":
+            finish()
+            continue
+
+        if _is_root_input(record.get('op', '')) and current and has_action and mps_depth == 0 and logic_depth <= 1:
+            if not mps_seen or (after_mpp and after_mpp_action):
+                finish()
+
+        if not current:
+            current_statements = list(pending_statements)
+            pending_statements.clear()
+            leading_statements = list(current_statements)
+            current.extend(pending_records)
+            pending_records.clear()
+        if record.get('statement', ''):
+            current_statements.append(record.get('statement', ''))
+        current.append(record)
+
+        if _is_root_input(record.get('op', '')):
+            logic_depth += 1
+        elif record.get('op', '') in {'ANB', 'ORB'}:
+            logic_depth -= 1
+
+        if record.get('op', '') == "MPS":
+            mps_depth += 1
+            mps_seen = True
+        elif record.get('op', '') == "MPP":
+            mps_depth = max(0, mps_depth - 1)
+            after_mpp = True
+        elif not _is_condition(record.get('op', '')) and record.get('op', '') not in _BRANCH_SYSTEM_OPS:
+            has_action = True
+            if after_mpp:
+                after_mpp_action = True
+
+    finish()
+    if pending_records or pending_statements:
+        if networks:
+            note, rows, leading = networks[-1]
+            networks[-1] = ('\n'.join([note, *pending_statements]).strip(), [*rows, *pending_records], leading)
+        elif pending_records:
+            networks.append(('\n'.join(pending_statements), list(pending_records), list(pending_statements)))
+    circuits = []
+    def needs_incoming(rows):
+        logic, saved = 0, 0
+        for row in rows:
+            if row.get('kind') in {'opaque', 'label'}:
+                return False
+            if _is_root_input(row.get('op', '')):
+                logic += 1
+            elif row.get('op', '') in {'ANB', 'ORB'}:
+                if logic < 2:
+                    return True
+                logic -= 1
+            elif row.get('op', '') == 'MPS':
+                if not logic:
+                    return True
+                saved += 1
+            elif row.get('op', '') in {'MRD', 'MPP'}:
+                if not saved:
+                    return True
+                if row.get('op', '') == 'MPP':
+                    saved -= 1
+            elif row.get('op') and not logic and (condition_connector(row['op']) in {'AND', 'OR'} or row['op'] in {'OUT', 'SET', 'RST', 'PLS', 'PLF', 'INV', 'MEP', 'MEF'}):
+                return True
+        return False
+    for note, rows, leading in networks:
+        # An output taps the accumulator; it does not discard it. A later
+        # LD/ANB/ORB may still consume that earlier block. Merge only when
+        # the following display partition actually needs the incoming stack.
+        while circuits and needs_incoming(rows):
+            previous_note, previous_rows, previous_leading = circuits.pop()
+            note = '\n'.join(part for part in (previous_note, note) if part)
+            rows = [*previous_rows, *rows]
+            leading = previous_leading
+        circuits.append((note, rows, leading))
+    return circuits
 
 
 def project_ordered_graph(rung):
@@ -55,7 +239,7 @@ def project_ordered_graph(rung):
     tap that result; later contacts and MPS/MRD/MPP retain their source order.
     This projection never changes the authoritative ordered instructions.
     """
-    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY, InstructionCategory
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY, InstructionCategory, condition_connector
     events, stack, saved = [], [], []
     unresolved = False
 
@@ -113,12 +297,11 @@ def project_ordered_graph(rung):
             events.append({**origin, 'kind': 'stack', 'anchor': anchor})
         elif op in {'INV', 'MEP', 'MEF'}:
             stack[-1:] = [{**origin, 'kind': 'invert' if op == 'INV' else 'edge', 'child': current()}]
-        elif (DEFAULT_INSTRUCTION_REGISTRY.category_of(op) == InstructionCategory.CONDITION
-              and op.startswith(('LD', 'AND', 'OR', 'ANI', 'ORI'))):
+        elif condition_connector(op):
             terminal = {'kind': 'contact', **origin}
-            if op.startswith('LD'):
+            if condition_connector(op) == 'LD':
                 stack.append(terminal)
-            elif op.startswith(('AND', 'ANI')):
+            elif condition_connector(op) == 'AND':
                 stack[-1:] = [combine('and', current(), terminal)]
             else:
                 stack[-1:] = [combine('or', current(), terminal)]
@@ -133,6 +316,21 @@ def project_ordered_graph(rung):
     if stack and current()['kind'] != 'reference':
         freeze()
     return events
+
+
+def same_ordered_source_inputs(before, after):
+    """Compare authoritative inputs when restoring an older derived IR view."""
+    from plc.ir import IR_SCHEMA_VERSION, ir_to_ladder
+    if any(not isinstance(value, Mapping) or value.get('schema_version') != IR_SCHEMA_VERSION
+           or (value.get('source') or {}).get('format') not in {
+               'instruction_sequence_v1', 'instruction_sequence_v2'} for value in (before, after)):
+        return False
+    if any(before.get(key) != after.get(key) for key in ('plc', 'program_name', 'revision', 'io_map')):
+        return False
+    if ((before.get('analysis') or {}).get('config') != (after.get('analysis') or {}).get('config')
+            or (before.get('logic') or {}).get('requirements') != (after.get('logic') or {}).get('requirements')):
+        return False
+    return ir_to_ladder(before) == ir_to_ladder(after)
 
 
 def source_analysis_equivalent(before, after):
@@ -162,8 +360,8 @@ def ordered_source_format(rungs):
             for row in rung.get('ordered_instructions', [])) else 'instruction_sequence_v1')
 
 
-def validate_ordered_rung(rung, *, plc_model, require_catalogued=True, syntax_only=False):
-    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+def validate_ordered_rung(rung, *, plc_model, require_catalogued=True, syntax_only=False, check_stack=True):
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY, source_instruction_arities
     from plc.device_profiles import SOURCE_DEVICE_PROFILES, DEVICE_LIMITS
     from plc.validation import (DEVICE_ADDRESS_RE, INDEXED_DEVICE_ADDRESS_RE,
         _validate_operand_token, _validate_instruction_boundaries,
@@ -207,13 +405,18 @@ def validate_ordered_rung(rung, *, plc_model, require_catalogued=True, syntax_on
         if spec is None:
             if require_catalogued:
                 raise ValueError(path + ': instruction is not catalogued for ' + plc_model + ': ' + op)
-        elif not spec.accepts_arity(len(args)):
+        if not require_catalogued:
+            spec = DEFAULT_INSTRUCTION_REGISTRY.resolve_source_form(op, len(args), cpu=plc_model)
+        if spec is not None and not spec.accepts_arity(len(args)):
             raise ValueError(path + ': incorrect operand count for ' + op)
+        source_arities = source_instruction_arities(op, plc_model)
+        if source_arities and len(args) not in source_arities:
+            raise ValueError(path + ': incorrect stored operand count for ' + op)
         partial = plc_model in SOURCE_DEVICE_PROFILES
         uncovered = [operand for operand in args if DEVICE_ADDRESS_RE.fullmatch(operand)
                      and DEVICE_ADDRESS_RE.fullmatch(operand).group(1).upper() not in DEVICE_LIMITS.get(plc_model, {})]
         for operand in args:
-            if not buffer_memory_reference(operand):
+            if not (buffer_memory_reference(operand) or source_label_reference(operand) or source_extended_reference(operand)):
                 _validate_operand_token(operand, path)
             if not syntax_only:
                 if INDEXED_DEVICE_ADDRESS_RE.fullmatch(operand):
@@ -224,8 +427,8 @@ def validate_ordered_rung(rung, *, plc_model, require_catalogued=True, syntax_on
             _validate_instruction_boundaries(spec, args, path, plc_model, opcode=op)
             _validate_source_operand_types(spec, args, path, plc_model, allow_indexed_literals=True,
                                            allow_buffer_references=True)
-            _validate_app_instruction_write_targets(op, args, path, plc_model)
-        if logic is None or saved is None:
+            _validate_app_instruction_write_targets(op, args, path, plc_model, allow_unverified=True, source_spec=spec)
+        if not check_stack or logic is None or saved is None:
             continue
         if op.startswith('LD'):
             logic += 1
@@ -242,16 +445,49 @@ def validate_ordered_rung(rung, *, plc_model, require_catalogued=True, syntax_on
                 raise ValueError(path + ': shared stack underflow')
             if op == 'MPP':
                 saved -= 1
-    if saved or logic is not None and logic > 1:
+    if check_stack and (saved or logic is not None and logic > 1):
         raise ValueError('ordered network has an unbalanced logic or shared stack')
     return rung
+
+
+def ordered_circuit_rows(rungs):
+    """Partition source without changing the stored network IDs or record order."""
+    rows = [{**row, 'statement': row.get('text', '') if row.get('kind') == 'statement' else '',
+             '_record': row, '_rung_index': index, '_instruction_index': position}
+            for index, rung in enumerate(rungs) for position, row in enumerate(rung.get('ordered_instructions', []))]
+    return split_ordered_circuits(rows)
+
+
+def ordered_display_rungs(rungs):
+    """Join legacy display continuations while retaining their navigation identities."""
+    joins = set()
+    for _note, rows, _leading in ordered_circuit_rows(rungs):
+        owners = sorted({row['_rung_index'] for row in rows})
+        if owners:
+            joins.update(range(owners[0] + 1, owners[-1] + 1))
+    displayed = []
+    for index, rung in enumerate(rungs):
+        if index in joins and displayed and 'ordered_instructions' in rung:
+            current = displayed[-1]
+            current['ordered_instructions'].extend(copy.deepcopy(rung['ordered_instructions']))
+            current['debug_note'] = '\n'.join(part for part in (current.get('debug_note'), rung.get('debug_note')) if part)
+            current['_source_rung_ids'].append(rung.get('rung_id', index + 1))
+        else:
+            displayed.append({**copy.deepcopy(rung), '_source_rung_ids': [rung.get('rung_id', index + 1)]})
+    return displayed
+
+
+def validate_ordered_circuits(rungs, *, plc_model):
+    for index, (_note, rows, _leading) in enumerate(ordered_circuit_rows(rungs)):
+        validate_ordered_rung({'rung_id': index, 'ordered_instructions': [row['_record'] for row in rows]},
+                              plc_model=plc_model, require_catalogued=False, syntax_only=True)
 
 
 def build_instruction_ir(networks, *, plc_model, program_name='MAIN', device_comments=None, revision=1):
     """Reuse the existing semantic/access/timing pipeline without graph lowering."""
     from plc.ir import build_plc_ir
     rungs = []
-    typed = any(row.get('kind') in {'opaque', 'label'} for network in networks
+    typed = any(row.get('kind', 'instruction') != 'instruction' for network in networks
                 for row in network.get('raw_instructions', network.get('instructions', [])))
     for index, network in enumerate(networks, 1):
         instructions = network.get('raw_instructions', network.get('instructions', []))
@@ -292,6 +528,14 @@ def source_coverage_findings(networks, *, plc_model):
                     rung_ids=[network['rung_id']], networks=[network['id']]),
                     'category': 'source_syntax', 'record_index': row.get('record_index'),
                     'kind': kind, 'operands': list(row['args'])})
+            if kind == 'instruction' and row.get('op') == 'RST' and str(plc_model).upper().startswith('Q'):
+                resets = [value for value in row.get('args', []) if re.fullmatch(r'X[0-9A-F]+', value, re.I)]
+                if resets:
+                    result.append({**_finding('SOURCE_INPUT_RESET_SEMANTICS_UNVERIFIED', 'unverified',
+                        'Stored input-image reset is preserved; physical input and scan effects are unverified.',
+                        'Verify the CPU, input image refresh and reset instruction in the actual project.',
+                        addresses=resets, rung_ids=[network['rung_id']], networks=[network['id']]),
+                        'category': 'source_semantics_unverified'})
             if kind in {'opaque', 'label'} or (kind == 'instruction' and
                     DEFAULT_INSTRUCTION_REGISTRY.resolve(row['op'], cpu=plc_model) is None):
                 result.append({**_finding('SOURCE_RECORD_SEMANTICS_UNVERIFIED', 'unverified',
@@ -322,10 +566,45 @@ def source_coverage_findings(networks, *, plc_model):
                     rung_ids=[network['rung_id']], networks=[network['id']]),
                     'category': 'source_semantics_unverified', 'record_index': row.get('record_index'),
                     'kind': kind, 'operands': buffers})
+            labels = [operand for operand in row.get('args', []) if source_label_reference(operand)]
+            if kind == 'instruction' and labels:
+                result.append({**_finding('SOURCE_LABEL_BINDING_UNVERIFIED', 'unverified',
+                    'Stored label references require their saved declarations and instance context: ' + ', '.join(labels),
+                    'Bind the labels in the complete saved project before validating their types or execution.',
+                    rung_ids=[network['rung_id']], networks=[network['id']]),
+                    'category': 'source_semantics_unverified', 'record_index': row.get('record_index'),
+                    'kind': kind, 'operands': labels})
+            grouped = [operand for operand in row.get('args', []) if source_grouped_reference(operand)]
+            if kind == 'instruction' and grouped:
+                result.append({**_finding('SOURCE_GROUPED_DEVICE_SEMANTICS_UNVERIFIED', 'unverified',
+                    'Stored digit-specified device regions are preserved: ' + ', '.join(grouped),
+                    'Verify the complete region and its execution for the saved CPU.',
+                    rung_ids=[network['rung_id']], networks=[network['id']]),
+                    'category': 'source_semantics_unverified', 'record_index': row.get('record_index'),
+                    'kind': kind, 'operands': grouped})
+            extended = [operand for operand in row.get('args', [])
+                        if source_extended_reference(operand) and not buffer_memory_reference(operand)]
+            if kind == 'instruction' and extended:
+                result.append({**_finding('SOURCE_QUALIFIED_DEVICE_SEMANTICS_UNVERIFIED', 'unverified',
+                    'Stored indirect or qualified device references need their saved access context: ' + ', '.join(extended),
+                    'Verify pointer, station, module and index configuration for the saved CPU.',
+                    rung_ids=[network['rung_id']], networks=[network['id']]),
+                    'category': 'source_semantics_unverified', 'record_index': row.get('record_index'),
+                    'kind': kind, 'operands': extended})
         if plc_model not in SOURCE_DEVICE_PROFILES:
             continue
+        from plc.validation import parse_device_address, _source_access
+        for address in network.get('writes', []):
+            parsed = parse_device_address(address, plc_model)
+            regions = SOURCE_DEVICE_PROFILES[plc_model].get('special_regions', {}).get(parsed[0], []) if parsed else []
+            if parsed and any(lo <= parsed[1] <= hi for lo, hi in regions) and not _source_access(address, plc_model):
+                result.append({**_finding('SOURCE_DEVICE_ACCESS_UNVERIFIED', 'unverified',
+                    'Write applicability for the stored special device is not established: ' + address,
+                    'Verify the saved CPU and instruction-specific access conditions.', addresses=[address],
+                    rung_ids=[network['rung_id']], networks=[network['id']]),
+                    'category': 'device_applicability_unverified'})
         devices = sorted({address for address in [*network.get('reads', []), *network.get('writes', [])]
-                          if re.match(r'^[A-Z]+', address).group() not in covered})
+                          if (match := re.match(r'^[A-Z]+', address)) and match.group() not in covered})
         if devices:
             result.append({**_finding('SOURCE_DEVICE_PROFILE_INCOMPLETE', 'unverified',
                 'Stored source is preserved; address rules are not established for '

@@ -1,0 +1,118 @@
+name: Model API Compatibility
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/model_runtime/**'
+      - 'src/application/settings.py'
+      - 'src/application/model_detection.py'
+      - 'src/application/model_api.py'
+      - 'src/storage/config.py'
+      - 'src/integrations/web/**'
+      - 'resources/model_catalog/**'
+      - 'tests/test_model_*.py'
+      - 'tests/test_application_settings.py'
+      - 'tests/test_web_contract.py'
+      - 'web/src/api/generated.ts'
+      - 'web/openapi.json'
+      - 'web/src/features/Settings.tsx'
+      - 'web/src/features/ModelParameterControls.tsx'
+      - 'web/src/features/modelParameters.ts'
+      - 'web/tests/model-parameters.test.mjs'
+      - 'web/tests/module-resolution.test.mjs'
+      - 'scripts/export_web_schema.py'
+      - 'requirements.txt'
+      - 'requirements/**'
+      - '.github/workflows/model-api-compatibility.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: model-api-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      PYTHONUTF8: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Detect pull-request model/API scope
+        id: scope
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Validate the whole PR, not only its most recent push. Rebased
+          # before SHAs may no longer be reachable in a fresh checkout.
+          from="$BASE_SHA"
+          to="$HEAD_SHA"
+          git diff --name-only "$from"..."$to" > changed-files.txt
+          if grep -Eq '^(requirements(\.txt|/)|src/(model_runtime/|application/(settings\.py|model_detection\.py|model_api\.py)|storage/config\.py|integrations/web/)|resources/model_catalog/|tests/(test_model_.*\.py|test_application_settings\.py|test_web_contract\.py)|web/(src/api/generated\.ts|openapi\.json|src/features/(Settings\.tsx|ModelParameterControls\.tsx|modelParameters\.ts)|tests/(model-parameters|module-resolution)\.test\.mjs)|requirements/web\.txt|scripts/export_web_schema\.py|\.github/workflows/model-api-compatibility\.yml$)' changed-files.txt; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.scope.outputs.run == 'true'
+        with:
+          python-version: '3.13.14'
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements/*.txt
+      - uses: actions/setup-node@v4
+        if: steps.scope.outputs.run == 'true'
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install validation dependencies
+        if: steps.scope.outputs.run == 'true'
+        run: |
+          python -m pip install -c requirements/development.constraints.txt -r requirements/web.txt -r requirements/gxw-test.txt pytest
+          python -m pip check
+          npm ci --prefix web
+      - name: Verify generated HTTP contract is current
+        if: steps.scope.outputs.run == 'true'
+        run: |
+          python scripts/export_web_schema.py
+          npm run types --prefix web
+          git diff --exit-code -- web/openapi.json web/src/api/generated.ts
+      - name: Verify model API and settings contracts
+        if: steps.scope.outputs.run == 'true'
+        run: >-
+          python -m pytest -q
+          tests/test_model_contract.py
+          tests/test_model_capabilities.py
+          tests/test_application_settings.py
+          tests/test_model_provider.py
+          tests/test_model_detection.py
+          tests/test_model_catalog_v3.py
+          tests/test_model_verification.py
+          tests/test_model_observations.py
+          tests/test_model_profile_config.py
+          tests/test_model_profile_deletion.py
+          tests/test_model_stream_cancellation.py
+          tests/test_model_presentation.py
+          tests/test_web_contract.py
+      - name: Test parameter controls
+        if: steps.scope.outputs.run == 'true'
+        run: |
+          node --experimental-strip-types --test web/tests/model-parameters.test.mjs web/tests/module-resolution.test.mjs

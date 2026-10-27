@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Deterministic artifacts shared by PLC Core and debug workflows.
 
 No models, application orchestration, UI, or external execution is loaded here.

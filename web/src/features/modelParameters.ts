@@ -1,3 +1,6 @@
+// Copyright 2026 Arienax
+// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 /** Model-neutral schema and deterministic selection helpers. No model-name tests. */
 export type Scalar = string | number | boolean;
 export type Options = Record<string, unknown>;

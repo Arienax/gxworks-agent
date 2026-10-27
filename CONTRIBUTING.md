@@ -17,6 +17,6 @@ acceptance and PLC behavior require separate evidence; a unit test does not
 establish either.
 
 Contributions to the public repository must also pass
-`python tools/check_public_boundary.py`. Update the explicit file manifest when
-adding a new public source file. Source data omitted for third-party rights or
+`python tools/check_public_boundary.py`. Normal source files are selected by the shared publication exclusion rules;
+no per-file source registration is required. Source data omitted for third-party rights or
 privacy must stay out of commits and build artifacts.

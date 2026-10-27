@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Application commands shared by the HTTP operator and connected MCP agents."""
 from __future__ import annotations
 
@@ -347,7 +350,7 @@ class WorkbenchService:
                 if observe_client:
                     self._observe_mcp_call(command, saved["response"])
                 return saved["response"]
-            context = self.projects.tool_context(command["project_id"], command.get("version_id"))
+            context = self.projects.invocation_context(command["project_id"], command.get("version_id"), command["name"])
             from dataclasses import replace
             context = replace(context, operation_status=self.operation_status,
                               native_session_status=self.native_session_status,

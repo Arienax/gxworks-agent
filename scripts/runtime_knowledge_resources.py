@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Explicit runtime knowledge allowlist, shared by all package collectors."""
 from pathlib import Path
 from contextlib import closing
@@ -19,9 +22,9 @@ FILES = (
 INSTRUCTION_FILES = (
     'common.json', 'device_definitions.json', 'fx3u_contract_promotions.json', 'fx3u_instruction_quarantine.json',
     'fx3u_operand_semantic_promotions.json', 'fx3u_verified_opcodes.json', 'fx3u.json', 'fx5u.json',
-    'instruction_behavior_facts.json', 'instruction_capabilities.json', 'instruction_definitions.json.gz',
-    'instruction_source_authority.json', 'modifier_rules.json', 'operand_semantic_coverage_summary.json',
-    'fx3u_step_widths.json',
+    'instruction_capabilities.json', 'instruction_definitions.json.gz',
+    'instruction_source_authority.json', 'modifier_rules.json',
+    'fx3u_step_widths.json', 'fbd_language_rules.json', 'pwm_contract.generated.json',
 )
 
 
@@ -54,37 +57,68 @@ def runtime_viewer_data(root):
     return [(str(path), ('web/dist/' + path.relative_to(directory).parent.as_posix()).rstrip('/.')) for path in sorted(visited)]
 
 
-def runtime_instruction_data(root):
+def _inspect_public_value(value):
+    if isinstance(value, dict):
+        if set(value).intersection({'bbox', 'raw_text', 'manual_text', 'layout_text', 'geometry_reference', 'source_span'}):
+            raise ValueError('Original evidence fields in compiled definitions')
+        for child in value.values():
+            _inspect_public_value(child)
+    elif isinstance(value, list):
+        for child in value:
+            _inspect_public_value(child)
+
+
+def runtime_instruction_data(root, *, native_encoding_source=None):
     root = Path(root)
-    result = [(str(root / 'resources/instructions/mitsubishi' / name), 'resources/instructions/mitsubishi')
-              for name in INSTRUCTION_FILES]
+    directory = root / 'resources/instructions/mitsubishi'
+    manifest = root / 'resources/knowledge/runtime/instruction_definitions.manifest.json'
+    local_manifest = directory / 'instruction_definitions.manifest.json'
+    if local_manifest.exists() or local_manifest.is_symlink():
+        manifest = local_manifest
+    use_store = manifest.exists() or manifest.is_symlink()
+    names = [name for name in INSTRUCTION_FILES if not (use_store and name == 'instruction_definitions.json.gz')]
+    result = [(str(Path(native_encoding_source) if native_encoding_source is not None and name == 'fx3u_step_widths.json' else directory / name), 'resources/instructions/mitsubishi') for name in names]
     for source, _ in result:
         if not Path(source).is_file():
             raise FileNotFoundError(source)
-    payload = json.loads(gzip.decompress((root / 'resources/instructions/mitsubishi/instruction_definitions.json.gz').read_bytes()))
+    if use_store:
+        from plc.instruction_owner_store import OwnerDefinitionStore
+        store = OwnerDefinitionStore(manifest, verify_integrity=True)
+        try:
+            metadata = store.metadata
+            if metadata.get('corpus_kind') != 'authored_plc_facts_v1' or metadata.get('documents'):
+                raise ValueError('Unreviewed owner store metadata')
+            _inspect_public_value(metadata)
+            # Build-time validation is bounded to one owner, never an eager
+            # runtime load of the complete inventory. No producer is inferred.
+            for header in store.iter_owner_headers():
+                _inspect_public_value(store.get_entry(header['opcode'],cpu=header['target_model'],vendor=header['vendor']))
+            assert_fact_database(store.database_path)
+        finally:
+            store.close()
+        destination = 'resources/instructions/mitsubishi' if manifest == local_manifest else 'knowledge/runtime'
+        result.extend([(str(manifest), destination), (str(store.database_path), destination)])
+        return result
+    with gzip.open(directory / 'instruction_definitions.json.gz', 'rt', encoding='utf-8') as stream:
+        payload = json.load(stream)
     if payload.get('corpus_kind') != 'authored_plc_facts_v1' or payload.get('documents'):
         raise ValueError('Unreviewed compiled instruction definitions')
-    def inspect(value):
-        if isinstance(value, dict):
-            if set(value).intersection({'bbox', 'raw_text', 'manual_text', 'layout_text', 'geometry_reference', 'source_span'}):
-                raise ValueError('Original evidence fields in compiled definitions')
-            for child in value.values():
-                inspect(child)
-        elif isinstance(value, list):
-            for child in value:
-                inspect(child)
-    inspect(payload)
+    _inspect_public_value(payload)
     return result
 
 
-def runtime_knowledge_data(root):
+def runtime_knowledge_data(root, *, native_encoding_source=None):
     root = Path(root)
     for relative, _ in FILES:
         if not (root / relative).is_file():
             raise FileNotFoundError(relative)
     assert_fact_database(root / FILES[0][0])
-    runtime_instruction_data(root)
-    return [(str(root / relative), destination) for relative, destination in FILES]
+    instruction_data = runtime_instruction_data(root, native_encoding_source=native_encoding_source)
+    result = [(str(root / relative), destination) for relative, destination in FILES]
+    manifest = root / 'resources/knowledge/runtime/instruction_definitions.manifest.json'
+    if manifest.exists() or manifest.is_symlink():
+        result.extend((source, destination) for source, destination in instruction_data if destination == 'knowledge/runtime')
+    return result
 
 
 def assert_fact_database(path):
@@ -96,6 +130,10 @@ def assert_fact_database(path):
         tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         if {"page_artifacts", "tables", "device_sections"} & tables:
             raise ValueError("Original document tables in runtime corpus")
+        for table in ('runtime_sources', 'runtime_values', 'runtime_definitions', 'runtime_language_features', 'runtime_fact_fields'):
+            if table in tables:
+                for row in db.execute('SELECT payload_json FROM '+table):
+                    _inspect_public_value(json.loads(row[0]))
         invalid = db.execute("SELECT count(*) FROM chunks WHERE content_origin NOT IN ('authored_fact','original_case') "
             "OR distribution_status!='fact_representation_reviewed'").fetchone()[0]
         if invalid:
@@ -111,7 +149,26 @@ def assert_fact_database(path):
 def audit_packaged_knowledge(package):
     package = Path(package)
     allowed = {destination + "/" + Path(relative).name for relative, destination in FILES}
+    if (package / 'knowledge/runtime/instruction_definitions.manifest.json').exists():
+        allowed.add('knowledge/runtime/instruction_definitions.manifest.json')
+        from plc.instruction_owner_store import OwnerDefinitionStore
+        store = OwnerDefinitionStore(package / 'knowledge/runtime/instruction_definitions.manifest.json')
+        allowed.add('knowledge/runtime/' + store.database_path.name)
+        store.close()
     actual = {p.relative_to(package).as_posix() for p in (package / "knowledge").rglob("*") if p.is_file()}
     if actual != allowed:
         raise ValueError("Knowledge package differs from allowlist: " + repr(sorted(actual ^ allowed)))
     assert_fact_database(package / "knowledge/runtime/plc_facts.sqlite")
+
+
+def unique_runtime_data(items):
+    """Resolve duplicate collectors while rejecting different inputs for one destination."""
+    by_destination = {}
+    for source, directory in items:
+        key = (Path(directory) / Path(source).name).as_posix().casefold()
+        resolved = Path(source).resolve()
+        previous = by_destination.get(key)
+        if previous is not None and previous[0] != resolved:
+            raise ValueError('Conflicting runtime package destination: ' + key)
+        by_destination[key] = (resolved, directory)
+    return [(str(source), directory) for source, directory in by_destination.values()]

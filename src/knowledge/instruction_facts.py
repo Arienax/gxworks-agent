@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Task-directed, source-preserving instruction evidence; no model calls.
 
 The catalogue resolves spelling/forms, not manual facts. Keyword matches identify
@@ -324,7 +327,8 @@ def _related_units(seed, plc_model, task_type):
     manual_id, section = seed.get("manual_id"), seed.get("section")
     if not manual_id or not section:
         return []
-    path = index_access.index_path()
+    from knowledge.fact_corpus import runtime_index_path
+    path = runtime_index_path('instruction') if seed.get('retrieval_domain') == 'selected_owner' else index_access.index_path()
     identity = index_access.index_identity(path)
     if identity[0] == "missing":
         return []
@@ -345,13 +349,13 @@ def _related_units(seed, plc_model, task_type):
         parent_column = index_access.first_column(columns, ("parent_chunk_id", "parent_id"))
         if parent_column:
             conditions.append(f"{quote(parent_column)}=?")
-            args.append(seed.get("id"))
+            args.append(seed.get("retrieval_chunk_id", seed.get("id")))
         sql = (f"SELECT rowid AS _chunk_rowid, * FROM {quote(table['name'])} "
                f"WHERE manual_id=? AND ({' OR '.join(conditions)}) ORDER BY rowid LIMIT 24")
         rows = connection.execute(sql, args).fetchall()
         if parent_column:
-            original = index_access.fetch_chunks(connection, schema, [("id", seed.get("id"))])
-            row = original.get(("id", str(seed.get("id"))))
+            original = index_access.fetch_chunks(connection, schema, [("id", seed.get("retrieval_chunk_id", seed.get("id")))])
+            row = original.get(("id", str(seed.get("retrieval_chunk_id", seed.get("id")))))
             parent = row[parent_column] if row is not None else None
             if parent:
                 rows.extend(index_access.fetch_chunks(connection, schema, [("id", parent)]).values())
@@ -655,7 +659,8 @@ def _completion_sources(seed, plc_model, task_type):
     """
     from knowledge.structured_facts import resolve_device_records
 
-    path = index_access.index_path()
+    from knowledge.fact_corpus import runtime_index_path
+    path = runtime_index_path('instruction') if seed.get('retrieval_domain') == 'selected_owner' else index_access.index_path()
     identity = index_access.index_identity(path)
     if identity[0] == "missing":
         return []
@@ -666,7 +671,7 @@ def _completion_sources(seed, plc_model, task_type):
             return []
         record = connection.execute(
             "SELECT completion_flags_json FROM " + index_access.quote_identifier(table["name"]) + " WHERE chunk_id=? LIMIT 1",
-            (seed.get("id"),)).fetchone()
+            (seed.get("retrieval_chunk_id", seed.get("id")),)).fetchone()
         flags = json.loads(record[0] or "[]") if record else []
     except (OSError, sqlite3.Error, ValueError, TypeError):
         return []
@@ -1092,6 +1097,7 @@ def _pack_target(
 def retrieve_instruction_facts(
     query, *, plc_model, task_type, char_budget=None, candidates=(), targets=None,
     retrieve=None, resolver=None, token_budget=None, primary_slots=None, compact_sources=False,
+    language=None, aspects=None, project_mode=None, instance_context=None, version=None,
 ):
     """Resolve selected instructions directly, then pack their source evidence.
 
@@ -1103,6 +1109,7 @@ def retrieve_instruction_facts(
 
     target_source = "provided_targets" if targets is not None else "query_references"
     targets = copy.deepcopy(targets if targets is not None else instruction_fact_targets(query))
+    custom_resolver = resolver is not None
     resolver = resolver or resolve_instruction_records
     report = {
         "version": _VERSION,
@@ -1135,7 +1142,17 @@ def retrieve_instruction_facts(
             "base_opcode": target["base_opcode"],
             "source": "instructions.opcode_norm",
         })
-        hits = list(resolver([target], plc_model=plc_model, task_type=task_type))
+        if custom_resolver:
+            hits = list(resolver([target], plc_model=plc_model, task_type=task_type))
+            from knowledge.fact_selection import project_instruction_records
+            from knowledge.structured_facts import generation_aspects, requested_aspects
+            selected_aspects = (generation_aspects(query, language=language) if aspects is None else
+                                requested_aspects(query, language=language, aspects=aspects))
+            hits = project_instruction_records(hits, plc_model=plc_model, language=language,
+                aspects=selected_aspects, project_mode=project_mode, instance_context=instance_context, version=version, query=query)
+        else:
+            hits = list(resolver([target], plc_model=plc_model, task_type=task_type, query=query,
+                language=language, aspects=aspects, project_mode=project_mode, instance_context=instance_context, version=version))
         from knowledge.fact_corpus import is_authored_record
         if hits and all(is_authored_record(row) for row in hits):
             groups.append(hits)

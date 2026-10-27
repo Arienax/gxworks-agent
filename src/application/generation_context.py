@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Compact, auditable generation prompt assembly for API and MCP clients.
 
 The deterministic PLC validators remain the acceptance boundary. This module
@@ -144,10 +147,7 @@ def _select_system_prompt(target_mode, is_edit_mode=False, user_requirement="", 
     route = classification.get("workflow_route") or {}
     selected_vendor = str(plc_model or route.get("vendor") or "").strip()
     if target_mode == "ladder":
-        from plc.generation_contract import ladder_response_schema
-        base = (LADDER_SYSTEM_PROMPT + "\n\n# Machine-readable output schema (authoritative structure)\n" +
-                json.dumps(ladder_response_schema(allow_partial=is_edit_mode, plc_model=selected_vendor), ensure_ascii=False,
-                           separators=(",", ":")))
+        base = LADDER_SYSTEM_PROMPT + '\nUse the structured output_schema as the authoritative output contract.'
     else:
         base = _st_system_prompt_for_model(selected_vendor)
     audit_section("base_prompt", base, reason="canonical_generation_base", source="base_prompt")
@@ -205,7 +205,8 @@ def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="gene
         metadata = getattr(query, 'metadata', {})
         feature_query = metadata.get('capability_requirement') or query if isinstance(metadata, dict) else query
         should_lookup = bool(query_text) and (has_generation_fact_target(query)
-            or bool(device_definition_targets(feature_query, plc_model)))
+            or bool(device_definition_targets(feature_query, plc_model))
+            or metadata.get('target_mode') == 'st')
         lookup_reason = (
             "generation_fact_retrieval"
             if should_lookup else "no_specific_fact_target"
@@ -219,10 +220,14 @@ def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="gene
         return absent("excluded", lookup_reason)
     try:
         from knowledge.retriever import build_knowledge_context as retrieve_context
+        from knowledge.structured_facts import generation_aspects
+        language = getattr(query, 'metadata', {}).get('target_mode')
+        aspect_options = ({'aspects': generation_aspects(query, language=language)}
+                          if normalized_task in {'generate', 'edit'} else {})
         analysis_options = ({"include_design": bool(include_design), "design_query": design_query}
                             if normalized_task == "analysis" else {})
         context = retrieve_context(query, plc_model=plc_model, task_type=normalized_task,
-                                   top_k=base_top_k, **analysis_options)
+                                   top_k=base_top_k, language=language, **aspect_options, **analysis_options)
     except Exception as error:
         from knowledge.evidence import retrieval_failure
         from shared.diagnostics import emit
@@ -313,9 +318,7 @@ def _current_version_context(user_requirement, current_version_json, *, target_m
     current_version_json = technical_value(current_version_json)
     if target_mode != "ladder" or not isinstance(current_version_json, dict):
         compact = json.dumps(current_version_json, ensure_ascii=False, separators=(",", ":"))
-        if len(compact) > 6000:
-            compact = compact[:6000] + "…"
-        return "# Current version excerpt\n" + compact, current_version_json
+        return "# Current version source\n" + compact, current_version_json
 
     rungs = current_version_json.get("rungs")
     if not isinstance(rungs, list) or not rungs:
@@ -458,34 +461,26 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
                 plc_model=plc_model,
                 confirmed_context=runtime_spec,
             )
-            system = confirmed_builder(
-                selected
-                + SOURCE_PRECEDENCE
-                + profile_builder(
-                    plc_model,
-                    runtime_spec,
-                    compact=bool(evidence_text),
-                )
-                + render_context_checkpoint(context_checkpoint)
-                + str(evidence_text or ""),
-                runtime_spec,
-            )
-            if current_context:
-                system += "\n\n" + current_context
-            system += generation_execution_prompt(
-                runtime_spec,
-                evidence_text=evidence_text,
-                task_type=normalized_task,
-                plc_model=plc_model,
-            )
-            message_history = (
-                runtime_history
-                if isinstance(runtime_history, list)
-                else history
-                if history is not None
-                else [{"role": "user", "content": generation_request}]
-            )
-            return {"messages": render_wire_messages(system, message_history)}
+            from shared.model_context import technical_context_units, technical_value, technical_knowledge_coverage
+            payload = {
+                'context_schema_version': 3, 'plc_model': plc_model,
+                'confirmed_spec': technical_value(runtime_spec),
+                'target_profile': profile_builder(plc_model, runtime_spec, compact=bool(evidence_text)),
+                'knowledge': technical_context_units(evidence_text),
+                'knowledge_coverage': technical_knowledge_coverage(evidence_text),
+                'current_program': retrieval_evidence,
+                'historical_context': render_context_checkpoint(context_checkpoint),
+            }
+            from plc.generation_contract import generation_output_contract
+            payload['output_schema'] = generation_output_contract(
+                allow_partial=is_edit_mode, plc_model=plc_model, target_mode=target_mode)['schema']
+            system = selected + SOURCE_PRECEDENCE + generation_execution_prompt(
+                runtime_spec, evidence_text=evidence_text, task_type=normalized_task, plc_model=plc_model)
+            message_history = (runtime_history if isinstance(runtime_history, list) and runtime_history
+                else history if history is not None else [{'role': 'user', 'content': generation_request}])
+            return {'messages': render_wire_messages(system, [
+                {'role': 'user', 'content': json.dumps(payload, ensure_ascii=False, separators=(',', ':'))},
+                *message_history])}
 
         context = build_confirmed_generation_context(
             confirmed_context,
@@ -539,6 +534,8 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
                           "structured_fact_targets": structured_fact_targets(fact_requirement, confirmed_context, plc_model=plc_model),
                           "repair_scope": {k: v for k, v in scope.items() if k != "requirement"},
                           "residual_fact_query": fact_requirement}
+        if retrieval_evidence is not None and not scope:
+            fact_requirement = _build_knowledge_query(fact_requirement, retrieval_evidence)
         language_query = KnowledgeQuery(fact_requirement, precompiled=True, metadata={
             **model_budget(model_profile), **scope_meta, "target_mode": target_mode,
             "hardware_context": copy.deepcopy((confirmed_context or {}).get('hardware_profile') or {}),
@@ -559,21 +556,29 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
                                      confirmed_context=confirmed_context)
     from plc.specification.provenance import SOURCE_PRECEDENCE
     from shared.model_context import technical_context_text, technical_value
-    system_prompt = confirmed_builder(selected_prompt + SOURCE_PRECEDENCE + profile_builder(
-        plc_model, technical_value(confirmed_context), compact=bool(knowledge_ctx)) + technical_context_text(knowledge_ctx),
-        technical_value(confirmed_context))
-    if current_context:
-        system_prompt += "\n\n" + current_context
-    if (target_mode == "ladder" and normalized_task in {"generate", "edit"}
+    from shared.model_context import technical_context_units, technical_knowledge_coverage
+    from application.generation_wire import GenerationWirePrompt, render_wire_messages
+    system_prompt = selected_prompt + SOURCE_PRECEDENCE
+    if (target_mode == 'ladder' and normalized_task in {'generate', 'edit'}
             and isinstance(confirmed_context, dict) and confirmed_context):
-        execution_prompt = generation_execution_prompt(
-            confirmed_context, evidence_text=knowledge_ctx, task_type=normalized_task,
-            plc_model=plc_model,
-        )
-        system_prompt += execution_prompt
-        audit_section("generation_execution_policy", execution_prompt,
-                      reason="settled_facts", source="application")
-    return system_prompt
+        system_prompt += generation_execution_prompt(confirmed_context, evidence_text=knowledge_ctx,
+            task_type=normalized_task, plc_model=plc_model)
+    payload = {
+        'context_schema_version': 3, 'plc_model': plc_model,
+        'confirmed_spec': technical_value(confirmed_context),
+        'target_profile': profile_builder(plc_model, technical_value(confirmed_context), compact=bool(knowledge_ctx)),
+        'knowledge': technical_context_units(knowledge_ctx),
+        'knowledge_coverage': technical_knowledge_coverage(knowledge_ctx),
+        'current_program': retrieval_evidence,
+    }
+    from plc.generation_contract import generation_output_contract
+    payload['output_schema'] = generation_output_contract(
+        allow_partial=is_edit_mode, plc_model=plc_model, target_mode=target_mode)['schema']
+    history = wire_history if isinstance(wire_history, list) else [{'role': 'user', 'content': user_requirement}]
+    messages = render_wire_messages(system_prompt, [
+        {'role': 'user', 'content': json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}, *history])
+    return GenerationWirePrompt(system_prompt, {'messages': messages})
+
 
 
 def generation_user_input(user_input, *, is_edit_mode=False, target_mode="ladder", repair_mode=False):

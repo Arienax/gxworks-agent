@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Read-only index access and per-thread cache lifecycle.
 
 No connection or filesystem probing occurs at import time. Each caller thread
@@ -7,6 +10,7 @@ invalidates schema and derived query caches together.
 from __future__ import annotations
 
 from pathlib import Path
+from contextlib import closing
 import sqlite3
 import threading
 from urllib.parse import quote
@@ -139,7 +143,7 @@ def index_path():
     # Renaming/copying the historical full-text corpus must not re-enable it.
     from knowledge.fact_corpus import CORPUS_KIND
     try:
-        with sqlite3.connect(path.resolve().as_uri() + "?mode=ro&immutable=1", uri=True) as check:
+        with closing(sqlite3.connect(path.resolve().as_uri() + "?mode=ro&immutable=1", uri=True)) as check:
             row = check.execute("SELECT value FROM meta WHERE key='corpus_kind'").fetchone()
         return path if row and row[0] == CORPUS_KIND else None
     except sqlite3.Error:
@@ -156,53 +160,55 @@ def index_identity(path):
     return (str(path.resolve()), int(stat.st_mtime_ns), int(stat.st_size))
 
 
+def _connection_entries():
+    entries = getattr(_thread_state, "connections", None)
+    if entries is None:
+        entries = _thread_state.connections = {}
+    return entries
+
+
+def _connection_entry(connection):
+    return next((entry for entry in _connection_entries().values()
+                 if entry['connection'] is connection), None)
+
+
 def close_thread_connection():
-    connection = getattr(_thread_state, "connection", None)
-    if connection is not None:
+    for entry in _connection_entries().values():
         try:
-            connection.close()
+            entry['connection'].close()
         except sqlite3.Error:
             pass
+    _thread_state.connections = {}
     _thread_state.connection = None
     _thread_state.identity = None
-    _thread_state.schema = None
-    _thread_state.derived = {}
-    _thread_state.schema_connection = None
 
 
 def connection(path, identity):
-    if (
-        getattr(_thread_state, "connection", None) is not None
-        and getattr(_thread_state, "identity", None) == identity
-    ):
-        return _thread_state.connection
-
-    close_thread_connection()
+    key = str(path.resolve())
+    entries = _connection_entries()
+    entry = entries.get(key)
+    if entry is not None and entry['identity'] == identity:
+        return entry['connection']
+    if entry is not None:
+        entry['connection'].close()
+        del entries[key]
     encoded_path = quote(path.resolve().as_posix(), safe="/:")
-    connection = sqlite3.connect(
-        "file:{}?mode=ro&immutable=1".format(encoded_path),
-        uri=True,
-        timeout=0.2,
-        check_same_thread=True,
-    )
+    opened = sqlite3.connect("file:{}?mode=ro&immutable=1".format(encoded_path),
+                             uri=True, timeout=0.2, check_same_thread=True)
     try:
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA query_only=ON")
-        connection.execute("PRAGMA temp_store=MEMORY")
+        opened.row_factory = sqlite3.Row
+        opened.execute("PRAGMA query_only=ON")
+        opened.execute("PRAGMA temp_store=MEMORY")
         try:
-            connection.execute("PRAGMA mmap_size=268435456")
+            opened.execute("PRAGMA mmap_size=268435456")
         except sqlite3.Error:
             pass
     except sqlite3.Error:
-        connection.close()
+        opened.close()
         raise
-
-    _thread_state.connection = connection
-    _thread_state.identity = identity
-    _thread_state.schema = None
-    _thread_state.derived = {}
-    _thread_state.schema_connection = None
-    return connection
+    entries[key] = {'connection': opened, 'identity': identity, 'schema': None, 'derived': {}}
+    _thread_state.connection, _thread_state.identity = opened, identity
+    return opened
 
 
 def table_columns(connection, table_name):
@@ -213,10 +219,13 @@ def table_columns(connection, table_name):
 
 
 def schema(connection):
-    cached = getattr(_thread_state, "schema", None)
-    if cached is not None and getattr(_thread_state, "schema_connection", None) is connection:
-        return cached
+    entry = _connection_entry(connection)
+    if entry is not None and entry['schema'] is not None:
+        return entry['schema']
 
+    if connection.execute("SELECT 1 FROM sqlite_master WHERE name='meta'").fetchone():
+        from knowledge.exact_search_storage import validate_search_schema
+        validate_search_schema(connection)
     table_rows = connection.execute(
         "SELECT name FROM sqlite_master WHERE type IN ('table', 'view')"
     ).fetchall()
@@ -243,9 +252,8 @@ def schema(connection):
                 "name": actual,
                 "columns": table_columns(connection, actual),
             }
-    if getattr(_thread_state, "connection", None) is connection:
-        _thread_state.schema = schema
-        _thread_state.schema_connection = connection
+    if entry is not None:
+        entry['schema'] = schema
     return schema
 
 
@@ -306,18 +314,19 @@ def fetch_chunks(connection, schema, references):
         )
         for row in connection.execute(sql, by_rowid).fetchall():
             found[("rowid", str(row["_chunk_rowid"]))] = row
+    if connection.execute("SELECT 1 FROM sqlite_master WHERE name='meta'").fetchone():
+        from knowledge.exact_search_storage import validate_search_rows
+        validate_search_rows(connection, found.values())
     return found
 
 
 def cached_value(connection, name):
-    """Read derived state only for the connection which owns that state."""
-    if getattr(_thread_state, "connection", None) is not connection:
-        return None
-    return getattr(_thread_state, "derived", {}).get(name)
+    entry = _connection_entry(connection)
+    return entry['derived'].get(name) if entry is not None else None
 
 
 def cache_value(connection, name, value):
-    """Store successful derived reads until this thread changes index identity."""
-    if getattr(_thread_state, "connection", None) is connection:
-        _thread_state.derived[name] = value
+    entry = _connection_entry(connection)
+    if entry is not None:
+        entry['derived'][name] = value
     return value

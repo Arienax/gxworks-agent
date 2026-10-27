@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "global_paths": ["pytest.ini", "tests/conftest.py"],
+  "shared_impacts": [
+    {"paths": ["src/shared/**", "src/storage/**", "src/plc/ir.py"]},
+    {"paths": ["resources/instructions/**"]},
+    {"paths": ["resources/instructions/mitsubishi/common.json", "resources/instructions/mitsubishi/fx3u.json", "resources/instructions/mitsubishi/fx5u.json", "resources/instructions/mitsubishi/fx3u_verified_opcodes.json", "resources/instructions/mitsubishi/modifier_rules.json", "resources/instructions/mitsubishi/fx3u_contract_promotions.json", "resources/instructions/mitsubishi/fx3u_operand_semantic_promotions.json", "resources/instructions/mitsubishi/instruction_capabilities.json", "resources/instructions/mitsubishi/instruction_definitions.json.gz"], "readers": ["plc.instructions"]},
+    {"paths": ["resources/instructions/mitsubishi/fx3u_step_widths.json"], "readers": ["plc.instruction_steps"]},
+    {"paths": ["resources/instructions/mitsubishi/device_definitions.json"], "readers": ["plc.device_definitions"]},
+    {"paths": ["resources/instructions/mitsubishi/control_runtime.json"], "readers": ["plc.runtime_semantics"]},
+    {"paths": ["resources/instructions/mitsubishi/instruction_source_authority.json"], "readers": ["knowledge.source_authority"]}
+  ],
+  "dependency_paths": ["requirements.txt", "requirements/**"],
+  "ignored_inputs": ["pytest.ini", "tools/source_layout.json", "tools/private_materials.py"],
+  "live_tests": [
+    "tests/test_gxworks2_live_boundaries.py::test_running_gxworks2_without_project_has_no_csv_import_command",
+    "tests/test_gxworks2_live_boundaries.py::test_running_gxworks2_output_summary_is_machine_readable"
+  ],
+  "domains": {
+    "analysis": {"heading": "Analysis, planning and confirmation", "quick": ["tests/test_confirmed_input_protocol.py", "tests/test_analysis_prompt_routing.py"]},
+    "knowledge": {"heading": "Context, prompt and retrieval", "quick": ["tests/test_context_compiler.py", "tests/test_structured_fact_lookup.py"]},
+    "generation": {"heading": "Generation, contracts, repair and delivery", "quick": ["tests/test_generation_repair_assembly.py", "tests/test_generation_repair_workflow.py"]},
+    "plc": {"heading": "Deterministic PLC Core and instruction semantics", "quick": ["tests/test_review_noise_regressions.py", "tests/test_plc_core_boundary.py"]},
+    "gxw": {"heading": "GXW reverse engineering and round-trip", "quick": []},
+    "native": {"heading": "GX Works2 native, CSV and synchronization", "quick": ["tests/test_gxworks2_import.py"]},
+    "simulation": {"heading": "Simulation and verification", "quick": ["tests/test_simulation_workbench.py"]},
+    "model": {"heading": "Model runtime and provider compatibility", "quick": ["tests/test_model_contract.py"]},
+    "mcp": {"heading": "MCP integration", "quick": ["tests/test_mcp_service.py"]},
+    "web": {"heading": "Web, desktop presentation and workbench application", "quick": ["tests/test_web_contract.py", "tests/test_web_api.py"]},
+    "diagnostics": {"heading": "Runtime diagnostics, privacy and streaming", "quick": ["tests/test_provider_error_privacy.py"]},
+    "architecture": {"heading": "Architecture, repository and platform boundaries", "quick": ["tests/test_source_layout.py"]},
+    "execution": {"heading": "Cross-cutting application and execution", "quick": ["tests/test_execution_read.py"]}
+  },
+  "rules": [
+    {
+      "paths": ["src/gxw/native_diagnostics.py", "src/gxw/diagnostic_*.py", "src/application/native_validation.py"],
+      "domains": ["gxw", "plc", "native", "web", "mcp"],
+      "quick": [
+        "tests/test_gxw_compiler.py::test_native_export_evidence_is_independent_of_save_and_publication",
+        "tests/test_gxw_compiler.py::test_native_event_index_preserves_order_positions_duplicates_and_source_names",
+        "tests/test_gxw_compiler.py::test_native_*event_visits*",
+        "tests/test_gxw_compiler.py::test_native_validation_noise_keeps_frozen_results_inputs_and_bounded_event_visits",
+        "tests/test_gxw_compiler.py::test_native_conversion_event_groups_keep_frozen_reports_and_ignore_unrelated_events",
+        "tests/test_native_validation.py::test_native_assignment_projection_keeps_missing_or_unbound_getters_unresolved",
+        "tests/test_mcp.py::test_*native_inspection*",
+        "tests/test_web_fbd.py::test_compile_save_requires_current_baseline_before_native_work",
+        "tests/test_web_contract.py::test_*dynamic_public_fields*"
+      ]
+    },
+    {"paths": ["src/gxw/**"], "domains": ["gxw"], "domain_only": true},
+    {"paths": ["src/gxworks2/**", "native/**", "vendor/**"], "domains": ["native", "gxw"], "domain_only": true},
+    {"paths": ["src/plc/**"], "domains": ["plc", "generation"]},
+    {"paths": ["src/simulator/**"], "domains": ["simulation"]},
+    {"paths": ["src/model_runtime/**", "src/application/model_*.py"], "domains": ["model", "diagnostics"]},
+    {"paths": ["src/knowledge/**", "resources/knowledge/**", "src/application/context_*.py", "src/agent_runtime/context_*.py"], "domains": ["knowledge"]},
+    {"paths": ["src/application/fbd*.py", "src/application/fbd/**"], "domains": ["web", "gxw"], "domain_only": true},
+    {"paths": ["src/application/generation*.py", "src/application/delivery*.py", "src/plc/candidate_repair.py", "src/rendering/**"], "domains": ["generation"]},
+    {"paths": ["src/application/analysis*.py", "src/application/planning*.py", "src/application/confirmed*.py"], "domains": ["analysis", "generation"]},
+    {"paths": ["src/integrations/mcp/**", "src/mcp_server/**", "scripts/mcp_*.py"], "domains": ["mcp"]},
+    {"paths": ["src/integrations/web/**", "scripts/web_*.py"], "domains": ["web"]},
+    {"paths": ["src/agent_runtime/**"], "domains": ["mcp", "generation"]},
+    {"paths": ["src/application/execution*.py", "src/application/live_*.py", "src/application/hardware*.py"], "domains": ["execution", "native"]},
+    {"paths": ["src/application/**", "src/api.py"], "domains": ["web", "generation"]},
+    {"paths": ["tools/**", "checks/**", "scripts/export_open_source.py", "publication/**", ".github/**", "tests/run_checks.py", "tests/check_*.py", "tests/check_suites.json", "tests/README.md"], "domains": ["architecture"]},
+    {"paths": ["tests/fixture_cache.py"], "domains": ["architecture", "gxw", "plc", "web"], "domain_only": true},
+    {"paths": ["resources/gxw/**", "resources/templates/**", "resources/native/**"], "domains": ["gxw", "native"], "domain_only": true},
+    {"paths": ["private/research/**", "private/tests/fixtures/**"], "domains": ["gxw", "native", "plc"], "domain_only": true},
+    {"paths": ["README*", "LICENSE*", "NOTICE*", "docs/**", "skills/*.md", "private/skills/*.md", "private/docs/**", "private/acceptance/**", "private/local/**"], "domains": []}
+  ]
+}

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Materialize persisted model profiles into one runtime capability snapshot.
 
 This boundary performs no model calls and never interprets retired profile

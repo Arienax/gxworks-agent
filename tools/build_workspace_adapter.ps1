@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 param([string]$OutputDirectory = "")
 
 $ErrorActionPreference = "Stop"
@@ -22,6 +25,7 @@ $executable = Join-Path $resolvedOutput "PlcAi.WorkspaceSourceSave.exe"
     (Join-Path $repositoryRoot "native_adapters\WorkspaceSourceSave.cs") `
     (Join-Path $repositoryRoot "native_adapters\WorkspaceValidation.cs") `
     (Join-Path $repositoryRoot "native_adapters\WorkspaceTasks.cs") (Join-Path $repositoryRoot "native_adapters\WorkspaceSfcGraph.cs") `
-    (Join-Path $repositoryRoot "native_adapters\NativeRequest.cs") (Join-Path $repositoryRoot "native_adapters\WorkspaceBusinessProtocol.cs")
+    (Join-Path $repositoryRoot "native_adapters\NativeRequest.cs") (Join-Path $repositoryRoot "native_adapters\WorkspaceBusinessProtocol.cs") `
+    (Join-Path $repositoryRoot "native_adapters\NativeExceptionTrace.cs")
 if ($LASTEXITCODE -ne 0) { throw "Native workspace adapter compilation failed with exit code $LASTEXITCODE." }
 Write-Output $executable

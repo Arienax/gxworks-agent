@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Build-time instruction document structure and source-bound table extraction.
 
 Runtime retrieval consumes the resulting instruction facts. This module owns
@@ -34,6 +37,91 @@ class DocumentUnit:
 
 def clean_cell(value):
     return re.sub(r'\s+', ' ', re.sub(r'\[GLYPH-[0-9A-F]+\]', '', value, flags=re.I)).strip()
+
+
+def instruction_declaration_names(text, outline_path, manual_type, *, source_text=None):
+    """Read literal iQ-F declarations before their introductory description.
+
+    Prose outline titles are not mnemonics. Optional suffixes and comparison
+    placeholders expand only when the same source explicitly spells them out.
+    This establishes section ownership, never CPU or language availability.
+    """
+    outline = str(outline_path).upper()
+    standard_functions = bool(re.match(r'^PART 5 STANDARD FUNCTIONS(?: > |$)', outline))
+    function_blocks = bool(re.match(r'^PART 6 FUNCTION BLOCKS(?: > |$)', outline))
+    if (manual_type != 'programming'
+            or not ('CPU MODULE INSTRUCTIONS' in outline or
+                    'PART 4 MODULE DEDICATED INSTRUCTION' in outline or
+                    standard_functions or function_blocks)):
+        return []
+    text = str(text or '')
+    if re.search(r'^(?:table of contents|index)$|examples?|precautions|errors?$',
+                 str(outline_path).split(' > ')[-1], re.I):
+        return []
+    lines = text[:2400].splitlines()
+    names = []
+    lead = re.compile(r'^(?:(?:This|These) instructions?\b|'
+                      + (r'(?:This|These) function(?:s| blocks?)?\b|'
+                         if standard_functions or function_blocks else '') +
+                      (r'When the execution condition\b|' if function_blocks else '') +
+                      r'(?:The (?:timer|status|real-time monitor)|Interrupts|When the processing)\b|'
+                      r'(?:Automatically|Initialize|Batch-deactivates)\b|'
+                      r'(?:Reads|Writes|Transfers|Stores|Compares|Executes|'
+                      r'Calculates|Converts|Set|Sets|Resets|Controls|Starts|Stops)\b)')
+    context = re.sub(r'\s+', ' ', str(source_text or text))
+    for index, raw in enumerate(lines[:-1]):
+        following = lines[index + 1].strip()
+        # Combined declarations are followed by a named description per form.
+        named_description = re.match(r'^(?:[•\-]\s*)?([A-Z][A-Z0-9_]*(?:\((?:P|_E)\))?)\s*:', following)
+        spaced_description = re.match(r'^•\s*[A-Z](?:\s+[A-Z])+(?:\s*\(\s*P\s*\))?$', following)
+        if not (lead.match(following) or named_description or spaced_description
+                or following == '• In case of bit device:'):
+            continue
+        declaration = re.sub(r'\s+\[(?!GLYPH-).*$', '', raw.strip())
+        declaration = re.sub(r'\s*\.\s*', '.', declaration)
+        if not re.fullmatch(r'[A-Z0-9_.$@+<>!=*/(), \-\[\]]+', declaration):
+            continue
+        for part in re.split(r'\s*,\s*|(?<=[)A-Z0-9_])/(?=[A-Z])', declaration):
+            # OUT T / SET F declare operand-specialized uses of the same
+            # mnemonic; the operand condition remains in the owning section.
+            part = re.sub(r'\s+(?:T|ST|C|LC|F)$', '', part.strip())
+            variants = [part]
+            for glyph in set(re.findall(r'\[GLYPH-[0-9A-F]+\]', part)):
+                if function_blocks:
+                    indication = re.search(r'\(' + re.escape(glyph)
+                                           + r' indicates ([^)]*)\)', context)
+                    if indication:
+                        # This manual names every TIMER_*_M block explicitly;
+                        # the placeholder is not a freely expandable pattern.
+                        variants = re.findall(r'\b[A-Z][A-Z0-9_]*\b', indication[1])
+                        continue
+                options = []
+                for match in re.finditer(r'\(([^\n]+?)\s+enters\s+'
+                                         + re.escape(glyph), context):
+                    quoted = re.findall(r'"[A-Z]*([<>=]+)(?:\(P\))?(?:\(_U\))?"', match[1])
+                    if quoted:
+                        # The suffix is expanded from the declaration below.
+                        options = quoted
+                        break
+                if not options:
+                    variants = []
+                    break
+                variants = [value.replace(glyph, option) for value in variants for option in options]
+            while variants and any(re.search(r'\((?:P|_U|_E)\)', value) for value in variants):
+                expanded = []
+                for value in variants:
+                    optional = re.search(r'\((P|_U|_E)\)', value)
+                    if optional:
+                        expanded.extend((value[:optional.start()] + value[optional.end():],
+                                         value[:optional.start()] + optional[1] + value[optional.end():]))
+                    else:
+                        expanded.append(value)
+                variants = expanded
+            names.extend(value for value in variants
+                         if re.fullmatch(r'[A-Z$+*/<>=!\-][A-Z0-9_.$@+<>!=*/\-]*', value)
+                         and not re.fullmatch(r'[+\-]\d+(?:\.\d+)?', value)
+                         and not re.fullmatch(r'(?:[XYZMDWRTLCFVS]|SM|SD|SB|SW|ST)\d+', value))
+    return list(dict.fromkeys(names))
 
 
 def document_units(record):

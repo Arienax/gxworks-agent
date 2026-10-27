@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Encode observed Ladder token forms without loading vendor components.
 
 The CPU profile selects a binary grammar, not instruction availability or PLC

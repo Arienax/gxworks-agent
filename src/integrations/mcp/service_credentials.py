@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Private local MCP service discovery for the product launcher.
 
 The Web process publishes only a loopback origin, an unprivileged Agent token

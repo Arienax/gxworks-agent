@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """CPU-selected callable interfaces bound to the existing graph and labels.
 
 Source formals describe graphic connections; execution and IN_OUT copyback are
@@ -426,6 +429,7 @@ class ProjectCallableSources:
         result.declaration_gaps = {issue['stream'] for issue in declaration_issues}
         result.declaration_owners = {group['labels']: name for name, group in
                                     source_groups.items()}
+        result.source_streams = streams
         return result
 
     def with_declarations(self, declarations):
@@ -447,6 +451,239 @@ class ProjectCallableSources:
             return None
         return resolve_label(self.declarations, self.program_name, symbol,
                              global_variable_hiding=self.global_variable_hiding, local_table=local)
+
+    def value_type_identity(self, data_type):
+        """Keep composite owner and array bounds in the same type identity."""
+        base, bounds = _type_parts(data_type)
+        if base.upper() in BASIC_TYPES or base.upper() == 'LREAL' or base.upper().startswith('ANY'):
+            identity = base.upper()
+        else:
+            try:
+                identity = 'STRUCT:' + self.structure(base).logical_name + ':' + base
+            except GXWFormatError:
+                stream, _ = self.definition(base, 'FUNCTION_BLOCK')
+                identity = 'FB:' + stream + ':' + base
+        return ('ARRAY' + repr([list(value) for value in bounds]) + ':' if bounds else '') + identity.upper()
+
+    def actual_value(self, symbol, *, literal_rules=None):
+        """Bind an FBD actual to its source, value domain and storage separately.
+
+        Reading nested declarations does not authorize creating or rewriting
+        their native layout. Existing writer capability checks still apply.
+        """
+        from plc.fbd_semantics import parse_literal, FBDSemanticError
+        from plc.validation import (parse_device_address, is_bit_device, _validate_device_address,
+                                    _validate_writable_device, device_address_radix, DEVICE_ADDRESS_RE,
+                                    device_address_status)
+        def checked_address(address):
+            if device_address_status(address, self.cpu) == 'unverified':
+                raise FBDSemanticError('fbd_device_coverage', 'Device namespace is absent from the current CPU rule subset',
+                                       severity='unverified', expression=text, device=address, plc_model=self.cpu)
+            _validate_device_address(address, '$.fbd.actual', self.cpu)
+        text = str(symbol).strip()
+        root = re.match(r'[^\W\d]\w*', text)
+        binding = self.label(root[0]) if root else None
+        if binding is not None:
+            table, declaration = binding
+            base, bounds = _type_parts(declaration.data_type)
+            constant = declaration.class_code in (2, 9, 11)
+            current_type = declaration.data_type
+            result = dict(text=text, kind='label', source_table=table, source_offset=declaration.offset,
+                          declaration=declaration.name, declared_type=declaration.data_type,
+                          class_code=declaration.class_code, constant=constant, readable=True,
+                          writable=declaration.class_code not in (2, 3, 9, 11, 12),
+                          storage=dict(device=declaration.device or None, iec_address=declaration.iec_address or None),
+                          member_path=[], issues=[])
+            remaining = text[root.end():]
+            while remaining:
+                if remaining.startswith('['):
+                    match = re.match(r'\[([^\]]+)\]', remaining)
+                    if match is None or not bounds:
+                        raise FBDSemanticError('fbd_actual_subscript', 'Array index has no matching declaration', expression=text)
+                    indices = []
+                    for token in match[1].split(','):
+                        token = token.strip()
+                        if re.fullmatch(r'[+-]?\d+', token):
+                            indices.append(int(token))
+                        else:
+                            index_binding = self.label(token)
+                            if index_binding is None or index_binding[1].class_code not in (2, 9):
+                                raise FBDSemanticError('fbd_actual_index_coverage', 'Index requires a known integer constant',
+                                                       severity='unverified', expression=text, index=token)
+                            value = parse_literal(index_binding[1].initial_value, self.cpu, rules=literal_rules)
+                            if not value or type(value.get('value')) is not int:
+                                raise FBDSemanticError('fbd_actual_subscript', 'Array index constant is not an integer', expression=text)
+                            indices.append(value['value'])
+                    if len(indices) != len(bounds) or any(not lo <= index <= hi for index, (lo, hi) in zip(indices, bounds)):
+                        raise FBDSemanticError('fbd_actual_subscript', 'Array index is outside the declared shape',
+                                               expression=text, shape=[list(v) for v in bounds], indices=indices)
+                    result['member_path'].append(dict(indices=indices, shape=[list(v) for v in bounds]))
+                    bounds, remaining, current_type = [], remaining[match.end():], base
+                    continue
+                match = re.match(r'\.([^\W\d]\w*)', remaining)
+                if not match or bounds:
+                    raise FBDSemanticError('fbd_actual_syntax', 'Member access needs a scalar declared owner', expression=text)
+                member_name = match[1]
+                try:
+                    structure = self.structure(base)
+                except GXWFormatError:
+                    try:
+                        stream, definition = self.definition(base, 'FUNCTION_BLOCK')
+                    except GXWFormatError as error:
+                        raise FBDSemanticError('fbd_actual_member', 'Member owner has no unique definition', expression=text) from error
+                    document = definition.get('declarations')
+                    if document is None:
+                        raise FBDSemanticError('fbd_actual_member_coverage', 'FB member declaration is unavailable',
+                                               severity='unverified', expression=text)
+                    matches = [row for row in document.rows if row.name.casefold() == member_name.casefold()]
+                    if len(matches) != 1 or matches[0].class_code != CLASS_CODES['VAR_OUTPUT']:
+                        raise FBDSemanticError('fbd_actual_member_access', 'Only a declared FB output can be read as a member', expression=text)
+                    member = matches[0]
+                    result['writable'] = False
+                else:
+                    stream = structure.logical_name
+                    matches = [row for row in structure.members if row.name.casefold() == member_name.casefold()]
+                    if len(matches) != 1:
+                        raise FBDSemanticError('fbd_actual_member', 'Missing or ambiguous declared structure member', expression=text)
+                    member = matches[0]
+                result['member_path'].append(dict(source_stream=stream, source_offset=member.offset, name=member.name))
+                base, bounds = _type_parts(member.data_type)
+                current_type = member.data_type
+                remaining = remaining[match.end():]
+            result.update(data_type=current_type,
+                          shape=[list(value) for value in bounds])
+            capacity = re.fullmatch(r'STRING\s*\[\s*(\d+)\s*\]', current_type, re.I)
+            if capacity:
+                result['string_capacity'] = int(capacity[1])
+            result['types'] = [self.value_type_identity(current_type)]
+            if constant and not result['member_path']:
+                value = parse_literal(declaration.initial_value, self.cpu, rules=literal_rules)
+                if value is not None:
+                    if base.upper() not in value['types']:
+                        raise FBDSemanticError('fbd_constant_type', 'Declared constant initializer does not fit its type', expression=text)
+                    if capacity and len(value['value']) > int(capacity[1]):
+                        raise FBDSemanticError('fbd_constant_type', 'Declared string constant exceeds its capacity', expression=text)
+                    result['value'] = value['value']
+                    result['syntax'] = value['syntax']
+            return result
+        grouped = re.fullmatch(r'K([1-8])([A-Z]+[0-9A-F]+)', text, re.I)
+        if grouped:
+            address, digits = grouped[2].upper(), int(grouped[1])
+            checked_address(address)
+            if not is_bit_device(address, self.cpu):
+                raise FBDSemanticError('fbd_actual_device_group', 'Digit specification needs a bit device', expression=text)
+            prefix, index = parse_device_address(address, self.cpu)
+            last = index + digits * 4 - 1
+            radix = device_address_radix(prefix, self.cpu)
+            suffix = format(last, 'X') if radix == 16 else format(last, 'o') if radix == 8 else str(last)
+            checked_address(prefix + suffix)
+            types = ['INT', 'WORD'] if digits <= 4 else ['DINT', 'DWORD']
+            writable = True
+            try:
+                _validate_writable_device(address, '$.fbd.actual', self.cpu)
+            except ValueError:
+                writable = False
+            return dict(text=text, kind='device_group', types=types, constant=False, readable=True, writable=writable,
+                        storage=dict(first=address, last=prefix + suffix, bits=digits * 4), shape=[], issues=[])
+        literal = parse_literal(text, self.cpu, rules=literal_rules)
+        if literal is not None:
+            return literal
+        if DEVICE_ADDRESS_RE.fullmatch(text):
+            checked_address(text)
+        if parse_device_address(text, self.cpu) is not None:
+            _validate_device_address(text, '$.fbd.actual', self.cpu)
+            bit = is_bit_device(text, self.cpu)
+            writable = True
+            try:
+                _validate_writable_device(text, '$.fbd.actual', self.cpu)
+            except ValueError:
+                writable = False
+            return dict(text=text, kind='device', types=['BOOL'] if bit else ['INT', 'WORD'],
+                        constant=False, readable=True, writable=writable, shape=[], issues=[],
+                        storage=dict(device=text.upper(), bits=1 if bit else 16), data_type='BOOL' if bit else None)
+        raise FBDSemanticError('fbd_actual_unresolved', 'Actual is not bound to the current declarations or target grammar',
+                               severity='unverified', expression=text)
+
+    def call_storage_bits(self, node, formal=None):
+        """Current MELSEC instruction device view, never a cast of a label."""
+        if node.kind != NodeKind.FUNCTION:
+            return None
+        try:
+            stream, definition = self.definition(node.symbol, 'FUNCTION')
+        except GXWFormatError:
+            return None  # Serialized operators have value ports, no MELSEC device span.
+        if stream.casefold() != 'melsec.lif' or definition.get('source_kind') == 'project_labels':
+            return None
+        if formal is not None:
+            from plc.fbd_semantics import language_rules
+            return language_rules('FBD.TYPES', self.cpu).get('generic_storage_bits', {}).get(formal.get('data_type'))
+        from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+        from plc.instruction_constraints import _cpu_members
+        forms = [DEFAULT_INSTRUCTION_REGISTRY.resolve_form(node.symbol, cpu=cpu) for cpu in _cpu_members(self.cpu)]
+        if any(not form or 'instruction_width' not in form.spec.verified_fields for form in forms):
+            return None
+        widths = {form.spec.instruction_width for form in forms}
+        return next(iter(widths)) if len(widths) == 1 and widths <= {16, 32} else None
+
+    def callee_context(self, node):
+        """Expose saved call conditions; unknown compiler option bits stay unknown."""
+        kind = 'FUNCTION_BLOCK' if node.kind == NodeKind.FUNCTION_BLOCK else 'FUNCTION'
+        name = node.type_name if node.kind == NodeKind.FUNCTION_BLOCK else node.symbol
+        stream, definition = self.definition(name, kind)
+        document = definition.get('declarations')
+        logical = next((key for key, group in (self.source_groups or {}).items() if group['labels'] == stream), None)
+        raw = getattr(self, 'source_streams', {}).get(logical)
+        language = None
+        if raw:
+            from .source_header import source_payload_offset
+            language = {193: 'st', 208: 'fbd', 1: 'ladder'}.get(raw[source_payload_offset(raw)])
+        return dict(source_stream=stream, source_name=logical, language=language, definition=definition,
+                    options=dict(use_en_eno=bool(document.owner_pou_status & 4)
+                                 if document is not None and document.owner_pou_status is not None else None,
+                                 use_macrocode=None, use_mc_mcr=None), raw=raw)
+
+    def inout_output_usage(self, node, formal):
+        """Return True/False only when the complete current callee can decide it."""
+        context = self.callee_context(node)
+        raw = context['raw']
+        if not raw:
+            return None, context['language']
+        if context['language'] == 'st':
+            from .text_pou import parse_st_pou
+            from plc.st_frontend import parse_body, STUncovered
+            try:
+                unit = parse_body(parse_st_pou(raw).text)
+            except (ValueError, STUncovered):
+                return None, 'st'
+            result = False
+            def visit(value):
+                nonlocal result
+                if not isinstance(value, (tuple, list)):
+                    return
+                if value and value[0] == 'assign' and isinstance(value[1], (tuple, list)):
+                    target = value[1]
+                    while target and target[0] in ('index', 'member', 'field') and isinstance(target[1], (tuple, list)):
+                        target = target[1]
+                    if target[0] == 'atom' and target[1].casefold() == formal.casefold():
+                        result = True
+                if value and isinstance(value[0], str) and value[0] in {'call', 'call_stmt'} and result is not True:
+                    result = None  # A nested callee may write an actual parameter.
+                for child in value:
+                    visit(child)
+            visit(unit.body)
+            return result, 'st'
+        if context['language'] == 'fbd':
+            from .structured_pou import parse_structured_pou
+            program = parse_structured_pou(raw, logical_name=context['source_name'], preserve_unsupported_records=True)
+            if program.unknown_records:
+                return None, 'fbd'
+            written = any(re.match(re.escape(formal) + r'(?:$|\.|\[)', n.symbol, re.I) and n.kind in
+                       (NodeKind.OUTPUT, NodeKind.INOUT, NodeKind.COIL, NodeKind.COIL_SET, NodeKind.COIL_RESET)
+                       for n in program.nodes)
+            if written:
+                return True, 'fbd'
+            return (None if any(n.kind in (NodeKind.FUNCTION, NodeKind.FUNCTION_BLOCK) for n in program.nodes) else False), 'fbd'
+        return None, context['language']
 
     @property
     def local_table(self):

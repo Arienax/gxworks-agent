@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Advisory, model-aware ladder workflow review rules.
 
 Hard schema and instruction failures belong in :mod:`plc_json_validator`.

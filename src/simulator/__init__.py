@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """GX Simulator2 integration and deterministic PLC test execution."""
 
 from .api import run_regression_suite, run_test_case, simulator_status

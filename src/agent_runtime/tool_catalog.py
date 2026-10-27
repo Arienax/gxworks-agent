@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Public tool declarations grouped by their stable capabilities."""
 from __future__ import annotations
 from itertools import chain
@@ -98,7 +101,7 @@ def program_definitions(generation):
     )
     yield ToolDefinition(
         "search_plc_manual",
-        "检索当前 PLC 型号的技术语义、约束和原创案例；来源与核验记录仅供显式 debug 查询。",
+        "检索当前 PLC 型号的指令、FBD 语言及软元件事实。精确地址规则区分编号范围、默认分配和参数条件，不表示当前已分配或原生访问许可；来源记录仅供显式 debug 查询。",
         {
             "type": "object",
             "properties": {
@@ -110,7 +113,7 @@ def program_definitions(generation):
                 },
                 "top_k": {
                     "type": "integer",
-                    "description": "返回条数，1 到 8。",
+                    "description": "补充相关资料条数，1 到 8；明确指令、地址、错误码及依赖不受此上限限制。",
                     "minimum": 1,
                     "maximum": 8,
                 },
@@ -118,6 +121,13 @@ def program_definitions(generation):
                     "type": "boolean", "default": False,
                     "description": "仅显式调试时设为 true，返回来源、证据和核验记录。普通生成与分析保持 false。",
                 },
+                "language": {'type': 'string', 'enum': ['ladder', 'st', 'fbd'],
+                    'description': '目标语言；省略时从问题识别，不以语言替代行为/时序问题。'},
+                "aspects": {'type': 'array', 'items': {'type': 'string', 'enum': [
+                    'arity', 'order', 'roles', 'purpose', 'unit', 'encoding', 'devices', 'types',
+                    'effects', 'execution', 'constraints', 'st_call', 'fbd_call', 'operand_range', 'operand_condition',
+                    'timing_state', 'same_scan', 'first_execution', 'disabled', 'jump']},
+                    'description': '明确要回答的知识维度；省略时自动识别。'},
             },
             "required": ["query"],
             "additionalProperties": False,
@@ -136,6 +146,8 @@ def program_definitions(generation):
             '默认校验当前程序；native=true 在隔离工作区检查当前版本已绑定的 GXW 快照，分别返回编译、公开检查、底层重检、诊断和当前源码对应状态。仅有源码或 '
             'CSV 不能启动原生检查；简单 Ladder 必须有明确原生 CPU，并完整回读源码词法、与当前候选的指令逐项匹配，覆盖外保留为未验证。program 仅标识请'
             '求的 POU 上下文，实际检查范围以 selection 和 targets 为准。不会操作 GX 界面、PLC 或写入项目版本。'
+            '原生检查不会保存编译产物；compilation.acceptance=accepted 仅表示编译器接受副本，实际保存状态见 save.completed/exported。'
+            '公开 compile_project 仅执行本地 Core 编译；保存原生编译产物须在 GX Works2 或独立原生工作区接口中另行编译、保存并检查冷重开结果。'
         ),
         {"type": "object", "properties": {
             "native": {"type": "boolean", "description": "显式启动已保存 GXW 的离线原生检查；默认 false。"},
@@ -161,7 +173,7 @@ def program_definitions(generation):
 def generation_definitions(generation):
     yield ToolDefinition(
         "get_generation_context",
-        "读取与内置 API 共用的生成提示、当前程序、确认规格、PLC 型号和本地手册上下文；可传本次需求改善检索。无版本时也可用，不调用模型，不返回路径或模型配置。",
+        "读取与内置 API 共用的生成提示、工程、规格和本地事实。FBD 必须从本工具取得 device_address_rules、language_rules、完整接口和受影响源码；按 output_contract 选择单图候选或 ST/FBD 联合事务。无版本时也可用，不调用模型。",
         {
             "type": "object",
             "properties": {
@@ -173,6 +185,10 @@ def generation_definitions(generation):
                              "description": "新 Ladder 有原始需求时默认 Direct；已确认规格可显式选 Direct，编辑仍沿用原入口。"},
                 "execution_mode": {"type": "string", "enum": ["background", "live"],
                     "description": "选择保存版本的后台上下文或持续原生会话当前确认的源码。省略时优先使用已启动的原生会话。"},
+                "catalog_scope": {"type": "string", "enum": ["task", "full"], "default": "task",
+                    "description": "FBD 目录范围：task 按本次需求及当前源码依赖选择完整接口，full 请求全目录；最终保留项以 generation_input.catalog 为准。缺项在 missing_templates 报告。"},
+                "templates": {"type": "array", "items": {"type": "string", "minLength": 1},
+                    "description": "FBD 只取这些模板及其完整依赖闭包；省略表示按 catalog_scope 取。"},
             },
             "additionalProperties": False,
         },
@@ -284,8 +300,14 @@ def native_definitions(generation):
     _engineering_native_schema(),
     _request_native_engineering, confirmation_required=True)
     yield ToolDefinition('get_fbd_catalog',
-    '读取当前 CPU 的空白 FBD 模板、工程源码引脚和声明表；启用 56 个 Q/L/FX 原生菜单，当前 FBD 复现流程不支持 FX1，按合并菜单身份选择模板。',
-    {'type': 'object', 'properties': {'program': {'type': 'string'}}, 'additionalProperties': False},
+    '读取当前 CPU 的 FBD 模板、源码端口、声明和 parameter_schema；默认 full，task 或 templates 可收窄目录，精确缺项不替换。生成前仍须 get_generation_context 的语言及地址规则。模板按实际 CPU 菜单绑定，当前 FBD 流程不支持 FX1。',
+    {'type': 'object', 'properties': {'program': {'type': 'string'},
+        'user_requirement': {'type': 'string', 'description': '用于 task 目录裁剪的用户需求。'},
+        'catalog_scope': {'type': 'string', 'enum': ['task', 'full'], 'default': 'full',
+            'description': 'task 只返回当前程序依赖闭包，full 返回完整模板表。'},
+        'templates': {'type': 'array', 'items': {'type': 'string', 'minLength': 1},
+            'description': '只取这些模板及其完整依赖闭包；省略表示按 catalog_scope 取。'}},
+     'additionalProperties': False},
     _get_fbd_catalog)
     yield ToolDefinition('read_fbd_project',
     '读取当前已保存 GXW 或上传 GXW 的 FBD 图形、标签、具名引脚和 SVG；不运行 GX Works2。',
@@ -302,7 +324,7 @@ def native_definitions(generation):
      'additionalProperties': False}, _read_fbd_definition)
     yield ToolDefinition('create_fbd_candidate',
     (
-        '在当前工程副本上编写 FBD。generate/edit 的 model 可只填 networks：calls 用 id/type/instance/argum'
+        '先读取 get_generation_context，按其中 FBD 语言、地址和接口规则编写工程副本。ST 接口/正文与受影响 FBD 调用者联合修改用 edit_gxw_project。generate/edit 的 model 可只填 networks：calls 用 id/type/instance/argum'
         'ents，组合逻辑用 nodes 和 from/to 端口连接。Core 从当前定义生成接口、IN_OUT、分块和布线，不需要坐标；参数 schema 见 ge'
         't_fbd_catalog.parameter_schema。原有 v2 对象编辑仍支持。create_structure 用 source_name/memb'
         'ers 新建类型；create_st_fb 用 source_name/declarations/st_text 编写完整 ST FB；edit_st_fb 省'
@@ -311,7 +333,7 @@ def native_definitions(generation):
         '建或更新全局表，结构设备映射用 member_devices；edit_pou_labels 用 POU 名和 declarations 更新局部表。confi'
         'gure_project 用目录 project_configuration 的 source_name 和 options 修改 system_variabl'
         'e_ranges，program_capacity 当前仅支持已验证 FX3U/FX3UC 的 16000/64000。create_fb 新建空 FBD FB'
-        ' 后用 edit 编写图形。定义和配置操作需基础版本。import_library 单独导入现有库；create_program 需资源和任务。compile '
+        ' 后用 edit 编写图形。定义和配置操作需基础版本。import_library 转移已覆盖的 ST 库实现，不能转移 FBD 库正文；create_program 需资源和任务。compile '
         '在当前基础版本上原生编译、完整检查、保存并冷重开比较三个代码通道，不接受源码修改参数；运行验证另行执行。'
     ),
     _engineering_fbd_schema(),
@@ -389,7 +411,8 @@ def native_definitions(generation):
     yield ToolDefinition('edit_gxw_project',
         '在明确 version_id 的 GXW 上联合编辑多个既有 Ladder/ST/FBD/SFC 源码、接口、声明和注释。'
         'edits 的 source_name 使用检查返回的逻辑身份，command 复用该语言的已有编辑契约；'
-        'save_policy 默认 draft，保留源码诊断并生成可继续编辑的草稿；checked 要求源码检查通过。'
+        '同时修改 ST 接口/正文和 FBD 调用者时在一次事务提交；从 get_generation_context.output_contract 取得版本和可编辑源码。'
+        'save_policy 默认 draft，保留诊断；checked 拒绝新增已知源码错误，两种策略均拒绝新增非法 FBD 字面量。旧错误保留不表示编译通过。'
         '返回统一差异和候选，确认后保存新版本；全程离线，编译和实际运行另行验证。',
         _gxw_edit_schema(graph_edits=sfc_definition.parameters['properties']['graph_edits']),
         transaction_candidate, confirmation_required=True)

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Managed FBD candidates. GXW engineering stays in gxw; approval stays shared."""
 from __future__ import annotations
 
@@ -329,12 +332,18 @@ def prepare_candidate(output, *, model=None, baseline=None, imported=None, progr
                   "modified_objects": [], "metadata_changes": []}
     context = read_project_context(raw, program_name)
     graph = context.object_model()
+    checked_source = source_checks(context)
+    if imported is None and model is not None:
+        from gxw.fbd_validation import require_graph_checks
+        original = read_project_context(baseline, context.program.logical_name)
+        require_graph_checks(source_checks(original)['findings'], checked_source['findings'],
+                             save_policy=save_policy)
     files = {"gxw": ("program.gxw", raw), "fbd": ("fbd.json", json_bytes(graph)),
              "svg": ("fbd.svg", context.svg().encode("utf-8")),
              "write_report": ("write_report.json", json_bytes(report))}
     if authoring is not None:
         files['definition'] = ('definition.json', json_bytes(report['definition_after']))
-    messages = ["已校验工程结构、对象和声明；GX Works2 编译尚未执行。"]
+    messages = ["工程结构和源码检查结果已保留；GX Works2 编译尚未执行。"]
     if imported is not None:
         messages.append("导入文件的 CPU 设置保持原样，尚未校验与工作台机型一致。")
     if source_ladder is not None:
@@ -350,8 +359,12 @@ def prepare_candidate(output, *, model=None, baseline=None, imported=None, progr
     for key, (name, data) in files.items():
         (output / name).write_bytes(data)
         artifacts[key] = {"path": name, "sha256": hashlib.sha256(data).hexdigest()}
+    source_errors = any(row.get('severity') == 'error' for row in checked_source['findings'])
+    source_gaps = checked_source['status'] == 'unverified'
+    status = 'draft_saved' if source_errors and save_policy == 'draft' else (
+        'failed' if source_errors else 'unverified' if source_gaps else 'validated')
     metadata = {"target_mode": "fbd", "plc_model": plc_model, "program_name": context.program.logical_name,
-                "summary": summary, "validation": {"status": "validated", "messages": messages,
+                "summary": summary, "validation": {"status": status, "messages": messages,
                 "gx_compile": "not_run", "object_issues": graph["issues"],
                 'native_save': report.get('validation', {}).get('native_save', 'not_run'),
                 'native_source_save_required': False,
@@ -361,7 +374,7 @@ def prepare_candidate(output, *, model=None, baseline=None, imported=None, progr
     if 'invalidated_results' in report:
         metadata['validation']['invalidated_results'] = copy.deepcopy(report['invalidated_results'])
     metadata['validation']['save_policy'] = save_policy
-    metadata['validation']['source_checks'] = source_checks(context)
+    metadata['validation']['source_checks'] = checked_source
     if save_policy == 'draft' and metadata['validation']['source_checks']['findings']:
         metadata['validation']['status'] = 'draft_saved'
         messages[:] = ['工程草稿已离线保存并回读；源码检查结果保留，编译尚未执行。']
@@ -439,37 +452,62 @@ def prepare_topology_candidate(output, topology, *, baseline, plc_model, program
 
 
 def build_fbd_generation_context(request, *, plc_model, confirmed_spec=None, catalog,
-                                 previous=None, model_profile=None):
-    """Expose the same source-owned interfaces and discovery to API and MCP."""
+                                 previous=None, model_profile=None, catalog_scope=None,
+                                 templates=None, device_comments=None, comment_tables=None,
+                                 images=(), image_count=None, source_baseline=None,
+                                 instances_model=None, task_type=None):
+    """Expose one request-scoped, dependency-closed and compiler-measured FBD request.
+
+    `fbd_context.compose_fbd_context` owns the engineering facts, the catalog
+    selection and the budget, so the API and MCP entries cannot drift apart.  The
+    returned `wire_messages` are exactly what the budget was measured on; callers
+    send those messages instead of re-serializing the payload.
+    """
     from application.capability_context import augment_generation_knowledge
+    from application.fbd_context import compose_fbd_context, handoff_entry, source_program_context
     from application.generation_support import public_generation_specification, public_generation_value
-    from gxw.generation_contract import FBD_GENERATION_PROMPT
+    from application.model_api import bound_provider_profile
     from knowledge.evidence import context_manifest
     from plc.specification.provenance import handoff_snapshot
+    from shared.model_context import technical_context_text
 
     requirement = public_generation_value(str(request or ""))
     specification = public_generation_specification(confirmed_spec)
-    knowledge = augment_generation_knowledge(requirement, plc_model=plc_model, target_mode="fbd",
+    # The external MCP client's window is unknown. Only Web callers supply
+    # their actual provider profile; transport paging has its own fixed cap.
+    profile = copy.deepcopy(model_profile) if isinstance(model_profile, dict) else {}
+    from knowledge.retriever import build_knowledge_context
+    from knowledge.structured_facts import generation_aspects
+    from shared.model_context import technical_context_units
+    from application.generation_support import _build_knowledge_query
+    source = source_program_context(source_baseline, selected_program=catalog.get('program'), request=requirement,
+                                    templates=templates or ()) if source_baseline is not None else None
+    query = _build_knowledge_query(requirement, previous,
+        (source or {}).get('st_sources'), (source or {}).get('fbd_callers'))
+    base_knowledge = build_knowledge_context(query, plc_model=plc_model,
+        task_type='edit' if previous is not None else 'generate', language='fbd', top_k=3,
+        aspects=generation_aspects(query, language='fbd'))
+    knowledge = augment_generation_knowledge(requirement, base_knowledge, plc_model=plc_model, target_mode="fbd",
         confirmed_spec=specification, catalog=catalog)
     manifest = context_manifest(knowledge, stage="generate" if previous is None else "edit")
     handoff = handoff_snapshot(specification, evidence=manifest, stage=manifest["stage"])
     handoff["capability_discovery"] = copy.deepcopy(manifest["capability_discovery"])
-    parameter_catalog = [{key: value for key, value in item.items() if key not in
-                          ('width','height','prototype_offset','ports')} | {
-                          'ports':[{key:value for key,value in port.items() if key not in ('x','y')}
-                                   for port in item.get('ports',[])]} for item in catalog['nodes']]
-    from gxw.generation_contract import FBD_PARAMETER_MODEL_SCHEMA
-    context = {"schema_version": 2, "cpu": catalog["cpu"],
-               "program": catalog["program"], "catalog": parameter_catalog,
-               'parameter_schema': FBD_PARAMETER_MODEL_SCHEMA,
-               "declaration_tables": catalog["declaration_tables"],
-               "confirmed_spec": specification,
-               'existing_declarations': (previous or {}).get('labels', {}),
-               "previous": catalog.get('parameter_model', previous) if previous is not None else None,
-               "request": requirement}
-    from shared.model_context import technical_context_text, technical_value
-    return {"generation_instructions": FBD_GENERATION_PROMPT + technical_context_text(knowledge),
-            "generation_input": technical_value(public_generation_value(context)), "generation_handoff": handoff}
+    composed = compose_fbd_context(request=requirement, plc_model=plc_model,
+        confirmed_spec=confirmed_spec, catalog=catalog, previous=previous,
+        instances_model=instances_model, model_profile=profile,
+        catalog_scope=catalog_scope, templates=templates, device_comments=device_comments,
+        comment_tables=comment_tables, knowledge_units=technical_context_units(knowledge),
+        knowledge_coverage=manifest.get('retrieval_coverage'),
+        discovery=manifest["capability_discovery"],
+        image_count=len(images or ()) if image_count is None else int(image_count or 0),
+        source_baseline=source_baseline, source_context=source,
+        task_type=task_type or ("edit" if previous is not None else "generate"))
+    receipt = handoff_entry(composed)
+    handoff.update(receipt)
+    return {"generation_instructions": composed.instructions,
+            "generation_input": composed.payload,
+            "generation_handoff": handoff, "context_receipt": receipt,
+            "wire_messages": composed.wire_messages}
 
 
 def generate_candidate(output, snapshot, images, ctx):
@@ -481,18 +519,21 @@ def generate_candidate(output, snapshot, images, ctx):
     source_context = _target_context(baseline, project.get('plc_model', 'FX3U'), snapshot.get('fbd_program'))
     previous = source_context.object_model() if baseline is not None else None
     from gxw.editor import editor_catalog
+    from gxw.offline_project import read_offline_project
+    from application.model_api import bound_provider_profile
+    comments, tables, _ = read_offline_project(source_context.raw).comments()
+    catalog = editor_catalog(source_context)
     generation = build_fbd_generation_context(snapshot.get("text", ""),
         plc_model=project.get("plc_model", "FX3U"), confirmed_spec=project.get("confirmed_spec"),
-        catalog=editor_catalog(source_context), previous=previous, model_profile=snapshot.get("model"))
-    from gxw.offline_project import read_offline_project
-    comments, tables, _ = read_offline_project(source_context.raw).comments()
-    generation['generation_input'].update(device_comments=comments, comment_tables=tables)
-    generation['generation_instructions'] += ('\nYou may also return device_comments mapping existing device addresses to complete '
-        'text or null (delete), and comment_table when selecting among existing QCD tables. '
-        'Comments and the model are saved in the same offline transaction; preserve unrelated comments.')
+        catalog=catalog, previous=catalog.get('parameter_model'),
+        instances_model=previous,
+        model_profile=bound_provider_profile(), catalog_scope=snapshot.get('catalog_scope'),
+        templates=snapshot.get('catalog_templates'), device_comments=comments, comment_tables=tables,
+        images=images or (), source_baseline=baseline)
     ctx.emit("progress", {"message": "正在生成 FBD 对象、连线及声明"})
-    response = _request_model([{"role": "system", "content": generation["generation_instructions"]},
-        _user_message_with_images(json.dumps(generation["generation_input"], ensure_ascii=False), images)],
+    messages = list(generation["wire_messages"])
+    messages[-1] = _user_message_with_images(messages[-1]["content"], images)
+    response = _request_model(messages,
         model_name=snapshot.get("model", {}).get("model"), effort=None, stream=True,
         on_reasoning_chunk=lambda t: ctx.emit("reasoning", {"text": t}),
         on_content_chunk=lambda t: ctx.emit("content", {"text": t}),
@@ -503,6 +544,11 @@ def generate_candidate(output, snapshot, images, ctx):
     answer = json.loads(text)
     if isinstance(answer, dict) and set(answer) == {'unsupported'} and isinstance(answer['unsupported'], str):
         raise FBDValidationError('当前 FBD 生成能力存在缺口：' + answer['unsupported'])
+    if isinstance(answer, dict) and 'arguments' in answer:
+        # A joint source transaction belongs to the shared existing-version path;
+        # this entry builds a new graph and has no saved source to join.
+        raise FBDValidationError(
+            '新建 FBD 图形只能返回 {"summary","model"}；既有多源码事务请使用已保存版本入口。')
     if (not isinstance(answer, dict) or not {'summary', 'model'} <= set(answer)
             or set(answer) - {'summary', 'model', 'device_comments', 'comment_table'}
             or not isinstance(answer['summary'], str)):

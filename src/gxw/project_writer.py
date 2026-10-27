@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Template-backed GXW project writes with metadata and preservation checks.
 
 Inputs are source-bound StructuredProgram and DeclarationDocument models.

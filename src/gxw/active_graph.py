@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Core projection and semantic target resolution for current native graphs.
 
 Native memory layout stays in the C# adapter. IDs identify one observed network

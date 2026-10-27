@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """One-hop source annotations over candidates from the existing Retriever.
 
 These are advisory composition evidence, not confirmed engineering requirements.

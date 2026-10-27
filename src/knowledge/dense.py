@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Lazy local dense retrieval for the bundled FX3U knowledge index.
 
 The model is an offline-trained multilingual character/word TF-IDF latent

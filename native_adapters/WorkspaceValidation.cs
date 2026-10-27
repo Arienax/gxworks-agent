@@ -1,3 +1,6 @@
+// Copyright 2026 Arienax
+// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 // Original offline compile/check collection. Core interprets source identities,
 // byte correspondence and phase outcomes. No PLC communication operation.
 using System;
@@ -15,7 +18,9 @@ namespace PlcAi.NativeAdapter
     {
         internal Dictionary<string, object> Validation;
         readonly List<object> validationEvents = new List<object>();
-        const int MaxValidationEvents = 16000, MaxValidationReports = 4096;
+        // Multi-POU Q projects read each declaration at three distinct stages.
+        // The independent 8 MiB serialized-data bound still limits the reply.
+        const int MaxValidationEvents = 65536, MaxValidationReports = 4096;
         const int MaxValidationCharacters = 8 * 1024 * 1024;
         int validationCharacters, reportCharacters, reportCount;
         readonly System.Web.Script.Serialization.JavaScriptSerializer validationSerializer =
@@ -1289,7 +1294,12 @@ namespace PlcAi.NativeAdapter
             Check("Workspace.GetProgramCheckCollection", Slot<CollectionCall>(workspace, 36)(workspace, project, 7, out collection, out code), code);
             List<ObjectId> targets = Children(collection);
             Event(new { operation = "ProgramCheckTargetOrder", targets = targets.ConvertAll(delegate(ObjectId id) { return id.Words; }) });
-            if (targets.Count == 0) throw new InvalidOperationException("native_check_target_selection_empty");
+            if (targets.Count == 0) {
+                if (generated.Count != 0) throw new InvalidOperationException("native_check_target_selection_empty_with_generated_resources");
+                Validation["check_status"] = "not_applicable_no_executable_resources";
+                Event(new { operation = "ProgramCheckNotApplicable", reason = "no_executable_resources" });
+                return;
+            }
             var targetCompilers = ResourceCompilerContexts(compiler, project, targets);
             Validation["check_status"] = "incomplete";
             int publicCompleted = 0, publicFailed = 0, publicSkipped = 0, identityMismatches = 0; bool publicRejected = false;
@@ -1314,7 +1324,7 @@ namespace PlcAi.NativeAdapter
                 try { reports = PollPublicCheckReports(targetCompiler, target, out rejected); }
                 catch (InvalidOperationException error)
                 {
-                    if (error.Message != "Compiler.OriginalPublicCheckProgress failed"
+                    if (!IsPublicCheckProjectionFailure(error)
                             || lastPublicCheckHResult != unchecked((int)0x80004005) || lastPublicCheckCode != 0x2d010025) throw;
                     publicFailed++;
                     Event(new { operation = "PublicDiagnosticProjectionFailure", target = target.Words, resource = name,
@@ -1339,7 +1349,7 @@ namespace PlcAi.NativeAdapter
                     if (!PublishedCode(target, name, generated)) throw new InvalidOperationException("published_code_changed_after_public_failure");
                     continue;
                 }
-                int warnings; int errors = CheckedReportCounts(reports, name, out warnings);
+                int warnings; int errors = CheckedReportCounts(reports, name, out warnings, true);
                 foreach (var row in reports) if ((int)row["kind"] == 2 || (int)row["kind"] == 3)
                 {
                     if (PublicDiagnosticIdentityMismatch(project, target, row)) identityMismatches++;
@@ -1593,23 +1603,27 @@ namespace PlcAi.NativeAdapter
                 : Fields(supplied, "cpu", "codepage", "programs", "lexical_reader", "libraries");
             object[] programs = Entries(source["programs"]), libraries = Entries(source["libraries"]);
             bool simpleLadder = programs.Length > 0 && libraries.Length == 0;
-            bool hasSimpleLadder = false;
             foreach (object item in programs)
             {
                 var row = item as IDictionary<string, object>;
                 int language = row == null ? -1 : NativeRequest.Integer(row["program_kind"]);
                 simpleLadder &= language == 1;
-                hasSimpleLadder |= language == 1;
             }
-            if (hasSimpleLadder && !simpleLadder) throw new ArgumentException("mixed_simple_ladder_validation_unobserved");
-            if (sfc && (Text(source["compilation_method"]) != "change_sfc_program" || libraries.Length != 0))
+            if (sfc && Text(source["compilation_method"]) != "change_sfc_program")
                 throw new ArgumentException("unsupported_native_conversion_method");
+            bool hasSfcSource = false, hasOtherSource = libraries.Length > 0;
             foreach (object item in programs)
             {
                 var row = item as IDictionary<string, object>;
-                if (row == null || (NativeRequest.Integer(row["program_kind"]) == 240) != sfc)
+                if (row == null) throw new ArgumentException("native_source_inventory_invalid");
+                int kind = NativeRequest.Integer(row["program_kind"]);
+                hasSfcSource |= kind == 240; hasOtherSource |= kind != 240;
+                if (kind != 1 && kind != 193 && kind != 208 && kind != 240)
                     throw new ArgumentException("native_conversion_method_and_language_differ");
             }
+            if (hasSfcSource != sfc) throw new ArgumentException("native_conversion_method_and_language_differ");
+            if (sfc && hasOtherSource && !Text(source["cpu"]).StartsWith("Q", StringComparison.Ordinal))
+                throw new ArgumentException("mixed_sfc_source_conversion_not_established_for_cpu:" + Text(source["cpu"]));
             if (programs.Length == 0 || programs.Length + libraries.Length > MaxInventoryEntries) throw new ArgumentException("native_validation_source_selection_empty");
             string input = Path.Combine(root, "input.gxw");
             if (!File.Exists(input) || new FileInfo(input).Length == 0 || new FileInfo(input).Length > 30 * 1024 * 1024) throw new ArgumentException("invalid_isolated_project_files");
@@ -1632,7 +1646,8 @@ namespace PlcAi.NativeAdapter
             Check("Workspace.GetProjectCompiler", Slot<ProjectFunctionCall>(workspace, 2560)(workspace, project, 0x10001, out borrowed, out code), code);
             IntPtr compiler = Query(borrowed, "99db1d02-f474-430d-bc1f-03abf0c7064b");
             Validation["compile_status"] = "incomplete";
-            if (sfc) Check("Compiler.ChangeSFCProgram", Slot<CodeCall>(compiler, 156)(compiler, out code), code);
+            bool standaloneSfc = sfc && !hasOtherSource;
+            if (standaloneSfc) Check("Compiler.ChangeSFCProgram", Slot<CodeCall>(compiler, 156)(compiler, out code), code);
             else
             {
                 Check("Compiler.ToBackward", Slot<IntCodeCall>(compiler, 236)(compiler, 1, out code), code);
@@ -1643,8 +1658,8 @@ namespace PlcAi.NativeAdapter
                 VerifyCharacterCase();
                 Check("Compiler.Build", Slot<CompilerBuildCall>(compiler, 28)(compiler, 0, -1, out code), code);
             }
-            bool rejected; PollCompileReports(compiler, out rejected, sfc ? 168 : 40);
-            if (!sfc) VerifyCharacterCase();
+            bool rejected; PollCompileReports(compiler, out rejected, standaloneSfc ? 168 : 40);
+            if (!standaloneSfc) VerifyCharacterCase();
             Validation["compile_status"] = rejected ? "completed_rejected" : "completed_accepted";
             ReadSources(project, programs, "after-build");
             ReadSources(project, libraries, "after-build", true);
@@ -1655,9 +1670,9 @@ namespace PlcAi.NativeAdapter
             if (simpleLadder)
                 Event(new { operation = "NativeSourceReferencesUnavailable", reason = "simple Ladder has no established IEC symbol-analysis binding",
                     provenance = "L02 non-label source: original CreateProgramAnalysis3 progress fails; task/source identity remains independently checked" });
-            else if (!sfc) ReadReferences(compiler, project);
+            else if (!standaloneSfc) ReadReferences(compiler, project);
             Check("Workspace.UpdatePCodeBeforeProgramCheck", Slot<DeleteCall>(workspace, 1736)(workspace, project, out code), code);
-            if (sfc) CheckSfcResources(project, generated);
+            if (standaloneSfc) CheckSfcResources(project, generated);
             else CheckResources(compiler, project, generated);
             if (inspection != null)
             {

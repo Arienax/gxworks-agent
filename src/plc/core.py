@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Model-free facade over the existing deterministic PLC implementation."""
 
 from __future__ import annotations
@@ -183,10 +186,7 @@ class PLCCore:
         from plc.validation import ValidationProfileUnavailableError
 
         try:
-            ordered = (program.get('source') or {}).get('format') in {
-                'instruction_sequence_v1', 'instruction_sequence_v2'}
-            validate_plc_ir(program, confirmed_spec=confirmed_spec,
-                            require_catalogued_instructions=not ordered)
+            validate_plc_ir(program, confirmed_spec=confirmed_spec)
         except ValidationProfileUnavailableError as error:
             from plc.device_definitions import ladder_device_findings
             known = ladder_device_findings(ir_to_ladder(program), (program.get('plc') or {}).get('cpu'),

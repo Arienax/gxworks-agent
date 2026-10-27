@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Model-independent compact ladder boundary: normalize representation, not logic."""
 from __future__ import annotations
 

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Task-relevant capability hints and explicit facts shared by context adapters."""
 from __future__ import annotations
 
@@ -128,6 +131,16 @@ def augment_generation_knowledge(requirement, knowledge="", *, plc_model="FX3U",
 
     # Coverage-first ordering, then alternatives in the existing retrieval order.
     candidates = discovery["candidates"]
+    # A complete project catalogue is a lookup table, not task evidence. Select
+    # before rendering; explicit calls are unlimited, advisory alternatives use
+    # the same cap as the FBD catalogue selector.
+    from application.fbd_context import DISCOVERY_CALLABLE_LIMIT
+    relevant = [c for c in candidates if set(c['functions']) - {'project_catalog'}]
+    mandatory = [c for c in relevant if 'explicit' in c['functions']]
+    advisory = [c for c in relevant if 'explicit' not in c['functions']][:DISCOVERY_CALLABLE_LIMIT]
+    retained_ids = {c['id'] for c in [*mandatory, *advisory]}
+    discovery['omitted_candidates'] = [c['id'] for c in candidates if c['id'] not in retained_ids]
+    candidates = [c for c in candidates if c['id'] in retained_ids]
     ordered, seen = [], set()
     for function in ["explicit", *discovery["functions"], "project_catalog"]:
         candidate = next((c for c in candidates if function in c["functions"] and c["id"] not in seen), None)

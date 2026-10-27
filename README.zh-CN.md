@@ -1,5 +1,9 @@
 <h1 align="center">GXWorks Agent</h1>
 
+<p align="center"><strong>原作者：<a href="https://github.com/Arienax">Arienax</a></strong> · <a href="https://github.com/Arienax/gxworks-agent">github.com/Arienax/gxworks-agent</a></p>
+
+<p align="center">© 2026 Arienax · Apache-2.0</p>
+
 <h3 align="center">面向三菱 PLC 工程的 MCP 工具服务与 AI 工作台</h3>
 
 <p align="center"><strong>读取工程上下文 · 生成与审阅程序 · 驱动 GX Works2 原生工程与诊断</strong></p>
@@ -40,6 +44,8 @@ GXWorks Agent 将三菱 PLC 的工程上下文、按 CPU 组织的指令事实�
 全部 FX/Q/L 型号目录参与文件能力判断，按 CPU、格式、对象和操作返回支持范围。局部未知记录保持原字节，其他已解析对象可照常编辑；存在未决依赖的修改会返回具体对象和原因。该入口专注于既有源码对象、声明项与注释的离线修改。
 
 源码或声明修改后，之前的编译结果会自动标记为过期，需要编译器验证时可显式运行原生编译检查。
+
+`validate_project(native=true)` 在隔离副本中编译并检查，`compilation.acceptance=accepted` 表示编译器接受当前副本。它不回写编译产物；`save.completed` 和 `save.exported` 均为 `false`，下载的工程在 GX Works2 中仍可能显示待编译。公开工具 `compile_project` 也仅执行本地 Core 编译。需要保存原生编译产物时，应在 GX Works2 中编译并保存，或使用独立工作区 API `NativeWorkspaceSourceSave.compile_project`，并核对保存与冷重开结果。编译、代码检查、保存及 PLC 运行是各自独立的结果。
 
 <a name="ladder"></a>
 
@@ -173,6 +179,8 @@ cd gxworks-agent
 
 离线 GXW 文件操作无需安装三菱软件。原生保存、原生编译与代码检查、交付到 GX Works2 及原生仿真依赖本机安装相应的三菱软件；PLC 只读监测依赖 MX Component 及已配置的逻辑站。发布包不包含任何三菱商业软件。
 
+Windows 原生适配器以 x86 进程加载 GX Works2 的原生组件，Python 主进程可以是 64 位。pywinauto 的应用位数警告本身不代表操作失败；排查前台自动化时以具体错误为准。截图不可用时保留原始异常，并单独报告窗口或桌面截图问题。
+
 ## 设备投运前
 
 投运前请对照目标 CPU、实际外部接线、机构运动边界与运行模式逐项审查生成逻辑。导入前先备份目标 GX 工程，发送到 GX Works2 更新工程文件后，在 GX Works2 中完成编译检查并按现场流程下装与调试。
@@ -181,6 +189,6 @@ cd gxworks-agent
 
 ## 资料与许可
 
-[版本更新记录](CHANGELOG.md) · [贡献指南](CONTRIBUTING.md) · [问题反馈](https://github.com/Arienax/gxworks-agent/issues) · [安全政策](SECURITY.md)
+[版本更新记录](CHANGELOG.md) · [问题反馈](https://github.com/Arienax/gxworks-agent/issues)
 
-项目贡献者拥有权利的 Core、Web、MCP 与原生适配器源码采用 [Apache License 2.0](LICENSE) 开源，具体适用范围见[许可范围](LICENSE-SCOPE.md)与[第三方声明](THIRD_PARTY_NOTICES.md)。各贡献者保留其版权；此前已发布的版本仍适用其发布时的许可证。
+项目贡献者拥有权利的 Core、Web、MCP 与原生适配器源码采用 [Apache License 2.0](LICENSE) 开源，具体适用范围见[许可范围](LICENSING.md)与[第三方声明](THIRD_PARTY_NOTICES.md)。各贡献者保留其版权；此前已发布的版本仍适用其发布时的许可证。[NOTICE](NOTICE) 记录原项目、作者与原始仓库地址。

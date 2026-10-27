@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Strict vendor observations and stable evidence origins for current adapters.
 
 The C# collector owns live interfaces and version selection. ABI checks expose
@@ -132,9 +135,16 @@ def public_report_converter_bound(row):
             and row.get('record_size') == 100)
 
 
-def source_named_check_diagnostics(row):
+def source_named_check_diagnostics(row, *, resource=None, reports=()):
     backend = row.get('input_backend')
-    return isinstance(backend, dict) and backend.get('module') == 'DZDataABS_Compiler.dll' and backend.get('version') == '1.635.0.1'
+    if (isinstance(backend, dict) and backend.get('module') == 'DZDataABS_Compiler.dll'
+            and backend.get('version') == '1.635.0.1'):
+        return True
+    rows = row.get('rows')
+    return (row.get('input_contract') == {'schema_version': 1, 'kind': 'structured', 'status': 'verified'}
+        and check_input_layout_bound(row, sfc=False)
+        and isinstance(rows, list) and bool(rows) and all(structured_input_reader_bound(item) for item in rows)
+        and any(report.get('kind') in (2, 3) and report.get('name', {}).get('text') != resource for report in reports))
 
 
 def check_input_versions(events, first_copy):

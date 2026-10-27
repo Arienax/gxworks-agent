@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Bounded instruction-order scan checks; neither native simulation nor hardware I/O.
 
 The canonical IR lowerer determines execution order. Instruction definitions
@@ -17,7 +20,7 @@ from plc.instruction_effects import execute_behavior
 from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
 from plc.ir import analyze_instruction_access, canonical_sha256, ir_to_ladder, is_plc_ir, lower_rung_instructions
 from plc.runtime_semantics import control_runtime_facts, first_scan_fact, timer_runtime_fact
-from plc.specification.behavior import initialization_values, normalize_behavior_constraints
+from plc.specification.behavior import initialization_values, normalize_behavior_constraints, normalize_execution_context
 
 MAX_SCANS = 8
 MAX_TRACES = 4096
@@ -100,6 +103,9 @@ class ScanMachine:
         self.instructions = instructions if instructions is not None else [
             [(instruction, analyze_instruction_access(instruction['op'], instruction['args'], plc_model=plc_model))
              for instruction in lower_rung_instructions(rung)] for rung in ladder.get('rungs', [])]
+        from plc.ordered_source import ordered_circuit_rows
+        self._ordered_starts = {(rows[0]['_rung_index'], rows[0]['_instruction_index'])
+                                for _, rows, _ in ordered_circuit_rows(ladder.get('rungs', [])) if rows}
         from plc.instruction_constraints import instruction_program_accesses
         self.execution_context.setdefault('program_accesses', instruction_program_accesses(ladder, plc_model=plc_model))
         self.applications = applications if applications is not None else {}
@@ -108,6 +114,9 @@ class ScanMachine:
         from simulator.st_execution import ExecutionBudget
         self.execution_budget = execution_budget or ExecutionBudget()
         self._st_executions = {}
+        from simulator.pwm import PWMPeripheral
+        self.pwm = PWMPeripheral(self)
+        self._pwm_frame_timestamp_missing = True
 
     def bit(self, address):
         address = canonical_reference_device(address)
@@ -169,11 +178,15 @@ class ScanMachine:
         require_constraints(check_instruction_constraints(op, values, plc_model=self.model,
             language='st' if parameter_values is not None else 'ladder', phase=phase,
             version=self.execution_context.get('software_version'), context={**self.execution_context,
+                'project_mode': 'st' if parameter_values is not None else 'native_ladder',
+                'program_context': 'st' if parameter_values is not None else 'ladder',
                 'hardware': self.execution_context.get('hardware') or self.execution_context.get('hardware_profile', {}),
                 'consume_step': self.execution_budget.charge,
                 'memory_reader': lambda base, offset: _leaf(decimal_region_address(base, offset), self.memory, plc_model=self.model)}))
 
     def _application(self, op, args, enabled, location, prior, *, parameter_values=None, writer=None):
+        if op in {'PWM', 'DPWM'} and self.pwm.enabled:
+            return self.pwm.execute(op, args, enabled, location, parameter_values=parameter_values)
         if enabled is True:
             self._check_constraints(op, args, parameter_values=parameter_values)
         if parameter_values is not None:
@@ -268,12 +281,15 @@ class ScanMachine:
         timer_drives = {}
         edge_samples = {}
         timestamp = frame.get('timestamp_ms')
+        self._pwm_frame_timestamp_missing = timestamp is None
         if timestamp is not None:
             if type(timestamp) not in {int,float} or timestamp < 0 or self.timestamp_ms is not None and timestamp < self.timestamp_ms:
                 raise ValueError('explicit_clock_not_monotonic')
             self.timestamp_ms = timestamp
+        accumulator, logic_stack, saved = True, [], []
         for rung_index, rung in enumerate(self.ladder.get('rungs', [])):
-            accumulator, logic_stack, saved = True, [], []
+            if 'ordered_instructions' not in rung:
+                accumulator, logic_stack, saved = True, [], []
             st_stack, st_enable = [], True
             # A branch connected directly to the left bus has its own TRUE
             # enable. It cannot inherit a preceding independent branch's guard.
@@ -281,6 +297,8 @@ class ScanMachine:
                             if not rung.get('header_element') and not rung.get('shared_inputs')
                             and not branch.get('inputs')}
             for step, (instruction, access) in enumerate(self.instructions[rung_index]):
+                if (rung_index, step) in self._ordered_starts:
+                    accumulator, logic_stack, saved = True, [], []
                 self.execution_context['current_instruction'] = (rung_index, instruction.get('path'))
                 op, args = instruction['op'], instruction['args']
                 if instruction.get('path') in root_outputs:
@@ -298,7 +316,7 @@ class ScanMachine:
                         continue
                     if record_kind != 'instruction':
                         raise UnknownInstructionSemantics('source_record_' + record_kind + '_unverified')
-                    if not self.facts.get('control') and not (op.startswith('ST_') or op in
+                    if not self.facts.get('control') and not (op.startswith('ST_') or (op in {'PWM', 'DPWM'} and self.pwm.enabled) or op in
                             {'LD','LDI','AND','ANI','OR','ORI','ORB','ANB','MPS','MRD','MPP','END','NOP',*self.facts.get('transfers',{})}):
                         raise UnknownInstructionSemantics('cpu_control_form_unverified:' + op)
                     if op == 'ST_PROGRAM':
@@ -455,6 +473,9 @@ class ScanMachine:
                         if value is None:
                             self.gap('pulse_history_unverified', location)
                         continue
+                    if op in {'PWM', 'DPWM'} and self.pwm.enabled:
+                        self.pwm.execute(op, args, accumulator, location)
+                        continue
                     if accumulator is False:
                         continue
                     if accumulator is None:
@@ -511,7 +532,7 @@ class ScanMachine:
                         self.memory = {key: None for key in self.memory}
                         self.scan_index += 1
                         return {'before': before, 'after': copy.deepcopy(self.memory),
-                                'writes': copy.deepcopy(self.writes), 'group_snapshots': group_snapshots}
+                                'writes': copy.deepcopy(self.writes), 'group_snapshots': group_snapshots, 'peripherals': {'pwm': self.pwm.snapshot()} if self.pwm.enabled else {}}
                     if op.startswith(('LD', 'AND', 'OR')):
                         accumulator = None
                     else:
@@ -530,7 +551,7 @@ class ScanMachine:
                             self.gap('unknown_instruction_write_scope', location)
         self.previous.update(edge_samples)
         self.scan_index += 1
-        return {'before': before, 'after': copy.deepcopy(self.memory), 'writes': copy.deepcopy(self.writes), 'group_snapshots': group_snapshots}
+        return {'before': before, 'after': copy.deepcopy(self.memory), 'writes': copy.deepcopy(self.writes), 'group_snapshots': group_snapshots, 'peripherals': {'pwm': self.pwm.snapshot()} if self.pwm.enabled else {}}
 
 
 def _evaluate(expression, memory, plc_model='FX3U'):
@@ -646,7 +667,7 @@ def check_bounded_traces(program, spec, traces, *, version_binding=None, max_tra
     if model_reason:
         for check in checks.values():
             check['reasons'].append(model_reason)
-        return {'schema_version': 1, 'stage': 'Core_bounded_scan_check', 'status': 'unverified',
+        return {'schema_version': 1, 'stage': 'Core_bounded_scan_check', 'status': 'unverified', 'execution_status': 'unverified',
                 'program_version': binding, 'checks': list(checks.values()), 'violations': [],
                 'coverage': {'traces_tested': 0, 'maximum_scans': 0, 'automatic_trace_limit': min(max_traces, MAX_TRACES),
                              'scan_limit': min(max_scans, MAX_SCANS), 'budget_exhausted': False,
@@ -662,6 +683,8 @@ def check_bounded_traces(program, spec, traces, *, version_binding=None, max_tra
         instructions = [st_instructions]
     applications, unsupported_index = {}, {}
     constraint_violations = []
+    peripheral_traces = []
+    frames_without_clock = 0
     from simulator.st_execution import ExecutionBudget
     execution_budget = ExecutionBudget()
     groups = [(False, traces), (True, frozen_time_traces)]
@@ -675,6 +698,7 @@ def check_bounded_traces(program, spec, traces, *, version_binding=None, max_tra
                 for check in checks.values():
                     check['reasons'].append('trace_initial_or_scan_bound_invalid')
                 continue
+            frames_without_clock += sum('timestamp_ms' not in frame for frame in frames)
             machine = ScanMachine(ladder, plc_model=model, initial=trace['initial'],
                                   execution_context=trace.get('execution_context', context),
                                   previous_inputs=trace.get('previous_inputs'), previous_enables=trace.get('previous_enables'),
@@ -708,6 +732,11 @@ def check_bounded_traces(program, spec, traces, *, version_binding=None, max_tra
                 boot = bool(trace.get('starts_in_run', True) and scan_index == 0)
                 try:
                     observation = machine.scan(frame, first_scan=boot)
+                    if observation.get('peripherals'):
+                        peripheral_traces.append({'trace_id': trace.get('id', index), 'scan': scan_index,
+                                                  'timestamp_ms': frame.get('timestamp_ms'),
+                                                  'time_source': 'explicit_trace' if 'timestamp_ms' in frame else 'not_provided',
+                                                  'peripherals': observation['peripherals']})
                 except Exception as error:
                     exceptions.append({'trace_id': trace.get('id', index), 'scan': scan_index,
                                        'reason': 'checker_exception', 'exception_type': type(error).__name__})
@@ -808,13 +837,17 @@ def check_bounded_traces(program, spec, traces, *, version_binding=None, max_tra
     statuses = {c['status'] for c in checks.values()}
     status = 'violated' if 'violated' in statuses or constraint_violations else 'unverified' if not checks or 'unverified' in statuses else 'no_violation_found_in_tested_scope'
     return {'schema_version': 1, 'stage': 'Core_bounded_scan_check', 'status': status, 'program_version': binding,
+            'execution_status': ('failed' if constraint_violations else 'unverified' if unsupported or exceptions or truncated or not tested else 'executed_in_tested_scope'),
             'checks': list(checks.values()), 'violations': [v for c in checks.values() for v in c['violations']],
             'constraint_violations': constraint_violations,
+            'peripheral_observations': peripheral_traces,
             'coverage': {'traces_tested': tested, 'maximum_scans': maximum_scans, 'automatic_trace_limit': min(max_traces, MAX_TRACES),
-                         'scan_limit': min(max_scans, MAX_SCANS), 'budget_exhausted': truncated, 'frozen_time_traces': len(frozen_time_traces)},
+                         'scan_limit': min(max_scans, MAX_SCANS), 'budget_exhausted': truncated, 'frozen_time_traces': len(frozen_time_traces),
+                         'frames_without_explicit_clock': frames_without_clock},
             'unsupported_or_missing': unsupported, 'checker_exceptions': exceptions,
             'assumptions': ['only declared initial memory is known', 'source-scoped exact CPU control subset',
                             'timer elapsed time is explicit; never inferred from scan count', 'bounded instruction-order execution; no native PLC acceptance'],
+            'default_simulation_assumptions': copy.deepcopy(context.get('simulation', {})),
             'first_scan_fact': first, 'activation_blocked': status == 'violated'}
 
 
@@ -822,6 +855,11 @@ def finite_behavior_traces(spec, *, max_traces=MAX_TRACES):
     """Finite bit combinations and 2-8 scan motifs, not random default memory."""
     from plc.construction import expression_devices
     rows = [r for r in normalize_behavior_constraints(spec.get('behavior_constraints', [])) if r['status'] == 'confirmed']
+    context = normalize_execution_context((spec.get('selected_approach') or {}).get(
+        'construction_plan', {}).get('execution_context', {}))
+    simulation = context.get('simulation', {})
+    timestamps = simulation.get('clock', {}).get('timestamps_ms', [])
+    declared_initial = simulation.get('initial_memory', {})
     initial = {}
     from plc.specification.conditions import external_input_bindings
     external = {canonical_device(row['address']) for row in external_input_bindings(spec.get('io_bindings', []))
@@ -858,8 +896,19 @@ def finite_behavior_traces(spec, *, max_traces=MAX_TRACES):
                 if produced > limit:
                     return
                 produced += 1
-                yield {'id': f'finite.{produced}', 'initial': copy.deepcopy(old),
-                       'frames': [{'inputs': copy.deepcopy(frame)} for frame in sequence], 'starts_in_run': True}
+                # The clock is supplied independently of scan order. A short
+                # clock does not manufacture later times or remove test scans;
+                # those frames remain untimed and time-sensitive behavior unknown.
+                frames = [{'inputs': copy.deepcopy(frame),
+                           **({'timestamp_ms': timestamps[i]} if i < len(timestamps) else {})}
+                          for i, frame in enumerate(sequence)]
+                yield {'id': f'finite.{produced}',
+                       'initial': copy.deepcopy({**old, **declared_initial}),
+                       'execution_context': copy.deepcopy(context), 'frames': frames,
+                       'simulation_assumptions': {'clock': copy.deepcopy(simulation.get('clock')),
+                                                  'initial_memory': copy.deepcopy(declared_initial),
+                                                  'time_source': 'explicit_timestamps' if timestamps else 'not_provided'},
+                       'starts_in_run': True}
 
 
 def check_confirmed_behavior(program, spec, *, version_binding=None, traces=None, frozen_time_traces=()):

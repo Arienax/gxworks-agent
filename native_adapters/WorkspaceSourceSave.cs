@@ -1,3 +1,6 @@
+// Copyright 2026 Arienax
+// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 // One-shot offline workspace save. Python owns source/declaration semantics.
 // Slots/layouts are bound to DZDataABS_Workspace 1.635.0.1 (32-bit).
 using System;
@@ -87,13 +90,27 @@ namespace PlcAi.NativeAdapter
         {
             return (T)(object)Marshal.GetDelegateForFunctionPointer(Marshal.ReadIntPtr(Marshal.ReadIntPtr(self), offset), typeof(T));
         }
+        sealed class NativeCallException : InvalidOperationException
+        {
+            internal readonly string Operation;
+            internal readonly int NativeHResult, NativeCode;
+            internal NativeCallException(string operation, int hr, int code)
+                : base(operation + " failed (HRESULT=0x" + unchecked((uint)hr).ToString("x8")
+                    + ", code=0x" + unchecked((uint)code).ToString("x8") + ")")
+            { Operation = operation; NativeHResult = hr; NativeCode = code; }
+        }
+        static bool IsPublicCheckProjectionFailure(Exception error)
+        {
+            var native = error as NativeCallException;
+            return native != null && native.Operation == "Compiler.OriginalPublicCheckProgress"
+                && native.NativeHResult == unchecked((int)0x80004005) && native.NativeCode == 0x2d010025;
+        }
         void Check(string operation, int hr, int code)
         {
             var value = new { operation = operation, hresult = hr, code = code };
             Calls.Add(value);
             if (Validation != null) Event(value);
-            if (hr < 0 || code != 0) throw new InvalidOperationException(operation + " failed (HRESULT=0x"
-                + unchecked((uint)hr).ToString("x8") + ", code=0x" + unchecked((uint)code).ToString("x8") + ")");
+            if (hr < 0 || code != 0) throw new NativeCallException(operation, hr, code);
         }
         static string Text(object value)
         {
@@ -307,7 +324,14 @@ namespace PlcAi.NativeAdapter
         {
             int code; ObjectId parent;
             Check("Workspace.GetParent", Slot<ParentCall>(workspace, 40)(workspace, id, out parent, out code), code);
-            if (!Same(parent, expected)) throw new InvalidOperationException("selected_native_parent_differs");
+            if (!Same(parent, expected)) {
+                int actualKind, expectedKind; string actualName, expectedName;
+                Event(new { operation = "NativeParentMismatch", selected = id.Words,
+                    actual = ObjectFacts(parent, out actualKind, out actualName),
+                    expected = ObjectFacts(expected, out expectedKind, out expectedName) });
+                throw new InvalidOperationException("selected_native_parent_differs: actual_type=" + actualKind
+                    + ", actual_name=" + actualName + ", expected_type=" + expectedKind + ", expected_name=" + expectedName);
+            }
         }
         List<ObjectId> Children(ObjectId parent)
         {
@@ -843,7 +867,9 @@ namespace PlcAi.NativeAdapter
                     if (String.Equals(actual, name, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("project_definition_already_exists");
                 }
                 Check("Definition.Create", Slot<CreateSourceCall>(workspace, 1972)(workspace, collection, BStr(name), structure ? 18 : expectedPouType, structure ? (byte)0 : (byte)193, out owner, out code), code);
-                Facts(owner, structure ? 18 : 26, name); Parent(owner, collection);
+                Facts(owner, structure ? 18 : 26, name);
+                if (structure) Parent(owner, collection);
+                else ProjectPouParent(owner, id, collection, expectedPouType);
                 if (!structure)
                 {
                     object identity; body = SourceIdentity(id, name, 193, "created-definition", out identity);
@@ -988,7 +1014,7 @@ namespace PlcAi.NativeAdapter
                 var row = Fields(item, "name", "program_kind", "pou_type", "body"); object selection;
                 ObjectId body = SourceIdentity(id, Text(row["name"]), NativeRequest.Integer(row["program_kind"]), "before_create", out selection), owner;
                 Check("Workspace.GetExistingPOUOwner", Slot<ParentCall>(workspace, 40)(workspace, body, out owner, out code), code);
-                Parent(owner, collection);
+                ProjectPouParent(owner, id, collection, NativeRequest.Integer(row["pou_type"]));
                 int type;
                 Check("Workspace.GetExistingPOUType", Slot<IdIntegerCall>(workspace, 1668)(workspace, owner, out type, out code), code);
                 if (type != NativeRequest.Integer(row["pou_type"]) || !Equal(ReadBody(body), Body(row["body"])))
@@ -1003,7 +1029,7 @@ namespace PlcAi.NativeAdapter
             if (before.Count != verified.Count) throw new InvalidOperationException("native_source_inventory_differs");
             ObjectId created;
             Check("Workspace.CreateData", Slot<CreateSourceCall>(workspace, 1972)(workspace, collection, BStr(name), pouType, (byte)language, out created, out code), code);
-            Facts(created, 26, name); Parent(created, collection);
+            Facts(created, 26, name); ProjectPouParent(created, id, collection, pouType);
             var after = Children(collection);
             if (after.Count != before.Count + 1 || !after.Exists(delegate(ObjectId child) { return Same(child, created); })
                     || before.Exists(delegate(ObjectId child) { return !after.Exists(delegate(ObjectId other) { return Same(child, other); }); }))
@@ -1158,6 +1184,7 @@ namespace PlcAi.NativeAdapter
         static int Main()
         {
             Console.InputEncoding = Encoding.UTF8; Console.OutputEncoding = new UTF8Encoding(false);
+            NativeExceptionTrace.Install();
             var json = new JavaScriptSerializer { MaxJsonLength = 32 * 1024 * 1024 };
             var adapter = new WorkspaceSourceSave(); IDictionary<string, object> request = null;
             string status = "failed", message = "", cpu = ""; int result = 1;
@@ -1198,10 +1225,14 @@ namespace PlcAi.NativeAdapter
                 try { adapter.Dispose(); }
                 catch (Exception error) { status = "failed"; result = 1; message = "native_cleanup_failed: " + error.Message; }
             }
+            NativeExceptionTrace.Flush("status=" + status + ";compile="
+                + (adapter.Validation == null ? "not_requested" : Convert.ToString(adapter.Validation["compile_status"]))
+                + ";records=" + NativeExceptionTrace.Count);
             Console.WriteLine(json.Serialize(new { protocol_version = WorkspaceBusinessProtocol.Version, status = status, message = message, native_version = NativeVersion,
                 cpu = cpu,
                 compile = adapter.Validation == null ? "not_requested" : adapter.Validation["compile_status"],
                 check = adapter.Validation == null ? "not_requested" : adapter.Validation["check_status"],
+                exception_trace = NativeExceptionTrace.Enabled ? NativeExceptionTrace.Count : -1,
                 validation = adapter.Validation, creation = adapter.CreatedSource, calls = adapter.Calls }));
             return result;
         }

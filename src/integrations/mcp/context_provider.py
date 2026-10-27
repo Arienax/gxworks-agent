@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Headless context loading through the shared application session."""
 
 from __future__ import annotations
@@ -37,6 +40,7 @@ class StaticToolContextProvider:
             native_snapshot=context.native_snapshot,
             st_text=context.st_text,
             sfc_graph=context.sfc_graph,
+            read_revision=context.read_revision,
         )
 
     def get_context(self) -> ToolContext:
@@ -66,5 +70,11 @@ class SessionToolContextProvider:
     def get_context(self) -> ToolContext:
         try:
             return self.projects.tool_context(self.project_id, self.version_id)
+        except (KeyError, ValueError, OSError) as error:
+            raise ContextUnavailableError(str(error)) from error
+
+    def get_model_context(self) -> ToolContext:
+        try:
+            return self.projects.tool_context(self.project_id, self.version_id, requirement='model')
         except (KeyError, ValueError, OSError) as error:
             raise ContextUnavailableError(str(error)) from error

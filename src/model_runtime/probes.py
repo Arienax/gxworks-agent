@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Safe synthetic fixtures for explicit, single-request verification.
 
 This is a capability verifier registry, never a list of allowed model controls.

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Single-worker local service launcher. Never start GX on page load."""
 import argparse
 import os

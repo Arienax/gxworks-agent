@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Normalize vendor UI observations at the GX Works2 adapter boundary.
 
 Raw captions, control IDs and MSAA states are retained for replay; callers

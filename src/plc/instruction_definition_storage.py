@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Lossless common definitions plus literal form/CPU field differences.
 
 Storage factoring does not infer applicability or inherit verification. Every
@@ -127,6 +130,9 @@ def expand_definitions(payload):
     if not isinstance(payload, Mapping):
         raise ValueError("Definition document must be an object")
     if payload.get("schema_version") == 1:
+        if payload.get("source_serialization"):
+            from knowledge.runtime_fact_projection import expand_runtime_sources
+            return expand_runtime_sources(payload)
         return copy.deepcopy(payload)
     if (payload.get("schema_version") != 2 or payload.get("serialization") != "common+form_diff+model_diff-v1"
             or payload.get("verification_inheritance") is not False):

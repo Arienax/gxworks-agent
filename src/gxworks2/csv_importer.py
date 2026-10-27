@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Import GX Works2 statement-list CSV files into the canonical ladder model.
 
 GX Works2 remains the interactive editor.  This module is the deterministic
@@ -30,7 +33,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
-from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY, InstructionCategory
+from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY, InstructionCategory, condition_connector
 
 from .csv_manager import CSVManager
 
@@ -40,7 +43,7 @@ _ROOT_INPUT_RE = re.compile(r"^LD(?:I|P|F|=|<>|>=|<=|>|<)?$", re.I)
 _AND_INPUT_RE = re.compile(r"^(?:AND|ANI|ANDP|ANDF|AND=|AND<>|AND>=|AND<=|AND>|AND<)$", re.I)
 _OR_INPUT_RE = re.compile(r"^OR(?:I|P|F|=|<>|>=|<=|>|<)?$", re.I)
 _COMPARE_SUFFIXES = ("<>", ">=", "<=", "=", ">", "<")
-_CONDITION_SYSTEM_OPS = {"ANB", "ORB"}
+_CONDITION_SYSTEM_OPS = {"ANB", "ORB", "INV", "MEP", "MEF"}
 _BRANCH_SYSTEM_OPS = {
     mnemonic
     for mnemonic in DEFAULT_INSTRUCTION_REGISTRY.known_mnemonics()
@@ -250,7 +253,7 @@ def read_device_comments(path: Any) -> Dict[str, str]:
 
 
 def _is_root_input(op: str) -> bool:
-    return bool(_ROOT_INPUT_RE.fullmatch(str(op or "").upper()))
+    return condition_connector(op) == 'LD'
 
 
 def _is_condition(op: str) -> bool:
@@ -259,86 +262,17 @@ def _is_condition(op: str) -> bool:
     if category == InstructionCategory.CONDITION:
         return True
     return bool(
-        _ROOT_INPUT_RE.fullmatch(normalized)
-        or _AND_INPUT_RE.fullmatch(normalized)
-        or _OR_INPUT_RE.fullmatch(normalized)
+        condition_connector(normalized)
         or normalized in _CONDITION_SYSTEM_OPS
     )
 
 
-def _split_networks(
-    records: Sequence[_Instruction],
-) -> List[tuple[str, List[_Instruction], List[str]]]:
-    """Group instructions into networks, keeping leading statement rows apart.
-
-    The joined note is what a reader shows for the network.  The leading
-    statements are the statement-only rows that preceded its first instruction;
-    a source-bound writer needs them separately, otherwise re-emitting the note
-    and the per-instruction statements would duplicate text.
-    """
-    networks: List[tuple[str, List[_Instruction], List[str]]] = []
-    current: List[_Instruction] = []
-    pending_statements: List[str] = []
-    current_statements: List[str] = []
-    leading_statements: List[str] = []
-    has_action = False
-    mps_depth = 0
-    mps_seen = False
-    after_mpp = False
-    after_mpp_action = False
-
-    def finish() -> None:
-        nonlocal current, current_statements, leading_statements, has_action, mps_depth
-        nonlocal mps_seen, after_mpp, after_mpp_action
-        if current:
-            note = "\n".join(item for item in current_statements if item).strip()
-            networks.append((note, current, list(leading_statements)))
-        current = []
-        current_statements = []
-        leading_statements = []
-        has_action = False
-        mps_depth = 0
-        mps_seen = False
-        after_mpp = False
-        after_mpp_action = False
-
-    for record in records:
-        if not record.op:
-            if record.statement:
-                if current and has_action and mps_depth == 0:
-                    finish()
-                pending_statements.append(record.statement)
-            continue
-
-        if record.op == "END":
-            finish()
-            continue
-
-        if _is_root_input(record.op) and current and has_action and mps_depth == 0:
-            if not mps_seen or (after_mpp and after_mpp_action):
-                finish()
-
-        if not current:
-            current_statements = list(pending_statements)
-            pending_statements.clear()
-            leading_statements = list(current_statements)
-        if record.statement:
-            current_statements.append(record.statement)
-        current.append(record)
-
-        if record.op == "MPS":
-            mps_depth += 1
-            mps_seen = True
-        elif record.op == "MPP":
-            mps_depth = max(0, mps_depth - 1)
-            after_mpp = True
-        elif not _is_condition(record.op) and record.op not in _BRANCH_SYSTEM_OPS:
-            has_action = True
-            if after_mpp:
-                after_mpp_action = True
-
-    finish()
-    return networks
+def _split_networks(records: Sequence[_Instruction]) -> List[tuple[str, List[_Instruction], List[str]]]:
+    """Project the shared circuit partition while retaining the original CSV rows."""
+    from plc.ordered_source import split_ordered_circuits
+    rows = [{**record.as_ir(), 'statement': record.statement, '_record': record} for record in records]
+    return [(note, [row['_record'] for row in group], leading)
+            for note, group, leading in split_ordered_circuits(rows)]
 
 
 def _comment_for(address: str, comments: Mapping[str, str]) -> str:

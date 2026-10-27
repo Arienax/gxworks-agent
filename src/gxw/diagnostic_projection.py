@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Bind native validation evidence in independently reviewable phases."""
 from __future__ import annotations
 
@@ -260,7 +263,7 @@ def _source_views(raw, sources, library_sources, current_check, references, comp
     return texts, graphs, graph_models, graph_connectivity, graph_contexts
 
 
-def _source_phase_reads(events, all_programs, source_bodies, snapshots):
+def _source_phase_reads(events, all_programs, source_bodies, snapshots, *, cpu=None):
     events = EventIndex.of(events)
     builds = [index for index, row in events.numbered(*NATIVE_COMPILATION_OPERATIONS)
               if row.get('hresult') == row.get('code') == 0]
@@ -270,7 +273,7 @@ def _source_phase_reads(events, all_programs, source_bodies, snapshots):
     check_ends = [index for index, row in events.numbered('ProgramCheckRawProgress', 'ProgramCheckOriginalProgress')
                   if row.get('percent') == 100 and row.get('hresult') == row.get('code') == 0]
     boundaries = bool(len(builds) == 1 and compile_ends and check_starts and check_ends
-        and events[builds[0]].get('operation') == _native_compilation_method(all_programs.values())
+        and events[builds[0]].get('operation') == _native_compilation_method(all_programs.values(), cpu=cpu)
         and builds[0] < max(compile_ends) < min(check_starts) <= max(check_ends))
     if source_bodies['status'] != 'current' or not boundaries:
         return False
@@ -503,7 +506,7 @@ def _project_native_validation(raw, observation, snapshots, *, event_index=None)
         result = bind_native_check_selection(result, selection)
     compile_context = bind_native_compile_source_context(all_programs, project_id=project,
         native_version=observation['native_version'], events=events, snapshots=snapshots,
-        selection=selection, compilation=result['compilation'])
+        selection=selection, compilation=result['compilation'], cpu=context['cpu'])
     result['compilation']['source_context'] = compile_context
     declaration_bindings = bind_native_compile_declarations([*sources, *library_sources],
         events=events, source_context=compile_context)
@@ -542,7 +545,7 @@ def _project_native_validation(raw, observation, snapshots, *, event_index=None)
     )
     result['diagnostic_projection'].update(source_audits=source_audits,
         source_body_binding=_public_source_audit_binding(source_audits, result['diagnostic_projection']['public_diagnostics']))
-    phase_reads_complete = _source_phase_reads(events, all_programs, source_bodies, snapshots)
+    phase_reads_complete = _source_phase_reads(events, all_programs, source_bodies, snapshots, cpu=context['cpu'])
     code_current = (selection['status'] == 'verified' and configuration_current and phase_reads_complete
         and result['compilation']['acceptance'] == 'accepted'
         and result['published_resources']['correspondence'] == 'current'

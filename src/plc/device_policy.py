@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Authoritative device I/O policy and native request planning.
 
 Adapters receive fully prepared, bounded requests. They never decide PLC
@@ -40,6 +43,12 @@ def device_address(value: Any, plc_model: str = "FX3U", *, access: Access = "rea
     if parsed is None or (native and (parsed[0] not in native_prefixes or "." in address)):
         raise DevicePolicyError(f"invalid {model} device address {value!r}")
     prefix, index = parsed
+    if native:
+        limits = profile.get('native_device_limits')
+        regions = profile.get('native_device_regions', {}).get(prefix)
+        if (limits is not None and (prefix not in limits or limits[prefix] is not None and index > limits[prefix])
+                or regions and not any(low <= index <= high for low, high in regions)):
+            raise DevicePolicyError(f'{model} {address} is outside the registered native-operation range')
     if access == "feedback" and (not native or prefix not in profile.get("native_feedback_prefixes", [])):
         raise DevicePolicyError("simulated feedback requires a source-scoped native device class",
                                 code="FEEDBACK_DEVICE_NOT_ALLOWED")
@@ -63,7 +72,7 @@ def stimulus_value(address: str, value: Any, plc_model: str = "FX3U") -> int:
     """Only explicit integer bit/word values may cross the stimulus boundary."""
     address = device_address(address, plc_model, access="stimulus")
     prefix, _ = parse_device_address(address, plc_model)
-    return _integer_input_value(value, bit=prefix in {"X", "M"}, word_label="D")
+    return _integer_input_value(value, bit=is_bit_device(address, plc_model), word_label="D")
 
 
 def _integer_input_value(value: Any, *, bit: bool, word_label: str) -> int:

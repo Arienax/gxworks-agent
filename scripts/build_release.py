@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Build lean MCP and combined Web/MCP (Full) Windows distributions."""
 from __future__ import annotations
 
@@ -11,12 +14,15 @@ import sys
 import tempfile
 import zipfile
 
-from runtime_knowledge_resources import FILES, INSTRUCTION_FILES, runtime_knowledge_data
+from runtime_knowledge_resources import runtime_instruction_data, runtime_knowledge_data
 from release_notices import stage as stage_notices
 from export_open_source import TEMPLATE_NAMES, safe_template_json, safe_native_encoding
 
 
 ROOT = Path(__file__).resolve().parents[1]
+# The collector validates owner manifests through the runtime reader before freeze.
+if str(ROOT / 'src') not in sys.path:
+    sys.path.insert(0, str(ROOT / 'src'))
 
 
 def main():
@@ -52,15 +58,28 @@ def main():
         run('frontend-build', [npm, 'run', 'build'], cwd=ROOT / 'web')
     resource_root = args.resource_root.resolve()
     inputs = output / 'inputs'
-    paths = [relative for relative, _ in FILES]
-    paths += ['resources/instructions/mitsubishi/' + name for name in INSTRUCTION_FILES]
-    for name in paths:
-        source = (ROOT if name.endswith('/fx3u_step_widths.json') else resource_root) / name
-        if not source.is_file():
-            raise FileNotFoundError(source)
-        target = inputs / name
+    if inputs.exists() and any(inputs.iterdir()):
+        raise ValueError('Use a fresh build output: staged runtime inputs already exist')
+    # Use the same validated graph as release.spec. A manifest replaces only
+    # the definition blob, not the mixed knowledge corpus or seed catalog.
+    encoding_source = ROOT / 'resources/instructions/mitsubishi/fx3u_step_widths.json'
+    selected = runtime_knowledge_data(resource_root, native_encoding_source=encoding_source)
+    selected += runtime_instruction_data(resource_root, native_encoding_source=encoding_source)
+    staged = {}
+    for source_name, destination in selected:
+        source = Path(source_name)
+        relative = Path(destination) / source.name
+        if not relative.parts or relative.parts[0] != 'resources':
+            relative = Path('resources') / relative
+        previous = staged.get(relative)
+        if previous is not None:
+            if previous != source:
+                raise ValueError('Conflicting runtime staging destination: ' + str(relative))
+            continue
+        staged[relative] = source
+        target = inputs / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        if name.endswith('/fx3u_step_widths.json'):
+        if source == encoding_source:
             target.write_bytes(safe_native_encoding(source))
         else:
             shutil.copyfile(source, target)
@@ -89,6 +108,7 @@ def main():
     artifacts.mkdir(exist_ok=True)
     for component in components:
         env = os.environ.copy()
+        env['PYTHONPATH'] = str(ROOT / 'src') + (os.pathsep + env['PYTHONPATH'] if env.get('PYTHONPATH') else '')
         env.update(GX_RELEASE_COMPONENT=component, GX_RELEASE_RESOURCES=str(inputs), GX_RELEASE_HELPERS=str(helpers))
         run('freeze-' + component, [sys.executable, '-m', 'PyInstaller', '--noconfirm',
             '--distpath', str(output / 'dist'), '--workpath', str(output / 'work' / component),

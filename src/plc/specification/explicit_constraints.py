@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Canonical owner for user-fixed low-level PLC constraints.
 
 Fresh natural-language interpretation is intentionally outside this module.

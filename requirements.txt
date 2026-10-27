@@ -1,0 +1,5 @@
+# Headless Web/Core development and release tooling; no GUI framework.
+-r requirements/web.txt
+-r requirements/gxw-test.txt
+pytest==9.1.1
+pyinstaller==6.21.0

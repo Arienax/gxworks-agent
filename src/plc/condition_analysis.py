@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Read stability and conservative output effects for condition factoring.
 
 This consumer of Core address/runtime/Registry facts never supplies missing

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Project inspection, deterministic validation and patch intents."""
 from __future__ import annotations
 import copy
@@ -131,6 +134,8 @@ def _get_current_program_info(
     }
     program_ir = context.program_ir
     if isinstance(program_ir, Mapping):
+        from plc.ir import canonical_sha256
+        result['ir_sha256'] = canonical_sha256(program_ir)
         networks = [
             {
                 "id": str(network.get("id") or ""),
