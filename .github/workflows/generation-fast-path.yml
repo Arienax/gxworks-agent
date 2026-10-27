@@ -55,7 +55,7 @@ jobs:
     env:
       PYTHONUTF8: '1'
       PYTHONDONTWRITEBYTECODE: '1'
-      GXWORKS_AGENT_PRIVATE_ROOT: ${{ runner.temp }}/unavailable-private-inputs
+      GXWORKS_AGENT_PRIVATE_ROOT: ${{ github.workspace }}/unavailable-private-inputs
     steps:
       - uses: actions/checkout@v4
         with:
