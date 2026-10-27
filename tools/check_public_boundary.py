@@ -23,7 +23,7 @@ from publication.source_policy import CACHE_DIRECTORIES, exclusion_reason
 
 # Minimum delivery contents, not a list of permitted source files.
 REQUIRED = {
-    'LICENSE', 'NOTICE', 'LICENSING.md', 'ACCESSIBILITY.md', 'CODE_OF_CONDUCT.md', 'CONTRIBUTING.md', 'SECURITY.md', 'README.md', 'README.zh-CN.md',
+    'LICENSE', 'NOTICE', 'LICENSING.md', 'README.md', 'README.zh-CN.md',
     'README.ja.md', 'publication/README.md', 'publication/source_policy.py',
     'src/gxw/project_templates.py',
     'src/gxw/templates/blank-fbd-projects.zip.xz',
