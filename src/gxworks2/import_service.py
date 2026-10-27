@@ -9,15 +9,7 @@ import time
 
 from .baseline_store import ImportBaselineStore
 from .models import ImportErrorCode, ImportResult
-from .project_profiles import native_project_profile
-
-
-_UNSAVED_PROJECT_NAMES = {
-    "(工程未设置)",
-    "工程未设置",
-    "(project not set)",
-    "project not set",
-}
+from .project_profiles import UNSAVED_PROJECT_NAMES as _UNSAVED_PROJECT_NAMES, native_project_profile
 
 
 def _unsaved_project_identity(session, project_name, import_context=None):
@@ -369,8 +361,14 @@ class ImportService:
                     "import_comments",
                     "正在从CSV文件读取软元件注释…",
                 )
+                from .native_locale import inspect_native_language
+                staged_comments = self.csv_manager.prepare_import_comments(
+                    comment_validation.path,
+                    staging_folder / "comments_to_import.csv",
+                    inspect_native_language(session.process_id, session.executable),
+                )
                 comment_import_state = self.automation.import_comments_csv(
-                    session, comment_validation.path
+                    session, staged_comments
                 )
             except Exception as error:
                 return ImportResult(

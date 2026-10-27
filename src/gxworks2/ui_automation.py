@@ -16,7 +16,8 @@ from .diagnostics import (
 )
 from .models import GXSyncErrorCode
 from .finder import GXWorks2Finder
-from .project_profiles import GXWORKS2_NATIVE_VERSION, native_project_profile
+from .project_profiles import (GXWORKS2_CSV_COMMAND_VERSIONS, GXWORKS2_NATIVE_VERSION,
+                               UNSAVED_PROJECT_NAMES, native_project_profile)
 
 
 class NativeEditorNotFound(RuntimeError):
@@ -115,7 +116,7 @@ class PywinautoGXWorks2UIAutomation(GXWorks2UIAutomation):
     FAILURE_TEXT = re.compile(r"错误|失败|无法|不能|异常|不正确|error|failed", re.I)
     CONFIRMATION_TEXT = re.compile(
         r"(?:读取|写入).*?(?:指定的)?文件.*?确定|执行读取后.*?无法撤消|"
-        r"read|write|confirm",
+        r"read|write|written|confirm|Are you sure you want to continue",
         re.I | re.S,
     )
     PROGRAM_EDITOR = re.compile(r"\[PRG\].*\bMAIN\b", re.I)
@@ -123,8 +124,8 @@ class PywinautoGXWorks2UIAutomation(GXWorks2UIAutomation):
         r"\[PRG\]\s*(?:写入|Write(?:\s+Mode)?)\s+MAIN\b",
         re.I,
     )
-    COMMENT_EDITOR = re.compile(r"软元件注释\s*COMMENT", re.I)
-    LOCAL_COMMENT_EDITOR = re.compile(r"软元件注释\s*MAIN\b", re.I)
+    COMMENT_EDITOR = re.compile(r"(?:软元件注释|Device Comment)\s*COMMENT", re.I)
+    LOCAL_COMMENT_EDITOR = re.compile(r"(?:软元件注释|Device Comment)\s*MAIN\b", re.I)
     PROGRAM_READ_KEY = "j"
     PROGRAM_WRITE_KEY = "k"
     COMMENT_READ_KEY = "f"
@@ -147,7 +148,7 @@ class PywinautoGXWorks2UIAutomation(GXWorks2UIAutomation):
         self.read_program_name = program
         self.PROGRAM_EDITOR = re.compile(r"\[PRG\].*(?<!\w)" + re.escape(program) + r"(?!\w)", re.I)
         self.PROGRAM_WRITE_EDITOR = re.compile(r"\[PRG\]\s*(?:写入|Write(?:\s+Mode)?)\s+" + re.escape(program) + r"(?!\w)", re.I)
-        self.LOCAL_COMMENT_EDITOR = re.compile(r"软元件注释\s*" + re.escape(program) + r"(?!\w)", re.I)
+        self.LOCAL_COMMENT_EDITOR = re.compile(r"(?:软元件注释|Device Comment)\s*" + re.escape(program) + r"(?!\w)", re.I)
         self._progress_reporter = None
         self._application_binding = None
 
@@ -336,7 +337,7 @@ class PywinautoGXWorks2UIAutomation(GXWorks2UIAutomation):
             process.Close()
         ms, ls = version["FileVersionMS"], version["FileVersionLS"]
         if (Path(executable).name.casefold() != "gd2.exe"
-                or (ms >> 16, ms & 65535, ls >> 16, ls & 65535) != GXWORKS2_NATIVE_VERSION):
+                or (ms >> 16, ms & 65535, ls >> 16, ls & 65535) not in GXWORKS2_CSV_COMMAND_VERSIONS):
             raise RuntimeError("此GX Works2版本尚未验证原生命令编号。")
         win32gui.PostMessage(handle, 0x0111, int(command), 0)
 
@@ -512,9 +513,9 @@ class PywinautoGXWorks2UIAutomation(GXWorks2UIAutomation):
         if editor_pattern is self.COMMENT_EDITOR:
             paths = (("全局软元件注释",), ("Global Device Comment",))
         elif editor_pattern is self.LOCAL_COMMENT_EDITOR:
-            paths = (("程序部件", "局部软元件注释", "MAIN"),)
+            paths = (("程序部件", "局部软元件注释", "MAIN"), ("POU", "Local Device Comment", "MAIN"))
         else:
-            paths = (("程序部件", "程序", "MAIN"), ("Program", "MAIN"))
+            paths = (("程序部件", "程序", "MAIN"), ("POU", "Program", "MAIN"), ("Program", "MAIN"))
         target = None
         for tree in window.descendants(class_name="SysTreeView32"):
             if not tree.is_visible() or not tree.is_enabled():
@@ -581,6 +582,11 @@ class PywinautoGXWorks2UIAutomation(GXWorks2UIAutomation):
         # pywinauto.set_focus repeatedly moves the pointer and waits even when
         # the GX frame is already foreground; it also targets the wrong window
         # for SetForegroundWindow. Keep foreground and keyboard focus separate.
+        # A minimized frame never hands keyboard focus to its MDI document;
+        # SetFocus leaves it on the navigation tree. Restore it first.
+        if user32.IsIconic(int(session.window_handle)):
+            user32.ShowWindow(int(session.window_handle), 9)  # SW_RESTORE
+            time.sleep(.3)
         user32.SetForegroundWindow(int(session.window_handle))
         current_thread = ctypes.windll.kernel32.GetCurrentThreadId()
         target_thread = user32.GetWindowThreadProcessId(matches[0], None)
@@ -648,7 +654,8 @@ class PywinautoGXWorks2UIAutomation(GXWorks2UIAutomation):
             control_id = getattr(tree, "control_id", None)
             if not callable(control_id) or control_id() != 12051:
                 continue
-            for path in (("程序部件", "程序", self.read_program_name), ("Program", self.read_program_name)):
+            for path in (("程序部件", "程序", self.read_program_name), ("POU", "Program", self.read_program_name),
+                         ("Program", self.read_program_name)):
                 try:
                     if tree.get_item(path, exact=True) is not None:
                         return
@@ -919,8 +926,10 @@ class PywinautoGXWorks2UIAutomation(GXWorks2UIAutomation):
             user32.GetClassNameW(child, class_buffer, len(class_buffer))
             if class_buffer.value.casefold() != "button":
                 continue
-            text = cls._native_window_title(child)
-            if re.search(r"^(?:是|确定|OK|Yes)(?:\(&?.*?\))?$", text, re.I):
+            # English/Japanese resources prefix the mnemonic ("&Yes"); Chinese
+            # puts it in a suffix ("是(&Y)"). Strip both before matching.
+            text = re.sub(r"\(&?.\)$", "", cls._native_window_title(child)).replace("&", "").strip()
+            if re.search(r"^(?:是|确定|はい|OK|Yes)$", text, re.I):
                 user32.SendMessageW(child, 0x00F5, 0, 0)  # BM_CLICK
                 return True
         return False
@@ -1723,7 +1732,7 @@ class PywinautoGXWorks2UIAutomation(GXWorks2UIAutomation):
                         pass
                     else:
                         return
-            elif re.search(r"工程未设置|project not set", main.window_text(), re.I):
+            elif re.search(r"工程未设置|project not set|Untitled Project|プロジェクト未設定|未設定工程", main.window_text(), re.I):
                 return
             time.sleep(.05)
         raise TimeoutError("未确认GX Works2已建立可编辑的MAIN。")
@@ -1784,12 +1793,7 @@ class PywinautoGXWorks2UIAutomation(GXWorks2UIAutomation):
 
     def save_project(self, session):
         project_name = str(getattr(session, "project_name", "") or "").strip().casefold()
-        if project_name in {
-            "(工程未设置)",
-            "工程未设置",
-            "(project not set)",
-            "project not set",
-        }:
+        if project_name in UNSAVED_PROJECT_NAMES:
             return {
                 "success": False,
                 "save_required": True,

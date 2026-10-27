@@ -22,6 +22,26 @@ _NATIVE_SERIES_NAMES = {
     SERIES_FX: ('FXCPU',),
 }
 
+# Versions whose GD2_RC_{1252,932,936}.dll menu resources were read and found
+# to carry the same New/Save/Write Mode/Read CSV/Write CSV command IDs as
+# 1.635.0.1 (0x3FF, 0x402, 0x200, 0x755, 0x756). Only the CSV import/export
+# path accepts these versions; native compile, live ST/FBD sessions and the
+# workspace adapters stay bound to GXWORKS2_NATIVE_VERSION.
+GXWORKS2_CSV_COMMAND_VERSIONS = frozenset({
+    GXWORKS2_NATIVE_VERSION,
+    (1, 580, 0, 1),
+})
+
+# GD2_RC_{936,1252,932,950}.dll string 142 in 1.580.0.1: the frame-title text
+# for a new project that has no file yet. Compared case-folded.
+UNSAVED_PROJECT_NAMES = frozenset({
+    "(工程未设置)", "工程未设置",
+    "(project not set)", "project not set",
+    "(untitled project)", "untitled project",
+    "(プロジェクト未設定)", "プロジェクト未設定",
+    "(未設定工程)", "未設定工程",
+})
+
 
 @dataclass(frozen=True)
 class NativeProjectProfile:

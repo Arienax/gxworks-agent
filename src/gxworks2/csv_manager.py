@@ -27,6 +27,13 @@ GXWORKS2_HEADER = [
 ]
 
 GXWORKS2_COMMENT_HEADER = ["软元件名", "注释"]
+# GD2WndOprComment_RC_{936,1252,932}.dll in 1.580.0.1: Read from CSV File on
+# the device-comment editor rejects a header that is not in the UI language.
+GXWORKS2_COMMENT_HEADERS = {
+    "zh-CN": GXWORKS2_COMMENT_HEADER,
+    "en": ["Device Name", "Comment"],
+    "ja": ["デバイス名", "コメント"],
+}
 GXWORKS2_STATEMENT_MAX_BYTES = 64
 
 
@@ -160,7 +167,7 @@ class CSVManager:
 
         if len(rows) < 2:
             errors.append("软元件注释CSV缺少GX Works2标题")
-        elif rows[1][:2] != GXWORKS2_COMMENT_HEADER:
+        elif rows[1][:2] not in GXWORKS2_COMMENT_HEADERS.values():
             errors.append("CSV列标题不是GX Works2软元件注释格式")
         # Generated files use ``COMMENT - 副本`` here, while GX Works2's own
         # export writes the current project title (for example ``(工程未设置)``).
@@ -269,6 +276,27 @@ class CSVManager:
                     changed = True
         if not changed:
             return source
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with destination.open("w", encoding="utf-16", newline="") as handle:
+            csv.writer(
+                handle,
+                delimiter="\t",
+                quoting=csv.QUOTE_ALL,
+                lineterminator="\r\n",
+            ).writerows(rows)
+        return destination
+
+    def prepare_import_comments(self, source_path, destination_path, language):
+        """Stage a comment CSV whose header matches the bound IDE language."""
+
+        source = Path(source_path).expanduser().resolve()
+        header = GXWORKS2_COMMENT_HEADERS.get(language)
+        with source.open("r", encoding="utf-16", newline="") as handle:
+            rows = list(csv.reader(handle, delimiter="\t"))
+        if header is None or len(rows) < 2 or rows[1][:2] == header:
+            return source
+        rows[1] = list(header) + rows[1][2:]
+        destination = Path(destination_path).expanduser().resolve()
         destination.parent.mkdir(parents=True, exist_ok=True)
         with destination.open("w", encoding="utf-16", newline="") as handle:
             csv.writer(
