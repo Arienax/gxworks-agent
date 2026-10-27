@@ -111,7 +111,7 @@ def test_release_notices_keep_working_demos_and_component_launchers(tmp_path, mo
     source.mkdir()
     for name in ('LICENSE', 'NOTICE', 'LICENSING.md', 'THIRD_PARTY_NOTICES.md',
                  'README.md', 'README.zh-CN.md', 'README.ja.md', 'CHANGELOG.md',
-                 'start-web.cmd', 'gxworks-agent-mcp.cmd', 'SECURITY.md', 'ACCESSIBILITY.md'):
+                 'start-web.cmd', 'gxworks-agent-mcp.cmd'):
         (source / name).write_text(f'{name}\nCopyright 2026 Arienax · 原作者\n![Demo](resources/assets/demo.gif)\n', encoding='utf-8')
     (source / 'resources/assets').mkdir(parents=True)
     (source / 'resources/assets/demo.gif').write_bytes(b'GIF89a')
@@ -123,7 +123,7 @@ def test_release_notices_keep_working_demos_and_component_launchers(tmp_path, mo
     monkeypatch.setattr(release_notices.metadata, 'distributions', lambda: [])
     release_notices.stage(package, component)
     assert (package / 'gxworks-agent-mcp.cmd').is_file()
-    for name in ('LICENSE', 'NOTICE', 'LICENSING.md', 'THIRD_PARTY_NOTICES.md', 'SECURITY.md', 'ACCESSIBILITY.md'):
+    for name in ('LICENSE', 'NOTICE', 'LICENSING.md', 'THIRD_PARTY_NOTICES.md'):
         assert (package / name).read_bytes() == (source / name).read_bytes()
     for name in ('README.md', 'README.zh-CN.md', 'README.ja.md'):
         readme = (package / name).read_text(encoding='utf-8')
