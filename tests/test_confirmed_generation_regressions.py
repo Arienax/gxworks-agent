@@ -8,6 +8,7 @@ from application.generation_agent import (
     _FirstJSONObjectProvider,
     _GENERATION_REQUEST,
     _build_agent_b_prompt,
+    _compact_wire_renderer,
     _compact_response_schema,
     _expand_compact_ladder,
     _strict_generation_projection,
@@ -204,7 +205,10 @@ def test_repaired_method_bans_and_exact_calls_reach_generation_without_reclassif
     from application.analysis_repair import plan_analysis_repair, apply_analysis_repair
     from application.confirmed_generation_context import project_confirmed_specification
     import application.generation_agent as agent
-    fixture = json.loads((private_path('tests/fixtures/analysis_sftl_repair.json')).read_text(encoding="utf-8"))
+    path = private_path('tests/fixtures/analysis_sftl_repair.json')
+    if not path.is_file():
+        pytest.skip('private recorded SFTL repair response is unavailable')
+    fixture = json.loads(path.read_text(encoding="utf-8"))
     raw = json.loads(fixture["first_response"])
     plan = plan_analysis_repair(raw, fixture["request"])
     repaired, receipt = apply_analysis_repair(plan, fixture["repair_response"], fixture["request"])
@@ -654,6 +658,8 @@ def test_compact_agent_b_output_is_materially_smaller_than_expanded_ladder():
 
 def test_agent_b_prompt_is_confirmed_spec_scoped_not_generic_model_dump(monkeypatch):
     import application.generation_agent as agent
+    from application.confirmed_generation_context import build_confirmed_generation_context
+    from tests.test_context_compiler import wire_context
 
     monkeypatch.setattr(agent, "_build_knowledge_context", lambda *args, **kwargs: "")
     projected = {
@@ -664,9 +670,11 @@ def test_agent_b_prompt_is_confirmed_spec_scoped_not_generic_model_dump(monkeypa
         },
         "io_table": [{"address": "X1", "label": "检测"}, {"address": "Y0", "label": "输送带"}],
     }
-    prompt = _build_agent_b_prompt(projected, "FX3U")
+    context = build_confirmed_generation_context(projected, 'FX3U', knowledge_builder=lambda *a, **k: '',
+        wire_renderer=_compact_wire_renderer('FX3U'))
+    prompt = _build_agent_b_prompt(projected, "FX3U", context=context)
 
-    actual, _ = json.JSONDecoder().raw_decode(prompt.split("# Confirmed project specification\n", 1)[1])
+    actual = wire_context(context.wire_packet['messages'])['confirmed_spec']
     assert actual == {**projected, "schema_version": 4}
     assert "FX3U-4DA" not in prompt
     assert "FX3U-2HSY-ADP" not in prompt
@@ -827,6 +835,7 @@ def test_exact_instruction_instance_survives_agent_a_confirmation_to_agent_b():
 
     context = build_confirmed_generation_context(
         confirmed, "FX3U", knowledge_builder=lambda *args, **kwargs: "",
+        wire_renderer=_compact_wire_renderer("FX3U"),
     )
     assert context.confirmed_spec["selected_approach"]["generation_contract"]["instruction_instances"] == [instance]
 
@@ -836,9 +845,8 @@ def test_exact_instruction_instance_survives_agent_a_confirmation_to_agent_b():
     assert exact["instance_source"] == "generation_contract"
 
     prompt = _build_agent_b_prompt(projected, "FX3U", context=context)
-    payload, _ = json.JSONDecoder().raw_decode(
-        prompt.split("# Confirmed project specification\n", 1)[1]
-    )
+    from tests.test_context_compiler import wire_context
+    payload = wire_context(context.wire_packet['messages'])['confirmed_spec']
     assert payload["selected_approach"]["generation_contract"]["instruction_instances"] == [instance]
     assert "opcode 与 operands 必须逐项原样使用" in prompt
 
@@ -914,6 +922,7 @@ def test_model_proposed_instruction_instance_stays_exact_as_selected_preference(
 
     context = build_confirmed_generation_context(
         confirmed, "FX3U", knowledge_builder=lambda *args, **kwargs: "",
+        wire_renderer=_compact_wire_renderer("FX3U"),
     )
     targets = structured_fact_targets("", context.confirmed_spec)
     exact = next(row for row in targets["instructions"] if row["opcode"] == "SFTL")
@@ -921,9 +930,8 @@ def test_model_proposed_instruction_instance_stays_exact_as_selected_preference(
     assert exact["instance_source"] == "implementation_preferences"
 
     prompt = _build_agent_b_prompt(projected, "FX3U", context=context)
-    payload, _ = json.JSONDecoder().raw_decode(
-        prompt.split("# Confirmed project specification\n", 1)[1]
-    )
+    from tests.test_context_compiler import wire_context
+    payload = wire_context(context.wire_packet['messages'])['confirmed_spec']
     assert payload["selected_approach"]["implementation_preferences"]["instruction_instances"] == [instance]
 
 

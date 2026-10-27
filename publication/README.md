@@ -36,3 +36,9 @@ separately and do not determine whether a source file is approved for publicatio
 Research reports, original samples and acceptance output remain in the separate
 private materials repository. Source pushes and executable-package releases are
 separate operations.
+
+Public CI uses the source and synthetic inputs included in the export. The
+workflow scopes are documented in [test ownership](../tests/README.md#ci-placement).
+Private recorded-provider replay, original knowledge-corpus checks and executable
+packaging require their own inputs and an explicit separate invocation; publishing
+source does not start a full regression or produce release packages.

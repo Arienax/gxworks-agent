@@ -13,6 +13,26 @@ from plc.specification.provenance import (
 )
 
 
+def wire_context(messages):
+    """Read the engineering document actually sent to a synthetic provider."""
+    from application.generation_wire import expand_context_document
+    from model_runtime.provider import UserMessage
+    documents = []
+    for message in messages:
+        role = message.get('role') if isinstance(message, dict) else ('user' if isinstance(message, UserMessage) else None)
+        content = message.get('content') if isinstance(message, dict) else message.content
+        if role != 'user':
+            continue
+        try:
+            document = json.loads(content)
+        except (ValueError, TypeError):
+            continue
+        if isinstance(document, dict) and document.get('context_schema_version') == 3:
+            documents.append(document)
+    document, = documents
+    return expand_context_document(document)
+
+
 def test_discovery_deduplicates_atomic_units_without_budget_omissions(monkeypatch):
     from application.capability_context import augment_generation_knowledge, reconcile_discovery
     from knowledge.evidence import KnowledgeContext

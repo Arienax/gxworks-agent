@@ -241,10 +241,9 @@ def test_local_and_service_mcp_share_persisted_live_session_and_saved_revision_r
 
 @pytest.mark.parametrize('extra', [{'pid': 123}, {'path': r'D:\unmanaged.gxw'}, {'approval_mode': 'full'}])
 def test_native_engineering_mcp_schema_rejects_driver_and_consent_arguments(extra):
-    from tests.test_gxworks2_live_boundaries import _visible_cross_reference_witness
+    # Argument validation precedes reading any saved GXW source.
     context = build_tool_context({'id': 'project', 'plc_model': 'FX3U', 'target_mode': 'fbd'},
-        version={'id': 'v1', 'plc_model': 'FX3U', 'target_mode': 'fbd'},
-        fbd_baseline=_visible_cross_reference_witness())
+        version={'id': 'v1', 'plc_model': 'FX3U', 'target_mode': 'fbd'})
     adapter = MCPToolAdapter(build_default_tool_runtime(), StaticToolContextProvider(context))
     result = adapter.call_tool('execute_native_engineering', {'plan': {'schema_version': 1,
         'commands': [{'operation': 'save', **extra}]}}, 'rejected-native')
@@ -2718,17 +2717,12 @@ def test_saved_plain_text_st_without_gxw_cannot_request_native_execution(tmp_pat
     ('execute_native_engineering', {'plan': {'schema_version': 1, 'commands': [{'operation': 'save'}]}, 'approval_mode': 'full'}),
 ])
 def test_st_mcp_tool_schemas_do_not_accept_process_path_text_authoring_or_consent_overrides(tool, arguments):
-    import base64
-    from gxw.fb_authoring import st_program_snapshot
-    from tests.test_execution_coordinator import native_st_source_witness
-    raw = native_st_source_witness()
-    program, = st_program_snapshot(raw)['programs']
+    # A schema-invalid call must be rejected before decoding an uploaded project.
     arguments = copy.deepcopy(arguments)
     if tool == 'create_st_candidate':
-        arguments['data_base64'] = base64.b64encode(raw).decode()
+        arguments['data_base64'] = 'c2F2ZWQgR1hX'
     context = build_tool_context({'id': 'st-project', 'plc_model': 'FX3U', 'target_mode': 'st'},
-        version={'id': 'v0001', 'plc_model': 'FX3U', 'target_mode': 'st', 'program_name': program['program']},
-        native_snapshot=raw, st_text=program['st_text'])
+        version={'id': 'v0001', 'plc_model': 'FX3U', 'target_mode': 'st', 'program_name': 'MAIN.Program.pou'})
     adapter = MCPToolAdapter(build_default_tool_runtime(), StaticToolContextProvider(context))
     schema = next(item.input_schema for item in adapter.list_tools() if item.name == tool)
     assert schema['additionalProperties'] is False

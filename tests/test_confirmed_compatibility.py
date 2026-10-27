@@ -248,9 +248,10 @@ class SDKFixture:
         self.calls.append(copy.deepcopy(params))
         assert len(self.calls) == 1, "no hidden model regeneration"
         assert params["temperature"] == .733
-        system = next(m["content"] for m in params["messages"] if m["role"] == "system")
-        encoded = system.split("# Confirmed project specification\n", 1)[1]
-        spec, _ = json.JSONDecoder().raw_decode(encoded)
+        from application.generation_wire import expand_context_document
+        documents = [json.loads(m["content"]) for m in params["messages"] if m["role"] == "user"]
+        document, = [item for item in documents if item.get('context_schema_version') == 3]
+        spec = expand_context_document(document)['confirmed_spec']
         assert {b["role"]: b["address"] for b in spec["io_bindings"]} == {"start": "X0", "stop": "X1", "output": "Y0"}
         assert {r["address"] for r in spec["io_table"]} == {"X0", "X1", "Y0"}
         content = _compact(self.shared, self.polarity)

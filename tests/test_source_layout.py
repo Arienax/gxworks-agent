@@ -116,7 +116,7 @@ def test_read_only_resources_keep_the_same_source_root(monkeypatch):
     from model_runtime.catalog import catalog_directory
     monkeypatch.delattr(sys, "_MEIPASS", raising=False)
     assert resource_path("config.default.json") == ROOT / "resources/config.default.json"
-    assert resource_path("knowledge/runtime/plc_facts.sqlite") == ROOT / "resources/knowledge/runtime/plc_facts.sqlite"
+    assert resource_path("instructions/mitsubishi/pwm_contract.generated.json") == ROOT / "resources/instructions/mitsubishi/pwm_contract.generated.json"
     assert catalog_directory() == ROOT / "resources/model_catalog"
 
 

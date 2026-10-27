@@ -5,9 +5,11 @@ import pytest
 
 def test_composition_references_existing_confirmation_and_never_allocates_addresses():
     from plc.composition import derive_composition
-    from tests.test_simulator_verification import _bounded_row, _bounded_expr, _bounded_spec
-    spec = _bounded_spec([_bounded_row("events", "event", source=_bounded_expr("device", name="X0"),
-        accept=_bounded_expr("constant", value=True), output="M100", edge="rising", startup_policy="require_opposite")])
+    spec = {'plc_model': 'FX3U', 'behavior_constraints': [
+        _construction_relation('events', 'event', source=_construction_expression('device', name='X0'),
+            accept=_construction_expression('constant', value=True), output='M100', edge='rising',
+            startup_policy='require_opposite')],
+        'selected_approach': {'construction_plan': {}}}
     spec["io_bindings"] = [{"binding_id": "a", "address": "X0", "label": "工位A输入"}]
     spec["selected_approach"]["construction_plan"]["instances"] = [
         {"id": "detector", "requirement_id": "events", "method": "source_history", "depends_on": []},
@@ -68,7 +70,7 @@ def _construction_spec(model='FX3U'):
 
 
 @pytest.mark.parametrize('model',['FX3U','FX5U'])
-def test_core_construction_expands_and_isolates_nonzero_coil_initialization(model):
+def test_core_construction_expands_and_isolates_nonzero_coil_initialization(model, private_manual_evidence):
     from application.generation_agent import prepare_model_candidate
     from simulator.bounded import ScanMachine
     from plc.validation import validate_ladder_candidate_structure
@@ -92,7 +94,7 @@ def test_core_construction_expands_and_isolates_nonzero_coil_initialization(mode
 
 
 @pytest.mark.parametrize('model,boot_device',[('FX3U','M8002'),('FX5U','SM402')])
-def test_construction_candidate_uses_runtime_cpu_after_positive_projection(model,boot_device):
+def test_construction_candidate_uses_runtime_cpu_after_positive_projection(model,boot_device,private_manual_evidence):
     from application.confirmed_generation_context import project_confirmed_specification
     from application.generation_agent import prepare_model_candidate
     from simulator.bounded import ScanMachine

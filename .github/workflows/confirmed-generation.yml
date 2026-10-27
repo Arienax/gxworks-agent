@@ -44,6 +44,7 @@ jobs:
     env:
       PYTHONUTF8: '1'
       PYTHONDONTWRITEBYTECODE: '1'
+      GXWORKS_AGENT_PRIVATE_ROOT: ${{ runner.temp }}/unavailable-private-inputs
       HAYSTACK_TELEMETRY_ENABLED: 'false'
     steps:
       - uses: actions/checkout@v4
@@ -89,12 +90,11 @@ jobs:
         run: |
           python -m pip install -c requirements/development.constraints.txt -r requirements.txt
           python -m pip check
-      - name: Test analysis-to-confirmed-generation handoff
+      - name: Test public analysis-to-confirmation contracts
         if: steps.scope.outputs.run == 'true'
         run: >-
           python -m pytest -q
           tests/test_analysis_design_rag.py
-          tests/test_analysis_format_repair.py
           tests/test_analysis_mode_jobs.py
           tests/test_analysis_prompt_integration.py
           tests/test_analysis_prompt_routing.py
@@ -103,8 +103,6 @@ jobs:
           tests/test_confirmed_reconfirmation.py
           tests/test_context_compiler.py
           tests/test_context_refresh_runtime.py
-          tests/test_instruction_fact_context.py
-          tests/test_intent_evidence_handoff.py
           tests/test_optional_hardware_parameters.py
           tests/test_spec_choice_metadata.py
           tests/test_approach_contracts.py

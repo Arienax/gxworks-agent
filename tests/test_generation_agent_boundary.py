@@ -191,7 +191,8 @@ def test_raw_direct_generates_once_without_analysis_or_model_compaction(monkeypa
     assert len(provider.requests) == 1
     assert provider.requests[0].max_retries == 0
     messages = provider.requests[0].messages
-    assert messages[-1].content == raw
+    payload = json.loads(messages[-1].content)
+    assert payload['context_schema_version'] == 3 and payload['request'] == raw
     assert "# Confirmed project specification" not in messages[0].content
     assert metadata["first_pass_pipeline"]["mode"] == "direct_generation"
     assert metadata["first_pass_pipeline"]["model_calls"] == 1
@@ -363,7 +364,7 @@ def test_operand_usage_and_execution_form_reach_actual_agent_b_messages(tmp_path
     assert "STEP_WIDTH:" not in sent
 
 
-def test_conflicting_usage_candidates_reach_agent_b_only_as_an_unresolved_facet(tmp_path, monkeypatch):
+def test_conflicting_usage_candidates_reach_agent_b_only_as_an_unresolved_facet(tmp_path, monkeypatch, private_manual_evidence):
     import knowledge.structured_facts as structured
     from tests.test_instruction_fact_context import _usage_source, _fixture_definition
 
@@ -820,7 +821,7 @@ def test_wire_renderer_changes_only_the_example_block_and_freezes_flag(monkeypat
     from application.generation_agent import _compact_wire_renderer, _COMPACT_PROTOCOL
     from application.compact_protocol import compact_capability_prompt
     from application.confirmed_generation_context import generation_execution_prompt
-    from application.generation_wire import render_context_checkpoint, render_wire_messages
+    from application.generation_wire import context_system_prompt, expand_context_document
     from plc.specification.provenance import SOURCE_PRECEDENCE
 
     spec, evidence, request = _construction_spec(), "\nEVIDENCE_CONTROL_SENTINEL\n", "Generate confirmed program"
@@ -828,39 +829,44 @@ def test_wire_renderer_changes_only_the_example_block_and_freezes_flag(monkeypat
     off_block = examples.prepare_construction_examples("FX3U", False, spec)
     on_block = examples.prepare_construction_examples("FX3U", True, spec)
     off = _compact_wire_renderer("FX3U", example_block=off_block)
-    expected = (_COMPACT_PROTOCOL + SOURCE_PRECEDENCE + "\n# Selected PLC\nFX3U\n"
-                + compact_capability_prompt("FX3U", spec) + evidence
-                + "\n# Confirmed project specification\n"
-                + json.dumps(spec, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-                + render_context_checkpoint("")
+    expected = (_COMPACT_PROTOCOL + SOURCE_PRECEDENCE
                 + generation_execution_prompt(spec, evidence_text=evidence, task_type="generate"))
-    assert off(*args) == {"messages": render_wire_messages(expected, [{"role": "user", "content": request}])}
+    assert off(*args)['messages'][0]['content'] == context_system_prompt(expected)
     on = _compact_wire_renderer("FX3U", example_block=on_block)
     off_packet, on_packet = off(*args), on(*args)
     block = on_block
     assert block.example_ids == ("reset_dominant_hold",)
-    assert on_packet["messages"][0]["content"].count(block.text) == 1
-    on_packet["messages"][0]["content"] = on_packet["messages"][0]["content"].replace(block.text, "", 1)
-    assert on_packet == off_packet
+    assert on_packet['messages'][0] == off_packet['messages'][0]
+    on_document = expand_context_document(json.loads(on_packet['messages'][1]['content']))
+    off_document = expand_context_document(json.loads(off_packet['messages'][1]['content']))
+    assert off_document['request'] == request and off_document['confirmed_spec'] == spec
+    assert off_document['knowledge'] == [{'text': 'EVIDENCE_CONTROL_SENTINEL'}]
+    assert on_document['examples'] == block.text and off_document['examples'] == ''
+    on_document['examples'] = ''
+    assert on_document == off_document
 
 
-def test_actual_wire_reuses_evidence_prefix_across_project_values_and_key_order():
+def test_actual_wire_keeps_rules_and_evidence_stable_across_project_values_and_key_order():
     from application.generation_agent import _compact_wire_renderer
+    from application.generation_wire import expand_context_document
     spec = _construction_spec()
     other = copy.deepcopy(spec)
     other['summary'] = '另一份已确认规格，地址及参数另行给定'
     evidence = '\n# Technical evidence\nUNCHANGED_SOURCE_' * 300
     block = examples.prepare_construction_examples('FX3U', False, spec)
     render = _compact_wire_renderer('FX3U', example_block=block)
-    first = render(spec, evidence, 'generate', None, '', [])['messages'][0]['content']
-    second = render(other, evidence, 'generate', None, '', [])['messages'][0]['content']
-    prefix = first.split('\n# Confirmed project specification\n', 1)[0]
-    assert second.startswith(prefix)
-    assert evidence in prefix
-    assert first != second and '另一份已确认规格' in second
+    first = render(spec, evidence, 'generate', None, '', [])['messages']
+    second = render(other, evidence, 'generate', None, '', [])['messages']
+    def document(messages):
+        return expand_context_document(json.loads(messages[1]['content']))
+    assert first[0] == second[0]
+    assert document(first)['knowledge'] == document(second)['knowledge'] == [{'text': evidence.strip()}]
+    assert document(first)['confirmed_spec'] == spec
+    assert document(second)['confirmed_spec'] == other
     reversed_keys = dict(reversed(list(spec.items())))
-    assert render(reversed_keys, evidence, 'generate', None, '', [])['messages'][0]['content'] == first
-    assert render(spec, '\nCHANGED_SOURCE\n', 'generate', None, '', [])['messages'][0]['content'] != first
+    assert document(render(reversed_keys, evidence, 'generate', None, '', [])['messages']) == document(first)
+    changed = render(spec, '\nCHANGED_SOURCE\n', 'generate', None, '', [])['messages']
+    assert changed[0] == first[0] and document(changed)['knowledge'] == [{'text': 'CHANGED_SOURCE'}]
 
 
 def test_actual_agent_request_budget_handoff_and_retrieval_are_isolated(monkeypatch):
@@ -912,8 +918,13 @@ def test_actual_agent_request_budget_handoff_and_retrieval_are_isolated(monkeypa
     off, on = copy.deepcopy(calls[0][0]), copy.deepcopy(calls[1][0])
     block = examples.prepare_construction_examples("FX3U", True, specification)
     assert block.example_ids == ("reset_dominant_hold",)
-    on[0]["content"] = on[0]["content"].replace(block.text, "", 1)
-    assert on == off
+    from application.generation_wire import expand_context_document
+    assert on[0] == off[0]
+    on_document = expand_context_document(json.loads(on[1]['content']))
+    off_document = expand_context_document(json.loads(off[1]['content']))
+    assert on_document['examples'] == block.text and off_document['examples'] == ''
+    on_document['examples'] = ''
+    assert on_document == off_document
     assert calls[0][1] == calls[1][1]
     assert results[1]["generation_handoff"]["budget_report"]["compiled_budget_payload_tokens"] > results[0]["generation_handoff"]["budget_report"]["compiled_budget_payload_tokens"]
 

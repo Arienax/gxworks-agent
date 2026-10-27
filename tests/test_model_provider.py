@@ -29,7 +29,15 @@ from model_runtime.provider import (
 
 
 @pytest.mark.parametrize("stream", [False, True])
-@pytest.mark.parametrize("case", json.loads((Path(__file__).parent / "fixtures/model_json_tail_responses.json").read_text(encoding="utf-8")), ids=lambda case: case["id"])
+@pytest.mark.parametrize("case", [
+    {"id": "nested-claim", "raw_response": '{"answer":"合成回答一",'
+     '"evidence_sufficient":true,"claims":[{"claim":"嵌套合成声明",'
+     '"source_ids":["synthetic:1"]}],"missing_evidence":[]}"}'},
+    {"id": "unicode-claims", "raw_response": '{"answer":"合成回答",'
+     '"evidence_sufficient":false,"claims":[{"claim":"值保持不变",'
+     '"source_ids":["synthetic:2"]},{"claim":"第二项","source_ids":[]}],'
+     '"missing_evidence":["未知条件"]}"}'},
+], ids=lambda case: case["id"])
 def test_complete_json_with_stray_wrapper_tail_is_recovered_before_publication(case, stream):
     from model_runtime.responses import ResponseContract
 
@@ -563,6 +571,7 @@ def test_request_timeout_and_retry_options_are_applied_to_client():
 
 
 def test_new_history_messages_strip_legacy_provider_fields_before_request():
+    from application.generation_wire import context_system_prompt
     messages = api._build_clean_messages(
         [
             {
@@ -576,7 +585,7 @@ def test_new_history_messages_strip_legacy_provider_fields_before_request():
     )
 
     assert messages == [
-        {"role": "system", "content": "system"},
+        {"role": "system", "content": context_system_prompt("system")},
         {"role": "assistant", "content": "可见正文"},
     ]
 

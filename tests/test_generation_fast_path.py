@@ -218,7 +218,10 @@ def test_confirmed_agent_origin_has_one_core_owner():
 
 
 def test_confirmed_generation_acceptance_capability_is_enforced():
-    from tools.audit_capability_coverage import audit_coverage
+    from tools.audit_capability_coverage import audit_coverage, DEFAULT_MANIFEST
+
+    if not DEFAULT_MANIFEST.is_file():
+        pytest.skip('private capability acceptance manifest is unavailable')
 
     report = audit_coverage()
     states = {row["id"]: row["state"] for row in report["capabilities"]}

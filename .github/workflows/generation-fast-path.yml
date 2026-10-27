@@ -55,6 +55,7 @@ jobs:
     env:
       PYTHONUTF8: '1'
       PYTHONDONTWRITEBYTECODE: '1'
+      GXWORKS_AGENT_PRIVATE_ROOT: ${{ runner.temp }}/unavailable-private-inputs
     steps:
       - uses: actions/checkout@v4
         with:
@@ -102,11 +103,10 @@ jobs:
       - name: Compile generation paths
         if: steps.scope.outputs.run == 'true'
         run: python -m compileall -q src tests
-      - name: Validate generation and repair contracts
+      - name: Validate public generation and repair contracts
         if: steps.scope.outputs.run == 'true'
         run: >-
           python -m pytest -q
-          tests/test_instruction_contract_alignment.py
           tests/test_field_patch_repair_protocol.py
           tests/test_format_patch_repair.py
           tests/test_hybrid_compact_recovery.py
@@ -120,6 +120,3 @@ jobs:
           tests/test_rejected_generation_delivery.py
           tests/test_generation_delivery.py
           tests/test_contract_repair_planner.py
-      - name: Verify generated FX3U instruction overlay
-        if: steps.scope.outputs.run == 'true'
-        run: python tools/build_fx3u_verified_opcode_overlay.py --check

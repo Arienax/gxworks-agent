@@ -197,11 +197,22 @@ workflow above. Register new genuine live cases in `check_suites.json` or with
 
 ## CI placement
 
-The public `Source boundary and build` workflow checks the exported boundary,
-Python compilation, clean-source runtime smoke, Web tests and the production Web
-build. Local Python/offline tests and private evidence are not exported to that
-workflow. Source CI, private offline acceptance, live native acceptance and final
-package validation retain their respective execution and evidence boundaries.
+The public `Source boundary and Web checks` workflow checks the exported boundary,
+Python compilation, clean-source startup and Web tests. Source Layout Validation
+runs source ownership, public Owner Store/PWM and MCP paging/schema regressions.
+The generation and model workflows run their explicitly listed public contract
+tests; adding a test file to a PR does not automatically select the entire suite.
+These workflows do not build executable packages or the production Web bundle.
+
+Captured-response replay in `test_analysis_format_repair.py` and
+`test_intent_evidence_handoff.py`, private definition coverage in
+`test_instruction_fact_context.py`, and original-corpus/ledger alignment in
+`test_instruction_contract_alignment.py` require the separate materials repository.
+They remain maintained tests and are not part of the public CI commands. The
+private generation workflow commands are retained with those materials. Individual
+acceptance cases report a skip when their explicitly required private input is
+absent; this is not a passing native or private-data result. Source CI, private
+offline acceptance, live native acceptance and package validation remain separate.
 
 A test file should have one primary targeted workflow. It may also run in the full suite. Listing the same file in multiple targeted workflows is justified only when the workflows exercise materially different contracts; platform/package checks belong to full validation rather than every PR.
 

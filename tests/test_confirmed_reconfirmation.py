@@ -6,6 +6,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from tests.test_context_compiler import wire_context
+
 from plc.specification.confirmed import build_review_draft, canonicalize_confirmed_spec, validate_spec_draft
 from test_confirmed_compatibility import operator_spec, profile_for
 
@@ -37,7 +39,7 @@ def test_http_unbound_analysis_split_confirmation_save_and_regeneration(tmp_path
                 payload = ENTRY_FIXTURE["analysis"]
             else:
                 prompt = next(m.content for m in request.messages if isinstance(m, SystemMessage))
-                projected, _ = json.JSONDecoder().raw_decode(prompt.split("# Confirmed project specification\n", 1)[1])
+                projected = wire_context(request.messages)['confirmed_spec']
                 stop = next((b for b in projected["io_bindings"] if b.get("role") == "stop"), None)
                 assert not projected.get("execution_semantics")
                 facts = generation_input_conditions(projected["io_bindings"])
@@ -385,8 +387,7 @@ def test_http_reconfirmation_after_address_edit_outputs_the_new_wiring(tmp_path,
         def create(self, **params):
             calls.append(copy.deepcopy(params))
             assert len(calls) == 1
-            prompt = next(m["content"] for m in params["messages"] if m["role"] == "system")
-            projected, _ = json.JSONDecoder().raw_decode(prompt.split("# Confirmed project specification\n", 1)[1])
+            projected = wire_context(params['messages'])['confirmed_spec']
             bindings = {b["role"]: b["address"] for b in projected["io_bindings"]}
             assert bindings == {"start": "X0", "stop": "X3", "output": "Y0"}
             assert next(p["value"] for p in projected["parameters"] if p["id"] == "stop_input") == f"X3，{contact}"
@@ -516,7 +517,7 @@ Y010：Sorter 3 belt
             else:
                 assert len(self.requests) == 2
                 prompt = next(m.content for m in request.messages if isinstance(m, SystemMessage))
-                projected, _ = json.JSONDecoder().raw_decode(prompt.split("# Confirmed project specification\n", 1)[1])
+                projected = wire_context(request.messages)['confirmed_spec']
                 rows = {r["address"]: r["label"] for r in projected["io_table"]}
                 assert len(rows) == 11
                 assert {"X1", "X5", "Y10", "D0"} <= rows.keys() and "X3" not in rows

@@ -112,8 +112,7 @@ jobs:
           tests/test_model_stream_cancellation.py
           tests/test_model_presentation.py
           tests/test_web_contract.py
-      - name: Test parameter controls and build Web frontend
+      - name: Test parameter controls
         if: steps.scope.outputs.run == 'true'
         run: |
           node --experimental-strip-types --test web/tests/model-parameters.test.mjs web/tests/module-resolution.test.mjs
-          npm run build --prefix web

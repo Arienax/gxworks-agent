@@ -1,4 +1,4 @@
-name: Source boundary and build
+name: Source boundary and Web checks
 on: [push, pull_request, workflow_dispatch]
 permissions:
   contents: read
@@ -25,6 +25,4 @@ jobs:
       - run: npm ci
         working-directory: web
       - run: npm test
-        working-directory: web
-      - run: npm run build
         working-directory: web

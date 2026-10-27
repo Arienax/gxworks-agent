@@ -1,13 +1,13 @@
 """Candidate controls retain user choices across analysis, review and storage."""
 
-from tools.offline_inputs import private_path
-
 import copy
 import itertools
 import json
 from pathlib import Path
 
 import pytest
+
+from tests.test_context_compiler import wire_context
 
 
 def test_equipment_grouping_is_advisory_and_keeps_stable_binding_identity():
@@ -55,7 +55,33 @@ from plc.specification.confirmed import (
 )
 
 
-ENTRY_FIXTURE = json.loads((private_path('tests/fixtures/analysis_entry_regression.json')).read_text(encoding="utf-8"))
+# Authored unbound I/O example; captured provider responses remain private.
+ENTRY_FIXTURE = {
+    'plc_model': 'FX3U', 'request': '启停',
+    'analysis': {
+        'summary': '启动、停止和输出尚未分配地址。',
+        'approaches': [{'approach_id': 'a1', 'name': '启停控制',
+            'description': '启动保持，停止复位。', 'pros': '', 'cons': '', 'generation_guide': '',
+            'implementation_semantics': [
+                {'kind': 'structure', 'status': 'required', 'value': 'direct_logic'},
+                {'kind': 'structure', 'status': 'required', 'value': 'self_hold'}]}],
+        'execution_intent_claims': [
+            {'trigger': {'kind': 'transition', 'source_devices': [], 'from': False, 'to': True}, 'evidence': ['启停']},
+            {'trigger': {'kind': 'level', 'source_devices': []}, 'evidence': ['启停']}],
+        'explicit_constraint_claims': [], 'suggested_io': {}, 'hardware_config': {}, 'assumptions': [],
+        'missing_info': [
+            {'id': 'start_button_input', 'question': '启动按钮输入地址？', 'required': True, 'options': [],
+             'io_binding': {'binding_id': 'start_button', 'kind': 'X', 'label': '启动按钮', 'role': 'start'}},
+            {'id': 'stop_button_input', 'question': '停止按钮输入地址？', 'required': True, 'options': [],
+             'io_binding': {'binding_id': 'stop_button', 'kind': 'X', 'label': '停止按钮', 'role': 'stop'}},
+            {'id': 'stop_button_polarity', 'question': '停止按钮是常开还是常闭？', 'required': True,
+             'options': ['常开', '常闭'], 'value_kind': 'choice',
+             'io_binding': {'binding_id': 'stop_button', 'kind': 'X', 'label': '停止按钮', 'role': 'stop'}},
+            {'id': 'output_coil', 'question': '输出地址？', 'required': True, 'options': [],
+             'io_binding': {'binding_id': 'output_coil', 'kind': 'Y', 'label': '输出', 'role': 'output'}}]},
+    'answers': {'start_button_input': 'x1', 'stop_button_input': 'x0',
+                'stop_button_polarity': '常开', 'output_coil': 'y0'},
+}
 
 
 def split_entry_draft(contact="常开"):
@@ -569,7 +595,7 @@ def test_io_purpose_http_save_generate_and_export_keep_only_device_names(tmp_pat
             self.requests.append(request)
             assert len(self.requests) == 1  # No annotation rewriting call.
             prompt = next(m.content for m in request.messages if isinstance(m, SystemMessage))
-            spec, _ = json.JSONDecoder().raw_decode(prompt.split("# Confirmed project specification\n", 1)[1])
+            spec = wire_context(request.messages)['confirmed_spec']
             expected = {"X0": "操作台启动", "X1": "停止按钮", "Y0": "控制输出"}
             assert {b["address"]: b["label"] for b in spec["io_bindings"]} == expected
             assert {r["address"]: r["label"] for r in spec["io_table"]} == expected
@@ -716,7 +742,7 @@ def test_inline_user_io_and_flat_analysis_reach_http_explorer_and_all_artifacts(
                                     "generation_guide": "", "implementation_semantics": []}]}
             else:
                 prompt = next(m.content for m in request.messages if isinstance(m, SystemMessage))
-                spec, _ = json.JSONDecoder().raw_decode(prompt.split("# Confirmed project specification\n", 1)[1])
+                spec = wire_context(request.messages)['confirmed_spec']
                 assert {r["address"]: r["label"] for r in spec["io_table"]} == expected
                 assert not {"approaches", "engineering_context", "decision_receipt"} & set(spec)
                 payload = {"r": [{"h": None, "s": [], "b": [{

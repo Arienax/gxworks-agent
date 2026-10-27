@@ -3,244 +3,41 @@ name: Source Layout Validation
 on:
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened, ready_for_review, labeled]
     paths:
       - 'src/**'
       - 'tests/**'
+      - 'checks/**'
       - 'scripts/**'
-      - 'evals/**'
       - 'tools/**'
-      - 'packaging/**'
+      - 'publication/**'
       - 'resources/**'
-      - 'research/**'
-      - 'web/**'
       - 'requirements.txt'
       - 'requirements/**'
       - '.github/workflows/**'
-      - '.github/actions/**'
   push:
     branches: [main]
-  release:
-    types: [published]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: source-layout-${{ github.workflow }}-${{ github.ref }}
+  group: source-layout-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  lfs-cache:
-    name: Prepare shared LFS cache
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          lfs: false
-      - uses: ./.github/actions/checkout-lfs
-
   regression:
-    name: Full headless suite and MCP smoke
-    needs: lfs-cache
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-          lfs: false
-      - uses: ./.github/actions/checkout-lfs
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13.14'
-          cache: pip
-          cache-dependency-path: |
-            requirements.txt
-            requirements/*.txt
-      - name: Install headless test dependencies
-        run: python -m pip install -c requirements/development.constraints.txt -r requirements.txt
-      - name: Fast PR validation
-        if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'full-validation')
-        shell: bash
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          set -euo pipefail
-          python -m compileall -q src tests
-          python -m pytest -q tests/test_source_layout.py tests/test_architecture_boundaries.py tests/test_plc_core_boundary.py
-          # Validate the whole PR, not only its most recent push. Rebased
-          # before SHAs may no longer be reachable in a fresh checkout.
-          from="$BASE_SHA"
-          to="$HEAD_SHA"
-          git diff --name-only "$from"..."$to" > changed-files.txt
-          {
-            while IFS= read -r path; do
-              if [[ "$path" =~ ^tests/test_.*\.py$ \
-                    && ! "$path" =~ ^tests/test_(source_layout|architecture_boundaries|plc_core_boundary)\.py$ \
-                    && -f "$path" ]]; then
-                printf '%s\n' "$path"
-              fi
-            done < changed-files.txt
-            if grep -Eq '^(resources/locales/|src/shared/i18n\.py$)' changed-files.txt; then
-              printf '%s\n' tests/test_i18n.py
-            fi
-            if grep -Eq '^research/(audit_gxw_knowledge\.py|gxw_corpus\.py|corpus/|results/block-boundary-20260913/)' changed-files.txt; then
-              printf '%s\n' tests/test_gxw_lossless.py tests/test_gxw_network_blocks.py
-            fi
-          } | sort -u > targeted-tests.txt
-          mapfile -t changed_tests < targeted-tests.txt
-          if (( ${#changed_tests[@]} )); then
-            python -m pytest -q "${changed_tests[@]}"
-          fi
-          python scripts/mcp_smoke.py
-      - name: Compile and run the complete suite
-        if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-validation')
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p validation
-          python -m compileall -q src
-          python -m pytest -q --junitxml=validation/candidate.xml 2>&1 | tee validation/candidate.log
-      - name: MCP real stdio smoke without credentials or model calls
-        if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-validation')
-        run: python scripts/mcp_smoke.py
-      - name: Preserve tracked source for failed full validation
-        if: failure() && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-validation'))
-        shell: bash
-        run: |
-          python - <<'PY'
-          import os
-          from pathlib import Path
-          import subprocess
-          import zipfile
-          Path('validation').mkdir(exist_ok=True)
-          # Include only tracked files, including checked-out LFS resources.
-          # Never archive user settings, the Git directory, or generated traces.
-          names = subprocess.check_output(['git', 'ls-files', '-z']).split(b'\0')
-          with zipfile.ZipFile('validation/tested-source.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
-              for name in names:
-                  if name:
-                      path = Path(os.fsdecode(name))
-                      if path.is_file() and not path.is_symlink():
-                          archive.write(path, path.as_posix())
-          PY
-          python -m pip freeze > validation/requirements.lock
-          python -m pip download --dest validation/wheels -r validation/requirements.lock
-      - uses: actions/upload-artifact@v4
-        if: always() && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-validation'))
-        with:
-          name: source-layout-full-suite-results
-          path: validation
-          retention-days: 7
-
-  web:
-    name: Web contract, browser tests and build
-    needs: lfs-cache
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-validation')
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          lfs: false
-      - uses: ./.github/actions/checkout-lfs
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13.14'
-          cache: pip
-          cache-dependency-path: |
-            requirements.txt
-            requirements/*.txt
-      - name: Install dependencies
-        run: |
-          python -m pip install -c requirements/development.constraints.txt -r requirements/web.txt pytest==9.1.1 playwright==1.55.0
-          npm ci --prefix web
-      - name: Verify schema, frontend and browser delivery
-        run: |
-          set -euo pipefail
-          mkdir -p validation-web/model-api
-          python scripts/export_web_schema.py
-          npm run types --prefix web
-          git diff --exit-code -- web/openapi.json web/src/api/generated.ts
-          node --experimental-strip-types --test web/tests/*.test.mjs
-          npm run build --prefix web
-          python -m playwright install --with-deps chromium
-          python scripts/web_model_settings_e2e.py --web-dist web/dist --evidence validation-web/model-api
-          python scripts/web_generation_e2e.py --web-dist web/dist --report validation-web/generation.json
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: source-layout-web-results
-          path: validation-web
-          retention-days: 7
-
-  web-package:
-    name: Windows Full and MCP package smoke
-    needs: lfs-cache
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-validation')
-    runs-on: windows-latest
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          lfs: false
-      - uses: ./.github/actions/checkout-lfs
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13.14'
-          cache: pip
-          cache-dependency-path: |
-            requirements.txt
-            requirements/*.txt
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - name: Install headless build dependencies
-        run: python -m pip install -c requirements/development.constraints.txt -r requirements.txt
-      - name: Build and verify MCP and Full packages, including extracted ZIPs
-        shell: pwsh
-        run: |
-          python scripts/build_release.py --component both --output "$env:RUNNER_TEMP/gxworks-release" --resource-root "$env:GITHUB_WORKSPACE"
-          if ($LASTEXITCODE -ne 0) { throw "Executable package build or smoke failed" }
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: windows-release-validation
-          path: ${{ runner.temp }}/gxworks-release/logs
-      - name: Verify Windows source startup contracts
-        run: python -m pytest -q tests/test_web_startup.py tests/test_web_source_entrypoints.py tests/test_mcp_product_launcher.py tests/test_model_profile_config.py tests/test_model_contract.py tests/test_architecture_boundaries.py
-
-  context-replay:
-    name: Typed context and offline promptfoo replay
-    needs: lfs-cache
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-validation')
+    name: Public source and runtime contracts
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      HAYSTACK_TELEMETRY_ENABLED: 'false'
-      PROMPTFOO_DISABLE_TELEMETRY: '1'
-      PROMPTFOO_DISABLE_UPDATE: '1'
+      PYTHONUTF8: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      GXWORKS_AGENT_PRIVATE_ROOT: ${{ runner.temp }}/unavailable-private-inputs
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          lfs: false
-      - uses: ./.github/actions/checkout-lfs
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13.14'
@@ -248,28 +45,19 @@ jobs:
           cache-dependency-path: |
             requirements.txt
             requirements/*.txt
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Install pinned context/evaluation tools
-        run: |
-          python -m pip install -c requirements/development.constraints.txt -r requirements.txt
-          npm install --prefix "$RUNNER_TEMP/context-eval" --no-audit --no-fund promptfoo@0.123.1
-      - name: Test real typed views and Haystack retrieval
+      - name: Install source test dependencies
+        run: python -m pip install -c requirements/development.constraints.txt -r requirements/web.txt -r requirements/gxw-test.txt pytest
+      - name: Check source ownership and test selection
+        run: python -m pytest -q tests/test_source_layout.py tests/test_architecture_boundaries.py
+      - name: Verify public Owner Store and PWM resources
         run: >-
           python -m pytest -q
-          tests/test_optional_hardware_parameters.py
-          tests/test_analysis_design_rag.py
-          tests/test_agent_b_measurement.py
-          tests/test_intent_evidence_handoff.py
-          --junitxml=validation-context/targeted.xml
-      - name: Replay the real call path with recorded providers (no network)
-        run: |
-          python scripts/context_replay.py --output validation-context/replay.json
-          "$RUNNER_TEMP/context-eval/node_modules/.bin/promptfoo" eval -c evals/context-replay/promptfooconfig.yaml --no-cache -o validation-context/promptfoo.json
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: context-components-offline-results
-          path: validation-context
-          retention-days: 7
+          checks/test_owner_domain_selection.py
+          checks/test_structured_fact_merge_efficiency.py
+          checks/test_pwm_workflow.py
+          checks/test_pwm_source_pipeline.py
+      - name: Verify MCP paging and public schemas without collected GXW samples
+        run: >-
+          python -m pytest -q
+          tests/test_mcp_service.py tests/test_mcp.py tests/test_web_contract.py
+          -k 'paging or paged or complete_read or multi_page or cursor or business_result or largecoverage or openapi or schema'

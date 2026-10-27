@@ -772,11 +772,11 @@ def test_execution_predicates_recompute_after_confirmed_io_edits_and_deletion():
 
 
 def test_execution_compact_and_full_share_one_execution_contract_and_keep_evidence(monkeypatch):
+    from application.generation_wire import CONTEXT_REFERENCE_HELP
     from application.confirmed_generation_context import (
         GENERATION_EXECUTION_POLICY, GENERATION_EXECUTION_POLICY_VERSION, generation_execution_prompt)
-    from application.generation_agent import _build_agent_b_prompt
+    from application.generation_agent import _build_agent_b_prompt, _compact_wire_renderer
     from application.generation_context import build_generation_instructions
-    from shared.model_context import technical_context_text
     spec = old_confirmed_spec()
     original = copy.deepcopy(spec)
     calls = []
@@ -784,21 +784,26 @@ def test_execution_compact_and_full_share_one_execution_contract_and_keep_eviden
     def retrieve(*args, **kwargs):
         calls.append((args, kwargs))
         return evidence
-    context = build_confirmed_generation_context(spec, "FX3U", knowledge_builder=retrieve)
+    context = build_confirmed_generation_context(spec, "FX3U", knowledge_builder=retrieve,
+        wire_renderer=_compact_wire_renderer('FX3U'))
     prompt = _build_agent_b_prompt(context.confirmed_spec, "FX3U", context=context)
     assert len(calls) == 1  # constructing compact prompt must not retrieve again
     expected = generation_execution_prompt(context.confirmed_spec, evidence_text=context.knowledge_context)
-    assert prompt.endswith(expected) and prompt.count(GENERATION_EXECUTION_POLICY) == 1
-    assert technical_context_text(evidence) in prompt and spec == original
+    assert prompt.endswith(expected + CONTEXT_REFERENCE_HELP) and prompt.count(GENERATION_EXECUTION_POLICY) == 1
+    def wire_knowledge(packet):
+        from tests.test_context_compiler import wire_context
+        return wire_context(packet['messages'])['knowledge']
+    expected_knowledge = [{'text': 'An intact technical fact block.'}]
+    assert wire_knowledge(context.wire_packet) == expected_knowledge and spec == original
     full = build_generation_instructions("generate", plc_model="FX3U", confirmed_context=spec,
         knowledge_builder=retrieve, profile_builder=lambda *a, **k: "",
         prompt_builder=lambda *a, **k: "existing full protocol")
     assert len(calls) == 2  # one retrieval per adapter, no extra planning/model pass
-    assert full.endswith(expected) and full.count(GENERATION_EXECUTION_POLICY) == 1
+    assert full.endswith(expected + CONTEXT_REFERENCE_HELP) and full.count(GENERATION_EXECUTION_POLICY) == 1
     assert 'NO 在位=1时导通，NC 在位=0时导通' in prompt
     assert 'NO 在位=1时导通，NC 在位=0时导通' in full
     assert '现场接线不直接决定程序触点' in full
-    assert technical_context_text(evidence) in full and spec == original
+    assert wire_knowledge(full.wire_packet) == expected_knowledge and spec == original
     assert '"run_permit_when":"NO X1"' in full
     assert context.handoff["generation_execution_policy"] == GENERATION_EXECUTION_POLICY_VERSION
 
@@ -847,6 +852,7 @@ def test_execution_current_snapshot_is_not_cached_or_written_back():
 
 @pytest.mark.parametrize("context_key", ["intent_context", "engineering_context"])
 def test_legacy_declarations_deliver_named_bit_values_to_both_generation_adapters(context_key):
+    from application.generation_wire import CONTEXT_REFERENCE_HELP
     from application.confirmed_generation_context import generation_execution_prompt
     from application.generation_agent import _build_agent_b_prompt
     from application.generation_context import build_generation_instructions
@@ -873,7 +879,8 @@ def test_legacy_declarations_deliver_named_bit_values_to_both_generation_adapter
     full_prompt = build_generation_instructions("generate", plc_model="FX3U", confirmed_context=spec,
         knowledge_builder=lambda *a, **k: "", profile_builder=lambda *a, **k: "",
         prompt_builder=lambda *a, **k: "full protocol")
-    assert compact_prompt.endswith(expected) and full_prompt.endswith(expected)
+    assert compact_prompt.endswith(expected + CONTEXT_REFERENCE_HELP)
+    assert full_prompt.endswith(expected + CONTEXT_REFERENCE_HELP)
     assert spec == original
     assert project_confirmed_specification(context.confirmed_spec) == context.confirmed_spec
     canonical = project_confirmed_specification(canonicalize_confirmed_spec(spec))

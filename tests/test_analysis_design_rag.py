@@ -72,7 +72,29 @@ def test_workflow_router_marks_analysis_without_embedding_architecture_catalog()
     assert "Control architecture search" not in prompt
 
 
-def test_bundled_design_knowledge_is_injected_through_production_analysis_path():
+@pytest.fixture
+def design_index(tmp_path, monkeypatch):
+    """Exercise the real SQL design lane with authored, redistributable input."""
+    import sqlite3
+    from contextlib import closing
+    from knowledge import core, index_access
+    path = tmp_path / 'design.sqlite'
+    with closing(sqlite3.connect(path)) as connection, connection:
+        connection.execute('CREATE TABLE chunks (id TEXT, text TEXT, section TEXT, '
+            'manual_id TEXT, manual_type TEXT, chunk_type TEXT, manual_priority INTEGER, '
+            'plc_models TEXT, task_types TEXT)')
+        connection.execute('INSERT INTO chunks VALUES (?,?,?,?,?,?,?,?,?)', (
+            'synthetic-design', json.dumps({'content_origin': 'authored_fact', 'kind': 'design',
+                'target': 'sequential', 'value': {'summary':
+                    'FX3U 三个工位依次执行，多阶段顺序和延时。控制架构方案设计合成输入。'}}, ensure_ascii=False),
+            '控制架构', 'curated_control_design', 'curated_design', 'design_pattern', 1, 'FX3U', 'analysis'))
+    monkeypatch.setattr(index_access, 'index_path', lambda: path)
+    core._close_thread_connection()
+    yield path
+    core._close_thread_connection()
+
+
+def test_bundled_design_knowledge_is_injected_through_production_analysis_path(design_index):
     query = "FX3U 三个工位依次执行，包含多阶段顺序和延时，应该如何组织控制架构"
     context = api._build_knowledge_context(
         query,
@@ -87,7 +109,7 @@ def test_bundled_design_knowledge_is_injected_through_production_analysis_path()
     assert "Retrieved-knowledge precedence" not in context
 
 
-def test_design_chunks_are_task_scoped_at_the_retriever_boundary():
+def test_design_chunks_are_task_scoped_at_the_retriever_boundary(design_index):
     query = "FX3U 三个工位依次执行，包含多阶段顺序和延时"
     analysis = knowledge_retriever.retrieve_design_knowledge(
         query,

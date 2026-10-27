@@ -288,7 +288,10 @@ def test_generation_retrieval_has_no_character_or_token_budget():
 
 
 def test_capability_coverage_manifest_is_current():
-    from tools.audit_capability_coverage import audit_coverage
+    from tools.audit_capability_coverage import audit_coverage, DEFAULT_MANIFEST
+
+    if not DEFAULT_MANIFEST.is_file():
+        pytest.skip('private capability acceptance manifest is unavailable')
 
     report = audit_coverage()
     assert report["ok"], "\n".join(report["failures"])

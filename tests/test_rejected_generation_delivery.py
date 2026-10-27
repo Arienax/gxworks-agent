@@ -69,6 +69,10 @@ def test_diagnostic_csv_keeps_target_regardless_of_local_profile(tmp_path, monke
         observed.append(kwargs.get('plc_model'))
         return original(*args, **kwargs)
     monkeypatch.setattr(export, 'generate_gx_works2_csv', generate)
+    if not available:
+        # Missing profiles are an environment condition, not a permanent CPU ban.
+        import plc.validation as validation
+        monkeypatch.setattr(validation, 'SUPPORTED_PLC_MODELS', validation.SUPPORTED_PLC_MODELS - {cpu})
     if available:
         assert normalize_plc_model(cpu) == cpu
     else:
