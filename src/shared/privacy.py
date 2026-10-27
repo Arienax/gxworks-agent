@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Credential and filesystem-field policy shared by public boundaries.
 
 Resource owners still select their public schema. These predicates do not turn
@@ -53,7 +56,8 @@ def provider_control_field(key, *, private=False, token_suffix=False):
 
 def private_field(key):
     name = str(key)
-    return name.startswith('_') or name.casefold() == 'private_payload' or credential_field(name)
+    return (name.startswith('_') or name.casefold() in {'private_payload', 'file_path', 'staging_dir', 'staging_directory'}
+            or credential_field(name))
 
 
 def filesystem_field(key):

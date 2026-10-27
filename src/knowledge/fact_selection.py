@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Task projection of authored facts, never a PLC admission or source rewrite.
 
 Select relevant roots, then preserve their full prerequisites, conditions and

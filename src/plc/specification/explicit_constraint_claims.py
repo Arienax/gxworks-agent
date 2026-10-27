@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Ground Agent-A reports of user-fixed low-level PLC constraints.
 
 Free-form language understanding belongs to Agent A. Core verifies only claim

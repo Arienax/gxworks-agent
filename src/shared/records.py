@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Identifier and resolved-path checks shared by durable record boundaries."""
 from pathlib import Path
 import re

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Explicit, agent-only bridge to the running loopback application service.
 
 The standalone adapter remains unchanged. This client knows only the two safe
@@ -60,6 +63,8 @@ class ApplicationServiceClient:
         self._token = token.strip()
         self.timeout = float(timeout)
         self._opener = opener or urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
+        from application.read_delivery import ReadDeliveryReceiver
+        self._read_receiver = ReadDeliveryReceiver()
 
     @classmethod
     def from_environment(cls, service_url, variable, **kwargs):
@@ -125,6 +130,19 @@ class ApplicationServiceClient:
         data = response.get("data")
         if not isinstance(data, dict):
             raise ServiceConnectionError("Local agent service returned an invalid tool result.")
+        from application.read_delivery import PAGED_READ_TOOLS
+        if name in PAGED_READ_TOOLS and not response.get('is_error'):
+            try:
+                if response.get('name') != name or response.get('call_id') != call_id:
+                    raise ValueError('Read response belongs to another call')
+                if json.loads(response.get('content') or '') != data:
+                    raise ValueError('Read response content differs from its data')
+                data = self._read_receiver.receive(name, data,
+                    binding=(name, project_id, version_id,
+                             {key: value for key, value in arguments.items() if key != 'cursor'}),
+                    cursor=arguments.get('cursor'))
+            except (ValueError, TypeError) as error:
+                raise ServiceConnectionError('Local agent service returned an invalid paged read result.') from error
         result = ToolResult(call_id, name, str(response.get("content") or ""), data, is_error=bool(response.get("is_error")))
         # Defense in depth: never trust a transport response with private IR.
         public = public_tool_result_data(result)

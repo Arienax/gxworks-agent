@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Compile reviewed PWM relations, never manual text, into a versioned profile.
 
 The JSON input is the source of semantic values. This module defines only the
@@ -7,12 +10,15 @@ are explicit; changing a source without rebuilding invalidates the snapshot.
 import copy
 import hashlib
 import json
+import sys
 from functools import lru_cache
 from pathlib import Path
 
-DIRECTORY = Path(__file__).resolve().parents[2] / 'resources/instructions/mitsubishi'
-SOURCE_PATH = DIRECTORY / 'pwm_reviewed_facts.json'
-GENERATED_PATH = DIRECTORY / 'pwm_contract.generated.json'
+from shared.paths import resource_path
+
+GENERATED_PATH = resource_path('instructions/mitsubishi/pwm_contract.generated.json')
+DIRECTORY = GENERATED_PATH.parent
+SOURCE_PATH = DIRECTORY / 'pwm_reviewed_facts.json'  # Offline compiler input, never read by load_contract.
 COMPILER_VERSION = 1
 
 
@@ -103,31 +109,42 @@ def compile_source(source):
             'source_fact_ids': [f['id'] for f in facts],
             'supplemental_fact_ids': [f['id'] for f in supplemental],
             'fact_digests': {f['id']: digest(f) for f in facts + supplemental}}
-    return {'schema_version': 1, 'compiler_version': COMPILER_VERSION,
+    return {'schema_version': 2, 'compiler_version': COMPILER_VERSION, 'reviewed_source': copy.deepcopy(source),
         'source_sha256': digest(source), 'binding': 'PWM-reviewed-v1:' + digest(source),
         'profiles': profiles, 'rule_catalog': [catalog[k] for k in sorted(catalog)],
         'coverage': 'named_bounded_software_subset_not_full_instruction_admission'}
 
 
 @lru_cache(maxsize=2)
-def _loaded(source_text, generated_text):
-    source = json.loads(source_text)
+def _loaded(generated_text):
     generated = json.loads(generated_text)
-    if canonical(compile_source(source)) != canonical(generated):
-        raise ValueError('generated profile does not match reviewed source')
+    required = {'schema_version', 'compiler_version', 'reviewed_source', 'source_sha256',
+                'binding', 'profiles', 'rule_catalog', 'coverage'}
+    if (not isinstance(generated, dict) or set(generated) != required
+            or generated['schema_version'] != 2 or generated['compiler_version'] != COMPILER_VERSION
+            or not isinstance(generated['reviewed_source'], dict)
+            or not isinstance(generated['profiles'], dict)
+            or not isinstance(generated['rule_catalog'], list)):
+        raise ValueError('Unsupported PWM runtime contract')
+    source = generated['reviewed_source']
+    if source.get('schema_version') != 1 or not isinstance(source.get('owners'), list):
+        raise ValueError('Missing PWM reviewed facts')
+    for owner in source['owners']:
+        profile = generated['profiles'][owner['opcode'] + ':' + owner['model']]
+        if profile['source_fact_ids'] != [fact['id'] for fact in owner['facts']]:
+            raise ValueError('Incomplete PWM owner facts')
     return source, generated
 
 
 @lru_cache(maxsize=2)
-def _path_loaded(source_path, source_stat, generated_path, generated_stat):
-    return _loaded(source_path.read_text(encoding='utf-8'), generated_path.read_text(encoding='utf-8'))
+def _path_loaded(generated_path, generated_stat):
+    return _loaded(generated_path.read_text(encoding='utf-8'))
 
 
 def load_contract():
     from plc.instruction_definition import UnknownInstructionSemantics
     try:
-        return _path_loaded(SOURCE_PATH, (SOURCE_PATH.stat().st_mtime_ns, SOURCE_PATH.stat().st_size),
-                            GENERATED_PATH, (GENERATED_PATH.stat().st_mtime_ns, GENERATED_PATH.stat().st_size))
+        return _path_loaded(GENERATED_PATH, (GENERATED_PATH.stat().st_mtime_ns, GENERATED_PATH.stat().st_size))
     except (OSError, ValueError, KeyError, TypeError) as exc:
         raise UnknownInstructionSemantics('pwm_reviewed_source_missing_or_drifted') from exc
 

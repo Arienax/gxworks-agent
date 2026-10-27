@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Read-only, version-bound navigation and review cards for the workbench."""
 from .projects import public
 from application.program_projection import explore_program, issue_cards

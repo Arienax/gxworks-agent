@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """A discrete sorting plant with independent device/workpiece state.
 
 PLC outputs drive timed device responses; sensors come from the resulting state.

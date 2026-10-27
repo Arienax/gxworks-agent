@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Process-bound engineering session and operation dispatch.
 
 Graph, labels, allocation, compilation and assignment inspectors own their native page workflows.

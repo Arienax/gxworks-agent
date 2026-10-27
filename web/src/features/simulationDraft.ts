@@ -1,3 +1,6 @@
+// Copyright 2026 Arienax
+// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 import type { Step, Suite, TestCase } from "./simulationTypes";
 
 /** Copy only the edited branch; saved drafts and other test cases stay immutable. */

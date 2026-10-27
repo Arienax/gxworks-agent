@@ -1,3 +1,6 @@
+// Copyright 2026 Arienax
+// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 // One-shot offline workspace save. Python owns source/declaration semantics.
 // Slots/layouts are bound to DZDataABS_Workspace 1.635.0.1 (32-bit).
 using System;
@@ -1181,6 +1184,7 @@ namespace PlcAi.NativeAdapter
         static int Main()
         {
             Console.InputEncoding = Encoding.UTF8; Console.OutputEncoding = new UTF8Encoding(false);
+            NativeExceptionTrace.Install();
             var json = new JavaScriptSerializer { MaxJsonLength = 32 * 1024 * 1024 };
             var adapter = new WorkspaceSourceSave(); IDictionary<string, object> request = null;
             string status = "failed", message = "", cpu = ""; int result = 1;
@@ -1221,10 +1225,14 @@ namespace PlcAi.NativeAdapter
                 try { adapter.Dispose(); }
                 catch (Exception error) { status = "failed"; result = 1; message = "native_cleanup_failed: " + error.Message; }
             }
+            NativeExceptionTrace.Flush("status=" + status + ";compile="
+                + (adapter.Validation == null ? "not_requested" : Convert.ToString(adapter.Validation["compile_status"]))
+                + ";records=" + NativeExceptionTrace.Count);
             Console.WriteLine(json.Serialize(new { protocol_version = WorkspaceBusinessProtocol.Version, status = status, message = message, native_version = NativeVersion,
                 cpu = cpu,
                 compile = adapter.Validation == null ? "not_requested" : adapter.Validation["compile_status"],
                 check = adapter.Validation == null ? "not_requested" : adapter.Validation["check_status"],
+                exception_trace = NativeExceptionTrace.Enabled ? NativeExceptionTrace.Count : -1,
                 validation = adapter.Validation, creation = adapter.CreatedSource, calls = adapter.Calls }));
             return result;
         }

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Stream a reviewed schema 1/2 bundle into a non-release owner store and audit it.
 
 No full-document json.load or corpus-wide Python catalog. Exact pools use SQLite.
@@ -18,7 +21,9 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / 'src'))
-from knowledge.runtime_fact_publication import OwnerStoreWriter, project_language_features
+from knowledge.runtime_fact_publication import (
+    OwnerStoreWriter, OWNER_STORAGE_LAYOUTS, owner_storage_options, project_language_features,
+)
 from knowledge.fact_corpus import project_definition
 from plc.instruction_owner_store import MANIFEST_NAME
 from tools.audit_runtime_fact_package import audit_owner_store
@@ -47,7 +52,8 @@ def _ledger_line(stream, value):
 
 
 def _build_owner_store(input_path, output_dir, *, max_unit_bytes=64 * 1024 * 1024,
-                       project_raw=False, private_audit_dir=None, progress=None):
+                       project_raw=False, private_audit_dir=None, progress=None,
+                       storage_layout='current'):
     started = time.perf_counter()
     progress = progress if progress is not None else {}
     progress['phase'] = 'input_inspection'
@@ -118,14 +124,14 @@ def _build_owner_store(input_path, output_dir, *, max_unit_bytes=64 * 1024 * 102
             'corpus_kind': 'authored_plc_facts_v1', 'fact_bundle_version': 'strict-owner-projection:' + version}
         generated_version = True
     output_dir.mkdir(parents=True, exist_ok=True)
-    database = output_dir / 'plc_facts.sqlite'
+    database = output_dir / 'instruction_owners.sqlite'
     manifest = output_dir / MANIFEST_NAME
     pending_manifest = output_dir / 'instruction_definitions.manifest.pending.json'
     audit_path = output_dir / 'owner-store-audit.json'
     receipt_path = output_dir / 'owner-store-build-receipt.json'
     if any(path.exists() for path in (database, manifest, pending_manifest, audit_path, receipt_path)):
         raise ValueError('Use a new output directory; existing resources are never overwritten')
-    writer = OwnerStoreWriter(database, metadata, field_pooling=True)
+    writer = OwnerStoreWriter(database, metadata, **owner_storage_options(storage_layout))
     ledger = None
     withheld_reasons = Counter()
     raw_facts = projected_facts = withheld_facts = changed_owners = published_features = 0
@@ -227,12 +233,13 @@ def _build_owner_store(input_path, output_dir, *, max_unit_bytes=64 * 1024 * 102
 
 
 def build_owner_store(input_path, output_dir, *, max_unit_bytes=64 * 1024 * 1024,
-                      project_raw=False, private_audit_dir=None):
+                      project_raw=False, private_audit_dir=None, storage_layout='current'):
     """Build a candidate; preserve failures privately without overwriting files."""
     progress = {'phase': 'input_inspection', 'owners_processed': 0}
     try:
         return _build_owner_store(input_path, output_dir, max_unit_bytes=max_unit_bytes,
-            project_raw=project_raw, private_audit_dir=private_audit_dir, progress=progress)
+            project_raw=project_raw, private_audit_dir=private_audit_dir, progress=progress,
+            storage_layout=storage_layout)
     except Exception as error:
         # This is an optional private diagnostic, not a publication receipt.
         # Never delete failed artifacts, overwrite an earlier failure, or write
@@ -258,6 +265,8 @@ def main():
     parser.add_argument('--input', type=Path, required=True)
     parser.add_argument('--output-dir', type=Path, required=True)
     parser.add_argument('--max-unit-mib', type=int, default=64)
+    parser.add_argument('--storage-layout', choices=['current', *OWNER_STORAGE_LAYOUTS],
+                        default='current', help='Physical storage layout; independent of the semantic bundle revision')
     parser.add_argument('--project-raw', action='store_true', help='Explicitly apply existing strict publication projection; preserve private withheld evidence separately')
     parser.add_argument('--private-audit-dir', type=Path)
     args = parser.parse_args()
@@ -265,7 +274,8 @@ def main():
         parser.error('--max-unit-mib must be positive')
     try:
         receipt = build_owner_store(args.input, args.output_dir, max_unit_bytes=args.max_unit_mib * 1024 * 1024,
-            project_raw=args.project_raw, private_audit_dir=args.private_audit_dir)
+            project_raw=args.project_raw, private_audit_dir=args.private_audit_dir,
+            storage_layout=args.storage_layout)
     except (ValueError, OSError, KeyError, TypeError, sqlite3.Error) as error:
         parser.exit(2, 'Migration failed without publishing a release: ' + str(error) + '\n')
     print(json.dumps({'owners_checked': receipt['owners_checked'], 'release_accepted': False,

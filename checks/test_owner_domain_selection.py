@@ -1,4 +1,5 @@
 """Startup-selected owner domains never borrow stale mixed-index owners."""
+from contextlib import closing
 import copy
 import json
 from pathlib import Path
@@ -6,21 +7,22 @@ import sqlite3
 import tempfile
 import unittest
 from unittest.mock import patch
+import pytest
 
 from knowledge import fact_corpus, index_access
 from knowledge.runtime_fact_publication import OwnerStoreWriter
 from plc.instructions import InstructionRegistry
 
 
-def build(root, flag):
+def build(root, flag, cpu='FX3U'):
     root.mkdir()
     metadata={'schema_version':1,'method':'instruction-material-compiler-v1',
               'corpus_kind':'authored_plc_facts_v1','fact_bundle_version':'synthetic:selection'}
     fact={'id':'sample','dimension':'effects.synthetic','value':{'flag':flag},
-          'scope':{'models':['FX3U'],'forms':['MOV']},'depends_on':[],
+           'scope':{'models':[cpu],'forms':['MOV']},'depends_on':[],
           'status':'source_verified','verification':'source_checked',
           'sources':[{'manual_id':'synthetic','revision':'A'}]}
-    entry={'vendor':'mitsubishi','opcode':'MOV','target_model':'FX3U','facts':[fact]}
+    entry={'vendor':'mitsubishi','opcode':'MOV','target_model':cpu,'facts':[fact]}
     db=root/'plc_facts.sqlite'; manifest=root/'instruction_definitions.manifest.json'
     writer=OwnerStoreWriter(db,metadata)
     writer.add_entry(entry);writer.finalize(manifest)
@@ -31,7 +33,7 @@ class OwnerDomainSelectionTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name)
         self.old,_=build(self.root/'old',False)
-        with sqlite3.connect(self.old) as connection:
+        with closing(sqlite3.connect(self.old)) as connection, connection:
             for kind,target,marker in [('device','D','DEVICE_MARKER'),('error','1234','ERROR_MARKER')]:
                 identity='synthetic:'+kind
                 metadata={'content_origin':'authored_fact','distribution_status':'fact_representation_reviewed',
@@ -84,9 +86,9 @@ class OwnerDomainSelectionTests(unittest.TestCase):
 
     def test_cross_database_id_collision_preserves_both_domains_and_exact_identity(self):
         from knowledge.core import retrieve_broad_knowledge
-        with sqlite3.connect(self.new) as connection:
+        with closing(sqlite3.connect(self.new)) as connection, connection:
             identity=connection.execute('SELECT id FROM chunks LIMIT 1').fetchone()[0]
-        with sqlite3.connect(self.old) as connection:
+        with closing(sqlite3.connect(self.old)) as connection, connection:
             connection.execute("DELETE FROM facts WHERE kind='instruction'")
             connection.execute('DELETE FROM chunks WHERE id=?',(identity,))
             packet={'kind':'device','target':'D','scope':{'models':['FX3U']},'value':{'marker':'PLC flag DEVICE_MARKER'}}
@@ -104,7 +106,7 @@ class OwnerDomainSelectionTests(unittest.TestCase):
 
     def test_legacy_source_followups_use_original_database_identity(self):
         from knowledge.instruction_facts import _related_units, _OFFICIAL
-        with sqlite3.connect(self.old) as connection:
+        with closing(sqlite3.connect(self.old)) as connection, connection:
             for name in ('manual_id','section','parent_chunk_id','revision','manual_type'):
                 connection.execute('ALTER TABLE chunks ADD COLUMN '+name+' TEXT')
             for identity,section,parent in [('original','seed','parent'),('child','other','original'),('parent','parent-section',None)]:
@@ -134,7 +136,7 @@ class OwnerDomainSelectionTests(unittest.TestCase):
         finally:connection.close()
 
     def test_explicit_connection_and_none_remain_authoritative(self):
-        with sqlite3.connect(self.old) as explicit:
+        with closing(sqlite3.connect(self.old)) as explicit, explicit:
             explicit.row_factory=sqlite3.Row
             rows=fact_corpus.resolve('instruction',['MOV'],plc_model='FX3U',connection=explicit)
             self.assertTrue(rows);self.assertIn('false',json.dumps(rows))
@@ -157,3 +159,116 @@ class OwnerDomainSelectionTests(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
+
+def test_thread_connections_and_derived_state_survive_domain_switches(tmp_path):
+    first, _ = build(tmp_path / 'first', False)
+    second, _ = build(tmp_path / 'second', True)
+    try:
+        a = index_access.connection(first, index_access.index_identity(first))
+        schema = index_access.schema(a)
+        index_access.cache_value(a, 'sample', 'first')
+        b = index_access.connection(second, index_access.index_identity(second))
+        assert b is not a
+        assert index_access.connection(first, index_access.index_identity(first)) is a
+        assert index_access.schema(a) is schema
+        assert index_access.cached_value(a, 'sample') == 'first'
+        assert index_access.cached_value(b, 'sample') is None
+    finally:
+        index_access.close_thread_connection()
+
+
+@pytest.mark.parametrize('owner_model,query_model', [
+    ('FX3U', 'FX3U'), ('FX3U', None), ('FX3U', 'FX3U/FX3UC'), ('L02', 'L02/L02-P')])
+@pytest.mark.parametrize('alias_table', ['fact_aliases', 'instruction_aliases'])
+def test_selected_owner_aliases_use_installed_alias_metadata_without_old_facts(
+        tmp_path, monkeypatch, owner_model, query_model, alias_table):
+    selected, manifest = build(tmp_path / 'selected', True, cpu=owner_model)
+    installed, _ = build(tmp_path / 'installed', False)
+    with closing(sqlite3.connect(installed)) as db, db:
+        if alias_table == 'fact_aliases':
+            from plc.target_identity import target_members
+            db.execute('CREATE TABLE fact_aliases(alias TEXT, opcode TEXT, alias_type TEXT, plc_models TEXT)')
+            for alias, opcode in [('synthetic transfer', 'MOV'), ('synthetic absent', 'ABSENT')]:
+                db.execute('INSERT INTO fact_aliases VALUES (?,?,?,?)',
+                           (alias, opcode, 'zh_alias', json.dumps(target_members(query_model or owner_model))))
+        else:
+            db.execute('CREATE TABLE instructions(id INTEGER, opcode TEXT)')
+            db.execute('CREATE TABLE instruction_aliases(alias TEXT, alias_type TEXT, instruction_id INTEGER)')
+            for identity, alias, opcode in [(1, 'synthetic transfer', 'MOV'), (2, 'synthetic absent', 'ABSENT')]:
+                db.execute('INSERT INTO instructions VALUES (?,?)', (identity, opcode))
+                db.execute('INSERT INTO instruction_aliases VALUES (?,?,?)', (alias, 'zh_alias', identity))
+    registry = InstructionRegistry()
+    registry.load_instruction_owner_store(manifest)
+    monkeypatch.setattr('plc.instructions.DEFAULT_INSTRUCTION_REGISTRY', registry)
+    monkeypatch.setattr(index_access, 'resource_path', lambda _: installed)
+    from knowledge.structured_facts import _declared_instruction_alias_targets
+    try:
+        found = _declared_instruction_alias_targets('synthetic transfer synthetic absent', plc_model=query_model)
+        assert [row['opcode'] for row in found] == ['MOV']
+        assert registry._definition_owner_store.stats()['hydrated_owner_count'] == 0
+        assert _declared_instruction_alias_targets('synthetic transfer', plc_model='Q00') == []
+        assert registry.definition_entry('MOV', cpu=owner_model)['facts'][0]['value']['flag'] is True
+    finally:
+        index_access.close_thread_connection()
+        registry._definition_owner_store.close()
+
+
+@pytest.mark.parametrize('separate_domains', [False, True])
+@pytest.mark.parametrize('error_type', [OSError, sqlite3.DatabaseError])
+def test_selected_payload_read_failure_closes_connections_and_reports_failure(
+        tmp_path, monkeypatch, separate_domains, error_type):
+    from knowledge import core
+    selected, manifest = build(tmp_path / 'selected', True)
+    installed, _ = build(tmp_path / 'installed', False) if separate_domains else (selected, manifest)
+    registry = InstructionRegistry()
+    registry.load_instruction_owner_store(manifest)
+    monkeypatch.setattr('plc.instructions.DEFAULT_INSTRUCTION_REGISTRY', registry)
+    monkeypatch.setattr(index_access, 'resource_path', lambda _: installed)
+    error = error_type('synthetic payload read failure')
+    def unreadable(*args, **kwargs):
+        raise error
+    monkeypatch.setattr('knowledge.record_projection.hydrate_result', unreadable)
+    connection = index_access.connection(selected, index_access.index_identity(selected))
+    try:
+        core.clear_query_cache()
+        with pytest.raises(core.KnowledgeReadError, match='could not be loaded') as raised:
+            core.retrieve_broad_knowledge('PLC flag', plc_model='FX3U', task_type='analysis')
+        assert raised.value.__cause__ is error
+        with pytest.raises(sqlite3.ProgrammingError, match='closed'):
+            connection.execute('SELECT 1')
+    finally:
+        index_access.close_thread_connection()
+        registry._definition_owner_store.close()
+
+
+def test_broad_hydrates_only_selected_owner_packets(tmp_path, monkeypatch):
+    from knowledge.core import retrieve_broad_knowledge, clear_query_cache
+    import knowledge.runtime_fact_publication as publication
+    metadata={'schema_version':1,'method':'instruction-material-compiler-v1',
+              'corpus_kind':'authored_plc_facts_v1','fact_bundle_version':'synthetic:lazy'}
+    database=tmp_path/'owners.sqlite';manifest=tmp_path/'instruction_definitions.manifest.json'
+    writer=OwnerStoreWriter(database,metadata)
+    for i in range(20):
+        opcode='OP'+str(i)
+        writer.add_entry({'vendor':'mitsubishi','opcode':opcode,'target_model':'FX3U','facts':[
+            {'id':'f','dimension':'effects.synthetic','value':{'marker':'PLC lazytoken','flag':True},
+             'scope':{'models':['FX3U'],'forms':[opcode]},'depends_on':[],
+             'status':'source_verified','verification':'source_checked',
+             'sources':[{'manual_id':'synthetic','revision':'A'}]}]})
+    writer.finalize(manifest)
+    registry=InstructionRegistry();registry.load_instruction_owner_store(manifest)
+    monkeypatch.setattr('plc.instructions.DEFAULT_INSTRUCTION_REGISTRY',registry)
+    monkeypatch.setattr(index_access,'resource_path',lambda _:database)
+    real=publication.hydrate_owner_packet;calls=[]
+    def hydrate(db, owner):
+        calls.append(owner)
+        return real(db, owner)
+    monkeypatch.setattr(publication,'hydrate_owner_packet',hydrate)
+    try:
+        clear_query_cache()
+        rows=retrieve_broad_knowledge('PLC lazytoken',plc_model='FX3U',task_type='analysis',top_k=2)
+        assert len(rows)==2 and len(calls)==2
+        assert all('"flag":true' in row['text'] for row in rows)
+    finally:
+        index_access.close_thread_connection();registry._definition_owner_store.close()

@@ -265,7 +265,15 @@ def test_required_delivery_files_are_checked_without_source_registration():
         assert run_check(root, required={'README.md'})[0] == 0
 
 
-CASES = (test_new_source_and_regressions_need_no_manifest,
+def test_manual_review_tools_remain_private_without_banning_authored_tools():
+    for name in ('tools/fact_new_review.py', 'tools/fbd_fact_review.py', 'tools/build_fact_knowledge.py'):
+        assert exclusion_reason(name)
+    assert exclusion_reason('tools/runtime_definition_stream.py') is None
+    assert exclusion_reason('resources/instructions/mitsubishi/fbd_language_rules.json') is None
+
+
+CASES = (test_manual_review_tools_remain_private_without_banning_authored_tools,
+         test_new_source_and_regressions_need_no_manifest,
     test_research_and_temporary_outputs_are_rejected,
     test_material_folders_do_not_ban_product_modules,
     test_large_source_and_authored_media_are_allowed,

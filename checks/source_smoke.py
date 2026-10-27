@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Clean-source smoke: native templates and Web startup without vendor manuals."""
 from __future__ import annotations
 

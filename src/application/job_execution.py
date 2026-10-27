@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Execute frozen generation, planning and inspection jobs."""
 from __future__ import annotations
 import base64

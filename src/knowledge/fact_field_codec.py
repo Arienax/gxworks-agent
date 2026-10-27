@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Lossless field sharing for owner storage, not semantic fact aggregation.
 
 An integer identifies the exact pair (field name, JSON value). Owners, fact IDs,

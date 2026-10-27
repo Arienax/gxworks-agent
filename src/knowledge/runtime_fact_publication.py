@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Explicit, standalone owner-normalized runtime index (not the private builder).
 
 Each complete owner is stored once. Search rows contain tokens and references,
@@ -11,6 +14,23 @@ import sqlite3
 from pathlib import Path
 from knowledge.runtime_fact_projection import SOURCE_SERIALIZATION, VALUE_SERIALIZATION, resolve_fact_sources
 from knowledge.exact_search_storage import create_search_pool, insert_chunk
+
+
+OWNER_STORAGE_LAYOUTS = {
+    'source-pool': {'field_pooling': False, 'search_pooling': False, 'fact_rows': False},
+    'field-pool': {'field_pooling': True, 'search_pooling': False, 'fact_rows': False},
+    'fact-rows': {'field_pooling': True, 'search_pooling': True, 'fact_rows': True},
+}
+CURRENT_OWNER_STORAGE_LAYOUT = 'fact-rows'
+
+
+def owner_storage_options(layout='current'):
+    """Select physical transport independently of the semantic bundle revision."""
+    selected = CURRENT_OWNER_STORAGE_LAYOUT if layout == 'current' else layout
+    try:
+        return dict(OWNER_STORAGE_LAYOUTS[selected])
+    except KeyError as error:
+        raise ValueError('Unsupported owner storage layout: ' + str(layout)) from error
 
 
 _SCHEMA_SQL = '''

@@ -1,3 +1,6 @@
+// Copyright 2026 Arienax
+// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 import { useEffect, useId, useRef, useState } from "react";
 import { Plus, Check } from "lucide-react";
 import { api } from "../api/client";

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Shared, task-scoped routes for GX Works2 supporting knowledge.
 
 Weak software words are never indexed as bare derived entities. Their

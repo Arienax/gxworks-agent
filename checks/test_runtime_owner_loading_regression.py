@@ -1,4 +1,5 @@
 """Independent lazy-owner integrity, admission and isolation regressions."""
+from contextlib import closing
 import copy
 import hashlib
 import json
@@ -47,9 +48,9 @@ class RuntimeOwnerLoadingRegression(unittest.TestCase):
     def refresh_hash(self):
         self.change_manifest(lambda v:v['database'].update(bytes=self.db.stat().st_size,sha256=hashlib.sha256(self.db.read_bytes()).hexdigest()))
     def sql(self,query,args=()):
-        with sqlite3.connect(self.db) as conn:conn.execute(query,args)
+        with closing(sqlite3.connect(self.db)) as conn, conn:conn.execute(query,args)
     def rewrite_owner(self,mutate,*,packed=False):
-        with sqlite3.connect(self.db) as conn:
+        with closing(sqlite3.connect(self.db)) as conn, conn:
             key,text=conn.execute('SELECT owner,payload_json FROM runtime_definitions ORDER BY owner LIMIT 1').fetchone()
             value=json.loads(text)
             shared=any('field_refs' in f for f in value['value']['facts']) and not packed
@@ -142,7 +143,7 @@ class RuntimeOwnerLoadingRegression(unittest.TestCase):
     def test_hash_and_bundle_receipt_mismatches_are_rejected(self):
         original=self.manifest.read_text()
         self.change_manifest(lambda v:v['database'].update(sha256='0'*64))
-        with self.assertRaises(ValueError):OwnerDefinitionStore(self.manifest)
+        with self.assertRaises(ValueError):OwnerDefinitionStore(self.manifest, verify_integrity=True)
         self.manifest.write_text(original);self.change_manifest(lambda v:v.update(fact_bundle_version='different'))
         with self.assertRaises(ValueError):OwnerDefinitionStore(self.manifest)
     def test_pool_corruption_and_source_withdrawal_fail_closed(self):
@@ -159,10 +160,13 @@ class RuntimeOwnerLoadingRegression(unittest.TestCase):
         with self.assertRaises(ValueError):r.resolve_form('KNOWN',cpu='FX5U')
         with self.assertRaises(ValueError):r.definition_entry('KNOWN',cpu='FX5U')
     def test_symlink_database_and_manifest_are_rejected(self):
-        alias=self.root/'alias.manifest.json';alias.symlink_to(self.manifest)
-        with self.assertRaises(ValueError):OwnerDefinitionStore(alias)
-        real=self.root/'real.sqlite';self.db.rename(real);self.db.symlink_to(real)
-        with self.assertRaises(ValueError):OwnerDefinitionStore(self.manifest)
+        # Exercise the path classifier without requiring Windows symlink privileges.
+        alias=self.root/'alias.manifest.json'
+        actual=Path.is_symlink
+        with patch.object(Path,'is_symlink',lambda path: path == alias or actual(path)):
+            with self.assertRaises(ValueError):OwnerDefinitionStore(alias)
+        with patch.object(Path,'is_symlink',lambda path: path == self.db or actual(path)):
+            with self.assertRaises(ValueError):OwnerDefinitionStore(self.manifest)
 
     def test_unsealed_sqlite_sidecar_is_rejected(self):
         for suffix in ('-wal','-journal'):
@@ -177,6 +181,7 @@ class RuntimeOwnerLoadingRegression(unittest.TestCase):
         from knowledge.fact_selection import project_packet
         from knowledge.core import retrieve_broad_knowledge
         from knowledge import index_access
+        self.addCleanup(index_access.close_thread_connection)
         raw=fixture()
         root=raw['entries'][0]['facts'][1]
         root.update(dimension='parameters.1.range',value={
@@ -185,6 +190,11 @@ class RuntimeOwnerLoadingRegression(unittest.TestCase):
         for f in raw['entries'][0]['facts']:f['scope']['languages']=['ladder']
         db=self.root/'technical.sqlite'
         write_runtime_sqlite(intern_runtime_sources(raw,intern_values=True),db,field_pooling=True)
+        manifest=self.root/'technical.manifest.json'
+        write_owner_manifest(raw,db,manifest)
+        selected=registry();selected.load_instruction_owner_store(manifest)
+        self.addCleanup(selected._definition_owner_store.close)
+        self.enterContext(patch('plc.instructions.DEFAULT_INSTRUCTION_REGISTRY',selected))
         connection=sqlite3.connect(db);connection.row_factory=sqlite3.Row
         self.addCleanup(connection.close)
         for term in ('independent_guard_token','9973','microseconds','special_context_token'):

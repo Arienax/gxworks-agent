@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Synthetic regressions for the shared storage rules and their GXW boundary.
 
 These cases need no manual text, private sample or user project: every input is built

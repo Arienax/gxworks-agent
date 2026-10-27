@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """SFC child source, graph and diagnostic correspondence."""
 from __future__ import annotations
 from .diagnostic_events import EventIndex

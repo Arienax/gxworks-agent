@@ -1,0 +1,136 @@
+"""Source Web entrypoints and isolated settings diagnostics without npm or GX."""
+from pathlib import Path
+
+import pytest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_build_web_double_click_wrapper_is_thin_and_pauses_on_failure():
+    text = (ROOT / "build-web.bat").read_text(encoding="utf-8")
+    assert "scripts\\build_web_source.ps1" in text
+    assert 'if "%~1"=="" goto :args_done' in text
+    assert "for %%A in (%*)" not in text
+    assert "--frontend-only" in text
+    assert "--no-pause" in text
+    assert "build-web.log" in text
+    assert "pause" in text.lower()
+
+
+def test_source_build_script_prepares_python_runtime_by_default():
+    text = (ROOT / "scripts" / "build_web_source.ps1").read_text(encoding="utf-8-sig")
+    assert ".venv\\Scripts\\python.exe" in text
+    assert '"-3"' in text
+    assert "-m venv" in text
+    assert "requirements\\web.txt" in text
+    assert "-m pip install -r" in text
+    assert "import fastapi, uvicorn, openai, numpy, mcp" in text
+    assert "npm ci failed" in text
+    assert "npm run types failed" in text
+    assert "npm run build failed" in text
+    assert "Source Web runtime is ready. You can now run start-web.cmd." in text
+
+
+def test_start_web_resolves_source_or_locally_built_package():
+    text = (ROOT / "scripts" / "start_web.ps1").read_text(encoding="utf-8-sig")
+    assert '.venv\\Scripts\\python.exe' in text
+    assert 'dist\\GXWorks-Agent-Web\\GXWorks-Agent-Web.exe' in text
+    assert 'dist\\GXWorks-Agent-Full\\GXWorks-Agent-Web.exe' in text
+    assert '$backendKind = "source"' in text
+    assert '$backendKind = "built-package"' in text
+    assert '请先运行根目录 build-web.bat' in text
+
+
+def test_packaged_sdk_diagnostic_never_starts_web_or_gx(monkeypatch):
+    from scripts import web_entry
+    import model_runtime.provider as provider
+    monkeypatch.setattr(web_entry.sys, "argv", ["GXWorks-Agent-Web.exe", "--self-test-openai-sdk"])
+    calls = []
+    monkeypatch.setattr(provider, "sdk_runtime_self_test", lambda: calls.append("sdk") or True)
+    assert web_entry.run() == 0
+    assert calls == ["sdk"]
+
+
+
+def test_packaged_pwm_diagnostic_parses_the_installed_contract(monkeypatch, capsys):
+    import json
+    from scripts import web_entry
+    monkeypatch.syspath_prepend(str(ROOT / "scripts"))
+    import runtime_pwm_smoke
+    calls = []
+    monkeypatch.setattr(runtime_pwm_smoke, "check_pwm_runtime",
+                        lambda: calls.append("pwm") or {"status": "passed", "contract_matches_reviewed_facts": True})
+    monkeypatch.setattr(web_entry.sys, "argv", ["GXWorks-Agent-Web.exe", "--self-test-pwm"])
+    assert web_entry.run() == 0
+    assert calls == ["pwm"]
+    assert json.loads(capsys.readouterr().out)["status"] == "passed"
+
+
+def test_source_build_checks_knowledge_in_the_venv_not_global_python():
+    text = (ROOT/"scripts/build_web_source.ps1").read_text(encoding="utf-8-sig")
+    assert '& $venvPython (Join-Path $root "scripts\\web_entry.py") --self-test-knowledge' in text
+
+
+def test_knowledge_self_test_is_not_a_server_or_model_call(monkeypatch, capsys):
+    from scripts import web_entry
+    import knowledge.scope as scope
+    import model_runtime.provider as provider
+    monkeypatch.setattr(web_entry.sys, "argv", ["web", "--self-test-knowledge"])
+    monkeypatch.setattr(scope, "runtime_status", lambda:{"status":"available", "engine":"fixture"})
+    monkeypatch.setattr(provider, "get_active_provider", lambda: (_ for _ in ()).throw(AssertionError("no provider")))
+    assert web_entry.run() == 0
+    assert '"available"' in capsys.readouterr().out
+
+
+def test_settings_path_diagnostic_does_not_migrate_or_start_provider(tmp_path, monkeypatch, capsys):
+    import json
+    from scripts import web_entry
+    from storage import config
+    monkeypatch.setenv("PLC_AI_CONFIG_PATH", str(tmp_path / "untouched" / "config.json"))
+    monkeypatch.setattr(config, "migrate_user_settings", lambda **kw: (_ for _ in ()).throw(AssertionError("no migration")))
+    monkeypatch.setattr(web_entry.sys, "argv", ["web", "--settings-path-info"])
+    assert web_entry.run() == 0
+    report = json.loads(capsys.readouterr().out)
+    assert not report["migration_performed"] and not report["model_called"]
+    assert not (tmp_path / "untouched").exists()
+
+
+def test_settings_selftest_uses_only_disposable_state(monkeypatch, capsys):
+    import json
+    from scripts import web_entry
+    monkeypatch.setattr(web_entry.sys, "argv", ["web", "--self-test-settings"])
+    assert web_entry.run() == 0
+    assert json.loads(capsys.readouterr().out)["user_state_modified"] is False
+
+
+@pytest.mark.parametrize('component', ['mcp', 'full'])
+def test_release_notices_keep_working_demos_and_component_launchers(tmp_path, monkeypatch, component):
+    from scripts import release_notices
+    source = tmp_path / 'source'
+    source.mkdir()
+    for name in ('LICENSE', 'NOTICE', 'LICENSING.md', 'THIRD_PARTY_NOTICES.md',
+                 'README.md', 'README.zh-CN.md', 'README.ja.md', 'CHANGELOG.md',
+                 'start-web.cmd', 'gxworks-agent-mcp.cmd', 'SECURITY.md', 'ACCESSIBILITY.md'):
+        (source / name).write_text(f'{name}\nCopyright 2026 Arienax · 原作者\n![Demo](resources/assets/demo.gif)\n', encoding='utf-8')
+    (source / 'resources/assets').mkdir(parents=True)
+    (source / 'resources/assets/demo.gif').write_bytes(b'GIF89a')
+    (source / 'scripts').mkdir()
+    (source / 'scripts/start_web.ps1').write_text('launcher', encoding='utf-8')
+    package = tmp_path / 'package'
+    package.mkdir()
+    monkeypatch.setattr(release_notices, 'ROOT', source)
+    monkeypatch.setattr(release_notices.metadata, 'distributions', lambda: [])
+    release_notices.stage(package, component)
+    assert (package / 'gxworks-agent-mcp.cmd').is_file()
+    for name in ('LICENSE', 'NOTICE', 'LICENSING.md', 'THIRD_PARTY_NOTICES.md', 'SECURITY.md', 'ACCESSIBILITY.md'):
+        assert (package / name).read_bytes() == (source / name).read_bytes()
+    for name in ('README.md', 'README.zh-CN.md', 'README.ja.md'):
+        readme = (package / name).read_text(encoding='utf-8')
+        if component == 'mcp':
+            assert '(resources/assets/' not in readme
+            assert 'https://raw.githubusercontent.com/Arienax/gxworks-agent/main/resources/assets/demo.gif' in readme
+        else:
+            assert (package / 'resources/assets/demo.gif').read_bytes() == b'GIF89a'
+    assert (package / 'start-web.cmd').exists() == (component == 'full')
+    assert (package / 'resources/assets').exists() == (component == 'full')

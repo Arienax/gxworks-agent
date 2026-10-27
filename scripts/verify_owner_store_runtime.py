@@ -1,4 +1,7 @@
-"""Bounded, read-only v2/v3 runtime comparison in two fresh subprocesses.
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
+"""Bounded, read-only owner-store comparison in two fresh subprocesses.
 
 Never enables a candidate, loads a large gzip corpus, invokes a model/native PLC,
 or scans all owner facts. A passed result covers only the named sample set.
@@ -96,7 +99,8 @@ def _worker(manifest):
     db=store.database_path;before_db=_identity(db);_sealed(db)
     attach={'seconds':time.perf_counter()-started,'memory':process_memory(),'store':store.stats(),
             'typed_owner_count':registry.loaded_definition_owner_count}
-    # Store constructor has already streamed and checked the complete DB digest.
+    # Runtime attachment checks identity/structure and reads owners on demand.
+    # The explicit offline digest comparison runs after the selected requests.
     manifest_data=json.loads(manifest.read_text(encoding='utf-8'))
     semantics={'owner_count':store.owner_count,'menus':{},'owners':{},'constraints':[], 'language':{}}
     gaps=[];metrics={'attach':attach};typed_before=registry.loaded_definition_owner_count
@@ -184,7 +188,7 @@ def _worker(manifest):
                     'database_sha256':end_hash,'database_bytes':manifest_data['database']['bytes'],
                     'database_path_sha256':_hash(str(db)),'manifest_path_sha256':_hash(str(manifest)),'database_file_identity':list(before_db[:2]),
                     'runtime_serialization':dict(store._db.execute('SELECT key,value FROM meta')).get('runtime_serialization')},
-                'input_unchanged':True,'hash_verified_on_attach':True,'hash_verified_after_requests':True,'readonly_connections':True,'sidecars_absent':True}
+                'input_unchanged':True,'hash_verified_on_attach':False,'hash_verified_after_requests':True,'readonly_connections':True,'sidecars_absent':True}
     finally:
         store.close()
 
@@ -229,7 +233,7 @@ def verify(source_manifest,candidate_manifest):
         'limitations':['Representative runtime acceptance only; not all owner facts are hydrated. Same manifest/database is unverified.',
             'Language aliases/model filtering are checked, not BM25/FTS ranking. Fingerprints cover the listed modules and seed files.',
             'Constraint statuses cover selected rule roots and complete dependency closures, not whole instruction completeness.',
-            'Fresh Python processes, not flushed OS/disk caches; attach includes complete database hash verification.',
+            'Fresh Python processes, not flushed OS/disk caches; offline database hash verification follows the selected requests.',
             'Store counters are cumulative read events, not distinct owners or total operating-system I/O.',
             'Windows working-set counters are not Linux RSS and are reported under different names.',
             'No native PLC/compiler/model invocation, deployment change, or new hardware support claim.']}

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Normal specification -> explicit automatic trace -> public bounded entry."""
 import copy
 import pathlib
@@ -16,7 +19,7 @@ from plc.specification.approach import normalize_approach
 from plc.specification.behavior import normalize_construction_plan
 from plc.specification.confirmed import validate_spec_draft
 from simulator.bounded import check_confirmed_behavior, finite_behavior_traces
-from test_pwm_execution import context, ladder
+from checks.test_pwm_execution import context, ladder
 
 
 def specification(cpu='FX5U'):

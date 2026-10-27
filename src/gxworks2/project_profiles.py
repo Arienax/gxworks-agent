@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """GX Works2 1.635 native New-dialog targets, including merged menu options.
 
 This is native project selection metadata, not instruction/device policy.

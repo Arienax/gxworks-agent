@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Target-specific instruction applicability and operand constraints.
 
 This lane overlays a selected CPU/model on vendor-level operand semantics. It

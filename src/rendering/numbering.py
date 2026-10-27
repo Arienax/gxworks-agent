@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Display-only ladder rung numbering for legacy program JSON.
 
 Legacy projects use ``rung_id`` as a stable merge and report anchor.  It is

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Offline bounded owner iteration for literal schema 1/2 definition bundles.
 
 This is a transport reader, not a semantic projection or support classifier.

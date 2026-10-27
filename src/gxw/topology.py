@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Named semantic connections to the existing source-bound object editor.
 
 Initial scope is additive, with an explicit call order. Imported geometry stays

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Low-latency broad retrieval for the bundled PLC knowledge index.
 
 Explicit PLC facts are resolved by :mod:`knowledge.structured_facts`. Broad
@@ -619,7 +622,7 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
 
     for fallback_rank, reference in enumerate(metadata_refs):
         row = rows.get((reference["kind"], str(reference["value"])))
-        result = _chunk_result(row, meta, path, plc_model, task_type, connection=connection)
+        result = _chunk_result(row, meta, path, plc_model, task_type, connection=connection, hydrate=False)
         merge_candidate(
             result,
             reference["match_type"],
@@ -629,14 +632,14 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
 
     for kind, value, entity, entity_rank in exact_refs:
         row = rows.get((kind, str(value)))
-        result = _chunk_result(row, meta, path, plc_model, task_type, connection=connection)
+        result = _chunk_result(row, meta, path, plc_model, task_type, connection=connection, hydrate=False)
         if result is None:
             continue
         merge_candidate(result, "entity", entity, entity_rank)
 
     for kind, value, rank, bm25_score in fts_refs:
         row = rows.get((kind, str(value)))
-        result = _chunk_result(row, meta, path, plc_model, task_type, connection=connection)
+        result = _chunk_result(row, meta, path, plc_model, task_type, connection=connection, hydrate=False)
         if result is None:
             continue
         coverage, matched_terms = _fts_match_quality(query, result, bm25_score)
@@ -656,7 +659,7 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
 
     for chunk_id, cosine, rank in dense_refs:
         row = rows.get(("id", str(chunk_id)))
-        result = _chunk_result(row, meta, path, plc_model, task_type, connection=connection)
+        result = _chunk_result(row, meta, path, plc_model, task_type, connection=connection, hydrate=False)
         if result is None:
             continue
         merge_candidate(
@@ -871,6 +874,25 @@ def _retrieve_cached(identity, query, plc_model, task_type, top_k, char_budget, 
     return _freeze_results(results)
 
 
+class KnowledgeReadError(RuntimeError):
+    """Selected records exist, but their technical payload could not be read."""
+
+
+def _hydrate_selected(records):
+    from knowledge.record_projection import hydrate_result
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+    try:
+        for result in records:
+            if result.get('_pending_hydration'):
+                path = (DEFAULT_INSTRUCTION_REGISTRY.selected_owner_database_path()
+                        if result.get('retrieval_domain') == 'selected_owner' else index_access.index_path())
+                hydrate_result(result, _connection(path, _index_identity(path)))
+    except (OSError, sqlite3.Error, TypeError, ValueError, KeyError, IndexError) as error:
+        _close_thread_connection()
+        raise KnowledgeReadError('Selected knowledge records could not be loaded') from error
+    return records
+
+
 def retrieve_broad_knowledge(
     query,
     plc_model="FX3U",
@@ -941,12 +963,11 @@ def retrieve_broad_knowledge(
                 for rank, result in enumerate(lane):
                     result['domain_rank'] = rank
                     result['retrieval_domain'] = domain
-                    result['score'] = round(1.0 / (_RRF_K + rank + 1.0), 8)
                 lanes.append(lane)
             ordered = sorted([item for lane in lanes for item in lane],
-                key=lambda item: (item['domain_rank'],
-                    0 if item['retrieval_domain'] == 'selected_owner' else 1, str(item.get('id',''))))
-            return _select_ranked(ordered, normalized_top_k)
+                key=lambda item: (0 if 'entity' in item.get('retrieval_signals', ()) else 1,
+                    -float(item.get('score', 0)), -float(item.get('query_coverage', 0)), str(item.get('id',''))))
+            return _hydrate_selected(_select_ranked(ordered, normalized_top_k))
         except (OSError, sqlite3.Error, TypeError, ValueError, KeyError, IndexError):
             _close_thread_connection()
             return []
@@ -968,7 +989,7 @@ def retrieve_broad_knowledge(
         _close_thread_connection()
         return []
     try:
-        return json.loads(frozen)
+        return _hydrate_selected(json.loads(frozen))
     except (TypeError, ValueError):
         return []
 

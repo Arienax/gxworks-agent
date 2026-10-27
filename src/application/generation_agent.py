@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """One compact ladder candidate from raw Direct input or a confirmed specification.
 
 The optional Agent A workflow still supplies only its confirmed projection to B.

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Opt-in, fixed construction examples built with the canonical PLC IR.
 
 This is a prompt-only experiment. Example devices never enter the project spec,

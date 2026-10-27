@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Canonical model-message rendering for generation context budgeting.
 
 This module owns only the model-visible message envelope. Engineering projection,
@@ -38,9 +41,22 @@ def render_context_checkpoint(checkpoint):
     )
 
 
+CONTEXT_REFERENCE_HELP = (
+    '\nStructured context can contain {"$ref":"#/path","$context_reference":true}. '
+    'This references the complete object at that JSON Pointer in the same context document. '
+    'Resolve it as that object; it is not omitted or missing information. '
+    'Ordinary JSON Schema $ref keeps its schema-local meaning.'
+)
+
+
+def context_system_prompt(prompt):
+    text = str(prompt or '')
+    return text if CONTEXT_REFERENCE_HELP.strip() in text else text + CONTEXT_REFERENCE_HELP
+
+
 def render_wire_messages(system_prompt, history=()):
     """Return the canonical system/user/assistant messages sent to a provider."""
-    messages = [{"role": "system", "content": str(system_prompt or "")}]
+    messages = [{"role": "system", "content": context_system_prompt(system_prompt)}]
     for raw in history or ():
         if not isinstance(raw, Mapping):
             continue

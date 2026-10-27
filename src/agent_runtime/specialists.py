@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Version-bound, deterministic orchestration for PLC specialist agents.
 
 The specialists in this module are deliberately *advisory*.  They receive an

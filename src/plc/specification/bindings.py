@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Pure I/O answer binding. Identity, not fuzzy prose, owns an address.
 
 This is a legacy-input adapter, not a PLC intent inference engine. Explicit

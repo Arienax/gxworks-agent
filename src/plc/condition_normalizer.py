@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Conservative, model-free cleanup of generation-owned ladder conditions.
 
 This is not a PLC validator or an intent repair. Unknown forms stay unchanged;

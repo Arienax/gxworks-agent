@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Version-bound test and evidence/debug planning; execution requires approval."""
 import copy
 from contextlib import nullcontext

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Workspace-scoped execution consent, separate from validation and HTTP security.
 
 This policy never exposes a new tool or relaxes PLC validators. Directly

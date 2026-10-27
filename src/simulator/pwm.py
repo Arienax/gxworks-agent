@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Opt-in bounded PWM software peripheral, called by the production ScanMachine.
 
 This models command/state contracts, not electrical phase or native hardware.
@@ -78,21 +81,39 @@ class PWMPeripheral:
                         if type(value) is not int or not 0 <= value <= 65535:
                             raise UnknownInstructionSemantics('pwm_multiword_memory_unknown:' + word)
         request = validate_pwm_request(opcode, m.model,
-            _leaf(args[0], m.memory, bits=bits, signed=False, plc_model=m.model),
-            _leaf(args[1], m.memory, bits=bits, signed=False, plc_model=m.model),
+            _leaf(args[0], m.memory, bits=bits, signed=opcode == 'DPWM', plc_model=m.model),
+            _leaf(args[1], m.memory, bits=bits, signed=opcode == 'DPWM', plc_model=m.model),
             args[2], context)
         request['time_unit'] = context['pwm']['time_unit']
         return request
 
-    def preflight(self):
+    def preflight(self, owner_id=None):
         m = self.machine
         requests = {}
         channels, outputs = set(), set()
         reserved = set()
         for row in self.instruction_owners():
             owner = row['owner_id']
+            if owner_id is not None and owner != owner_id:
+                continue
             request = self.resolve_request(row['opcode'], row['operands'], owner)
             channel, output = request['channel'], request['output_device']
+            bindings = m.execution_context.get('pwm', {}).get('bindings')
+            base_binding = dict(m.execution_context.get('pwm', {}))
+            for peer in self.instruction_owners():
+                if peer['owner_id'] == owner:
+                    continue
+                if bindings is not None:
+                    if not isinstance(bindings, Mapping) or not isinstance(bindings.get(peer['owner_id']), Mapping):
+                        raise UnknownInstructionSemantics('pwm_instruction_binding_required:' + peer['owner_id'])
+                    peer_binding = {**base_binding, **bindings[peer['owner_id']]}
+                else:
+                    peer_binding = base_binding
+                peer_output = canonical_reference_device(peer_binding.get('output_device'))
+                if len(peer['operands']) == 3 and re.fullmatch(r'Y[0-7]', peer['operands'][2], re.I):
+                    peer_output = canonical_reference_device(peer['operands'][2])
+                if peer_binding.get('channel') == channel or peer_output == output:
+                    raise UnknownInstructionSemantics('pwm_resource_conflict:' + output)
             if channel in channels or output in outputs:
                 raise UnknownInstructionSemantics('pwm_resource_conflict:' + output)
             channels.add(channel); outputs.add(output)
@@ -121,9 +142,13 @@ class PWMPeripheral:
                 writes = {canonical_reference_device(address) for address in access[1]}
                 if reserved.intersection(writes):
                     raise UnknownInstructionSemantics('pwm_resource_conflict:' + ','.join(sorted(reserved.intersection(writes))))
-                if not access[1] and not (op in {'END', 'NOP', 'MPS', 'MRD', 'MPP', 'ANB', 'ORB', 'ANI', 'ORI'}
-                                         or re.fullmatch(r'(LD|AND|OR)(I|P|F|=|==|<>|>=|<=|>|<)?', op)):
-                    raise UnknownInstructionSemantics('pwm_peer_write_scope_unverified:' + op)
+                if not access[1]:
+                    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY, InstructionCategory
+                    spec = DEFAULT_INSTRUCTION_REGISTRY.resolve_source_form(op, len(instruction.get('args', ())), cpu=m.model)
+                    known_read_only = (spec is not None and not spec.write_indexes
+                        or spec is not None and spec.category in {InstructionCategory.CONDITION, InstructionCategory.BRANCH_CONTROL})
+                    if not known_read_only and op not in {'END', 'FEND', 'RET', 'NOP', 'MPS', 'MRD', 'MPP', 'ANB', 'ORB', 'INV', 'MEP', 'MEF'}:
+                        raise UnknownInstructionSemantics('pwm_peer_write_scope_unverified:' + op)
         return requests
 
     def _execute(self, opcode, args, enabled, location, *, parameter_values=None):
@@ -134,12 +159,17 @@ class PWMPeripheral:
             raise UnknownInstructionSemantics('pwm_operand_arity_unverified')
         if type(enabled) is not bool:
             raise UnknownInstructionSemantics('pwm_enable_unknown')
+        if not enabled and not any(state['owner_id'] == self.owner_id(location) for state in self.channels.values()):
+            return
         if type(m.timestamp_ms) not in (int, float) or not math.isfinite(m.timestamp_ms):
             raise UnknownInstructionSemantics('pwm_explicit_clock_required')
         if m._pwm_frame_timestamp_missing:
             raise UnknownInstructionSemantics('pwm_explicit_clock_required')
         owner_id = self.owner_id(location)
-        request = self.preflight()[owner_id]
+        prior = next((state for state in self.channels.values() if state['owner_id'] == owner_id), None)
+        if not enabled and prior is None:
+            return
+        request = prior['request'] if not enabled else self.preflight(owner_id)[owner_id]
         stop = m.memory.get('SM8034')
         if type(stop) is not bool:
             raise UnknownInstructionSemantics('pwm_stop_bit_unknown:SM8034')

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Headless, non-migrating project queries and one bounded file boundary."""
 from __future__ import annotations
 
@@ -5,6 +8,7 @@ import copy
 import json
 import mimetypes
 import re
+import uuid
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -54,6 +58,7 @@ class ProjectService:
         self.workspace = Path(workspace).expanduser().resolve()
         self.store = ProjectSession(base_dir=self.workspace, create=False)
         self.runtime = build_default_tool_runtime()
+        self.read_revision = uuid.uuid4().hex
         from application.program_inspection import ProgramInspectionService
         self.inspection = ProgramInspectionService()
 
@@ -223,7 +228,8 @@ class ProjectService:
         selected = version_id or project.get("active_version_id")
         version = self.raw_version(project_id, selected) if selected else None
         if requirement == 'model':
-            return build_tool_context(project, version=version, inspection=self.inspection)
+            return build_tool_context(project, version=version, inspection=self.inspection,
+                                      read_revision=self.read_revision)
         program = self.program(project_id, selected) if version and version.get("target_mode") == "ladder" else None
         if version and version.get("target_mode") == "ladder" and program is None:
             raise ProjectError("Selected ladder version has no readable program.")
@@ -236,6 +242,7 @@ class ProjectService:
         if self.raw_project(project_id) != project:
             raise ProjectError("Project changed during read; retry")
         return build_tool_context(project, version=version, program_ir=program,
+                                  read_revision=self.read_revision,
                                   ladder=ir_to_ladder(program) if program else None, fbd_baseline=fbd_baseline,
                                   native_snapshot=native_snapshot,
                                   st_text=st_text, sfc_graph=sfc_graph, inspection=self.inspection)

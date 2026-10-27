@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Source-bound edits and exact checkpoints for existing visible FBD graphs.
 
 No native calls or file writes. Initial offsets are handles for one frozen

@@ -5360,10 +5360,7 @@ export interface components {
              */
             context_schema_version: 3;
             delivery: components["schemas"]["ReadDelivery"];
-            /** Document */
-            document: {
-                [key: string]: components["schemas"]["JsonValue"];
-            };
+            document: components["schemas"]["ReadObjectReference"];
             /** Objects */
             objects: {
                 [key: string]: components["schemas"]["JsonValue"];
@@ -6320,6 +6317,11 @@ export interface components {
             }[] | null;
         } & {
             [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ReadObjectReference */
+        ReadObjectReference: {
+            /** $Ref */
+            $ref: string;
         };
         /** ReplayAssertion */
         ReplayAssertion: {

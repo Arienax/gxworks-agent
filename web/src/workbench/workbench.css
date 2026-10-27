@@ -156,6 +156,11 @@
 .popover-field { display: grid; gap: 6px; padding: 10px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); }
 .popover-field select { font-size: 12px; }
 .popover-footnote { display: flex; align-items: center; gap: 7px; padding: 8px 10px; color: var(--muted); font-size: 10px; }
+.about-dialog { display: grid; gap: 10px; font-size: 12px; }
+.about-dialog dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; margin: 0; padding: 10px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.about-dialog dt { color: var(--muted); font-size: 11px; }
+.about-dialog dd { display: flex; align-items: center; gap: 6px; margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.about-dialog dd a { display: inline-flex; align-items: center; gap: 6px; color: var(--accent, inherit); }
 
 /* The conversation has a readable measure independent of the canvas width. */
 .agent-pane { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; container: conversation / inline-size; }

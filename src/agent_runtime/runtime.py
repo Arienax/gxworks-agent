@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Shared deterministic tool boundary for desktop and external agents."""
 
 from __future__ import annotations
@@ -43,9 +46,9 @@ _DEBUG_TOOLS = frozenset({
 
 
 def _model_tool_value(name, value):
-    from application.read_delivery import PAGED_READ_TOOLS, DELIVERY_VERSION
-    if (name in PAGED_READ_TOOLS and isinstance(value, Mapping)
-            and (value.get('data', {}).get('delivery') or {}).get('version') == DELIVERY_VERSION):
+    from application.read_delivery import PAGED_READ_TOOLS, PreparedReadEnvelope
+    if (name in PAGED_READ_TOOLS and isinstance(value, PreparedReadEnvelope)
+            and value.get('tool') == name):
         # Produced only by the registry after the ordinary public projection.
         # A second generic projection would corrupt engineering map keys in
         # the object table and invalidate the measured final envelope.

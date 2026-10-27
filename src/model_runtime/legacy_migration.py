@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Legacy model-profile migration into the v3 capability runtime.
 
 Only this module should interpret the retired persisted fields:

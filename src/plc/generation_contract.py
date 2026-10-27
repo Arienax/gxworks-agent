@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Model-free ladder_v1 generation contract and safe specification projection.
 
 This describes the generation subset of the historical ladder interchange

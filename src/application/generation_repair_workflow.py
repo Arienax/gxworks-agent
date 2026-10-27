@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Prepare one bounded repair from an immutable rejected generation snapshot."""
 from dataclasses import dataclass
 from pathlib import Path

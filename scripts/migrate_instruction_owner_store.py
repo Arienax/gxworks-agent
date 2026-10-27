@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Migrate a sealed v2 owner store to a NEW v3 candidate; never enable it."""
 from __future__ import annotations
 import argparse
@@ -67,7 +70,7 @@ def migrate(source_manifest,output_dir):
                 value=json.loads(text)
                 if not isinstance(value,dict) or hashlib.sha256(_json(value).encode()).hexdigest()!=identity:
                     raise ValueError('Invalid content-addressed source/value catalog')
-        output.mkdir();database=output/'plc_facts.sqlite';phase='backup'
+        output.mkdir();database=output/'instruction_owners.sqlite';phase='backup'
         conn=sqlite3.connect(database);ro.backup(conn)
         conn.execute('PRAGMA trusted_schema=OFF');conn.execute('PRAGMA temp_store=FILE')
         conn.execute('PRAGMA cache_size=-4096');conn.execute('PRAGMA temp.cache_size=-2048')

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Isolated native source saves and checks; no UI or PLC session is used."""
 from __future__ import annotations
 
@@ -453,6 +456,74 @@ class NativeWorkspaceSourceSave(_NativeWorkspaceAdapter):
                 raise WorkspaceSaveError('原生保存输出未通过回读校验：' + str(error), observation) from error
 
 
+_VENDOR_INTERNAL_REPORT = 0x500c5150
+_VENDOR_INTERNAL_REPORT_TEXT = '0x500c5150'
+
+
+def _vendor_internal_fault_only(result):
+    """True when a rejected build reported nothing but the vendor catch-all literal.
+
+    That literal is written by the vendor's own catch-all funclets and carries no cause, so
+    a rejection made of it alone says the build stopped on an internal fault rather than on
+    anything in the source. Anything else — a source diagnostic, an unfinished diagnostic
+    set, an extra report code — is not this condition and must not be repeated.
+    """
+    compilation = result.get('compilation') if isinstance(result, dict) else None
+    if not isinstance(compilation, dict) or compilation.get('acceptance') != 'rejected':
+        return False
+    if compilation.get('diagnostics_complete') is not True:
+        return False
+    rows = compilation.get('diagnostics')
+    if not isinstance(rows, list) or not rows:
+        return False
+    codes = set()
+    for row in rows:
+        if not isinstance(row, dict) or row.get('kind') != 2 or type(row.get('code')) is not int:
+            return False
+        codes.add(row['code'])
+    return codes == {_VENDOR_INTERNAL_REPORT}
+
+
+def _observed_report_sequence(observation):
+    """The compile report codes this observation recorded, or None when it recorded none."""
+    validation = observation.get('validation') if isinstance(observation, dict) else None
+    events = validation.get('events') if isinstance(validation, dict) else None
+    if not isinstance(events, list):
+        return None
+    sequence = []
+    for event in events:
+        if not isinstance(event, dict) or event.get('operation') != 'CompilePublicReports':
+            continue
+        for report in event.get('reports') or []:
+            if isinstance(report, dict) and type(report.get('code')) is int:
+                sequence.append('0x%08x' % (report['code'] & 0xffffffff))
+    return sequence[:8] if sequence else None
+
+
+def _repeated_failure(error, retry):
+    """Re-raise a failed repeat with the first attempt's record attached.
+
+    The repeat can fail before any projection exists — a timeout, a spawn failure, a
+    response that cannot be read. Without this the caller would see one unexplained error
+    and no sign that an accepted-as-internal first attempt preceded it.
+    """
+    message = str(error)
+    if 'attempts=2' not in message:
+        message += '; attempts=2'
+    try:
+        repeated = type(error)(message, getattr(error, 'observation', None))
+    except TypeError:  # A future error type may not take (message, observation).
+        error.args = (message,)
+        repeated = error
+    # A save failure also carries the projection that made it narrow; keep everything the
+    # first error exposed apart from the message and observation, which are rebuilt here.
+    repeated.__dict__.update({name: value for name, value in vars(error).items() if name != 'observation'})
+    repeated.retry = dict(retry)
+    if isinstance(repeated.observation, dict):
+        repeated.observation.setdefault('retry', dict(retry))
+    return repeated
+
+
 class NativeWorkspaceValidation(_NativeWorkspaceAdapter):
     """Collect original compile/check observations, then interpret them in Core."""
 
@@ -463,13 +534,43 @@ class NativeWorkspaceValidation(_NativeWorkspaceAdapter):
             source['inspection'] = native_inspection_queries(raw, inspection)
         if os.name != 'nt' or not self.executable.is_file() or self.installation is None:
             raise WorkspaceValidationError('原生检查需要本地 GX Works2 离线工作区适配器；请先构建 workspace adapter。')
+        retry = None
+        while True:
+            try:
+                attempt, observation = self._validate_once(raw, source, timeout=timeout, save_output=_save_output,
+                                                           evidence=_evidence, retry=retry)
+            except WorkspaceSaveError as failure:
+                result = getattr(failure, 'validation', None)
+                if retry is None and _vendor_internal_fault_only(result):
+                    retry = {'reason': 'vendor_internal_fault', 'report': _VENDOR_INTERNAL_REPORT_TEXT,
+                             'attempts': 2, 'first_message': str(failure)[:400],
+                             'first_reports': (failure.observation.get('forensics') or {}).get('report_sequence')}
+                    continue
+                if retry is None:
+                    raise
+                raise _repeated_failure(failure, retry) from failure
+            except WorkspaceAdapterError as error:
+                if retry is None:
+                    raise
+                raise _repeated_failure(error, retry) from error
+            if retry is None and not _save_output and _vendor_internal_fault_only(attempt):
+                retry = {'reason': 'vendor_internal_fault', 'report': _VENDOR_INTERNAL_REPORT_TEXT,
+                         'attempts': 2, 'first_message': 'validate_project rejected with 0x500c5150',
+                         'first_reports': _observed_report_sequence(observation)}
+                continue
+            return attempt
+
+    def _validate_once(self, raw, source, *, timeout, save_output, evidence, retry):
+        """Run one native compile and save, and interpret it; `retry` labels a repeat."""
         with _native_workspace_directory(prefix='gxw-check-') as directory:
             root = Path(directory)
             (root / 'input.gxw').write_bytes(raw)
-            request = {'operation': 'compile_save_project' if _save_output else 'validate_project', 'protocol_version': 1,
+            request = {'operation': 'compile_save_project' if save_output else 'validate_project', 'protocol_version': 1,
                        'installation': str(self.installation), 'directory': str(root),
                        'owner_token': uuid.uuid4().hex, 'source': source}
             returncode, observation = _run_native_adapter(self.executable, request, root, timeout, WorkspaceValidationError)
+            if retry is not None:
+                observation['retry'] = dict(retry)
             validation = observation.get('validation')
             if not isinstance(validation, dict) or not isinstance(validation.get('events'), list):
                 raise WorkspaceValidationError('原生工作区没有返回检查过程记录。', observation)
@@ -480,18 +581,20 @@ class NativeWorkspaceValidation(_NativeWorkspaceAdapter):
                 result = project_native_validation(raw, observation, snapshots)
                 from gxw.project_metadata import project_gui_configuration
                 result['gui_configuration'] = project_gui_configuration(raw)
-                if inspection is not None:
+                if source.get('inspection') is not None:
                     from gxw.native_diagnostics import project_native_inspection
                     result['inspection'] = project_native_inspection(raw, observation, snapshots, result, source['inspection'])
                 result['adapter']['exit_code'] = returncode
+                if retry is not None:
+                    result['adapter']['retry'] = {'reason': retry['reason'], 'attempts': retry['attempts']}
                 if returncode and observation.get('status') != 'failed':
                     raise GXWFormatError('native collector exited unsuccessfully without a failed observation')
             except GXWFormatError as error:
                 raise WorkspaceValidationError('原生工作区检查结果无法绑定本次工程：' + str(error), observation) from error
-            if _evidence is not None:
-                _evidence['observation'] = observation
-                _evidence['snapshots'] = snapshots
-            if _save_output:
+            if evidence is not None:
+                evidence['observation'] = observation
+                evidence['snapshots'] = snapshots
+            if save_output:
                 output = root/'candidate.gxw'
                 if returncode or observation.get('status') != 'observed' or not output.is_file():
                     detail = observation.get('message') or (
@@ -501,11 +604,94 @@ class NativeWorkspaceValidation(_NativeWorkspaceAdapter):
                                     if type(report.get('code')) is int})
                     if codes:
                         detail += '; diagnostics=' + ','.join(f'0x{code & 0xffffffff:08x}' for code in codes)
+                    forensics = _native_failure_forensics(root, observation, result)
+                    observation['forensics'] = forensics
+                    sequence = forensics['report_sequence']
+                    if sequence:
+                        detail += '; reports=' + ','.join(sequence[:8]) + (',...' if len(sequence) > 8 else '')
+                    if retry is not None:
+                        detail += '; attempts=2'
                     failure = WorkspaceSaveError('原生编译保存未产生工程：' + detail, observation)
                     failure.validation = result
                     raise failure
-                return output.read_bytes(), result, observation, snapshots
-            return result
+                return (output.read_bytes(), result, observation, snapshots), observation
+            return result, observation
+
+
+def _bounded_directory(path, limit):
+    """List at most `limit` entries of one directory without following links."""
+    entries = []
+    try:
+        for entry in Path(path).iterdir():
+            if len(entries) >= limit:
+                break
+            try:
+                size = entry.stat(follow_symlinks=False).st_size
+            except OSError:
+                size = None
+            entries.append({'name': entry.name, 'bytes': size})
+    except OSError:
+        return None
+    return sorted(entries, key=lambda row: row['name'])
+
+
+def _native_failure_forensics(root, observation, result):
+    """Snapshot what a rejected native compile looked like from outside the vendor code.
+
+    A rejected native compile can carry only the vendor catch-all report 0x500c5150,
+    which names no cause: the vendor compiler raises and catches C++ exceptions for
+    ordinary failures and this code is the fixed literal its outer catch-all writes. The
+    snapshot therefore records only observable state of the failing call - the ordered
+    compiler reports, whether an exception trace was requested, what the isolated root and
+    the vendor temporary state held, and the remaining space. It never retries, delays,
+    reclassifies or suppresses a report code.
+    """
+    def code_text(code):
+        return f'0x{code & 0xffffffff:08x}'
+
+    report_sequence = []
+    reports = []
+    events = (observation.get('validation') or {}).get('events') or []
+    for event in events:
+        if not isinstance(event, dict) or event.get('operation') != 'CompilePublicReports':
+            continue
+        for report in event.get('reports') or []:
+            if not isinstance(report, dict) or type(report.get('code')) is not int:
+                continue
+            if len(reports) >= 32:
+                break
+            arguments = [row.get('text') for row in report.get('arguments') or []
+                         if isinstance(row, dict) and isinstance(row.get('text'), str)]
+            reports.append({'kind': report.get('kind'), 'code': code_text(report['code']),
+                            'arguments': arguments})
+            report_sequence.append(code_text(report['code']))
+    output = Path(root)/'candidate.gxw'
+    try:
+        output_bytes = output.stat().st_size if output.is_file() else None
+    except OSError:
+        output_bytes = None
+    local = os.environ.get('LOCALAPPDATA')
+    vendor = (Path(local)/'MITSUBISHI'/'SWnDN-GPPW2'/'Project'/'DZTempData') if local else None
+    system_temp = Path(os.environ.get('TEMP') or tempfile.gettempdir())
+    try:
+        free = shutil.disk_usage(root).free
+    except OSError:
+        free = None
+    # 0x500c5150 is the fixed literal the vendor catch-all writes when an unexpected
+    # exception escaped the build; it carries no cause and is not a source diagnostic.
+    failures = sorted(report['code'] for report in reports if report['kind'] == 2)
+    return {
+        'reports': reports,
+        'report_sequence': report_sequence,
+        'internal_fault': bool(failures) and failures == ['0x500c5150'],
+        'exception_trace_records': observation.get('exception_trace'),
+        'save_output_bytes': output_bytes,
+        'workspace_entries': _bounded_directory(root, 40),
+        'vendor_temporary_entries': _bounded_directory(vendor, 40) if vendor else None,
+        'system_temporary_entries': _bounded_directory(system_temp, 40) if system_temp else None,
+        'disk_free_bytes': free,
+        'acceptance': result.get('compilation', {}).get('acceptance'),
+        'public_check': result.get('public_check', {}).get('status')}
 
 
 def _validation_snapshots(root, events):

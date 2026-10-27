@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Correlate compile positions with the selected current source."""
 from __future__ import annotations
 from gxw.diagnostic_scope import (

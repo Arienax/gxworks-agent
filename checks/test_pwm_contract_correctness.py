@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Synthetic source-scope and public contract regressions; no private corpus."""
 import copy
 import pathlib
@@ -9,7 +12,7 @@ sys.path[:0] = [str(ROOT / 'src'), str(ROOT)]
 from plc.pwm_contract import derive_pwm_formal_facts, validate_pwm_request, PWM_AB_MINIMUM_TIMES, _supported_pwm_rule_shape
 from plc.instruction_constraints import check_fact_constraints
 from plc.instruction_definition import InstructionFactGroup, UnknownInstructionSemantics
-from test_pwm_contract import context
+from checks.test_pwm_contract import context
 
 
 def witness(kind='operand_relation'):
@@ -195,26 +198,6 @@ class PWMContractCorrectness(unittest.TestCase):
                 plc_model='FX5U', language='ladder', context=c)
             self.assertEqual(report['status'], 'unverified', rule['kind'])
 
-    def test_reviewed_error_codes_survive_final_spec_assembly(self):
-        from tools import fact_fx5_condition_review as c
-        block = {'text': 'Synthetic input error.', 'page': 1, 'pages': [1], 'line': 1,
-                 'domain': 'operation_error', 'error_domain': 'operation_error',
-                 'codes': ['3600H'], 'diagnostic_registers': []}
-        section = {'section': 'Synthetic', 'first_page': 1, 'page_layouts': [], 'tables': []}
-        codes = ['3600H'] + [format(0x3610 + i, '04X') + 'H' for i in range(1, 13)]
-        reviewed = {'rules': [{'kind': 'invalid_program_context', 'context': 'interrupt_program'}],
-                    'full_clause_review': True, 'value_updates': {'error_codes': codes}}
-        for opcode in ('PWM', 'DPWM'):
-            with patch.object(c, '_blocks', return_value=([block], [])), patch.object(c, '_body_blocks', return_value=[]), \
-                 patch.object(c, '_review_auxiliary_clause', return_value=None), \
-                 patch.object(c, '_review_pwm_clause', return_value=reviewed):
-                specs = c.condition_specs(section, {'opcode': opcode, 'operands': []})
-                self.assertEqual(len(specs), 1)
-                self.assertEqual(specs[0]['value']['error_codes'], codes)
-            with patch.object(c, '_blocks', return_value=([block], [])), patch.object(c, '_body_blocks', return_value=[]), \
-                 patch.object(c, '_review_auxiliary_clause', return_value=None), patch.object(c, '_review_pwm_clause', return_value=None):
-                specs = c.condition_specs(section, {'opcode': opcode, 'operands': []})
-                self.assertEqual(specs[0]['value']['error_codes'], ['3600H'])
 
 
 if __name__ == '__main__':

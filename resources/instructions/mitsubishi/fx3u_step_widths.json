@@ -2399,12 +2399,6 @@
         "scope": "FX3"
       }
     ],
-    "observation_scopes": {
-      "default": {
-        "scope": "FAMILY",
-        "evidence": "native encoding observation"
-      }
-    },
     "device_ranges": [
       {
         "devices": [
@@ -2429,7 +2423,7 @@
             "steps": 2
           }
         ],
-        "evidence": "FX programming manual JY997D16601-R section 7.16 device-range step table: direct S coil (OUT/SET/RST, S0-S4095) takes 2 steps"
+        "evidence": "Mitsubishi FX3U/FX3UC Programming Manual, Basic & Applied Instruction Edition (JY997D16601-R) section 7.16, printed page 219: OUT/SET/RST with a direct S0-S4095 target take 2 program steps. Confirmed by a complete native FX3U CSV sample (155 instructions, END at step 306) where the 16 direct-S coils take 2 steps."
       },
       {
         "devices": [
@@ -2459,7 +2453,7 @@
             "steps": 2
           }
         ],
-        "evidence": "FX programming manual JY997D16601-R section 7.16 device-range step table: S contact 1 step up to S1023, 2 steps from S1024"
+        "evidence": "Mitsubishi FX3U/FX3UC Programming Manual, Basic & Applied Instruction Edition (JY997D16601-R) section 7.16, printed page 219: an S contact is one step up to S1023 and two steps from S1024 to S4095. The low-address native sample (LD S0) only covers the first span, so the split is taken from the manual table."
       },
       {
         "devices": [
@@ -2497,7 +2491,7 @@
             "steps": 3
           }
         ],
-        "evidence": "FX programming manual JY997D16601-R section 7.16 device-range step table: direct normal M one/two/three steps below M1536 / to M3583 / to M7679"
+        "evidence": "Mitsubishi FX3U/FX3UC Programming Manual, Basic & Applied Instruction Edition (JY997D16601-R) section 7.16, printed page 219: a direct normal M target takes one step below M1536, two steps for M1536-M3583 and three steps for M3584-M7679; M8000 and above are special relays with their own span."
       },
       {
         "devices": [
@@ -2529,7 +2523,7 @@
             "steps": 3
           }
         ],
-        "evidence": "FX programming manual JY997D16601-R section 7.16 device-range step table: pulse form on a direct normal M 2 steps up to M3583, 3 from M3584"
+        "evidence": "Mitsubishi FX3U/FX3UC Programming Manual, Basic & Applied Instruction Edition (JY997D16601-R) section 7.16, printed page 219: a pulse form on a direct normal M target takes two steps up to M3583 and three steps from M3584, one step more than the level form of the same device."
       },
       {
         "devices": [
@@ -2559,7 +2553,7 @@
             "steps": 2
           }
         ],
-        "evidence": "FX programming manual JY997D16601-R section 7.16 device-range step table: special relay contact 1 step for M8000-M8255, 2 steps for M8256-M8511"
+        "evidence": "Mitsubishi FX3U/FX3UC Programming Manual, Basic & Applied Instruction Edition (JY997D16601-R) section 7.16, printed page 219: a special relay contact takes one step for M8000-M8255 and two steps for M8256-M8511. The native ANI M8340 sample agrees with the second span."
       },
       {
         "devices": [
@@ -2581,7 +2575,7 @@
             "steps": 2
           }
         ],
-        "evidence": "FX programming manual JY997D16601-R section 7.16 device-range step table: special relay coil 2 steps anywhere in M8000-M8511"
+        "evidence": "Mitsubishi FX3U/FX3UC Programming Manual, Basic & Applied Instruction Edition (JY997D16601-R) section 7.16, printed page 219: a special relay coil takes two steps anywhere in M8000-M8511; the native SET M8161 and RST M8123 samples agree."
       },
       {
         "devices": [
@@ -2610,7 +2604,7 @@
             "steps": 1
           }
         ],
-        "evidence": "FX programming manual JY997D16601-R section 7.16 device-range step table: the direct M contact/coil form stays at one step; GX Works2 1.635.0.1 limits the FX1S M space to M511 and FX1N to M1535, so the wider form is unreachable"
+        "evidence": "GX Works2 1.635.0.1 refused M1536 and above for an FX1N/FX1NC project and M512 and above for FX1S, so the direct M contact/coil form only ever takes one step on these CPUs; the FX1S samples (LD M511, OUT M511, LDP M511) and the FX1N samples (LD M511 ... M1535) agree."
       },
       {
         "devices": [
@@ -2643,7 +2637,7 @@
             "steps": 2
           }
         ],
-        "evidence": "FX programming manual JY997D16601-R section 7.16 device-range step table with a native FX2N measurement in GX Works2 1.635.0.1: one step up to M1535, two steps from M1536 to M3071 (M2048 and M3071 measured); M3584 and above are outside the FX2N M space"
+        "evidence": "Native FX2N/FX2NC measurement (GX Works2 1.635.0.1, program compiled by the IDE and exported back): LD M1535 stores one step, while LD/LDI/AND/OR/OUT/SET/RST on M1536, M2048 and M3071 store two; the IDE also refused M3584, M8256 and S1024 for this CPU, so the FX3 three-step range has no FX2N form."
       },
       {
         "devices": [
@@ -2672,7 +2666,7 @@
             "steps": 2
           }
         ],
-        "evidence": "older FX manuals: pulse form on a direct M 2 steps for FX0/FX1/FX2"
+        "evidence": "FX1S/FX1N/FX2N pulse forms on a direct M target take two steps in the older FX manuals, without the FX3 M3584 split."
       },
       {
         "devices": [
@@ -2699,8 +2693,14 @@
             "steps": 4
           }
         ],
-        "evidence": "FX programming manual JY997D16601-R section 7.16 device-range step table: MC steps by its nesting operand plus the second operand's device, 3 steps at M0 and 4 at M3584"
+        "evidence": "Mitsubishi FX3U/FX3UC Programming Manual, Basic & Applied Instruction Edition (JY997D16601-R) section 7.16, printed page 219: MC is stepped by its nesting operand plus the device of its second operand, so MC N0 M0 is 3 steps and MC N0 M3584 is 4. The writer's own header table agreed on the 3-step M0 form only."
       }
-    ]
+    ],
+    "observation_scopes": {
+      "default": {
+        "scope": "FAMILY",
+        "evidence": "native encoding observation: the stored headers were read from the FX3 native compiler (FX3U/FX3UC programme headers), and the FX applied instruction header is one format across the FX series. A per-series re-measurement of the stored width on FX0/FX1/FX2 is still outstanding"
+      }
+    }
   }
 }

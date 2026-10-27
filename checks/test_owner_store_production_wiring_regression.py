@@ -1,4 +1,5 @@
 """Actual shared manual-tool and MCP entry points select a manifest without path patches."""
+from contextlib import closing
 import json
 import importlib.util
 import importlib.metadata
@@ -87,9 +88,9 @@ class ProductionWiringTests(unittest.TestCase):
         legacy,_=build(root/'bundle/knowledge/runtime','LEGACY_MARKER',('MOV','ADD'),search_pooling=False)
         candidate,manifest=build(root/'candidate','CANDIDATE_MARKER')
         if collision:
-            with sqlite3.connect(candidate) as conn:
+            with closing(sqlite3.connect(candidate)) as conn, conn:
                 identity=conn.execute("SELECT chunk_id FROM facts WHERE kind='instruction' AND target='MOV'").fetchone()[0]
-            with sqlite3.connect(legacy) as conn:
+            with closing(sqlite3.connect(legacy)) as conn, conn:
                 conn.execute('DELETE FROM facts WHERE chunk_id=?',(identity,));conn.execute('DELETE FROM chunks WHERE id=?',(identity,))
                 packet={'kind':'device','target':'D','scope':{'models':['FX3U']},'value':{'marker':'PLC CANDIDATE_MARKER DEVICE_MARKER'}}
                 meta={'content_origin':'authored_fact','distribution_status':'fact_representation_reviewed','fact_kind':'device','fact_target':'D','source_lane':'fact'}
@@ -118,6 +119,7 @@ class ProductionWiringTests(unittest.TestCase):
     def test_startup_env_exact_real_entry_without_any_path_patch(self):
         child=r"""
 import json,sys,sqlite3
+from contextlib import closing
 from pathlib import Path
 sys._MEIPASS=sys.argv[1]
 from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY as registry
@@ -129,7 +131,7 @@ with patch('plc.instruction_owner_store._digest',side_effect=AssertionError('no 
     missing=resolve('instruction',['ADD'],plc_model='FX3U')
     wrong=resolve('instruction',['MOV'],plc_model='Q03UDV')
 legacy=Path(sys.argv[1])/'knowledge/runtime/plc_facts.sqlite'
-with sqlite3.connect('file:'+legacy.as_posix()+'?mode=ro',uri=True) as conn:
+with closing(sqlite3.connect('file:'+legacy.as_posix()+'?mode=ro',uri=True)) as conn, conn:
     conn.row_factory=sqlite3.Row
     explicit=resolve('instruction',['MOV'],plc_model='FX3U',connection=conn)
 from knowledge.core import retrieve_broad_knowledge

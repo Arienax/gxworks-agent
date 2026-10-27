@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """One-shot, read-only physical PLC boundary, separate from Simulator2.
 
 Only the locally installed hardware reader may open MX Component. A reader

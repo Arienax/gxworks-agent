@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Source-bound, order-preserving re-serialization of an ordered CSV export.
 
 :mod:`gxworks2.csv_export` refuses ordered instruction sources on purpose: the

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Presentation-only names for internal identifiers.
 
 The application persists stable identifiers such as ``manual_start_test`` and

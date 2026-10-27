@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Non-executable v3 parameter domains, presentation hints and bounded evidence.
 
 UI precision is not server precision. Observations never define allowed values.

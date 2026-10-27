@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Narrow model boundary for the rare whole-rung structural repair path.
 
 Only the explicitly-recognized shared-input representation error reaches this

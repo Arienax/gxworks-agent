@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Authoritative device I/O policy and native request planning.
 
 Adapters receive fully prepared, bounded requests. They never decide PLC
@@ -69,7 +72,7 @@ def stimulus_value(address: str, value: Any, plc_model: str = "FX3U") -> int:
     """Only explicit integer bit/word values may cross the stimulus boundary."""
     address = device_address(address, plc_model, access="stimulus")
     prefix, _ = parse_device_address(address, plc_model)
-    return _integer_input_value(value, bit=prefix in {"X", "M"}, word_label="D")
+    return _integer_input_value(value, bit=is_bit_device(address, plc_model), word_label="D")
 
 
 def _integer_input_value(value: Any, *, bit: bool, word_label: str) -> int:

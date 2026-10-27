@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Execute the actual production ScanMachine dispatcher, never a toy engine.
 
 These checks exercise an explicitly opt-in bounded software peripheral contract.
@@ -43,7 +46,29 @@ def scan(m, t, **inputs):
     return result
 
 
-class PWMExecution(unittest.TestCase):
+from checks.test_pwm_contract import ReviewedPWMTestCase
+
+
+class PWMExecution(ReviewedPWMTestCase):
+    def test_each_pwm_reads_parameters_at_its_scan_position(self):
+        later = {'type': 'APP_INSTR', 'opcode': 'PWM', 'operands': ['D0', 'D1', 'Y1']}
+        first = ladder(['K10', 'K20', 'Y0'])['rungs'][0]
+        middle = {'rung_id': 2, 'branches': [{'inputs': [{'type': 'NO', 'address': 'X0'}],
+            'outputs': [{'type': 'APP_INSTR', 'opcode': 'MOV', 'operands': ['K30', 'D0']},
+                        {'type': 'APP_INSTR', 'opcode': 'MOV', 'operands': ['K60', 'D1']}]}]}
+        last = {'rung_id': 3, 'branches': [{'inputs': [{'type': 'NO', 'address': 'X0'}], 'outputs': [later]}]}
+        ctx = context()
+        ctx['pwm']['bindings'] = {
+            '0:branches[0].outputs[0]': {'channel': 1, 'output_device': 'Y0'},
+            '2:branches[0].outputs[0]': {'channel': 2, 'output_device': 'Y1'}}
+        m = ScanMachine({'rungs': [first, middle, last]}, plc_model='FX5U',
+            initial={'X0': True, 'SM8034': False, 'D0': 0, 'D1': 0, 'Y0': False, 'Y1': False},
+            execution_context=ctx)
+        scan(m, 0)
+        self.assertEqual(m.pwm.channels[1]['request']['period_us'], 20)
+        self.assertEqual(m.pwm.channels[2]['request']['on_time_us'], 30)
+        self.assertEqual(m.pwm.channels[2]['request']['period_us'], 60)
+
     def test_actual_dispatch_and_storage_without_fake_waveform(self):
         m = machine()
         for t in (0, 0.001, 1, 100):
@@ -265,13 +290,13 @@ class PWMExecution(unittest.TestCase):
         self.assertEqual(o['peripherals']['pwm']['channels'][2]['command_state'], 'forced_stop_commanded')
 
     def test_multichannel_conflict_or_bad_peer_prevents_all_initial_commits(self):
-        for kwargs in ({'second_channel': 1}, {'second_output': 'Y0'}, {'second_args': ['D9', 'K30', 'Y1']}):
+        for kwargs in ({'second_channel': 1}, {'second_output': 'Y0'}):
             m = self.two_channel_machine(**kwargs)
             scan(m, 0)
             self.assertEqual(m.pwm.channels, {})
         m = self.two_channel_machine(second_args=['D9', 'K30', 'Y1'])
         scan(m, 0, X1=False)
-        self.assertEqual(m.pwm.channels, {})  # disabled unknown peer is not guessed
+        self.assertEqual(set(m.pwm.channels), {1})  # an inactive peer is not read ahead
         m = self.two_channel_machine()
         del m.execution_context['pwm']['bindings']['1:branches[0].outputs[0]']
         scan(m, 0)
@@ -333,3 +358,25 @@ class PWMExecution(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
+
+
+def test_inactive_first_pwm_preserves_output_and_does_not_capture_parameters():
+    case = ReviewedPWMTestCase(); case.setUp()
+    try:
+        m = machine(['D0', 'D1', 'Y0'], initial={'D0': 0, 'D1': 0, 'X0': False})
+        first = scan(m, 0)
+        assert first['after']['Y0'] is False and not m.pwm.channels
+        scan(m, 1, X0=True, D0=10, D1=20)
+        assert m.pwm.channels[1]['command_state'] == 'run_commanded'
+    finally:
+        case.doCleanups()
+
+
+def test_failed_pwm_never_overwrites_channel_number_register():
+    case = ReviewedPWMTestCase(); case.setUp()
+    try:
+        m = machine(['K10', 'K20', 'D0'], initial={'D0': 1})
+        scan(m, None)
+        assert m.memory['D0'] == 1
+    finally:
+        case.doCleanups()

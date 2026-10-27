@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Tool registration, argument checks and public result envelopes."""
 from __future__ import annotations
 import copy
@@ -29,6 +32,11 @@ class ToolDefinition:
     parameters: Mapping[str, Any]
     handler: Callable[[ToolContext, Mapping[str, Any]], Mapping[str, Any]]
     confirmation_required: bool = False
+
+    @property
+    def result_schema(self):
+        from application.read_delivery import READ_RESULT_SCHEMAS
+        return READ_RESULT_SCHEMAS.get(self.name)
 
     @property
     def context_requirement(self):
@@ -65,6 +73,7 @@ class ToolRegistry:
 
     _tools: Dict[str, ToolDefinition] = field(default_factory=dict)
     _read_delivery: Any = field(default=None, init=False, repr=False)
+    public_read_validator: Any = field(default=None, repr=False)
 
     def register(self, definition: ToolDefinition) -> None:
         name = str(definition.name or "")
@@ -193,7 +202,14 @@ class ToolRegistry:
         if definition.name in PAGED_READ_TOOLS:
             from agent_runtime.runtime import _model_tool_value
             try:
-                return self._read_delivery.prepare(_model_tool_value(definition.name, envelope), decoded, binding)
+                try:
+                    validate_schema(definition.result_schema, data, 'result')
+                except ValueError as error:
+                    raise ToolPreconditionError('INVALID_TOOL_RESULT', '工具业务结果结构无效。') from error
+                public = _model_tool_value(definition.name, envelope)
+                if self.public_read_validator is not None:
+                    self.public_read_validator(definition.name, public['data'])
+                return self._read_delivery.prepare(public, decoded, binding)
             except ToolPreconditionError as error:
                 return {'ok': False, 'tool': definition.name, 'error': error.payload()}
         if definition.confirmation_required:

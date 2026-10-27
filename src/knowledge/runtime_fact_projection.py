@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Conservative semantic publication, separate from complete private evidence.
 
 Only facts belonging to the same literal owner and having the same technical

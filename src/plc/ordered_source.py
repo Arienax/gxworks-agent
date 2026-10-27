@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Ordered native instruction sources in the existing PLC IR.
 
 The instruction sequence is authoritative. A graphical preview may be absent;
@@ -113,6 +116,7 @@ def split_ordered_circuits(records):
     networks = []
     current = []
     pending_statements = []
+    pending_records = []
     current_statements = []
     leading_statements = []
     has_action = False
@@ -143,10 +147,11 @@ def split_ordered_circuits(records):
             current.append(record)
             continue
         if not record.get('op', ''):
-            if record.get('statement', ''):
-                if current and has_action and mps_depth == 0 and logic_depth <= 1:
-                    finish()
-                pending_statements.append(record.get('statement', ''))
+            text = record.get('statement') or record.get('text') or ''
+            if text:
+                (current_statements if current else pending_statements).append(text)
+            if record.get('kind') in {'statement', 'note'}:
+                (current if current else pending_records).append(record)
             continue
 
         if record.get('op', '') == "END":
@@ -161,6 +166,8 @@ def split_ordered_circuits(records):
             current_statements = list(pending_statements)
             pending_statements.clear()
             leading_statements = list(current_statements)
+            current.extend(pending_records)
+            pending_records.clear()
         if record.get('statement', ''):
             current_statements.append(record.get('statement', ''))
         current.append(record)
@@ -182,6 +189,12 @@ def split_ordered_circuits(records):
                 after_mpp_action = True
 
     finish()
+    if pending_records or pending_statements:
+        if networks:
+            note, rows, leading = networks[-1]
+            networks[-1] = ('\n'.join([note, *pending_statements]).strip(), [*rows, *pending_records], leading)
+        elif pending_records:
+            networks.append(('\n'.join(pending_statements), list(pending_records), list(pending_statements)))
     circuits = []
     def needs_incoming(rows):
         logic, saved = 0, 0
@@ -195,12 +208,16 @@ def split_ordered_circuits(records):
                     return True
                 logic -= 1
             elif row.get('op', '') == 'MPS':
+                if not logic:
+                    return True
                 saved += 1
             elif row.get('op', '') in {'MRD', 'MPP'}:
                 if not saved:
                     return True
                 if row.get('op', '') == 'MPP':
                     saved -= 1
+            elif row.get('op') and not logic and (condition_connector(row['op']) in {'AND', 'OR'} or row['op'] in {'OUT', 'SET', 'RST', 'PLS', 'PLF', 'INV', 'MEP', 'MEF'}):
+                return True
         return False
     for note, rows, leading in networks:
         # An output taps the accumulator; it does not discard it. A later
@@ -470,7 +487,7 @@ def build_instruction_ir(networks, *, plc_model, program_name='MAIN', device_com
     """Reuse the existing semantic/access/timing pipeline without graph lowering."""
     from plc.ir import build_plc_ir
     rungs = []
-    typed = any(row.get('kind') in {'opaque', 'label'} for network in networks
+    typed = any(row.get('kind', 'instruction') != 'instruction' for network in networks
                 for row in network.get('raw_instructions', network.get('instructions', [])))
     for index, network in enumerate(networks, 1):
         instructions = network.get('raw_instructions', network.get('instructions', []))

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Compile complete indexed instruction material into registry-owned facts.
 
 Documents are joined by exact manual/revision/section, never a page window.

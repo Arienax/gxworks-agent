@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Rebuildable composition views. Confirmed behavior remains in the specification.
 
 No device allocation, callable creation, or confirmation takes place here.

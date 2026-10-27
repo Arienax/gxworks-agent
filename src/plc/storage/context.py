@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Project-bound device allocation context shared by every storage consumer.
 
 The context describes the source storage width of D/W extended ranges. It is not an

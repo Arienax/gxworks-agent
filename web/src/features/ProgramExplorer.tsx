@@ -1,3 +1,6 @@
+// Copyright 2026 Arienax
+// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useResource } from "../lifecycle/useResource";
 import { Button } from "../components/ui";

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Fact-only runtime storage; original evidence is an offline build input.
 
 This module projects existing Core definitions. It does not infer PLC behavior

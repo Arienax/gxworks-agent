@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Structural parallel-row accounting shared by factoring and GX export.
 
 GX Works2 Simple Project manual SH-080780, section 6.2.8, limits a ladder

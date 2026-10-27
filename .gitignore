@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.tmp/
 .venv/
 .venv-mcp/
 .runtime/
@@ -31,9 +32,3 @@ AGENTS.md
 *.exe
 *.dll
 *.pdb
-
-# Local investigation scripts, outputs and downloaded engineering samples.
-/tmp/
-/tmp_*/
-/tmp_*.py
-/tmp_*.json

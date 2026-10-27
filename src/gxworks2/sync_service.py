@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Three-way synchronization between one application version and GX Works2."""
 
 from __future__ import annotations

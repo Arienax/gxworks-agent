@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Source-scoped FBD values and constraints, independent of GXW storage.
 
 Native objects are projected into ordinary values by gxw. This module owns

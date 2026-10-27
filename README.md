@@ -1,5 +1,9 @@
 <h1 align="center">GXWorks Agent</h1>
 
+<p align="center"><strong>Originally created by <a href="https://github.com/Arienax">Arienax</a></strong> · <a href="https://github.com/Arienax/gxworks-agent">github.com/Arienax/gxworks-agent</a></p>
+
+<p align="center">© 2026 Arienax · Apache-2.0</p>
+
 <h3 align="center">MCP engineering tools and an AI workbench for Mitsubishi PLC workflows.</h3>
 
 <p align="center"><strong>Read project context · Build and review programs · Drive native GX Works2 engineering and diagnostics</strong></p>
@@ -187,4 +191,4 @@ Implement emergency stops, safety interlocks, and overtravel protection in an in
 
 [Release changes](CHANGELOG.md) · [Issues](https://github.com/Arienax/gxworks-agent/issues)
 
-Project-authored Core, Web, MCP, and native-adapter source code is licensed under the [Apache License 2.0](LICENSE); see the [license scope](LICENSE-SCOPE.md) and [third-party notices](THIRD_PARTY_NOTICES.md) for details. Contributors retain their copyright, and previously distributed releases retain their original licenses.
+Project-authored Core, Web, MCP, and native-adapter source code is licensed under the [Apache License 2.0](LICENSE); see the [license scope](LICENSING.md) and [third-party notices](THIRD_PARTY_NOTICES.md) for details. Contributors retain their copyright, and previously distributed releases retain their original licenses. [NOTICE](NOTICE) records the original project, author and repository for copyrighted project material.

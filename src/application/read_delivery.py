@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Bounded, dependency-preserving delivery of already-public read documents.
 
 The store is owned by a tool registry/session. Cursors cannot be used with a
@@ -8,6 +11,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import threading
 import uuid
 from collections import OrderedDict
@@ -20,6 +24,163 @@ PAGED_READ_TOOLS = frozenset({'search_plc_manual', 'get_generation_context', 'ge
 MAX_READ_TOKENS = 6000
 MAX_READ_BYTES = 32 * 1024
 DELIVERY_VERSION = 1
+
+# The registered tool selects its business result contract before projection.
+# These are transport shapes; PLC and source validation stay with their owners.
+READ_RESULT_SCHEMAS = {
+    'search_plc_manual': {'type': 'object', 'properties': {
+        'results': {'type': 'array', 'items': {'type': 'object'}},
+        'coverage': {'type': 'object'},
+    }},
+    'get_fbd_catalog': {'type': 'object', 'properties': {
+        'nodes': {'type': 'array', 'items': {'type': 'object'}},
+        **{key: {'type': ['object', 'null']} for key in
+           ('parameter_model', 'empty_parameter_model', 'parameter_schema', 'empty_model')},
+    }},
+    'get_generation_context': {'type': 'object', 'properties': {
+        **{key: {'type': ['object', 'null']} for key in
+           ('current_model', 'catalog', 'confirmed_spec', 'output_contract',
+            'generation_handoff', 'verification', 'validation')},
+        'generation_input': {'type': 'object', 'properties': {
+            'previous': {'type': ['object', 'null']},
+            'catalog': {'type': 'array', 'items': {'type': 'object'}},
+            **{key: {'type': ['object', 'null']} for key in
+               ('source_context', 'parameter_schema', 'existing_declarations', 'call_interface', 'structures')},
+        }},
+    }},
+}
+
+
+class PreparedReadEnvelope(dict):
+    """A public document paginated by its registered server-side owner."""
+
+
+def received_read_envelope(tool, envelope, *, previous_objects=None):
+    """Validate a paging response on the explicit application-service route.
+
+    Called by the transport owner for registered read tools, never by a payload
+    marker. Reconstruct the available document before applying its field owners;
+    an object table received over HTTP is not an internal prepared result.
+    """
+    if tool not in PAGED_READ_TOOLS or not isinstance(envelope, Mapping):
+        raise ValueError('Not a registered read response')
+    if set(envelope) != {'ok', 'tool', 'data'} or envelope['ok'] is not True or envelope['tool'] != tool:
+        raise ValueError('Invalid read response owner')
+    data = envelope['data']
+    if not isinstance(data, Mapping) or set(data) != {'context_schema_version', 'document', 'objects', 'delivery'}:
+        raise ValueError('Invalid read response shape')
+    if type(data['context_schema_version']) is not int or data['context_schema_version'] != 3:
+        raise ValueError('Unsupported read response version')
+    root, delivery = data['document'], data['delivery']
+    if (not isinstance(root, Mapping) or set(root) != {'$ref'}
+            or not isinstance(root['$ref'], str) or not re.fullmatch(r'#/objects/unit-[1-9][0-9]*', root['$ref'])
+            or not isinstance(data['objects'], Mapping) or not isinstance(delivery, Mapping)):
+        raise ValueError('Invalid read response objects')
+    if (delivery.get('version') != DELIVERY_VERSION or type(delivery.get('page')) is not int
+            or delivery['page'] < 0 or type(delivery.get('complete')) is not bool
+            or not isinstance(delivery.get('document_id'), str) or not delivery['document_id']
+            or delivery.get('scope') != 'read_sequence'):
+        raise ValueError('Invalid read response sequence')
+    followup = delivery.get('next')
+    if delivery['complete']:
+        if followup is not None:
+            raise ValueError('Completed read response has a continuation')
+    elif (not isinstance(followup, Mapping) or followup.get('tool') != tool
+            or not isinstance(followup.get('arguments'), Mapping)
+            or followup['arguments'].get('cursor') != delivery['document_id'] + ':' + str(delivery['page'] + 1)):
+        raise ValueError('Invalid read response continuation')
+    from agent_runtime.runtime import _model_tool_value, _public_value
+    if _public_value(delivery) != delivery:
+        raise ValueError('Private read response metadata')
+    objects = dict(previous_objects or {})
+    for key, value in data['objects'].items():
+        if not isinstance(key, str) or not re.fullmatch(r'unit-[1-9][0-9]*', key):
+            raise ValueError('Invalid read object identity')
+        if key in objects and objects[key] != value:
+            raise ValueError('Read object changed during delivery')
+        objects[key] = value
+    used, missing = set(), set()
+
+    def resolve(value, visiting=frozenset(), schema=False):
+        if isinstance(value, Mapping):
+            if set(value) == {'$ref'} and isinstance(value['$ref'], str) and value['$ref'].startswith('#/objects/'):
+                key = value['$ref'].removeprefix('#/objects/')
+                if key in visiting:
+                    raise ValueError('Cyclic read reference')
+                if key not in objects:
+                    missing.add(key)
+                    return value
+                used.add(key)
+                return copy.deepcopy(objects[key]) if schema else resolve(objects[key], visiting | {key})
+            if schema:
+                return copy.deepcopy(value)
+            for operator in ('$merge', '$concat'):
+                if set(value) != {operator}:
+                    continue
+                parts = resolve(value[operator], visiting)
+                if isinstance(parts, Mapping) and set(parts) == {'$ref'}:
+                    return {} if operator == '$merge' else []
+                if not isinstance(parts, list):
+                    raise ValueError('Invalid read container')
+                result = {} if operator == '$merge' else []
+                for part in parts:
+                    if isinstance(part, Mapping) and set(part) == {'$ref'}:
+                        continue  # This container part belongs to a later page.
+                    if operator == '$merge':
+                        if not isinstance(part, Mapping) or result.keys() & part.keys():
+                            raise ValueError('Invalid or overlapping read map parts')
+                        result.update(part)
+                    else:
+                        if not isinstance(part, list):
+                            raise ValueError('Invalid read list part')
+                        result.extend(part)
+                return result
+            return {key: resolve(item, visiting, schema=key == 'schema' or str(key).endswith('_schema'))
+                    for key, item in value.items()}
+        if isinstance(value, list):
+            return [resolve(item, visiting) for item in value]
+        return copy.deepcopy(value)
+
+    document = resolve(root)
+    if used != set(objects) or delivery['complete'] and missing:
+        raise ValueError('Unbound or missing read objects')
+    if not isinstance(document, Mapping) or _model_tool_value(tool, document) != document:
+        raise ValueError('Private fields in read objects')
+    return PreparedReadEnvelope(copy.deepcopy(envelope))
+
+
+class ReadDeliveryReceiver:
+    """Keep public page objects only for the matching service read sequence."""
+
+    def __init__(self, capacity=32):
+        self.capacity = capacity
+        self._documents = OrderedDict()
+
+    def receive(self, tool, envelope, *, binding, cursor=None):
+        data = envelope.get('data', {})
+        delivery = data.get('delivery', {}) if isinstance(data, Mapping) else {}
+        if not isinstance(delivery, Mapping):
+            raise ValueError('Invalid read delivery')
+        identity, page = delivery.get('document_id'), delivery.get('page')
+        if not isinstance(identity, str) or type(page) is not int:
+            raise ValueError('Invalid read delivery sequence')
+        previous = self._documents.get(identity)
+        if page and (previous is None or previous['binding'] != binding
+                     or previous['root'] != data.get('document')
+                     or page > previous['page'] + 1 or cursor != identity + ':' + str(page)):
+            raise ValueError('Read continuation has no matching first page')
+        if previous is not None and previous['binding'] != binding:
+            raise ValueError('Read document belongs to another request')
+        objects = previous['objects'] if previous is not None else {}
+        result = received_read_envelope(tool, envelope, previous_objects=objects)
+        self._documents[identity] = {'binding': copy.deepcopy(binding), 'root': data['document'],
+            'page': max(page, previous['page'] if previous else 0),
+            'objects': {**objects, **copy.deepcopy(data['objects'])}}
+        self._documents.move_to_end(identity)
+        while len(self._documents) > self.capacity:
+            self._documents.popitem(last=False)
+        return result
+
 
 
 def serialized_size(value):
@@ -51,12 +212,16 @@ def _binding_value(value):
 
 def read_binding(context):
     from knowledge.index_access import index_path, index_identity
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+    owner_path = DEFAULT_INSTRUCTION_REGISTRY.selected_owner_database_path()
     # Index identity includes the bundle replacement epoch. No raw project or
     # private source material is exposed in the cursor or model response.
     return _binding_value((context.project_id, context.version_id, context.plc_model,
             context.project, context.version, context.analysis_source, context.program_ir,
-            context.ladder, context.st_text, context.native_snapshot, context.fbd_baseline,
-            index_identity(index_path())))
+            context.ladder, context.st_text, context.sfc_graph,
+            context.read_revision if not context.version_id else None,
+            index_identity(index_path()), index_identity(owner_path),
+            getattr(DEFAULT_INSTRUCTION_REGISTRY, 'fact_bundle_version', None)))
 
 
 def _split_document(document):
@@ -65,19 +230,20 @@ def _split_document(document):
     Schema documents, source bodies, interface entries and facts are indivisible.
     Container maps/lists may refer to them; strings are never sliced.
     """
-    objects, interned = OrderedDict(), {}
-    atomic_fields = {'parameter_schema', 'model_schema', 'schema', 'output_schema', 'previous', 'current_model'}
+    objects, interned, locations = OrderedDict(), {}, {}
+    atomic_fields = {'parameter_schema', 'model_schema', 'schema', 'output_schema'}
     atomic_lists = {'facts', 'catalog', 'nodes', 'st_sources', 'fbd_callers', 'pous', 'networks'}
 
-    def store(value):
+    def store(value, location=()):
         marker = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
         if marker not in interned:
             identity = 'unit-' + str(len(objects) + 1)
             interned[marker] = identity
             objects[identity] = copy.deepcopy(value)
+            locations[identity] = list(location)
         return {'$ref': '#/objects/' + interned[marker]}
 
-    def container(value):
+    def container(value, path=()):
         # Container indexes are divisible even when the complete interfaces or
         # facts they reference are not. Keep large directories from becoming a
         # single oversized list of thousands of object references.
@@ -85,7 +251,7 @@ def _split_document(document):
         if size <= 750:
             return value
         if size <= 4000:
-            return store(value)
+            return store(value, path)
         chunks, current = [], {} if isinstance(value, Mapping) else []
         entries = list(value.items()) if isinstance(value, Mapping) else list(value)
         for entry in entries:
@@ -102,27 +268,49 @@ def _split_document(document):
     def walk(value, path=()):
         key = str(path[-1]) if path else ''
         if (key in atomic_fields or key.endswith('_schema')) and value is not None:
-            return store(value)
+            return store(value, path)
+        if len(path) >= 2 and path[-2] in {'structures', 'call_interface', 'existing_declarations'}:
+            return store(value, path)
         if isinstance(value, Mapping):
             # Each rule is a complete dependency-closed language rule packet.
             if len(path) >= 2 and path[-2] == 'rules':
-                return store(value)
+                return store(value, path)
             if len(path) >= 2 and path[-2] in {'structures', 'call_interface', 'existing_declarations'}:
-                return store(value)
+                return store(value, path)
             out = {k: walk(v, (*path, k)) for k, v in value.items()}
             # The container is also shareable. Its child refs are delivered first.
-            return container(out)
+            return container(out, path)
         if isinstance(value, (list, tuple)):
             if key in atomic_lists:
-                out = [store(v) for v in value]
+                out = [store(v, (*path, index)) for index, v in enumerate(value)]
             else:
                 out = [walk(v, (*path, i)) for i, v in enumerate(value)]
-            return container(out)
+            return container(out, path)
         if isinstance(value, str) and len(value.encode('utf-8')) > 750:
-            return store(value)
+            return store(value, path)
         return copy.deepcopy(value)
 
-    return walk(document), objects
+    root = store(walk(document))
+    # Parents establish field ownership before their children cross a service
+    # boundary. Assembly remains independent of object order.
+    ordered, expanded = OrderedDict(), set()
+    def visit(value, schema=False):
+        if isinstance(value, Mapping):
+            if set(value) == {'$ref'} and isinstance(value['$ref'], str) and value['$ref'].startswith('#/objects/'):
+                key = value['$ref'].removeprefix('#/objects/')
+                if key not in ordered:
+                    ordered[key] = objects[key]
+                if not schema and key not in expanded:
+                    expanded.add(key)
+                    visit(objects[key])
+            elif not schema:
+                for key, item in value.items():
+                    visit(item, schema=key == 'schema' or str(key).endswith('_schema'))
+        elif isinstance(value, list):
+            for item in value:
+                visit(item)
+    visit(root)
+    return root, ordered, locations
 
 
 class ReadDeliveryStore:
@@ -154,7 +342,7 @@ class ReadDeliveryStore:
                 coverage_targets.append(copy.deepcopy(row))
             row['delivery'] = ('not_available' if row.get('corpus') == 'absent'
                                else 'see_delivery_complete')
-        document, objects = _split_document(content)
+        document, objects, locations = _split_document(content)
         identity = 'read-' + uuid.uuid4().hex
         request = {k: copy.deepcopy(v) for k, v in arguments.items() if k != 'cursor'}
         items, pages = list(objects.items()), []
@@ -180,7 +368,7 @@ class ReadDeliveryStore:
                     'absent': sum(row.get('corpus') == 'absent' for row in coverage_targets),
                     'delivery': 'delivered' if complete else 'pending',
                 }
-            return {'ok': True, 'tool': tool, 'data': data}
+            return PreparedReadEnvelope(ok=True, tool=tool, data=data)
 
         current = []
         for item in items:
@@ -189,13 +377,13 @@ class ReadDeliveryStore:
                 if not current:
                     raise ToolPreconditionError('READ_OBJECT_TOO_LARGE',
                         '一个完整必需对象超过单次读取上限；未截断内容，也未标记交付完成。',
-                        details={'object_id': item[0], 'object_size': serialized_size(item[1]),
+                        details={'object_id': item[0], 'object_location': locations[item[0]], 'object_size': serialized_size(item[1]),
                                  'limits': {'estimated_tokens': self.max_tokens, 'utf8_bytes': self.max_bytes}})
                 pages.append(make_page(current, len(pages), False))
                 current = [item]
                 if not _fits(make_page(current, len(pages), False), self.max_tokens, self.max_bytes):
                     raise ToolPreconditionError('READ_OBJECT_TOO_LARGE',
-                        '一个完整必需对象超过单次读取上限；请缩小读取对象。', details={'object_id': item[0]})
+                        '一个完整必需对象超过单次读取上限；请缩小读取对象。', details={'object_id': item[0], 'object_location': locations[item[0]]})
             else:
                 current.append(item)
         pages.append(make_page(current, len(pages), True))

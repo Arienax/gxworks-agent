@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Source-bound reading of the observed uncompressed ST source envelope.
 
 The source stores UTF-16LE independently of the project's compiler code page.

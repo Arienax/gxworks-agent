@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """One spelling for Mitsubishi device aliases, without renumbering devices.
 
 X001 and X1 denote the same index; X010 becomes X10, NEVER X8. This

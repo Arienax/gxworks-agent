@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Task-scoped FBD generation context.
 
 One builder serves the Web entry (`application.gxw_files`) and the MCP entry
@@ -19,6 +22,8 @@ Three rules this module keeps:
 """
 
 from __future__ import annotations
+
+from application.generation_wire import context_system_prompt
 
 import copy
 import json
@@ -91,7 +96,8 @@ class FBDContextRuleError(FBDContextError):
 
 def json_text(value):
     """Serialize exactly like the request path, so the measurement is not optimistic."""
-    return json.dumps(value, ensure_ascii=False)
+    from application.generation_wire import structured_context_text
+    return structured_context_text(value)
 
 
 @dataclass(frozen=True)
@@ -674,7 +680,7 @@ def fit_units(units, *, instructions, model_profile=None, image_count=0, plc_mod
         payload = _model_tool_value('get_generation_context', {'generation_input': build_payload(active)})['generation_input']
 
         def get_messages(payload=payload):
-            return [{"role": "system", "content": instructions},
+            return [{"role": "system", "content": context_system_prompt(instructions)},
                     {"role": "user", "content": structured_context_text(payload)}]
 
         compiled, _ = _compile_messages(
@@ -716,7 +722,7 @@ def compile_envelope(envelope, *, instructions, optional_paths=(), model_profile
     dropped, rounds = [], 0
     while True:
         def get_messages(envelope=envelope):
-            return [{"role": "system", "content": instructions},
+            return [{"role": "system", "content": context_system_prompt(instructions)},
                     {"role": "user", "content": json_text(envelope)}]
 
         compiled, _ = _compile_messages(
@@ -1285,7 +1291,7 @@ def compose_fbd_context(*, request, plc_model, catalog, confirmed_spec=None, pre
         plc_model=plc_model, request=request,
         confirmed_spec=confirmed_spec, current_program=current, task_type=task_type)
     from application.generation_wire import structured_context_text
-    wire = [{"role": "system", "content": instructions},
+    wire = [{"role": "system", "content": context_system_prompt(instructions)},
             {"role": "user", "content": structured_context_text(payload)}]
     catalog_report = {key: value for key, value in selection.items() if key != "nodes"}
     delivered = {row['template'] for row in payload['catalog']}

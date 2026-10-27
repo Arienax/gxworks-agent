@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Conservative transport selection; never infer retry permission from prose.
 
 A timeout/connection loss can occur after paid work has started. Changing stream

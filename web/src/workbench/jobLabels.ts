@@ -1,3 +1,6 @@
+// Copyright 2026 Arienax
+// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 import type { Job } from "../api/client";
 
 /** Display names for job kinds; the kinds themselves come from the job API. */

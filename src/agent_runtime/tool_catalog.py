@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Public tool declarations grouped by their stable capabilities."""
 from __future__ import annotations
 from itertools import chain
@@ -299,6 +302,7 @@ def native_definitions(generation):
     yield ToolDefinition('get_fbd_catalog',
     '读取当前 CPU 的 FBD 模板、源码端口、声明和 parameter_schema；默认 full，task 或 templates 可收窄目录，精确缺项不替换。生成前仍须 get_generation_context 的语言及地址规则。模板按实际 CPU 菜单绑定，当前 FBD 流程不支持 FX1。',
     {'type': 'object', 'properties': {'program': {'type': 'string'},
+        'user_requirement': {'type': 'string', 'description': '用于 task 目录裁剪的用户需求。'},
         'catalog_scope': {'type': 'string', 'enum': ['task', 'full'], 'default': 'full',
             'description': 'task 只返回当前程序依赖闭包，full 返回完整模板表。'},
         'templates': {'type': 'array', 'items': {'type': 'string', 'minLength': 1},

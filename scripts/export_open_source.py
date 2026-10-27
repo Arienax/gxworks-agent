@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Export source while separating research materials and development output."""
 from __future__ import annotations
 
@@ -87,7 +90,10 @@ def export_source(root: Path, destination: Path) -> int:
         elif name.startswith("resources/instructions/mitsubishi/") and path.suffix == ".json":
             target.write_bytes(safe_structured_catalog(path))
         else:
-            shutil.copyfile(path, target)
+            data = path.read_bytes()
+            if path.suffix.lower() in {'.py', '.md', '.json', '.yml', '.yaml', '.ts', '.tsx', '.css', '.html', '.ps1', '.toml'}:
+                data = data.replace(b'\r\n', b'\n')
+            target.write_bytes(data)
         count += 1
     return count
 

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """The Q/L storage plan: what form an instruction stores in, and its stored width.
 
 One plan answers both questions a caller can have: Core asks for the expected width,

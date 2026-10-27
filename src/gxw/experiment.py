@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Reproducible GXW experiments and source-level round-trip comparisons."""
 from __future__ import annotations
 from .project_metadata import project_stream_mapping

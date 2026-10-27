@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Headless engineering sessions using the shared application transactions.
 
 Session tools manage selection and receipts; PLC tools retain their existing
@@ -211,6 +214,7 @@ class EngineeringSession:
                     context = (build_tool_context({}) if independent or not self.project_id else
                                self.service.projects.invocation_context(self.project_id, self.version_id, call.name))
                     context = replace(context, inspection=self.inspection,
+                                      read_revision=self.service.projects.read_revision,
                                       operation_status=self.service.operation_status,
                                       native_session_status=self.service.native_session_status,
                                       native_session_pause=self.service.native_session_pause)

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Local HTTP/SSE transport. Domain operations belong to application services."""
 from __future__ import annotations
 
@@ -34,6 +37,10 @@ def create_app(workspace, *, state_dir=None, read_only=False, origin="http://127
                operator_token=None, agent_token=None, service=None, static_dir=None):
     security = LocalSecurity(origin, operator_token or secrets.token_urlsafe(32), agent_token)
     service = service or WorkbenchService(workspace, state_dir or default_state_dir(workspace), read_only=read_only)
+
+    registry = getattr(service.projects.runtime, 'registry', None)
+    if registry is not None:
+        registry.public_read_validator = dto.validate_public_read_document
 
     @asynccontextmanager
     async def lifespan(_app):

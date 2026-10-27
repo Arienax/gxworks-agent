@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Saved native project queries and approved engineering intents."""
 from __future__ import annotations
 import copy
@@ -86,8 +89,17 @@ def _get_fbd_catalog(context: ToolContext, arguments: Mapping[str, Any]) -> Dict
     from application.fbd import _target_baseline, catalog_snapshot
     from application.fbd_context import CATALOG_SCOPES, has_graph, select_task_catalog
 
-    raw = _target_baseline(context.fbd_baseline, context.plc_model)
-    snapshot = catalog_snapshot(raw, arguments.get('program') or (context.version or {}).get('program_name'))
+    raw = _target_baseline(context.native_snapshot or context.fbd_baseline, context.plc_model)
+    program = arguments.get('program') or (context.version or {}).get('program_name')
+    if not arguments.get('program') and context.native_snapshot is not None and (context.version or {}).get('target_mode') != 'fbd':
+        from gxw.offline_project import read_offline_project
+        candidates = [row['source_name'] for row in read_offline_project(raw).sources()
+                      if row.get('language') == 'fbd' and row.get('unit_kind') == 'program']
+        if program not in candidates:
+            if len(candidates) != 1:
+                raise ValueError('Select an existing FBD Program for this project; available: ' + ', '.join(candidates))
+            program = candidates[0]
+    snapshot = catalog_snapshot(raw, program)
     scope = str(arguments.get('catalog_scope') or 'full')
     if scope not in CATALOG_SCOPES:
         raise ValueError('catalog_scope must be task or full')

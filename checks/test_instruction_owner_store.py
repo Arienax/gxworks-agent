@@ -1,4 +1,5 @@
 """Synthetic random-access storage, not a claim of native PLC support."""
+from contextlib import closing
 import copy
 import hashlib
 import json
@@ -77,14 +78,14 @@ class OwnerStoreTests(unittest.TestCase):
             _,db,manifest=build(tmp);original=json.loads(manifest.read_text())
             for name in ('../plc_facts.sqlite','/tmp/plc_facts.sqlite','C:\\facts.sqlite','https://bad/facts.sqlite'):
                 bad=copy.deepcopy(original);bad['database']['filename']=name;manifest.write_text(json.dumps(bad))
-                with self.assertRaises(ValueError):OwnerDefinitionStore(manifest)
+                with self.assertRaises(ValueError):OwnerDefinitionStore(manifest, verify_integrity=True)
             bad=copy.deepcopy(original);bad['database']['sha256']='0'*64;manifest.write_text(json.dumps(bad))
-            with self.assertRaises(ValueError):OwnerDefinitionStore(manifest)
+            with self.assertRaises(ValueError):OwnerDefinitionStore(manifest, verify_integrity=True)
 
     def test_source_withdrawal_and_changed_resource_fail_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             _,db,manifest=build(tmp);store=OwnerDefinitionStore(manifest)
-            with sqlite3.connect(db) as edit:edit.execute('DELETE FROM runtime_sources')
+            with closing(sqlite3.connect(db)) as edit, edit:edit.execute('DELETE FROM runtime_sources')
             self.assertFalse(store.current())
             with self.assertRaises(ValueError):store.get_entry('PWM',cpu='FX5U')
             store.close();refresh_manifest(db,manifest)
@@ -95,7 +96,7 @@ class OwnerStoreTests(unittest.TestCase):
     def test_dangling_dependency_rejected_even_with_new_packet_receipt(self):
         with tempfile.TemporaryDirectory() as tmp:
             _,db,manifest=build(tmp)
-            with sqlite3.connect(db) as edit:
+            with closing(sqlite3.connect(db)) as edit, edit:
                 owner,text=edit.execute('SELECT owner,payload_json FROM runtime_definitions LIMIT 1').fetchone()
                 packet=json.loads(text);packet['value']['facts'][0]['depends_on']=['missing'];text=json.dumps(packet)
                 edit.execute('UPDATE runtime_definitions SET payload_json=? WHERE owner=?',(text,owner))
@@ -105,3 +106,15 @@ class OwnerStoreTests(unittest.TestCase):
             store.close()
 
 if __name__=='__main__':unittest.main()
+
+
+def test_runtime_open_does_not_hash_the_database(tmp_path, monkeypatch):
+    _, database, manifest = build(tmp_path)
+    def forbidden(_):
+        raise AssertionError('runtime attempted a full database digest')
+    monkeypatch.setattr('plc.instruction_owner_store._digest', forbidden)
+    store = OwnerDefinitionStore(manifest)
+    try:
+        assert store.get_entry('PWM', cpu='FX5U')['opcode'] == 'PWM'
+    finally:
+        store.close()

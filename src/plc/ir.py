@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Canonical project-level PLC intermediate representation.
 
 The historical model-facing ladder format (``device_comments`` + ``rungs``)
@@ -30,16 +33,16 @@ IR_KIND = "plc_program_ir"
 IR_SCHEMA_VERSION = 3
 
 _DEVICE_RE = re.compile(
-    r"^(ZR|SM|SD|SB|SW|X|Y|M|D|T|C|S|L|F|B|W|R|V|Z)([0-9A-F]+)(?:\.([0-9A-F]+))?$", re.IGNORECASE
+    r"^(?:(ZR|SM|SD|SB|SW|X|Y|M|D|T|C|S|L|F|B|W|R|V|Z)([0-9A-F]+)(?:\.([0-9A-F]+))?|([VZ]))$", re.IGNORECASE
 )
 _INDEXED_DEVICE_RE = re.compile(
-    r"^(?P<base>(?:SM|SD|X|Y|M|D|T|C|S)\d+)(?P<index>[VZ]\d+)$",
+    r"^(?P<base>(?:SM|SD|X|Y|M|D|T|C|S)\d+)(?P<index>[VZ]\d*)$",
     re.IGNORECASE,
 )
 _DEVICE_TOKEN_RE = re.compile(
     r"(?<![A-Z0-9_])"
-    r"(?:(?P<base>(?:SM|SD|X|Y|M|D|T|C|S)\d+)(?P<index>[VZ]\d+)"
-    r"|(?P<simple>(?:ZR|SM|SD|SB|SW|X|Y|M|D|T|C|S|L|F|B|W|R|V|Z)[0-9A-F]+(?:\.[0-9A-F]+)?))"
+    r"(?:(?P<base>(?:SM|SD|X|Y|M|D|T|C|S)\d+)(?P<index>[VZ]\d*)"
+    r"|(?P<simple>(?:ZR|SM|SD|SB|SW|X|Y|M|D|T|C|S|L|F|B|W|R|V|Z)[0-9A-F]+(?:\.[0-9A-F]+)?|[VZ]))"
     r"(?![A-Z0-9_])",
     re.IGNORECASE,
 )
@@ -114,9 +117,10 @@ def _device_sort_key(value: str) -> Tuple[int, int, str]:
         "V": 9,
         "Z": 10,
     }
-    prefix = match.group(1).upper()
-    radix = 16 if prefix in {"X", "Y", "B", "W", "SB", "SW"} or re.search(r"[A-F]", match.group(2)) else 10
-    return (prefix_order.get(prefix, 99), int(match.group(2), radix) * 16 + int(match.group(3) or "0", 16), value)
+    prefix = (match.group(1) or match.group(4)).upper()
+    number = match.group(2) or '0'
+    radix = 16 if prefix in {"X", "Y", "B", "W", "SB", "SW"} or re.search(r"[A-F]", number) else 10
+    return (prefix_order.get(prefix, 99), int(number, radix) * 16 + int(match.group(3) or "0", 16), value)
 
 
 def _network_id(rung_id: Any) -> str:
@@ -387,6 +391,11 @@ def _instruction_access(
     spec = DEFAULT_INSTRUCTION_REGISTRY.resolve_source_form(op, len(operands or []), cpu=plc_model)
     write_indexes = set(spec.write_indexes if spec is not None else ())
     read_write_indexes = set(spec.read_write_indexes if spec is not None else ())
+    if op in {'PWM', 'DPWM'} and str(plc_model).upper() in {'FX5U', 'FX5UC', 'FX5UJ', 'FX5S'} and len(operands or ()) == 3:
+        # A channel-number word is read; a literal physical Y output is an effect.
+        write_indexes.discard(2)
+        if re.fullmatch(r'Y[0-9A-F]+', str(operands[2]).strip(), re.I):
+            write_indexes.add(2)
     if spec is not None and not spec.operands:
         from plc.instruction_definition import select_fact_dependencies
         scoped = DEFAULT_INSTRUCTION_REGISTRY.resolve(op, cpu=plc_model)
@@ -581,7 +590,7 @@ def _normalize_io_map(
             continue
         prefix_match = _DEVICE_RE.fullmatch(address)
         value = {
-            "kind": str(row.get("kind") or prefix_match.group(1)).strip().upper(),
+            "kind": str(row.get("kind") or prefix_match.group(1) or prefix_match.group(4)).strip().upper(),
             "label": str(row.get("label") or row.get("description") or "").strip(),
             "source": str(row.get("source") or "confirmed").strip(),
         }
@@ -685,7 +694,7 @@ def build_plc_ir(
     for address in sorted(all_addresses, key=_device_sort_key):
         match = _DEVICE_RE.fullmatch(address)
         if match:
-            prefix = match.group(1).upper()
+            prefix = (match.group(1) or match.group(4)).upper()
         else:
             from plc.ordered_source import buffer_memory_reference, source_extended_reference
             if buffer_memory_reference(address):

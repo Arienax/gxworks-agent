@@ -19,9 +19,11 @@ pulse counts, and source conflicts remain outside the admitted software subset.
    profile. Numeric limits, output ranges, hardware tables and OFF-time predicate
    values come from these facts. The consumer's relation vocabulary is code,
    not a second copy of the manual's values.
-4. Static checks and software execution use the same profile and predicates.
-   Source or generated-file drift invalidates the profile. An explicitly named
-   software source binding identifies the exact reviewed source SHA256.
+4. Static checks and software execution use the same complete generated contract
+   and predicates. Runtime checks its schema, version and selected facts without
+   reopening the offline input or recompiling it. Explicit build checks compare
+   the reviewed input and generated contract. The software source binding retains
+   the reviewed source identity.
 
 Reproduction:
 
@@ -33,6 +35,17 @@ Reproduction:
 Updating an input requires review, source export, and regeneration. The exporter
 reads AB values from the pipeline input, not from the manifest's existing rules.
 Its manifest fixes the reviewed identities and separately reviewed AG fact.
+
+## Distribution
+
+MCP and Full ship only `pwm_contract.generated.json` under
+`resources/instructions/mitsubishi/`. It contains the profiles, reviewed facts and
+source identities needed by runtime. `pwm_reviewed_facts.json` remains an offline
+generation input. Both runtime consumers use the shared resource locator.
+`scripts/release_smoke.py` runs `--self-test-pwm` inside the built distribution;
+this explicit check recompiles the embedded reviewed input and compares the
+contract, then binds PWM/DPWM values for all four reviewed CPUs. A missing or
+inconsistent packaged contract fails the check.
 
 ## Live graph and safety boundaries
 

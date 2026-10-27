@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Source-bounded PWM facts and binding, shared by static and software execution.
 
 This is not PLC admission. The full instruction graph retains unresolved source
@@ -75,11 +78,8 @@ def bind_pwm_values(opcode, model, values, context):
         # PWM negative literals need the language's unsigned interpretation.
         if on >= 0 and period >= 0 or opcode == 'DPWM':
             result['PWM_WIDTH_VALID'] = 0 <= on <= maximum and 0 <= period <= config['maximum_period']
-        if on >= config['domain_minimum'] and period >= config['domain_minimum']:
-            result['PWM_DOMAIN_VALID'] = True
-            result['PWM_ON_POSITIVE'], result['PWM_PERIOD_POSITIVE'] = on, period
-        elif opcode == 'DPWM' and (on < 0 or period < 0):
-            result['PWM_DOMAIN_VALID'] = False
+        result['PWM_DOMAIN_VALID'] = on >= config['domain_minimum'] and period >= config['domain_minimum']
+        result['PWM_ON_POSITIVE'], result['PWM_PERIOD_POSITIVE'] = on, period
     raw = tokens[2] if len(tokens) > 2 else values.get('D')
     token = raw.strip().upper() if isinstance(raw, str) else None
     if token is not None: result['$PWM_DESTINATION_TOKEN'] = token
@@ -190,19 +190,30 @@ def validate_pwm_request(opcode, model, on_time, period, destination, context):
     if not isinstance(language, str) or language not in {'ladder', 'st', 'fbd'}:
         raise UnknownInstructionSemantics('pwm_language_not_supported')
     bound = bind_pwm_values(opcode, model, values, context)
-    # A live owner, including an empty/withdrawn owner, always takes priority.
-    # The named snapshot is usable only when this owner was never installed.
+    # A declared catalogue skeleton has never supplied reviewed PWM semantics.
+    # An installed reviewed owner, including one with withdrawn witnesses, does.
     from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
     registry = DEFAULT_INSTRUCTION_REGISTRY
     if not registry.fact_bundle_current():
         raise UnknownInstructionSemantics('pwm_live_fact_bundle_stale')
     entry = registry.definition_entry(opcode, cpu=model)
-    groups = snapshot_facts(opcode, model) if entry is None else entry.get('facts', [])
+    catalogue_only = (entry is not None
+        and entry.get('support_status') == 'existing_declared_scope'
+        and entry.get('call_available') is True and entry.get('registry_member') is True
+        and not entry.get('conflicts') and bool(entry.get('facts'))
+        and all(isinstance(fact, Mapping)
+                and str(fact.get('id', '')).startswith('registry:')
+                and fact.get('status') in {'unknown', 'declared_unverified'}
+                and fact.get('verification') == 'not_performed'
+                for fact in entry['facts']))
+    groups = (snapshot_facts(opcode, model) if entry is None or catalogue_only
+              else entry.get('facts', []))
     required_ids = {fact['id'] for fact in pwm_formal_facts(opcode, model)}
     report = check_fact_constraints(groups, bound, target=opcode,
         plc_model=model, language=language, version=context.get('software_version'), context=context,
         root_ids=sorted(required_ids))
-    report['source_mode'] = 'version_bound_snapshot' if entry is None else 'live_owner'
+    report['source_mode'] = ('version_bound_snapshot_with_catalogue' if catalogue_only
+                            else 'version_bound_snapshot' if entry is None else 'live_owner')
     report['source_binding'] = source_binding()
     passed_ids = {row['fact_id'] for row in report['checks'] if row['status'] == 'passed'}
     if report['status'] != 'passed' or not required_ids <= passed_ids:

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Business objects at the isolated workspace boundary, never vendor call plans.
 
 The Core continues to validate source bytes and PLC semantics. The workspace

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Confirmed generation context and candidate preparation tools."""
 from __future__ import annotations
 from shared.privacy import credential_field, filesystem_field
@@ -442,7 +445,8 @@ class GenerationToolHandlers:
         return canonical_sha256({
             "project_id": context.project_id, "version_id": context.version_id,
             "plc_model": context.plc_model,
-            "target_mode": str(context.project.get("target_mode") or "ladder"),
+            "target_mode": str((context.version or {}).get("target_mode")
+                               or context.project.get("target_mode") or "ladder"),
             "confirmed_spec": project_confirmed_specification(_confirmed_spec(context)),
             "program": public_generation_ladder(program),
         })

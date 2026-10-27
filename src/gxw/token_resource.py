@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Read bounded code regions in the observed FX .res wrapper without rewriting it.
 
 Both code copies, timestamps and the unparsed suffix retain original bytes.

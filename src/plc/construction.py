@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Three finite Core constructions, instantiated through the existing ladder IR.
 
 No process templates are stored here. Confirmed relations determine effects;

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Model API-key targets stored in Windows Credential Manager."""
 
 from storage.windows_credentials import delete_secret, read_secret, write_secret

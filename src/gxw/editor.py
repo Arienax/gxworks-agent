@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Deterministic FBD draft commands and presentation projections.
 
 A draft is not accepted, compiled, or saved by this module. Native templates,

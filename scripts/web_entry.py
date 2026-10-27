@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Frozen Web entry and side-effect-free runtime diagnostics."""
 import json
 import sys
@@ -7,6 +10,10 @@ def run():
     if sys.argv[1:] == ['--self-test-st']:
         from runtime_st_smoke import check_st_runtime
         print(json.dumps(check_st_runtime()))
+        return 0
+    if sys.argv[1:] == ['--self-test-pwm']:
+        from runtime_pwm_smoke import check_pwm_runtime
+        print(json.dumps(check_pwm_runtime()))
         return 0
     if sys.argv[1:] == ["--self-test-core"]:
         import importlib

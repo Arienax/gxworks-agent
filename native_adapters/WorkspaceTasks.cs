@@ -1,3 +1,6 @@
+// Copyright 2026 Arienax
+// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 // Original resource/task interfaces, bound to Workspace 1.635.0.1 (x86).
 // Python supplies current source, ownership, configuration and append intent.
 using System;

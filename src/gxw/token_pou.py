@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Lossless token framing, with lexical decoding limited to observed FX code.
 
 Facts come from FX3U controls, full native CSV alignments and hash-bound native

@@ -1,6 +1,10 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Immutable engineering snapshots and explicit context preconditions."""
 from __future__ import annotations
 import copy
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 from agent_runtime.tool_errors import ToolPreconditionError, PROJECT_ACTIONS, SOURCE_ACTIONS
@@ -21,6 +25,7 @@ class ToolContext:
     native_snapshot: Optional[bytes] = None
     st_text: Optional[str] = None
     sfc_graph: Optional[Mapping[str, Any]] = None
+    read_revision: str = field(default_factory=lambda: uuid.uuid4().hex)
     inspection: Any = None
     analysis_source: Optional[Mapping[str, Any]] = None
     operation_status: Any = None
@@ -54,6 +59,7 @@ def build_tool_context(
     native_snapshot: Optional[bytes] = None,
     st_text: Optional[str] = None,
     sfc_graph: Optional[Mapping[str, Any]] = None,
+    read_revision=None,
     inspection=None,
     analysis_source=None,
     operation_status=None,
@@ -77,6 +83,7 @@ def build_tool_context(
         native_snapshot=bytes(native_snapshot) if native_snapshot is not None else None,
         st_text=st_text,
         sfc_graph=copy.deepcopy(dict(sfc_graph)) if isinstance(sfc_graph, Mapping) else None,
+        read_revision=read_revision if read_revision is not None else uuid.uuid4().hex,
         inspection=inspection,
         analysis_source=copy.deepcopy(analysis_source),
         operation_status=operation_status,

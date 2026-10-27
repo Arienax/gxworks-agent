@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Model-free generation acceptance shared by the API and engineering tools.
 
 The API fast path is authoritative: representation checks are blocking;

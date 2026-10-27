@@ -1,0 +1,326 @@
+import json
+
+import pytest
+from hypothesis import given, settings, strategies as st
+
+import application.model_api as api
+from application.compact_alias import expand_hybrid_compact_ladder
+from application.format_patch_repair import format_repair_response
+from application.rejected_generation_preview import materialize_rejected_preview, recover_rejected_ladder
+
+
+@given(contacts=st.lists(st.tuples(st.sampled_from(["NO", "NC", "P", "F"]),
+                                 st.integers(min_value=0, max_value=99)), min_size=1, max_size=8),
+       operand=st.integers(min_value=0, max_value=32767),
+       branches=st.integers(min_value=1, max_value=6))
+@settings(max_examples=100, deadline=None)
+def test_uniform_common_conditions_preserve_native_instruction_order(contacts, operand, branches):
+    import copy
+    from application.compact_protocol import normalize_compact, expand_compact_ladder
+    from plc.ir import lower_rung_instructions
+    common = [f"{kind} M{address}" for kind, address in contacts]
+    outputs = [{"i": [f"NC M{100 + n}"], "o": [f"MOV K{operand} D{n}", f"COIL M{200 + n}"]}
+               for n in range(branches)]
+    legacy = {"r": [{"h": common[0], "s": common[1:], "b": outputs}]}
+    current = {"r": [{"c": common, "b": outputs}]}
+    original = copy.deepcopy(current)
+    canonical, changes = normalize_compact(current)
+    assert current == original and canonical == current and changes == []
+    assert normalize_compact(canonical) == (canonical, [])
+    old_ladder, new_ladder = expand_compact_ladder(legacy), expand_compact_ladder(current)
+    # Source locations move from header_element to shared_inputs; executable
+    # operations and operand order must remain byte-for-byte equivalent.
+    def instructions(ladder):
+        return [(item["op"], item["args"]) for item in lower_rung_instructions(ladder["rungs"][0])]
+    assert instructions(old_ladder) == instructions(new_ladder)
+    assert new_ladder["rungs"][0]["shared_inputs"] == [
+        {"type": kind, "address": f"M{address}"} for kind, address in contacts]
+    for n, branch in enumerate(new_ladder["rungs"][0]["branches"]):
+        assert branch["outputs"] == [
+            {"type": "APP_INSTR", "opcode": "MOV", "operands": [f"K{operand}", f"D{n}"]},
+            {"type": "COIL", "address": f"M{200 + n}"}]
+
+
+@given(kind=st.sampled_from(["NO", "NC", "P", "F"]), address=st.integers(min_value=0, max_value=99))
+@settings(max_examples=60, deadline=None)
+def test_singleton_representations_normalize_without_mutating_or_changing_predicates(kind, address):
+    import copy
+    from application.compact_protocol import normalize_compact, expand_compact_ladder
+    original = {"r": [{"h": [f"{kind} M{address}"], "s": "NC M100",
+                       "b": [{"i": "NO X0", "o": "COIL Y0"}]}]}
+    before = copy.deepcopy(original)
+    normalized, changes = normalize_compact(original)
+    assert original == before and len(changes) == 4
+    assert normalize_compact(normalized) == (normalized, [])
+    expanded = expand_compact_ladder(original)
+    assert expanded["rungs"][0]["header_element"] == {"type": kind, "address": f"M{address}"}
+    assert expanded["rungs"][0]["shared_inputs"] == [{"type": "NC", "address": "M100"}]
+    assert expanded["rungs"][0]["branches"][0]["inputs"] == [{"type": "NO", "address": "X0"}]
+
+
+@pytest.mark.parametrize("row", [
+    {"c": None}, {"c": False}, {"c": 0}, {"c": [None]}, {"c": ["NO M0"], "h": "NC M1"},
+    {"c": ["NO M0"], "s": []}, {"h": []}, {"h": ["NO M0", "NC M1"]},
+])
+def test_ambiguous_common_conditions_are_not_discarded_or_combined(row):
+    from application.compact_protocol import CompactProtocolError, expand_compact_ladder
+    with pytest.raises(CompactProtocolError):
+        expand_compact_ladder({"r": [{**row, "b": [{"i": [], "o": ["COIL Y0"]}]}]})
+
+
+def _hybrid_compact():
+    return {
+        "device_comments": {},
+        "rungs": [
+            {
+                "branches": [
+                    {
+                        "inputs": ["NO X3", {"or": [["NO X1"], ["NO M0"]]}],
+                        "outputs": ["COIL M0"],
+                    }
+                ]
+            },
+            {
+                "branches": [
+                    {
+                        "inputs": [">= D0 K1", "<= D0 K9"],
+                        "outputs": ["COIL M10"],
+                    }
+                ]
+            },
+        ],
+    }
+
+
+@given(st.lists(st.lists(st.tuples(
+    st.sampled_from(["NO", "NC", "P", "F"]),
+    st.sampled_from(["X0", "X1", "X10", "M10", "M11"])),
+    min_size=1, max_size=4), min_size=1, max_size=4))
+@settings(max_examples=100, deadline=None)
+def test_single_branch_shared_parallel_preserves_condition_order_and_round_trips(alternatives):
+    import copy
+    from application.compact_protocol import expand_compact_ladder, normalize_compact, validate_compact_structure
+    from application.construction_examples import _compact_from_ir
+    from plc.ir import build_plc_ir, ir_to_ladder
+
+    parallel = {"or": [[f"{kind} {address}" for kind, address in series] for series in alternatives]}
+    compact = {"r": [{"h": "NO X2", "s": ["NC X1", parallel, "NO X0"],
+                      "b": [{"i": ["NO X3"], "o": ["RST M10", "SET M11"]}]}]}
+    before = copy.deepcopy(compact)
+    canonical, changes = normalize_compact(compact)
+    assert canonical == {"r": [{"h": "NO X2", "s": [], "b": [
+        {"i": ["NC X1", parallel, "NO X0", "NO X3"], "o": ["RST M10", "SET M11"]}]}]}
+    assert [x["rule"] for x in changes] == ["single_branch_shared_parallel"]
+    assert normalize_compact(canonical) == (canonical, [])
+    validate_compact_structure(canonical)
+    ladder = expand_compact_ladder(compact)
+    assert compact == before
+    assert ladder["rungs"][0]["header_element"] == {"type": "NO", "address": "X2"}
+    assert ladder["rungs"][0]["shared_inputs"] == []
+    assert ladder["rungs"][0]["branches"][0]["inputs"] == [
+        {"type": "NC", "address": "X1"}, {"type": "parallel_block", "branches": [
+            [{"type": kind, "address": address} for kind, address in series] for series in alternatives]},
+        {"type": "NO", "address": "X0"}, {"type": "NO", "address": "X3"}]
+    from plc.validation import validate_ladder_candidate_structure
+    validate_ladder_candidate_structure(ladder)
+    program = build_plc_ir(ladder)
+    assert ir_to_ladder(program) == ladder
+    assert _compact_from_ir(program) == {"r": [{"c": ["NO X2"], "b": canonical["r"][0]["b"]}]}
+    assert not any(f["code"] == "REPEATED_GUARD_INVALIDATED" for f in program["analysis"]["findings"])
+
+
+def test_long_key_alias_relocates_parallel_only_when_there_is_one_output_branch():
+    value = {"rungs": [{"shared_inputs": [{"or": [["NO M10"], ["NO X0"]]}],
+                        "branches": [{"inputs": [], "outputs": ["RST M10", "SET M11"]}]}]}
+    ladder = expand_hybrid_compact_ladder(value)
+    assert ladder["rungs"][0]["shared_inputs"] == []
+    assert ladder["rungs"][0]["branches"][0]["inputs"] == [{"type": "parallel_block", "branches": [
+        [{"type": "NO", "address": "M10"}], [{"type": "NO", "address": "X0"}]]}]
+
+
+def test_shared_parallel_is_not_repeated_across_mutating_output_branches():
+    from application.compact_protocol import CompactProtocolError, expand_compact_ladder
+    with pytest.raises(CompactProtocolError):
+        expand_compact_ladder({"r": [{"h": None, "s": [{"or": [["NO M10"], ["NO X0"]]}],
+                                      "b": [{"i": [], "o": ["RST M10"]},
+                                            {"i": [], "o": ["SET M11"]}]}]})
+
+
+@pytest.mark.parametrize("condition", [{"or": []}, {"or": [[]]}, {"or": [[{"or": [["NO X0"]]}]]},
+                                        {"or": [["NO X0"]], "unknown": True}])
+def test_shared_parallel_rejects_empty_nested_or_ambiguous_shapes(condition):
+    from application.compact_protocol import CompactProtocolError, expand_compact_ladder
+    with pytest.raises(CompactProtocolError):
+        expand_compact_ladder({"r": [{"h": None, "s": [condition], "b": [{"i": [], "o": ["COIL Y0"]}]}]})
+
+
+def test_long_key_compact_alias_expands_without_changing_plc_tokens():
+    ladder = expand_hybrid_compact_ladder(_hybrid_compact())
+    assert ladder is not None
+    assert len(ladder["rungs"]) == 2
+    branch = ladder["rungs"][0]["branches"][0]
+    assert branch["inputs"][0] == {"type": "NO", "address": "X3"}
+    assert branch["inputs"][1] == {
+        "type": "parallel_block",
+        "branches": [
+            [{"type": "NO", "address": "X1"}],
+            [{"type": "NO", "address": "M0"}],
+        ],
+    }
+    assert branch["outputs"] == [{"type": "COIL", "address": "M0"}]
+    compare = ladder["rungs"][1]["branches"][0]["inputs"]
+    assert compare == [
+        {"type": "COMPARE", "expression": ">= D0 K1"},
+        {"type": "COMPARE", "expression": "<= D0 K9"},
+    ]
+
+
+def test_format_repair_recovers_long_key_compact_alias_without_model(monkeypatch):
+    raw = json.dumps(_hybrid_compact(), ensure_ascii=False, separators=(",", ":"))
+    monkeypatch.setattr(
+        api,
+        "_request_model",
+        lambda *args, **kwargs: pytest.fail("long-key compact alias must be deterministic"),
+    )
+
+    reasoning, content = format_repair_response(
+        {"repair_mode": "format", "candidate_text": raw},
+        "offline-model",
+        "high",
+    )
+
+    assert reasoning == ""
+    ladder = json.loads(content)
+    assert ladder["rungs"][0]["branches"][0]["inputs"][0] == {
+        "type": "NO",
+        "address": "X3",
+    }
+    assert ladder["rungs"][0]["branches"][0]["outputs"] == [
+        {"type": "COIL", "address": "M0"}
+    ]
+
+
+def test_rejected_preview_renders_long_key_compact_alias(tmp_path):
+    raw = json.dumps(_hybrid_compact(), ensure_ascii=False, separators=(",", ":"))
+    ladder, info = recover_rejected_ladder(raw)
+    assert info["source_format"] == "compact_alias_ladder"
+    assert len(ladder["rungs"]) == 2
+
+    metadata = materialize_rejected_preview(raw, tmp_path, plc_model="FX3U")
+    assert metadata["validation"]["status"] == "invalid_candidate"
+    assert metadata["recovery"]["source_format"] == "compact_alias_ladder"
+    for key in ("svg", "program_csv", "comment_csv"):
+        path = tmp_path / metadata["artifacts"][key]
+        assert path.is_file()
+        assert path.stat().st_size > 0
+
+
+@pytest.mark.parametrize("root_key", ["r", "root"])
+def test_compact_root_alias_is_detached_idempotent_and_logic_preserving(root_key):
+    import copy
+    from application.compact_protocol import normalize_compact, expand_compact_ladder
+    canonical = {"r": [{"h": None, "s": ["NC X1"], "b": [
+        {"i": [{"or": [["NO X0"], ["NO Y0"]]}], "o": ["COIL Y0"]}]}]}
+    value = {root_key: copy.deepcopy(canonical["r"])}
+    before = copy.deepcopy(value)
+    normalized, changes = normalize_compact(value)
+    assert value == before and normalized == canonical
+    assert normalize_compact(normalized) == (normalized, [])
+    assert [row["rule"] for row in changes] == (["root_field_alias"] if root_key == "root" else [])
+    assert expand_compact_ladder(value) == expand_compact_ladder(canonical)
+
+
+@pytest.mark.parametrize("value", [
+    {"root": [], "r": []}, {"root": [], "extra": "ignored?"},
+    {"root": {"r": []}}, {"root": None}, {"root": []},
+])
+def test_compact_alias_never_discards_ambiguity_or_bypasses_schema(value):
+    from application.compact_protocol import CompactProtocolError, expand_compact_ladder
+    with pytest.raises(CompactProtocolError):
+        expand_compact_ladder(value)
+
+
+def test_transport_annotation_is_logic_preserving_detached_and_idempotent():
+    import copy
+    from application.compact_protocol import normalize_compact, expand_compact_ladder
+    canonical = {'r': [{'h': None, 's': ['NC X1'], 'b': [
+        {'i': ['NO X0'], 'o': ['SUB D14 K3 D100']}]}]}
+    raw = {'type': 'json_object', **copy.deepcopy(canonical)}
+    before = copy.deepcopy(raw)
+    normalized, changes = normalize_compact(raw)
+    assert normalized == canonical and raw == before
+    assert [c['rule'] for c in changes] == ['transport_format_annotation']
+    assert normalize_compact(normalized) == (normalized, [])
+    assert expand_compact_ladder(raw) == expand_compact_ladder(canonical)
+
+
+@pytest.mark.parametrize('fields', [
+    {'type': 'instruction'}, {'type': {'json_object': True}},
+    {'type': 'json_object', 'instructions': ['MOV K0 D0']},
+    {'type': 'json_object', 'root': []},
+])
+def test_transport_annotation_never_discards_competing_or_unknown_fields(fields):
+    from application.compact_protocol import CompactProtocolError, expand_compact_ladder
+    raw = {**fields, 'r': [{'b': [{'o': ['COIL Y0']}]}]}
+    with pytest.raises(CompactProtocolError):
+        expand_compact_ladder(raw)
+
+
+@pytest.mark.parametrize("field,value,keyword,path", [
+    ("r", [], "minItems", "content.r"),
+    ("s", False, "type", "content.r.0.s"),
+    ("s", [7], "type", "content.r.0.s.0"),
+    ("h", 1, "type", "content.r.0.h"),
+    ("i", None, "type", "content.r.0.b.0.i"),
+    ("i", [{"or": []}], "anyOf", "content.r.0.b.0.i.0"),
+    ("i", [{"or": [[{"or": [["NO X0"]]}]]}], "anyOf", "content.r.0.b.0.i.0"),
+    ("o", [], "minItems", "content.r.0.b.0.o"),
+    ("o", [""], "minLength", "content.r.0.b.0.o.0"),
+    ("o", ["A" * 161], "maxLength", "content.r.0.b.0.o.0"),
+])
+def test_compact_schema_reports_safe_paths_without_type_coercion(field, value, keyword, path):
+    from application.compact_protocol import (
+        CompactProtocolError, canonical_compact_example, expand_compact_ladder,
+    )
+    candidate = canonical_compact_example()
+    if field in {"h", "s"}:
+        candidate["r"][0].pop("c")
+        candidate["r"][0].update(h=None, s=[])
+    target = candidate if field == "r" else candidate["r"][0] if field in {"h", "s"} else candidate["r"][0]["b"][0]
+    target[field] = value
+    with pytest.raises(CompactProtocolError) as caught:
+        expand_compact_ladder(candidate)
+    assert caught.value.path == path
+    assert caught.value.schema_keyword == keyword
+
+
+def test_schema_errors_do_not_echo_unknown_model_fields():
+    from application.compact_protocol import (
+        CompactProtocolError, canonical_compact_example, expand_compact_ladder,
+    )
+    candidate = canonical_compact_example()
+    candidate["r"][0]["model_controlled_secret"] = "do not echo this"
+    with pytest.raises(CompactProtocolError) as caught:
+        expand_compact_ladder(candidate)
+    assert caught.value.schema_keyword == "additionalProperties"
+    assert caught.value.path == "content.r.0"
+    assert "model_controlled_secret" not in str(caught.value)
+    assert "do not echo this" not in str(caught.value)
+
+
+def test_compact_missing_required_output_is_not_materialized():
+    from application.compact_protocol import CompactProtocolError, expand_compact_ladder
+    with pytest.raises(CompactProtocolError) as caught:
+        expand_compact_ladder({"r": [{"b": [{}]}]})
+    assert caught.value.path == "content.r.0.b.0.o"
+    assert caught.value.schema_keyword == "required"
+
+
+def test_compact_schema_keeps_documented_optional_defaults_and_semantic_parser():
+    from application.compact_protocol import CompactProtocolError, expand_compact_ladder
+    sparse = {"r": [{"b": [{"o": ["COIL Y0"]}]}]}
+    explicit = {"r": [{"h": None, "s": [], "b": [{"i": [], "o": ["COIL Y0"]}]}]}
+    assert expand_compact_ladder(sparse) == expand_compact_ladder(explicit)
+    explicit["r"][0]["b"][0]["i"] = ["NOT_A_CONTACT X0"]
+    with pytest.raises(CompactProtocolError):
+        expand_compact_ladder(explicit)

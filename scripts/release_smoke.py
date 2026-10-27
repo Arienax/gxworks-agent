@@ -1,6 +1,10 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Audit and exercise executable distributions in isolated temporary state."""
 from __future__ import annotations
 import argparse
+import hashlib
 import http.cookiejar
 import json
 import os
@@ -9,6 +13,7 @@ import re
 import secrets
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.request
@@ -20,11 +25,12 @@ URL = "https://github.com/Arienax/gxworks-agent"
 def audit(package, component):
     from runtime_knowledge_resources import audit_packaged_knowledge
     audit_packaged_knowledge(package)
-    required = {"LICENSE", "LICENSE-SCOPE.md", "THIRD_PARTY_NOTICES.md",
+    required = {"LICENSE", "NOTICE", "LICENSING.md", "THIRD_PARTY_NOTICES.md", "SECURITY.md", "ACCESSIBILITY.md",
                 "THIRD_PARTY_LICENSES/README.md", "gxw/templates/fx3u.gxw",
                 "gxw/templates/blank-fbd-projects.zip.xz",
     "gxw/templates/blank-ladder-projects.zip.xz",
-                "resources/instructions/mitsubishi/fx3u_step_widths.json"}
+                "resources/instructions/mitsubishi/fx3u_step_widths.json",
+                "resources/instructions/mitsubishi/pwm_contract.generated.json"}
     for name in required:
         assert (package / name).is_file(), name
     assert "Apache License" in (package / "LICENSE").read_text(encoding="utf-8")[:500]
@@ -97,6 +103,8 @@ def smoke_mcp(exe, scratch):
     params = StdioServerParameters(command=str(exe), args=["--local", "--workspace", str(scratch / "workspace"),
                                   "--state-dir", str(scratch / "state")], cwd=scratch, env=env)
     async def exercise():
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+        from application.read_delivery import assemble_read_pages, serialized_size
         with anyio.fail_after(120):
             with (scratch / "mcp.log").open("w", encoding="utf-8") as errors:
                 async with stdio_client(params, errlog=errors) as streams:
@@ -105,28 +113,39 @@ def smoke_mcp(exe, scratch):
                         assert str(initialized.server_info.website_url) == URL
                         assert URL in initialized.instructions
                         count = len((await client.list_tools()).tools)
+                        async def read(tool, arguments):
+                            pages = []
+                            while True:
+                                response = await client.call_tool(tool, arguments)
+                                assert not response.is_error, response
+                                assert serialized_size(response.model_dump(by_alias=True, exclude_none=True))['utf8_bytes'] <= 32768
+                                payload = json.loads(response.content[0].text)
+                                pages.append(payload)
+                                next_call = payload['data']['delivery']['next']
+                                if next_call is None:
+                                    return assemble_read_pages(pages)
+                                tool, arguments = next_call['tool'], next_call['arguments']
                         created = await client.call_tool("create_project", {"name": "Release smoke", "plc_model": "FX3U", "target_mode": "ladder"})
                         assert not created.is_error, created
-                        facts = await client.call_tool('search_plc_manual', {'query': 'PLSY 操作数', 'plc_model': 'FX3U', 'top_k': 2})
-                        assert not facts.is_error, facts
-                        fact_rows = facts.structured_content['data']['results']
-                        assert fact_rows and all('[PLC KNOWLEDGE]' in row['text'] for row in fact_rows)
+                        facts = await read('search_plc_manual', {'query': 'PLSY 操作数', 'plc_model': 'FX3U', 'top_k': 2})
+                        fact_rows = facts['results']
+                        assert fact_rows and all(row.get('knowledge') and
+                            all(isinstance(unit, dict) for unit in row['knowledge']) for row in fact_rows)
                         assert all(not set(row) & {'id', 'source_id', 'manual_id', 'technical_status', 'distribution_status'} for row in fact_rows)
-                        assert all('source_verified' not in row['text'] and 'native_compile' not in row['text'] for row in fact_rows)
-                        assert all('[PAGE ' not in row['text'] and '[TABLE page=' not in row['text'] for row in fact_rows)
-                        debug_facts = await client.call_tool('search_plc_manual', {'query': 'PLSY 操作数', 'plc_model': 'FX3U', 'top_k': 2, 'debug': True})
-                        assert not debug_facts.is_error, debug_facts
-                        debug_rows = debug_facts.structured_content['data']['results']
+                        assert all('native_compile' not in json.dumps(row['knowledge']) for row in fact_rows)
+                        assert all('[PAGE ' not in json.dumps(row['knowledge']) and
+                                   '[TABLE page=' not in json.dumps(row['knowledge']) for row in fact_rows)
+                        debug_facts = await read('search_plc_manual', {'query': 'AND 操作数', 'plc_model': 'FX3U', 'top_k': 1, 'debug': True})
+                        debug_rows = debug_facts['results']
                         assert debug_rows and all(row['id'] and row.get('content_origin') == 'authored_fact' for row in debug_rows)
-                        context = await client.call_tool("get_generation_context", {"user_requirement": "X0 controls Y0", "workflow": "direct_generation"})
-                        assert not context.is_error, context
-                        assert 'generation_handoff' not in context.structured_content['data']
+                        context = await read("get_generation_context", {"user_requirement": "X0 controls Y0", "workflow": "direct_generation"})
+                        assert 'generation_handoff' not in context
                         ladder = {"result": {"r": [
                             {"c": ["NO X0"], "b": [{"i": [], "o": ["COIL Y0"]}]},
                             {"h": ["NO X0"], "s": [], "b": [{"i": [], "o": ["COIL M0"]}]},
                         ]}}
                         candidate = await client.call_tool("create_program_candidate", {"ladder": ladder,
-                            "generation_context_id": context.structured_content["data"]["generation_context_id"]})
+                            "generation_context_id": context["generation_context_id"]})
                         assert not candidate.is_error and candidate.structured_content["status"] == "saved", candidate
                         artifacts = await client.call_tool("get_project_artifacts", {})
                         assert not artifacts.is_error, artifacts
@@ -136,9 +155,43 @@ def smoke_mcp(exe, scratch):
     return anyio.run(exercise)
 
 
+def canonical_digest(path):
+    """Digest one packaged JSON document the way the PWM compiler identifies it."""
+    value = json.loads(path.read_text(encoding="utf-8"))
+    canonical = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def smoke_pwm(exe, package, scratch):
+    """Parse the packaged PWM/DPWM facts through the packaged runtime itself."""
+    env = environment(scratch)
+    result = subprocess.run([str(exe), "--self-test-pwm"], cwd=scratch, env=env, capture_output=True, timeout=120)
+    assert result.returncode == 0, (result.stdout.decode(errors="replace"), result.stderr.decode(errors="replace"))
+    report = json.loads(result.stdout.decode().strip().splitlines()[-1])
+    # The runtime must resolve the installed distribution's own resources, not a
+    # development checkout or a stale copy beside the extracted directory.
+    directory = Path(report["directory"]).resolve()
+    assert directory == package / "resources/instructions/mitsubishi", directory
+    for key in ("generated_path",):
+        assert Path(report[key]).resolve().parent == directory, report[key]
+    generated = (directory / "pwm_contract.generated.json").resolve()
+    assert generated.is_file()
+    reviewed_source = json.loads(generated.read_text(encoding="utf-8"))["reviewed_source"]
+    digest = hashlib.sha256(json.dumps(reviewed_source, sort_keys=True, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+    assert report["status"] == "passed" and report["contract_matches_reviewed_facts"] is True, report
+    assert report["source_sha256"] == digest, (report["source_sha256"], digest)
+    assert report["source_binding"] == "PWM-reviewed-v1:" + digest, report["source_binding"]
+    assert report["forms"] == ["DPWM", "PWM"] and report["models"] == 4, report
+    assert len(report["profiles"]) == 8 and set(report["profiles"].values()) == {11}, report["profiles"]
+    assert report["native_compile"] == "not_performed"
+    return {"pwm_resources": 1, "pwm_profiles": len(report["profiles"]),
+            "contract_matches_reviewed_facts": True, "installed_resources_only": True}
+
+
 def smoke_web(exe, scratch):
     env = environment(scratch)
-    for flag in ("--self-test-core", "--self-test-st", "--self-test-knowledge", "--self-test-settings", "--self-test-openai-sdk"):
+    for flag in ("--self-test-core", "--self-test-st", "--self-test-pwm", "--self-test-knowledge",
+                 "--self-test-settings", "--self-test-openai-sdk"):
         result = subprocess.run([str(exe), flag], cwd=scratch, env=env, capture_output=True, timeout=90)
         assert result.returncode == 0, (flag, result.stdout.decode(errors="replace"), result.stderr.decode(errors="replace"))
     with socket.socket() as listener:
@@ -191,12 +244,16 @@ if __name__ == "__main__":
     parser.add_argument("package", type=Path)
     args = parser.parse_args()
     component = 'full' if args.component == 'web' else args.component
-    exe = audit(args.package.resolve(), component)
+    package = args.package.resolve()
+    exe = audit(package, component)
     with tempfile.TemporaryDirectory(prefix="gx-release-smoke-") as directory:
         scratch = Path(directory)
         mcp_state = scratch / 'mcp'
         mcp_state.mkdir()
         result = {'mcp': smoke_mcp(exe.with_name('gxworks-agent-mcp.exe'), mcp_state)}
+        pwm_state = scratch / 'pwm'
+        pwm_state.mkdir()
+        result['pwm'] = smoke_pwm(exe.with_name('gxworks-agent-mcp.exe'), package, pwm_state)
         if component == 'full':
             web_state = scratch / 'web'
             web_state.mkdir()

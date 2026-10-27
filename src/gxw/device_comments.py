@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Lossless editing of the counted UTF-16 GX Works2 device-comment table.
 
 Native project/CSV and typed comment-API controls establish stored device

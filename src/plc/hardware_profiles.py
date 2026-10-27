@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Hardware context for PLC generation and requirement confirmation.
 
 PLC nameplate/profile details are optional metadata.  Drive- and motion-side

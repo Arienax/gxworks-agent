@@ -1,4 +1,5 @@
 """Independent physical/logical accounting checks; no user/private fixtures."""
+from contextlib import closing
 import copy
 import hashlib
 import json
@@ -25,7 +26,7 @@ def make_store(root):
 
 def raw_accounting(db):
     """Separate plain SQLite oracle; no production diagnostic helpers."""
-    with sqlite3.connect(db.as_uri()+'?mode=ro',uri=True) as conn:
+    with closing(sqlite3.connect(db.as_uri()+'?mode=ro',uri=True)) as conn, conn:
         page_size=conn.execute('PRAGMA page_size').fetchone()[0]
         page_count=conn.execute('PRAGMA page_count').fetchone()[0]
         free=conn.execute('PRAGMA freelist_count').fetchone()[0]
@@ -59,11 +60,11 @@ class PhysicalAuditIndependentTests(unittest.TestCase):
         fts_actual=sum(v['allocated_bytes']for k,v in report['physical_objects'].items()if k.startswith('fts:'))
         self.assertEqual(fts_actual,fts_expected)
         self.assertNotIn('table:chunks_fts',report['physical_objects'])
-        with sqlite3.connect(self.db) as c:
+        with closing(sqlite3.connect(self.db)) as c, c:
             indexes=[name for name, in c.execute("SELECT name FROM sqlite_schema WHERE type='index' AND tbl_name='runtime_owner_index'")]
         self.assertEqual(report['physical_objects']['index:runtime_owner_index']['allocated_bytes'],sum(oracle['objects'][name][1]for name in indexes))
     def test_free_pages_are_not_counted_twice(self):
-        with sqlite3.connect(self.db) as c:
+        with closing(sqlite3.connect(self.db)) as c, c:
             c.execute('CREATE TABLE transient_data(x BLOB)');c.executemany('INSERT INTO transient_data VALUES (?)',[(b'x'*10000,)]*40);c.execute('DROP TABLE transient_data')
         oracle=raw_accounting(self.db);self.assertGreater(oracle['free_pages'],0)
         r=subject.audit_storage(self.db)
@@ -71,7 +72,7 @@ class PhysicalAuditIndependentTests(unittest.TestCase):
         self.assertEqual(r['dbstat_attributed_bytes']+r['freelist_bytes'],r['sqlite_page_bytes'])
     def test_logical_field_pool_is_exact_payload_count_not_physical_estimate(self):
         r=subject.audit_storage(self.db)
-        with sqlite3.connect(self.db) as c:
+        with closing(sqlite3.connect(self.db)) as c, c:
             fields={}
             for text, in c.execute('SELECT payload_json FROM runtime_fact_fields'):
                 name=json.loads(text)['field'];fields.setdefault(name,[0,0]);fields[name][0]+=1;fields[name][1]+=len(text.encode())
@@ -81,7 +82,7 @@ class PhysicalAuditIndependentTests(unittest.TestCase):
         self.assertAlmostEqual(sum(x['share_of_field_pool_json_bytes']for x in r['field_pool_distribution']),1)
         self.assertEqual(sum(x['payload_json_utf8_bytes']for x in r['field_pool_distribution']),r['logical_columns']['runtime_fact_fields']['selected_column_utf8_bytes']['payload_json'])
     def test_report_never_contains_technical_values_or_unknown_names(self):
-        with sqlite3.connect(self.db) as c:
+        with closing(sqlite3.connect(self.db)) as c, c:
             c.execute('CREATE TABLE SECRET_PRIVATE_OBJECT(x TEXT)')
             c.execute('INSERT INTO SECRET_PRIVATE_OBJECT VALUES (?)',('SECRET_PRIVATE_BODY',))
             text=json.dumps({'field':'SECRET_PRIVATE_FIELD','value':'SECRET_PRIVATE_BODY'})

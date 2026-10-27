@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Persistent page operations composed from the bound native engineering driver.
 
 Reading and applying operate on current native pages. Only stage_save issues a

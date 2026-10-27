@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 import json
 import re
 from plc.ladder_facts import (TIMER_CYCLIC_INTENT_RE, flatten_inputs as _flatten_input_elements,
@@ -23,11 +26,11 @@ DEVICE_ADDRESS_RE = re.compile(
     r"^(ZR|ER|SM|SD|SB|SW|ST|X|Y|M|D|T|C|S|L|F|B|W|R|V|Z)([0-9A-F]+)(?:\.([0-9A-F]+))?$", re.IGNORECASE
 )
 INDEXED_DEVICE_ADDRESS_RE = re.compile(
-    r"^(?P<base>(?:SM|SD|X|Y|M|D|T|C|S)\d+)(?P<index>[VZ]\d+)$",
+    r"^(?P<base>(?:SM|SD|X|Y|M|D|T|C|S)\d+)(?P<index>[VZ]\d*)$",
     re.IGNORECASE,
 )
 INDEXED_DEVICE_TOKEN_RE = re.compile(
-    r"(?<![A-Z0-9_])(?:SM|SD|X|Y|M|D|T|C|S)\d+[VZ]\d+(?![A-Z0-9_])",
+    r"(?<![A-Z0-9_])(?:SM|SD|X|Y|M|D|T|C|S)\d+[VZ]\d*(?![A-Z0-9_])",
     re.IGNORECASE,
 )
 DEVICE_TOKEN_RE = re.compile(
@@ -224,6 +227,17 @@ def parse_device_address(value, plc_model="FX3U"):
     return prefix, index
 
 
+def parse_device_reference(value, plc_model="FX3U"):
+    """Preserve the bit selector alongside the legacy base-address pair."""
+    parsed = parse_device_address(value, plc_model)
+    if parsed is None:
+        return None
+    text = value.strip().upper()
+    return {'prefix': parsed[0], 'number': parsed[1],
+            'bit': int(text.rsplit('.', 1)[1], 16) if '.' in text else None,
+            'text': text}
+
+
 def parse_indexed_device_address(value, plc_model="FX3U"):
     """Parse an FX-style indexed operand such as ``D100Z0``.
 
@@ -242,13 +256,15 @@ def parse_indexed_device_address(value, plc_model="FX3U"):
     index_text = match.group("index").upper()
     base = parse_device_address(base_text, model)
     index = parse_device_address(index_text, model)
-    if base is None or index is None or index[0] not in {"V", "Z"}:
+    if base is None or index is None or index[0] not in {"V", "Z"} or is_bit_device(index_text, model):
         return None
     return {
         "base_text": base_text,
         "index_text": index_text,
         "base": base,
         "index": index,
+        "base_reference": parse_device_reference(base_text, model),
+        "index_reference": parse_device_reference(index_text, model),
     }
 
 
@@ -730,7 +746,17 @@ def _validate_element(
             parsed = _validate_device_address(elem.get("address"), f"{path}.address", plc_model)
             if not is_bit_device(elem["address"], plc_model) or elem_type in {"COIL", "PLS", "PLF"} and parsed[0] == "X":
                 _fail(f"{path}.address", f"{elem_type} requires a {'writable ' if is_output else ''}bit device")
-            expected = None
+            if elem_type in {"COIL", "PLS", "PLF"}:
+                if parsed[0] in {'T', 'ST', 'C'}:
+                    _fail(f"{path}.address", 'timer/counter outputs require their complete typed instruction')
+                from plc.target_identity import target_family
+                if target_family(plc_model) in {'Q', 'L'}:
+                    expected = (None if '.' in elem['address'] else
+                                set(SOURCE_DEVICE_PROFILES[plc_model].get('bit_prefixes', ())) - {'X', 'T', 'ST', 'C'})
+                elif '.' in elem['address']:
+                    _fail(f"{path}.address", f'{elem_type} word-bit output form is not established for {plc_model}')
+            else:
+                expected = None
         _validate_device_address(
             elem.get("address"), f"{path}.address", plc_model, expected
         )
@@ -848,7 +874,7 @@ def _validate_element(
         # must not accidentally make them valid latch targets.
         if opcode in {"SET", "RST"} and operands:
             target = parse_device_address(operands[0], plc_model)
-            if target is not None and target[0] in {"V", "Z"}:
+            if target is not None and target[0] in {"V", "Z"} and not is_bit_device(operands[0], plc_model):
                 _fail(
                     f"{path}.operands[0]",
                     f"{opcode} requires a bit target; {operands[0]} is an index register",

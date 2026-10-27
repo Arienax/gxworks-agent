@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Lossless updates of observed GXW metadata (no XML reserialization)."""
 from __future__ import annotations
 

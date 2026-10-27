@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Shared GXW file import and offline-source candidates for Web and MCP."""
 from __future__ import annotations
 
@@ -360,7 +363,8 @@ def generate_candidate(output, snapshot, context, images, job):
         'Do not create engineering-level POUs, FB definitions, declaration tables, resources or tasks; '
         'do not change task registration or request native operations. '
         'patch_program arguments must contain the nested patch object.')
-    from application.fbd_context import compile_envelope
+    from application.fbd_context import compile_envelope, json_text
+    from application.generation_wire import context_system_prompt
     from application.model_api import bound_provider_profile
     wire_generation = generation
     if fbd_target:
@@ -386,8 +390,8 @@ def generate_candidate(output, snapshot, context, images, job):
         task_type='edit', optional_templates=(
             generation.get('generation_handoff', {}).get('catalog_report', {}).get('optional_templates', ())
             if fbd_target else ()))
-    response = _request_model([{'role': 'system', 'content': instructions},
-        _user_message_with_images(json.dumps(envelope, ensure_ascii=False), images),
+    response = _request_model([{'role': 'system', 'content': context_system_prompt(instructions)},
+        _user_message_with_images(json_text(envelope), images),
         ], model_name=snapshot.get('model', {}).get('model'),
         effort=None, stream=True, on_reasoning_chunk=lambda value: job.emit('reasoning', {'text': value}),
         on_content_chunk=lambda value: job.emit('content', {'text': value}),

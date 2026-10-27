@@ -7,6 +7,7 @@ import sqlite3
 import subprocess
 import sys
 import unittest
+from contextlib import closing
 from tools.audit_runtime_fact_package import JSONUnits, audit_package, audit_sqlite, audit_owner_store
 from plc.instruction_definition_storage import compact_definitions
 
@@ -262,7 +263,7 @@ class RuntimePackageAudit(unittest.TestCase):
         from checks.test_instruction_owner_store import build, refresh_manifest
         with tempfile.TemporaryDirectory() as d:
             _, database, manifest = build(d)
-            with sqlite3.connect(database) as connection:
+            with closing(sqlite3.connect(database)) as connection, connection:
                 connection.execute('DELETE FROM runtime_sources')
             refresh_manifest(database, manifest)
             with self.assertRaisesRegex(ValueError, 'source'):

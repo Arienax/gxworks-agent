@@ -1,13 +1,15 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Read-only, bounded-unit audit of a local runtime package; emits no fact prose.
 
 The complete gzip document is never decompressed to disk or materialized in RAM.
 JSON parsing retains at most one entry/family, with an explicit size guard.
 Distinct identities live in a temporary SQLite file, not a growing Python set.
-Owner manifests use the verified read-only store API, one hydrated owner at a
-time; their size guard runs after hydration, not as a hard peak-RAM bound.
 """
 from __future__ import annotations
 import argparse
+from contextlib import closing
 from collections import Counter
 import gzip
 import hashlib
@@ -310,8 +312,8 @@ def audit_package(path, *, max_unit_bytes=64 * 1024 * 1024, owner_breakdown=Fals
         raise ValueError('Unsupported runtime schema; no counts were inferred')
     counts, statuses, dimensions, field_bytes = Counter(), Counter(), Counter(), Counter()
     provenance = OwnerBreakdown() if owner_breakdown else None
-    with tempfile.TemporaryDirectory(prefix='runtime-fact-audit-') as temporary:
-        db = sqlite3.connect(str(Path(temporary) / 'identities.sqlite'))
+    with tempfile.TemporaryDirectory(prefix='runtime-fact-audit-') as temporary, closing(
+            sqlite3.connect(str(Path(temporary) / 'identities.sqlite'))) as db:
         db.executescript('PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; PRAGMA cache_size=-4096;'
                          'CREATE TABLE owners(id TEXT PRIMARY KEY);'
                          'CREATE TABLE bare_ids(id TEXT PRIMARY KEY);'
@@ -388,85 +390,6 @@ def audit_package(path, *, max_unit_bytes=64 * 1024 * 1024, owner_breakdown=Fals
                            'Expanded owner byte count is a sum of canonical entry JSON, not the complete output document.',
                            'This does not inspect SQLite chunks. Chunk fact occurrences cannot be inferred from definition facts.',
                            'Parsing is bounded by one entry/family, not one fact. Oversized units fail closed.']}
-
-
-def audit_owner_store(path, *, max_unit_bytes=64 * 1024 * 1024, owner_breakdown=False):
-    """Offline full-owner audit through the store API, not a startup benchmark."""
-    from plc.instruction_owner_store import OwnerDefinitionStore, SERIALIZATION
-    started = time.perf_counter()
-    store = OwnerDefinitionStore(path)
-    counts, statuses, dimensions, field_bytes = Counter(), Counter(), Counter(), Counter()
-    provenance = OwnerBreakdown() if owner_breakdown else None
-    maximum = 0
-    try:
-        manifest = json.loads(store.manifest_path.read_text(encoding='utf-8'))
-        manifest_sha = hashlib.sha256(store.manifest_path.read_bytes()).hexdigest()
-        with tempfile.TemporaryDirectory(prefix='runtime-owner-audit-') as temporary:
-            db = sqlite3.connect(str(Path(temporary) / 'identities.sqlite'))
-            try:
-                db.executescript('PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; PRAGMA cache_size=-4096;'
-                    'CREATE TABLE bare_ids(id TEXT PRIMARY KEY); CREATE TABLE source_refs(id TEXT PRIMARY KEY);')
-                for header in store.iter_owner_headers():
-                    entry = store.get_entry(header['opcode'], cpu=header['target_model'], vendor=header['vendor'])
-                    if entry is None:
-                        raise ValueError('Owner header has no stored definition')
-                    size = len(canonical(entry).encode('utf-8'))
-                    maximum = max(maximum, size)
-                    if size > max_unit_bytes:
-                        raise ValueError('Hydrated owner exceeds max-unit limit')
-                    facts = entry.get('facts', [])
-                    counts['owners'] += 1
-                    counts['owner_qualified_fact_instances'] += len(facts)
-                    counts['expanded_owner_json_bytes'] += size
-                    counts['maximum_facts_per_owner'] = max(counts['maximum_facts_per_owner'], len(facts))
-                    if provenance is not None:
-                        provenance.owner(entry)
-                    ids = {fact['id'] for fact in facts}
-                    for fact in facts:
-                        db.execute('INSERT OR IGNORE INTO bare_ids VALUES (?)', (fact['id'],))
-                        statuses[fact.get('status', '<missing>')] += 1
-                        dimensions[fact.get('dimension', '<missing>')] += 1
-                        for key, value in fact.items():
-                            field_bytes[key] += len(canonical(value).encode('utf-8'))
-                        for dependency in fact.get('depends_on', []):
-                            counts['dependency_references'] += 1
-                            counts['dependencies_not_found_within_owner'] += dependency not in ids
-                        for source in fact.get('sources', []):
-                            counts['source_reference_occurrences'] += 1
-                            db.execute('INSERT OR IGNORE INTO source_refs VALUES (?)',
-                                (hashlib.sha256(canonical(source).encode()).hexdigest(),))
-                    del entry, facts, ids
-                    fact = source = value = None  # Do not retain the previous owner's payload.
-                counts['distinct_bare_fact_ids'] = db.execute('SELECT count(*) FROM bare_ids').fetchone()[0]
-                counts['unique_exact_source_reference_objects'] = db.execute('SELECT count(*) FROM source_refs').fetchone()[0]
-            finally:
-                db.close()
-        if not store.current() or counts['owners'] != store.owner_count:
-            raise ValueError('Owner store changed or owner count differs')
-        stats = store.stats()
-        try:
-            import resource
-            peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-            if sys.platform == 'darwin':
-                peak //= 1024
-        except ImportError:
-            peak = None
-        return {**({'owner_provenance': provenance.report()} if provenance is not None else {}),
-            'audit_schema': 1, 'serialization': SERIALIZATION, 'offline_full_owner_scan': True,
-            'manifest_sha256': manifest_sha, 'manifest_bytes': store.manifest_path.stat().st_size,
-            'database_bytes': manifest['database']['bytes'], 'database_sha256': manifest['database']['sha256'],
-            'counts': dict(counts), 'status_counts': dict(statuses), 'dimension_counts': dict(dimensions),
-            'fact_field_value_json_bytes': dict(field_bytes), 'store_validation_stats': stats,
-            'maximum_hydrated_owner_json_bytes': maximum, 'max_unit_limit_bytes': max_unit_bytes,
-            'elapsed_seconds': time.perf_counter() - started, 'peak_rss_kib': peak,
-            'limitations': [
-                'This is an offline scan of every owner through the verified read-only store API, not lazy runtime startup.',
-                'Size is checked after one owner is hydrated; max-unit is not a hard peak-RAM bound for this mode.',
-                'Database size is physical SQLite size, not compressed size or proof that storage expansion is solved.',
-                'Counts do not prove compiler admission, engineering-tool support, native compilation or hardware validity.',
-                'No fact prose or owner identities are emitted; language-feature payloads are not scanned by this owner audit.']}
-    finally:
-        store.close()
 
 
 def audit_sqlite(path, *, max_unit_bytes=64 * 1024 * 1024):
@@ -550,6 +473,85 @@ def audit_sqlite(path, *, max_unit_bytes=64 * 1024 * 1024):
                            'Non-JSON chunks and literal-owner omissions are explicit; no owners are guessed.',
                            'Reference-only chunks are counted but not expanded; zero embedded facts does not mean no runtime knowledge.',
                            'This audit does not read private prose into its report or mutate the database.']}
+
+
+def audit_owner_store(path, *, max_unit_bytes=64 * 1024 * 1024, owner_breakdown=False):
+    """Offline full-owner audit through the store API, not a startup benchmark."""
+    from plc.instruction_owner_store import OwnerDefinitionStore, SERIALIZATION
+    started = time.perf_counter()
+    store = OwnerDefinitionStore(path, verify_integrity=True)
+    counts, statuses, dimensions, field_bytes = Counter(), Counter(), Counter(), Counter()
+    provenance = OwnerBreakdown() if owner_breakdown else None
+    maximum = 0
+    try:
+        manifest = json.loads(store.manifest_path.read_text(encoding='utf-8'))
+        manifest_sha = hashlib.sha256(store.manifest_path.read_bytes()).hexdigest()
+        with tempfile.TemporaryDirectory(prefix='runtime-owner-audit-') as temporary:
+            db = sqlite3.connect(str(Path(temporary) / 'identities.sqlite'))
+            try:
+                db.executescript('PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; PRAGMA cache_size=-4096;'
+                    'CREATE TABLE bare_ids(id TEXT PRIMARY KEY); CREATE TABLE source_refs(id TEXT PRIMARY KEY);')
+                for header in store.iter_owner_headers():
+                    entry = store.get_entry(header['opcode'], cpu=header['target_model'], vendor=header['vendor'])
+                    if entry is None:
+                        raise ValueError('Owner header has no stored definition')
+                    size = len(canonical(entry).encode('utf-8'))
+                    maximum = max(maximum, size)
+                    if size > max_unit_bytes:
+                        raise ValueError('Hydrated owner exceeds max-unit limit')
+                    facts = entry.get('facts', [])
+                    counts['owners'] += 1
+                    counts['owner_qualified_fact_instances'] += len(facts)
+                    counts['expanded_owner_json_bytes'] += size
+                    counts['maximum_facts_per_owner'] = max(counts['maximum_facts_per_owner'], len(facts))
+                    if provenance is not None:
+                        provenance.owner(entry)
+                    ids = {fact['id'] for fact in facts}
+                    for fact in facts:
+                        db.execute('INSERT OR IGNORE INTO bare_ids VALUES (?)', (fact['id'],))
+                        statuses[fact.get('status', '<missing>')] += 1
+                        dimensions[fact.get('dimension', '<missing>')] += 1
+                        for key, value in fact.items():
+                            field_bytes[key] += len(canonical(value).encode('utf-8'))
+                        for dependency in fact.get('depends_on', []):
+                            counts['dependency_references'] += 1
+                            counts['dependencies_not_found_within_owner'] += dependency not in ids
+                        for source in fact.get('sources', []):
+                            counts['source_reference_occurrences'] += 1
+                            db.execute('INSERT OR IGNORE INTO source_refs VALUES (?)',
+                                (hashlib.sha256(canonical(source).encode()).hexdigest(),))
+                    del entry, facts, ids
+                    fact = source = value = None  # Do not retain the previous owner's payload.
+                counts['distinct_bare_fact_ids'] = db.execute('SELECT count(*) FROM bare_ids').fetchone()[0]
+                counts['unique_exact_source_reference_objects'] = db.execute('SELECT count(*) FROM source_refs').fetchone()[0]
+            finally:
+                db.close()
+        if not store.current() or counts['owners'] != store.owner_count:
+            raise ValueError('Owner store changed or owner count differs')
+        stats = store.stats()
+        try:
+            import resource
+            peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            if sys.platform == 'darwin':
+                peak //= 1024
+        except ImportError:
+            peak = None
+        return {**({'owner_provenance': provenance.report()} if provenance is not None else {}),
+            'audit_schema': 1, 'serialization': SERIALIZATION, 'offline_full_owner_scan': True,
+            'manifest_sha256': manifest_sha, 'manifest_bytes': store.manifest_path.stat().st_size,
+            'database_bytes': manifest['database']['bytes'], 'database_sha256': manifest['database']['sha256'],
+            'counts': dict(counts), 'status_counts': dict(statuses), 'dimension_counts': dict(dimensions),
+            'fact_field_value_json_bytes': dict(field_bytes), 'store_validation_stats': stats,
+            'maximum_hydrated_owner_json_bytes': maximum, 'max_unit_limit_bytes': max_unit_bytes,
+            'elapsed_seconds': time.perf_counter() - started, 'peak_rss_kib': peak,
+            'limitations': [
+                'This is an offline scan of every owner through the verified read-only store API, not lazy runtime startup.',
+                'Size is checked after one owner is hydrated; max-unit is not a hard peak-RAM bound for this mode.',
+                'Database size is physical SQLite size, not compressed size or proof that storage expansion is solved.',
+                'Counts do not prove compiler admission, engineering-tool support, native compilation or hardware validity.',
+                'No fact prose or owner identities are emitted; language-feature payloads are not scanned by this owner audit.']}
+    finally:
+        store.close()
 
 
 def main():

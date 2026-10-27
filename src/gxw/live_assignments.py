@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Current-build allocations joined to source-owned native cross-references.
 
 The caller supplies bytes saved for this exact native build, after the existing

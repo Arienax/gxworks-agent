@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Reject research materials, development output and credentials in source trees."""
 from __future__ import annotations
 
@@ -20,7 +23,7 @@ from publication.source_policy import CACHE_DIRECTORIES, exclusion_reason
 
 # Minimum delivery contents, not a list of permitted source files.
 REQUIRED = {
-    'LICENSE', 'LICENSE-SCOPE.md', 'README.md', 'README.zh-CN.md',
+    'LICENSE', 'NOTICE', 'LICENSING.md', 'ACCESSIBILITY.md', 'CODE_OF_CONDUCT.md', 'CONTRIBUTING.md', 'SECURITY.md', 'README.md', 'README.zh-CN.md',
     'README.ja.md', 'publication/README.md', 'publication/source_policy.py',
     'src/gxw/project_templates.py',
     'src/gxw/templates/blank-fbd-projects.zip.xz',
@@ -32,6 +35,8 @@ REQUIRED = {
     'src/gxw/templates/fx-token-encoder-forms.json',
     'src/gxw/templates/q-token-encoder-forms.json',
     'resources/instructions/mitsubishi/common.json',
+    'resources/instructions/mitsubishi/fbd_language_rules.json',
+    'resources/instructions/mitsubishi/pwm_contract.generated.json',
     'resources/instructions/mitsubishi/fx3u.json',
     'resources/instructions/mitsubishi/fx5u.json',
     'resources/instructions/mitsubishi/fx3u_step_widths.json',
@@ -152,6 +157,10 @@ def check_file(name: str, *, root: Path = ROOT) -> list[str]:
         text = data.decode('utf-8')
     except UnicodeDecodeError:
         return [f'{name}: not UTF-8; unsupported binary format']
+    if path.name == '.gitattributes':
+        text = '\n'.join(line.replace('research/' + 'evidence/', 'research-material-pattern/')
+            if line.split()[1:] == ['filter=lfs', 'diff=lfs', 'merge=lfs', '-text'] else line
+            for line in text.splitlines() if line.strip())
     return [f'{name}: {problem}' for problem in check_content(text)]
 
 

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Raw-preserved CGTable framing and observed POU/component references.
 
 ECCompiler.dll 15.22 Restore/Save use fourteen length-bounded tables. Each

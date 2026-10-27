@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Data-driven PLC instruction catalogue used across import, IR and validation.
 
 The public ladder JSON format intentionally remains unchanged. APP_INSTR nodes
@@ -623,6 +626,8 @@ class InstructionRegistry:
             return None
         spec = self._with_definition_facts(form.spec, form.opcode, cpu,
                                            str(vendor or "mitsubishi").strip().lower())
+        if form.opcode in {'PWM', 'DPWM'} and str(cpu).upper() in {'FX5U', 'FX5UC', 'FX5UJ', 'FX5S'} and len(spec.operands) == 3:
+            spec = replace(spec, operands=(*spec.operands[:2], replace(spec.operands[2], name='channel', role=OperandRole.READ)))
         return replace(form, spec=spec) if spec is not form.spec else form
 
     @property
@@ -773,8 +778,12 @@ class InstructionRegistry:
             payload = expand_definitions(payload)
         from knowledge.runtime_fact_projection import SOURCE_SERIALIZATION, VALUE_SERIALIZATION, VerifiedCatalog, resolve_fact_sources
         pooled = payload.get("source_serialization")
-        if ("source_serialization" in payload or "source_catalog" in payload) and pooled != SOURCE_SERIALIZATION:
+        # Legacy source bundles use a list bibliography under the same name;
+        # only a pooled mapping requires the exact pool serialization marker.
+        if ("source_serialization" in payload or isinstance(payload.get("source_catalog"), Mapping)) and pooled != SOURCE_SERIALIZATION:
             raise ValueError("Unsupported fact source serialization")
+        if "source_catalog" in payload and not isinstance(payload['source_catalog'], (Mapping, list)):
+            raise ValueError("Invalid fact source catalog")
         if pooled and not isinstance(payload.get("source_catalog"), Mapping):
             raise ValueError("Invalid fact source catalog")
         if ("value_catalog" in payload or "value_serialization" in payload) and (
@@ -891,6 +900,14 @@ class InstructionRegistry:
         return store.database_path
 
     def fact_bundle_current(self):
+        core = getattr(self, '_core_language_resource', None)
+        if core is not None:
+            try:
+                state = core[0].stat()
+                if (state.st_mtime_ns, state.st_size) != core[1:]:
+                    return False
+            except OSError:
+                return False
         if self._definition_owner_store is not None:
             return self._definition_owner_store.current()
         bound = getattr(self, '_fact_resource', None)
@@ -1562,18 +1579,19 @@ class InstructionRegistry:
             )
         registry = cls(specs)
         for form in source_forms:
-            operands = form['operands']
-            for token in form['symbols']:
-                key = (form['family'], token, len(operands))
-                if key in registry._source_forms:
-                    raise ValueError('duplicate saved-source instruction form: ' + str(key))
-                spec = InstructionSpec.from_mapping(dict(
-                    mnemonic=token, category=form.get('category', 'action'), semantic_kind='vendor',
-                    arity=dict(min=len(operands), max=len(operands)), operands=operands,
-                    source_materials=[dict(manual_id=form['manual_id'], pdf_page=form['pdf_page'])]))
-                registry._source_forms[key] = replace(spec, verified_fields=tuple(
-                    ['arity', 'operand_order', 'operand_roles'] +
-                    (['operand_types'] if form.get('operand_types_verified') else [])))
+            for family in form.get('families', [form['family']]):
+                operands = form['operands']
+                for token in form['symbols']:
+                    key = (family, token, len(operands))
+                    if key in registry._source_forms:
+                        raise ValueError('duplicate saved-source instruction form: ' + str(key))
+                    spec = InstructionSpec.from_mapping(dict(
+                        mnemonic=token, category=form.get('category', 'action'), semantic_kind='vendor',
+                        arity=dict(min=len(operands), max=len(operands)), operands=operands,
+                        source_materials=[dict(manual_id=form['manual_id'], pdf_page=form['pdf_page'])]))
+                    registry._source_forms[key] = replace(spec, verified_fields=tuple(
+                        ['arity', 'operand_order', 'operand_roles'] +
+                        (['operand_types'] if form.get('operand_types_verified') else [])))
         registry.load_target_contracts(target_contracts)
         return registry
 
@@ -1612,6 +1630,25 @@ def _candidate_catalog_directories() -> Tuple[Path, ...]:
     return tuple(unique)
 
 
+def _load_core_language_rules(registry, directory):
+    path = directory / 'fbd_language_rules.json'
+    if not path.is_file():
+        return registry
+    payload = json.loads(path.read_text(encoding='utf-8'))
+    if payload.get('schema_version') != 1:
+        raise ValueError('Unsupported core language rules')
+    features = _validated_language_features(payload['language_facts'])
+    current = dict(getattr(registry, '_language_features', {}))
+    for target, feature in features.items():
+        if target not in current:
+            current[target] = feature
+    registry._language_features = current
+    registry.language_facts = tuple(current.values())
+    state = path.stat()
+    registry._core_language_resource = (path.resolve(), state.st_mtime_ns, state.st_size)
+    return registry
+
+
 def load_default_instruction_registry() -> InstructionRegistry:
     required = ("common.json", "fx3u.json", "fx5u.json")
     for directory in _candidate_catalog_directories():
@@ -1640,20 +1677,20 @@ def load_default_instruction_registry() -> InstructionRegistry:
                 if not configured_manifest:
                     raise ValueError("GXW2_INSTRUCTION_OWNER_MANIFEST must name a manifest")
                 registry.load_instruction_owner_store(Path(configured_manifest).expanduser())
-                return registry
+                return _load_core_language_rules(registry, directory)
             manifest = directory / "instruction_definitions.manifest.json"
             if not (manifest.exists() or manifest.is_symlink()):
                 from shared.paths import resource_path
                 manifest = resource_path("knowledge/runtime/instruction_definitions.manifest.json")
             if manifest.exists() or manifest.is_symlink():
                 registry.load_instruction_owner_store(manifest)
-                return registry
+                return _load_core_language_rules(registry, directory)
             definitions = directory / "instruction_definitions.json.gz"
             if not definitions.exists():
                 definitions = directory / "instruction_definitions.json"
             if definitions.is_file():
                 registry.load_instruction_definitions(definitions)
-            return registry
+            return _load_core_language_rules(registry, directory)
     searched = "\n - ".join(str(item) for item in _candidate_catalog_directories())
     raise RuntimeError(
         "Mitsubishi instruction catalogue not found. Searched:\n - " + searched

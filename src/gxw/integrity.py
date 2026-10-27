@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Preserve and refresh the observed GXW native save envelope offline.
 
 Some native files append nine metadata integrity records to the nested CFB and

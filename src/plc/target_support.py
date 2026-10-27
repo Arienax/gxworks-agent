@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Operation-specific expansion points for every native GX Works2 CPU menu target.
 
 Selection metadata never grants instruction, ABI, or execution support. Evidence

@@ -1,5 +1,9 @@
 <h1 align="center">GXWorks Agent</h1>
 
+<p align="center"><strong>原作者: <a href="https://github.com/Arienax">Arienax</a></strong> · <a href="https://github.com/Arienax/gxworks-agent">github.com/Arienax/gxworks-agent</a></p>
+
+<p align="center">© 2026 Arienax · Apache-2.0</p>
+
 <h3 align="center">三菱電機 PLC エンジニアリング向け MCP ツールサービスと AI ワークベンチ</h3>
 
 <p align="center"><strong>設計コンテキストの取得 · プログラムの生成とレビュー · GX Works2 ネイティブ編集と診断</strong></p>
@@ -187,4 +191,4 @@ Windows のネイティブアダプターは x86 プロセスで GX Works2 の�
 
 [リリースの変更点](CHANGELOG.md) · [Issue](https://github.com/Arienax/gxworks-agent/issues)
 
-プロジェクト貢献者が権利を持つ Core、Web、MCP、ネイティブアダプターのソースコードには [Apache License 2.0](LICENSE) を適用します。詳細は[ライセンス範囲](LICENSE-SCOPE.md)と[第三者の権利表記](THIRD_PARTY_NOTICES.md)を参照してください。各貢献者は自身の著作権を保持し、過去に配布されたリリースにはそれぞれの配布時点のライセンスが適用されます。
+プロジェクト貢献者が権利を持つ Core、Web、MCP、ネイティブアダプターのソースコードには [Apache License 2.0](LICENSE) を適用します。詳細は[ライセンス範囲](LICENSING.md)と[第三者の権利表記](THIRD_PARTY_NOTICES.md)を参照してください。各貢献者は自身の著作権を保持し、過去に配布されたリリースにはそれぞれの配布時点のライセンスが適用されます。[NOTICE](NOTICE) にオリジナルプロジェクト、作者、リポジトリを記録しています。

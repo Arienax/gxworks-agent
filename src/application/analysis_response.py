@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """One response validation and bounded repair flow for all analysis transports."""
 import json
 from dataclasses import replace

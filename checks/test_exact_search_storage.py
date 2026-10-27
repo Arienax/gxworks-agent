@@ -1,4 +1,5 @@
 """Exact text sharing preserves retrieval cardinality and BM25 corpus statistics."""
+from contextlib import closing
 import sqlite3
 import unittest
 from unittest.mock import patch
@@ -59,7 +60,7 @@ class ExactSearchStorageTests(unittest.TestCase):
     def test_new_writer_tuple_rows_roundtrip_with_legacy_still_supported(self):
         import tempfile,json
         from pathlib import Path
-        from test_instruction_owner_store import fixture
+        from checks.test_instruction_owner_store import fixture
         from knowledge.runtime_fact_publication import OwnerStoreWriter
         from plc.instruction_owner_store import OwnerDefinitionStore
         raw=fixture()
@@ -72,7 +73,7 @@ class ExactSearchStorageTests(unittest.TestCase):
             try:
                 for entry in raw['entries']:self.assertEqual(store.get_entry(entry['opcode'],cpu=entry['target_model']),entry)
             finally:store.close()
-            with sqlite3.connect(db) as read:
+            with closing(sqlite3.connect(db)) as read, read:
                 self.assertEqual(read.execute("select value from meta where key='runtime_serialization'").fetchone()[0],'owner-field-row-v3')
                 self.assertFalse(read.execute("select 1 from sqlite_master where name='seen_fact_ids'").fetchone())
                 packets=[json.loads(row[0]) for row in read.execute('select payload_json from runtime_definitions')]
@@ -85,7 +86,7 @@ class ExactSearchStorageTests(unittest.TestCase):
         from audit_runtime_sqlite_storage import audit_storage
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)/'facts.sqlite'
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 db.executescript(_SCHEMA_SQL);create_search_pool(db);self.populate(db)
                 db.execute('INSERT INTO runtime_fact_fields VALUES (1,?,?)',('{"field":"id","value":"private-identity"}','x'))
             report=audit_storage(path)

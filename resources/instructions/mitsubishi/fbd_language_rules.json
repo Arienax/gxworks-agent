@@ -1,0 +1,3383 @@
+{
+  "schema_version": 1,
+  "language_facts": [
+    {
+      "aliases": [
+        "FBD 常量",
+        "FBD literal",
+        "常量写法",
+        "INT#",
+        "T#",
+        "时间常数"
+      ],
+      "facts": [
+        {
+          "id": "fbd.literals",
+          "dimension": "parameters.fbd_literals",
+          "status": "source_verified",
+          "depends_on": [],
+          "verification": "source_checked",
+          "value": {
+            "examples": {
+              "binary": [
+                "2#0010"
+              ],
+              "boolean": [
+                "TRUE",
+                "FALSE",
+                "0",
+                "1"
+              ],
+              "decimal": [
+                "0",
+                "K0",
+                "K-1"
+              ],
+              "hexadecimal": [
+                "16#FF",
+                "HFF"
+              ],
+              "octal": [
+                "8#337"
+              ],
+              "real": [
+                "2.34",
+                "E2.34"
+              ],
+              "string": [
+                "'ABC'",
+                "\"ABC\""
+              ],
+              "time": [
+                "T#1s",
+                "T#100ms"
+              ]
+            },
+            "forms": [
+              "boolean",
+              "binary",
+              "octal",
+              "decimal",
+              "hexadecimal",
+              "real",
+              "string",
+              "time"
+            ],
+            "integer_types": [
+              "INT",
+              "DINT",
+              "WORD",
+              "DWORD"
+            ],
+            "real_ranges": {
+              "LREAL": [
+                "2.225073858507201383090232717332404064219215980462331830553327416887204434813918195854283159012511020564067339731035811005152434161553460108856012385377718821130777993532002330479610147442583636071921565046942503734208375250806650616658158948720491179968591639648500635908770118304874799780887753749949451580451605050915399856582470818645113537935804992115981085766051992433352114352390148795699609591288891602992641511063466313393663477586513029371762047325631781485664350872122828637642044846811407613911477062801689853244110024161447421618567166150540154285084716752901903161322778896729707373123334086988983175067838846926092773977972858659654941091369095406136467568702398678315290680984617210924625396728515625E-308",
+                "179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.0000000000000000000000000000000000000000000000000000"
+              ],
+              "REAL": [
+                "1.1754943508222875079687365372222456778186655567720875215087517062784172594547271728515625E-38",
+                "340282346638528859811704183484516925440.00000000000000000000000"
+              ]
+            },
+            "string_max_characters": 255,
+            "target_product": "GX Works2",
+            "time_range_ms": [
+              -2147483648,
+              2147483647
+            ],
+            "time_units_ms": {
+              "D": 86400000,
+              "H": 3600000,
+              "M": 60000,
+              "MS": 1,
+              "S": 1000
+            },
+            "typed_iec_prefixes_admitted": false
+          },
+          "scope": {
+            "forms": [
+              "FBD.LITERALS"
+            ],
+            "languages": [
+              "fbd"
+            ],
+            "models": [
+              "FX0",
+              "FX0N",
+              "FX0S",
+              "FX1",
+              "FX1N",
+              "FX1NC",
+              "FX1S",
+              "FX2C",
+              "FX2N",
+              "FX2NC",
+              "FX3G",
+              "FX3GC",
+              "FX3S",
+              "FX3U",
+              "FX3UC",
+              "FXU",
+              "L02",
+              "L02-P",
+              "L02S",
+              "L02S-P",
+              "L06",
+              "L06-P",
+              "L26",
+              "L26-BT",
+              "L26-P",
+              "L26-PBT",
+              "Q00",
+              "Q00J",
+              "Q00U",
+              "Q00UJ",
+              "Q01",
+              "Q01U",
+              "Q02",
+              "Q02H",
+              "Q02PH",
+              "Q02U",
+              "Q03UD",
+              "Q03UDE",
+              "Q03UDV",
+              "Q04UDEH",
+              "Q04UDH",
+              "Q04UDPV",
+              "Q04UDV",
+              "Q06H",
+              "Q06PH",
+              "Q06UDEH",
+              "Q06UDH",
+              "Q06UDPV",
+              "Q06UDV",
+              "Q100UDEH",
+              "Q10UDEH",
+              "Q10UDH",
+              "Q12H",
+              "Q12PH",
+              "Q12PRH",
+              "Q13UDEH",
+              "Q13UDH",
+              "Q13UDPV",
+              "Q13UDV",
+              "Q20UDEH",
+              "Q20UDH",
+              "Q25H",
+              "Q25PH",
+              "Q25PRH",
+              "Q26UDEH",
+              "Q26UDH",
+              "Q26UDPV",
+              "Q26UDV",
+              "Q50UDEH"
+            ]
+          },
+          "sources": [
+            {
+              "manual_id": "structured_fundamentals_o",
+              "manual_number": "SH-080782ENG",
+              "pdf_pages": [
+                36
+              ],
+              "revision": "O",
+              "source_ref": "structured_fundamentals_o:O:pages=36"
+            },
+            {
+              "manual_id": "structured_fundamentals_o",
+              "manual_number": "SH-080782ENG",
+              "pdf_pages": [
+                34
+              ],
+              "revision": "O",
+              "source_ref": "structured_fundamentals_o:O:pages=34"
+            },
+            {
+              "manual_id": "structured_fundamentals_o",
+              "manual_number": "SH-080782ENG",
+              "pdf_pages": [
+                49
+              ],
+              "revision": "O",
+              "source_ref": "structured_fundamentals_o:O:pages=49"
+            }
+          ]
+        }
+      ],
+      "language": "fbd",
+      "models": [
+        "FX0",
+        "FX0N",
+        "FX0S",
+        "FX1",
+        "FX1N",
+        "FX1NC",
+        "FX1S",
+        "FX2C",
+        "FX2N",
+        "FX2NC",
+        "FX3G",
+        "FX3GC",
+        "FX3S",
+        "FX3U",
+        "FX3UC",
+        "FXU",
+        "L02",
+        "L02-P",
+        "L02S",
+        "L02S-P",
+        "L06",
+        "L06-P",
+        "L26",
+        "L26-BT",
+        "L26-P",
+        "L26-PBT",
+        "Q00",
+        "Q00J",
+        "Q00U",
+        "Q00UJ",
+        "Q01",
+        "Q01U",
+        "Q02",
+        "Q02H",
+        "Q02PH",
+        "Q02U",
+        "Q03UD",
+        "Q03UDE",
+        "Q03UDV",
+        "Q04UDEH",
+        "Q04UDH",
+        "Q04UDPV",
+        "Q04UDV",
+        "Q06H",
+        "Q06PH",
+        "Q06UDEH",
+        "Q06UDH",
+        "Q06UDPV",
+        "Q06UDV",
+        "Q100UDEH",
+        "Q10UDEH",
+        "Q10UDH",
+        "Q12H",
+        "Q12PH",
+        "Q12PRH",
+        "Q13UDEH",
+        "Q13UDH",
+        "Q13UDPV",
+        "Q13UDV",
+        "Q20UDEH",
+        "Q20UDH",
+        "Q25H",
+        "Q25PH",
+        "Q25PRH",
+        "Q26UDEH",
+        "Q26UDH",
+        "Q26UDPV",
+        "Q26UDV",
+        "Q50UDEH"
+      ],
+      "target": "FBD.LITERALS"
+    },
+    {
+      "aliases": [
+        "FBD 类型",
+        "FBD types",
+        "ANY16",
+        "ANY32",
+        "泛型端口"
+      ],
+      "facts": [
+        {
+          "id": "fbd.types",
+          "dimension": "parameters.fbd_types",
+          "status": "source_verified",
+          "depends_on": [],
+          "verification": "source_checked",
+          "value": {
+            "any_includes_composites": true,
+            "fx_type_conditions": {
+              "LREAL": [],
+              "REAL": [
+                "FX3S",
+                "FX3G",
+                "FX3GC",
+                "FX3U",
+                "FX3UC"
+              ],
+              "STRING": [
+                "FX3U",
+                "FX3UC"
+              ]
+            },
+            "generic_storage_bits": {
+              "ANY16": 16,
+              "ANY32": 32
+            },
+            "generic_types": {
+              "ANY": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "ANY16": [
+                "INT",
+                "WORD"
+              ],
+              "ANY32": [
+                "DINT",
+                "DWORD",
+                "REAL"
+              ],
+              "ANY_BIT": [
+                "BOOL",
+                "WORD",
+                "DWORD"
+              ],
+              "ANY_INT": [
+                "INT",
+                "DINT"
+              ],
+              "ANY_NUM": [
+                "INT",
+                "DINT",
+                "REAL",
+                "LREAL"
+              ],
+              "ANY_REAL": [
+                "REAL",
+                "LREAL"
+              ],
+              "ANY_SIMPLE": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ]
+            },
+            "implicit_casts": [],
+            "lreal_cpu_condition": "universal_q_or_l",
+            "scalar_types": [
+              "BOOL",
+              "INT",
+              "DINT",
+              "WORD",
+              "DWORD",
+              "REAL",
+              "LREAL",
+              "STRING",
+              "TIME"
+            ],
+            "supported_types_by_model": {
+              "FX0": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "TIME"
+              ],
+              "FX0N": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "TIME"
+              ],
+              "FX0S": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "TIME"
+              ],
+              "FX1": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "TIME"
+              ],
+              "FX1N": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "TIME"
+              ],
+              "FX1NC": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "TIME"
+              ],
+              "FX1S": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "TIME"
+              ],
+              "FX2C": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "TIME"
+              ],
+              "FX2N": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "TIME"
+              ],
+              "FX2NC": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "TIME"
+              ],
+              "FX3G": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "TIME"
+              ],
+              "FX3GC": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "TIME"
+              ],
+              "FX3S": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "TIME"
+              ],
+              "FX3U": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "STRING",
+                "TIME"
+              ],
+              "FX3UC": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "STRING",
+                "TIME"
+              ],
+              "FXU": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "TIME"
+              ],
+              "L02": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "L02-P": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "L02S": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "L02S-P": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "L06": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "L06-P": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "L26": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "L26-BT": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "L26-P": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "L26-PBT": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q00": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q00J": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q00U": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q00UJ": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q01": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q01U": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q02": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q02H": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q02PH": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q02U": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q03UD": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q03UDE": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q03UDV": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q04UDEH": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q04UDH": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q04UDPV": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q04UDV": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q06H": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q06PH": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q06UDEH": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q06UDH": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q06UDPV": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q06UDV": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q100UDEH": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q10UDEH": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q10UDH": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q12H": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q12PH": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q12PRH": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q13UDEH": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q13UDH": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q13UDPV": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q13UDV": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q20UDEH": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q20UDH": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q25H": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q25PH": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q25PRH": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q26UDEH": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q26UDH": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q26UDPV": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q26UDV": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ],
+              "Q50UDEH": [
+                "BOOL",
+                "INT",
+                "DINT",
+                "WORD",
+                "DWORD",
+                "REAL",
+                "LREAL",
+                "STRING",
+                "TIME"
+              ]
+            },
+            "time_is_integer_cast": false
+          },
+          "scope": {
+            "forms": [
+              "FBD.TYPES"
+            ],
+            "languages": [
+              "fbd"
+            ],
+            "models": [
+              "FX0",
+              "FX0N",
+              "FX0S",
+              "FX1",
+              "FX1N",
+              "FX1NC",
+              "FX1S",
+              "FX2C",
+              "FX2N",
+              "FX2NC",
+              "FX3G",
+              "FX3GC",
+              "FX3S",
+              "FX3U",
+              "FX3UC",
+              "FXU",
+              "L02",
+              "L02-P",
+              "L02S",
+              "L02S-P",
+              "L06",
+              "L06-P",
+              "L26",
+              "L26-BT",
+              "L26-P",
+              "L26-PBT",
+              "Q00",
+              "Q00J",
+              "Q00U",
+              "Q00UJ",
+              "Q01",
+              "Q01U",
+              "Q02",
+              "Q02H",
+              "Q02PH",
+              "Q02U",
+              "Q03UD",
+              "Q03UDE",
+              "Q03UDV",
+              "Q04UDEH",
+              "Q04UDH",
+              "Q04UDPV",
+              "Q04UDV",
+              "Q06H",
+              "Q06PH",
+              "Q06UDEH",
+              "Q06UDH",
+              "Q06UDPV",
+              "Q06UDV",
+              "Q100UDEH",
+              "Q10UDEH",
+              "Q10UDH",
+              "Q12H",
+              "Q12PH",
+              "Q12PRH",
+              "Q13UDEH",
+              "Q13UDH",
+              "Q13UDPV",
+              "Q13UDV",
+              "Q20UDEH",
+              "Q20UDH",
+              "Q25H",
+              "Q25PH",
+              "Q25PRH",
+              "Q26UDEH",
+              "Q26UDH",
+              "Q26UDPV",
+              "Q26UDV",
+              "Q50UDEH"
+            ]
+          },
+          "sources": [
+            {
+              "manual_id": "structured_fundamentals_o",
+              "manual_number": "SH-080782ENG",
+              "pdf_pages": [
+                34
+              ],
+              "revision": "O",
+              "source_ref": "structured_fundamentals_o:O:pages=34"
+            },
+            {
+              "manual_id": "structured_fundamentals_o",
+              "manual_number": "SH-080782ENG",
+              "pdf_pages": [
+                35
+              ],
+              "revision": "O",
+              "source_ref": "structured_fundamentals_o:O:pages=35"
+            }
+          ]
+        }
+      ],
+      "language": "fbd",
+      "models": [
+        "FX0",
+        "FX0N",
+        "FX0S",
+        "FX1",
+        "FX1N",
+        "FX1NC",
+        "FX1S",
+        "FX2C",
+        "FX2N",
+        "FX2NC",
+        "FX3G",
+        "FX3GC",
+        "FX3S",
+        "FX3U",
+        "FX3UC",
+        "FXU",
+        "L02",
+        "L02-P",
+        "L02S",
+        "L02S-P",
+        "L06",
+        "L06-P",
+        "L26",
+        "L26-BT",
+        "L26-P",
+        "L26-PBT",
+        "Q00",
+        "Q00J",
+        "Q00U",
+        "Q00UJ",
+        "Q01",
+        "Q01U",
+        "Q02",
+        "Q02H",
+        "Q02PH",
+        "Q02U",
+        "Q03UD",
+        "Q03UDE",
+        "Q03UDV",
+        "Q04UDEH",
+        "Q04UDH",
+        "Q04UDPV",
+        "Q04UDV",
+        "Q06H",
+        "Q06PH",
+        "Q06UDEH",
+        "Q06UDH",
+        "Q06UDPV",
+        "Q06UDV",
+        "Q100UDEH",
+        "Q10UDEH",
+        "Q10UDH",
+        "Q12H",
+        "Q12PH",
+        "Q12PRH",
+        "Q13UDEH",
+        "Q13UDH",
+        "Q13UDPV",
+        "Q13UDV",
+        "Q20UDEH",
+        "Q20UDH",
+        "Q25H",
+        "Q25PH",
+        "Q25PRH",
+        "Q26UDEH",
+        "Q26UDH",
+        "Q26UDPV",
+        "Q26UDV",
+        "Q50UDEH"
+      ],
+      "target": "FBD.TYPES"
+    },
+    {
+      "aliases": [
+        "FBD 运算",
+        "FBD 比较",
+        "FBD operators"
+      ],
+      "facts": [
+        {
+          "id": "fbd.operators",
+          "dimension": "parameters.fbd_operators",
+          "status": "source_verified",
+          "depends_on": [],
+          "verification": "source_checked",
+          "value": {
+            "operators": {
+              "ADD": {
+                "inputs": [
+                  "INT",
+                  "DINT",
+                  "REAL",
+                  "LREAL"
+                ],
+                "output": [
+                  "INT",
+                  "DINT",
+                  "REAL",
+                  "LREAL"
+                ],
+                "same_input_type": true,
+                "same_result_type": true
+              },
+              "AND": {
+                "inputs": [
+                  "BOOL",
+                  "WORD",
+                  "DWORD"
+                ],
+                "output": [
+                  "BOOL",
+                  "WORD",
+                  "DWORD"
+                ],
+                "same_input_type": true,
+                "same_result_type": true
+              },
+              "DIV": {
+                "inputs": [
+                  "INT",
+                  "DINT",
+                  "REAL",
+                  "LREAL"
+                ],
+                "output": [
+                  "INT",
+                  "DINT",
+                  "REAL",
+                  "LREAL"
+                ],
+                "same_input_type": true,
+                "same_result_type": true
+              },
+              "EQ": {
+                "inputs": [
+                  "BOOL",
+                  "INT",
+                  "DINT",
+                  "WORD",
+                  "DWORD",
+                  "REAL",
+                  "LREAL",
+                  "STRING",
+                  "TIME"
+                ],
+                "output": [
+                  "BOOL"
+                ],
+                "same_input_type": true,
+                "same_result_type": false
+              },
+              "GE": {
+                "inputs": [
+                  "BOOL",
+                  "INT",
+                  "DINT",
+                  "WORD",
+                  "DWORD",
+                  "REAL",
+                  "LREAL",
+                  "STRING",
+                  "TIME"
+                ],
+                "output": [
+                  "BOOL"
+                ],
+                "same_input_type": true,
+                "same_result_type": false
+              },
+              "GT": {
+                "inputs": [
+                  "BOOL",
+                  "INT",
+                  "DINT",
+                  "WORD",
+                  "DWORD",
+                  "REAL",
+                  "LREAL",
+                  "STRING",
+                  "TIME"
+                ],
+                "output": [
+                  "BOOL"
+                ],
+                "same_input_type": true,
+                "same_result_type": false
+              },
+              "LE": {
+                "inputs": [
+                  "BOOL",
+                  "INT",
+                  "DINT",
+                  "WORD",
+                  "DWORD",
+                  "REAL",
+                  "LREAL",
+                  "STRING",
+                  "TIME"
+                ],
+                "output": [
+                  "BOOL"
+                ],
+                "same_input_type": true,
+                "same_result_type": false
+              },
+              "LT": {
+                "inputs": [
+                  "BOOL",
+                  "INT",
+                  "DINT",
+                  "WORD",
+                  "DWORD",
+                  "REAL",
+                  "LREAL",
+                  "STRING",
+                  "TIME"
+                ],
+                "output": [
+                  "BOOL"
+                ],
+                "same_input_type": true,
+                "same_result_type": false
+              },
+              "MUL": {
+                "inputs": [
+                  "INT",
+                  "DINT",
+                  "REAL",
+                  "LREAL"
+                ],
+                "output": [
+                  "INT",
+                  "DINT",
+                  "REAL",
+                  "LREAL"
+                ],
+                "same_input_type": true,
+                "same_result_type": true
+              },
+              "NE": {
+                "inputs": [
+                  "BOOL",
+                  "INT",
+                  "DINT",
+                  "WORD",
+                  "DWORD",
+                  "REAL",
+                  "LREAL",
+                  "STRING",
+                  "TIME"
+                ],
+                "output": [
+                  "BOOL"
+                ],
+                "same_input_type": true,
+                "same_result_type": false
+              },
+              "NOT": {
+                "inputs": [
+                  "BOOL",
+                  "WORD",
+                  "DWORD"
+                ],
+                "output": [
+                  "BOOL",
+                  "WORD",
+                  "DWORD"
+                ],
+                "same_input_type": true,
+                "same_result_type": true
+              },
+              "OR": {
+                "inputs": [
+                  "BOOL",
+                  "WORD",
+                  "DWORD"
+                ],
+                "output": [
+                  "BOOL",
+                  "WORD",
+                  "DWORD"
+                ],
+                "same_input_type": true,
+                "same_result_type": true
+              },
+              "SUB": {
+                "inputs": [
+                  "INT",
+                  "DINT",
+                  "REAL",
+                  "LREAL"
+                ],
+                "output": [
+                  "INT",
+                  "DINT",
+                  "REAL",
+                  "LREAL"
+                ],
+                "same_input_type": true,
+                "same_result_type": true
+              },
+              "XOR": {
+                "inputs": [
+                  "BOOL",
+                  "WORD",
+                  "DWORD"
+                ],
+                "output": [
+                  "BOOL",
+                  "WORD",
+                  "DWORD"
+                ],
+                "same_input_type": true,
+                "same_result_type": true
+              }
+            },
+            "ordinary_data_wire_is_execution_enable": false,
+            "source_conflicts": {
+              "GT": {
+                "models": [
+                  "FX0",
+                  "FX0N",
+                  "FX0S",
+                  "FX1",
+                  "FX1N",
+                  "FX1NC",
+                  "FX1S",
+                  "FX2C",
+                  "FX2N",
+                  "FX2NC",
+                  "FX3G",
+                  "FX3GC",
+                  "FX3S",
+                  "FX3U",
+                  "FX3UC",
+                  "FXU"
+                ],
+                "reason": {
+                  "kind": "explanation_reference",
+                  "note_ref": "source_conflicts.GT.reason"
+                }
+              }
+            },
+            "standard_function_aliases": {
+              "ADD_E": "ADD",
+              "AND_E": "AND",
+              "DIV_E": "DIV",
+              "EQ_E": "EQ",
+              "GE_E": "GE",
+              "GT_E": "GT",
+              "LE_E": "LE",
+              "LT_E": "LT",
+              "MUL_E": "MUL",
+              "NE_E": "NE",
+              "NOT_E": "NOT",
+              "OR_E": "OR",
+              "SUB_E": "SUB",
+              "XOR_E": "XOR"
+            },
+            "unresolved_overload": "retain_type_domain"
+          },
+          "scope": {
+            "forms": [
+              "FBD.OPERATORS"
+            ],
+            "languages": [
+              "fbd"
+            ],
+            "models": [
+              "FX0",
+              "FX0N",
+              "FX0S",
+              "FX1",
+              "FX1N",
+              "FX1NC",
+              "FX1S",
+              "FX2C",
+              "FX2N",
+              "FX2NC",
+              "FX3G",
+              "FX3GC",
+              "FX3S",
+              "FX3U",
+              "FX3UC",
+              "FXU",
+              "L02",
+              "L02-P",
+              "L02S",
+              "L02S-P",
+              "L06",
+              "L06-P",
+              "L26",
+              "L26-BT",
+              "L26-P",
+              "L26-PBT",
+              "Q00",
+              "Q00J",
+              "Q00U",
+              "Q00UJ",
+              "Q01",
+              "Q01U",
+              "Q02",
+              "Q02H",
+              "Q02PH",
+              "Q02U",
+              "Q03UD",
+              "Q03UDE",
+              "Q03UDV",
+              "Q04UDEH",
+              "Q04UDH",
+              "Q04UDPV",
+              "Q04UDV",
+              "Q06H",
+              "Q06PH",
+              "Q06UDEH",
+              "Q06UDH",
+              "Q06UDPV",
+              "Q06UDV",
+              "Q100UDEH",
+              "Q10UDEH",
+              "Q10UDH",
+              "Q12H",
+              "Q12PH",
+              "Q12PRH",
+              "Q13UDEH",
+              "Q13UDH",
+              "Q13UDPV",
+              "Q13UDV",
+              "Q20UDEH",
+              "Q20UDH",
+              "Q25H",
+              "Q25PH",
+              "Q25PRH",
+              "Q26UDEH",
+              "Q26UDH",
+              "Q26UDPV",
+              "Q26UDV",
+              "Q50UDEH"
+            ]
+          },
+          "sources": [
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                265
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=265"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                271
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=271"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                277
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=277"
+            },
+            {
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                207
+              ],
+              "revision": "N",
+              "source_ref": "sh080784engn:N:pages=207"
+            },
+            {
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                215
+              ],
+              "revision": "N",
+              "source_ref": "sh080784engn:N:pages=215"
+            },
+            {
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                217
+              ],
+              "revision": "N",
+              "source_ref": "sh080784engn:N:pages=217"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                266
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=266"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                267
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=267"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                268
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=268"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                272
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=272"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                273
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=273"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                275
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=275"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                276
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=276"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                278
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=278"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                279
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=279"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                280
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=280"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                281
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=281"
+            },
+            {
+              "manual_id": "structured_fundamentals_o",
+              "manual_number": "SH-080782ENG",
+              "pdf_pages": [
+                35
+              ],
+              "revision": "O",
+              "source_ref": "structured_fundamentals_o:O:pages=35"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                163
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=163"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                165
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=165"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                167
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=167"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                169
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=169"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                183
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=183"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                185
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=185"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                187
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=187"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                189
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=189"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                203
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=203"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                205
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=205"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                207
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=207"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                209
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=209"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                211
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=211"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                213
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=213"
+            }
+          ],
+          "note": "source_conflicts.GT.reason: FX GT table says ANY_BIT while its operation text and Q/L comparison contract cover numeric data",
+          "note_kind": "explanation"
+        }
+      ],
+      "language": "fbd",
+      "models": [
+        "FX0",
+        "FX0N",
+        "FX0S",
+        "FX1",
+        "FX1N",
+        "FX1NC",
+        "FX1S",
+        "FX2C",
+        "FX2N",
+        "FX2NC",
+        "FX3G",
+        "FX3GC",
+        "FX3S",
+        "FX3U",
+        "FX3UC",
+        "FXU",
+        "L02",
+        "L02-P",
+        "L02S",
+        "L02S-P",
+        "L06",
+        "L06-P",
+        "L26",
+        "L26-BT",
+        "L26-P",
+        "L26-PBT",
+        "Q00",
+        "Q00J",
+        "Q00U",
+        "Q00UJ",
+        "Q01",
+        "Q01U",
+        "Q02",
+        "Q02H",
+        "Q02PH",
+        "Q02U",
+        "Q03UD",
+        "Q03UDE",
+        "Q03UDV",
+        "Q04UDEH",
+        "Q04UDH",
+        "Q04UDPV",
+        "Q04UDV",
+        "Q06H",
+        "Q06PH",
+        "Q06UDEH",
+        "Q06UDH",
+        "Q06UDPV",
+        "Q06UDV",
+        "Q100UDEH",
+        "Q10UDEH",
+        "Q10UDH",
+        "Q12H",
+        "Q12PH",
+        "Q12PRH",
+        "Q13UDEH",
+        "Q13UDH",
+        "Q13UDPV",
+        "Q13UDV",
+        "Q20UDEH",
+        "Q20UDH",
+        "Q25H",
+        "Q25PH",
+        "Q25PRH",
+        "Q26UDEH",
+        "Q26UDH",
+        "Q26UDPV",
+        "Q26UDV",
+        "Q50UDEH"
+      ],
+      "target": "FBD.OPERATORS"
+    },
+    {
+      "aliases": [
+        "FBD 参数",
+        "FBD IN_OUT",
+        "FBD 调用",
+        "FBD VAR_INPUT"
+      ],
+      "facts": [
+        {
+          "id": "fbd.call.binding",
+          "dimension": "parameters.fbd_call_binding",
+          "status": "source_verified",
+          "depends_on": [],
+          "verification": "source_checked",
+          "value": {
+            "constant_input_formal_classes": [
+              "VAR_INPUT CONSTANT"
+            ],
+            "extendable_arguments": "current_source_VAR_IN_EXT_arity",
+            "inout_constant_conditions": [
+              "caller_language",
+              "callee_language",
+              "formal_type",
+              "callee_output_usage"
+            ],
+            "inout_input_and_output_are_distinct_bindings": true,
+            "inout_input_constant": {
+              "fbd": {
+                "BOOL": {
+                  "unused": true,
+                  "written": true
+                },
+                "other": {
+                  "unused": true,
+                  "written": false
+                }
+              },
+              "ladder": {
+                "BOOL": {
+                  "unused": true,
+                  "written": true
+                },
+                "other": {
+                  "unused": false,
+                  "written": false
+                }
+              },
+              "st": {
+                "BOOL": {
+                  "unused": true,
+                  "written": true
+                },
+                "other": {
+                  "unused": true,
+                  "written": false
+                }
+              }
+            },
+            "omitted_arguments": "current_source_optional_contract_only",
+            "output_requires_writable_target": true,
+            "same_generic_value_type": [
+              "MOVE",
+              "MOVE_E",
+              "SEL",
+              "SEL_E",
+              "MUX",
+              "MUX_E"
+            ],
+            "var_input_writable": false
+          },
+          "scope": {
+            "forms": [
+              "FBD.CALL.BINDING"
+            ],
+            "languages": [
+              "fbd"
+            ],
+            "models": [
+              "FX0",
+              "FX0N",
+              "FX0S",
+              "FX1",
+              "FX1N",
+              "FX1NC",
+              "FX1S",
+              "FX2C",
+              "FX2N",
+              "FX2NC",
+              "FX3G",
+              "FX3GC",
+              "FX3S",
+              "FX3U",
+              "FX3UC",
+              "FXU",
+              "L02",
+              "L02-P",
+              "L02S",
+              "L02S-P",
+              "L06",
+              "L06-P",
+              "L26",
+              "L26-BT",
+              "L26-P",
+              "L26-PBT",
+              "Q00",
+              "Q00J",
+              "Q00U",
+              "Q00UJ",
+              "Q01",
+              "Q01U",
+              "Q02",
+              "Q02H",
+              "Q02PH",
+              "Q02U",
+              "Q03UD",
+              "Q03UDE",
+              "Q03UDV",
+              "Q04UDEH",
+              "Q04UDH",
+              "Q04UDPV",
+              "Q04UDV",
+              "Q06H",
+              "Q06PH",
+              "Q06UDEH",
+              "Q06UDH",
+              "Q06UDPV",
+              "Q06UDV",
+              "Q100UDEH",
+              "Q10UDEH",
+              "Q10UDH",
+              "Q12H",
+              "Q12PH",
+              "Q12PRH",
+              "Q13UDEH",
+              "Q13UDH",
+              "Q13UDPV",
+              "Q13UDV",
+              "Q20UDEH",
+              "Q20UDH",
+              "Q25H",
+              "Q25PH",
+              "Q25PRH",
+              "Q26UDEH",
+              "Q26UDH",
+              "Q26UDPV",
+              "Q26UDV",
+              "Q50UDEH"
+            ]
+          },
+          "sources": [
+            {
+              "manual_id": "gxworks2_structured_ag",
+              "manual_number": "SH-080781ENG",
+              "pdf_pages": [
+                196
+              ],
+              "revision": "AG",
+              "source_ref": "gxworks2_structured_ag:AG:pages=196"
+            },
+            {
+              "manual_id": "structured_fundamentals_o",
+              "manual_number": "SH-080782ENG",
+              "pdf_pages": [
+                32
+              ],
+              "revision": "O",
+              "source_ref": "structured_fundamentals_o:O:pages=32"
+            },
+            {
+              "manual_id": "gxworks2_structured_ag",
+              "manual_number": "SH-080781ENG",
+              "pdf_pages": [
+                146
+              ],
+              "revision": "AG",
+              "source_ref": "gxworks2_structured_ag:AG:pages=146"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                175
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=175"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                192
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=192"
+            },
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                200
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=200"
+            }
+          ]
+        }
+      ],
+      "language": "fbd",
+      "models": [
+        "FX0",
+        "FX0N",
+        "FX0S",
+        "FX1",
+        "FX1N",
+        "FX1NC",
+        "FX1S",
+        "FX2C",
+        "FX2N",
+        "FX2NC",
+        "FX3G",
+        "FX3GC",
+        "FX3S",
+        "FX3U",
+        "FX3UC",
+        "FXU",
+        "L02",
+        "L02-P",
+        "L02S",
+        "L02S-P",
+        "L06",
+        "L06-P",
+        "L26",
+        "L26-BT",
+        "L26-P",
+        "L26-PBT",
+        "Q00",
+        "Q00J",
+        "Q00U",
+        "Q00UJ",
+        "Q01",
+        "Q01U",
+        "Q02",
+        "Q02H",
+        "Q02PH",
+        "Q02U",
+        "Q03UD",
+        "Q03UDE",
+        "Q03UDV",
+        "Q04UDEH",
+        "Q04UDH",
+        "Q04UDPV",
+        "Q04UDV",
+        "Q06H",
+        "Q06PH",
+        "Q06UDEH",
+        "Q06UDH",
+        "Q06UDPV",
+        "Q06UDV",
+        "Q100UDEH",
+        "Q10UDEH",
+        "Q10UDH",
+        "Q12H",
+        "Q12PH",
+        "Q12PRH",
+        "Q13UDEH",
+        "Q13UDH",
+        "Q13UDPV",
+        "Q13UDV",
+        "Q20UDEH",
+        "Q20UDH",
+        "Q25H",
+        "Q25PH",
+        "Q25PRH",
+        "Q26UDEH",
+        "Q26UDH",
+        "Q26UDPV",
+        "Q26UDV",
+        "Q50UDEH"
+      ],
+      "target": "FBD.CALL.BINDING"
+    },
+    {
+      "aliases": [
+        "FBD 顺序",
+        "FBD EN/ENO",
+        "FBD execution order"
+      ],
+      "facts": [
+        {
+          "id": "fbd.execution",
+          "dimension": "parameters.fbd_execution",
+          "status": "source_verified",
+          "depends_on": [],
+          "verification": "source_checked",
+          "value": {
+            "dependency_kinds": [
+              "data",
+              "enable",
+              "shared_storage",
+              "instance_state"
+            ],
+            "en_eno": {
+              "disabled": "no_execution",
+              "disabled_eno": false,
+              "enabled_error": "undefined_result",
+              "enabled_success": "valid_result"
+            },
+            "feedback_rule": "requires_state_and_order_contract",
+            "network_order": "stored_order",
+            "parallel_order": "top_to_bottom",
+            "result_use_requires_enable_contract": true,
+            "series_order": "left_to_right"
+          },
+          "scope": {
+            "forms": [
+              "FBD.EXECUTION"
+            ],
+            "languages": [
+              "fbd"
+            ],
+            "models": [
+              "FX0",
+              "FX0N",
+              "FX0S",
+              "FX1",
+              "FX1N",
+              "FX1NC",
+              "FX1S",
+              "FX2C",
+              "FX2N",
+              "FX2NC",
+              "FX3G",
+              "FX3GC",
+              "FX3S",
+              "FX3U",
+              "FX3UC",
+              "FXU",
+              "L02",
+              "L02-P",
+              "L02S",
+              "L02S-P",
+              "L06",
+              "L06-P",
+              "L26",
+              "L26-BT",
+              "L26-P",
+              "L26-PBT",
+              "Q00",
+              "Q00J",
+              "Q00U",
+              "Q00UJ",
+              "Q01",
+              "Q01U",
+              "Q02",
+              "Q02H",
+              "Q02PH",
+              "Q02U",
+              "Q03UD",
+              "Q03UDE",
+              "Q03UDV",
+              "Q04UDEH",
+              "Q04UDH",
+              "Q04UDPV",
+              "Q04UDV",
+              "Q06H",
+              "Q06PH",
+              "Q06UDEH",
+              "Q06UDH",
+              "Q06UDPV",
+              "Q06UDV",
+              "Q100UDEH",
+              "Q10UDEH",
+              "Q10UDH",
+              "Q12H",
+              "Q12PH",
+              "Q12PRH",
+              "Q13UDEH",
+              "Q13UDH",
+              "Q13UDPV",
+              "Q13UDV",
+              "Q20UDEH",
+              "Q20UDH",
+              "Q25H",
+              "Q25PH",
+              "Q25PRH",
+              "Q26UDEH",
+              "Q26UDH",
+              "Q26UDPV",
+              "Q26UDV",
+              "Q50UDEH"
+            ]
+          },
+          "sources": [
+            {
+              "manual_id": "structured_fundamentals_o",
+              "manual_number": "SH-080782ENG",
+              "pdf_pages": [
+                91
+              ],
+              "revision": "O",
+              "source_ref": "structured_fundamentals_o:O:pages=91"
+            },
+            {
+              "manual_id": "structured_fundamentals_o",
+              "manual_number": "SH-080782ENG",
+              "pdf_pages": [
+                29
+              ],
+              "revision": "O",
+              "source_ref": "structured_fundamentals_o:O:pages=29"
+            }
+          ]
+        }
+      ],
+      "language": "fbd",
+      "models": [
+        "FX0",
+        "FX0N",
+        "FX0S",
+        "FX1",
+        "FX1N",
+        "FX1NC",
+        "FX1S",
+        "FX2C",
+        "FX2N",
+        "FX2NC",
+        "FX3G",
+        "FX3GC",
+        "FX3S",
+        "FX3U",
+        "FX3UC",
+        "FXU",
+        "L02",
+        "L02-P",
+        "L02S",
+        "L02S-P",
+        "L06",
+        "L06-P",
+        "L26",
+        "L26-BT",
+        "L26-P",
+        "L26-PBT",
+        "Q00",
+        "Q00J",
+        "Q00U",
+        "Q00UJ",
+        "Q01",
+        "Q01U",
+        "Q02",
+        "Q02H",
+        "Q02PH",
+        "Q02U",
+        "Q03UD",
+        "Q03UDE",
+        "Q03UDV",
+        "Q04UDEH",
+        "Q04UDH",
+        "Q04UDPV",
+        "Q04UDV",
+        "Q06H",
+        "Q06PH",
+        "Q06UDEH",
+        "Q06UDH",
+        "Q06UDPV",
+        "Q06UDV",
+        "Q100UDEH",
+        "Q10UDEH",
+        "Q10UDH",
+        "Q12H",
+        "Q12PH",
+        "Q12PRH",
+        "Q13UDEH",
+        "Q13UDH",
+        "Q13UDPV",
+        "Q13UDV",
+        "Q20UDEH",
+        "Q20UDH",
+        "Q25H",
+        "Q25PH",
+        "Q25PRH",
+        "Q26UDEH",
+        "Q26UDH",
+        "Q26UDPV",
+        "Q26UDV",
+        "Q50UDEH"
+      ],
+      "target": "FBD.EXECUTION"
+    },
+    {
+      "aliases": [
+        "FBD 实例",
+        "FB 共享状态",
+        "Use Macrocode",
+        "Use MC/MCR"
+      ],
+      "facts": [
+        {
+          "id": "fbd.instance.state",
+          "dimension": "parameters.fbd_instance_state",
+          "status": "source_verified",
+          "depends_on": [],
+          "verification": "source_checked",
+          "value": {
+            "disabled_state_depends_on": [
+              "callee_language",
+              "use_macrocode",
+              "use_mc_mcr",
+              "use_en_eno"
+            ],
+            "distinct_instances_have_distinct_state": true,
+            "en_disabled_is_in_false": false,
+            "en_disabled_is_reset": false,
+            "macrocode_without_mc_mcr": "output_variables_retained_when_EN_off",
+            "repeated_instance_calls_require_order": true,
+            "same_instance_shares_state": true,
+            "use_mc_mcr_requires": [
+              "use_macrocode",
+              "use_en_eno"
+            ]
+          },
+          "scope": {
+            "forms": [
+              "FBD.INSTANCE.STATE"
+            ],
+            "languages": [
+              "fbd"
+            ],
+            "models": [
+              "FX0",
+              "FX0N",
+              "FX0S",
+              "FX1",
+              "FX1N",
+              "FX1NC",
+              "FX1S",
+              "FX2C",
+              "FX2N",
+              "FX2NC",
+              "FX3G",
+              "FX3GC",
+              "FX3S",
+              "FX3U",
+              "FX3UC",
+              "FXU",
+              "L02",
+              "L02-P",
+              "L02S",
+              "L02S-P",
+              "L06",
+              "L06-P",
+              "L26",
+              "L26-BT",
+              "L26-P",
+              "L26-PBT",
+              "Q00",
+              "Q00J",
+              "Q00U",
+              "Q00UJ",
+              "Q01",
+              "Q01U",
+              "Q02",
+              "Q02H",
+              "Q02PH",
+              "Q02U",
+              "Q03UD",
+              "Q03UDE",
+              "Q03UDV",
+              "Q04UDEH",
+              "Q04UDH",
+              "Q04UDPV",
+              "Q04UDV",
+              "Q06H",
+              "Q06PH",
+              "Q06UDEH",
+              "Q06UDH",
+              "Q06UDPV",
+              "Q06UDV",
+              "Q100UDEH",
+              "Q10UDEH",
+              "Q10UDH",
+              "Q12H",
+              "Q12PH",
+              "Q12PRH",
+              "Q13UDEH",
+              "Q13UDH",
+              "Q13UDPV",
+              "Q13UDV",
+              "Q20UDEH",
+              "Q20UDH",
+              "Q25H",
+              "Q25PH",
+              "Q25PRH",
+              "Q26UDEH",
+              "Q26UDH",
+              "Q26UDPV",
+              "Q26UDV",
+              "Q50UDEH"
+            ]
+          },
+          "sources": [
+            {
+              "manual_id": "structured_fundamentals_o",
+              "manual_number": "SH-080782ENG",
+              "pdf_pages": [
+                26
+              ],
+              "revision": "O",
+              "source_ref": "structured_fundamentals_o:O:pages=26"
+            },
+            {
+              "manual_id": "gxworks2_structured_ag",
+              "manual_number": "SH-080781ENG",
+              "pdf_pages": [
+                57
+              ],
+              "revision": "AG",
+              "source_ref": "gxworks2_structured_ag:AG:pages=57"
+            }
+          ]
+        }
+      ],
+      "language": "fbd",
+      "models": [
+        "FX0",
+        "FX0N",
+        "FX0S",
+        "FX1",
+        "FX1N",
+        "FX1NC",
+        "FX1S",
+        "FX2C",
+        "FX2N",
+        "FX2NC",
+        "FX3G",
+        "FX3GC",
+        "FX3S",
+        "FX3U",
+        "FX3UC",
+        "FXU",
+        "L02",
+        "L02-P",
+        "L02S",
+        "L02S-P",
+        "L06",
+        "L06-P",
+        "L26",
+        "L26-BT",
+        "L26-P",
+        "L26-PBT",
+        "Q00",
+        "Q00J",
+        "Q00U",
+        "Q00UJ",
+        "Q01",
+        "Q01U",
+        "Q02",
+        "Q02H",
+        "Q02PH",
+        "Q02U",
+        "Q03UD",
+        "Q03UDE",
+        "Q03UDV",
+        "Q04UDEH",
+        "Q04UDH",
+        "Q04UDPV",
+        "Q04UDV",
+        "Q06H",
+        "Q06PH",
+        "Q06UDEH",
+        "Q06UDH",
+        "Q06UDPV",
+        "Q06UDV",
+        "Q100UDEH",
+        "Q10UDEH",
+        "Q10UDH",
+        "Q12H",
+        "Q12PH",
+        "Q12PRH",
+        "Q13UDEH",
+        "Q13UDH",
+        "Q13UDPV",
+        "Q13UDV",
+        "Q20UDEH",
+        "Q20UDH",
+        "Q25H",
+        "Q25PH",
+        "Q25PRH",
+        "Q26UDEH",
+        "Q26UDH",
+        "Q26UDPV",
+        "Q26UDV",
+        "Q50UDEH"
+      ],
+      "target": "FBD.INSTANCE.STATE"
+    },
+    {
+      "aliases": [
+        "FBD 标签",
+        "FBD 数组",
+        "FBD 结构成员"
+      ],
+      "facts": [
+        {
+          "id": "fbd.symbols",
+          "dimension": "parameters.fbd_symbols",
+          "status": "source_verified",
+          "depends_on": [],
+          "verification": "source_checked",
+          "value": {
+            "arbitrary_st_expression_is_terminal": false,
+            "array_access_requires_declared_bounds": true,
+            "composite_identity": "declaration_source_and_shape",
+            "device_storage_and_declared_value_type_are_distinct": true,
+            "label_binding": "current_local_global_scope_and_hiding_option"
+          },
+          "scope": {
+            "forms": [
+              "FBD.SYMBOLS"
+            ],
+            "languages": [
+              "fbd"
+            ],
+            "models": [
+              "FX0",
+              "FX0N",
+              "FX0S",
+              "FX1",
+              "FX1N",
+              "FX1NC",
+              "FX1S",
+              "FX2C",
+              "FX2N",
+              "FX2NC",
+              "FX3G",
+              "FX3GC",
+              "FX3S",
+              "FX3U",
+              "FX3UC",
+              "FXU",
+              "L02",
+              "L02-P",
+              "L02S",
+              "L02S-P",
+              "L06",
+              "L06-P",
+              "L26",
+              "L26-BT",
+              "L26-P",
+              "L26-PBT",
+              "Q00",
+              "Q00J",
+              "Q00U",
+              "Q00UJ",
+              "Q01",
+              "Q01U",
+              "Q02",
+              "Q02H",
+              "Q02PH",
+              "Q02U",
+              "Q03UD",
+              "Q03UDE",
+              "Q03UDV",
+              "Q04UDEH",
+              "Q04UDH",
+              "Q04UDPV",
+              "Q04UDV",
+              "Q06H",
+              "Q06PH",
+              "Q06UDEH",
+              "Q06UDH",
+              "Q06UDPV",
+              "Q06UDV",
+              "Q100UDEH",
+              "Q10UDEH",
+              "Q10UDH",
+              "Q12H",
+              "Q12PH",
+              "Q12PRH",
+              "Q13UDEH",
+              "Q13UDH",
+              "Q13UDPV",
+              "Q13UDV",
+              "Q20UDEH",
+              "Q20UDH",
+              "Q25H",
+              "Q25PH",
+              "Q25PRH",
+              "Q26UDEH",
+              "Q26UDH",
+              "Q26UDPV",
+              "Q26UDV",
+              "Q50UDEH"
+            ]
+          },
+          "sources": [
+            {
+              "manual_id": "structured_fundamentals_o",
+              "manual_number": "SH-080782ENG",
+              "pdf_pages": [
+                32
+              ],
+              "revision": "O",
+              "source_ref": "structured_fundamentals_o:O:pages=32"
+            },
+            {
+              "manual_id": "structured_fundamentals_o",
+              "manual_number": "SH-080782ENG",
+              "pdf_pages": [
+                34
+              ],
+              "revision": "O",
+              "source_ref": "structured_fundamentals_o:O:pages=34"
+            }
+          ]
+        }
+      ],
+      "language": "fbd",
+      "models": [
+        "FX0",
+        "FX0N",
+        "FX0S",
+        "FX1",
+        "FX1N",
+        "FX1NC",
+        "FX1S",
+        "FX2C",
+        "FX2N",
+        "FX2NC",
+        "FX3G",
+        "FX3GC",
+        "FX3S",
+        "FX3U",
+        "FX3UC",
+        "FXU",
+        "L02",
+        "L02-P",
+        "L02S",
+        "L02S-P",
+        "L06",
+        "L06-P",
+        "L26",
+        "L26-BT",
+        "L26-P",
+        "L26-PBT",
+        "Q00",
+        "Q00J",
+        "Q00U",
+        "Q00UJ",
+        "Q01",
+        "Q01U",
+        "Q02",
+        "Q02H",
+        "Q02PH",
+        "Q02U",
+        "Q03UD",
+        "Q03UDE",
+        "Q03UDV",
+        "Q04UDEH",
+        "Q04UDH",
+        "Q04UDPV",
+        "Q04UDV",
+        "Q06H",
+        "Q06PH",
+        "Q06UDEH",
+        "Q06UDH",
+        "Q06UDPV",
+        "Q06UDV",
+        "Q100UDEH",
+        "Q10UDEH",
+        "Q10UDH",
+        "Q12H",
+        "Q12PH",
+        "Q12PRH",
+        "Q13UDEH",
+        "Q13UDH",
+        "Q13UDPV",
+        "Q13UDV",
+        "Q20UDEH",
+        "Q20UDH",
+        "Q25H",
+        "Q25PH",
+        "Q25PRH",
+        "Q26UDEH",
+        "Q26UDH",
+        "Q26UDPV",
+        "Q26UDV",
+        "Q50UDEH"
+      ],
+      "target": "FBD.SYMBOLS"
+    },
+    {
+      "aliases": [
+        "FBD 跳转",
+        "网络标签",
+        "FBD Return",
+        "并联触点"
+      ],
+      "facts": [
+        {
+          "id": "fbd.control_flow",
+          "dimension": "parameters.fbd_control_flow",
+          "status": "source_verified",
+          "depends_on": [],
+          "verification": "source_checked",
+          "value": {
+            "jump_target": "ladder_block_label_in_same_pou",
+            "network_header_label_is_control_flow": true,
+            "pure_fbd_relay_symbols": false,
+            "relay_parallel_operation": "OR",
+            "relay_series_operation": "AND",
+            "relay_symbols_mode": "structured_ladder",
+            "return_fb_depends_on": [
+              "use_macrocode"
+            ],
+            "return_function": "return_to_caller",
+            "return_macro_fb": "end_pou",
+            "return_program": "end_pou",
+            "return_subroutine_fb": "return_to_caller"
+          },
+          "scope": {
+            "forms": [
+              "FBD.CONTROL_FLOW"
+            ],
+            "languages": [
+              "fbd"
+            ],
+            "models": [
+              "FX0",
+              "FX0N",
+              "FX0S",
+              "FX1",
+              "FX1N",
+              "FX1NC",
+              "FX1S",
+              "FX2C",
+              "FX2N",
+              "FX2NC",
+              "FX3G",
+              "FX3GC",
+              "FX3S",
+              "FX3U",
+              "FX3UC",
+              "FXU",
+              "L02",
+              "L02-P",
+              "L02S",
+              "L02S-P",
+              "L06",
+              "L06-P",
+              "L26",
+              "L26-BT",
+              "L26-P",
+              "L26-PBT",
+              "Q00",
+              "Q00J",
+              "Q00U",
+              "Q00UJ",
+              "Q01",
+              "Q01U",
+              "Q02",
+              "Q02H",
+              "Q02PH",
+              "Q02U",
+              "Q03UD",
+              "Q03UDE",
+              "Q03UDV",
+              "Q04UDEH",
+              "Q04UDH",
+              "Q04UDPV",
+              "Q04UDV",
+              "Q06H",
+              "Q06PH",
+              "Q06UDEH",
+              "Q06UDH",
+              "Q06UDPV",
+              "Q06UDV",
+              "Q100UDEH",
+              "Q10UDEH",
+              "Q10UDH",
+              "Q12H",
+              "Q12PH",
+              "Q12PRH",
+              "Q13UDEH",
+              "Q13UDH",
+              "Q13UDPV",
+              "Q13UDV",
+              "Q20UDEH",
+              "Q20UDH",
+              "Q25H",
+              "Q25PH",
+              "Q25PRH",
+              "Q26UDEH",
+              "Q26UDH",
+              "Q26UDPV",
+              "Q26UDV",
+              "Q50UDEH"
+            ]
+          },
+          "sources": [
+            {
+              "manual_id": "structured_fundamentals_o",
+              "manual_number": "SH-080782ENG",
+              "pdf_pages": [
+                24
+              ],
+              "revision": "O",
+              "source_ref": "structured_fundamentals_o:O:pages=24"
+            },
+            {
+              "manual_id": "structured_fundamentals_o",
+              "manual_number": "SH-080782ENG",
+              "pdf_pages": [
+                89
+              ],
+              "revision": "O",
+              "source_ref": "structured_fundamentals_o:O:pages=89"
+            },
+            {
+              "manual_id": "structured_fundamentals_o",
+              "manual_number": "SH-080782ENG",
+              "pdf_pages": [
+                91
+              ],
+              "revision": "O",
+              "source_ref": "structured_fundamentals_o:O:pages=91"
+            }
+          ]
+        }
+      ],
+      "language": "fbd",
+      "models": [
+        "FX0",
+        "FX0N",
+        "FX0S",
+        "FX1",
+        "FX1N",
+        "FX1NC",
+        "FX1S",
+        "FX2C",
+        "FX2N",
+        "FX2NC",
+        "FX3G",
+        "FX3GC",
+        "FX3S",
+        "FX3U",
+        "FX3UC",
+        "FXU",
+        "L02",
+        "L02-P",
+        "L02S",
+        "L02S-P",
+        "L06",
+        "L06-P",
+        "L26",
+        "L26-BT",
+        "L26-P",
+        "L26-PBT",
+        "Q00",
+        "Q00J",
+        "Q00U",
+        "Q00UJ",
+        "Q01",
+        "Q01U",
+        "Q02",
+        "Q02H",
+        "Q02PH",
+        "Q02U",
+        "Q03UD",
+        "Q03UDE",
+        "Q03UDV",
+        "Q04UDEH",
+        "Q04UDH",
+        "Q04UDPV",
+        "Q04UDV",
+        "Q06H",
+        "Q06PH",
+        "Q06UDEH",
+        "Q06UDH",
+        "Q06UDPV",
+        "Q06UDV",
+        "Q100UDEH",
+        "Q10UDEH",
+        "Q10UDH",
+        "Q12H",
+        "Q12PH",
+        "Q12PRH",
+        "Q13UDEH",
+        "Q13UDH",
+        "Q13UDPV",
+        "Q13UDV",
+        "Q20UDEH",
+        "Q20UDH",
+        "Q25H",
+        "Q25PH",
+        "Q25PRH",
+        "Q26UDEH",
+        "Q26UDH",
+        "Q26UDPV",
+        "Q26UDV",
+        "Q50UDEH"
+      ],
+      "target": "FBD.CONTROL_FLOW"
+    },
+    {
+      "aliases": [
+        "FBD 工程条件",
+        "FBD 编译选项"
+      ],
+      "facts": [
+        {
+          "id": "fbd.project",
+          "dimension": "parameters.fbd_project",
+          "status": "source_verified",
+          "depends_on": [],
+          "verification": "source_checked",
+          "value": {
+            "available_interface_grants_write_capability": false,
+            "interface_change_checks": "final_joint_project_and_affected_callers",
+            "required_context": [
+              "cpu_members",
+              "project_mode",
+              "pou_kind",
+              "source_identity",
+              "task_scopes",
+              "declarations",
+              "callable_interfaces",
+              "compile_options",
+              "operation_capabilities"
+            ],
+            "unknown_fb_options": "report_missing_conditions_not_default_values"
+          },
+          "scope": {
+            "forms": [
+              "FBD.PROJECT"
+            ],
+            "languages": [
+              "fbd"
+            ],
+            "models": [
+              "FX0",
+              "FX0N",
+              "FX0S",
+              "FX1",
+              "FX1N",
+              "FX1NC",
+              "FX1S",
+              "FX2C",
+              "FX2N",
+              "FX2NC",
+              "FX3G",
+              "FX3GC",
+              "FX3S",
+              "FX3U",
+              "FX3UC",
+              "FXU",
+              "L02",
+              "L02-P",
+              "L02S",
+              "L02S-P",
+              "L06",
+              "L06-P",
+              "L26",
+              "L26-BT",
+              "L26-P",
+              "L26-PBT",
+              "Q00",
+              "Q00J",
+              "Q00U",
+              "Q00UJ",
+              "Q01",
+              "Q01U",
+              "Q02",
+              "Q02H",
+              "Q02PH",
+              "Q02U",
+              "Q03UD",
+              "Q03UDE",
+              "Q03UDV",
+              "Q04UDEH",
+              "Q04UDH",
+              "Q04UDPV",
+              "Q04UDV",
+              "Q06H",
+              "Q06PH",
+              "Q06UDEH",
+              "Q06UDH",
+              "Q06UDPV",
+              "Q06UDV",
+              "Q100UDEH",
+              "Q10UDEH",
+              "Q10UDH",
+              "Q12H",
+              "Q12PH",
+              "Q12PRH",
+              "Q13UDEH",
+              "Q13UDH",
+              "Q13UDPV",
+              "Q13UDV",
+              "Q20UDEH",
+              "Q20UDH",
+              "Q25H",
+              "Q25PH",
+              "Q25PRH",
+              "Q26UDEH",
+              "Q26UDH",
+              "Q26UDPV",
+              "Q26UDV",
+              "Q50UDEH"
+            ]
+          },
+          "sources": [
+            {
+              "manual_id": "gxworks2_structured_ag",
+              "manual_number": "SH-080781ENG",
+              "pdf_pages": [
+                57
+              ],
+              "revision": "AG",
+              "source_ref": "gxworks2_structured_ag:AG:pages=57"
+            },
+            {
+              "manual_id": "gxworks2_structured_ag",
+              "manual_number": "SH-080781ENG",
+              "pdf_pages": [
+                196
+              ],
+              "revision": "AG",
+              "source_ref": "gxworks2_structured_ag:AG:pages=196"
+            }
+          ]
+        }
+      ],
+      "language": "fbd",
+      "models": [
+        "FX0",
+        "FX0N",
+        "FX0S",
+        "FX1",
+        "FX1N",
+        "FX1NC",
+        "FX1S",
+        "FX2C",
+        "FX2N",
+        "FX2NC",
+        "FX3G",
+        "FX3GC",
+        "FX3S",
+        "FX3U",
+        "FX3UC",
+        "FXU",
+        "L02",
+        "L02-P",
+        "L02S",
+        "L02S-P",
+        "L06",
+        "L06-P",
+        "L26",
+        "L26-BT",
+        "L26-P",
+        "L26-PBT",
+        "Q00",
+        "Q00J",
+        "Q00U",
+        "Q00UJ",
+        "Q01",
+        "Q01U",
+        "Q02",
+        "Q02H",
+        "Q02PH",
+        "Q02U",
+        "Q03UD",
+        "Q03UDE",
+        "Q03UDV",
+        "Q04UDEH",
+        "Q04UDH",
+        "Q04UDPV",
+        "Q04UDV",
+        "Q06H",
+        "Q06PH",
+        "Q06UDEH",
+        "Q06UDH",
+        "Q06UDPV",
+        "Q06UDV",
+        "Q100UDEH",
+        "Q10UDEH",
+        "Q10UDH",
+        "Q12H",
+        "Q12PH",
+        "Q12PRH",
+        "Q13UDEH",
+        "Q13UDH",
+        "Q13UDPV",
+        "Q13UDV",
+        "Q20UDEH",
+        "Q20UDH",
+        "Q25H",
+        "Q25PH",
+        "Q25PRH",
+        "Q26UDEH",
+        "Q26UDH",
+        "Q26UDPV",
+        "Q26UDV",
+        "Q50UDEH"
+      ],
+      "target": "FBD.PROJECT"
+    },
+    {
+      "aliases": [
+        "TON",
+        "TON_10",
+        "FBD 定时精度",
+        "FBD timer resolution"
+      ],
+      "facts": [
+        {
+          "id": "fbd.timers",
+          "dimension": "parameters.fbd_timers",
+          "status": "source_verified",
+          "depends_on": [],
+          "verification": "source_checked",
+          "value": {
+            "disabled_behavior_requires_block_contract": true,
+            "resolution_ms": {
+              "TON": 100,
+              "TON_10": 10,
+              "TON_10_E": 10,
+              "TON_E": 100
+            },
+            "round_requested_time": false
+          },
+          "scope": {
+            "forms": [
+              "FBD.TIMERS"
+            ],
+            "languages": [
+              "fbd"
+            ],
+            "models": [
+              "FX3U",
+              "FX3UC",
+              "FX3G",
+              "FX3GC",
+              "FX3S",
+              "FX2N",
+              "FX2NC",
+              "FX1N",
+              "FX1NC",
+              "FX1S",
+              "FXU",
+              "FX2C"
+            ]
+          },
+          "sources": [
+            {
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                254
+              ],
+              "revision": "K",
+              "source_ref": "fxcpu_application_k:K:pages=254"
+            }
+          ]
+        }
+      ],
+      "language": "fbd",
+      "models": [
+        "FX3U",
+        "FX3UC",
+        "FX3G",
+        "FX3GC",
+        "FX3S",
+        "FX2N",
+        "FX2NC",
+        "FX1N",
+        "FX1NC",
+        "FX1S",
+        "FXU",
+        "FX2C"
+      ],
+      "target": "FBD.TIMERS"
+    }
+  ]
+}

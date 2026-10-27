@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Choose an available wire mode before generating; never probe or retry a model.
 
 The same local compact contract applies in all modes. Provider names are not

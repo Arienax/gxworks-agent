@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Public HTTP resources; application owners select the public projection."""
 from __future__ import annotations
 from typing import Literal
@@ -719,9 +722,13 @@ class ReadDelivery(PublicResource):
     coverage: JsonObject | None = None
 
 
+class ReadObjectReference(PublicResource):
+    reference: str = Field(alias='$ref', pattern=r'^#/objects/unit-[1-9][0-9]*$')
+
+
 class PagedReadData(PublicResource):
     context_schema_version: Literal[3]
-    document: EngineeringObject
+    document: ReadObjectReference
     objects: EngineeringMap[EngineeringValue]
     delivery: ReadDelivery
 
@@ -867,3 +874,16 @@ def document_sse_events(schema):
         response["content"] = {"text/event-stream": {"schema": {"type": "string"}}}
         response["x-event-schema"] = {"$ref": "#/components/schemas/JobEvent"}
     return schema
+
+
+def validate_public_read_document(tool, document):
+    """Validate unpooled result types before the transport's object table exists."""
+    from agent_runtime.tool_errors import ToolPreconditionError
+    model = {'get_fbd_catalog': FBDCatalog, 'get_generation_context': GenerationContextToolData}.get(tool)
+    try:
+        if model is not None:
+            model.model_validate(document)
+        else:
+            _require_public(document)
+    except ValueError as error:
+        raise ToolPreconditionError('INVALID_TOOL_RESULT', '工具结果不符合公开读取契约。') from error

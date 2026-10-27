@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Lazy lifecycle manager for the local GX Simulator2 HTTP gateway.
 
 Nothing in this module starts during application import.  The external x86

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Evidence-bound planning for generation-contract repair.
 
 The generation contract is a validator, not a repair recipe.  This module turns

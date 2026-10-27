@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Versioned, model-neutral capability data. No SDK, network or PLC dependencies.
 
 The schema is deliberately small: scalar controls, conjunctions of membership

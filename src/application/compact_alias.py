@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Deterministic recovery for compact Agent-B data emitted with ladder_v1 key names.
 
 Some json_object providers keep the compact token values but expand the transport

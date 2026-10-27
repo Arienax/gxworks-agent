@@ -1,3 +1,6 @@
+// Copyright 2026 Arienax
+// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 // Loaded with the settings panel so diagnostic copy does not enlarge startup.
 import type { Locale } from "../i18n";
 const words: Record<string, [string, string]> = {

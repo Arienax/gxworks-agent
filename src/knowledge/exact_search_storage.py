@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Exact search-document sharing without changing owner-qualified FTS statistics.
 
 The compatibility view preserves chunk rowids and every search/filter field.

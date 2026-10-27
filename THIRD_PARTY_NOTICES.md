@@ -1,10 +1,13 @@
 # Third-party notices
 
+The project's own copyright, original repository and author attribution are
+recorded in [NOTICE](NOTICE), retained in source copies and in released packages.
+
 GXWorks Agent is independent of Mitsubishi Electric. GX Works, MELSEC and
 Mitsubishi Electric are trademarks of their respective owners. This repository
 does not include GX Works2, its manuals, vendor binaries, or a license to use
 them. Native blank project templates are included for interoperability; see
-[license scope](LICENSE-SCOPE.md).
+[license scope](LICENSING.md).
 
 Python and npm dependencies retain their own licenses and copyright notices.
 Dependency versions are listed in `requirements/` and `web/package-lock.json`.

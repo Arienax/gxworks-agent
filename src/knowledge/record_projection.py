@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Typed index-record projection, stable selection and reference formatting."""
 from __future__ import annotations
 
@@ -27,7 +30,7 @@ def default_source(meta, path):
     return path.stem if path is not None else "authored_facts"
 
 
-def chunk_result(row, meta, path, plc_model, task_type, connection=None, *, qualify_result=True):
+def chunk_result(row, meta, path, plc_model, task_type, connection=None, *, qualify_result=True, hydrate=True):
     if row is None or not row_in_scope(row, plc_model, task_type):
         return None
     text = row_value(row, TEXT_COLUMNS)
@@ -78,13 +81,15 @@ def chunk_result(row, meta, path, plc_model, task_type, connection=None, *, qual
                 or authored.get("content_origin") not in {"authored_fact", "original_case"}):
             return None
         result.update(authored)
-        if authored.get("runtime_owner") is not None:
+        if not hydrate and (authored.get("runtime_owner") is not None or authored.get("runtime_language") is not None):
+            result["_pending_hydration"] = True
+        if hydrate and authored.get("runtime_owner") is not None:
             if connection is None:
                 return None
             from knowledge.runtime_fact_publication import hydrate_owner_packet
             result["text"] = json.dumps(hydrate_owner_packet(connection, authored["runtime_owner"]),
                                         ensure_ascii=False, separators=(",", ":"))
-        if authored.get("runtime_language") is not None:
+        if hydrate and authored.get("runtime_language") is not None:
             if connection is None:
                 return None
             from knowledge.runtime_fact_publication import hydrate_language_packet
@@ -221,3 +226,16 @@ def select_ranked(candidates, top_k):
         if len(selected) >= top_k:
             break
     return selected
+
+
+def hydrate_result(result, connection):
+    """Expand an already-ranked authored result through its owning database."""
+    if not result.pop('_pending_hydration', False):
+        return result
+    from knowledge.runtime_fact_publication import hydrate_owner_packet, hydrate_language_packet
+    if result.get('runtime_owner') is not None:
+        packet = hydrate_owner_packet(connection, result['runtime_owner'])
+    else:
+        packet = hydrate_language_packet(connection, result['runtime_language'], result['runtime_language_model'])
+    result['text'] = json.dumps(packet, ensure_ascii=False, separators=(',', ':'))
+    return result

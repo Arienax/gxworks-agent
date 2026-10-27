@@ -1,3 +1,6 @@
+// Copyright 2026 Arienax
+// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 import { useEffect, useRef, useState } from "react";
 import { activeJob, api, key } from "../api/client";
 import type { GXSendSelection } from "../features/gxSend";

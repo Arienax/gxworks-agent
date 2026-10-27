@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Derive bounded executable sources from established graph semantics.
 
 Connectivity determines values. Calls need a unique dependency order; opaque,

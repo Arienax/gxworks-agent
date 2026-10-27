@@ -23,6 +23,8 @@ PRIVATE_PREFIXES = (
 )
 PRIVATE_FILES = frozenset({
     'config.json', 'src/config.json', 'publication/public-files.json',
+    'tools/download_mitsubishi_manuals.py',
+
     'examples/comment.csv', 'examples/plc_import_comment.csv',
     'examples/plc_import_program.csv', 'examples/real_import_program.csv',
     'tools/private_materials.py', 'tools/download_mitsubishi_manuals.py',
@@ -62,6 +64,9 @@ def exclusion_reason(name: str) -> str | None:
         return 'private research material or process record'
     if path.name.casefold() in {'agents.md', 'claude.md', '.coverage', '.ds_store'}:
         return 'local collaboration or test output'
+    if value.startswith('tools/fact_') or value in {
+            'tools/fbd_fact_review.py', 'tools/build_fact_knowledge.py', 'tools/validate_fact_knowledge.py'}:
+        return 'private manual review implementation'
     if value in PRIVATE_FILES:
         return 'local configuration or private research input/tool'
     if path.name.casefold().startswith('.env') and path.name.casefold() != '.env.example':

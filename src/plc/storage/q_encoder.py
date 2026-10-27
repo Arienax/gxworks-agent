@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Q/L native token encodings and stored widths, shared by Core and the writers.
 
 A Q/L stored width is a property of the stored header, so the encodings, the header

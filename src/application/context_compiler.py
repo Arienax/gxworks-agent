@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Deterministic model-aware context selection for generation and retrieval.
 
 This module owns no PLC semantics. It only selects, deduplicates and

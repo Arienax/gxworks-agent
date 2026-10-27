@@ -14616,11 +14616,7 @@
             "$ref": "#/components/schemas/ReadDelivery"
           },
           "document": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/JsonValue"
-            },
-            "title": "Document",
-            "type": "object"
+            "$ref": "#/components/schemas/ReadObjectReference"
           },
           "objects": {
             "additionalProperties": {
@@ -17927,6 +17923,21 @@
           "id"
         ],
         "title": "ReadNetworkSnapshot",
+        "type": "object"
+      },
+      "ReadObjectReference": {
+        "additionalProperties": false,
+        "properties": {
+          "$ref": {
+            "pattern": "^#/objects/unit-[1-9][0-9]*$",
+            "title": "$Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "$ref"
+        ],
+        "title": "ReadObjectReference",
         "type": "object"
       },
       "ReplayAssertion": {

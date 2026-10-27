@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Source-page applicability, shared by the offline manual build.
 
 These are evidence scopes, not instruction admission or native verification.

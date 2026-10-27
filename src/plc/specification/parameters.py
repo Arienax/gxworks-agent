@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Typed parameter identity and separate review/generation views.
 
 This adapter does not validate PLC behavior, infer an address or translate an

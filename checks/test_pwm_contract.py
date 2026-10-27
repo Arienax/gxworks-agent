@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Public synthetic contract regressions; no private manual corpus fixtures."""
 import copy
 import pathlib
@@ -16,7 +19,22 @@ def context():
                     'resource_owner': None, 'time_unit': 'us'}}
 
 
-class PWMContractTests(unittest.TestCase):
+class ReviewedPWMTestCase(unittest.TestCase):
+    def setUp(self):
+        from unittest.mock import patch
+        from plc.pwm_fact_source import snapshot_facts
+        from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY as installed
+        class ReviewedRegistry:
+            def __getattr__(self, name): return getattr(installed, name)
+            def fact_bundle_current(self): return True
+            def definition_entry(self, opcode, *, cpu):
+                return {'facts': snapshot_facts(opcode, cpu)} if opcode in {'PWM', 'DPWM'} else installed.definition_entry(opcode, cpu=cpu)
+        self._owner_patch = patch('plc.instructions.DEFAULT_INSTRUCTION_REGISTRY', ReviewedRegistry())
+        self._owner_patch.start()
+        self.addCleanup(self._owner_patch.stop)
+
+
+class PWMContractTests(ReviewedPWMTestCase):
     def test_explicit_bounded_contract(self):
         for cpu in ('FX5U', 'FX5UC', 'FX5UJ', 'FX5S'):
             for opcode in ('PWM', 'DPWM'):
@@ -48,9 +66,10 @@ class PWMContractTests(unittest.TestCase):
             validate_pwm_request('DPWM', 'FX5U', 100000000, 200000000, 'Y0', c)
 
     def test_unsupported_does_not_become_known_illegal(self):
-        for on, period in [(0, 20), (10, 10)]:
-            with self.assertRaises(UnknownInstructionSemantics):
-                validate_pwm_request('PWM', 'FX5U', on, period, 'Y0', context())
+        with self.assertRaises(ValueError):
+            validate_pwm_request('PWM', 'FX5U', 0, 20, 'Y0', context())
+        with self.assertRaises(UnknownInstructionSemantics):
+            validate_pwm_request('PWM', 'FX5U', 10, 10, 'Y0', context())
         for count in (1, False, 0.0, None):
             c = context(); c['pwm']['pulse_count'] = count
             with self.assertRaises(UnknownInstructionSemantics):

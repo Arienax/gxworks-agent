@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
 """Raw-preserved index and primary link map from observed ESCompiler storage.
 
 These are stored compiler artifacts, not authoritative current source. Index

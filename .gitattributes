@@ -1,0 +1,20 @@
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+resources/knowledge/*.sqlite filter=lfs diff=lfs merge=lfs -text
+resources/knowledge/*.npz filter=lfs diff=lfs merge=lfs -text
+resources/knowledge/runtime/*.sqlite filter=lfs diff=lfs merge=lfs -text
+resources/knowledge/runtime/*.npz filter=lfs diff=lfs merge=lfs -text
+# Reproducible instruction facts and source locations; original manuals stay in SQLite.
+resources/instructions/mitsubishi/instruction_definitions.json.gz filter=lfs diff=lfs merge=lfs -text
+# Historical failure-corpus attestations hash these exact repository bytes.
+research/results/gxworks_validation.json text eol=lf
+research/evidence/**/*.zip filter=lfs diff=lfs merge=lfs -text
+research/results/rag-fact-migration-20261016.json filter=lfs diff=lfs merge=lfs -text
+research/results/rag-withheld-migration-20261016.json filter=lfs diff=lfs merge=lfs -text
+# These existing checkpoint inventories exceed the ordinary Git blob limit.
+research/results/gxw-check-allocation-20260930/manifest.json filter=lfs diff=lfs merge=lfs -text
+research/results/gxw-source-sfc-20260927/manifest.json filter=lfs diff=lfs merge=lfs -text
+research/results/gxw-st-transfers-20260930/manifest.json filter=lfs diff=lfs merge=lfs -text
+# Keep readable summaries in research/results; bulk raw output is opt-in.
+research/results/raw/** filter=lfs diff=lfs merge=lfs -text

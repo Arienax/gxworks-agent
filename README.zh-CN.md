@@ -1,5 +1,9 @@
 <h1 align="center">GXWorks Agent</h1>
 
+<p align="center"><strong>原作者：<a href="https://github.com/Arienax">Arienax</a></strong> · <a href="https://github.com/Arienax/gxworks-agent">github.com/Arienax/gxworks-agent</a></p>
+
+<p align="center">© 2026 Arienax · Apache-2.0</p>
+
 <h3 align="center">面向三菱 PLC 工程的 MCP 工具服务与 AI 工作台</h3>
 
 <p align="center"><strong>读取工程上下文 · 生成与审阅程序 · 驱动 GX Works2 原生工程与诊断</strong></p>
@@ -187,4 +191,4 @@ Windows 原生适配器以 x86 进程加载 GX Works2 的原生组件，Python �
 
 [版本更新记录](CHANGELOG.md) · [问题反馈](https://github.com/Arienax/gxworks-agent/issues)
 
-项目贡献者拥有权利的 Core、Web、MCP 与原生适配器源码采用 [Apache License 2.0](LICENSE) 开源，具体适用范围见[许可范围](LICENSE-SCOPE.md)与[第三方声明](THIRD_PARTY_NOTICES.md)。各贡献者保留其版权；此前已发布的版本仍适用其发布时的许可证。
+项目贡献者拥有权利的 Core、Web、MCP 与原生适配器源码采用 [Apache License 2.0](LICENSE) 开源，具体适用范围见[许可范围](LICENSING.md)与[第三方声明](THIRD_PARTY_NOTICES.md)。各贡献者保留其版权；此前已发布的版本仍适用其发布时的许可证。[NOTICE](NOTICE) 记录原项目、作者与原始仓库地址。
