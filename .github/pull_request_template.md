@@ -7,8 +7,8 @@
 
 ## AI 辅助 / AI assistance
 
-<!-- 在初始 PR 描述中列出有实质性帮助的 AI 工具/模型及协助范围；未使用则写“未使用”。 -->
-<!-- In the initial PR description, name the AI tools/models that provided substantive assistance and what they helped produce, or write "None". -->
+<!-- 在初始 PR 描述中列出有实质性帮助的 AI 工具、精确模型 ID 及协助范围（不能只写模型系列名）；未使用则写“未使用”。 -->
+<!-- In the initial PR description, name the AI tools and exact model IDs (not just model families) that provided substantive assistance and what they helped produce, or write "None". -->
 <!-- 欢迎 AI 辅助，但不能替代独立判断、人工审查或测试；不要附私人提示词、聊天记录或完整推理过程。 -->
 <!-- AI assistance is welcome but does not replace independent judgment, human review, or testing; do not attach private prompts, chat logs, or full reasoning traces. -->
 
