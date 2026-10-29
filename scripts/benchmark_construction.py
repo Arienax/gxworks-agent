@@ -32,6 +32,217 @@ from scripts.benchmark_user_path import (
 
 _BLOCK = re.compile(r'\n# Core construction delivery\n.*?\n# End Core construction delivery\n', re.S)
 
+MINING_ARMS = ('raw_llm', 'fixed_examples', 'structured_algorithm')
+
+
+def _mining_case(case, spec, arm):
+    """Keep confirmed behavior common; only the implementation aid changes."""
+    result = copy.deepcopy(case)
+    result['confirmed_spec'] = copy.deepcopy(spec)
+    if arm != 'structured_algorithm':
+        result['confirmed_spec'].get('selected_approach', {}).pop('construction_plan', None)
+    result['construction_examples'] = arm == 'fixed_examples'
+    result['construction_delivery'] = 'instantiate'
+    return result
+
+
+def _mining_payload(request):
+    payloads = []
+    for index, message in enumerate(request.get('messages', [])):
+        if message.get('role') != 'user':
+            continue
+        try:
+            payload = json.loads(message['content'])
+        except (TypeError, ValueError, KeyError):
+            continue
+        if isinstance(payload, dict) and payload.get('context_schema_version') == 3:
+            payloads.append((index, payload))
+    if len(payloads) != 1:
+        raise ValueError('Mining comparison requires one current generation context packet')
+    return payloads[0]
+
+
+def _common_mining_request(request):
+    value = copy.deepcopy(request)
+    index, payload = _mining_payload(value)
+    payload['examples'] = ''
+    payload['construction_bindings'] = ''
+    payload['confirmed_spec'].get('selected_approach', {}).pop('construction_plan', None)
+    value['messages'][index]['content'] = payload
+    # The construct reference is the treatment's documented response mechanism.
+    response_format = value.get('response_format', {})
+    if response_format.get('type') == 'json_schema':
+        from application.compact_protocol import compact_response_schema
+        response_format['json_schema']['schema'] = compact_response_schema()
+    return value
+
+
+@contextmanager
+def _mining_evidence(evidence):
+    if evidence is None:
+        yield
+        return
+    from application import generation_agent as agent
+    from knowledge.evidence import KnowledgeContext
+    with patch.object(agent, '_build_knowledge_context', lambda *a, **k:
+                      KnowledgeContext(evidence['text'], copy.deepcopy(evidence['manifest']))):
+        yield
+
+
+def prepare_mining_requests(case, spec, provider):
+    """Prepare three real requests without transport or model quality claims.
+
+    ``spec`` contains the matched mining plan and the independently authored
+    behavior relations. Returned request text is runtime material: callers must
+    keep it outside the source repository, as with the other benchmark runners.
+    """
+    from application.confirmed_generation_context import project_confirmed_specification
+    from application.generation_wire import wire_payload_text, wire_token_estimate
+    from plc.construction import compile_constructions
+    from shared.model_context import technical_value
+
+    model = provider.profile.get('model')
+    if not model:
+        raise ValueError('Mining comparison requires an explicitly selected model')
+    if not (spec.get('selected_approach') or {}).get('construction_plan'):
+        raise ValueError('Mining comparison requires a matched construction plan')
+    compiled = compile_constructions({**spec, 'plc_model': case['plc_model']})
+    if compiled['gaps'] or not compiled['instances']:
+        raise ValueError('Mining plan is not available for Core instantiation')
+    evidence = copy.deepcopy(case.get('frozen_evidence'))
+    if evidence is not None:
+        from knowledge.evidence import KnowledgeContext, context_manifest
+        evidence['manifest'] = context_manifest(KnowledgeContext(evidence['text'], evidence['manifest']))
+    requests, arms = {}, {}
+    started = time.perf_counter()
+    for arm in MINING_ARMS:
+        variant = _mining_case(case, spec, arm)
+        with _mining_evidence(evidence):
+            record = run_case(variant, 'automatic', provider=PreviewProvider(provider), model=model)
+        if len(record['actual_requests']) != 1 or len(record['evidence']) != 1:
+            raise ValueError('Mining preparation requires exactly one generation request per arm')
+        observed = record['evidence'][0]
+        if evidence is None:
+            evidence = {'text': observed['text'], 'manifest': copy.deepcopy(observed['manifest'])}
+        elif observed['text'] != evidence['text'] or observed['manifest'] != evidence['manifest']:
+            raise ValueError('Knowledge evidence differs between mining arms')
+        request = record['actual_requests'][0]
+        _index, payload = _mining_payload(request)
+        expected = technical_value(project_confirmed_specification(variant['confirmed_spec']))
+        if payload.get('confirmed_spec') != expected:
+            raise ValueError('Complete confirmed relations or mining plan were lost')
+        if bool(payload.get('examples')) != (arm == 'fixed_examples'):
+            raise ValueError('Fixed-example comparison requires an actually routed example')
+        if bool(payload.get('construction_bindings')) != (arm == 'structured_algorithm'):
+            raise ValueError('Construction delivery leaked into another mining arm')
+        requests[arm] = request
+        arms[arm] = {
+            'model_evaluation': 'not_run', 'native_execution': 'not_run',
+            'first_candidate_correct_rate': None, 'semantic_errors': None,
+            'input_tokens': None, 'model_calls': None, 'elapsed_ms': None,
+            'request_chars': len(wire_payload_text(request)),
+            'estimated_input_tokens': wire_token_estimate(request),
+            'token_estimate_basis': 'product_deterministic_heuristic_not_provider_usage',
+            'example_ids': record.get('handoff', {}).get('construction_examples', {}).get('example_ids', []),
+        }
+    common = [_common_mining_request(requests[arm]) for arm in MINING_ARMS]
+    if any(request != common[0] for request in common[1:]):
+        raise ValueError('Non-treatment content or model parameters differ between mining arms')
+    return {
+        'status': 'prepared', 'case_id': case['case_id'], 'requests': requests,
+        'evidence': evidence, 'arms': arms, 'network_calls': 0,
+        'request_preparations': len(MINING_ARMS),
+        'preparation_ms': (time.perf_counter() - started) * 1000,
+        'common_behavior_and_evidence': True,
+        'scope': 'generation_from_identical_confirmed_behavior',
+        'native_execution': 'not_run',
+    }
+
+
+def _mining_first_outcome(record):
+    first = record['first_candidate']
+    binding = first.get('construction_binding') or {}
+    behavior = first.get('behavior_check') or {}
+    semantic = first.get('semantic', {}).get('status')
+    if (semantic == 'failed' or first.get('structural_valid') is False
+            or first.get('contract_status') == 'violated'
+            or binding.get('reference_violations') or behavior.get('activation_blocked')):
+        return 'failed'
+    if first.get('status') == 'not_produced':
+        return 'not_produced'
+    if first.get('error') or binding.get('gaps'):
+        return 'unverified'
+    if (semantic == 'verified' and first.get('usable') is True
+            and first.get('structural_valid') is True
+            and first.get('contract_status') in {'verified', 'not_applicable'}):
+        return 'passed'
+    return 'unverified'
+
+
+def run_mining_comparison(cases, provider, *, repeats=1, evaluator=None, preview=False):
+    """Reuse the existing first-candidate runner and its reported metering.
+
+    Preview prepares actual requests and leaves every model outcome unknown.
+    Live calls require an explicit provider; this adapter sets no model tuning,
+    retries, defaults or credentials. An evaluator must supply independent
+    behavioral expectations before model correctness can be measured.
+    """
+    if type(repeats) is not int or repeats < 1 or not cases:
+        raise ValueError('Mining comparison requires cases and a positive repeat count')
+    if len({case['case_id'] for case in cases}) != len(cases):
+        raise ValueError('Mining comparison requires unique case IDs')
+    prepared = {case['case_id']: prepare_mining_requests(case, case['confirmed_spec'], provider)
+                for case in cases}
+    if preview:
+        return {'status': 'prepared', 'cases': prepared, 'records': [], 'network_calls': 0,
+                'scheduled_runs': len(cases) * repeats * len(MINING_ARMS),
+                'model_evaluation': 'not_run', 'native_execution': 'not_run'}
+    if isinstance(provider, PreviewProvider):
+        raise ValueError('Preview transport cannot be reported as a model experiment')
+    if evaluator is None:
+        raise ValueError('Model comparison requires an independent behavior evaluator')
+    records = []
+    for repeat in range(repeats):
+        for position, case in enumerate(cases):
+            flight = prepared[case['case_id']]
+            offset = (repeat + position) % len(MINING_ARMS)
+            order = MINING_ARMS[offset:] + MINING_ARMS[:offset]
+            for arm in order:
+                variant = _mining_case(case, case['confirmed_spec'], arm)
+                expected = flight['requests'][arm]
+                resolver = provider._request_params
+
+                def checked_params(request):
+                    actual = resolver(request)
+                    if actual != expected:
+                        raise ValueError('Mining generation request changed after preparation')
+                    return actual
+
+                with _mining_evidence(flight['evidence']), patch.object(provider, '_request_params', checked_params):
+                    record = run_case(variant, 'automatic', provider=provider,
+                                      model=provider.profile['model'], evaluator=evaluator)
+                record.update(arm=arm, repeat=repeat, native_execution='not_run',
+                              mining_first_outcome=_mining_first_outcome(record))
+                records.append(record)
+    summary = summarize(records)
+    for arm, group in summary['groups'].items():
+        selected = [record for record in records if record['arm'] == arm]
+        statuses = [record['first_candidate'].get('semantic', {}).get('status') for record in selected]
+        outcomes = [record['mining_first_outcome'] for record in selected]
+        unknown = outcomes.count('unverified')
+        group.update(
+            first_candidate_correct_rate=None if unknown else outcomes.count('passed') / len(selected),
+            first_pass_usable=outcomes.count('passed'),
+            semantic_errors=statuses.count('failed'), unverified_candidates=unknown,
+            rejected_first_candidates=outcomes.count('failed'),
+            missing_first_candidates=outcomes.count('not_produced'),
+            native_execution='not_run',
+        )
+    return {'status': 'measured', 'records': records, 'summary': summary,
+            'request_preparations': len(cases) * len(MINING_ARMS),
+            'preparation_network_calls': 0, 'native_execution': 'not_run',
+            'scope': 'independently_tested_behavior_only'}
+
 
 def construction_specification(case):
     from plc.specification.confirmed import canonicalize_confirmed_spec

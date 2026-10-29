@@ -23,6 +23,28 @@ from tools.offline_inputs import private_path
 from plc.target_identity import Q_CPUS, PARAMETER_ONLY
 
 
+@pytest.mark.parametrize('case_id', ['cycle3', 'cycle3_renamed', 'cycle4', 'priority_branch'])
+def test_synthetic_control_sources_roundtrip_without_private_projects(case_id):
+    from scripts.control_mining_cases import decode_case, ordered_controller, synthetic_cases
+    from plc.ir import ir_to_ladder, lower_rung_instructions
+
+    case = next(case for case in synthetic_cases() if case['case_id'] == case_id)
+    decoded = decode_case(case)
+    ordered = decoded['ordered']
+    expected = ordered_controller(case)
+    assert [{'op': row['op'], 'args': row['args']}
+            for row in ordered['source_records']] == expected
+    assert [{'op': row['op'], 'args': row['args']}
+            for rung in ir_to_ladder(decoded['program_ir'])['rungs']
+            for row in lower_rung_instructions(rung)] == expected
+    assert ordered['plc_model'] == 'FX3U/FX3UC'
+    assert ordered['coverage']['parse_status'] == 'complete'
+    assert ordered['coverage']['semantic_status'] == 'static_only'
+    assert ordered['coverage']['runtime_verified'] is False
+    assert ordered['selected']['capabilities']['native_compile'] == 'not_run'
+    assert edit_ladder_project(decoded['raw'], 'MAIN', []).data == decoded['raw']
+
+
 def q_source_with_opaque_record(cpu):
     from tests.test_gxw_offline_application import q_native_origin_projects
     raw = q_native_origin_projects()[cpu]
@@ -137,7 +159,7 @@ def no_external_processes():
     monkeypatch.setattr(subprocess, "Popen", forbidden)
     monkeypatch.setattr(subprocess, "run", forbidden)
     monkeypatch.setattr(ctypes, "CDLL", forbidden)
-    monkeypatch.setattr(ctypes, "WinDLL", forbidden)
+    monkeypatch.setattr(ctypes, "WinDLL", forbidden, raising=False)
     monkeypatch.setenv("GXWORKS2_INSTALL_DIR", "Z:/missing-gxworks2-for-offline-tests")
     yield
     monkeypatch.undo()
