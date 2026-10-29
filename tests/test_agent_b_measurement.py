@@ -459,14 +459,21 @@ def test_prompt_cache_summary_weights_reported_tokens_and_excludes_unknown_calls
         'input_token_hit_rate': 0.82}
 
 
-def _purpose_cases():
-    from pathlib import Path
-    return load_cases(private_path('benchmarks/agent_b_operand_purpose_cases.jsonl'))
+def _private_measurement_cases(name, *, collection=False):
+    path = private_path('benchmarks/' + name)
+    if not path.is_file():
+        if collection:
+            return []
+        pytest.skip('Private benchmark corpus is not installed: ' + name)
+    return load_cases(path)
 
 
-def _challenge_cases():
-    from pathlib import Path
-    return load_cases(private_path('benchmarks/agent_b_operand_purpose_challenge_cases.jsonl'))
+def _purpose_cases(*, collection=False):
+    return _private_measurement_cases('agent_b_operand_purpose_cases.jsonl', collection=collection)
+
+
+def _challenge_cases(*, collection=False):
+    return _private_measurement_cases('agent_b_operand_purpose_challenge_cases.jsonl', collection=collection)
 
 
 def _mapping_ladder(case, operands=None):
@@ -554,7 +561,7 @@ def test_cmp_reference_retention_one_hot_and_swap_properties(left,right):
         if left==right:assert active==(False,True,False)
 
 
-@pytest.mark.parametrize('case',[c for c in _challenge_cases() if c['evaluation'].get('opcode')=='CMP'],ids=lambda c:c['case_id'])
+@pytest.mark.parametrize('case',[c for c in _challenge_cases(collection=True) if c['evaluation'].get('opcode')=='CMP'],ids=lambda c:c['case_id'])
 def test_cmp_truth_traces_reject_direction_swap_and_preserve_disabled_states(case):
     from scripts.benchmark_agent_b import evaluate_cmp_behavior
     expectation=case['evaluation']['cmp_behavior']
@@ -659,7 +666,7 @@ def test_paired_preflight_compares_real_final_requests_and_does_not_use_transpor
         assert raw == bound and pair['candidate_counts'] == {'manual_text':0,'usage_bound':0}
 
 
-@pytest.mark.parametrize("case", _challenge_cases()[:-1], ids=lambda case:case['case_id'])
+@pytest.mark.parametrize("case", _challenge_cases(collection=True)[:-1], ids=lambda case:case['case_id'])
 def test_challenge_preflight_compares_final_requests_without_prefilled_parameters(case):
     provider = OpenAICompatibleProvider(offline_runtime_profile(), 'fixture-key', client=object())
     result = preflight_pairs([case], provider=provider, evidence_cache={})
@@ -669,7 +676,7 @@ def test_challenge_preflight_compares_final_requests_without_prefilled_parameter
         assert ' '.join([case['evaluation']['opcode'],*case['evaluation']['operands']]) not in supplied
 
 
-@pytest.mark.parametrize("case", _purpose_cases()[:-1]+_challenge_cases()[:-1], ids=lambda case:case['case_id'])
+@pytest.mark.parametrize("case", _purpose_cases(collection=True)[:-1]+_challenge_cases(collection=True)[:-1], ids=lambda case:case['case_id'])
 def test_independent_mapping_answers_reject_swapped_values(case):
     expected = case['evaluation']
     assert evaluate_synthetic_case(case,{'ladder':_mapping_ladder(case)})['status'] == 'verified'
@@ -801,18 +808,15 @@ def test_native_direction_failure_is_rebound_and_original_model_error_stays_meas
     assert totals['raw_model_native_evaluated_runs'] == 1
 
 
-def _effect_challenge_cases():
-    from pathlib import Path
-    return [row for row in map(json.loads, (private_path('benchmarks/agent_b_instruction_effect_cases.jsonl')).read_text(encoding='utf-8').splitlines())
-        if row['case_id'].startswith('challenge-')]
+def _effect_challenge_cases(*, collection=False):
+    return [row for row in _reviewed_effect_cases(collection=collection) if row['case_id'].startswith('challenge-')]
 
 
-def _reviewed_effect_cases():
-    from pathlib import Path
-    return load_cases(private_path('benchmarks/agent_b_instruction_effect_cases.jsonl'))
+def _reviewed_effect_cases(*, collection=False):
+    return _private_measurement_cases('agent_b_instruction_effect_cases.jsonl', collection=collection)
 
 
-@pytest.mark.parametrize('case', _reviewed_effect_cases(), ids=lambda c: c['case_id'])
+@pytest.mark.parametrize('case', _reviewed_effect_cases(collection=True), ids=lambda c: c['case_id'])
 def test_every_reviewed_effect_case_executes_independent_fixed_traces(case):
     evaluation = case['evaluation']
     assert evaluation['effect_traces'] and evaluation['reference']['expected_source']
@@ -890,7 +894,7 @@ def test_operation_reference_raw_candidate_requires_Core_instead_of_counting_as_
     assert totals['raw_model_semantic_correct'] == totals['raw_model_native_evaluated_runs'] == 0
 
 
-@pytest.mark.parametrize('case', _effect_challenge_cases(), ids=lambda case: case['case_id'])
+@pytest.mark.parametrize('case', _effect_challenge_cases(collection=True), ids=lambda case: case['case_id'])
 def test_effect_challenges_execute_independent_fixed_result_traces(case):
     from application.compact_protocol import expand_compact_ladder
     expected = case['evaluation']
@@ -1578,6 +1582,112 @@ def _construction_measurement_fixture():
         {'id':'init','requirement_id':'boot','method':'first_scan_isolation'}], 'internal_ranges':[],
         'execution_context':{'program_type':'scan','initial_execution_program':False}}
     return case
+
+
+def _mining_measurement_case():
+    from test_confirmed_input_protocol import old_confirmed_spec
+    spec = old_confirmed_spec()
+    spec['selected_approach']['generation_contract']['required_structures'] = ['register_state_machine']
+    spec['behavior_constraints'] = [{'id': 'boot', 'kind': 'initialize', 'status': 'confirmed',
+        'values': {'M100': False}, 'execution_context': {'program_type': 'scan', 'initial_execution_program': False},
+        'provenance': {'source': 'user_authored', 'evidence': ['Initialize state']}}]
+    spec['selected_approach']['construction_plan'] = {
+        'instances': [{'id': 'init', 'requirement_id': 'boot', 'method': 'first_scan_isolation'}],
+        'internal_ranges': [], 'execution_context': {'program_type': 'scan', 'initial_execution_program': False}}
+    return {'case_id': 'mining_measurement', 'plc_model': 'FX3U', 'confirmed_spec': spec,
+            'execution_oracle': {'kind': 'independent_test'},
+            'frozen_evidence': {'text': '', 'manifest': {'records': [], 'status': 'offline_test'}}}
+
+
+def test_mining_requests_use_actual_examples_and_keep_unrun_metrics_unknown(monkeypatch):
+    from scripts.benchmark_construction import MINING_ARMS, prepare_mining_requests, _mining_payload
+    case = _mining_measurement_case()
+    before = copy.deepcopy(case)
+    provider = OpenAICompatibleProvider(offline_runtime_profile(), 'offline-key', client=object())
+    monkeypatch.setattr(provider, 'stream', lambda *a: pytest.fail('Request preparation called transport'))
+    result = prepare_mining_requests(case, case['confirmed_spec'], provider)
+    assert result['network_calls'] == 0 and result['request_preparations'] == 3
+    assert case == before and result['common_behavior_and_evidence']
+    for arm in MINING_ARMS:
+        _index, payload = _mining_payload(result['requests'][arm])
+        assert bool(payload['examples']) == (arm == 'fixed_examples')
+        assert bool(payload['construction_bindings']) == (arm == 'structured_algorithm')
+        assert ('construction_plan' in payload['confirmed_spec']['selected_approach']) == (arm == 'structured_algorithm')
+        metric = result['arms'][arm]
+        assert metric['native_execution'] == metric['model_evaluation'] == 'not_run'
+        assert all(metric[key] is None for key in ('first_candidate_correct_rate', 'semantic_errors', 'input_tokens', 'model_calls', 'elapsed_ms'))
+        assert metric['request_chars'] > metric['estimated_input_tokens'] > 0
+    assert result['arms']['fixed_examples']['example_ids'] == ['timed_register_sequence']
+
+
+@pytest.mark.parametrize('damage', ['knowledge', 'behavior'])
+def test_mining_requests_reject_changes_outside_the_implementation_aid(monkeypatch, damage):
+    from scripts import benchmark_construction as runner
+    original = runner.run_case
+
+    def changed(*args, **kwargs):
+        record = original(*args, **kwargs)
+        if args[0]['construction_examples']:
+            request = record['actual_requests'][0]
+            index, payload = runner._mining_payload(request)
+            if damage == 'knowledge':
+                payload['knowledge'] = ['extra evidence in only one arm']
+            else:
+                payload['confirmed_spec']['behavior_constraints'][0]['values']['M100'] = True
+            request['messages'][index]['content'] = json.dumps(payload)
+        return record
+
+    monkeypatch.setattr(runner, 'run_case', changed)
+    case = _mining_measurement_case()
+    provider = OpenAICompatibleProvider(offline_runtime_profile(), 'offline-key', client=object())
+    with pytest.raises(ValueError, match='Non-treatment content|Complete confirmed relations'):
+        runner.prepare_mining_requests(case, case['confirmed_spec'], provider)
+
+
+@pytest.mark.parametrize('reference', ['valid', 'duplicate', 'missing', 'unverified'])
+def test_mining_model_runner_preserves_provider_usage_and_first_candidate_failures(reference):
+    from scripts.benchmark_construction import MINING_ARMS, _mining_payload, run_mining_comparison
+
+    class OfflineProvider(OpenAICompatibleProvider):
+        def stream(self, request):
+            params = self._request_params(request)
+            if self.observation_sink:
+                self.observation_sink(params, [], None)
+            _index, payload = _mining_payload(params)
+            if payload['construction_bindings']:
+                candidate = {'r': [{'construct': 'init'}] * (2 if reference == 'duplicate' else 1)}
+                if reference == 'missing':
+                    candidate = {'r': [{'h': None, 's': [], 'b': [{'i': ['NO M8002'], 'o': ['RST M100']}]}]}
+            else:
+                address = 'M100' if payload['examples'] else 'M101'
+                candidate = {'r': [{'h': None, 's': [], 'b': [{'i': ['NO M8002'], 'o': ['RST ' + address]}]}]}
+            yield TextDelta(json.dumps(candidate))
+            yield Usage(123, 45, 168)
+
+    def evaluate(case, result):
+        if reference == 'unverified' and case['confirmed_spec']['selected_approach'].get('construction_plan'):
+            return {'status': 'unverified', 'scope': 'test_incomplete_behavior'}
+        from plc.ir import lower_rung_instructions
+        writes = [instruction['args'] for rung in result['ladder']['rungs']
+                  for instruction in lower_rung_instructions(rung) if instruction['op'] == 'RST']
+        return {'status': 'verified' if writes and all(row == ['M100'] for row in writes) else 'failed',
+                'scope': 'test_literal_target'}
+
+    provider = OfflineProvider(offline_runtime_profile(), 'offline-key', client=object())
+    result = run_mining_comparison([_mining_measurement_case()], provider, evaluator=evaluate)
+    assert len(result['records']) == 3 and result['preparation_network_calls'] == 0
+    for arm in MINING_ARMS:
+        group = result['summary']['groups'][arm]
+        assert group['model_calls'] == 1 and group['input_tokens'] == {'known_runs': 1, 'median': 123, 'p90': 123}
+        assert group['median_end_to_end_ms'] > 0 and group['native_execution'] == 'not_run'
+    assert result['summary']['groups']['raw_llm']['semantic_errors'] == 1
+    assert result['summary']['groups']['raw_llm']['first_candidate_correct_rate'] == 0
+    structured = result['summary']['groups']['structured_algorithm']
+    assert structured['first_candidate_correct_rate'] == (None if reference == 'unverified' else 1 if reference == 'valid' else 0)
+    assert structured['first_pass_usable'] == (1 if reference == 'valid' else 0)
+    assert structured['semantic_errors'] == 0
+    assert structured['rejected_first_candidates'] == (1 if reference in {'duplicate', 'missing'} else 0)
+    assert structured['unverified_candidates'] == (1 if reference == 'unverified' else 0)
 
 
 @pytest.mark.parametrize('model',['FX3U','FX5U'])
