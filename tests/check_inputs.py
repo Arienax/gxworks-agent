@@ -70,21 +70,62 @@ def default_base(root):
 def read_file(path):
     if not path.is_file():
         return None
-    if path.suffix.lower() in {'.zip', '.gxw', '.bin', '.sqlite', '.npz', '.pdf'}:
-        stat = path.stat()
+    stat = path.stat()
+    if metadata_input(path, stat.st_size):
         return repr((stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)).encode('ascii')
     return path.read_bytes()
+
+
+def metadata_input(path, size):
+    # Large research exports are resource inputs, not Python/function diffs.
+    # Use the same change detection as binary resources instead of copying GB
+    # of JSON/JSONL/CSV into memory and then base64-encoding it into each receipt.
+    return (path.suffix.lower() in {'.zip', '.gxw', '.bin', '.sqlite', '.npz', '.pdf'}
+            or (size > 1024 * 1024 and path.suffix.lower() in {'.json', '.jsonl', '.csv', '.txt', '.log', '.html'}))
 
 
 def git_changes(root, base, prefix=''):
     """Diff against working bytes, including staged edits and both rename sides."""
     names = git(root, 'diff', '--name-only', '--no-renames', '-z', base, '--')
     untracked = git(root, 'ls-files', '--others', '--exclude-standard', '-z')
-    paths = set((names + untracked).decode('utf-8').split('\0')) - {''}
+    paths = sorted(set((names + untracked).decode('utf-8').split('\0')) - {''})
+    if not paths:
+        return []
+    # One Git process for all baseline blobs. Starting git show once per path
+    # made a preview take minutes in a dirty checkout with private research data.
     result = []
-    for name in sorted(paths):
-        previous = git(root, 'show', f'{base}:{name}', optional=True)
-        result.append(Change(prefix + name, previous, read_file(root / name)))
+    with subprocess.Popen(['git', '-C', str(root), 'cat-file', '--batch', '-Z'],
+                          stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as batch:
+        for name in paths:
+            batch.stdin.write(f'{base}:{name}\0'.encode('utf-8'))
+            batch.stdin.flush()
+            header = bytearray()
+            while (value := batch.stdout.read(1)) != b'\0':
+                if not value:
+                    raise ValueError('Git stopped while reading baseline objects: '
+                                     + batch.stderr.read().decode('utf-8', errors='replace'))
+                header.extend(value)
+            previous = None
+            if not header.endswith(b' missing'):
+                size = int(header.rsplit(b' ', 1)[1])
+                if metadata_input(Path(name), size):
+                    remaining = size
+                    while remaining:
+                        chunk = batch.stdout.read(min(remaining, 64 * 1024))
+                        if not chunk:
+                            raise ValueError('Incomplete Git baseline object: ' + name)
+                        remaining -= len(chunk)
+                    previous = repr(('git-resource', size)).encode('ascii')
+                else:
+                    previous = batch.stdout.read(size)
+                    if len(previous) != size:
+                        raise ValueError('Incomplete Git baseline object: ' + name)
+                if batch.stdout.read(1) != b'\0':
+                    raise ValueError('Incomplete Git baseline object: ' + name)
+            result.append(Change(prefix + name, previous, read_file(root / name)))
+        batch.stdin.close()
+        if batch.wait():
+            raise ValueError(batch.stderr.read().decode('utf-8', errors='replace').strip())
     return result
 
 

@@ -274,8 +274,8 @@ def check_workspace(tmp_path):
     ('web/src/App.tsx', 'quick', set(), True),
     ('src/gxw/diagnostic_events.py', 'quick', {'tests/test_alpha.py::test_one', 'tests/test_beta.py::test_route'}, False),
     ('src/gxw/diagnostic_events.py', 'domain', {'tests/test_alpha.py', 'tests/test_beta.py'}, False),
-    ('src/gxw/reader.py', 'quick', {'tests/test_alpha.py'}, False),
-    ('private/research/' + 'evidence/sample.zip', 'quick', {'tests/test_alpha.py'}, False),
+    ('src/gxw/reader.py', 'quick', {'tests/test_alpha.py::test_one'}, False),
+    ('private/research/' + 'evidence/sample.zip', 'quick', {'tests/test_alpha.py::test_one'}, False),
     ('requirements.txt', 'quick', set(), False),
     ('requirements/development.constraints.txt', 'quick', set(), False),
     ('web/src/App.tsx', 'full', {'tests/test_alpha.py', 'tests/test_beta.py'}, True),
@@ -340,7 +340,7 @@ def test_check_skill_documentation_and_environment_keep_selected_scope(check_wor
                      environment_pending={'tests': ['tests/test_alpha.py', 'tests/test_beta.py']})
     assert plan.level == plan.requested_level == level
     assert plan.full_reasons == []
-    assert set(plan.targets) == {'tests/test_alpha.py'}
+    assert set(plan.targets) == {'tests/test_alpha.py::test_one' if level == 'quick' else 'tests/test_alpha.py'}
     assert not plan.frontend
     assert 'tests/test_beta.py' in plan.deferred
     assert 're-verify when its scope is selected' in plan.verification['tests/test_beta.py']
@@ -528,6 +528,9 @@ def check_environment(monkeypatch):
 def check_git_workspace(check_workspace, monkeypatch, check_environment):
     from tests.check_inputs import checkout_state, save_snapshot, snapshot
     root, archive, config = check_workspace
+    # State/receipt scenarios use only three test definitions. Budget-specific
+    # tests below restore the real 40% limit before checking execution refusal.
+    monkeypatch.setattr('tests.check_approval.QUICK_MAX_FRACTION', 1.0)
     (root / '.gitignore').write_text('/tests/\n')
     (root / 'src/a.py').write_text('a = 1\n')
     (root / 'src/b.py').write_text('b = 1\n')
@@ -650,7 +653,9 @@ def _passing_execute(root, status='passed'):
 
     def execute(plan, *_args, **_kwargs):
         results = {target.split('::')[0] + '::' + name: status for target in plan.targets
-                   for name in test_functions((root / target.split('::')[0]).read_bytes())}
+                   for name in test_functions((root / target.split('::')[0]).read_bytes())
+                   if '::' not in target or name == target.partition('::')[2]
+                   or name.startswith(target.partition('::')[2] + '::')}
         return [{'name': 'python', 'status': status, 'exit_code': 0 if status == 'passed' else 7,
                  'results': results,
                  'pending': sorted(selector for selector, value in results.items() if value != 'passed')}]
@@ -748,11 +753,11 @@ def test_check_environment_change_reverifies_only_the_selected_owner(check_git_w
     plan = make_plan(root, archive, config, changes, 'quick',
                      environment_pending={'tests': ['tests/test_alpha.py', 'tests/test_beta.py']})
     assert plan.level == 'quick'
-    assert set(plan.targets) == {'tests/test_alpha.py'}
+    assert set(plan.targets) == {'tests/test_alpha.py::test_one'}
     # Both files keep the obligation: the selected one only loses it once the whole
     # file ran and passed, so a failed or partial run cannot drop its own debt.
     assert set(plan.verification) == {'tests/test_alpha.py', 'tests/test_beta.py'}
-    assert 'whole file selected' in plan.verification['tests/test_alpha.py']
+    assert 'selected cases will run' in plan.verification['tests/test_alpha.py']
     assert 'tests/test_beta.py' in plan.deferred
     assert make_plan(root, archive, config, changes, 'domain',
                      environment_pending={'tests': ['tests/test_beta.py']}).level == 'domain'
@@ -1590,8 +1595,196 @@ def test_check_execution_boundary_rejects_full_scope_without_permission(check_wo
     root, _, _ = check_workspace
     plan = Plan(level, targets={'tests/test_alpha.py': [], 'tests/test_beta.py': []})
     monkeypatch.setattr(run_checks, 'run_step', lambda *_args, **_kwargs: pytest.fail('unapproved subprocess launched'))
-    with pytest.raises(ValueError, match='explicit user permission'):
+    with pytest.raises(ValueError, match='Quick execution stopped' if level == 'quick' else 'explicit user permission'):
         run_checks.execute(plan, root, tmp_path)
+
+
+@pytest.mark.parametrize('selection,allowed', [
+    ('tests/test_alpha.py::test_one', True),
+    ('tests/test_alpha.py', False),
+])
+def test_check_quick_limit_catches_partial_suite_before_any_subprocess(check_workspace, monkeypatch, tmp_path, selection, allowed):
+    from tests import run_checks
+    from tests.check_approval import requires_full_approval
+    from tests.check_plan import Plan
+    root, _, _ = check_workspace
+    plan = Plan('quick', targets={selection: []}, frontend=True)
+    assert not requires_full_approval(plan, root)
+    calls = []
+    monkeypatch.setattr(run_checks, 'run_step', lambda name, *_args, **_kwargs:
+                        calls.append(name) or {'name': name, 'status': 'passed', 'exit_code': 0})
+    if allowed:
+        run_checks.execute(plan, root, tmp_path)
+        assert calls
+    else:
+        with pytest.raises(ValueError, match='2/3 Python test functions'):
+            run_checks.execute(plan, root, tmp_path, full_approval='Permission cannot override a quick size limit')
+        assert calls == []
+
+
+def test_check_quick_limit_allows_exactly_forty_percent_and_counts_classes(check_workspace):
+    from tests.check_approval import selection_size, quick_scope_error
+    from tests.check_plan import Plan
+    root, _, _ = check_workspace
+    with (root / 'tests/test_beta.py').open('a') as file:
+        file.write('\nclass TestMore:\n    def test_three(self): pass\n    def test_four(self): pass\n')
+    plan = Plan('quick', targets={'tests/test_alpha.py': []})
+    assert selection_size(plan, root) == {'files': 1, 'total_files': 2, 'functions': 2,
+                                         'total_functions': 5, 'fraction': 0.4}
+    assert quick_scope_error(plan, root) is None
+    plan.targets['tests/test_beta.py::TestMore'] = []
+    assert selection_size(plan, root)['functions'] == 4
+    plan.live = ['tests/test_beta.py::TestMore::test_four']
+    assert selection_size(plan, root)['functions'] == 3
+    assert selection_size(plan, root)['total_functions'] == 4
+
+
+@pytest.mark.parametrize('dry_run', [True, False])
+def test_check_oversized_quick_keeps_state_and_reports_actual_scope(check_git_workspace, monkeypatch, capsys, dry_run):
+    from tests import run_checks
+    root, archive, _, state = check_git_workspace
+    monkeypatch.setattr('tests.check_approval.QUICK_MAX_FRACTION', 0.4)
+    monkeypatch.setattr(run_checks, 'ROOT', root)
+    monkeypatch.setattr(run_checks, 'private_root', lambda: archive)
+    monkeypatch.setattr(run_checks, 'execute', lambda *_args, **_kwargs: pytest.fail('oversized quick executed'))
+    original = (state / 'inputs.json').read_bytes()
+    arguments = ['--scope', 'tests/test_alpha.py'] + (['--dry-run'] if dry_run else [])
+    assert run_checks.main(arguments) == (0 if dry_run else 2)
+    output = capsys.readouterr()
+    assert 'Quick execution stopped' in output.out
+    assert 'Python files:' in output.out and 'parameter variants not expanded' in output.out
+    assert (state / 'inputs.json').read_bytes() == original
+    assert not (state / 'runs').exists()
+
+
+@pytest.mark.parametrize('level', ['quick', 'domain'])
+def test_check_explicit_input_scope_keeps_unselected_source_and_environment_debt(check_workspace, level):
+    from tests.check_inputs import Change
+    from tests.check_plan import make_plan
+    root, archive, config = check_workspace
+    config['rules'].append({'paths': ['src/api/**'], 'domains': ['api']})
+    changes = [Change('src/gxw/reader.py', b'old', b'new'), Change('src/api/client.py', b'old', b'new'),
+               Change('web/src/App.tsx', b'old', b'new'), Change('pytest.ini', b'old', b'new')]
+    plan = make_plan(root, archive, config, changes, level, execution_scope=['src/api'],
+                     environment_pending={'tests': ['tests/test_alpha.py', 'tests/test_beta.py']},
+                     pending_domains=['compiler'])
+    assert set(plan.targets) == {'tests/test_beta.py'} and not plan.frontend
+    assert plan.frontend_pending
+    assert plan.domains == {'api'}
+    assert set(plan.affected_domains) == {'compiler', 'api'}
+    assert 'tests/test_alpha.py' in plan.source_changes
+    assert 'tests/test_alpha.py' in plan.verification
+    assert 'tests/test_alpha.py' in plan.deferred
+    assert plan.execution_scope == ['src/api']
+
+
+def test_check_quick_empty_contract_and_unmatched_consumers_never_expand_owner(check_workspace):
+    from tests.check_inputs import Change
+    from tests.check_plan import make_plan
+    root, archive, config = check_workspace
+    config['domains']['compiler']['quick'] = []
+    plan = make_plan(root, archive, config, [Change('src/gxw/reader.py', b'old', b'new')])
+    assert not plan.targets and 'tests/test_alpha.py' in plan.source_changes
+    assert any('no quick contract' in note for note in plan.notes)
+    # An unmapped module's import consumers also cannot use the entire owner as
+    # a fallback when it has no representative in the declared quick contract.
+    (root / 'src/misc.py').write_text('value = 1\n')
+    alpha = root / 'tests/test_alpha.py'
+    alpha.write_text('import misc\n' + alpha.read_text())
+    plan = make_plan(root, archive, config, [Change('src/misc.py', b'old', b'new')])
+    assert 'tests/test_alpha.py' not in plan.targets
+    assert 'tests/test_alpha.py' in plan.source_verification
+
+
+def test_check_scoped_pass_preserves_unselected_failures_skips_and_web(check_git_workspace, monkeypatch):
+    from tests import run_checks
+    from tests.check_inputs import save_snapshot, load_snapshot
+    root, archive, _, state = check_git_workspace
+    identity = run_checks.environment_identity(root)
+    previous = load_snapshot(state, root, archive)
+    previous['pending'] = ['tests/test_alpha.py::test_one', 'tests/test_alpha.py::test_two']
+    previous['domain_debt'] = ['compiler']
+    previous['environment_pending'] = {identity: {'tests': ['tests/test_alpha.py', 'tests/test_beta.py']}}
+    save_snapshot(state, previous)
+    alpha = root / 'tests/test_alpha.py'
+    alpha.write_bytes(alpha.read_bytes().replace(b'assert True', b'assert 2 == 2'))
+    (root / 'web/src').mkdir(parents=True)
+    (root / 'web/src/App.tsx').write_text('changed')
+    monkeypatch.setattr(run_checks, 'ROOT', root)
+    monkeypatch.setattr(run_checks, 'private_root', lambda: archive)
+    plans = []
+    def execute(plan, *_args, **_kwargs):
+        plans.append(plan)
+        assert set(plan.targets) == {'tests/test_beta.py'} and not plan.frontend
+        return [{'name': 'python', 'status': 'passed', 'exit_code': 0,
+                 'results': {'tests/test_beta.py::test_route': 'passed'}}]
+    monkeypatch.setattr(run_checks, 'execute', execute)
+    assert run_checks.main(['--scope', str(root / 'tests/test_beta.py')]) == 0
+    saved = load_snapshot(state, root, archive)
+    assert saved['pending'] == previous['pending']
+    assert 'tests/test_alpha.py::test_two' in saved['source_pending'][identity]
+    assert saved['environment_pending'][identity]['tests'] == ['tests/test_alpha.py']
+    assert 'compiler' in saved['domain_debt'] and saved['frontend_pending']
+    receipt = json.loads(next((state / 'runs').glob('*/result.json')).read_text(encoding='utf-8'))
+    assert receipt['selection']['execution_scope'] == ['tests/test_beta.py']
+    assert receipt['python_selection_size']['functions'] == 1
+    assert receipt['python_selection_size']['total_functions'] == 3
+    # An empty explicit directory cannot retry unrelated saved failures.
+    assert run_checks.main(['--scope', 'src/unused']) == 0
+    assert len(plans) == 1
+
+
+def test_check_git_batch_reads_match_individual_baseline_blobs(check_git_workspace, monkeypatch):
+    from tests import check_inputs
+    root, _, _, _ = check_git_workspace
+    baseline = _check_git(root, 'rev-parse', 'HEAD')
+    (root / 'src/a.py').write_bytes(b'a = 2\n')
+    (root / 'src/b.py').rename(root / 'src/renamed.py')
+    (root / 'src/new file.py').write_bytes(b'new\0binary\n')
+    calls = []
+    popen = check_inputs.subprocess.Popen
+    def record(command, **kwargs):
+        calls.append(command)
+        return popen(command, **kwargs)
+    monkeypatch.setattr(check_inputs.subprocess, 'Popen', record)
+    changes = check_inputs.git_changes(root, baseline)
+    assert len(calls) == 3  # diff, untracked names, one cat-file for every path
+    assert {change.path for change in changes} == {'src/a.py', 'src/b.py', 'src/renamed.py', 'src/new file.py'}
+    for change in changes:
+        assert change.before == check_inputs.git(root, 'show', f'{baseline}:{change.path}', optional=True)
+        assert change.after == check_inputs.read_file(root / change.path)
+
+
+@pytest.mark.parametrize('suffix', ['.json', '.jsonl', '.csv', '.txt', '.log', '.html'])
+def test_check_large_resources_keep_change_detection_without_copying_payload(tmp_path, monkeypatch, suffix):
+    import os
+    from tests.check_inputs import read_file
+    path = tmp_path / ('large' + suffix)
+    with path.open('wb') as file:
+        file.seek(2 * 1024 * 1024)
+        file.write(b'0')
+    monkeypatch.setattr(type(path), 'read_bytes', lambda *_: pytest.fail('large resource payload read'))
+    before = read_file(path)
+    stat = path.stat()
+    os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 10_000_000))
+    after = read_file(path)
+    assert before != after and len(before) < 200 and len(after) < 200
+
+
+def test_check_git_batch_drains_large_resource_before_next_blob(check_git_workspace):
+    from tests.check_inputs import git_changes
+    root, _, _, _ = check_git_workspace
+    resource = root / 'src/a.json'
+    resource.write_bytes(b' ' * (2 * 1024 * 1024))
+    _check_git(root, 'add', 'src/a.json')
+    _check_git(root, '-c', 'user.name=Offline test', '-c', 'user.email=test@example.invalid', 'commit', '-m', 'resource')
+    base = _check_git(root, 'rev-parse', 'HEAD')
+    with resource.open('ab') as file:
+        file.write(b'1')
+    (root / 'src/b.py').write_bytes(b'b = 2\n')
+    changes = {change.path: change for change in git_changes(root, base)}
+    assert len(changes['src/a.json'].before) < 100 and len(changes['src/a.json'].after) < 200
+    assert changes['src/b.py'].before == b'b = 1\n' and changes['src/b.py'].after == b'b = 2\n'
 
 
 def test_check_execution_passes_full_permission_explicitly_to_pytest(check_workspace, monkeypatch, tmp_path):
@@ -1728,7 +1921,7 @@ def test_check_source_verification_keeps_the_unrun_owner_and_function_scope(chec
                      source_pending=['tests/test_beta.py::test_route'])
     assert plan.level == 'quick' and plan.full_reasons == []
     # A pending source debt never widens a quick function scope into whole files.
-    assert set(plan.targets) == {'tests/test_alpha.py'}
+    assert set(plan.targets) == {'tests/test_alpha.py::test_one'}
     assert 'tests/test_beta.py' not in plan.targets
     assert 'tests/test_beta.py::test_route' in plan.source_verification
     assert 'tests/test_beta.py' in plan.deferred
@@ -1777,6 +1970,11 @@ def test_check_source_debt_is_isolated_per_identity(check_git_workspace, monkeyp
                               'interpreter': {'executable': 'fixture-python', 'venv': 'fixture-venv'}})
     monkeypatch.setattr(run_checks, 'execute', _passing_execute(root))
     assert run_checks.main(['--paths', 'src/gxw/reader.py']) == 0
+    saved = json.loads((state / 'inputs.json').read_text())
+    # Quick now runs only the declared representative, so whole-file source debt
+    # stays owed even after that representative passes in this environment.
+    assert 'tests/test_alpha.py' in saved['source_pending'][first]
+    assert run_checks.main(['--level', 'domain', '--paths', 'src/gxw/reader.py']) == 0
     saved = json.loads((state / 'inputs.json').read_text())
     # The other venv keeps its own debt; what this one ran and passed is cleared.
     assert saved['source_pending'][other]

@@ -5,6 +5,7 @@ from pathlib import Path
 
 
 APPROVAL_OPTION = '--full-approval'
+QUICK_MAX_FRACTION = 0.40
 APPROVAL_REQUIRED = (
     'Full regression requires explicit user permission for this invocation. '
     'Inspect the selection with --dry-run, then obtain user permission before '
@@ -54,7 +55,45 @@ def requires_full_approval(plan, root):
     return plan.level == 'full' or selects_full_suite(root, plan.targets)
 
 
+def selection_size(plan, root):
+    """Count test definitions, not parameter variants or estimated run time."""
+    from tests.check_plan import test_functions
+    files = sorted((Path(root) / 'tests').rglob('test_*.py'))
+    selected_files, selected_functions, total_functions = 0, 0, 0
+    live = set(plan.live)
+    for file in files:
+        name = file.relative_to(root).as_posix()
+        names = {member for member in test_functions(file.read_bytes()) if name + '::' + member not in live}
+        total_functions += len(names)
+        members = {target.partition('::')[2].split('[')[0] for target in plan.targets
+                   if target.startswith(name + '::')}
+        selected = names if name in plan.targets else {
+            member for member in names if any(member == target or member.startswith(target + '::') for target in members)}
+        if name in plan.targets or members:
+            selected_files += 1
+        selected_functions += len(selected)
+    return {'files': selected_files, 'total_files': len(files), 'functions': selected_functions,
+            'total_functions': total_functions,
+            'fraction': selected_functions / total_functions if total_functions else 0.0}
+
+
+def quick_scope_error(plan, root, size=None):
+    if plan.level != 'quick':
+        return None
+    size = selection_size(plan, root) if size is None else size
+    if size['fraction'] > QUICK_MAX_FRACTION:
+        return (f"Quick execution stopped: {size['functions']}/{size['total_functions']} Python test functions "
+                f"({size['fraction']:.1%}) exceeds the {QUICK_MAX_FRACTION:.0%} quick limit. "
+                'Narrow this task with --scope <input files/directories>, or explicitly choose --level domain. '
+                'A complete regression still requires --level full and --full-approval. '
+                'No tests or Web build have started; pending results are preserved.')
+    return None
+
+
 def require_plan_approval(plan, root, statement=None):
+    error = quick_scope_error(plan, root)
+    if error:
+        raise ValueError(error)
     if requires_full_approval(plan, root):
         return approval_statement(statement)
     return None
