@@ -47,9 +47,117 @@ _PRODUCT_FIELDS = {
 
 def normalize_native_plan(plan, *, plc_model=None):
     """Freeze a domain batch, with no process, path or driver option surface."""
+    if isinstance(plan, dict) and plan.get('mode') == 'background':
+        if (set(plan) != {'schema_version', 'mode', 'commands'}
+                or type(plan.get('schema_version')) is not int or plan['schema_version'] != 1
+                or plan.get('commands') != [{'operation': name} for name in ('compile', 'save', 'reopen')]):
+            raise ValueError('Background engineering requires schema_version 1 and compile, save, reopen in that order')
+        if plc_model is not None:
+            from plc.target_support import require_native_program_target
+            require_native_program_target(plc_model)
+        return copy.deepcopy(plan)
     if plc_model is not None and str(plc_model).upper() != 'FX3U':
         raise ValueError('Visible native engineering is verified only for FX3U (FX3U/FX3UC native menu)')
     return _normalize_native_syntax(plan, plc_model=plc_model, live=False)
+
+
+def validate_background_source(raw, *, plc_model, target_mode, program_name):
+    """Bind the selected saved source without requiring visible-editor state."""
+    from gxw.offline_project import read_offline_project
+    from gxw.native_diagnostics import native_validation_source_plan
+    from plc.target_support import require_native_program_target
+    if target_mode not in {'ladder', 'st', 'fbd', 'sfc'}:
+        raise ValueError('Background engineering requires a saved Ladder, ST, FBD or SFC version')
+    expected = require_native_program_target(plc_model)
+    project = read_offline_project(raw)
+    actual = require_native_program_target(project.context['cpu'])
+    if actual.cpu != expected.cpu:
+        raise ValueError('The saved engineering CPU differs from the selected native CPU menu')
+    selected = project.select(program_name)
+    if selected['language'] != target_mode:
+        raise ValueError('The selected GXW source language differs from the saved version')
+    # Reuse the compiler's complete source/CPU admission before creating a job.
+    native_validation_source_plan(raw)
+    return selected
+
+
+def validate_background_artifacts(artifacts, version, *, plc_model):
+    raw = artifacts.get('gxw')
+    if not isinstance(raw, bytes) or not raw:
+        raise ValueError('Background engineering requires the current saved GXW artifact')
+    mode = version.get('target_mode')
+    selected = validate_background_source(raw, plc_model=plc_model, target_mode=mode,
+                                         program_name=version.get('program_name'))
+    if mode == 'st':
+        from application.native_st import validate_candidate
+        validate_candidate(artifacts, plc_model=plc_model, program_name=selected['source_name'], metadata=version)
+    elif mode == 'fbd':
+        from application.fbd import validate_candidate
+        validate_candidate(artifacts)
+    elif mode == 'sfc':
+        from application.sfc import validate_candidate
+        validate_candidate(artifacts)
+    else:
+        from application.gxw_files import validate_ladder_candidate
+        validate_ladder_candidate(artifacts)
+    return raw
+
+
+def verified_background_result(result, baseline):
+    """Recheck the shared native save result before activating its version."""
+    from gxw.native_write import verify_native_compilation_save
+    if (not isinstance(result, dict) or not isinstance(result.get('data'), bytes)
+            or not isinstance(result.get('report'), dict)):
+        raise ValueError('Background engineering did not return a native saved project')
+    report = result['report']
+    required = ('native_validation', 'cold_validation', 'native_workspace')
+    if any(not isinstance(report.get(key), dict) for key in required):
+        raise ValueError('Background engineering is missing compilation or cold-reopen results')
+    return verify_native_compilation_save(baseline, result['data'],
+        report['native_validation'], report['cold_validation'], report['native_workspace'])
+
+
+def background_engineering_summary():
+    """Public result emitted only after the native save verifier succeeds."""
+    return dict(status='completed', passed=True, mode='background', operation='native_engineering',
+        gx_compile_status='passed', simulation_status='not_run', counts={'completed': 3, 'total': 3},
+        changes=[{'operation': name, 'status': 'completed'} for name in ('compile', 'save', 'reopen')],
+        findings=[{'kind': 'native_save', 'status': 'passed'}, {'kind': 'cold_reopen', 'status': 'passed'},
+                  {'kind': 'execution_correspondence', 'status': 'unverified'}])
+
+
+def background_native_diagnostics(validation, *, phase='compile'):
+    """Keep compiler and public-check diagnostics distinct in engineering receipts."""
+    from application.projects import public
+    diagnostics = []
+    for origin, reports in (
+            (phase, validation.get('compilation', {}).get('diagnostics', [])),
+            ('public_check' if phase == 'compile' else phase + '_public_check',
+             validation.get('diagnostic_projection', {}).get('public_diagnostics', []))):
+        for report in reports:
+            row = {'phase': origin, 'kind': report.get('kind'), 'code': report.get('code'),
+                   'name': (report.get('name') or {}).get('text'),
+                   'text': ' '.join(item.get('text') or '' for item in report.get('arguments', []))}
+            row.update({key: report[key] for key in ('step', 'network')
+                        if type(report.get(key)) is int and report[key] >= 0})
+            diagnostics.append(row)
+    return public(diagnostics)
+
+
+def background_engineering_failure(error):
+    """A rejected check is a completed diagnostic result, never a saved version."""
+    validation = getattr(error, 'validation', None) or {}
+    phase = 'reopen' if getattr(error, 'phase', None) == 'reopen' else 'compile'
+    diagnostics = background_native_diagnostics(validation, phase=phase)
+    message = str(error)
+    if diagnostics:
+        details = [f"{row['phase']} 0x{row['code'] & 0xffffffff:08x} {row['text']}".strip()
+                   for row in diagnostics[:4] if type(row.get('code')) is int]
+        message += '；' + '；'.join(details) + '。完整诊断见 get_operation_status。'
+    return dict(status='interrupted', passed=False, mode='background', operation='native_engineering', phase=phase,
+                message=message, diagnostics=diagnostics,
+                findings=[{'kind': 'native_compile', 'status': validation.get('compilation', {}).get('acceptance', 'unverified')},
+                          {'kind': 'public_check', 'status': validation.get('public_check', {}).get('status', 'unverified')}])
 
 
 def _normalize_native_syntax(plan, *, plc_model=None, live=False):

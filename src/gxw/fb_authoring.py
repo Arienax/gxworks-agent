@@ -487,7 +487,7 @@ def st_program_authoring_plan(raw, command):
     return plan, before, expected, caller
 
 
-def _visible_task_append_header(before, after, *, cpu, native_identity=None):
+def _visible_task_append_header(before, after, *, cpu, native_identity=None, timestamp_policy="strict"):
     """Bound measured task-append save metadata to the actual native context.
 
     Only the selected appended task may update its common SYSTEMTIME and
@@ -498,7 +498,7 @@ def _visible_task_append_header(before, after, *, cpu, native_identity=None):
     from .source_header import normalize_visible_save_header
     previous, saved = read_task_source(before), read_task_source(after)
     normalized, observed = normalize_visible_save_header(previous['header'], saved['header'], cpu=cpu,
-        native_identity=native_identity, operation='task_append')
+        native_identity=native_identity, operation='task_append', timestamp_policy=timestamp_policy)
     return normalized + bytes(after[len(saved['header']):]), observed
 
 

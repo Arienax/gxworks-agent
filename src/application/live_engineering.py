@@ -15,6 +15,40 @@ import json
 import re
 import threading
 
+
+def encode_live_checkpoint(value):
+    """JSON transport for the one overwritten recovery record, never pickle."""
+    import base64
+    if isinstance(value, bytes):
+        return {'$live_bytes': base64.b64encode(value).decode('ascii')}
+    if isinstance(value, tuple):
+        return {'$live_tuple': [encode_live_checkpoint(item) for item in value]}
+    if isinstance(value, dict):
+        encoded = {key: encode_live_checkpoint(item) for key, item in value.items()}
+        if any(key in value for key in ('$live_bytes', '$live_tuple', '$live_dict')):
+            return {'$live_dict': encoded}
+        return encoded
+    if isinstance(value, list):
+        return [encode_live_checkpoint(item) for item in value]
+    if value is None or isinstance(value, (str, bool, int, float)):
+        return value
+    raise TypeError('Unsupported live recovery value: ' + type(value).__name__)
+
+
+def decode_live_checkpoint(value):
+    import base64
+    if isinstance(value, dict):
+        if set(value) == {'$live_dict'}:
+            return {key: decode_live_checkpoint(item) for key, item in value['$live_dict'].items()}
+        if set(value) == {'$live_bytes'}:
+            return base64.b64decode(value['$live_bytes'], validate=True)
+        if set(value) == {'$live_tuple'}:
+            return tuple(decode_live_checkpoint(item) for item in value['$live_tuple'])
+        return {key: decode_live_checkpoint(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [decode_live_checkpoint(item) for item in value]
+    return value
+
 from .native_engineering import _PRODUCT_FIELDS, _identity
 
 
@@ -241,8 +275,47 @@ class LiveEngineeringSession:
         self.save = {'status': 'not_run', 'revision': None}
         self.history, self.last_error = [], None
         self._compiled_save = None
+        self._pending_delivery = None
         self._operation_authorizer = operation_authorizer
         self._capability_authorization = {'status': 'not_checked', 'operations': []}
+        self.checkpoint_callback = None
+        self.live.checkpoint_callback = self._checkpoint
+
+    _RECOVERY_FIELDS = ('_raw_identity', '_identity', '_context', '_pending', '_inflight',
+        'revision', 'saved_revision', 'sequence', 'version_revision', '_pending_version_revision',
+        'native_disk_save', 'state', 'closed', 'compile', 'assignments', 'save', 'history',
+        'last_error', '_compiled_save', '_capability_authorization', '_pending_delivery')
+
+    def checkpoint(self):
+        with self._guard:
+            return dict(fields={key: deepcopy(getattr(self, key)) for key in self._RECOVERY_FIELDS},
+                        pause_requested=self._pause.is_set(), live=self.live.checkpoint())
+
+    def restore_checkpoint(self, checkpoint):
+        fields = checkpoint.get('fields', {})
+        if set(fields) != set(self._RECOVERY_FIELDS):
+            raise ValueError('Incomplete native session recovery record; no commands were replayed')
+        if fields['_identity'] != self._identity:
+            raise ValueError('Native recovery record belongs to another process or project')
+        with self._guard:
+            for key, value in fields.items():
+                setattr(self, key, deepcopy(value))
+            if checkpoint.get('pause_requested'):
+                self._pause.set()
+            # A process that stopped between dispatch and confirmation must
+            # observe the original action before it can write again.
+            if self._inflight is not None:
+                self.state = 'unconfirmed'
+
+    def _checkpoint(self):
+        if self.checkpoint_callback:
+            self.checkpoint_callback()
+
+    def detach(self):
+        """Release this process's wrappers while retaining resumable state."""
+        self._checkpoint()
+        self.live.close()
+        self.driver.close()
 
     def _check_identity(self):
         if _identity(self.live.inspect(), self.expected_cpu) != self._identity:
@@ -337,6 +410,7 @@ class LiveEngineeringSession:
         return work
 
     def _emit(self, value):
+        self._checkpoint()
         if self.progress:
             self.progress(deepcopy(value))
 
@@ -350,6 +424,7 @@ class LiveEngineeringSession:
             if self._pending_version_revision is not None:
                 self.version_revision = self._pending_version_revision
                 self._pending_version_revision = None
+            self._pending_delivery = None
 
     def status(self):
         with self._guard:
@@ -470,6 +545,7 @@ class LiveEngineeringSession:
                 with self._guard:
                     self._inflight = {'command': deepcopy(command), 'prepared': prepared, 'before': before,
                                       'step': deepcopy(step)}
+                self._checkpoint()
                 observation = None
                 if operation == 'compile':
                     with self._guard:
@@ -480,6 +556,7 @@ class LiveEngineeringSession:
                     observation = self.driver.compile_current(native_compile_plan)
                     with self._guard:
                         self._inflight['observation'] = deepcopy(observation)
+                    self._checkpoint()
                     after = self.live.read_context()
                     from .native_engineering import compile_observation
                     self._unchanged(before, after)
@@ -529,6 +606,7 @@ class LiveEngineeringSession:
                     save_operation_id = uuid4().hex
                     with self._guard:
                         self._inflight['save_operation_id'] = save_operation_id
+                    self._checkpoint()
                     save_options = dict(operation_id=save_operation_id, compilation=self.compile)
                     if hasattr(self.live, 'read_target_context'):
                         save_options['_current_before'] = before
@@ -537,6 +615,7 @@ class LiveEngineeringSession:
                         raise ValueError('The stage save has no dispatch receipt for this operation')
                     with self._guard:
                         self._inflight['saved'] = saved
+                    self._checkpoint()
                     saved_data = saved['data']
                     stage_context = deepcopy(before)
                     after = deepcopy(saved['_stage_context'])
@@ -585,6 +664,12 @@ class LiveEngineeringSession:
                     self._pending = deepcopy(work[index+1:])
                     step.update(status='completed', revision=self.revision, verification=deepcopy(verification))
                     self.history.append(deepcopy(step))
+                    if operation == 'save':
+                        self._pending_version_revision = self.revision
+                        self._pending_delivery = dict(data=saved_data, data_status='verified_stage_save',
+                            data_revision=self.revision, _stage_context=deepcopy(stage_context),
+                            _stage_compile=deepcopy(saved.get('_stage_compile')),
+                            stage_saves=deepcopy(stage_saves), executed_steps=[deepcopy(step)])
                 if hasattr(self.live, 'show_completion'):
                     step['visible_completion'] = self.live.show_completion(command, prepared,
                         observation if operation != 'save' else verification)
@@ -689,6 +774,12 @@ class LiveEngineeringSession:
                 _stage_compile=deepcopy(self.compile),
                 stage_saves=[dict(revision=self.revision, sequence=reconciled['index'],
                                   validation=deepcopy(self.save['validation']))])
+            self._pending_delivery = {key: deepcopy(result[key]) for key in (
+                'data', 'data_status', 'data_revision', '_stage_context', '_stage_compile',
+                'stage_saves', 'executed_steps')}
+        elif self._pending_delivery is not None:
+            result.update(deepcopy(self._pending_delivery))
+        self._checkpoint()
         return result
 
     def _reconcile_auxiliary(self, inflight, current):
@@ -745,6 +836,10 @@ class LiveEngineeringSession:
             # source and original dispatch, never send Save a second time.
             latest = self.live.read_disk_change()
             raw = latest if latest is not None else saved['data'] if returned else None
+            if raw is None and progress.get('snapshot_returned') is True:
+                # The page driver may have acknowledged the disk bytes before
+                # its caller lost the reply. Re-read that same file; no Save.
+                raw = self.live.path.read_bytes()
             if not isinstance(raw, bytes):
                 raise ValueError('The interrupted Save has no independently observed saved bytes')
             validation = verify_active_saved_context(raw, current, self.baseline, compilation=self.compile)

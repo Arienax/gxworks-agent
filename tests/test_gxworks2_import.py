@@ -137,8 +137,7 @@ class FakeAutomation:
             "automation_available": True,
             "project_open": True,
             "program_ready": True,
-            "project_name": self.project_name,
-            "project_path": str(self.project_path) if self.project_path else self.project_name,
+            "project_name": str(self.project_path) if self.project_path is not None else self.project_name,
         }
 
     def export_current_program(self, session, destination):
@@ -387,10 +386,111 @@ def test_gxw_backup_failure_stops_before_native_import(tmp_path, monkeypatch, fa
         monkeypatch.setattr("gxworks2.import_service.shutil.copy2", fail)
     service = ImportService(FakeFinder(_session()), automation, CSVManager(), tmp_path / "backups")
     result = service.import_current_program(source)
-    assert not result.success and result.error_code == ImportErrorCode.BACKUP_FAILED
-    assert result.stage == "backup" and "GXW备份失败" in result.message
+    expected = ImportErrorCode.BACKUP_FAILED if failure == "copy_failed" else ImportErrorCode.PROJECT_PATH_UNKNOWN
+    assert not result.success and result.error_code == expected
+    assert result.stage == "backup"
     assert result.details["backup_performed"] is False
     assert automation.events == []
+
+
+@pytest.mark.parametrize("case,accepted", [
+    ("full", True), ("full_explicit", True), ("abbreviated", True), ("filename", True),
+    ("same_name_copy", False), ("owner_false", False), ("owner_register_error", False),
+    ("owner_query_error", False), ("missing_pid", False), ("missing_start", False),
+    ("caption_conflict", False), ("suffix_conflict", False), ("missing_hint", False),
+    ("missing_file", False), ("relative", False), ("wrong_extension", False),
+    ("empty_hint", False), ("unsaved", False),
+])
+def test_import_path_binds_backup_to_the_open_project(tmp_path, monkeypatch, case, accepted):
+    import gxworks2.engineering_files as files
+
+    program = tmp_path / "program.csv"
+    _write_program(program)
+    opened = tmp_path / "中文目录" / "线体3.gxw"
+    opened.parent.mkdir()
+    opened.write_bytes(b"the open engineering project")
+    copied = tmp_path / "same-name-copy" / opened.name
+    copied.parent.mkdir()
+    copied.write_bytes(b"a different engineering project")
+    automation = FakeAutomation(program)
+    automation.project_path = str(opened) if case in {"full", "full_explicit", "caption_conflict"} else "...\\中文目录\\线体3.gxw"
+    hint = str(opened)
+    if case in {"full", "missing_hint"}:
+        hint = None
+    elif case == "filename":
+        automation.project_path = opened.name
+    elif case == "same_name_copy":
+        automation.project_path = "...\\线体3.gxw"
+        hint = str(copied)
+    elif case == "caption_conflict":
+        hint = str(copied)
+    elif case == "suffix_conflict":
+        automation.project_path = "...\\other\\线体3.gxw"
+    elif case == "missing_file":
+        opened.unlink()
+    elif case == "relative":
+        hint = opened.name
+    elif case == "wrong_extension":
+        hint = str(opened.with_suffix(".csv"))
+    elif case == "empty_hint":
+        hint = "   "
+    elif case == "unsaved":
+        automation.project_path = None
+        automation.project_name = "(工程未设置)"
+    queries, closed = [], []
+
+    class FileUse:
+        def __init__(self, path):
+            self.path = path
+            queries.append(path)
+            if case == "owner_register_error":
+                raise OSError("Restart Manager unavailable")
+
+        def owns(self, pid, started):
+            assert (pid, started) == (701, "123456")
+            if case == "owner_query_error":
+                raise OSError("file ownership query failed")
+            return case != "owner_false" and self.path == opened
+
+        def close(self):
+            closed.append(self.path)
+
+    monkeypatch.setattr(files, "_NativeFileUse", FileUse)
+    session = replace(_session(), process_id=0 if case == "missing_pid" else 701,
+                      process_started="" if case == "missing_start" else "123456")
+    service = ImportService(FakeFinder(session), automation, CSVManager(), tmp_path / "backups")
+    result = service.import_current_program(program, project_path=hint)
+    assert result.success is accepted
+    if accepted:
+        assert Path(result.backup_path).read_bytes() == b"the open engineering project"
+        assert automation.events == ["import_program"]
+    else:
+        assert result.error_code == ImportErrorCode.PROJECT_PATH_UNKNOWN
+        assert not result.backup_path and automation.events == []
+        assert not service.backup_root.exists()
+    if case in {"full", "full_explicit", "caption_conflict", "suffix_conflict", "missing_pid", "missing_start"}:
+        assert queries == []
+    if case == "owner_query_error":
+        assert closed == [opened]
+
+
+@pytest.mark.parametrize("running", [False, True])
+def test_explicit_import_path_refuses_before_start_or_create(tmp_path, monkeypatch, running):
+    program = tmp_path / "program.csv"
+    _write_program(program)
+    finder = FakeFinder(_session(False) if running else None)
+    automation = FakeAutomation(program)
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("An explicit existing target must not launch or create another project")
+
+    monkeypatch.setattr(finder, "start", forbidden)
+    monkeypatch.setattr(automation, "create_simple_project", forbidden, raising=False)
+    result = ImportService(finder, automation, CSVManager(), tmp_path / "backups").import_current_program(
+        program, project_path=str(tmp_path / "requested.gxw"), start_if_needed=True,
+        create_project_path=tmp_path / "gx_import.gxw", import_context={"plc_model": "FX3U"})
+    assert result.error_code == ImportErrorCode.PROJECT_PATH_UNKNOWN
+    assert automation.events == [] and not result.backup_path
 
 
 def test_import_backs_up_gxw_and_imports_device_comments_once(tmp_path):
@@ -557,7 +657,7 @@ def test_first_successful_import_creates_version_baseline(tmp_path):
     assert protection["status"] == "baseline_recorded"
     assert protection["roundtrip_verified"] is False
     identity = service.baseline_store.project_identity(
-        _session(), project_name="FixtureProject"
+        _session(), project_name=str(automation.project_path)
     )
     baseline = service.baseline_store.load(identity)
     assert baseline["program_semantic_sha256"] == protection[
@@ -599,7 +699,7 @@ def test_failed_import_does_not_advance_version_baseline(tmp_path):
     )
     assert service.import_current_program(original).success
     identity = service.baseline_store.project_identity(
-        _session(), project_name="FixtureProject"
+        _session(), project_name=str(automation.project_path)
     )
     before = service.baseline_store.load(identity)
 
@@ -1175,6 +1275,8 @@ def test_explicit_managed_target_can_start_create_and_import(tmp_path, already_r
     assert result.success
     assert events == (["create"] if already_running else ["start", "create"])
     assert automation.events == ["import_program", "import_comments"]
+    assert result.details["version_protection"]["project_identity"]["project"] == str(
+        (tmp_path / "owned.gxw").resolve()).casefold()
     assert "prepare_project" in result.details["timings_ms"]
     assert ("start_gxworks2" in result.details["timings_ms"]) is not already_running
 

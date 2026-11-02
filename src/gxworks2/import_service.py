@@ -3,6 +3,7 @@
 
 from dataclasses import asdict, replace
 from pathlib import Path
+import ntpath
 import shutil
 import tempfile
 import time
@@ -18,6 +19,59 @@ _UNSAVED_PROJECT_NAMES = {
     "(project not set)",
     "project not set",
 }
+
+
+def normalize_import_project_path(value):
+    """Validate an optional saved-project hint without selecting or opening it."""
+    if value is None:
+        return None
+    if not isinstance(value, (str, Path)):
+        raise ValueError("project_path 必须是 .gxw 文件的绝对路径。")
+    text = str(value).strip()
+    path = Path(text).expanduser()
+    if not text or len(text) > 4096 or not path.is_absolute() or path.suffix.casefold() != ".gxw":
+        raise ValueError("project_path 必须是 .gxw 文件的绝对路径。")
+    return str(path)
+
+
+def _import_project_file(session, caption, project_path):
+    """Bind a backup file to the current caption and, when needed, its owner."""
+    from .engineering_files import _NativeFileUse, _abbreviated_project_path
+
+    caption = str(caption or "").strip()
+    if not caption or caption.casefold() in _UNSAVED_PROJECT_NAMES:
+        if project_path is not None:
+            raise ValueError("当前工程尚未保存，无法确认指定文件就是当前打开的工程。")
+        return None
+    complete = Path(caption).is_absolute()
+    if project_path is None and not complete:
+        raise ValueError("窗口标题未包含完整工程路径，请填写当前打开的 GXW 完整路径后重试。")
+    source = Path(normalize_import_project_path(project_path if project_path is not None else caption))
+    if complete:
+        if source.resolve() != Path(caption).resolve():
+            raise ValueError("指定路径与 GX Works2 当前打开的工程不一致。")
+    elif not (_abbreviated_project_path(caption, source)
+            or caption.casefold() == ntpath.basename(str(source)).casefold()):
+        raise ValueError("指定路径与 GX Works2 窗口显示的工程不一致。")
+    if not source.is_file():
+        raise ValueError(f"指定的 GXW 工程文件不存在：{source}")
+    if complete:
+        return source.resolve()
+    process_id = getattr(session, "process_id", 0)
+    process_started = getattr(session, "process_started", "")
+    if not process_id or not process_started:
+        raise ValueError("无法取得当前 GX Works2 进程的文件占用信息，请将工程另存到较短路径后重试。")
+    try:
+        query = _NativeFileUse(source)
+        try:
+            owned = query.owns(process_id, process_started)
+        finally:
+            query.close()
+    except Exception as error:
+        raise ValueError("无法查询当前 GX Works2 进程的文件占用信息，请将工程另存到较短路径后重试。") from error
+    if not owned:
+        raise ValueError("指定文件未被当前 GX Works2 进程占用，请填写当前打开的工程路径。")
+    return source.resolve()
 
 
 def _unsaved_project_identity(session, project_name, import_context=None):
@@ -74,6 +128,7 @@ class ImportService:
         save_project=False,
         pre_import_policy="project_file",
         create_project_path=None,
+        project_path=None,
     ):
         """Back up an existing GXW and import each CSV once, without exporting."""
         # Legacy policy names remain accepted, but never select CSV exports or
@@ -106,6 +161,7 @@ class ImportService:
                 progress=report, import_context=import_context, project_identity=project_identity,
                 synchronize_comments=synchronize_comments, save_project=save_project,
                 staging_folder=Path(directory), create_project_path=create_project_path,
+                project_path=project_path,
             )
         finished = time.monotonic()
         if current_stage is not None:
@@ -120,7 +176,7 @@ class ImportService:
     def _import_current_program(
         self, csv_path, *, comment_csv_path, start_if_needed, progress, import_context,
         project_identity, synchronize_comments, save_project, staging_folder,
-        create_project_path,
+        create_project_path, project_path,
     ):
         def report(stage, message):
             if progress is not None:
@@ -172,6 +228,11 @@ class ImportService:
 
         report("check_project", "正在检查GX Works2与当前目标工程…")
         session = self.finder.find_running()
+        if project_path is not None and (session is None or not session.project_open):
+            return ImportResult(
+                False, "check_project", "指定了工程路径，但当前没有打开的目标工程；请先在 GX Works2 中打开该文件。",
+                ImportErrorCode.PROJECT_PATH_UNKNOWN, csv_path=validation.path,
+            )
         context = import_context if isinstance(import_context, dict) else {}
         profile = native_project_profile(context.get("plc_model"))
         if create_project_path is not None and (session is None or not session.project_open):
@@ -272,32 +333,36 @@ class ImportService:
             )
 
         project_name = state.get("project_name") or session.project_name or "GXWorks2"
-        effective_project_identity = project_identity or _unsaved_project_identity(
-            session,
-            project_name,
-            import_context=import_context,
+        backup_path = ""
+        source = None
+        if not created_project:
+            try:
+                source = _import_project_file(session, project_name, project_path)
+            except (ValueError, OSError, RuntimeError) as error:
+                return ImportResult(
+                    False, "backup", f"导入前无法确定 GXW 工程路径：{error}",
+                    ImportErrorCode.PROJECT_PATH_UNKNOWN, csv_path=validation.path,
+                    project_name=project_name,
+                )
+        saved_path = Path(create_project_path).resolve() if created_project else source
+        effective_project_identity = project_identity or (
+            str(saved_path) if saved_path is not None else _unsaved_project_identity(
+                session, project_name, import_context=import_context,
+            )
         )
         identity = self.baseline_store.project_identity(
             session,
             project_name=project_name,
             project_identity=effective_project_identity,
         )
-        backup_path = ""
         try:
-            if not created_project:
-                candidate = str(state.get("project_path") or project_name).strip()
-                if candidate.casefold() not in _UNSAVED_PROJECT_NAMES:
-                    source = Path(candidate).expanduser()
-                    if not source.is_absolute() or source.suffix.casefold() != ".gxw":
-                        raise RuntimeError("无法确认当前工程的完整GXW路径，请打开目标GXW文件后重试。")
-                    if not source.is_file():
-                        raise FileNotFoundError(f"当前GXW工程文件不存在：{source}")
-                    report("backup", "正在备份当前GXW工程文件…")
-                    folder = self.csv_manager.backup_folder(self.backup_root, source.stem)
-                    destination = folder / source.name
-                    # Keep the saved project intact before any native import.
-                    shutil.copy2(source, destination)
-                    backup_path = str(destination)
+            if source is not None:
+                report("backup", "正在备份当前GXW工程文件…")
+                folder = self.csv_manager.backup_folder(self.backup_root, source.stem)
+                destination = folder / source.name
+                # Keep the saved project intact before any native import.
+                shutil.copy2(source, destination)
+                backup_path = str(destination)
         except Exception as error:
             return ImportResult(
                 False, "backup", f"导入前GXW备份失败：{error}",

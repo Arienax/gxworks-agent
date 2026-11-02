@@ -5400,6 +5400,75 @@ def test_native_compiled_save_header_permission_never_normalizes_unknown_header_
         normalize_visible_save_header(before, after, cpu=cpu, native_compiled=permission)
 
 
+@pytest.mark.parametrize('stamp', [bytes(16), b'\xff' * 16,
+    bytes.fromhex('ea070d00000012000d001b0006000000'),
+    bytes.fromhex('ea070a00010012000d001b0006000000')], ids=['zero', 'arbitrary', 'month', 'weekday'])
+@pytest.mark.parametrize('compiled', [False, True], ids=['explicit-save', 'compile-save'])
+def test_live_save_ignores_source_and_unedited_task_timestamp_contents(stamp, compiled):
+    from gxw.fb_authoring import _context
+    from gxw.live_context import verify_active_saved_context
+    before, saved, context, compilation = compiled_stage_save_witness()
+    if not compiled:
+        saved = before
+        context = live_native_context_witness(saved)
+        compilation = None
+    # Both sides are opaque, including timestamp-only refreshes of an unedited task.
+    original = _context(before, require_fbd=False)[1]
+    current = _context(saved, require_fbd=False)[1]
+    names = [name for name in original if name.endswith(('.pou', '.tsk'))]
+    def restamp(streams, value):
+        return {name: streams[name][:34] + value + streams[name][50:] for name in names}
+    before = replay_source_records(before, restamp(original, b'\xff' * 16))
+    saved = replay_source_records(saved, restamp(current, stamp))
+    report = verify_active_saved_context(saved, context, before, compilation=compilation)
+    assert report['status'] == report['retained_source_fields'] == 'matched'
+
+
+@pytest.mark.parametrize('damage', ['prefix', 'before_flag', 'after_flag', 'payload'])
+def test_live_opaque_timestamps_preserve_header_flags_and_task_payload_checks(damage):
+    import struct
+    from gxw.fb_authoring import _context
+    from gxw.live_context import verify_active_saved_context
+    before, saved, context, compilation = compiled_stage_save_witness()
+    streams = _context(saved, require_fbd=False)[1]
+    task, = [name for name in streams if name.endswith('.tsk')]
+    raw = bytearray(streams[task])
+    raw[34:50] = b'\xff' * 16
+    if damage == 'prefix': raw[24] ^= 1
+    elif damage == 'after_flag': struct.pack_into('<I', raw, 50, 2)
+    elif damage == 'payload': raw[-1] ^= 1
+    else:
+        old = bytearray(_context(before, require_fbd=False)[1][task])
+        struct.pack_into('<I', old, 50, 2)
+        before = replay_source_records(before, {task: bytes(old)})
+    saved = replay_source_records(saved, {task: bytes(raw)})
+    with pytest.raises(ValueError):
+        verify_active_saved_context(saved, context, before, compilation=compilation)
+
+
+@pytest.mark.parametrize('description', ['', '保存注释'])
+@pytest.mark.parametrize('pending', [0, 1])
+def test_live_timestamp_only_header_preserves_descriptions_without_compile_permission(description, pending):
+    import struct
+    from gxw.source_header import normalize_visible_save_header
+    before, _, _, _ = compiled_visible_header_witness()
+    before = bytearray(before)
+    struct.pack_into('<I', before, 50, pending)
+    if description:
+        encoded = (description + '\0').encode('utf-16le')
+        before = bytearray(struct.pack('<I', len(encoded) // 2) + encoded + before[6:])
+    after = before[:-20] + b'\xff' * 16 + before[-4:]
+    normalized, observed = normalize_visible_save_header(before, after, cpu='Q03UDV', timestamp_policy='opaque')
+    assert normalized == before and observed['compile_pending_after'] == pending
+    assert observed['timestamp_after'] == [65535] * 8
+    with pytest.raises(ValueError):
+        normalize_visible_save_header(before, after, cpu='Q03UDV')
+    # A simultaneous description/prefix change is still rejected.
+    after[12] ^= 1
+    with pytest.raises(ValueError):
+        normalize_visible_save_header(before, after, cpu='Q03UDV', timestamp_policy='opaque')
+
+
 def test_native_compiled_header_prefix_is_fixed_for_every_uninterpreted_byte():
     from hypothesis import given, settings, strategies as st
     from gxw.source_header import normalize_visible_save_header
@@ -6242,8 +6311,11 @@ def test_q03udv_english_checkpoint_rejects_unobserved_defaults_or_source_save_ch
         elif damage == 'compiled_flag': struct.pack_into('<I',raw,50,0)
         else: raw[24] ^= 1
         saved = replay_source_records(saved,{name:bytes(raw)})
-    with pytest.raises(ValueError):
-        verify_active_saved_context(saved, context, before)
+    if damage == 'untouched_source_timestamp':
+        assert verify_active_saved_context(saved, context, before)['status'] == 'matched'
+    else:
+        with pytest.raises(ValueError):
+            verify_active_saved_context(saved, context, before)
 
 
 @pytest.mark.parametrize('damage', [None, 'no_identity', 'language', 'version', 'menu', 'codepage',
@@ -6413,8 +6485,11 @@ def test_q03udv_english_stage_save_still_rejects_unmeasured_storage_or_unconfirm
         assert source_payload_offset(pou) == 54
         pou[34:50] = bytes.fromhex('ea070a00000012001400160039000000')
         saved = replay_source_records(saved, {'POU_01.Program.pou': bytes(pou)})
-    with pytest.raises(ValueError):
-        verify_active_saved_context(saved, context, before)
+    if damage == 'retained_source_timestamp':
+        assert verify_active_saved_context(saved, context, before)['status'] == 'matched'
+    else:
+        with pytest.raises(ValueError):
+            verify_active_saved_context(saved, context, before)
 
 
 @lru_cache(maxsize=1)
@@ -6512,8 +6587,11 @@ def test_q03udv_cp932_native_compile_does_not_authorize_unobserved_saved_storage
         elif damage == 'initial_timestamp': raw[34:50] = bytes(16)
         elif damage == 'weekday': struct.pack_into('<H', raw, 38, 0)
         if damage != 'before_flag': saved = replay_source_records(saved, {name:bytes(raw)})
-    with pytest.raises(ValueError):
-        verify_active_saved_context(saved, context, before, compilation=compilation)
+    if damage in ('initial_timestamp', 'weekday'):
+        assert verify_active_saved_context(saved, context, before, compilation=compilation)['status'] == 'matched'
+    else:
+        with pytest.raises(ValueError):
+            verify_active_saved_context(saved, context, before, compilation=compilation)
 
 
 @pytest.mark.parametrize('operation', ('edited_source_save', 'compiled_task_save'))
@@ -6767,8 +6845,11 @@ def test_unchanged_st_compiled_save_rejects_unbound_or_unobserved_changes(damage
             from gxw.text_pou import parse_st_pou, serialize_st_pou
             raw = serialize_st_pou(parse_st_pou(raw), 'X0 := TRUE;')
         saved = replay_source_records(saved, {source: bytes(raw)})
-    with pytest.raises(ValueError):
-        verify_active_saved_context(saved, context, baseline, compilation=compilation)
+    if damage not in ('prefix', 'invalid_flag', 'pending_after', 'body'):
+        assert verify_active_saved_context(saved, context, baseline, compilation=compilation)['status'] == 'matched'
+    else:
+        with pytest.raises(ValueError):
+            verify_active_saved_context(saved, context, baseline, compilation=compilation)
 
 
 def test_compiled_st_save_metadata_preserves_unknown_header_bytes_for_generated_timestamps():

@@ -85,6 +85,8 @@ Beyond wiring edits on imported files, the FBD module supports end-to-end projec
 
 <a name="native-session"></a>
 
+For saved Ladder, ST, FBD, and SFC GXW versions, `execute_native_engineering` with `plan.mode="background"` and the ordered commands `compile`, `save`, `reopen` compiles and saves in an isolated native workspace, verifies the reopened output, and delivers a new version of the same language. It does not open a visible editing session or write to a PLC. See the [background workflow](skills/gxworks-mcp-router/references/workflows.md#后台原生编译与版本交付).
+
 ## Persistent native engineering sessions
 
 With `execute_native_engineering(mode="live")`, an MCP client can drive multi-step edits inside **one continuously open GX Works2 process** across tool calls, without saving and reopening the project between every action:
@@ -104,6 +106,8 @@ Native engineering sessions require an interactive Windows desktop, GX Works2 `1
 Configure a model API in the workbench to use the built-in **Direct generation workflow**—analyzing requirements, confirming specifications, and generating programs—then inspect Ladder networks, FBD/SFC graphs, device usage, version diffs, and downloadable artifacts. Direct shares the same engineering context and RAG pipeline as MCP while reducing external agent orchestration overhead; workbench Q&A can still invoke read-only tools as needed.
 
 When process facts are missing, each clarification question appears as an individual input field that preserves entered text across panel switches and reloads until submitted together. Generation uses strict structured output where supported by the endpoint and normalizes unambiguous format differences locally before Core validation.
+
+When sending Ladder to GX, enter the full path of the currently open GXW in the confirmation dialog if the window title shortens the path or shows only a file name. The MCP equivalent is `import_current_program_to_gxworks2(project_path=...)`. For shortened titles, import is refused unless the current GX Works2 process holds the specified file. This does not open or switch projects. The parameter may be omitted when the title already contains the full path.
 
 ## What the toolchain provides
 

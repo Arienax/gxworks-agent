@@ -22,7 +22,7 @@ def test_policy_default_read_never_creates_files(tmp_path):
 @pytest.mark.parametrize('mode', ['ask', 'auto', 'full'])
 @pytest.mark.parametrize('action', ['gx_import', 'simulation', 'debug', 'native_engineering', 'write_plc', 'force_device', 'shell'])
 def test_delegation_is_bounded_to_existing_actions(mode, action):
-    expected = action in {'gx_import', 'simulation', 'debug', 'native_engineering'} and (mode == 'full' or (mode == 'auto' and action in {'simulation', 'debug'}))
+    expected = action in {'native_engineering'} or (action in {'gx_import', 'simulation', 'debug'} and (mode == 'full' or (mode == 'auto' and action in {'simulation', 'debug'})))
     assert allows(mode, action, {'project_id': 'p', 'version_id': 'v', 'plan': {}}) is expected
     assert not allows(mode, action, {})
     if action in {'simulation', 'debug', 'native_engineering'}:

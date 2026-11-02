@@ -108,6 +108,14 @@ class ProposalWorkflow:
                 or not all((version.get("artifacts") or {}).get(key) for key in ("program_csv", "comment_csv"))
             )):
                 raise ValueError("Manual backup acknowledgement is only supported for CSV GX imports")
+            project_path = command.get("project_path")
+            if project_path is not None:
+                if (command["action"] != "gx_import" or version.get("target_mode") == "fbd"
+                        or not all((version.get("artifacts") or {}).get(key)
+                                   for key in ("program_csv", "comment_csv"))):
+                    raise ValueError("project_path is only supported for CSV GX imports")
+                from gxworks2.import_service import normalize_import_project_path
+                project_path = normalize_import_project_path(project_path)
             if command["action"] == "gx_import":
                 from application.execution import ExecutionUnavailableError, read_gx_environment
                 from gxworks2.project_profiles import can_prepare_program_project
@@ -126,19 +134,28 @@ class ProposalWorkflow:
                         "GX Works2 已运行，但尚未新建或打开目标工程。"
                     )
             payload = {"project_id": project_id, "version_id": version_id}
+            if project_path is not None:
+                payload["project_path"] = project_path
             if command['action'] == 'native_engineering':
                 from application.native_engineering import normalize_native_plan, validate_native_baseline
                 from application.execution import native_saved_cpu
-                if version.get('target_mode') not in {'fbd', 'st'} or command.get('plan_id') is not None:
-                    raise ValueError('Native engineering requires a saved structured FBD or ST version and an explicit batch plan')
+                background = (command.get('plan') or {}).get('mode') == 'background'
+                modes = {'ladder', 'st', 'fbd', 'sfc'} if background else {'fbd', 'st'}
+                if version.get('target_mode') not in modes or command.get('plan_id') is not None:
+                    raise ValueError('Native engineering requires a saved version supported by the selected mode and an explicit plan')
                 cpu = native_saved_cpu(version, self.store.get_project(project_id))
                 if (command.get('plan') or {}).get('mode') == 'live':
                     from application.live_engineering import normalize_live_plan
                     payload['plan'] = normalize_live_plan(command['plan'], plc_model=cpu)
                 else:
                     payload['plan'] = normalize_native_plan(command.get('plan'), plc_model=cpu)
-                validate_native_baseline(self.projects.artifact(project_id, version_id, 'gxw').read_bytes(),
-                                         plc_model=cpu, live=payload['plan'].get('mode') == 'live')
+                raw = self.projects.artifact(project_id, version_id, 'gxw').read_bytes()
+                if background:
+                    from application.native_engineering import validate_background_source
+                    validate_background_source(raw, plc_model=cpu, target_mode=version['target_mode'],
+                                               program_name=version.get('program_name'))
+                else:
+                    validate_native_baseline(raw, plc_model=cpu, live=payload['plan'].get('mode') == 'live')
             elif command.get('plan') is not None:
                 raise ValueError('An explicit batch plan is only supported for native engineering')
             if manual_backup:

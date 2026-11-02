@@ -20,7 +20,7 @@ from gxw.native_locale import native_language, program_title, ui_text
 
 
 class LiveEngineeringDriver:
-    def __init__(self, driver, baseline, expected_cpu, adapter=None):
+    def __init__(self, driver, baseline, expected_cpu, adapter=None, *, recovery=None):
         from gxw.fb_authoring import _context
         from gxw.native_write import native_task_scope_context
         from gxworks2.project_profiles import native_project_profile
@@ -48,8 +48,44 @@ class LiveEngineeringDriver:
         self._saved_bytes, self._closed, self._last_context = baseline, False, None
         self._completion_dialog = None
         self._last_target = None
-        if self.path.read_bytes() != baseline:
+        self.checkpoint_callback = None
+        self._recovered_pending = []
+        if recovery is not None:
+            self._tasks = deepcopy(recovery['tasks'])
+            self._saved_bytes = self.baseline = recovery['saved_bytes']
+            self._last_context = deepcopy(recovery['last_context'])
+            self._last_target = deepcopy(recovery['last_target'])
+            self._stage_save_progress = deepcopy(recovery.get('stage_save_progress'))
+            self._recovered_pending = deepcopy(recovery.get('pending_children', []))
+            completion = recovery.get('completion_dialog')
+            if completion is not None:
+                dialog = driver.ui._application(driver.session).window(handle=completion['handle'])
+                self._completion_dialog = dict(dialog=dialog, fields=deepcopy(completion['fields']),
+                                              identity=deepcopy(completion['identity']))
+            driver._last_saved = self._saved_bytes
+            if recovery.get('last_compile_run') is not None:
+                driver._last_compile_run = deepcopy(recovery['last_compile_run'])
+        elif self.path.read_bytes() != baseline:
             raise NativeEngineeringDriverError('持续编辑开始时工程文件已偏离明确的保存基线。')
+
+    def checkpoint(self):
+        pending = deepcopy(self._recovered_pending)
+        for task_id, (child, request) in getattr(self.adapter, '_pending', {}).items():
+            import psutil
+            try:
+                started = psutil.Process(child.pid).create_time()
+            except psutil.NoSuchProcess:
+                continue
+            pending.append(dict(native_task_id=task_id, process_id=child.pid,
+                                process_started=started, operation=request['operation']))
+        completion = self._completion_dialog
+        return dict(tasks=deepcopy(self._tasks), saved_bytes=self._saved_bytes,
+            last_context=deepcopy(self._last_context), last_target=deepcopy(self._last_target),
+            stage_save_progress=deepcopy(getattr(self, '_stage_save_progress', None)),
+            last_compile_run=deepcopy(getattr(self.driver, '_last_compile_run', None)),
+            pending_children=pending,
+            completion_dialog=(dict(handle=completion['dialog'].handle, fields=deepcopy(completion['fields']),
+                                    identity=deepcopy(completion['identity'])) if completion else None))
 
     def capabilities(self):
         from plc.target_support import DEFAULT_TARGET_SUPPORT
@@ -66,6 +102,10 @@ class LiveEngineeringDriver:
         return deepcopy(actual)
 
     def _ready(self):
+        if self._recovered_pending:
+            pending = self.pending_operations()
+            if any(row['status'] == 'running' for row in pending):
+                raise NativeEngineeringDriverError('原会话的原生子进程仍在执行，需要先核对完成状态。')
         pending = getattr(self.adapter, '_pending', {})
         if pending:
             raise NativeEngineeringDriverError('已有原生操作未确认，未发送新的页面操作。',
@@ -494,6 +534,8 @@ class LiveEngineeringDriver:
             if type(event.get('native_error_code')) is int:
                 progress['native_error_code'] = event['native_error_code']
             progress['status'] = 'dispatched' if progress['save_dispatched'] else 'rejected'
+            if self.checkpoint_callback:
+                self.checkpoint_callback()
         try:
             self._ready()
             if _current_before is None:
@@ -545,7 +587,19 @@ class LiveEngineeringDriver:
             raise
 
     def pending_operations(self):
-        return self.adapter.pending_operations()
+        result = self.adapter.pending_operations()
+        remaining = []
+        for row in self._recovered_pending:
+            import psutil
+            try:
+                running = psutil.Process(row['process_id']).create_time() == row['process_started']
+            except psutil.NoSuchProcess:
+                running = False
+            result.append({**row, 'status': 'running' if running else 'ready_to_reconcile'})
+            if running:
+                remaining.append(row)
+        self._recovered_pending = remaining
+        return result
 
     def show_completion(self, command, prepared, observation=None):
         """Return to the actual target page after the full-context readback."""
@@ -632,6 +686,7 @@ class LiveEngineeringDriver:
         if actual != self.identity or _identity(expected_identity) != self.identity:
             raise NativeEngineeringDriverError('重新绑定必须指向原来的进程启动身份、窗口与工程。')
         self._closed = False
+        self.finish_completion()
         return self.read_context()
 
     def close(self):

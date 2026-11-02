@@ -135,12 +135,23 @@
 
 如需指定目标 POU 上下文可传入 `program`。从返回结果中查看 `compilation`（编译完成与通过状态）、`public_check`、`current_source_check` 及具体诊断列表。
 
+## 后台原生编译与版本交付
+
+对已保存的 Ladder/ST/FBD/SFC GXW，使用当前选中版本调用：
+
+```json
+{"plan":{"schema_version":1,"mode":"background","commands":[{"operation":"compile"},{"operation":"save"},{"operation":"reopen"}]}}
+```
+
+工具为 `execute_native_engineering`。三个步骤组成后台原生工作区的一次编译保存流程，重开后核对保存代码；请求通过后直接执行，不要求改成 full。成功返回同语言新版本，失败保留原活动版本。源码修改先通过对应候选工具或 `edit_gxw_project` 保存，后台编译不包含可见页面编辑。仅检查时使用 `validate_project(native=true)`。
+
 ## 8. 在 GX Works2 中连续可见编辑（Live 会话）
 
-1. **启动会话**：选中目标工程后，调用 `execute_native_engineering` 并传入 `plan.mode="live"`、`session_action="start"`，记录返回的工程会话 `session_id`。
+1. **启动会话**：选中目标工程后，调用 `execute_native_engineering` 并传入 `plan.mode="live"`、`session_action="start"`，记录返回的工程会话 `session_id`。首次为该工程创建一份受管 GXW 工作副本，保留原保存版本；后续调用及 MCP 重启继续复用同一路径和原 GX Works2 窗口。重复 `start` 返回已有会话，不执行本次提交的命令列表。
 2. **分步推进**：每次继续操作前，先调用 `get_native_engineering_session` 获取当前 `controls.expected_revision` 与待处理状态，再提交 `session_action="continue"`。在持续会话内获取生成上下文时传入 `execution_mode="live"`。
-3. **暂停与恢复**：需要暂停时调用 `pause_native_engineering_session(session_id=...)`；步骤中断或超时后，通过 `rebind` 先核对实际界面状态再继续。
+3. **暂停与恢复**：需要暂停时调用 `pause_native_engineering_session(session_id=...)`。MCP 退出仅分离可恢复会话；新 MCP 进程查询状态会加载持久记录，`rebind` / `continue` 在修改前核对原 PID、进程启动时间、HWND、工作路径与 CPU。目标丢失或身份不符时报告需要协调，不新开窗口、复制工程或重放动作；旧记录字段不完整时明确报错。中断或超时后先 `rebind` 只读观察实际状态；恢复已有待处理队列使用空命令列表及 `controls.resume_pending=true`。
 4. **会话内编译与地址查询**：在当前修订上执行 `compile` 步骤后，可通过 `show_assignments` 查询编译器分配地址；后续继续修改源码会使此前的编译与地址结果变为 `stale`。
+5. **保存与结束**：按任务阶段显式编译、保存或冷重开。保存验收忽略 Live 时间戳内容，仍检查实际正文、声明等实质内容；按工具实际结果区分保存、编译和运行。显式 `session_action="end"` 才结束会话，GX 窗口保持打开。
 
 ## 9. 查询编译器分配地址、代码一致性与步号定位
 

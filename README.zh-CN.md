@@ -85,6 +85,8 @@ ST 工作流兼顾独立文本生成与 GXW 原生工程维护：
 
 <a name="native-session"></a>
 
+对已保存的 Ladder、ST、FBD、SFC GXW 版本，使用 `execute_native_engineering` 的 `plan.mode="background"`，依次提交 `compile`、`save`、`reopen`，即可在隔离后台原生工作区编译、保存、重开核对并交付同语言新版本。该路径不打开可见编辑会话，也不写入 PLC。详见[后台操作流程](skills/gxworks-mcp-router/references/workflows.md#后台原生编译与版本交付)。
+
 ## 持续可见的 GX Works2 原生工程会话
 
 通过 `execute_native_engineering(mode="live")`，MCP 客户端可以在**同一个持续打开的 GX Works2 进程**中跨多次调用推进工程修改，而不必在每一步之间反复保存和重开文件：
@@ -104,6 +106,8 @@ ST 工作流兼顾独立文本生成与 GXW 原生工程维护：
 在工作台中直接配置模型 API，即可使用内置 **Direct 生成流程**完成需求分析、规格确认与程序生成，并在浏览器内查看梯形图网络、FBD/SFC 图形、软元件占用、版本差异及可导出产物。Direct 与 MCP 共用同一套工程上下文与 RAG 管线，可减少外部 Agent 编排开销；工作台内的工程问答仍可按需调用只读工具。
 
 当需求缺少现场工艺事实时，每个待确认问题都会呈现为独立输入框，切换面板或重新加载不会丢失已填内容，填齐必答项后统一提交。生成阶段按模型接口能力启用严格结构化输出，并在进入 Core 校验前自动归一无歧义的格式差异。
+
+发送 Ladder 到 GX 时，如果窗口标题中的路径被截断或只显示文件名，请在发送确认框填写“当前 GXW 完整路径（可选）”；MCP 对应参数为 `import_current_program_to_gxworks2(project_path=...)`。这两种标题下，路径须通过当前 GX Works2 进程的文件占用检查；无法确认时拒绝导入，不会打开或切换工程。完整路径标题可省略该参数。
 
 ## 工具链与架构分工
 

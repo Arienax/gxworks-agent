@@ -87,6 +87,116 @@ def native_st_source_witness(*, kind='array'):
         return archive.read(witness['saved'])
 
 
+def background_source(mode):
+    """Existing saved source controls; these do not claim a new native run."""
+    from gxw.project_templates import blank_ladder_baseline, blank_fbd_baseline
+    if mode == 'ladder':
+        return blank_ladder_baseline('FX3U')
+    if mode == 'fbd':
+        return blank_fbd_baseline('FX3U')
+    if mode == 'st':
+        return native_st_source_witness()
+    from tests.test_gxw_sfc_offline import _authoring
+    return _authoring('fx3u', 'original.gxw')
+
+
+def background_save_result(raw):
+    """Controlled backend response for application routing, not vendor evidence."""
+    from gxw.native_diagnostics import native_validation_source_plan
+    from gxw.native_write import verify_native_compilation_save
+    validation = dict(compilation=dict(acceptance='accepted', completed=True, diagnostics_complete=True),
+        public_check=dict(status='passed', completed=True), current_source_check='established')
+    cold = {**copy.deepcopy(validation), 'inspection': {'saved_code': {'status': 'matches', 'resources': [
+        {'status': 'matches', 'channels': [{'channel': channel, 'matches': True, 'saved_bytes': 4,
+                                         'generated_bytes': 4} for channel in range(3)]}]}}}
+    observation = dict(protocol_version=1, status='observed', native_version='1.635.0.1',
+        cpu=native_validation_source_plan(raw)['cpu'],
+        calls=[dict(operation='SaveProject'), dict(operation='ExportOneFileProject')])
+    return verify_native_compilation_save(raw, raw, validation, cold, observation)
+
+
+@pytest.mark.parametrize('phase', ['compile', 'reopen'])
+def test_background_native_failure_retains_phase_and_check_diagnostics(phase):
+    from application.native_engineering import background_engineering_failure
+    from application.workspace import public_payload
+    from gxworks2.workspace_adapter import WorkspaceSaveError
+    error = WorkspaceSaveError('native check rejected')
+    error.phase = phase
+    error.validation = {'compilation': {'acceptance': 'accepted', 'diagnostics': []},
+        'public_check': {'status': 'failed'}, 'diagnostic_projection': {'public_diagnostics': [
+            {'kind': 2, 'code': 0x050c9512, 'name': {'text': 'MAIN.Block.Action'},
+             'arguments': [{'text': 'Y002'}], 'step': 0, 'network': 1, 'raw_bytes': b'private'}]}}
+    summary = public_payload(background_engineering_failure(error))
+    assert summary['phase'] == phase and summary['passed'] is False
+    assert summary['diagnostics'] == [dict(phase='public_check' if phase == 'compile' else 'reopen_public_check',
+        kind=2, code=0x050c9512, name='MAIN.Block.Action', text='Y002', step=0, network=1)]
+    assert '0x050c9512' in summary['message'] and 'Y002' in summary['message']
+    assert 'raw_bytes' not in json.dumps(summary)
+
+
+@pytest.mark.parametrize('change', [
+    {'schema_version': True}, {'commands': [{'operation': 'save'}]},
+    {'commands': [{'operation': 'save'}, {'operation': 'compile'}, {'operation': 'reopen'}]},
+    {'controls': {'expected_revision': 0}}, {'path': r'D:\\unmanaged.gxw'},
+])
+def test_background_plan_rejects_incomplete_or_visible_requests(change):
+    from application.native_engineering import normalize_native_plan
+    plan = dict(schema_version=1, mode='background',
+                commands=[{'operation': name} for name in ('compile', 'save', 'reopen')])
+    with pytest.raises(ValueError, match='Background engineering requires'):
+        normalize_native_plan({**plan, **change}, plc_model='FX3U')
+
+
+@pytest.mark.parametrize('cpu', ['FX3U', 'FX3UC', 'Q03UDV', 'L02'])
+def test_background_plan_uses_backend_cpu_admission_without_visible_fx3u_restriction(cpu):
+    from application.native_engineering import normalize_native_plan
+    plan = dict(schema_version=1, mode='background',
+                commands=[{'operation': name} for name in ('compile', 'save', 'reopen')])
+    assert normalize_native_plan(plan, plc_model=cpu) == plan
+
+
+@pytest.mark.parametrize('mismatch', ['cpu', 'language', 'program', 'artifacts'])
+def test_background_execution_rejects_source_mismatch_before_native_factory(store, tmp_path, mismatch):
+    from application.gxw_files import prepare_candidate
+    raw = background_source('ladder')
+    prepared = prepare_candidate(store.version_dir('p1', 'v1'), raw=raw)
+    store.version.update(prepared['metadata'], id='v1',
+        artifacts={key: row['path'] for key, row in prepared['artifacts'].items()})
+    if mismatch == 'cpu':
+        store.version['plc_model'] = 'Q03UDV'
+    elif mismatch == 'language':
+        store.version['target_mode'] = 'sfc'
+    elif mismatch == 'program':
+        store.version['program_name'] = 'Missing.Program.pou'
+    else:
+        (store.version_dir('p1', 'v1') / 'ladder.json').write_text('{}')
+    def forbidden(*args, **kwargs):
+        pytest.fail('A mismatched saved version reached the native backend')
+    service = GXExecutionCoordinator(store, dependencies_factory=forbidden, com_factory=forbidden)
+    payload = dict(project_id='p1', version_id='v1', plan=dict(schema_version=1, mode='background',
+        commands=[{'operation': name} for name in ('compile', 'save', 'reopen')]))
+    with pytest.raises(ValueError):
+        service._native_engineering(payload, store.version, store.version_dir('p1', 'v1'), 'p1', None)
+
+
+@pytest.mark.parametrize('failure', ['source', 'compile', 'reopen', 'save'])
+def test_background_result_rejects_incomplete_native_output(failure):
+    from application.native_engineering import verified_background_result
+    from tests.test_gxw_object_model import motion_compilation_witness
+    before, after, original = motion_compilation_witness()
+    report = copy.deepcopy(original)
+    if failure == 'source':
+        after = background_source('ladder')
+    elif failure == 'compile':
+        report['native_validation']['compilation']['acceptance'] = 'rejected'
+    elif failure == 'reopen':
+        report['cold_validation']['inspection']['saved_code']['status'] = 'differs'
+    else:
+        report['native_workspace']['calls'] = []
+    with pytest.raises(ValueError):
+        verified_background_result({'data': after, 'report': report}, before)
+
+
 @pytest.fixture
 def store(tmp_path):
     return FakeStore(tmp_path / "workspace")
@@ -830,6 +940,7 @@ def test_saved_st_native_worker_keeps_frozen_plan_and_rejects_failed_source_rece
 
 def _live_execution_witness(store, tmp_path, monkeypatch):
     from application.native_st import prepare_candidate
+    from application.live_engineering import encode_live_checkpoint, decode_live_checkpoint
     raw = native_st_source_witness()
     prepared = prepare_candidate(store.version_dir('p1', 'v1'), imported=raw,
                                  program_name='POU_01.Program.pou', plc_model='FX3U')
@@ -891,7 +1002,8 @@ def _live_execution_witness(store, tmp_path, monkeypatch):
                     revision, validation = self.receipt['revision'], {'source': 'Core verified'}
                     self.receipt.update(data=b'Core checked live save', data_status='verified_stage_save',
                         data_revision=revision, saved_revision=revision, dirty=False,
-                        save={'status': 'passed', 'revision': revision, 'validation': validation})
+                        save={'status': 'passed', 'revision': revision, 'validation': validation,
+                              'operation_id': 'b' * 32})
                     self.receipt['stage_saves'].append(dict(revision=revision, sequence=self.sequence,
                                                            validation=validation))
                     step['verification'] = copy.deepcopy(self.receipt['save'])
@@ -922,10 +1034,27 @@ def _live_execution_witness(store, tmp_path, monkeypatch):
             self.receipt['status'] = 'closed'
             self.driver.close()
             return self.status()
+        def detach(self):
+            self.driver.close()
+        def checkpoint(self):
+            return dict(receipt=copy.deepcopy(self.receipt), sequence=self.sequence,
+                        pending=copy.deepcopy(self.pending), fields=dict(
+                            closed=self.receipt['status'] == 'closed', state=self.receipt['status'],
+                            _inflight=None, _pending=copy.deepcopy(self.pending)))
+    def restore(path, cpu, *, baseline, checkpoint, session_id, project_id, base_version_id):
+        assert path == drivers[0].path and baseline == raw
+        controller = Session(drivers[0], cpu, baseline, session_id, project_id, base_version_id, None)
+        controller.receipt = copy.deepcopy(checkpoint['receipt'])
+        controller.receipt.update(base_version_id=base_version_id, status=checkpoint['fields']['state'])
+        controller.sequence, controller.pending = checkpoint['sequence'], copy.deepcopy(checkpoint['pending'])
+        events.append(('restore', threading.get_ident()))
+        return controller
     monkeypatch.setitem(sys.modules, 'application.live_engineering', types.SimpleNamespace(
-        normalize_live_plan=lambda plan, plc_model: copy.deepcopy(plan)))
+        normalize_live_plan=lambda plan, plc_model: copy.deepcopy(plan),
+        encode_live_checkpoint=encode_live_checkpoint, decode_live_checkpoint=decode_live_checkpoint))
     coordinator = GXExecutionCoordinator(store, resource_lock_path=tmp_path / 'live-desktop.lock',
-        dependencies_factory=lambda _: {'driver_factory': driver_factory, 'live_session_factory': Session},
+        dependencies_factory=lambda _: {'driver_factory': driver_factory, 'live_session_factory': Session,
+                                        'restore_live_session': restore},
         com_factory=COM)
     def submit(action, commands=None, session_id=None, project_id='p1', version_id=None, controls=None):
         plan = dict(mode='live', session_action=action, commands=commands or [])
@@ -948,8 +1077,9 @@ def test_live_coordinator_reuses_one_copy_worker_and_com_apartment_until_explici
         second = submit('continue', [{'operation': 'edit'}], session_id).result(15)
         assert second['_live_result']['revision'] == 2 and len(drivers) == 1
         assert '_native_result' not in second and state.refs == 1
-        duplicate = submit('start').result(15)
-        assert duplicate['status'] == 'error' and len(drivers) == 1
+        duplicate = submit('start', [{'operation': 'edit'}]).result(15)
+        assert duplicate['_live_result']['session_id'] == session_id and len(drivers) == 1
+        assert duplicate['_live_result']['revision'] == 2 and duplicate['_live_result']['replayed'] is False
         submit('rebind', session_id=session_id).result(15)
         ended = submit('end', session_id=session_id).result(15)
         assert ended['_live_result']['status'] == 'closed' and state.refs == 0
@@ -964,6 +1094,91 @@ def test_live_coordinator_reuses_one_copy_worker_and_com_apartment_until_explici
         coordinator.close()
     assert state.refs == 0 and len({thread for _, thread in events}) == 1
     assert next(thread for _, thread in events) != threading.get_ident()
+
+
+def test_live_coordinator_restart_restores_pending_steps_without_another_copy_or_driver(store, tmp_path, monkeypatch):
+    coordinator, submit, state, events, drivers, controllers = _live_execution_witness(store, tmp_path, monkeypatch)
+    first = submit('start', [{'operation': 'edit'}, {'operation': 'edit'}],
+                   controls={'step_mode': True}).result(15)['_live_result']
+    session_id, path = first['session_id'], drivers[0].path
+    original = (store.version_dir('p1', 'v1') / 'program.gxw').read_bytes()
+    coordinator.close()
+    assert state.refs == 0
+    restarted = GXExecutionCoordinator(store, resource_lock_path=coordinator.resource_lock_path,
+        dependencies_factory=coordinator._dependencies_factory, com_factory=coordinator._com_factory)
+    try:
+        cached = restarted.live_session_status('p1', session_id)
+        assert cached['revision'] == 1 and cached['dirty']
+        assert not any(name == 'restore' for name, _ in events)
+        duplicate = restarted.submit_approved('native_engineering', dict(project_id='p1', version_id='v1',
+            plan=dict(mode='live', session_action='start', commands=[{'operation': 'edit'}])),
+            approval_id='duplicate').result(15)
+        assert duplicate['_live_result']['session_id'] == session_id
+        assert duplicate['_live_result']['revision'] == 1 and len(drivers) == 1
+        resumed = restarted.submit_approved('native_engineering', dict(project_id='p1', version_id='v1',
+            plan=dict(mode='live', session_action='continue', session_id=session_id, commands=[],
+                      controls={'expected_revision': 1, 'resume_pending': True})), approval_id='resume').result(15)
+        assert resumed['_live_result']['revision'] == 2, resumed
+        assert len(drivers) == 1 and len(controllers) == 2
+        assert list((store.project_dir('p1') / 'gxw_runs').rglob('*.gxw')) == [path]
+        assert (store.version_dir('p1', 'v1') / 'program.gxw').read_bytes() == original
+    finally:
+        restarted.close()
+    assert state.refs == 0
+
+
+def test_live_coordinator_old_receipt_never_starts_another_copy(store, tmp_path, monkeypatch):
+    coordinator, submit, state, events, drivers, controllers = _live_execution_witness(store, tmp_path, monkeypatch)
+    old = store.project_dir('p1') / 'gxw_runs' / ('a' * 32)
+    old.mkdir(parents=True)
+    (old / 'receipt.json').write_text(json.dumps({'session_id': 'a' * 32}), encoding='utf-8')
+    try:
+        result = submit('start', [{'operation': 'edit'}]).result(15)
+        assert result['status'] == 'error' and '恢复信息' in result['message']
+        assert drivers == [] and controllers == [] and not (old.parent / 'live').exists()
+    finally:
+        coordinator.close()
+
+
+def test_live_start_after_end_reconnects_existing_work_without_launch_or_replay(store, tmp_path, monkeypatch):
+    coordinator, submit, state, events, drivers, controllers = _live_execution_witness(store, tmp_path, monkeypatch)
+    try:
+        first = submit('start', [{'operation': 'edit'}]).result(15)['_live_result']
+        session_id = first['session_id']
+        assert submit('end', session_id=session_id).result(15)['passed']
+        started = submit('start', [{'operation': 'edit'}]).result(15)['_live_result']
+        assert started['session_id'] == session_id and started['revision'] == 1
+        resumed = submit('continue', [{'operation': 'edit'}], session_id).result(15)
+        assert resumed['_live_result']['revision'] == 2, resumed
+        assert len(drivers) == 1 and sum(name == 'restore' for name, _ in events) == 1
+    finally:
+        coordinator.close()
+
+
+def test_live_restart_reconciles_already_committed_version_before_rebase(store, tmp_path, monkeypatch):
+    coordinator, submit, state, events, drivers, controllers = _live_execution_witness(store, tmp_path, monkeypatch)
+    receipt = submit('start', [{'operation': 'edit'}, {'operation': 'save'}]).result(15)['_live_result']
+    session_id = receipt['session_id']
+    coordinator.close()
+    store.active, store.version['id'] = 'v2', 'v2'
+    store.version['generation_metadata'] = {'native_engineering': copy.deepcopy(receipt)}
+    # FakeStore exposes one source version; keep the original artifact readable
+    # under v2 as well, as a normal stored version would be.
+    import shutil
+    shutil.copytree(store.version_dir('p1', 'v1'), store.version_dir('p1', 'v2'))
+    restarted = GXExecutionCoordinator(store, resource_lock_path=coordinator.resource_lock_path,
+        dependencies_factory=coordinator._dependencies_factory, com_factory=coordinator._com_factory)
+    try:
+        result = restarted.submit_approved('native_engineering', dict(project_id='p1', version_id='v2',
+            plan=dict(mode='live', session_action='continue', session_id=session_id,
+                      commands=[{'operation': 'edit'}], controls={'expected_revision': 1})),
+            approval_id='committed-recovery').result(15)
+        assert result['passed'] and result['_live_result']['revision'] == 2, result
+        assert restarted.live_session_status('p1', session_id)['base_version_id'] == 'v2'
+        assert not restarted.live_session_status('p1', session_id)['pending_save_transaction']
+        assert len(drivers) == 1 and drivers[0].path.exists()
+    finally:
+        restarted.close()
 
 
 def test_live_continuation_observes_its_own_job_instead_of_the_finished_start_job(store, tmp_path, monkeypatch):
@@ -1021,7 +1236,9 @@ def test_live_coordinator_status_is_cached_during_work_and_save_rebase_is_transa
         assert saved['_live_result']['data'] == b'Core checked live save'
         assert 'data' not in coordinator.live_session_status('p1', session_id)
         assert coordinator.live_session_status('p1')['pending_stage_save']['revision'] == 1
-        assert submit('continue', session_id=session_id).result(15)['status'] == 'error'
+        replayed_save = submit('continue', session_id=session_id).result(15)
+        assert replayed_save['_live_result']['data'] == saved['_live_result']['data']
+        assert len([step for step in controllers[0].receipt['steps'] if step['operation'] == 'save']) == 1
         with pytest.raises(ValueError): coordinator.rebase_live_session('p1', session_id, 'v1', 'v2')
         store.active, store.version['id'] = 'v2', 'v2'
         with pytest.raises(ValueError): coordinator.rebase_live_session('p1', session_id, 'foreign', 'v2')
@@ -1113,9 +1330,9 @@ def test_live_shutdown_records_refused_close_without_claiming_a_running_child_wa
     assert refused_receipt['private_native_observation'] == controller._private_native_error
     coordinator.close()
     receipt = coordinator.live_session_status('p1', session_id)
-    assert receipt['status'] == 'requires_reconciliation' and receipt['controller_closed'] is False
+    assert receipt['status'] == 'requires_reconciliation' and receipt['controller_closed'] is True
     assert receipt['com_release'] == 'worker_shutdown' and receipt['ide_policy'] == 'keep_open'
     assert 'private_native_observation' not in receipt and state.refs == 0
     durable = json.loads((drivers[0].path.parent / 'receipt.json').read_text(encoding='utf-8'))
     assert durable['private_native_observation'] == controller._private_native_error
-    assert not any(name == 'driver_close' for name, _ in events)
+    assert sum(name == 'driver_close' for name, _ in events) == 1

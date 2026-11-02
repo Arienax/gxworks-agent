@@ -147,6 +147,27 @@ class NativeEngineeringDriver:
         return driver
 
     @classmethod
+    def attach_to_saved(cls, path, cpu, *, identity, timeout=30, progress=None, evidence_directory=None):
+        """Recreate wrappers for the exact retained frame, without opening a file."""
+        from gxw.live_context import _identity
+        finder = GXWorks2Finder()
+        session = finder.find_running(process_id=identity['process_id'])
+        if session is None:
+            raise NativeEngineeringDriverError('原 GX Works2 窗口已关闭；保留工作副本，未重建工程或重放步骤。')
+        if any(getattr(session, key) != identity[key] for key in (
+                'window_handle', 'process_started', 'executable', 'software_version')):
+            raise NativeEngineeringDriverError('原 GX Works2 进程或窗口身份已改变，未继续写入。')
+        driver = cls(session, path, cpu, timeout=timeout, progress=progress,
+                     evidence_directory=evidence_directory, finder=finder)
+        try:
+            if _identity(driver.inspect()) != _identity(identity):
+                raise NativeEngineeringDriverError('原 GX Works2 工程、CPU、语言或编码已改变，未继续写入。')
+        except Exception:
+            driver.close()
+            raise
+        return driver
+
+    @classmethod
     def start_from_saved(cls, path, cpu, *, timeout=30, progress=None, evidence_directory=None):
         """Open the caller's explicitly managed copy in a new native process."""
         if os.name != 'nt':

@@ -17,11 +17,13 @@ from agent_runtime.tool_context import (
 
 def _request_native_engineering(context: ToolContext, arguments: Mapping[str, Any]) -> Dict[str, Any]:
     from application.native_engineering import normalize_native_plan, validate_native_baseline
-    if not isinstance(context.version, Mapping) or context.version.get('target_mode') not in {'fbd', 'st'}:
-        raise ValueError('可见原生工程执行需要已选择的结构化 FBD 或 ST 保存版本。')
+    background = arguments.get('plan', {}).get('mode') == 'background'
+    modes = {'ladder', 'st', 'fbd', 'sfc'} if background else {'fbd', 'st'}
+    if not isinstance(context.version, Mapping) or context.version.get('target_mode') not in modes:
+        raise ValueError('后台原生工程需要已保存的 Ladder/ST/FBD/SFC 版本；可见编辑仅支持 FBD/ST。')
     baseline = context.native_snapshot or context.fbd_baseline
     if not baseline:
-        raise ValueError('可见原生工程执行需要当前版本保存的 GXW 工程。')
+        raise ValueError('原生工程执行需要当前版本保存的 GXW 工程。')
     selected_cpu = context.version.get('plc_model') or context.project.get('plc_model')
     if not isinstance(selected_cpu, str) or not selected_cpu.strip():
         raise ToolPreconditionError('PLC_MODEL_REQUIRED', 'Native engineering requires the selected saved project CPU model.')
@@ -33,8 +35,13 @@ def _request_native_engineering(context: ToolContext, arguments: Mapping[str, An
             plan = normalize_native_plan(arguments.get('plan'), plc_model=selected_cpu)
     except ValueError as error:
         raise ToolPreconditionError('INVALID_ARGUMENTS', str(error)) from error
-    validate_native_baseline(baseline, plc_model=selected_cpu, live=plan.get('mode') == 'live')
-    if context.version['target_mode'] == 'st':
+    if background:
+        from application.native_engineering import validate_background_source
+        validate_background_source(baseline, plc_model=selected_cpu,
+            target_mode=context.version['target_mode'], program_name=context.version.get('program_name'))
+    else:
+        validate_native_baseline(baseline, plc_model=selected_cpu, live=plan.get('mode') == 'live')
+    if not background and context.version['target_mode'] == 'st':
         from gxw.fb_authoring import st_program_snapshot
         from gxw.visible_engineering import normalized_st
         selected = [row for row in st_program_snapshot(baseline)['programs']
@@ -44,7 +51,8 @@ def _request_native_engineering(context: ToolContext, arguments: Mapping[str, An
                 or normalized_st(selected[0]['st_text']) != normalized_st(context.st_text)):
             raise ValueError('ST 版本正文、当前 Program 及唯一任务绑定不一致。')
     return {'requires_confirmation': True,
-        'message': ('工程步骤已冻结，获准后沿同一原生会话执行；保存步骤单独交付版本。'
+        'message': ('将后台编译、保存并重开核对当前 GXW，完成后交付新的同语言版本。' if background else
+                    '工程步骤已冻结，获准后沿同一原生会话执行；保存步骤单独交付版本。'
                     if plan.get('mode') == 'live' else
                     '工程方案已冻结。获准后会在独立 GX Works2 工程副本中执行，核对所请求的验证层后保存新版本。'),
         'pending_action': {'type': 'execute_native_engineering', 'project_id': context.project_id,
@@ -52,8 +60,13 @@ def _request_native_engineering(context: ToolContext, arguments: Mapping[str, An
 
 
 def _request_gxworks2_import(
-    context: ToolContext, _arguments: Mapping[str, Any]
+    context: ToolContext, arguments: Mapping[str, Any]
 ) -> Dict[str, Any]:
+    from gxworks2.import_service import normalize_import_project_path
+    try:
+        project_path = normalize_import_project_path(arguments.get("project_path"))
+    except ValueError as error:
+        raise ToolPreconditionError("INVALID_ARGUMENTS", str(error)) from error
     version = context.version
     if not isinstance(version, Mapping):
         raise ValueError("当前没有选中的已生成版本。")
@@ -81,6 +94,7 @@ def _request_gxworks2_import(
             "revision": version.get("revision"),
             "program_name": str(version.get("program_name") or "MAIN"),
             "plc_model": context.plc_model,
+            **({"project_path": project_path} if project_path is not None else {}),
         },
     }
 

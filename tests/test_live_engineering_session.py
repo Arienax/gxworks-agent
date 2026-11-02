@@ -897,6 +897,116 @@ def test_live_single_step_and_pause_resume_never_replay_completed_changes(tmp_pa
     assert pages.saves == 0
 
 
+def _restore_offline_live_session(raw, pages, live, session):
+    import json
+    from application.live_engineering import encode_live_checkpoint, decode_live_checkpoint
+    from gxworks2.live_driver import LiveEngineeringDriver
+    checkpoint = decode_live_checkpoint(json.loads(json.dumps(encode_live_checkpoint(session.checkpoint()))))
+    restored_live = LiveEngineeringDriver(pages, raw, 'FX3U', adapter=live.adapter, recovery=checkpoint['live'])
+    restored = LiveEngineeringSession(pages, 'FX3U', raw, session.session_id, session.project_id,
+        session.base_version_id, live_driver=restored_live, operation_authorizer=authorize_offline_live_pages)
+    restored.restore_checkpoint(checkpoint)
+    return restored
+
+
+def test_live_checkpoint_restores_unsaved_pages_revision_and_pending_queue(tmp_path):
+    raw, pages, live, session = session_pages(tmp_path)
+    persisted = []
+    session.checkpoint_callback = lambda: persisted.append(session.checkpoint())
+    first = session.run([label_edit(pages), label_edit(pages, 'SecondFlag')], {'step_mode': True})
+    assert first['passed'] and first['revision'] == 1 and pages.saves == 0
+    assert any(row['fields']['_inflight'] is not None for row in persisted)
+    restored = _restore_offline_live_session(raw, pages, live, session)
+    assert restored.rebind()['passed']
+    assert restored.status()['revision'] == 1 and restored.status()['dirty']
+    result = restored.run([], {'expected_revision': 1, 'resume_pending': True})
+    assert result['passed'] and result['revision'] == 2 and result['pending_commands'] == 0
+    assert [row['index'] for row in result['steps']] == [1, 2]
+    assert pages.saves == 0 and pages.path.read_bytes() == raw
+
+
+def test_live_checkpoint_recovers_saved_reply_loss_without_saving_twice(tmp_path, monkeypatch):
+    raw, pages, live, session = session_pages(tmp_path)
+    assert session.run([label_edit(pages)])['passed']
+    pages.saved_output = current_saved_bytes(raw, pages)
+    original = live.stage_save
+    def save_then_lose_reply(context, **options):
+        original(context, **options)
+        raise TimeoutError('reply lost after Save')
+    monkeypatch.setattr(live, 'stage_save', save_then_lose_reply)
+    result = session.run([{'operation': 'save'}], {'expected_revision': 1})
+    assert result['status'] == 'unconfirmed' and pages.saves == 1
+    restored = _restore_offline_live_session(raw, pages, live, session)
+    result = restored.rebind()
+    assert result['passed'] and result['saved_revision'] == 1, result
+    assert result['pending_commands'] == 0 and pages.saves == 1
+    assert verified_live_data(result, raw) == pages.saved_output
+
+
+def test_live_checkpoint_after_completed_save_retains_uncommitted_version_delivery(tmp_path):
+    raw, pages, live, session = session_pages(tmp_path)
+    assert session.run([label_edit(pages)])['passed']
+    pages.saved_output = current_saved_bytes(raw, pages)
+    class ProcessStopped(BaseException):
+        pass
+    def stop_after_checkpoint(step):
+        if step['operation'] == 'save' and step['status'] == 'completed':
+            raise ProcessStopped()
+    session.progress = stop_after_checkpoint
+    with pytest.raises(ProcessStopped):
+        session.run([{'operation': 'save'}], {'expected_revision': 1})
+    restored = _restore_offline_live_session(raw, pages, live, session)
+    result = restored.rebind()
+    assert result['passed'] and result['data_revision'] == 1 and pages.saves == 1
+    assert verified_live_data(result, raw) == pages.saved_output
+    restored.set_base_version('version2')
+    assert 'data' not in restored.rebind()
+
+
+def test_live_checkpoint_reconnects_existing_configuration_display_without_reopening_it(tmp_path):
+    from types import SimpleNamespace
+    raw, pages, live, session = session_pages(tmp_path)
+    fields = deepcopy(pages.context['configuration'])
+    dialog = SimpleNamespace(handle=567, is_enabled=lambda: True)
+    visible = [dialog]
+    clicks = []
+    pages.ui = SimpleNamespace(_application=lambda _: SimpleNamespace(window=lambda *, handle: dialog))
+    pages.session = object()
+    pages._configuration_fields = lambda _: deepcopy(fields)
+    pages._dialogs = lambda: visible
+    def click(target, control):
+        assert target is dialog and control == 2
+        clicks.append(control)
+        visible.clear()
+    pages._click = click
+    live._completion_dialog = dict(dialog=dialog, fields=fields, identity=pages.inspect())
+    assert session.run([], {})['passed']
+    # Leave the previously displayed page open at the process boundary.
+    visible[:] = [dialog]
+    live._completion_dialog = dict(dialog=dialog, fields=fields, identity=pages.inspect())
+    restored = _restore_offline_live_session(raw, pages, live, session)
+    assert restored.rebind()['passed']
+    assert clicks == [2, 2] and visible == [] and pages.saves == 0
+
+
+def test_live_checkpoint_json_roundtrip_preserves_nested_binary_and_tuple_values():
+    import json
+    from hypothesis import given, example, settings, strategies as st
+    from application.live_engineering import encode_live_checkpoint, decode_live_checkpoint
+    scalar = st.one_of(st.none(), st.booleans(), st.integers(), st.text(max_size=30),
+                       st.binary(max_size=100), st.floats(allow_nan=False, allow_infinity=False))
+    values = st.recursive(scalar, lambda child: st.one_of(st.lists(child, max_size=5),
+        st.tuples(child, child), st.dictionaries(st.one_of(st.text(max_size=20),
+            st.sampled_from(['$live_bytes', '$live_tuple', '$live_dict'])), child, max_size=5)), max_leaves=20)
+    @settings(max_examples=60, deadline=None)
+    @example({'$live_bytes': b'\0\xff', '$live_dict': ({'$live_tuple': []},)})
+    @given(values)
+    def check(value):
+        restored = decode_live_checkpoint(json.loads(json.dumps(encode_live_checkpoint(value), allow_nan=False)))
+        assert restored == value and type(restored) is type(value)
+    check()
+
+
 @pytest.mark.parametrize('native_finished', [True, False])
 def test_live_edit_timeout_reconciles_actual_state_without_sending_the_edit_again(tmp_path, monkeypatch, native_finished):
     _, pages, live, session = session_pages(tmp_path)

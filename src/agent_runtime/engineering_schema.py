@@ -195,15 +195,22 @@ def _engineering_native_schema():
         'controls': controls,
         'commands': {'type': 'array', 'minItems': 0, 'maxItems': 256, 'items': live_command}},
         ['schema_version', 'mode', 'commands'])
+    background = _engineering_object({'schema_version': {'type': 'integer', 'enum': [1]},
+        'mode': {'type': 'string', 'enum': ['background']},
+        'commands': {'type': 'array', 'minItems': 3, 'maxItems': 3,
+            'description': 'Compile, save and reopen the saved GXW in that order, without a visible editor.',
+            'items': _engineering_object({'operation': {'type': 'string', 'enum': ['compile', 'save', 'reopen']}},
+                                         ['operation'])}}, ['schema_version', 'mode', 'commands'])
     discoverable = {
         **command['properties'], **live_command['properties'],
         'operation': {'type': 'string', 'enum': list(dict.fromkeys([*_native_commands(), *_native_commands(live=True)]))},
         'actions': {'oneOf': [_engineering_graph_actions(), _engineering_graph_actions(live=True)]},
     }
     properties = {**batch['properties'], **live['properties'],
+        'mode': {'type': 'string', 'enum': ['background', 'live']},
         'commands': {'type': 'array', 'maxItems': 256, 'items': _engineering_object(discoverable, ['operation'])}}
     return _engineering_object({'plan': _engineering_object(properties, ['schema_version', 'commands'],
-        oneOf=[batch, live])}, ['plan'])
+        oneOf=[batch, live, background])}, ['plan'])
 
 
 def _engineering_st_schema():

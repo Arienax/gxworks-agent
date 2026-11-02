@@ -60,9 +60,9 @@
 
 | 工具 | 范围 | 适用场景 | 参数要点 | 主要产出与说明 |
 | --- | --- | --- | --- | --- |
-| `import_current_program_to_gxworks2` | 共享 | 将当前选中的 Ladder 版本导入 GX Works2 | 无参数（需已选中保存版本） | 按服务端审批策略执行导入，返回操作回执。 |
-| `execute_native_engineering` | 共享 | 执行后台原生工程批次或驱动持续前台会话 | `plan`（含 `mode`、`session_action`、`session_id`、`controls`、`steps` 等） | 支持在隔离后台或同一个持续打开的 GX Works2 窗口中推进多步工程修改、编译与保存。 |
-| `get_native_engineering_session` | 共享 | 查询持续原生工程会话状态与修订号 | 可选 `session_id` | 返回当前会话的活动 `revision`、`saved_revision`、`version_revision` 与待处理步骤。 |
+| `import_current_program_to_gxworks2` | 共享 | 将当前选中的 Ladder 版本导入 GX Works2 | 可选 `project_path`（当前打开的 `.gxw` 绝对路径；需已选中保存版本） | 标题截断或只有文件名时须提供路径并核对当前进程的文件占用；不会打开或切换工程。按服务端审批策略执行导入，返回操作回执。 |
+| `execute_native_engineering` | 共享 | 四语言已保存 GXW 的后台编译保存与新版本交付；保留原有 FBD/ST 可见会话 | 后台传 `plan={schema_version:1,mode:"background",commands:[{operation:"compile"},{operation:"save"},{operation:"reopen"}]}` | 后台模式不打开可见编辑会话，编译保存与重开核对成功后交付新版本。显式 `mode="live"` 继续复用原路径与窗口；重复 `start` 不执行本次命令，`end` 结束会话。 |
+| `get_native_engineering_session` | 共享 | 查询持续原生工程会话状态与修订号 | 可选 `session_id` | MCP 重启后加载持久状态；返回活动 `revision`、`saved_revision`、`version_revision` 与待处理步骤，继续前读取当前修订。 |
 | `pause_native_engineering_session` | 共享 | 请求持续原生会话在当前步骤完成后暂停 | `session_id` | 在当前原生操作完成后安全暂停会话，便于审阅或后续恢复。 |
 | `read_native_device_assignments` | 共享 | 原生编译并查询声明或 FB 成员的分配地址 | `queries`（含 `source`, `name`, 可选 `scope="local"`/`"global"`，最多 128 项）；可选 `program`, `compare_saved_code` | 返回编译器通过原生交叉引用分配的实际软元件地址。 |
 | `compare_native_compiled_code` | 共享 | 比对已保存 `.gxw` 的代码通道与最新编译结果 | 可选 `program` | 对比已保存代码与新编译输出的三通道一致性。 |

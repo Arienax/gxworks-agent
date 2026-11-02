@@ -2733,7 +2733,8 @@ def test_native_failure_forensics_is_bounded_and_tolerates_missing_state(tmp_pat
     assert forensics['exception_trace_records'] is None and forensics['save_output_bytes'] is None
 
 
-def test_native_compile_save_rejection_attaches_forensics_and_report_sequence(tmp_path, monkeypatch):
+@pytest.mark.parametrize('phase', ['compile', 'public_check'])
+def test_native_compile_save_rejection_attaches_forensics_and_report_sequence(tmp_path, monkeypatch, phase):
     import gxworks2.workspace_adapter as adapter
     from tests.test_gxw_object_model import authored_fb_witness
 
@@ -2749,6 +2750,14 @@ def test_native_compile_save_rejection_attaches_forensics_and_report_sequence(tm
     result = {'compilation': {'acceptance': 'rejected',
                               'diagnostics': [{'code': 0x500c5150}]},
               'public_check': {'status': 'not_requested'}, 'adapter': {}}
+    if phase == 'public_check':
+        observation.update(status='failed', message='compile_save_requires_completed_accepted_build_and_public_check')
+        observation['validation']['events'] = [
+            {'operation': 'CompilePublicReports', 'reports': [{'kind': 1, 'code': code} for code in (256, 257, 260)]},
+            {'operation': 'ProgramCheckOriginalReports', 'reports': [
+                {'kind': 2, 'code': 0x050c9512, 'arguments': [{'text': 'MAIN'}, {'text': 'Y002'}]}]}]
+        result.update(compilation={'acceptance': 'accepted', 'diagnostics': []}, public_check={'status': 'failed'},
+                      diagnostic_projection={'public_diagnostics': observation['validation']['events'][1]['reports']})
 
     def run(_executable, request, root, timeout, error_type):
         assert (root/'input.gxw').read_bytes() == before
@@ -2760,12 +2769,43 @@ def test_native_compile_save_rejection_attaches_forensics_and_report_sequence(tm
     with pytest.raises(adapter.WorkspaceSaveError) as raised:
         checker.validate(before, timeout=10, _save_output=True)
     message = str(raised.value)
+    if phase == 'public_check':
+        assert 'compilation=accepted; public_check=failed; public_check_diagnostics=0x050c9512' in message
+        assert 'reports=0x00000100,0x00000101,0x00000104' in message
+        assert raised.value.validation['diagnostic_projection'] == result['diagnostic_projection']
+        return
     assert 'diagnostics=0x500c5150' in message and 'reports=0x500c5150,0x00000019' in message
     forensics = raised.value.observation['forensics']
     assert forensics['report_sequence'] == ['0x500c5150', '0x00000019']
     assert forensics['exception_trace_records'] == 18
     assert forensics['acceptance'] == 'rejected' and forensics['save_output_bytes'] is None
     assert 'input.gxw' in [row['name'] for row in forensics['workspace_entries']]
+
+
+@pytest.mark.parametrize('failure_at', ['validation', 'verification'])
+def test_native_compile_save_marks_cold_failure_as_reopen(tmp_path, monkeypatch, failure_at):
+    import gxworks2.workspace_adapter as adapter
+    from gxw.models import GXWFormatError
+    import gxw.native_write as native_write
+    cold = {'compilation': {'acceptance': 'accepted'}, 'public_check': {'status': 'failed'}}
+    class Checker:
+        def validate(self, raw, **options):
+            if options.get('_save_output'):
+                assert raw == b'before'
+                return b'saved', {}, {}, {}
+            assert raw == b'saved' and options['inspection']['saved_code'] is True
+            if failure_at == 'validation':
+                raise adapter.WorkspaceValidationError('cold read failed')
+            return cold
+    monkeypatch.setattr(adapter, 'NativeWorkspaceValidation', lambda **options: Checker())
+    def reject(*args):
+        raise GXWFormatError('cold check rejected')
+    monkeypatch.setattr(native_write, 'verify_native_compilation_save', reject)
+    with pytest.raises(adapter.WorkspaceAdapterError) as raised:
+        adapter.NativeWorkspaceSourceSave(tmp_path / 'unused.exe', tmp_path).compile_project(b'before')
+    assert raised.value.phase == 'reopen'
+    if failure_at == 'verification':
+        assert raised.value.validation == cold
 
 
 def test_native_failure_forensics_separates_internal_fault_from_source_diagnostics(tmp_path):

@@ -18,7 +18,7 @@ from .diagnostics import (
     exception_details,
 )
 from .models import GXSyncErrorCode, SyncResult, SyncStatus
-from .import_service import _unsaved_project_identity
+from .import_service import _import_project_file, _unsaved_project_identity
 
 
 AUTO_RETRY_CODES = {
@@ -537,6 +537,30 @@ class GXWorks2SyncService:
             )
         return None
 
+    def _project_identity(self, session, project_name, project_identity, import_context):
+        effective = project_identity or _unsaved_project_identity(
+            session, project_name, import_context=import_context,
+        )
+        if not effective and Path(project_name).suffix.casefold() == ".gxw":
+            # Imports record the confirmed full path. A shortened title alone
+            # cannot identify that record, even if only one name matches.
+            paths = ([project_name] if Path(project_name).is_absolute()
+                     else self.baseline_store.known_project_paths(session))
+            confirmed = set()
+            for path in paths:
+                try:
+                    confirmed.add(_import_project_file(session, project_name, path))
+                except (ValueError, OSError, RuntimeError):
+                    continue
+            if len(confirmed) != 1:
+                # Reading MAIN/comments remains available, but an unresolved
+                # saved project must not read or write a shared title record.
+                return {}
+            effective = str(confirmed.pop())
+        return self.baseline_store.project_identity(
+            session, project_name=project_name, project_identity=effective,
+        )
+
     def _read_current_snapshot_core(
         self,
         *,
@@ -616,16 +640,7 @@ class GXWorks2SyncService:
                 details=state_failure.get("details"),
             )
         try:
-            effective_project_identity = project_identity or _unsaved_project_identity(
-                session,
-                project_name,
-                import_context=import_context,
-            )
-            identity = self.baseline_store.project_identity(
-                session,
-                project_name=project_name,
-                project_identity=effective_project_identity,
-            )
+            identity = self._project_identity(session, project_name, project_identity, import_context)
         except Exception as error:
             return self._error(
                 "无法确定GX Works2同步基线：" + describe_exception(error),
@@ -1047,7 +1062,7 @@ class GXWorks2SyncService:
             gx_program_hash = self.csv_manager.program_semantic_sha256(gx_program_path)
             app_comment_hash = self.csv_manager.comments_semantic_sha256(app_comment_path)
             gx_comment_hash = self.csv_manager.comments_semantic_sha256(gx_comment_path)
-            baseline = self.baseline_store.load(identity)
+            baseline = self.baseline_store.load(identity) if identity else None
             difference = diff_gxworks2_programs(app_program_path, gx_program_path)
         except Exception as error:
             return self._error(
@@ -1077,7 +1092,7 @@ class GXWorks2SyncService:
         details = {
             "project_identity": identity,
             "baseline_found": baseline is not None,
-            "baseline_write_enabled": bool(persist_baseline),
+            "baseline_write_enabled": bool(persist_baseline and identity),
             "baseline": baseline or {},
             "hashes": hashes,
             "diff": difference,
@@ -1091,6 +1106,15 @@ class GXWorks2SyncService:
 
         program_equal = app_program_hash == gx_program_hash
         comments_equal = app_comment_hash == gx_comment_hash
+        if not identity:
+            return SyncResult(
+                True, SyncStatus.UNBOUND,
+                "已读取当前工程，但无法确认其完整路径，未读取或更新同步基线。",
+                project_name=project_name,
+                exported_program_path=str(gx_program_path),
+                exported_comment_path=str(gx_comment_path),
+                details=details,
+            )
         if baseline is None:
             if program_equal and comments_equal:
                 baseline_error = self._save_snapshot_error(

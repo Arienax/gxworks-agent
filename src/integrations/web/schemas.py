@@ -89,6 +89,8 @@ class ExecutionProposal(Command):
     plan_id: str | None = None
     plan: dict[str, Any] | None = None
     request_id: str = Field(min_length=1, max_length=128)
+    project_path: str | None = Field(default=None, min_length=1, max_length=4096,
+        description="CSV 导入时当前 GX Works2 打开的 .gxw 完整绝对路径；标题被截断或只有文件名时须提供并核对文件占用，不会打开或切换工程。")
     manual_backup_acknowledged: bool = Field(default=False, strict=True, deprecated=True,
         description="Legacy CSV-send acknowledgement. All CSV imports now back up the existing GXW file automatically; this field does not change backup or execution approval.")
 

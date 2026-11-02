@@ -431,7 +431,7 @@ class ProposalService:
             self._check_binding(record)
             base = self.store.get_version(record['project_id'], record['base_version_id'])
             mode = base.get('target_mode') if isinstance(base, dict) else None
-            if (not isinstance(candidate, dict) or mode not in ('fbd', 'st')
+            if (not isinstance(candidate, dict) or mode not in ('ladder', 'fbd', 'st', 'sfc')
                     or candidate.get('target_mode') != mode):
                 raise ValueError('Native engineering requires a verified candidate in the approved source mode')
             if mode == 'st':

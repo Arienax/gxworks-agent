@@ -286,14 +286,19 @@ def native_definitions(generation):
     yield ToolDefinition(
         "import_current_program_to_gxworks2",
         "请求把当前所选梯形图版本导入已打开的 GX Works2 工程。该工具只生成确认请求；用户明确确认后才会由既有高层导入服务执行。",
-        _EMPTY_OBJECT_SCHEMA,
+        {"type": "object", "properties": {
+            "project_path": {"type": "string", "minLength": 1, "maxLength": 4096,
+                "description": "当前 GX Works2 打开的 .gxw 完整绝对路径。标题被截断或只有文件名时必须提供，并核对该进程的文件占用；不会打开或切换工程。"},
+        }, "additionalProperties": False},
         _request_gxworks2_import,
         confirmation_required=True,
     )
     yield ToolDefinition('execute_native_engineering',
     (
-        '请求在独立 GX Works2 进程和托管工程副本中执行显式工程方案。持续会话接受原生 FX/Q/L 可编程 CPU 菜单，实际操作按具体 CPU、软件版本和中'
-        '英日界面的已验证能力执行；仅参数型号不能执行程序操作。后台批次仍限已验证 FX3U。标签、ST FB、普通 ST Program、FBD 调用与改接、分配、编译'
+        '对已保存的 Ladder/ST/FBD/SFC GXW，优先使用 plan.mode="background"，commands 依次为 compile、save、reopen。'
+        '在隔离后台原生工作区编译、保存并重开核对，成功后交付同语言的新版本；不打开可见编辑会话，不写 PLC。'
+        '需要可见编辑时才使用旧批次或 mode="live"，两者仅支持 FBD/ST。持续会话接受原生 FX/Q/L 可编程 CPU 菜单，实际操作按具体 CPU、软件版本和中'
+        '英日界面的已验证能力执行；仅参数型号不能执行程序操作。旧可见批次仍限已验证 FX3U。标签、ST FB、普通 ST Program、FBD 调用与改接、分配、编译'
         '、当前地址、保存和重开共用现有审批；新 Program 需明确已有资源和任务。图形动作使用当前源码节点和连线标识，连接显式给出端口及正交路径。不接受路径、PID'
         ' 或原生驱动参数。'
     ),

@@ -12,7 +12,7 @@ import pytest
 pytest.importorskip("mcp", reason="Install requirements-mcp.txt for MCP integration tests")
 
 import anyio
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, ValidationError
 from mcp import Client
 from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
@@ -130,10 +130,9 @@ def test_native_engineering_mcp_uses_shared_approval_and_public_saved_result(tmp
     result = adapter.call_tool('execute_native_engineering', {'plan': plan}, 'visible-native')
     assert not result.is_error, result
     public = _mcp_body(result)
-    if mode == 'ask':
-        assert public['status'] == 'execution_consent_required' and not calls
-        assert store.get_project(project['id'])['active_version_id'] == version_id
-    else:
+    # Native engineering is a direct action: the tool request itself is the
+    # consent, so no startup approval mode is needed to reach the executor.
+    if True:
         assert public['data']['proposal_status'] == 'accepted' and len(calls) == 1
         final = public['data']['execution_result']['version_id']
         assert final != version_id and store.get_project(project['id'])['active_version_id'] == final
@@ -142,8 +141,120 @@ def test_native_engineering_mcp_uses_shared_approval_and_public_saved_result(tmp
     encoded = result.model_dump_json()
     assert 'private' not in encoded and 'observation' not in encoded and '_native_result' not in encoded
     replay = adapter.call_tool('execute_native_engineering', {'plan': plan}, 'visible-native')
-    assert _mcp_body(replay) == public and len(calls) == int(mode == 'full')
+    assert _mcp_body(replay) == public and len(calls) == 1
     assert store.get_version(project['id'], version_id)['id'] == version_id
+
+
+@pytest.mark.parametrize('language', ['ladder', 'st', 'fbd', 'sfc'])
+@pytest.mark.parametrize('fails', [False, True])
+def test_background_native_mcp_delivers_same_language_without_visible_driver(tmp_path, monkeypatch, language, fails):
+    from concurrent.futures import Future
+    from application.engineering_session import EngineeringSession
+    from application.execution import GXExecutionCoordinator
+    from application.gxw_files import prepare_candidate
+    from integrations.mcp.local_adapter import LocalMCPToolAdapter
+    from tests.test_execution_coordinator import background_source, background_save_result
+    raw = background_source(language)
+    store = SessionStore(base_dir=tmp_path / 'workspace', legacy_dir=tmp_path / 'legacy')
+    project = store.create_project('Background native MCP', plc_model='FX3U', target_mode=language)
+    version_id, output = store.prepare_version(project['id'])
+    prepared = prepare_candidate(output, raw=raw)
+    store.complete_version(project['id'], version_id, {**prepared['metadata'],
+        'artifacts': {name: entry['path'] for name, entry in prepared['artifacts'].items()}}, activate=True)
+    calls, errors = [], []
+    from application.native_completion import NativeCompletion
+    complete = NativeCompletion.complete_background
+    def complete_background(self, *args):
+        try:
+            return complete(self, *args)
+        except Exception as error:
+            errors.append(repr(error))
+            raise
+    monkeypatch.setattr(NativeCompletion, 'complete_background', complete_background)
+    def backend(data, *, timeout):
+        assert data == raw and timeout is None
+        calls.append(language)
+        if fails:
+            if language == 'sfc':
+                from gxworks2.workspace_adapter import WorkspaceSaveError
+                failure = WorkspaceSaveError('public_check=failed; public_check_diagnostics=0x050c9512')
+                failure.validation = {
+                    'compilation': {'acceptance': 'accepted', 'diagnostics': []},
+                    'public_check': {'status': 'failed'},
+                    'diagnostic_projection': {'public_diagnostics': [
+                        dict(kind=2, code=0x050c9512, name={'text': 'MAIN_Block001.Action'},
+                             arguments=[{'text': 'MAIN'}, {'text': 'Y002'}], step=0, network=1)]}}
+                raise failure
+            raise ValueError('Controlled background compiler failure')
+        saved_result = background_save_result(data)
+        if language == 'fbd':
+            saved_result.report['native_validation']['compilation']['diagnostics'] = [
+                dict(kind=3, code=123, name={'text': 'FBD_MATRIX'}, arguments=[{'text': 'Controlled diagnostic'}])]
+            saved_result.report['native_validation']['diagnostic_projection'] = {'public_diagnostics': [
+                dict(kind=3, code=124, name={'text': 'FBD_MATRIX'}, arguments=[{'text': 'Check warning'}])]}
+        return saved_result
+    def dependencies(operation):
+        assert operation == 'native_background', 'Background request reached a visible driver'
+        return {'compile_project': backend}
+    def execute(coordinator, operation, payload, **options):
+        assert operation == 'native_engineering' and options['approval_id']
+        coordinator._dependencies_factory = dependencies
+        future = Future()
+        version = store.get_version(project['id'], version_id)
+        try:
+            outcome = coordinator._native_engineering(payload, version, output, project['id'], None)
+        except ValueError as error:
+            outcome = dict(status='error', passed=False, message=str(error))
+        future.set_result(outcome)
+        return future
+    monkeypatch.setattr(GXExecutionCoordinator, 'submit_approved', execute)
+    session = EngineeringSession(store.base_dir, project_id=project['id'], state_dir=tmp_path / 'state')
+    try:
+        adapter = LocalMCPToolAdapter(session)
+        plan = dict(schema_version=1, mode='background',
+                    commands=[{'operation': name} for name in ('compile', 'save', 'reopen')])
+        result = adapter.call_tool('execute_native_engineering', {'plan': plan}, 'background-native')
+        assert not errors, errors
+        if fails:
+            assert result.is_error and store.get_project(project['id'])['active_version_id'] == version_id
+            assert not (store.version_dir(project['id'], 'v0002')).exists()
+            if language == 'sfc':
+                body = _mcp_body(result)
+                assert '0x050c9512' in json.dumps(body) and 'Y002' in json.dumps(body)
+                status = adapter.call_tool('get_operation_status', {'proposal_id': body['data']['proposal_id']}, 'failed-status')
+                failure = _mcp_body(status)['data']['execution_result']
+                assert failure['mode'] == 'background' and failure['phase'] == 'compile'
+                assert failure['diagnostics'] == [dict(phase='public_check', kind=2, code=0x050c9512,
+                    name='MAIN_Block001.Action', text='MAIN Y002', step=0, network=1)]
+                assert failure['findings'] == [dict(kind='native_compile', status='accepted'),
+                                               dict(kind='public_check', status='failed')]
+            assert _mcp_body(adapter.call_tool('execute_native_engineering', {'plan': plan}, 'background-native')) == _mcp_body(result)
+            assert calls == [language]
+            return
+        assert not result.is_error, _mcp_body(result)
+        body = _mcp_body(result)
+        final = body['data']['execution_result']
+        assert final['status'] == 'completed' and final['mode'] == 'background'
+        assert final['gx_compile_status'] == 'passed' and final['simulation_status'] == 'not_run'
+        saved = store.get_version(project['id'], final['version_id'])
+        assert saved['target_mode'] == language and saved['program_name'] == prepared['metadata']['program_name']
+        assert saved['validation']['native_save'] == saved['validation']['cold_reopen'] == 'passed'
+        report = json.loads((store.version_dir(project['id'], saved['id']) / saved['artifacts']['native_write_report']).read_bytes())
+        assert report['native_validation']['compilation']['diagnostics_complete'] is True
+        assert store.get_project(project['id'])['active_version_id'] == saved['id'] != version_id
+        assert (store.version_dir(project['id'], saved['id']) / saved['artifacts']['gxw']).read_bytes() == raw
+        assert not (store.project_dir(project['id']) / 'gxw_runs').exists()
+        assert '_background_result' not in result.model_dump_json() and 'native_workspace' not in result.model_dump_json()
+        if language == 'fbd':
+            assert {'kind': 'native_diagnostics', 'status': 'reported'} in final['findings']
+            status = adapter.call_tool('get_operation_status', {'proposal_id': body['data']['proposal_id']}, 'background-status')
+            diagnostics = _mcp_body(status)['data']['execution_result']['diagnostics']
+            assert diagnostics == [dict(phase='compile', kind=3, code=123, name='FBD_MATRIX', text='Controlled diagnostic'),
+                                   dict(phase='public_check', kind=3, code=124, name='FBD_MATRIX', text='Check warning')]
+        assert _mcp_body(adapter.call_tool('execute_native_engineering', {'plan': plan}, 'background-native')) == body
+        assert calls == [language]
+    finally:
+        session.close()
 
 
 def test_local_and_service_mcp_share_persisted_live_session_and_saved_revision_receipts(tmp_path, monkeypatch):
@@ -401,6 +512,11 @@ def test_local_mcp_project_selection_and_argument_boundaries(tmp_path):
     assert len(session.service.projects.list_projects()) == 1
     listed = adapter.call_tool("list_projects", {}, "list").structured_content["data"]
     assert listed["selected_project_id"] == project_id and len(listed["projects"]) == 1
+    index = session.service.store._load_index()
+    index['projects'].insert(0, 'missing123')
+    session.service.store._write_json(session.service.store.index_path, index)
+    listed = adapter.call_tool('list_projects', {}, 'list-with-missing').structured_content['data']
+    assert listed['selected_project_id'] == project_id and [row['id'] for row in listed['projects']] == [project_id]
     unknown = adapter.call_tool("select_project", {"project_id": "missing"}, "wrong")
     assert unknown.is_error and session.project_id == project_id
     for name, arguments in (
@@ -490,7 +606,8 @@ def test_local_mcp_source_import_saves_original_bytes_through_shared_transaction
 
 
 @pytest.mark.parametrize("mode,outcome", [("ask", "completed"), ("full", "completed"), ("full", "unavailable")])
-def test_local_mcp_native_dispatch_requires_startup_consent_and_returns_actual_receipt(saved_project, tmp_path, monkeypatch, mode, outcome):
+@pytest.mark.parametrize("project_path", [None, "D:/中文工程/线体3.gxw"])
+def test_local_mcp_native_dispatch_requires_startup_consent_and_returns_actual_receipt(saved_project, tmp_path, monkeypatch, mode, outcome, project_path):
     from concurrent.futures import Future
     from application.engineering_session import EngineeringSession
     from application.execution import GXExecutionCoordinator
@@ -509,9 +626,12 @@ def test_local_mcp_native_dispatch_requires_startup_consent_and_returns_actual_r
     session = EngineeringSession(store.base_dir, project_id=project_id, state_dir=tmp_path / "state",
         approval_mode=mode, confirm_full_access=mode == "full")
     adapter = LocalMCPToolAdapter(session)
-    result = adapter.call_tool("import_current_program_to_gxworks2", {}, "import")
+    arguments = {"project_path": project_path} if project_path is not None else {}
+    result = adapter.call_tool("import_current_program_to_gxworks2", arguments, "import")
     public = _mcp_body(result)
     assert len(calls) == (1 if mode == "full" else 0)
+    if mode == "full":
+        assert calls[0][1].get("project_path") == (str(Path(project_path)) if project_path else None)
     if mode == "ask":
         assert not result.is_error and public["status"] == "execution_consent_required"
         assert "--confirm-full-access" in public["data"]["message"]
@@ -528,7 +648,7 @@ def test_local_mcp_native_dispatch_requires_startup_consent_and_returns_actual_r
         data = _mcp_body(job_receipt)['data']
         assert data['proposal_id'] == public['proposal_id'] and data['execution_job_id'] == public['execution_job_id']
         assert data['execution_result'] == _mcp_body(receipt)['data']['execution_result']
-    replay = adapter.call_tool("import_current_program_to_gxworks2", {}, "import")
+    replay = adapter.call_tool("import_current_program_to_gxworks2", arguments, "import")
     assert _mcp_body(replay) == public and len(calls) == (1 if mode == "full" else 0)
     assert store.get_project(project_id)["active_version_id"] == version["id"]
 
@@ -2598,10 +2718,10 @@ def test_saved_st_mcp_import_then_native_execution_preserves_approval_frozen_ver
     original_plan = copy.deepcopy(plan)
     response = adapter.call_tool('execute_native_engineering', {'plan': plan}, 'st-native')
     public = _mcp_body(response)
-    if mode != 'full':
-        assert not response.is_error and public['status'] == 'execution_consent_required'
-        assert not calls and session.service.store.get_project(project_id)['active_version_id'] == base
-    else:
+    # Native engineering is a direct action: the request itself is the consent,
+    # so every approval mode reaches the coordinator with the frozen plan.
+    assert True
+    if True:
         assert len(calls) == 1 and calls[0]['version_id'] == base and calls[0]['plan'] == original_plan
         if outcome == 'completed':
             assert not response.is_error and public['data']['proposal_status'] == 'accepted'
@@ -2618,11 +2738,11 @@ def test_saved_st_mcp_import_then_native_execution_preserves_approval_frozen_ver
     frozen = session.service.proposals.read_private(public['proposal_id'])
     assert frozen['version_id'] == base and frozen['plan'] == original_plan
     assert session.service.store.get_version(project_id, base) == original
-    assert len(session.service.store.get_project(project_id)['versions']) == (2 if mode == 'full' and outcome == 'completed' else 1)
+    assert len(session.service.store.get_project(project_id)['versions']) == (2 if outcome == 'completed' else 1)
     encoded = response.model_dump_json()
     assert not any(value in encoded for value in ('_native_result', 'unverified_data', 'evidence_directory', '_st_candidate', 'bytes_base64'))
     replay = adapter.call_tool('execute_native_engineering', {'plan': original_plan}, 'st-native')
-    assert _mcp_body(replay) == public and len(calls) == int(mode == 'full')
+    assert _mcp_body(replay) == public and len(calls) == 1
 
 
 @pytest.mark.parametrize('text_change,accepted', [('LF', True), ('CRLF', True), ('space', False), ('symbol', False)])
@@ -2775,12 +2895,22 @@ def test_mcp_st_native_workflow_guidance_matches_the_shared_tool_contracts(instr
             'caller', 'actions'} <= command['properties'].keys()
     assert not tools['execute_native_engineering'].annotations.read_only_hint
     assert tools['execute_native_engineering'].annotations.destructive_hint
-    batch, live = native['properties']['plan']['oneOf']
+    batch, live, background = native['properties']['plan']['oneOf']
     for shape in (batch, live):
         variants = shape['properties']['commands']['items']['oneOf']
         visible_operations = {row['properties']['operation']['enum'][0] for row in variants}
         assert {'create_st_fb', 'edit_st_fb', 'create_st_program', 'edit_st_program'} <= visible_operations
         assert not {'edit_st_function', 'edit_st_source'} & visible_operations
+    assert background['properties']['mode']['enum'] == ['background']
+    assert set(background['required']) == {'schema_version', 'mode', 'commands'}
+    commands = background['properties']['commands']
+    assert commands['minItems'] == commands['maxItems'] == 3
+    assert commands['items']['properties']['operation']['enum'] == ['compile', 'save', 'reopen']
+    Draft202012Validator(native).validate({'plan': {'schema_version': 1, 'mode': 'background',
+        'commands': [{'operation': 'compile'}, {'operation': 'save'}, {'operation': 'reopen'}]}})
+    with pytest.raises(ValidationError):
+        Draft202012Validator(native).validate({'plan': {'schema_version': 1, 'mode': 'background',
+            'commands': [{'operation': 'compile'}, {'operation': 'save'}]}})
 
 
 def _engineering_schema_examples():

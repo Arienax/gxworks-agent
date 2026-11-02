@@ -32,9 +32,10 @@
 | `UNKNOWN_TOOL` 或工具未暴露 | 当前接入模式未注册该工具（如在 `service` 模式下调用 `local` 专有工具） | 查阅当前连接暴露的工具清单，改用当前模式支持的对应入口。 |
 | 原生组件启动或协议错误（如 `WORKSPACE_*`） | 本地 GX Works2 环境、辅助组件版本或桌面会话条件未满足 | 记录返回的 `error.code`、`details` 与失败阶段并如实告知用户，区分环境配置问题与 PLC 源码编译错误。 |
 | 原生编译报出源码诊断 | GX Works2 编译器或代码检查发现程序/声明错误 | 读取返回的诊断详情与定位信息，按用户要求修正对应源码或声明后重新提交。 |
-| 写入超时或结果未知 | 原生操作或长耗时任务尚未完成或连接中断 | 先调用 `get_operation_status` 或 `get_native_engineering_session` 查询实际完成阶段，需要恢复前台会话时使用 `rebind`。 |
+| 写入超时或结果未知 | 原生操作或长耗时任务尚未完成或连接中断 | 先调用 `get_operation_status` 或 `get_native_engineering_session` 查询实际完成阶段；Live 会话先 `rebind` 只读观察，不重放不确定动作。恢复已有队列用空命令列表及 `controls.resume_pending=true`。 |
+| Live 原目标丢失、身份不符或持久记录不完整 | 原进程、窗口、工作路径或 CPU 已变化，或旧记录缺少恢复字段 | 按返回错误协调目标；不重复 `start` 新建副本或自动重放。MCP 重启后先查持久状态，再用当前 `expected_revision` 继续。 |
 | `pending` / `confirmation_required` / `execution_consent_required` | 当前操作等待工作台批准或操作员配置原生执行许可 | 向用户说明当前待确认状态、提案编号或所需的执行许可配置。 |
-| `source_ref` / `session_id` / `target_ref` 失效 | 临时快照过期、GX 窗口重启或模拟器重新连接 | 重新调用对应的发现、快照或连接工具获取最新标识。 |
+| `source_ref` / 快照 `session_id` / `target_ref` 失效 | 临时快照过期、GX 窗口重启或模拟器重新连接 | 重新调用对应的发现、快照或连接工具获取最新标识；持续 Live 会话按上面的原目标恢复规则处理。 |
 
 ## 手册检索结果的判读
 

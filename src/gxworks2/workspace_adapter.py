@@ -144,13 +144,18 @@ class NativeWorkspaceSourceSave(_NativeWorkspaceAdapter):
         checker = NativeWorkspaceValidation(executable=self.executable, installation=self.installation)
         saved, validation, observation, snapshots = checker.validate(raw, timeout=timeout, _save_output=True)
         cold_evidence = {}
-        cold = checker.validate(saved, timeout=timeout, inspection={'assignments': [], 'locations': [], 'saved_code': True},
-                                _evidence=cold_evidence)
+        try:
+            cold = checker.validate(saved, timeout=timeout, inspection={'assignments': [], 'locations': [], 'saved_code': True},
+                                    _evidence=cold_evidence)
+        except WorkspaceAdapterError as error:
+            error.phase = 'reopen'
+            raise
         try:
             result = verify_native_compilation_save(raw, saved, validation, cold, observation)
         except GXWFormatError as error:
             failure = WorkspaceSaveError('原生编译保存校验未通过：' + str(error), cold_evidence.get('observation', observation))
             failure.validation = cold
+            failure.phase = 'reopen'
             raise failure from error
         import base64
         result.report['native_evidence'] = {'observation': observation,
@@ -597,13 +602,17 @@ class NativeWorkspaceValidation(_NativeWorkspaceAdapter):
             if save_output:
                 output = root/'candidate.gxw'
                 if returncode or observation.get('status') != 'observed' or not output.is_file():
-                    detail = observation.get('message') or (
-                        'compilation=' + str(result['compilation']['acceptance']) +
-                        '; public_check=' + str(result['public_check']['status']))
+                    detail = (observation.get('message') + '; ' if observation.get('message') else '')
+                    detail += ('compilation=' + str(result['compilation']['acceptance']) +
+                               '; public_check=' + str(result['public_check']['status']))
                     codes = sorted({report['code'] for report in result['compilation'].get('diagnostics', [])
                                     if type(report.get('code')) is int})
                     if codes:
                         detail += '; diagnostics=' + ','.join(f'0x{code & 0xffffffff:08x}' for code in codes)
+                    check_codes = sorted({report['code'] for report in result.get('diagnostic_projection', {}).get('public_diagnostics', [])
+                                          if type(report.get('code')) is int})
+                    if check_codes:
+                        detail += '; public_check_diagnostics=' + ','.join(f'0x{code & 0xffffffff:08x}' for code in check_codes)
                     forensics = _native_failure_forensics(root, observation, result)
                     observation['forensics'] = forensics
                     sequence = forensics['report_sequence']

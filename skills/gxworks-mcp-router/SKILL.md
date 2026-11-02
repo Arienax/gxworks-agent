@@ -87,7 +87,9 @@ metadata:
 
 **本地产物与原生编译。** `compile_project` 用于生成 Core 本地产物（JSON、SVG、衍生 ST、CSV）；需要调用 GX Works2 编译器做后台无界面检查时使用 `validate_project(native=true)`。若需编译并更新保存的 `.gxw`，使用对应语言支持的保存操作（如 FBD 的 `operation="compile"` 或原生工程方案）。
 
-**持续前台会话。** 当用户要求在 GX Works2 界面中展示编辑过程，或任务需要跨步执行原生工程操作时，使用 `execute_native_engineering` 的 `live` 模式。继续下一步前先通过 `get_native_engineering_session` 读取 `controls.expected_revision`，在关键阶段按任务要求显式执行编译、保存或冷重开验证。
+**持续前台会话。** 当用户要求在 GX Works2 界面中展示编辑过程，或任务需要跨步执行原生工程操作时，使用 `execute_native_engineering` 的 `live` 模式。每个工程首次 `start` 创建一份受管 GXW 工作副本并保留原保存版本；后续调用及 MCP 重启复用同一路径和原 GX Works2 窗口。重复 `start` 只返回已有会话，不执行本次命令列表；先用 `get_native_engineering_session` 读取状态和 `controls.expected_revision`，再 `continue`。MCP 退出仅分离可恢复会话，显式 `end` 才结束会话。恢复时须匹配原进程、窗口、路径和 CPU；目标丢失、身份不符或旧记录不完整时按错误处理，不另建副本或重放中断动作。详细步骤见 [Live 工作流](references/workflows.md#8-在-gx-works2-中连续可见编辑live-会话)。
+
+**后台原生保存。** 已保存的 Ladder、ST、FBD、SFC GXW 需要原生编译并交付新版本时，优先调用 `execute_native_engineering`，传入 `plan.mode="background"`、`schema_version=1`，`commands` 依次为 `compile`、`save`、`reopen`。后台工作区核对源码、编译、保存及重开结果后保存同语言版本；失败不激活新版本，不打开可见编辑会话，也不写入 PLC。仅检查而不保存时仍使用 `validate_project(native=true)`。
 
 ## 回执与错误处理
 

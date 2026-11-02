@@ -287,8 +287,13 @@ class EngineeringWindow:
                 raise NativeEngineeringDriverError('原生工程对象路径不唯一。')
             return matches[0] if matches else None
         item = self.desktop._wait(tree_item, '原生工程对象路径尚未出现。')
-        document = self.desktop._active_document()
-        if re.search(title_pattern, document.window_text()):
+        try:
+            document = self.desktop._active_document()
+        except NativeEngineeringDriverError:
+            # A managed instance that just opened its project copy has no editor
+            # page yet; the tree/Enter path below opens the requested one.
+            document = None
+        if document is not None and re.search(title_pattern, document.window_text()):
             # A bound active editor can be read without stealing desktop
             # focus or reopening it (also while Simulator2 owns the desktop).
             return document
