@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { api, activeJob } from "../api/client";
 import type { Json, ModelSettings, Job } from "../api/client";
 import { Button } from "../components/ui";
+import { SelectMenu } from "../components/SelectMenu";
 
 type Summary = Record<string, unknown>;
 const sources: Record<string,string> = {user_selection:"用户设置",user_omit:"服务默认",server_default:"服务默认",
@@ -32,19 +33,27 @@ export function ModelSwitcher({settings, job, disabled, onChange, onSettings, t,
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const pending = useRef(false);
   const frozen = job && activeJob(job) ? job.model_usage : null;
+  const profiles = settings?.profiles || [];
+  /** The switch round-trips to the service, so the menu closes on the answer. */
+  async function choose(id: string) {
+    if (pending.current) return;
+    pending.current = true; setBusy(true); setError("");
+    try { onChange(await api<ModelSettings>("/settings", "PUT", { active_profile_id: id })); }
+    catch (e) { setError((e as Error).message); }
+    finally { pending.current = false; setBusy(false); }
+  }
   return <div className={`model-switcher${compact ? " compact" : ""}`}>
-    <div className="form-actions"><label className="sr-only">{t("新任务模型")}</label><select aria-label={t("当前模型（用于新任务）")} title={frozen?.model ? `${t("运行中")}: ${String(frozen.profile_name || frozen.model)} · ${String(frozen.model)}` : t("新任务模型")} value={settings?.active_profile_id || ""}
-      disabled={disabled || busy || !settings?.profiles?.length} onChange={async e=>{
-        if (pending.current) return;
-        pending.current=true; setBusy(true); setError("");
-        try { onChange(await api<ModelSettings>("/settings", "PUT", {active_profile_id:e.target.value})); }
-        catch(e) { setError((e as Error).message); }
-        finally { pending.current=false; setBusy(false); }
-      }}>
-      {!settings?.profiles?.length && <option value="">{t("添加模型")}</option>}
-      {settings?.profiles?.map(p=><option key={p.id} value={p.id}>{p.name} · {p.model}</option>)}
-    </select>{(!compact || !settings?.profiles?.length) && <Button variant="ghost" onClick={onSettings}>{t("模型设置")}</Button>}
-    {!!frozen?.model && frozen.profile_id !== settings?.active_profile_id && <small title={String(frozen.model)}>{t("运行中")}: {String(frozen.profile_name || frozen.model)}</small>}</div>
+    <div className="form-actions">
+      <SelectMenu className="model-picker-pill" label={t("当前模型（用于新任务）")}
+        title={frozen?.model ? `${t("运行中")}: ${String(frozen.profile_name || frozen.model)} · ${String(frozen.model)}` : t("新任务模型")}
+        value={settings?.active_profile_id || ""}
+        disabled={disabled || busy || !profiles.length}
+        onChange={(id) => void choose(id)}
+        options={profiles.length
+          ? profiles.map((p) => ({ value: p.id, label: `${p.name} · ${p.model}` }))
+          : [{ value: "", label: t("添加模型"), disabled: true }]} />
+      {(!compact || !profiles.length) && <Button variant="ghost" onClick={onSettings}>{t("模型设置")}</Button>}
+      {!!frozen?.model && frozen.profile_id !== settings?.active_profile_id && <small title={String(frozen.model)}>{t("运行中")}: {String(frozen.profile_name || frozen.model)}</small>}</div>
     {error && <p role="alert">{error}</p>}
   </div>;
 }

@@ -30,6 +30,6 @@
 }
 .analysis-mode-picker strong { font-size: 0.8rem; font-weight: 500; }
 .analysis-mode-picker .selected { background: var(--accent-soft); color: var(--accent); }
-.analysis-mode-picker .selected strong { font-weight: 700; }
+.analysis-mode-picker .selected strong { font-weight: 600; }
 .analysis-mode-picker small { font-size: 0.75rem; color: var(--muted); }
 .analysis-mode-picker label:focus-within { outline: 2px solid var(--accent); }

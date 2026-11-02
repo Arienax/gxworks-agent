@@ -1,16 +1,29 @@
 // Copyright 2026 Arienax
 // Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
 
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { RetainedPanel } from "../components/RetainedPanel";
 import { Button, Modal } from "../components/ui";
 import { ApprovalSettingsPanel } from "../features/ApprovalSettings";
 import { DeveloperSettingsPanel } from "../features/DeveloperSettings";
 import type { WorkbenchModel } from "./useWorkbenchController";
 
-const Settings = lazy(() =>
-  import("../features/Settings").then((module) => ({ default: module.Settings })),
-);
+/** Shared by the lazy panel and its prefetch so both resolve the same chunk. */
+const loadSettings = () =>
+  import("../features/Settings").then((module) => ({ default: module.Settings }));
+const Settings = lazy(loadSettings);
+/** Placeholder with the panel's own rhythm, so a slow first read never looks like a freeze. */
+function SettingsSkeleton({ t, rows }: { t: (s: string) => string; rows: number }) {
+  return (
+    <div className="settings-loading" role="status">
+      {Array.from({ length: rows }, (_, index) => (
+        <span className="skeleton-row" key={index} />
+      ))}
+      <span className="sr-only">{t("正在读取设置")}</span>
+    </div>
+  );
+}
+
 export const settingsDialogFields = [
   "approvalSettings",
   "constructionExamples",
@@ -51,6 +64,11 @@ export function SettingsDialog(props: Props) {
     settingsTab,
     t,
   } = props;
+  /** Warm the model panel while the reader is still on another tab. */
+  useEffect(() => {
+    if (modal !== "settings") return;
+    void loadSettings();
+  }, [modal]);
 
   return (
     <Modal open={modal === "settings"} onOpenChange={(v) => !v && setModal("")} title={t("设置")}>
@@ -75,18 +93,20 @@ export function SettingsDialog(props: Props) {
         </Button>
       </nav>
       <RetainedPanel active={settingsTab === "general"}>
-        {() =>
-          approvalSettings ? (
-            <ApprovalSettingsPanel
-              value={approvalSettings}
-              disabled={!!session?.read_only}
-              onChange={setApprovalSettings}
-              t={t}
-            />
-          ) : (
-            <p>{t("正在读取设置")}</p>
-          )
-        }
+        {() => (
+          <div className="settings-panel" data-active={settingsTab === "general" || undefined}>
+            {approvalSettings ? (
+              <ApprovalSettingsPanel
+                value={approvalSettings}
+                disabled={!!session?.read_only}
+                onChange={setApprovalSettings}
+                t={t}
+              />
+            ) : (
+              <SettingsSkeleton t={t} rows={3} />
+            )}
+          </div>
+        )}
       </RetainedPanel>
       {settingsTab === "general" && settingsError && (
         <p role="alert" className="error-text">
@@ -95,30 +115,36 @@ export function SettingsDialog(props: Props) {
         </p>
       )}
       <RetainedPanel active={settingsTab === "model"}>
-        {() =>
-          settings && (
-            <Suspense fallback={<p role="status">{t("正在读取设置")}</p>}>
-              <Settings
-                locale={locale}
-                value={settings}
-                t={t}
-                disabled={!session || !!session?.read_only}
-                onChange={setSettings}
-              />
-            </Suspense>
-          )
-        }
+        {() => (
+          <div className="settings-panel" data-active={settingsTab === "model" || undefined}>
+            {settings ? (
+              <Suspense fallback={<SettingsSkeleton t={t} rows={4} />}>
+                <Settings
+                  locale={locale}
+                  value={settings}
+                  t={t}
+                  disabled={!session || !!session?.read_only}
+                  onChange={setSettings}
+                />
+              </Suspense>
+            ) : (
+              <SettingsSkeleton t={t} rows={4} />
+            )}
+          </div>
+        )}
       </RetainedPanel>
       <RetainedPanel active={settingsTab === "developer"}>
         {() => (
-          <DeveloperSettingsPanel
-            constructionExamples={constructionExamples}
-            freshConfirmedGeneration={freshConfirmedGeneration}
-            disabled={!session || !!session?.read_only}
-            onConstructionExamplesChange={setConstructionExamples}
-            onFreshConfirmedGenerationChange={setFreshConfirmedGeneration}
-            t={t}
-          />
+          <div className="settings-panel" data-active={settingsTab === "developer" || undefined}>
+            <DeveloperSettingsPanel
+              constructionExamples={constructionExamples}
+              freshConfirmedGeneration={freshConfirmedGeneration}
+              disabled={!session || !!session?.read_only}
+              onConstructionExamplesChange={setConstructionExamples}
+              onFreshConfirmedGenerationChange={setFreshConfirmedGeneration}
+              t={t}
+            />
+          </div>
         )}
       </RetainedPanel>
     </Modal>

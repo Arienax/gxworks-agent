@@ -55,7 +55,12 @@ export function AgentConversation(props: Props) {
           </button>
         )}
         <div className="pane-title">
-          {project?.id === pid && project && <span className="pane-crumb">{project.name}</span>}
+          {project?.id === pid && project && (
+            <>
+              <span className="pane-crumb">{project.name}</span>
+              <span className="pane-sep" aria-hidden="true">/</span>
+            </>
+          )}
           <strong>{currentJob ? t(jobKindLabel(currentJob.kind)) : t("新任务")}</strong>
           {currentJob && status(displayedJobStatus)}
         </div>
@@ -80,11 +85,11 @@ export function AgentConversation(props: Props) {
             className={`canvas-toggle ${canvasOpen ? "active" : ""}`}
             aria-pressed={canvasOpen}
             aria-controls="engineering-canvas"
+            aria-label={t(canvasOpen ? "收起画布" : "打开画布")}
             title={t(canvasOpen ? "收起画布" : "打开画布")}
             onClick={() => setCanvasOpen((value) => !value)}
           >
-            {canvasOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
-            <span>{t("工程画布")}</span>
+            {canvasOpen ? <PanelRightClose size={17} /> : <PanelRightOpen size={17} />}
           </button>
         )}
       </header>

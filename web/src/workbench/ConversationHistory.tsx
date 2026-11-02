@@ -107,7 +107,9 @@ export function ConversationHistory(props: Props) {
 
   return (
     <div className="conversation">
-      <div className="conversation-inner">
+      {/* Keyed by task so switching fades the transcript in once, while
+          streaming updates inside a task never re-run the animation. */}
+      <div className="conversation-inner" key={currentJob?.id || "empty"}>
       {task === "create" &&
         loaded &&
         !hasSavedVersions &&

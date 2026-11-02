@@ -11,6 +11,8 @@ const words: Record<string, [string, string]> = {
   "更多设置": ["More settings", "その他の設定"],
   "获取列表": ["Fetch models", "一覧を取得"],
   "获取中…": ["Fetching…", "取得中…"],
+  "可用模型": ["Available models", "利用可能なモデル"],
+  "点击“获取列表”读取可用模型": ["Select Fetch models to load the catalog", "「一覧を取得」でモデルを読み込みます"],
   "模型列表已更新": ["Model list updated", "モデル一覧を更新しました"],
   "未获取到模型列表": ["No models found", "モデル一覧を取得できませんでした"],
   "无法读取模型配置": ["Could not load model settings", "モデル設定を読み込めません"],

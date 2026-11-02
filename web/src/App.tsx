@@ -2,8 +2,8 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
 
 import { X } from "lucide-react";
-import type { CSSProperties } from "react";
-import { lazy, Suspense, useRef } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { RetainedPanel } from "./components/RetainedPanel";
 import { AgentConversation, agentConversationFields } from "./workbench/AgentConversation";
 import { CanvasPanels, canvasPanelFields } from "./workbench/CanvasPanels";
@@ -15,30 +15,96 @@ import { ProjectSidebar, projectSidebarFields } from "./workbench/ProjectSidebar
 import { ProposalList, proposalListFields } from "./workbench/ProposalList";
 import { workbenchDialogsFields } from "./workbench/dialogFields";
 import { clampCanvasWidth } from "./workbench/usePanelResize";
+import { usePanelTransition } from "./workbench/usePanelTransition";
 import { useWorkbenchController } from "./workbench/useWorkbenchController";
 import { pickView } from "./workbench/viewProps";
 
 const WorkbenchDialogs = lazy(() => import("./workbench/WorkbenchDialogs").then((module) => ({ default: module.WorkbenchDialogs })));
 
+/** The sidebar column is a layout constant shared with the canvas clamp. */
+const SIDEBAR_WIDTH = 268;
+const MIN_CONVERSATION = 360;
+
 export default function App() {
   const view = useWorkbenchController();
   const dialogsOpened = useRef(false);
-  if (view.modal || view.gxSend) dialogsOpened.current = true;
-  if (!view.session) return <LoginScreen {...pickView(view, loginScreenFields)} />;
+  const root = useRef<HTMLDivElement>(null);
+  const [resizing, setResizing] = useState(false);
+  const [nudging, setNudging] = useState(false);
+  const nudgeTimer = useRef(0);
+  const [overlay, setOverlay] = useState(false);
+  const [noMotion, setNoMotion] = useState(true);
   const canvasVisible = view.canvasOpen && !!view.pid;
+  const sidebarPhase = usePanelTransition(view.leftOpen);
+  const canvasPhase = usePanelTransition(canvasVisible);
+  const wasLeftOpen = useRef(view.leftOpen);
+
+  // The first paint must not animate a restored layout.
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setNoMotion(false));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  // The canvas turns into an overlay before it squeezes the conversation.
+  useEffect(() => {
+    const measure = () => {
+      const sidebar = view.leftOpen && window.innerWidth > 1100 ? SIDEBAR_WIDTH : 0;
+      const splitter = canvasVisible ? 5 : 0;
+      const conversation = window.innerWidth - sidebar - splitter - view.rightWidth;
+      setOverlay(window.innerWidth <= 860 || (canvasVisible && conversation < MIN_CONVERSATION));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [view.leftOpen, view.rightWidth, canvasVisible]);
+
+  // A collapsed sidebar leaves the tab order; send focus to its trigger instead.
+  useEffect(() => {
+    if (wasLeftOpen.current === view.leftOpen) return;
+    wasLeftOpen.current = view.leftOpen;
+    const frame = requestAnimationFrame(() => {
+      const selector = view.leftOpen ? ".project-sidebar .sidebar-collapse" : ".sidebar-toggle";
+      document.querySelector<HTMLElement>(selector)?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [view.leftOpen]);
+
+  if (!view.session) return <LoginScreen {...pickView(view, loginScreenFields)} />;
+  if (view.modal || view.gxSend) dialogsOpened.current = true;
+  const startResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    setResizing(true);
+    const stop = () => {
+      setResizing(false);
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+    };
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
+    view.resizePanel(event);
+  };
   return (
     <div
-      className={`workbench ${view.leftOpen ? "" : "sidebar-hidden"} ${canvasVisible ? "canvas-open" : ""}`}
-      style={{ "--canvas-width": `${view.rightWidth}px` } as CSSProperties}
+      ref={root}
+      className={[
+        "workbench",
+        view.leftOpen ? "" : "sidebar-hidden",
+        canvasVisible ? "canvas-open" : "",
+        overlay ? "canvas-overlay" : "",
+        resizing ? "is-resizing" : "",
+        nudging ? "is-nudging" : "",
+        noMotion ? "no-motion" : "",
+      ].filter(Boolean).join(" ")}
+      data-sidebar={sidebarPhase}
+      data-canvas={canvasPhase}
+      style={{ "--sidebar-width": `${SIDEBAR_WIDTH}px`, "--canvas-width": `${view.rightWidth}px` } as CSSProperties}
       onKeyDown={(event) => {
-        if (event.key === "Escape" && view.leftOpen && window.innerWidth <= 1100) {
-          view.setLeftOpen(false);
-          requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(".sidebar-toggle")?.focus());
-        }
+        if (event.key === "Escape" && view.leftOpen && window.innerWidth <= 1100) view.setLeftOpen(false);
       }}
     >
-      <ProjectSidebar {...pickView(view, projectSidebarFields)} />
-      {view.leftOpen && <div className="sidebar-scrim" aria-hidden="true" onClick={() => view.setLeftOpen(false)} />}
+      <div className="sidebar-host" inert={sidebarPhase === "closed" || undefined}>
+        <ProjectSidebar {...pickView(view, projectSidebarFields)} />
+      </div>
+      <div className="sidebar-scrim" aria-hidden="true" onClick={() => view.setLeftOpen(false)} />
       <AgentConversation {...pickView(view, agentConversationFields)}
         history={<ConversationHistory {...pickView(view, conversationHistoryFields)} />}
         composer={<ComposerPanel {...pickView(view, composerPanelFields)} />} />
@@ -52,19 +118,25 @@ export default function App() {
         aria-controls="engineering-canvas"
         tabIndex={canvasVisible ? 0 : -1}
         className="panel-resizer"
-        onPointerDown={view.resizePanel}
+        onPointerDown={startResize}
         onKeyDown={(e) => {
           if (!["ArrowLeft", "ArrowRight"].includes(e.key)) return;
           e.preventDefault();
+          // Keyboard nudges use the quick duration; pointer drags use none.
+          setNudging(true);
+          window.clearTimeout(nudgeTimer.current);
+          nudgeTimer.current = window.setTimeout(() => setNudging(false), 240);
           if (e.key === "ArrowLeft") view.setRightWidth((v) => clampCanvasWidth(v + 20, view.leftOpen));
           if (e.key === "ArrowRight") view.setRightWidth((v) => clampCanvasWidth(v - 20, view.leftOpen));
         }}
       />
-      <RetainedPanel active={canvasVisible}>
-        {() => <ProgramWorkspace {...pickView(view, programWorkspaceFields)}
-          contextView={<CanvasPanels {...pickView(view, canvasPanelFields)}
-            proposalsView={<ProposalList {...pickView(view, proposalListFields)} />} />} />}
-      </RetainedPanel>
+      <div className="canvas-host" inert={canvasPhase === "closed" || undefined}>
+        <RetainedPanel active={canvasVisible || canvasPhase !== "closed"}>
+          {() => <ProgramWorkspace {...pickView(view, programWorkspaceFields)}
+            contextView={<CanvasPanels {...pickView(view, canvasPanelFields)}
+              proposalsView={<ProposalList {...pickView(view, proposalListFields)} />} />} />}
+        </RetainedPanel>
+      </div>
       {(view.error || view.notice) && (
         <div className={`toast ${view.error ? "toast-error" : ""}`} role={view.error ? "alert" : "status"}>
           <span>{view.error || view.notice}</span>

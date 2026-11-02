@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
 
 import { useId } from "react";
+import { SelectMenu } from "../components/SelectMenu";
 import type { components } from "../api/generated";
 import type { Locale } from "../i18n";
 import "./AnalysisModePicker.css";
@@ -35,16 +36,11 @@ export function AnalysisModePicker({ locale, value, onChange, disabled = false, 
 }) {
   const group = useId();
   const text = labels[locale];
-  if (compact) return (
-    <label className="composer-select">
-      <span className="sr-only">{text.title}</span>
-      <select aria-label={text.title} value={value} disabled={disabled}
-        onChange={(event) => onChange(event.target.value as AnalysisMode)}>
-        <option value="direct">{text.direct}</option>
-        <option value="design">{text.design}</option>
-      </select>
-    </label>
-  );
+  if (compact) return <SelectMenu className="composer-select" label={text.title} value={value}
+    disabled={disabled} onChange={onChange} options={[
+      { value: "direct", label: text.direct },
+      { value: "design", label: text.design },
+    ]} />;
   return (
     <fieldset className="analysis-mode-picker" disabled={disabled}>
       <legend>{text.title}</legend>

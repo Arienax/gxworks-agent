@@ -63,6 +63,24 @@ export function WorkbenchDialogs(props: Props) {
         <p>
           {t("待发送版本")}：<strong>{gxSend?.versionId}</strong>
         </p>
+        <div className="form">
+          <label>
+            <span>{t("当前 GXW 完整路径（可选）")}</span>
+            <input
+              value={gxSend?.projectPath || ""}
+              onChange={(event) => {
+                const projectPath = event.target.value;
+                setGXSend((current) => current ? { ...current, projectPath } : null);
+              }}
+              maxLength={4096}
+              disabled={!canWrite}
+              aria-describedby="gx-send-project-path-help"
+            />
+          </label>
+          <p id="gx-send-project-path-help" className="muted">
+            {t("窗口标题被截断或只有文件名时，请填写 GX Works2 当前打开的工程完整路径；不会打开或切换工程。")}
+          </p>
+        </div>
         <div className="proposal-actions">
           <Button onClick={() => setGXSend(null)}>{t("取消")}</Button>
           <Button

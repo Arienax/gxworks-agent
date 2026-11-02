@@ -625,6 +625,37 @@ def test_project_reads_and_legacy_program_loading_never_write(saved):
     assert _bytes(store.base_dir) == before
 
 
+def test_project_listing_skips_absent_index_record_without_repairing_storage(saved, caplog):
+    store, project, _, _ = saved
+    index = store._load_index()
+    index['projects'].insert(0, 'missing123')
+    store._write_json(store.index_path, index)
+    before = _bytes(store.base_dir)
+    service = ProjectService(store.base_dir)
+    assert [row['id'] for row in service.list_projects()] == [project['id']]
+    assert 'Indexed project record is missing: missing123' in caplog.text
+    with pytest.raises(KeyError, match='Project not found'):
+        service.project('missing123')
+    assert _bytes(store.base_dir) == before
+
+
+@pytest.mark.parametrize('damage', ['invalid_json', 'wrong_id', 'missing_database'])
+def test_project_listing_does_not_hide_corrupt_records(saved, damage):
+    store, project, _, _ = saved
+    path = store.project_path(project['id'])
+    if damage == 'invalid_json':
+        path.write_text('{invalid', encoding='utf-8')
+    elif damage == 'wrong_id':
+        store._write_json(path, {'id': 'another123'})
+    else:
+        store._write_json(path, {'id': project['id'], 'storage_format': 'project-records-v1'})
+        (path.parent / 'records.sqlite3').unlink(missing_ok=True)
+    before = _bytes(store.base_dir)
+    with pytest.raises((ValueError, KeyError, OSError)):
+        ProjectService(store.base_dir).list_projects()
+    assert _bytes(store.base_dir) == before
+
+
 def test_read_only_workbench_does_not_create_workspace_state_or_config(tmp_path, monkeypatch):
     missing = tmp_path / "missing-workspace"
     state = tmp_path / "application-state"

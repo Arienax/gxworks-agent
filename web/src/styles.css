@@ -27,10 +27,25 @@
   --accent-border: color-mix(in srgb, var(--accent) 50%, var(--border));
   --border-subtle: color-mix(in srgb, var(--border) 65%, transparent);
   --canvas-grid: color-mix(in srgb, var(--muted) 22%, transparent);
+  --canvas-grid-faint: color-mix(in srgb, var(--canvas-grid) 55%, transparent);
+  --canvas-frame: color-mix(in srgb, var(--muted) 40%, transparent);
   --scrim: #00000080;
-  --shadow-soft: 0 3px 16px #00000014;
-  --shadow-popover: 0 10px 32px #00000030;
-  --shadow-modal: 0 20px 64px #00000040;
+  /* Floating layers and the composer are the only elevated surfaces. */
+  --shadow: 0 10px 30px #0000004d;
+  --shadow-popover: var(--shadow);
+  --shadow-modal: 0 24px 64px #00000073;
+  /* Shape scale: controls, cards, the composer shell and pill controls. */
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-field: 18px;
+  --radius-pill: 999px;
+  --radius-modal: 14px;
+  /* Motion: panels, transient layers and state changes share these durations. */
+  --motion-panel: 220ms;
+  --motion-fast: 140ms;
+  --motion-quick: 120ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
   color-scheme: dark;
 }
 :root[data-theme="light"] {
@@ -40,7 +55,7 @@
   --soft: #eeeeec;
   --hover: #e4e4e1;
   --text: #292927;
-  --muted: #686864;
+  --muted: #5f5f5b;
   --border: #deded9;
   --accent: #2f66b4;
   --primary: #346ec7;
@@ -54,6 +69,8 @@
   --bad-bg: #ffedf0;
   --bad-border: #eab3bf;
   --canvas-paper: #ffffff;
+  --shadow: 0 10px 28px #0000001f;
+  --shadow-modal: 0 24px 64px #00000029;
   color-scheme: light;
 }
 select,
@@ -206,9 +223,9 @@ button {
 button,
 a {
   transition:
-    background 0.12s,
-    border-color 0.12s,
-    color 0.12s;
+    background var(--motion-quick) linear,
+    border-color var(--motion-quick) linear,
+    color var(--motion-quick) linear;
 }
 a {
   color: var(--accent);
@@ -233,7 +250,7 @@ input,
 select,
 textarea {
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--radius-control);
   background: var(--chrome);
   color: var(--text);
   min-height: 34px;
@@ -309,7 +326,7 @@ pre {
   justify-content: center;
   gap: 7px;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--radius-control);
   min-height: 32px;
   padding: 5px 10px;
   background: var(--panel);
@@ -348,7 +365,7 @@ pre {
   align-items: center;
   justify-content: center;
   background: transparent;
-  border-radius: 5px;
+  border-radius: var(--radius-control);
   min-width: 30px;
   min-height: 30px;
 }
@@ -369,10 +386,10 @@ pre {
   align-items: center;
   gap: 5px;
   border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 2px 6px;
+  border-radius: var(--radius-pill);
+  padding: 2px 9px;
   line-height: 1.5;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   white-space: nowrap;
   color: var(--text);
@@ -401,22 +418,21 @@ pre {
   height: 6px;
   flex-shrink: 0;
   border-radius: 50%;
-  background: var(--good-bg);
+  background: var(--muted);
+}
+.connection-dot {
+  background: var(--good);
 }
 .small-dot.warn {
-  background: var(--warn-bg);
+  background: var(--warn);
 }
 .small-dot.good {
-  background: var(--good-bg);
+  background: var(--good);
 }
-.workbench {
-  height: 100dvh;
-  min-height: 580px;
-  display: grid;
-  grid-template-columns: 216px minmax(320px, 1fr) 4px var(--inspector-width);
-  grid-template-rows: 48px minmax(0, 1fr) 37px;
-  overflow: hidden;
+.small-dot.bad {
+  background: var(--bad);
 }
+/* The workbench grid is owned by workbench.css; legacy layout rules stay out. */
 .app-header {
   grid-column: 1/-1;
   background: var(--chrome);
@@ -491,15 +507,7 @@ pre {
   width: auto;
   padding: 3px 20px 3px 6px;
 }
-.project-sidebar {
-  grid-column: 1;
-  grid-row: 2;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg);
-  border-right: 1px solid var(--border);
-  min-height: 0;
-}
+/* Sidebar placement, sizing and its collapsed states are owned by workbench.css. */
 .sidebar-heading {
   display: flex;
   align-items: center;
@@ -613,14 +621,8 @@ pre {
   font-size: 12px;
   text-align: left;
 }
-.sidebar-bottom > button > span:nth-child(2) {
-  flex: 1;
-}
-.sidebar-bottom > button > span:last-child:not(.small-dot) {
-  max-width: 70px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+/* GX Works2 line: label grows, status text truncates, dot keeps its size. */
+.sidebar-row > span:nth-child(2) { flex: 1; }
 .engineering-area {
   grid-column: 2;
   grid-row: 2;
@@ -756,8 +758,8 @@ pre {
   min-width: 250px;
   margin: auto;
   background: var(--canvas-paper);
-  border-radius: 3px;
-  box-shadow: var(--shadow-soft);
+  border: 1px solid var(--canvas-frame);
+  border-radius: var(--radius-card);
 }
 .network-strip {
   display: flex;
@@ -1044,8 +1046,8 @@ pre {
   margin: 0 12px 13px;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: var(--shadow-soft);
+  border-radius: var(--radius-field);
+  box-shadow: var(--shadow);
 }
 .composer:focus-within {
   border-color: var(--accent);
@@ -1428,12 +1430,6 @@ pre {
   gap: 6px;
   white-space: nowrap;
 }
-.sidebar-hidden {
-  grid-template-columns: 0 minmax(350px, 1fr) 4px var(--inspector-width);
-}
-.sidebar-hidden .project-sidebar {
-  visibility: hidden;
-}
 .toast {
   position: fixed;
   bottom: 52px;
@@ -1442,15 +1438,26 @@ pre {
   display: flex;
   align-items: center;
   gap: 15px;
-  padding: 10px 13px;
+  padding: 10px 14px;
   background: var(--good-bg);
   border: 1px solid var(--good-border);
   color: var(--good);
-  box-shadow: var(--shadow-popover);
-  border-radius: 7px;
+  box-shadow: var(--shadow);
+  border-radius: var(--radius-card);
   z-index: 1000;
   max-width: 75vw;
   font-size: 13px;
+  animation: toast-in var(--motion-fast) var(--ease-out) both;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
 .toast-error {
   background: var(--bad-bg);
@@ -1479,7 +1486,7 @@ pre {
   overflow: auto;
   padding: 24px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-modal);
   background: var(--panel);
   color: var(--text);
   z-index: 51;
@@ -1492,11 +1499,52 @@ pre {
   margin-bottom: 18px;
 }
 .modal > header h2 {
-  font-size: 19px;
+  font-size: 16px;
+  font-weight: 600;
 }
 .modal > p.muted {
   font-size: 13px;
   margin-bottom: 20px;
+}
+.modal .form-actions {
+  justify-content: flex-end;
+}
+.modal .form-actions > .button.primary {
+  order: 1;
+}
+.modal[data-state="open"] {
+  animation: modal-in var(--motion-fast) var(--ease-out);
+}
+.modal[data-state="closed"] {
+  animation: modal-out var(--motion-fast) var(--ease-in);
+}
+.modal-overlay[data-state="open"] {
+  animation: overlay-in var(--motion-fast) var(--ease-out);
+}
+.modal-overlay[data-state="closed"] {
+  animation: overlay-out var(--motion-fast) var(--ease-in);
+}
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.98);
+  }
+}
+@keyframes modal-out {
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.98);
+  }
+}
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes overlay-out {
+  to {
+    opacity: 0;
+  }
 }
 .form {
   display: flex;
@@ -1601,84 +1649,21 @@ pre {
   gap: 8px;
   align-items: center;
 }
-@media (min-width: 1600px) {
-  .workbench {
-    grid-template-columns: 240px minmax(450px, 1fr) 4px var(--inspector-width);
-  }
-  .sidebar-hidden {
-    grid-template-columns: 0 minmax(450px, 1fr) 4px var(--inspector-width);
-  }
-  .canvas-scroll {
-    padding: 40px 50px 70px;
-  }
-  .conversation {
-    padding: 25px;
-  }
-}
-@media (max-width: 1150px) {
-  .workbench {
-    grid-template-columns: 180px minmax(300px, 1fr) 4px 315px;
-  }
-  .edition,
-  .header-center {
-    display: none;
-  }
-  .project-bar {
-    padding: 10px 8px;
-  }
-  .project-bar > .badge {
-    display: none;
-  }
-  .project-actions > .button.ghost {
-    display: none;
-  }
-  .editor-tabs {
-    gap: 12px;
-    padding: 0 10px;
-  }
-  .editor-tabs button {
-    font-size: 12px;
-  }
-  .canvas-scroll {
-    padding: 22px 12px;
-  }
-  .sidebar-hidden {
-    grid-template-columns: 0 minmax(300px, 1fr) 4px 315px;
-  }
-  .artifact-footer > span {
-    display: none;
-  }
-  .dock-progress {
-    display: none;
-  }
-  .task-dock .local-indicator {
-    margin-left: auto;
-  }
-}
+/* Layout lives in workbench.css. These blocks only carry document styling. */
 @media (max-width: 900px) {
-  .workbench {
-    grid-template-columns: 0 minmax(340px, 1fr) 4px 320px;
-  }
-  .project-sidebar {
-    visibility: hidden;
-  }
-  .project-actions .button {
-    font-size: 11px;
-  }
-  .project-title h1 {
-    font-size: 14px;
-  }
   .document-view {
     padding: 16px;
   }
-  .header-actions {
-    gap: 4px;
-  }
-  .task-dock select {
-    max-width: 190px;
-  }
   .content-heading {
     flex-wrap: wrap;
+  }
+}
+@media (max-width: 740px) {
+  body {
+    min-width: 0;
+  }
+  .artifact-footer a {
+    font-size: 10px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1688,117 +1673,35 @@ pre {
     animation: none !important;
     transition: none !important;
   }
-}
-
-@media (max-width: 900px) {
-  .workbench .project-sidebar {
-    position: fixed;
-    left: 0;
-    top: 48px;
-    bottom: 37px;
-    width: 220px;
-    visibility: visible;
-    z-index: 12;
-    box-shadow: var(--shadow-modal);
-  }
-  .workbench.sidebar-hidden .project-sidebar {
-    visibility: hidden;
-  }
-  .project-sidebar .project-list {
-    max-height: 45%;
-  }
-}
-@media (max-width: 740px) {
-  body {
-    min-width: 0;
-  }
-  .workbench,
-  .workbench.sidebar-hidden {
-    height: auto;
-    min-height: 100dvh;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: 48px minmax(420px, 65dvh) minmax(500px, 70dvh) 37px;
-    overflow: visible;
-  }
-  .app-header {
-    grid-row: 1;
-    padding: 0 12px;
-  }
-  .brand strong {
-    font-size: 14px;
-  }
-  .engineering-area {
-    grid-row: 2;
-    grid-column: 1;
-  }
-  .agent-sidebar {
-    grid-row: 3;
-    grid-column: 1;
-    border-top: 1px solid var(--border);
-  }
-  .panel-resizer {
-    display: none;
-  }
-  .task-dock {
-    grid-row: 4;
-    grid-column: 1;
-    position: sticky;
-    bottom: 0;
-    gap: 5px;
-    padding: 0 8px;
-  }
-  .task-dock select {
-    max-width: 180px;
-  }
-  .task-dock .badge {
-    display: none;
-  }
-  .project-actions .button {
-    min-width: 24px;
-    padding: 4px 6px;
-  }
-  .project-title h1 {
-    max-width: 190px;
-  }
-  .conversation {
-    padding: 18px;
-  }
-  .editor-tabs {
-    gap: 13px;
-  }
-  .app-header .language-select {
-    max-width: 95px;
-  }
-  .project-bar {
-    gap: 4px;
-  }
-  .artifact-footer a {
-    font-size: 10px;
-  }
-  .composer textarea {
-    min-height: 90px;
+  html {
+    scroll-behavior: auto !important;
   }
 }
 
 /* Workflow controls: file actions, GX transfer, then utilities. Wrap rather than clip. */
 .project-toolbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 9px 14px; border-bottom: 1px solid var(--border); background: var(--panel); position: relative; z-index: 5; }
 .toolbar-group { display: flex; align-items: center; gap: 5px; min-width: 0; }
-.gx-transfer-group { padding-left: 12px; border-left: 1px solid var(--border); }
+/* GX transfer reads as one segmented control instead of two loose buttons. */
+.gx-transfer-group { display: inline-flex; align-items: center; gap: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-control); overflow: hidden; }
+.gx-transfer-group > .button { border: 0; border-radius: 0; min-height: 28px; }
+.gx-transfer-group > .button + .button { border-left: 1px solid var(--border); }
 .toolbar-secondary { margin-left: auto; }
 .project-toolbar .button { white-space: nowrap; }
 .toolbar-menu { position: relative; }
 .toolbar-menu summary { cursor: pointer; list-style: none; }
 .toolbar-menu summary::-webkit-details-marker { display: none; }
 .toolbar-menu summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.toolbar-menu-content { position: absolute; top: calc(100% + 6px); left: 0; min-width: 240px; max-width: min(340px, 80vw); max-height: 55vh; overflow-y: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-popover); padding: 6px; display: grid; gap: 3px; z-index: 20; }
-.more-menu .toolbar-menu-content { left: auto; right: 0; }
-.toolbar-menu-content > a, .toolbar-menu-content > .button { text-align: left; justify-content: flex-start; width: 100%; padding: 9px 10px; border: 0; border-radius: 4px; }
+.toolbar-menu-content { position: absolute; top: calc(100% + 6px); left: 0; min-width: 240px; max-width: min(340px, 80vw); max-height: 55vh; overflow-y: auto; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-card); box-shadow: var(--shadow-popover); padding: 6px; display: grid; gap: 3px; z-index: 20;
+  transform-origin: top left;
+  transition: opacity var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out);
+  @starting-style { opacity: 0; transform: scale(0.98) translateY(-2px); } }
+.more-menu .toolbar-menu-content { left: auto; right: 0; transform-origin: top right; }
+.toolbar-menu-content > a, .toolbar-menu-content > .button { text-align: left; justify-content: flex-start; width: 100%; padding: 9px 10px; border: 0; border-radius: var(--radius-control); }
 .toolbar-menu-content > a { display: grid; color: var(--text); text-decoration: none; }
 .toolbar-menu-content > a:hover, .toolbar-menu-content > a:focus { background: var(--hover); }
 .toolbar-menu-content small { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
-.export-menu > summary { border-color: var(--accent); color: var(--accent); }
-.approval-mode-indicator { background: var(--panel); border: 1px solid var(--border); border-radius: 5px; display: flex; gap: 6px; align-items: center; padding: 5px 9px; font-size: 12px; white-space: nowrap; }
-.approval-mode-indicator.full-access { border-style: dashed; }
+.approval-mode-indicator { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-pill); display: flex; gap: 6px; align-items: center; padding: 5px 9px; font-size: 12px; white-space: nowrap; }
+.approval-mode-indicator.full-access { border-style: dashed; border-color: var(--warn-border); color: var(--warn); }
 .settings-tabs { display: flex; gap: 8px; padding: 0 0 16px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
 .approval-settings { display: grid; gap: 14px; }
 .approval-settings fieldset { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; grid-auto-rows: 1fr; gap: 9px; }
@@ -1812,12 +1715,10 @@ pre {
 .approval-consent { display: flex; align-items: flex-start; gap: 8px; }
 @media (max-width: 1150px) {
   .project-toolbar { padding: 8px; gap: 7px; }
-  .gx-transfer-group { padding-left: 7px; }
   .project-toolbar .button { font-size: 12px; padding-left: 9px; padding-right: 9px; }
 }
 @media (max-width: 740px) {
   .project-toolbar { gap: 7px; }
-  .gx-transfer-group { border-left: 0; padding-left: 0; }
   .toolbar-menu-content { min-width: 200px; }
   .approval-mode-indicator { padding: 4px; font-size: 11px; }
 }
@@ -1839,6 +1740,48 @@ fieldset.settings-form { border: 0; padding: 0; min-width: 0; }
 .model-switcher { display: grid; gap: 3px; max-width: 460px; min-width: 0; }
 .model-switcher .form-actions { display: flex; align-items: center; gap: 6px; margin: 0; }
 .model-switcher select { max-width: 280px; min-width: 0; }
+/* The model chooser is a pill that opens the shared menu card, not a native select. */
+.model-switcher .model-picker-pill {
+  max-width: 280px;
+  min-width: 0;
+}
+.model-switcher .model-picker-pill > summary {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 0 20px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+}
+.model-switcher .model-picker-pill > summary:hover,
+.model-switcher .model-picker-pill[open] > summary {
+  background: var(--hover);
+}
+.model-switcher .model-picker-pill > summary::after {
+  content: "";
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin-top: -4px;
+  border-right: 1px solid var(--muted);
+  border-bottom: 1px solid var(--muted);
+  transform: rotate(45deg);
+  pointer-events: none;
+  transition: transform var(--motion-quick) var(--ease-out);
+}
+.model-switcher .model-picker-pill[open] > summary::after {
+  transform: rotate(225deg);
+}
+.model-switcher .model-picker-pill .select-value {
+  max-width: 240px;
+}
 .model-switcher small { color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
 .request-summary { overflow-x: auto; }
 .request-summary table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -1853,9 +1796,56 @@ fieldset.settings-form { border: 0; padding: 0; min-width: 0; }
 .model-source-switch .button { flex: 1; min-height: 32px; }
 .model-source-switch .button[aria-pressed="true"] { background: var(--panel); border-color: var(--border); color: var(--text); }
 .model-field { display: grid; gap: 6px; }
-.model-picker { display: flex; gap: 8px; }
-.model-picker input { flex: 1; min-width: 0; }
+.model-picker { display: flex; align-items: stretch; gap: 8px; }
+.model-picker > input { flex: 1; min-width: 0; }
 .model-picker .button { flex-shrink: 0; }
+/* Discovered models arrive as a card menu so the list cannot pop in unstyled.
+ * The trigger is its own control between the field and the fetch button: an
+ * arrow drawn inside the text field reads as an overflow of the field itself. */
+.model-choices {
+  display: flex;
+  flex-shrink: 0;
+  align-self: stretch;
+}
+.model-choices-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--chrome);
+  color: var(--muted);
+}
+.model-choices-trigger:hover,
+.model-choices[open] > summary {
+  background: var(--hover);
+  color: var(--text);
+}
+.model-choices .popover-content {
+  right: 0;
+  left: auto;
+  min-width: 240px;
+  max-width: min(320px, 60vw);
+  max-height: 240px;
+  overflow-y: auto;
+}
+/* Settings tabs keep their drafts while hidden, so the incoming panel fades in
+ * instead of replacing the previous one without a transition. */
+.settings-panel[data-active] {
+  animation: settings-panel-in var(--motion-panel) var(--ease-out) both;
+}
+@keyframes settings-panel-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+.settings-loading { display: grid; gap: 10px; }
+.settings-loading .skeleton-row {
+  height: 34px;
+  border-radius: var(--radius-control);
+  background: var(--soft);
+}
 .more-settings, .model-debug { border-top: 1px solid var(--border); padding-top: 10px; }
 .more-settings > summary .badge { margin-left: 8px; }
 .more-settings-body, .model-debug[open] { display: grid; gap: 12px; }

@@ -1892,6 +1892,11 @@ export interface components {
             plan_id?: string | null;
             /** Project Id */
             project_id: string;
+            /**
+             * Project Path
+             * @description CSV 导入时当前 GX Works2 打开的 .gxw 完整绝对路径；标题被截断或只有文件名时须提供并核对文件占用，不会打开或切换工程。
+             */
+            project_path?: string | null;
             /** Request Id */
             request_id: string;
             /** Version Id */

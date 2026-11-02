@@ -136,6 +136,8 @@ const words: Record<string, string> = {
   "流程步骤": "Process steps",
   "填写流程步骤": "Enter process steps",
   "确认发送到 GX": "Confirm send to GX",
+  "当前 GXW 完整路径（可选）": "Full path of the current GXW project (optional)",
+  "窗口标题被截断或只有文件名时，请填写 GX Works2 当前打开的工程完整路径；不会打开或切换工程。": "If the window title is shortened or shows only a file name, enter the full path of the project currently open in GX Works2. This does not open or switch projects.",
   "将覆盖 GX Works2 当前 MAIN 和相关软元件注释，已有 GXW 文件会自动备份。": "This will overwrite the current MAIN and related device comments in GX Works2. The existing GXW file will be backed up automatically.",
   "助手": "Assistant",
   "创建第一个程序": "Create your first program",
@@ -959,6 +961,12 @@ const words: Record<string, string> = {
   "设为当前版本": "Activate version",
   "梯形图": "Ladder",
   "诊断": "Diagnostics",
+  "验证": "Verification",
+  "上下文": "Context",
+  "网络详情": "Network detail",
+  "软元件注释": "Device comments",
+  "指令": "Instructions",
+  "重置": "Reset",
   "检查报告": "Reports",
   "仿真记录": "Simulation",
   "导入 GX": "Import to GX",
@@ -1112,6 +1120,7 @@ const states: Record<string, [string, string, string]> = {
   loading_result: ["读取结果中", "Loading result", "結果読み込み中"],
   result_unavailable: ["结果不可用", "Result unavailable", "結果取得不可"],
   contract_mismatch: ["规格冲突", "Specification mismatch", "仕様の不一致"],
+  unverified: ["未核验", "Unverified", "未検証"],
 };
 export const statusText = (locale: Locale, state: string) =>
   states[state]?.[locale === "zh-CN" ? 0 : locale === "en" ? 1 : 2] || state;
@@ -1127,6 +1136,6 @@ export const statusTone = (state: string) =>
     ? "bad"
     : ["saved", "accepted", "passed", "completed", "imported"].includes(state)
       ? "good"
-      : ["pending", "queued", "cancelling", "contract_mismatch", "candidate_ready", "needs_input"].includes(state)
+      : ["pending", "queued", "cancelling", "contract_mismatch", "candidate_ready", "needs_input", "unverified"].includes(state)
         ? "warn"
         : "neutral";

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import mimetypes
 import re
 import uuid
@@ -23,6 +24,10 @@ from .workspace import artifact_relative_path
 
 class ProjectError(ValueError):
     pass
+
+
+class ProjectNotFoundError(KeyError):
+    """An indexed project record is absent, rather than invalid or unreadable."""
 
 
 def record_id(value: str) -> str:
@@ -66,6 +71,8 @@ class ProjectService:
         record_id(project_id)
         contained(self.store.project_path(project_id), self.workspace)
         project = self.store.get_project(project_id)
+        if project is None:
+            raise ProjectNotFoundError("Project not found")
         if not isinstance(project, dict) or project.get("id") != project_id:
             raise KeyError("Project not found")
         return project
@@ -75,7 +82,10 @@ class ProjectService:
         index = self.store._load_index()
         result = []
         for project_id in index.get("projects", []):
-            result.append(self.project(project_id, detail=False))
+            try:
+                result.append(self.project(project_id, detail=False))
+            except ProjectNotFoundError:
+                logging.getLogger(__name__).warning("Indexed project record is missing: %s", project_id)
         return sorted(result, key=lambda p: p.get("updated_at", ""), reverse=True)
 
     def project(self, project_id: str, *, detail=True) -> dict:
