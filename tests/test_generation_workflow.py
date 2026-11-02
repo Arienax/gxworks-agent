@@ -144,6 +144,166 @@ def test_edit_generation_full_json_remains_accepted_without_retry(tmp_path):
     assert json.loads((tmp_path / "ladder.json").read_text(encoding="utf-8")) == full
 
 
+@pytest.mark.parametrize('strict', [False, True])
+@pytest.mark.parametrize('edit_kind', ['logic', 'comments', 'delete'])
+def test_compact_edit_one_request_preserves_other_rungs_and_exports_csv(monkeypatch, tmp_path, strict, edit_kind):
+    from model_profile_fixtures import offline_runtime_profile
+    from model_runtime.contract import contract_scope
+    from application.generation_wire import expand_context_document
+    from jsonschema import Draft202012Validator
+    from plc.ir import lower_rung_instructions
+
+    base = _ladder()
+    first = base['rungs'][0]
+    first['rung_id'] = 7
+    other = copy.deepcopy(first)
+    other['rung_id'] = 21
+    other['branches'][0]['inputs'][0]['address'] = 'X2'
+    other['branches'][0]['outputs'][0]['address'] = 'Y2'
+    base['rungs'].append(other)
+    patch = {'mode': 'partial', 'r': [], 'device_comments': [], 'delete_rung_ids': []}
+    if edit_kind == 'logic':
+        patch['r'] = [{'rung_id': 7, 'c': [], 'b': [{'i': ['NC X0'], 'o': ['COIL Y0']}]}]
+    elif edit_kind == 'comments':
+        patch['device_comments'] = [{'address': 'Y0', 'comment': '电机'}]
+    else:
+        patch['delete_rung_ids'] = [7]
+    class Provider:
+        def __init__(self):
+            self.profile = offline_runtime_profile()
+            if strict:
+                self.profile['capabilityContract'] = {'schema_version': 3,
+                    'scope': contract_scope(self.profile, {}, model='offline', api_key=None),
+                    'parameters': {}, 'capabilities': {'structured_output': {
+                        'status': 'supported', 'source': 'manual', 'modes': ['json_schema']}}}
+            self.requests = []
+        def stream(self, request):
+            self.requests.append(request)
+            context = expand_context_document(json.loads(request.messages[1].content))
+            assert context['current_program']['rungs'][0]['rung_id'] == 7
+            if strict:
+                assert 'output_schema' not in context
+                schema = request.options['response_format']['json_schema']['schema']
+            else:
+                schema = context['output_schema']
+            assert 'r' in schema['properties'] and 'rungs' not in schema['properties']
+            Draft202012Validator(schema).validate(patch)
+            yield TextDelta(json.dumps(patch, ensure_ascii=False))
+    provider = Provider()
+    monkeypatch.setattr(api, '_build_knowledge_context', lambda *a, **k: '')
+    before = copy.deepcopy(base)
+    result = GenerationWorkflow(GenerationRequest('修改梯级7', previous_json=base, model_name='offline'),
+        tmp_path, dependencies=GenerationDependencies(provider=provider)).run()
+    assert len(provider.requests) == 1 and provider.requests[0].max_retries == 0
+    assert result['repair_attempts'] == 0 and base == before
+    saved = json.loads((tmp_path / 'ladder.json').read_text(encoding='utf-8'))
+    assert saved['rungs'][-1] == other
+    if edit_kind == 'logic':
+        assert [(row['op'], row['args']) for row in lower_rung_instructions(saved['rungs'][0])] == [
+            ('LDI', ['X0']), ('OUT', ['Y0'])]
+    elif edit_kind == 'comments':
+        assert saved['rungs'] == base['rungs'] and saved['device_comments']['Y0'] == '电机'
+    else:
+        assert [row['rung_id'] for row in saved['rungs']] == [21]
+    csv = (tmp_path / result['artifacts']['program_csv']).read_text(encoding='utf-16')
+    assert 'Y002' in csv and ('LDI' in csv) == (edit_kind == 'logic')
+
+
+@pytest.mark.parametrize('strict', [False, True])
+@pytest.mark.parametrize('mode', ['direct', 'edit'])
+def test_compact_complex_request_reaches_csv_once(monkeypatch, tmp_path, strict, mode):
+    from gxworks2.csv_importer import parse_gxworks2_csv
+    import application.generation_agent as agent
+    from model_profile_fixtures import offline_runtime_profile
+    from model_runtime.contract import contract_scope
+    from jsonschema import Draft202012Validator
+
+    rows = [
+        {'c': ['NO M0'], 'b': [
+            {'i': [{'or': [['NO M1', 'NC M2'], ['>= D0 K5']]}],
+             'o': ['MOV K-7 D10', 'BMOV D20 D100 K8']},
+            {'i': ['NC M3'], 'o': ['SFTL M100 M1000 K128 K1']},
+            {'i': [], 'o': ['COIL M200']}]},
+        {'c': [], 'b': [{'i': ['P M4'], 'o': ['DMOV D0Z0 D200', 'COIL M201']}]},
+    ]
+    program = {'r': rows, 'device_comments': []}
+    base = _ladder()
+    base['rungs'][0]['rung_id'] = 21
+    before = copy.deepcopy(base)
+    if mode == 'edit':
+        program.update(mode='partial', delete_rung_ids=[])
+        for row, identity in zip(rows, [7, 31]):
+            row['rung_id'] = identity
+        answer = program
+    else:
+        answer = {'result': {'program': program, 'decisions': [], 'open_items': []}}
+
+    class Provider:
+        def __init__(self):
+            self.profile = offline_runtime_profile()
+            if strict:
+                self.profile['capabilityContract'] = {'schema_version': 3,
+                    'scope': contract_scope(self.profile, {}, model='offline', api_key=None),
+                    'parameters': {}, 'capabilities': {'structured_output': {
+                        'status': 'supported', 'source': 'manual', 'modes': ['json_schema']}}}
+            self.requests = []
+
+        def stream(self, request):
+            self.requests.append(request)
+            if strict:
+                Draft202012Validator(request.options['response_format']['json_schema']['schema']).validate(answer)
+            yield TextDelta(json.dumps(answer, ensure_ascii=False))
+
+    monkeypatch.setattr(api, '_build_knowledge_context', lambda *a, **k: '')
+    monkeypatch.setattr(agent, '_build_knowledge_context', lambda *a, **k: '')
+    provider = Provider()
+    result = GenerationWorkflow(GenerationRequest('生成串并联多输出程序', model_name='offline',
+        previous_json=base if mode == 'edit' else None, direct_generation=mode == 'direct'),
+        tmp_path, dependencies=GenerationDependencies(provider=provider)).run()
+    assert len(provider.requests) == 1 and provider.requests[0].max_retries == 0
+    assert result['repair_attempts'] == 0
+    assert result['validation']['status'] == 'candidate_ready'
+    saved = json.loads((tmp_path / 'ladder.json').read_text(encoding='utf-8'))
+    expected = ['LD M0', 'MPS', 'LD M1', 'ANI M2', 'OR>= D0 K5', 'ANB',
+        'MOV K-7 D10', 'BMOV D20 D100 K8', 'MRD', 'ANI M3',
+        'SFTL M100 M1000 K128 K1', 'MPP', 'OUT M200']
+    if mode == 'edit':
+        assert base == before
+        assert [rung['rung_id'] for rung in saved['rungs']] == [7, 21, 31]
+        assert saved['rungs'][1] == base['rungs'][0]
+        expected.extend(['LD X000', 'OUT Y000'])
+    expected.extend(['LDP M4', 'DMOV D0Z0 D200', 'OUT M201'])
+    imported = parse_gxworks2_csv(tmp_path / result['artifacts']['program_csv'],
+                                 tmp_path / result['artifacts']['comment_csv'])
+    assert [' '.join([row['op'], *row['args']])
+            for network in imported.network_instructions for row in network] == expected
+
+
+@pytest.mark.parametrize('row', [
+    pytest.param({'c': ['NO M0'], 'b': [{'i': [], 'o': ['ZRST M100']}]}, id='missing-operand'),
+    pytest.param({'c': ['NO M0'], 'b': [{'i': [], 'o': ['ZRST M100 M115 M120']}]}, id='extra-operand'),
+    pytest.param({'c': ['NO M0'], 'b': [{'i': [], 'o': ['ADD D0 K1 K7']}]}, id='literal-destination'),
+    pytest.param({'c': [{'or': [['NO M0'], ['NO M1']]}], 'b': [
+        {'i': [], 'o': ['COIL M100']}, {'i': [], 'o': ['COIL M101']}]}, id='parallel-common-to-multiple-outputs'),
+    pytest.param({'c': [], 'b': [{'i': [{'or': [[{'or': [['NO M0'], ['NO M1']]}], ['NO M2']]}],
+                                 'o': ['COIL M100']}]}, id='nested-parallel'),
+])
+def test_compact_invalid_operands_and_parallel_shapes_stop_before_export(tmp_path, row):
+    from application.compact_protocol import CompactProtocolError
+    patch = {'mode': 'partial', 'r': [{'rung_id': 1, **row}], 'delete_rung_ids': [], 'device_comments': []}
+    calls = []
+    def stream(*args, **kwargs):
+        calls.append(kwargs)
+        return '', json.dumps(patch)
+    workflow = GenerationWorkflow(GenerationRequest('修改梯级', previous_json=_ladder(), model_name='offline'),
+        tmp_path, dependencies=GenerationDependencies(stream_response=stream,
+            generate_json=lambda *a, **k: pytest.fail('Invalid edit must not silently retry')))
+    with pytest.raises((GenerationValidationError, CompactProtocolError)):
+        workflow.run()
+    assert len(calls) == 1
+    assert not list(tmp_path.iterdir())
+
+
 @pytest.mark.parametrize("mutation", ["delete", "rung", "device", "comment", "full"])
 def test_contract_repair_rejects_scope_escape_without_hidden_retry(tmp_path, mutation):
     ladder = _ladder()

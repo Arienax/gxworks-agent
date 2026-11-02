@@ -627,6 +627,9 @@ def test_direct_delivers_header_contract_in_prompt_and_supported_wire_schema(mon
     assert json.dumps(example, separators=(",", ":")) in prompt
     wire = request.options["response_format"]
     assert wire["type"] == modes[0]
+    from application.generation_wire import expand_context_document
+    payload = expand_context_document(json.loads(request.messages[-1].content))
+    assert ('output_schema' in payload) == (modes != ['json_schema'])
     if modes == ["json_schema"]:
         schema = wire["json_schema"]["schema"]
         assert schema["type"] == "object" and "anyOf" not in schema
@@ -640,6 +643,254 @@ def test_direct_delivers_header_contract_in_prompt_and_supported_wire_schema(mon
         annotation = program["properties"]["device_comments"]["items"]
         assert annotation["additionalProperties"] is False
         assert set(annotation["required"]) == set(annotation["properties"])
+
+
+@pytest.mark.parametrize('direct', [False, True])
+@pytest.mark.parametrize('strict', [False, True])
+def test_construction_reference_uses_one_generation_schema(monkeypatch, direct, strict):
+    import application.generation_agent as agent
+    import application.model_api as api
+    from application.generation_wire import expand_context_document
+    from jsonschema import Draft202012Validator
+
+    spec = {'behavior_constraints': [{'id': 'boot', 'kind': 'initialize',
+        'status': 'confirmed', 'provenance': {'source': 'user_confirmed', 'evidence': ['initialize M10']},
+        'values': {'M10': False}, 'execution_context': {'program_type': 'scan'}}],
+        'selected_approach': {'construction_plan': {'instances': [
+            {'id': 'boot_instance', 'requirement_id': 'boot', 'method': 'first_scan_isolation'}]}}}
+    program = {'r': [{'construct': 'boot_instance'},
+        {'c': ['NO X0'], 'b': [{'i': [], 'o': ['COIL Y0']}]}], 'device_comments': []}
+    answer = {'result': {'program': program, 'decisions': [], 'open_items': []}} if direct else program
+    captured = []
+    def request(messages, **kwargs):
+        captured.append((messages, kwargs))
+        payload = expand_context_document(json.loads(messages[-1]['content']))
+        assert 'boot_instance' in payload['construction_bindings']
+        expected = agent._generation_schema(spec, direct=direct)
+        if strict:
+            assert 'output_schema' not in payload
+            assert kwargs['options']['response_format']['json_schema']['schema'] == expected
+        else:
+            assert payload['output_schema'] == expected
+        Draft202012Validator(expected).validate(answer)
+        return SimpleNamespace(message=SimpleNamespace(content=json.dumps(answer)))
+    monkeypatch.setattr(agent, '_build_knowledge_context', lambda *a, **k: '')
+    monkeypatch.setattr(api, 'request_model', request)
+    provider = OneShotProvider()
+    provider.profile = _profile_declaring_structured_output(['json_schema' if strict else 'json_object'])
+    with api.provider_scope(provider):
+        result = (agent.generate_direct_ladder('Initialize M10, X0 controls Y0', confirmed_spec=spec)
+                  if direct else agent.generate_confirmed_ladder(spec))
+    assert len(captured) == 1 and result['model_calls'] == 1
+    assert result['ladder']['rungs'] and not result['construction_binding']['reference_violations']
+
+
+def test_direct_image_keeps_compiled_requirement_facts_and_knowledge(monkeypatch):
+    import application.generation_agent as agent
+    import application.model_api as api
+    from application.generation_wire import expand_context_document
+    from model_runtime.provider import ImageAttachment, UserMessage
+
+    captured = []
+    image = ImageAttachment('diagram.png', 'image/png', b'image-content')
+    monkeypatch.setattr(agent, '_build_knowledge_context', lambda *a, **k: 'KEEP_KNOWLEDGE_CONTEXT')
+    def request(messages, **kwargs):
+        captured.append(messages)
+        return SimpleNamespace(message=SimpleNamespace(content=json.dumps(
+            {'r': [{'c': ['NO X0'], 'b': [{'i': [], 'o': ['COIL Y0']}]}], 'device_comments': []})))
+    monkeypatch.setattr(api, 'request_model', request)
+    with api.provider_scope(OneShotProvider()):
+        agent.generate_direct_ladder('X0 controls Y0', confirmed_spec=_spec(), image_attachments=[image])
+    assert len(captured) == 1
+    message = captured[0][-1]
+    assert isinstance(message, UserMessage) and message.images == (image,)
+    payload = expand_context_document(json.loads(message.content))
+    assert payload['request'] == 'X0 controls Y0'
+    assert payload['confirmed_spec']['io_table']
+    assert 'KEEP_KNOWLEDGE_CONTEXT' in json.dumps(payload['knowledge'])
+    assert payload['output_schema']['properties']['result']
+
+
+def test_compact_partial_preserves_ids_instruction_order_and_unedited_rungs():
+    from hypothesis import given, settings, strategies as st
+    from application.compact_protocol import expand_compact_partial
+    from plc.candidate_repair import materialize_partial
+    from plc.ir import lower_rung_instructions
+
+    @settings(max_examples=35, deadline=None)
+    @given(identity=st.integers(min_value=2, max_value=1000), number=st.integers(min_value=0, max_value=4095),
+           contact=st.sampled_from([('NO', 'LD'), ('NC', 'LDI'), ('P', 'LDP'), ('F', 'LDF')]))
+    def check(identity, number, contact):
+        base = _ladder()
+        other = copy.deepcopy(base['rungs'][0])
+        other['rung_id'] = identity
+        base['rungs'].append(other)
+        patch = {'mode': 'partial', 'r': [{'rung_id': identity, 'c': [],
+            'b': [{'i': [f'{contact[0]} X1'], 'o': [f'MOV K{number} D0', 'COIL M5']}]}],
+            'device_comments': [], 'delete_rung_ids': []}
+        before = copy.deepcopy((base, patch))
+        merged = materialize_partial(base, expand_compact_partial(patch))
+        assert [row['rung_id'] for row in merged['rungs']] == [1, identity]
+        assert merged['rungs'][0] == base['rungs'][0]
+        assert merged['device_comments'] == base['device_comments']
+        instructions = lower_rung_instructions(merged['rungs'][1])
+        assert [(row['op'], row['args']) for row in instructions] == [
+            (contact[1], ['X1']), ('MOV', [f'K{number}', 'D0']), ('OUT', ['M5'])]
+        assert (base, patch) == before
+    check()
+
+
+def _expand_wire_case(row, partial):
+    from application.compact_protocol import expand_compact_partial
+    payload = {'r': [copy.deepcopy(row)], 'device_comments': []}
+    if partial:
+        payload.update(mode='partial', delete_rung_ids=[])
+        payload['r'][0]['rung_id'] = 37
+        result = expand_compact_partial(payload)
+        assert result['rungs'][0]['rung_id'] == 37
+        return {'rungs': result['rungs'], 'device_comments': result['device_comments']}
+    return expand_compact_ladder(payload)
+
+
+def _assert_wire_csv_instructions(tmp_path, ladder, expected):
+    from gxworks2.csv_export import generate_gx_works2_csv
+    from gxworks2.csv_importer import parse_gxworks2_csv
+    from plc.ir import lower_rung_instructions
+    from plc.validation import validate_ladder_full
+    validate_ladder_full(ladder, plc_model='FX3U')
+    lowered = [' '.join([item['op'], *item['args']])
+               for rung in ladder['rungs'] for item in lower_rung_instructions(rung)]
+    assert lowered == expected
+    program, comments = tmp_path / 'program.csv', tmp_path / 'comments.csv'
+    assert generate_gx_works2_csv(ladder, program, comments, plc_model='FX3U')
+    imported = parse_gxworks2_csv(program, comments)
+    actual = [' '.join([row['op'], *row['args']])
+              for network in imported.network_instructions for row in network]
+    assert actual == expected
+
+
+@pytest.mark.parametrize('partial', [False, True], ids=['new', 'edit'])
+@pytest.mark.parametrize('output,expected', [
+    ('MOV K-7 D10', 'MOV K-7 D10'),
+    ('MOV H00FF D10', 'MOV H00FF D10'),
+    ('MOV D0 D10', 'MOV D0 D10'),
+    ('MOV K4M100 D10', 'MOV K4M100 D10'),
+    ('MOV D0Z0 D10', 'MOV D0Z0 D10'),
+    ('DMOV K123456 D10', 'DMOV K123456 D10'),
+    ('ADD D0 K5 D10', 'ADD D0 K5 D10'),
+    ('DADD D0 D2 D10', 'DADD D0 D2 D10'),
+    ('BMOV D0 D100 K8', 'BMOV D0 D100 K8'),
+    ('CMP D0 K10 M20', 'CMP D0 K10 M20'),
+    ('ZRST M100 M115', 'ZRST M100 M115'),
+    ('SFTL M100 M1000 K128 K1', 'SFTL M100 M1000 K128 K1'),
+    ('INC D10', 'INC D10'),
+    ('SET M10', 'SET M10'),
+    ('RST M10', 'RST M10'),
+    ('PLS M10', 'PLS M10'),
+    ('PLF M10', 'PLF M10'),
+    ('TIMER T0 K10', 'OUT T0 K10'),
+    ('COUNTER C0 K3', 'OUT C0 K3'),
+])
+def test_compact_operand_forms_survive_ir_and_csv(tmp_path, partial, output, expected):
+    ladder = _expand_wire_case({'c': ['NO M0'], 'b': [{'i': [], 'o': [output]}]}, partial)
+    _assert_wire_csv_instructions(tmp_path, ladder, ['LD M0', expected])
+
+
+@pytest.mark.parametrize('partial', [False, True], ids=['new', 'edit'])
+@pytest.mark.parametrize('row,expected', [
+    pytest.param({'c': [], 'b': [{'i': [{'or': [['NO M0'], ['NC M1'], ['NO M2']]}], 'o': ['COIL M100']}]},
+        ['LD M0', 'ORI M1', 'OR M2', 'OUT M100'], id='three-single-arms'),
+    pytest.param({'c': [], 'b': [{'i': [{'or': [['NO M0', 'NC M1'], ['NO M2', '>= D0 K5']]}], 'o': ['COIL M100']}]},
+        ['LD M0', 'ANI M1', 'LD M2', 'AND>= D0 K5', 'ORB', 'OUT M100'], id='series-arms-with-compare'),
+    pytest.param({'c': [], 'b': [{'i': ['NO M0', {'or': [['NC M1'], ['NO M2', 'NO M3']]}, 'NC M4'], 'o': ['COIL M100']}]},
+        ['LD M0', 'LDI M1', 'LD M2', 'AND M3', 'ORB', 'ANB', 'ANI M4', 'OUT M100'], id='series-around-parallel'),
+    pytest.param({'c': [], 'b': [{'i': [{'or': [['NO M0'], ['NC M1']]}, {'or': [['NO M2'], ['NC M3']]}], 'o': ['MOV K1 D10', 'COIL M100']}]},
+        ['LD M0', 'ORI M1', 'LD M2', 'ORI M3', 'ANB', 'MOV K1 D10', 'OUT M100'], id='two-parallel-blocks'),
+    pytest.param({'c': ['NO M0', 'NC M1'], 'b': [
+        {'i': ['NO M2'], 'o': ['MOV K-7 D10']},
+        {'i': ['NC M3'], 'o': ['BMOV D20 D100 K8']},
+        {'i': [], 'o': ['TIMER T0 K10', 'COIL M100']}]},
+        ['LD M0', 'ANI M1', 'MPS', 'AND M2', 'MOV K-7 D10', 'MRD', 'ANI M3',
+         'BMOV D20 D100 K8', 'MPP', 'OUT T0 K10', 'OUT M100'], id='shared-three-output-branches'),
+    pytest.param({'c': ['NO M0'], 'b': [
+        {'i': [{'or': [['NO M1', 'NC M2'], ['NO M3']]}], 'o': ['COIL M100']},
+        {'i': ['>= D0 K5'], 'o': ['ADD D0 K1 D10']}]},
+        ['LD M0', 'MPS', 'LD M1', 'ANI M2', 'OR M3', 'ANB', 'OUT M100',
+         'MPP', 'AND>= D0 K5', 'ADD D0 K1 D10'], id='shared-input-and-parallel-branch'),
+    pytest.param({'c': [], 'b': [{'i': ['P M0'], 'o': ['PLS M100']}, {'i': ['F M1'], 'o': ['PLF M101']}]},
+        ['LDP M0', 'PLS M100', 'LDF M1', 'PLF M101'], id='independent-edge-branches'),
+    pytest.param({'c': [], 'b': [{'i': [{'or': [['P M0'], ['F M1'], ['>= D0 K5']]}], 'o': ['COUNTER C0 K3']}]},
+        ['LDP M0', 'ORF M1', 'OR>= D0 K5', 'OUT C0 K3'], id='edge-and-compare-parallel'),
+])
+def test_compact_parallel_topologies_preserve_instruction_order_and_csv(tmp_path, partial, row, expected):
+    _assert_wire_csv_instructions(tmp_path, _expand_wire_case(row, partial), expected)
+
+
+def test_compact_parallel_boolean_paths_preserve_csv_roundtrip_behavior():
+    import tempfile
+    from pathlib import Path
+    from hypothesis import given, settings, strategies as st
+    from gxworks2.csv_export import generate_gx_works2_csv
+    from gxworks2.csv_importer import parse_gxworks2_csv
+    from simulator.bounded import ScanMachine
+
+    @settings(max_examples=40, deadline=None)
+    @given(arms=st.lists(st.lists(st.booleans(), min_size=1, max_size=4), min_size=2, max_size=6))
+    def check(arms):
+        # Each generated arm has a known conducting assignment. Independently
+        # block every arm, then open each arm alone: catches AND/OR inversion,
+        # missing branches and accidental reliance on a different branch.
+        paths, conducting, blockers = [], {}, []
+        index = 10
+        for arm in arms:
+            path = []
+            for normally_open in arm:
+                address = f'M{index}'
+                index += 1
+                path.append(('NO ' if normally_open else 'NC ') + address)
+                conducting[address] = normally_open
+            paths.append(path)
+            blockers.append(path[0].split()[1])
+        ladder = _expand_wire_case({'c': ['NO M0'], 'b': [
+            {'i': [{'or': paths}, 'NC M1'], 'o': ['COIL M100']},
+            {'i': ['NO M2'], 'o': ['COIL M101']}]}, partial=True)
+        with tempfile.TemporaryDirectory() as directory:
+            program, comments = Path(directory) / 'p.csv', Path(directory) / 'c.csv'
+            assert generate_gx_works2_csv(ladder, program, comments, plc_model='FX3U')
+            roundtrip = parse_gxworks2_csv(program, comments).ladder
+        all_blocked = dict(conducting)
+        for address in blockers:
+            all_blocked[address] = not conducting[address]
+        states = [(all_blocked, False), (conducting, True)]
+        states.extend(({**all_blocked, address: conducting[address]}, True) for address in blockers)
+        for candidate in (ladder, roundtrip):
+            machine = ScanMachine(candidate, plc_model='FX3U', initial={}, execution_context={})
+            for bits, enabled in states:
+                for common, stop, second in [(True, False, False), (False, False, True), (True, True, True)]:
+                    after = machine.scan({'inputs': {**bits, 'M0': common, 'M1': stop, 'M2': second}})['after']
+                    assert bool(after['M100']) == (common and enabled and not stop)
+                    assert bool(after['M101']) == (common and second)
+            assert not machine.gaps
+    check()
+
+
+@pytest.mark.parametrize('mutation', ['missing_id', 'boolean_id', 'mixed_shapes', 'missing_outputs', 'duplicate_id'])
+def test_compact_partial_rejects_ambiguous_or_invalid_edits(mutation):
+    from application.compact_protocol import canonical_compact_example, expand_compact_partial
+    from plc.candidate_repair import materialize_partial, RepairAssemblyError
+    patch = canonical_compact_example(partial=True)
+    if mutation == 'missing_id':
+        patch['r'][0].pop('rung_id')
+    elif mutation == 'boolean_id':
+        patch['r'][0]['rung_id'] = True
+    elif mutation == 'mixed_shapes':
+        patch['rungs'] = _ladder()['rungs']
+    elif mutation == 'missing_outputs':
+        patch['r'][0]['b'][0]['o'] = []
+    else:
+        patch['r'].append(copy.deepcopy(patch['r'][0]))
+    with pytest.raises((CompactProtocolError, RepairAssemblyError)):
+        materialize_partial(_ladder(), expand_compact_partial(patch))
 
 
 @pytest.mark.parametrize("notes", [[], ["采用 M0 作为内部状态，用户可主动调整。"]])

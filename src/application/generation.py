@@ -540,6 +540,9 @@ class GenerationWorkflow:
                 if not isinstance(parsed, dict):
                     raise PLCJsonValidationError("$: expected JSON object")
                 if self.target_mode == "ladder":
+                    if parsed.get('mode') == 'partial' and 'r' in parsed and not repair_call:
+                        from application.compact_protocol import expand_compact_partial
+                        parsed = expand_compact_partial(parsed)
                     if self.repair_mode and isinstance(self.repair_plan, dict) and self.repair_plan.get("mode") == "field_patch":
                         from application.field_repair import apply as apply_field_patch
                         parsed = apply_field_patch(self.previous_json, parsed, self.repair_plan)

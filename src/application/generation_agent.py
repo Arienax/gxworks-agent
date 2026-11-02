@@ -17,7 +17,7 @@ from application.compact_protocol import (
     PROTOCOL_VERSION, CompactProtocolError, compact_response_schema as _compact_response_schema,
     decode_compact as _json_object, expand_compact_ladder as _expand_compact_ladder,
     normalize_compact, _simple_input, _branch_input, _output, _confirmed_comments,
-    compact_protocol_prompt, compact_capability_prompt,
+    compact_protocol_prompt, compact_capability_prompt, compact_generation_prompt,
 )
 
 from application.construction_examples import prepare_construction_examples
@@ -79,22 +79,17 @@ from application.confirmed_generation_context import (
 
 _COMPACT_RESPONSE = ResponseContract("compact_ladder", "json")
 
-_COMPACT_PROTOCOL = """# Agent B compact ladder protocol
-实现已确认规格，返回一个紧凑梯级计划。
-""" + CYCLIC_ASSIGNMENT_PROMPT + """
-
-- 实现已确认 I/O、参数、电平及 selected_approach.generation_contract；unverified_constraints 不升级为硬约束。
-- selected_approach.generation_contract 或 implementation_preferences 的 instruction_instances 中，opcode 与 operands 必须逐项原样使用，不省略、替换或重排。
-- NO 检查位=1，NC 检查位=0；active_when 与 run_permit_when 使用下方绑定谓词。
-- 不新增未确认 X/Y、停止/急停、硬件或模块寄存器。内部状态用普通 M/D/T/C；特殊软元件遵守本型号证据及显式禁用。
-- COIL 每扫描写导通真假；同一普通 Y/M 一个 COIL，完整条件放在同一输入路径，输出 branch 不是输入 OR。
-- 比较输入只比较；算术先用应用指令写入寄存器。
-- TIMER 使用 T，COUNTER 使用 C；普通定时器须有可变为 FALSE 的使能/复位路径。
-- 一次事件使用 P/F 边沿，持续条件使用电平；两者不互换。
-""" + compact_protocol_prompt()
+_COMPACT_PROTOCOL = compact_generation_prompt()
 
 
-def _compact_wire_renderer(plc_model, *, example_block=None, direct=False):
+def _generation_schema(projected, *, direct=False):
+    allow_construct = bool((projected.get('selected_approach') or {}).get('construction_plan')) and _construction_delivery() == 'instantiate'
+    return (direct_response_schema(allow_construct=allow_construct) if direct else
+            _compact_response_schema(allow_construct=allow_construct))
+
+
+def _compact_wire_renderer(plc_model, *, example_block=None, direct=False,
+                           output_schema=None, include_output_schema=True):
     model = str(plc_model or "FX3U").strip().upper() or "FX3U"
     # Capture once; compiler remeasurement must render the same experiment arm.
     examples = example_block if example_block is not None else prepare_construction_examples(model)
@@ -125,7 +120,6 @@ def _compact_wire_renderer(plc_model, *, example_block=None, direct=False):
             'context_schema_version': 3, 'plc_model': model,
             'request': generation_request, 'confirmed_spec': runtime_spec,
             'knowledge': technical_context_units(evidence_text), 'knowledge_coverage': coverage,
-            'output_schema': direct_response_schema() if direct else _compact_response_schema(),
             'capability_constraints': compact_capability_prompt(model, runtime_spec),
             'examples': examples.text,
             'operation_bindings': operation_intent_prompt(core_spec, target_model=model),
@@ -133,6 +127,9 @@ def _compact_wire_renderer(plc_model, *, example_block=None, direct=False):
                 {**core_spec, 'plc_model': model}, delivery=_construction_delivery()),
             'historical_context': render_context_checkpoint(context_checkpoint),
         }
+        if include_output_schema:
+            payload['output_schema'] = (copy.deepcopy(output_schema) if output_schema is not None
+                                        else _generation_schema(core_spec, direct=direct))
         return {'messages': render_wire_messages(system_prompt,
             [{'role': 'user', 'content': json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}])}
 
@@ -158,7 +155,7 @@ T/C 用 TIMER/COUNTER，定时器使能须能复位；事件用边沿，持续�
 """ + compact_protocol_prompt()
 
 
-def direct_response_schema():
+def direct_response_schema(*, allow_construct=False):
     """Every new Direct response contains a program and non-blocking notes."""
     return {
         "type": "object", "required": ["result"], "additionalProperties": False,
@@ -166,7 +163,7 @@ def direct_response_schema():
             "type": "object", "additionalProperties": False,
             "required": ["program", "decisions", "open_items"],
             "properties": {
-                "program": _compact_response_schema(),
+                "program": _compact_response_schema(allow_construct=allow_construct),
                 "decisions": {"type": "array", "items": {"type": "string"}},
                 "open_items": {"type": "array", "items": {"type": "string"}},
             },
@@ -185,12 +182,16 @@ def generate_direct_ladder(user_requirement, plc_model="FX3U", *, confirmed_spec
     projected = _strict_generation_projection(confirmed_spec)
     examples = prepare_construction_examples(model, construction_examples, projected)
     base_provider = api.current_provider()
+    schema = _generation_schema(projected, direct=True)
+    options, streaming = response_plan(getattr(base_provider, "profile", {}), schema,
+        model=model_name, api_key=getattr(base_provider, "api_key", None), hints=None)
     context = build_direct_generation_context(
         user_requirement, model, confirmed_spec=confirmed_spec,
         user_fact_text=user_fact_text,
         knowledge_builder=_build_knowledge_context,
         model_profile=getattr(base_provider, "profile", {}),
-        wire_renderer=_compact_wire_renderer(model, example_block=examples, direct=True),
+        wire_renderer=_compact_wire_renderer(model, example_block=examples, direct=True,
+            output_schema=schema, include_output_schema=(options.get('response_format') or {}).get('type') != 'json_schema'),
     )
     handoff = context.to_dict()["handoff"]
     handoff["construction_examples"] = examples.manifest()
@@ -198,12 +199,10 @@ def generate_direct_ladder(user_requirement, plc_model="FX3U", *, confirmed_spec
         on_context(copy.deepcopy(handoff))
     if on_stage:
         on_stage("direct_generation", "正在根据完整需求生成程序及实现说明")
-    options, streaming = response_plan(getattr(base_provider, "profile", {}), direct_response_schema(),
-        model=model_name, api_key=getattr(base_provider, "api_key", None), hints=None)
     messages = copy.deepcopy(context.wire_packet["messages"])
     if image_attachments:
         from model_runtime.provider import UserMessage
-        messages[-1] = UserMessage(user_requirement, tuple(image_attachments))
+        messages[-1] = UserMessage(messages[-1]['content'], tuple(image_attachments))
     handoff["output_contract"] = {
         "protocol": PROTOCOL_VERSION,
         "transport": (options.get("response_format") or {}).get("type", "text"),
@@ -422,13 +421,18 @@ def generate_confirmed_ladder(
         reason=examples.reason, source="builtin_plc_ir",
     )
     base_provider = api.current_provider()
+    from model_runtime.response_format import response_plan
+    schema = _generation_schema(projected)
+    options, streaming = response_plan(getattr(base_provider, "profile", {}), schema,
+        model=model_name, api_key=getattr(base_provider, "api_key", None), hints=None)
     context = build_confirmed_generation_context(
         projected,
         model,
         knowledge_builder=_build_knowledge_context,
         model_profile=getattr(base_provider, "profile", {}),
         decision_receipt_id=decision_receipt_id,
-        wire_renderer=_compact_wire_renderer(model, example_block=examples),
+        wire_renderer=_compact_wire_renderer(model, example_block=examples, output_schema=schema,
+            include_output_schema=(options.get('response_format') or {}).get('type') != 'json_schema'),
     )
     handoff = context.to_dict()["handoff"]
     handoff["construction_examples"] = examples.manifest()
@@ -446,13 +450,6 @@ def generate_confirmed_ladder(
         on_stage("confirmed_spec_generation", "正在根据已确认规格生成梯形图")
 
     provider = _FirstJSONObjectProvider(base_provider)
-    from model_runtime.response_format import response_plan
-    options, streaming = response_plan(
-        getattr(base_provider, "profile", {}), _compact_response_schema(allow_construct=bool(
-            (projected.get('selected_approach') or {}).get('construction_plan')) and _construction_delivery() == 'instantiate'),
-        model=model_name, api_key=getattr(base_provider, "api_key", None),
-        hints=None,
-    )
     with api.provider_scope(provider, model_name=model_name):
         response = api.request_model(
             context.wire_packet["messages"],

@@ -24,7 +24,7 @@ from shared.i18n import language_scoped, tr
 from model_runtime.responses import TEXT_RESPONSE, preserved_annotations as source_annotations
 from application.response_contracts import (
     ANALYSIS_RESPONSE, ANALYSIS_REPAIR_RESPONSE, DEBUG_RESPONSE, DIAGNOSIS_RESPONSE, FIELD_PATCH_RESPONSE,
-    INSPECTION_RESPONSE, LADDER_RESPONSE, PATCH_RESPONSE, ST_RESPONSE, TEST_SUITE_RESPONSE,
+    INSPECTION_RESPONSE, LADDER_RESPONSE, COMPACT_EDIT_RESPONSE, PATCH_RESPONSE, ST_RESPONSE, TEST_SUITE_RESPONSE,
 )
 from plc.specification.approach import normalize_approach
 from rendering.ladder_svg import AdvancedSVGLadder
@@ -389,6 +389,8 @@ def _prepare_api_call(
     plc_model=None,
     image_attachments=None,
     on_generation_context=None,
+    compact_edit=False,
+    include_output_schema=True,
 ):
     """
     共用准备逻辑：复制调用方历史、追加用户消息、选取系统提示词、
@@ -435,6 +437,8 @@ def _prepare_api_call(
         on_context=on_generation_context,
         model_profile=bound_provider_profile(),
         wire_history=conversation_history,
+        compact_edit=compact_edit,
+        include_output_schema=include_output_schema,
     )
     compiled_wire = getattr(system_prompt, "wire_packet", None)
     if isinstance(compiled_wire, dict) and isinstance(compiled_wire.get("messages"), list):
@@ -443,7 +447,7 @@ def _prepare_api_call(
         messages_to_send = _build_clean_messages(conversation_history, system_prompt)
     if image_attachments:
         messages_to_send[-1] = _user_message_with_images(
-            user_requirement,
+            messages_to_send[-1]['content'],
             image_attachments,
         )
 
@@ -954,7 +958,12 @@ def repair_ladder_response(repair_payload, model_name, effort, *, mode,
     return response.message.reasoning, response.message.content
 
 
-def _native_ladder_generation_options(plc_model, *, allow_partial=False):
+def _compact_edit_request(target_mode, is_edit_mode, task_type=None, review_mode=None):
+    return (target_mode == 'ladder' and is_edit_mode
+            and str(task_type or review_mode or 'edit').strip().casefold() == 'edit')
+
+
+def _native_ladder_generation_options(plc_model, *, allow_partial=False, compact_edit=False):
     """Use native JSON Schema only when the v3 model contract declares it."""
     provider = _workflow_provider()
     profile = getattr(provider, "profile", None)
@@ -977,18 +986,21 @@ def _native_ladder_generation_options(plc_model, *, allow_partial=False):
     ):
         return None
 
-    selected_model = str(plc_model or "FX3U").strip().upper() or "FX3U"
-    schema = ladder_response_schema(
-        allow_partial=bool(allow_partial),
-        plc_model=selected_model,
-    )
-    name = "ladder_candidate"
-    if allow_partial:
-        # Ordinary edit generation prefers a partial candidate. Use that branch
-        # directly so providers do not have to support a top-level oneOf.
-        schema = json.loads(json.dumps(schema["oneOf"][1]))
-        schema["required"] = ["mode", "device_comments", "rungs", "delete_rung_ids"]
-        name = "ladder_partial_candidate"
+    if compact_edit:
+        from application.compact_protocol import compact_response_schema
+        schema = compact_response_schema(partial=True)
+        name = 'compact_ladder_partial'
+    else:
+        selected_model = str(plc_model or "FX3U").strip().upper() or "FX3U"
+        schema = ladder_response_schema(
+            allow_partial=bool(allow_partial), plc_model=selected_model,
+        )
+        name = "ladder_candidate"
+        if allow_partial:
+            # Scoped repairs retain their existing partial contract.
+            schema = json.loads(json.dumps(schema["oneOf"][1]))
+            schema["required"] = ["mode", "device_comments", "rungs", "delete_rung_ids"]
+            name = "ladder_partial_candidate"
     return {
         "response_format": {
             "type": "json_schema",
@@ -1023,6 +1035,11 @@ def stream_model_response(user_requirement, model_name, effort, target_mode,
     """
     print(f"思考中(流式)... (模型配置参数, 目标语言: {target_mode})")
 
+    compact_edit = _compact_edit_request(target_mode, is_edit_mode, task_type, review_mode)
+    native_options = (_native_ladder_generation_options(
+        _resolve_plc_model(user_requirement, confirmed_spec or confirmed_context, explicit_model=plc_model),
+        allow_partial=is_edit_mode, compact_edit=compact_edit) if target_mode == 'ladder' else None)
+
     messages, conversation_history, should_persist = _prepare_api_call(
         user_requirement, model_name, None, target_mode,
         is_edit_mode=is_edit_mode,
@@ -1036,12 +1053,10 @@ def stream_model_response(user_requirement, model_name, effort, target_mode,
         plc_model=plc_model,
         image_attachments=image_attachments,
         on_generation_context=on_generation_context,
+        compact_edit=compact_edit,
+        include_output_schema=not bool(native_options),
     )
 
-    native_options = (
-        _native_ladder_generation_options(plc_model, allow_partial=is_edit_mode)
-        if target_mode == "ladder" else None
-    )
     response = _request_model(
         messages,
         model_name=model_name,
@@ -1051,7 +1066,7 @@ def stream_model_response(user_requirement, model_name, effort, target_mode,
         fallback_to_non_stream=True,
         on_fallback=on_fallback,
         options=native_options,
-        response_contract=LADDER_RESPONSE if target_mode == "ladder" else ST_RESPONSE,
+        response_contract=COMPACT_EDIT_RESPONSE if compact_edit else LADDER_RESPONSE if target_mode == "ladder" else ST_RESPONSE,
         preserved_annotations=source_annotations(current_version_json, confirmed_spec, confirmed_context),
         on_reasoning_chunk=on_reasoning_chunk,
         on_content_chunk=on_content_chunk,
@@ -1086,6 +1101,11 @@ def generate_model_json(user_requirement: str, model_name: str, effort: str,
                                    image_attachments=None) -> str:
     print(f"思考中... (模型配置参数, 目标语言: {target_mode})")
 
+    compact_edit = _compact_edit_request(target_mode, is_edit_mode, task_type, review_mode)
+    native_options = (_native_ladder_generation_options(
+        _resolve_plc_model(user_requirement, confirmed_spec or confirmed_context, explicit_model=plc_model),
+        allow_partial=is_edit_mode, compact_edit=compact_edit) if target_mode == 'ladder' else None)
+
     messages, conversation_history, should_persist = _prepare_api_call(
         user_requirement, model_name, None, target_mode,
         is_edit_mode=is_edit_mode,
@@ -1098,12 +1118,10 @@ def generate_model_json(user_requirement: str, model_name: str, effort: str,
         current_version_json=current_version_json,
         plc_model=plc_model,
         image_attachments=image_attachments,
+        compact_edit=compact_edit,
+        include_output_schema=not bool(native_options),
     )
 
-    native_options = (
-        _native_ladder_generation_options(plc_model, allow_partial=is_edit_mode)
-        if target_mode == "ladder" else None
-    )
     try:
         response = _request_model(
             messages,
@@ -1113,7 +1131,7 @@ def generate_model_json(user_requirement: str, model_name: str, effort: str,
             options=native_options,
             request_timeout=request_timeout,
             max_retries=max_retries,
-            response_contract=LADDER_RESPONSE if target_mode == "ladder" else ST_RESPONSE,
+            response_contract=COMPACT_EDIT_RESPONSE if compact_edit else LADDER_RESPONSE if target_mode == "ladder" else ST_RESPONSE,
             preserved_annotations=source_annotations(current_version_json, confirmed_spec, confirmed_context),
         )
         assistant_message = response.message

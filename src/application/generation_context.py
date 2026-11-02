@@ -407,7 +407,8 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
                                   task_type=None, review_mode=None, confirmed_context=None,
                                   current_version_json=None, prompt_builder=None, knowledge_builder=None,
                                   profile_builder=None, confirmed_builder=None, on_context=None,
-                                  model_profile=None, wire_history=None):
+                                  model_profile=None, wire_history=None, compact_edit=False,
+                                  include_output_schema=True):
     normalized_task = str(task_type or review_mode or ("edit" if is_edit_mode else "generate")).strip().casefold()
     if _is_format_repair(normalized_task, user_requirement):
         audit_section("model_profile", status="excluded", reason="format_repair", source="model_registry")
@@ -426,6 +427,9 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
         return result
 
     prompt_builder = prompt_builder or _select_system_prompt
+    if compact_edit:
+        from application.compact_protocol import compact_generation_prompt
+        prompt_builder = lambda *args, **kwargs: compact_generation_prompt(partial=True)
     knowledge_builder = knowledge_builder or _build_knowledge_context
     profile_builder = profile_builder or _build_model_context
     confirmed_builder = confirmed_builder or _with_confirmed_context
@@ -472,8 +476,10 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
                 'historical_context': render_context_checkpoint(context_checkpoint),
             }
             from plc.generation_contract import generation_output_contract
-            payload['output_schema'] = generation_output_contract(
-                allow_partial=is_edit_mode, plc_model=plc_model, target_mode=target_mode)['schema']
+            if include_output_schema:
+                from application.compact_protocol import compact_response_schema
+                payload['output_schema'] = (compact_response_schema(partial=True) if compact_edit else
+                    generation_output_contract(allow_partial=is_edit_mode, plc_model=plc_model, target_mode=target_mode)['schema'])
             system = selected + SOURCE_PRECEDENCE + generation_execution_prompt(
                 runtime_spec, evidence_text=evidence_text, task_type=normalized_task, plc_model=plc_model)
             message_history = (runtime_history if isinstance(runtime_history, list) and runtime_history
@@ -572,8 +578,10 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
         'current_program': retrieval_evidence,
     }
     from plc.generation_contract import generation_output_contract
-    payload['output_schema'] = generation_output_contract(
-        allow_partial=is_edit_mode, plc_model=plc_model, target_mode=target_mode)['schema']
+    if include_output_schema:
+        from application.compact_protocol import compact_response_schema
+        payload['output_schema'] = (compact_response_schema(partial=True) if compact_edit else
+            generation_output_contract(allow_partial=is_edit_mode, plc_model=plc_model, target_mode=target_mode)['schema'])
     history = wire_history if isinstance(wire_history, list) else [{'role': 'user', 'content': user_requirement}]
     messages = render_wire_messages(system_prompt, [
         {'role': 'user', 'content': json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}, *history])
