@@ -7,7 +7,7 @@ GXWorks Agent is independent of Mitsubishi Electric. GX Works, MELSEC and
 Mitsubishi Electric are trademarks of their respective owners. This repository
 does not include GX Works2, its manuals, vendor binaries, or a license to use
 them. Native blank project templates are included for interoperability; see
-[license scope](LICENSING.md).
+[license scope](LICENSE-SCOPE.md).
 
 Python and npm dependencies retain their own licenses and copyright notices.
 Dependency versions are listed in `requirements/` and `web/package-lock.json`.
