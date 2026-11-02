@@ -17,7 +17,7 @@
 
 <p align="center"><strong><a href="https://github.com/Arienax/gxworks-agent/releases/latest">下载发布包</a> · <a href="#mcp">MCP 与 Web</a> · <a href="https://github.com/Arienax/gxworks-agent/issues">问题反馈</a></strong></p>
 
-<p align="center"><a href="#quick-start">快速上手</a> · <a href="#offline-gxw">离线 GXW 编辑</a> · <a href="#ladder">Ladder</a> · <a href="#st">ST</a> · <a href="#fbd">FBD</a> · <a href="#native-session">原生会话</a> · <a href="#web">Web 工作台</a> · <a href="#diagnostics">诊断与验证</a></p>
+<p align="center"><a href="#quick-start">快速上手</a> · <a href="#offline-gxw">离线 GXW 编辑</a> · <a href="#ladder">Ladder</a> · <a href="#st">ST</a> · <a href="#fbd">FBD</a> · <a href="#rag">工程 RAG</a> · <a href="#native-session">原生会话</a> · <a href="#web">Web 工作台</a> · <a href="#diagnostics">诊断与验证</a></p>
 
 <p align="center"><strong>简体中文</strong> · <a href="README.md">English</a> · <a href="README.ja.md">日本語</a></p>
 
@@ -109,10 +109,21 @@ ST 工作流兼顾独立文本生成与 GXW 原生工程维护：
 
 发送 Ladder 到 GX 时，如果窗口标题中的路径被截断或只显示文件名，请在发送确认框填写“当前 GXW 完整路径（可选）”；MCP 对应参数为 `import_current_program_to_gxworks2(project_path=...)`。这两种标题下，路径须通过当前 GX Works2 进程的文件占用检查；无法确认时拒绝导入，不会打开或切换工程。完整路径标题可省略该参数。
 
+<a name="rag"></a>
+
+## CPU 作用域工程 RAG：架构与紧凑事实实现
+
+通用文档切片 RAG 面向自由文本问答，难以满足工业控制对无外部服务依赖、跨型号规格隔离与代码级编译验证的需求。GXWorks Agent 针对经审查的技术事实条目（Reviewed Technical Facts）与原创工程范例实现了紧凑型 RAG 体系（发布包不包含厂商手册 PDF 原文及原始索引）：
+
+- **知识文本池化与 BM25 统计守恒**：面对跨型号技术规则与工程知识条目中的大段结构化描述，[`exact_search_storage`](src/knowledge/exact_search_storage.py) 将长文本收敛到 SHA-256 去重池，并在逻辑绑定层为各型号 chunk 保留独立行与属性，通过视图挂接 SQLite FTS5。该设计在压缩物理存储的同时，保证各型号语料库的词频与 BM25 计算结果与未压缩版本完全一致；配合 SQL 中的 `+rowid` 约束规避 FTS 虚拟表对型号子查询的循环 MATCH 扫描。
+- **图谱级事实池化与按需水合**：底层采用 `owner-field-row-v3` 格式与 [`fact_field_codec`](src/knowledge/fact_field_codec.py)，将适用范围、执行条件、指令依赖与参数规格等高频事实字段池化为正整数引用。运行时通过清单 `instruction_definitions.manifest.json` 挂载只读 SQLite 库（[`OwnerDefinitionStore`](src/plc/instruction_owner_store.py)），应用启动时仅读取轻量身份头进行 CPU 准入与目录过滤，仅在命中后按需水合（`hydrate_owner`）对应事实图谱。
+- **域内局部排名融合（Domain-Local RRF）**：检索统一由 [`knowledge.retriever`](src/knowledge/retriever.py) 承载，整合实体路由、BM25 全文检索、Dense/LSA 向量检索与分词覆盖门控。跨数据库检索（如指令事实库与通用软元件/调试范例库）时，采用域内局部 RRF 排名融合（平滑常数 $k=60.0$）与域命名空间，防止跨知识域词频统计失真；顶层依序按照实体精确匹配、域内相对得分、查询词覆盖度与确定性 ID 进行仲裁。
+- **技术投影与确定性 Core 校验**：系统不将检索命中的知识直接视为可调用依据。面向模型端时，由 [`model_context`](src/shared/model_context.py) 提取引脚规格与时序约束等紧凑技术投影以控制 Prompt 预算；生成的程序逻辑必须经由 [`instruction_constraints`](src/plc/instruction_constraints.py) 与 Core 规则引擎执行 CPU 型号白名单、操作数位宽及互斥检查，形成闭环验证。
+
 ## 工具链与架构分工
 
 - **工程上下文与现场快照发现**：既可按 CPU 和程序类型创建、选择版本化工程，也可在不建工程的前提下调用 `list_gxworks2_sessions` 与 `read_gxworks2_snapshot`，直接读取本机已打开 GX Works2 窗口的只读程序快照并按网络分析。未打开 GX Works2 时，`inspect_gxworks2_csv_files` 可凭一份程序 CSV、一份软元件注释 CSV 和显式 CPU 取得同类的只读 `source_ref`。
-- **CPU 作用域工程 RAG**：检索管线融合实体匹配、全文检索与 dense/LSA 向量检索。已知指令由结构化事实库提供精确操作数、步长与修饰规则，剩余检索补充手册依据与原创工程范例，并自动剔除重复上下文。
+- **CPU 作用域工程 RAG**：检索管线融合实体匹配、全文检索与 dense/LSA 向量检索（详见[架构与紧凑事实实现](#rag)）。已知指令由结构化事实库提供精确操作数、步长与修饰规则，剩余检索补充来源依据与原创工程范例，并自动剔除重复上下文。
 - **确定性 Core 校验与版本化产物**：Python Core 持有 PLC 领域语义，统一负责 IR 构建、操作数与时序检查、FBD 拓扑与声明核对以及版本化产物生成，并与原生编译、仿真采样和实机监测各司其职。
 - **受控的 GX Works2 交付**：按操作员配置的审批策略，将当前 Ladder 版本的 MAIN 与注释导入 GX Works2，或执行 FBD/ST 原生保存、编译与会话操作，返回绑定版本的操作回执。
 
@@ -193,6 +204,6 @@ Windows 原生适配器以 x86 进程加载 GX Works2 的原生组件，Python �
 
 ## 资料与许可
 
-[版本更新记录](CHANGELOG.md) · [问题反馈](https://github.com/Arienax/gxworks-agent/issues)
+[版本更新记录](CHANGELOG.md) · [贡献指南](CONTRIBUTING.md) · [问题反馈](https://github.com/Arienax/gxworks-agent/issues)
 
 项目贡献者拥有权利的 Core、Web、MCP 与原生适配器源码采用 [Apache License 2.0](LICENSE) 开源，具体适用范围见[许可范围](LICENSING.md)与[第三方声明](THIRD_PARTY_NOTICES.md)。各贡献者保留其版权；此前已发布的版本仍适用其发布时的许可证。[NOTICE](NOTICE) 记录原项目、作者与原始仓库地址。

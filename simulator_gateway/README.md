@@ -1,48 +1,45 @@
-# GX Simulator2 gateway
+# GX Simulator2 Gateway
 
-This local process isolates MX Component from the Python application.
-It binds only to `127.0.0.1`, requires a per-process token for every endpoint
-except health, and fixes `ActProgType.ActUnitType` to `UNIT_SIMULATOR2 (0x30)`.
-Consequently it has no route that can target a physical PLC.
+The GX Simulator2 Gateway is an isolated local helper process that decouples Mitsubishi MX Component and GX Simulator2 COM interop from the Python application runtime.
 
-The adapter targets FX3U/FX3UC (`ActCpuType = 0x208`) and uses
-`ActTargetSimulator = 0`, as required for an FX CPU. Tests may write only
-ordinary X, M and D devices; Y and CPU-owned special devices are read-only.
+To maintain strict security isolation, the gateway:
+- Binds strictly to the loopback interface (`127.0.0.1`);
+- Requires a cryptographically random, per-process bearer token for every endpoint except `/health`;
+- Hardcodes `ActProgType.ActUnitType` to `UNIT_SIMULATOR2` (`0x30`), completely preventing any network route from reaching physical PLC hardware.
 
-Build it outside the repository:
+Protocol version 3 binds `ActCpuType` and the expected returned model code to the CPU selected by Python Core. The legacy empty connection request defaults to FX3U/FX3UC (`ActCpuType = 0x208`, expected model code `0xF3`). The adapter sets `ActTargetSimulator = 0`. Test stimulus writes are strictly confined to ordinary `X`, `M`, and `D` devices; output coils (`Y`) and CPU-owned special registers are read-only.
+
+## Building and Running
+
+Compile the gateway executable outside the source tree:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools\build_simulator_gateway.ps1
 ```
 
-At runtime set a random token of at least 16 characters in
-`GX_SIMULATOR_GATEWAY_TOKEN`, then start the compiled executable. The Python
-client uses the same environment variable. The gateway exposes only:
+At runtime, generate a random token containing at least 16 characters, export it to the `GX_SIMULATOR_GATEWAY_TOKEN` environment variable, and start the compiled executable. The Python application runtime consumes this same environment variable to authenticate requests.
 
-- `GET /health`
-- `POST /connect`
-- `POST /disconnect`
-- `POST /devices/read`
-- `POST /observations/read`
-- `POST /devices/write`
-- `POST /shutdown`
+### Exposed HTTP Endpoints
 
-`/health` reports `target_binding` for an already-open simulator connection. A new
-connection receives a fresh identity. `/observations/read` accepts only the existing
-protocol version, a Core-prepared read plan (at most 64 devices), and that binding.
-It rejects a disconnected or changed target before reading, and returns the same
-binding and simulator-only route with the values. This observation endpoint does
-not open a connection, write devices, download a program or change CPU state. MCP
-discovery and read tools use it separately from static program diagnostics. Old
-gateways without target bindings remain usable by their existing test runner but
-are unavailable to the new observation tools.
+- `GET /health` — Reports current process status and the `target_binding` identifier for any active simulator connection.
+- `POST /connect` — Establishes a connection to the local GX Simulator2 instance and generates a fresh target binding.
+- `POST /disconnect` — Gracefully disconnects from the simulator session.
+- `POST /devices/read` — Reads discrete device values.
+- `POST /observations/read` — Executes a structured observation plan prepared by Python Core (up to 64 devices) against the verified `target_binding`. Rejects the request if the connection target changed or disconnected. Does not write devices, alter CPU run states, or download programs.
+- `POST /devices/write` — Writes permitted stimulus devices (`X`, `M`, `D`).
+- `POST /shutdown` — Safely closes simulator connections and exits the gateway process.
 
-The design follows Mitsubishi Electric's MX Component programming manual:
-GX Simulator2 uses `UNIT_SIMULATOR2 (0x30)`; `GetDevice` and `SetDevice` are
-the documented single-device operations.
+### Verification and Observation Model
 
-## Implementation and field owners
+The `/observations/read` endpoint provides a deterministic observation channel for MCP discovery and timeline sampling, completely separated from static program diagnostics. It requires an exact protocol version match, a pre-validated read plan, and active target binding validation before reading device memory.
 
-[Program.cs](Program.cs) defines gateway configuration, native target constants, token handling and HTTP operations. [NativeRequest.cs](../native_adapters/NativeRequest.cs) owns the native request envelope compiled into the helper. Rebuild with [build_simulator_gateway.ps1](../tools/build_simulator_gateway.ps1) when updating the Python/native protocol.
+The gateway implementation conforms to Mitsubishi Electric's MX Component specifications: GX Simulator2 relies on `UNIT_SIMULATOR2` (`0x30`), with `GetDevice` and `SetDevice` serving as the standard single-device access operations.
 
-[plc.device_policy](../src/plc/device_policy.py) owns device and stimulus policy; the helper executes the prepared native plan. [Language boundaries](../docs/architecture/language-boundaries.md) define the Python/Core and C# adapter responsibilities. Physical PLC reading uses the [separate reader](../hardware_reader/README.md).
+## Architecture and Source Mapping
+
+- **Native Gateway Implementation:** [Program.cs](Program.cs) defines gateway HTTP routes, configuration, target constants, and COM call sequencing.
+- **Request Envelope:** [native_adapters/NativeRequest.cs](../native_adapters/NativeRequest.cs) defines the serialized request contracts shared between Python Core and native helpers. Rebuild with [tools/build_simulator_gateway.ps1](../tools/build_simulator_gateway.ps1) whenever protocol structures are updated.
+- **Device Policy and Plan Preparation:** [src/plc/device_policy.py](../src/plc/device_policy.py) enforces device access rules, read limits, and stimulus safety.
+- **Physical Device Reading:** For read-only inspection of physical PLCs, refer to the completely independent [hardware reader](../hardware_reader/README.md).
+
+Architecturally, PLC domain rules, safety constraints, and observation plans are owned entirely by Python Core (`src/plc/` and `src/simulator/`). The C# gateway functions strictly as an unopinionated COM bridge and process-level isolation boundary.

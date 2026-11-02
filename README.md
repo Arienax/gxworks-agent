@@ -17,7 +17,7 @@
 
 <p align="center"><strong><a href="https://github.com/Arienax/gxworks-agent/releases/latest">Downloads</a> · <a href="#mcp">MCP &amp; Web</a> · <a href="https://github.com/Arienax/gxworks-agent/issues">Issues</a></strong></p>
 
-<p align="center"><a href="#quick-start">Quick start</a> · <a href="#offline-gxw">Offline GXW editing</a> · <a href="#ladder">Ladder</a> · <a href="#st">ST</a> · <a href="#fbd">FBD</a> · <a href="#native-session">Native sessions</a> · <a href="#web">Web workbench</a> · <a href="#diagnostics">Diagnostics</a></p>
+<p align="center"><a href="#quick-start">Quick start</a> · <a href="#offline-gxw">Offline GXW editing</a> · <a href="#ladder">Ladder</a> · <a href="#st">ST</a> · <a href="#fbd">FBD</a> · <a href="#rag">Engineering RAG</a> · <a href="#native-session">Native sessions</a> · <a href="#web">Web workbench</a> · <a href="#diagnostics">Diagnostics</a></p>
 
 <p align="center"><a href="README.zh-CN.md">简体中文</a> · <strong>English</strong> · <a href="README.ja.md">日本語</a></p>
 
@@ -109,10 +109,21 @@ When process facts are missing, each clarification question appears as an indivi
 
 When sending Ladder to GX, enter the full path of the currently open GXW in the confirmation dialog if the window title shortens the path or shows only a file name. The MCP equivalent is `import_current_program_to_gxworks2(project_path=...)`. For shortened titles, import is refused unless the current GX Works2 process holds the specified file. This does not open or switch projects. The parameter may be omitted when the title already contains the full path.
 
+<a name="rag"></a>
+
+## CPU-scoped engineering RAG: architecture and compact facts
+
+Generic document-chunking RAG frameworks are tailored for open-ended text Q&A and struggle with industrial control requirements such as zero-external-service deployments, strict isolation across CPU models, and compiler-grade deterministic verification. GXWorks Agent implements an engineered, compact RAG architecture based on reviewed technical facts and project-authored engineering records (release packages exclude vendor manual PDFs and raw manual-text indexes):
+
+- **Knowledge text pooling with BM25 statistical invariance**: To handle recurring descriptions across multi-model technical specifications and engineering records, [`exact_search_storage`](src/knowledge/exact_search_storage.py) consolidates long text into a SHA-256 deduplicated pool while retaining distinct chunk rows and attributes in the binding layer, exposed to SQLite FTS5 via a compatibility view. This design achieves multi-fold physical compression while ensuring BM25 scores and term frequencies remain mathematically identical to uncompressed baselines; a `+rowid` constraint prevents redundant FTS virtual table MATCH loops across CPU pre-filter subqueries.
+- **Graph-level fact pooling and on-demand hydration**: The transport layer adopts the `owner-field-row-v3` layout with [`fact_field_codec`](src/knowledge/fact_field_codec.py), interning repetitive structured fields (scope, conditions, dependencies, parameter specifications) into integer references. At runtime, [`OwnerDefinitionStore`](src/plc/instruction_owner_store.py) mounts an authenticated read-only SQLite database via `instruction_definitions.manifest.json`, reading only lightweight identity headers at startup for CPU admission preflight and hydrating full fact graphs (`hydrate_owner`) strictly on demand.
+- **Domain-Local Rank Fusion (RRF)**: Retrieval is coordinated through [`knowledge.retriever`](src/knowledge/retriever.py), combining exact entity routing, BM25 full-text search, dense/LSA vector similarity, and lexical coverage gating. When querying across distinct databases (e.g., the instruction fact store and general engineering records), domain-local RRF (smoothing constant $k=60.0$) and qualified identifiers prevent cross-corpus score distortion; top-level arbitration prioritizes exact entity hits, normalized domain scores, query coverage, and deterministic record IDs.
+- **Technical projection and deterministic Core validation**: Retrieval hits are never treated as direct execution permission. For LLM generation, [`model_context`](src/shared/model_context.py) extracts compact technical constraints (pin specifications, step widths, prerequisite conditions) to manage prompt budget. Generated logic must subsequently pass deterministic CPU whitelist, operand bit-width, and timing checks enforced by [`instruction_constraints`](src/plc/instruction_constraints.py) and the Core validation engine.
+
 ## What the toolchain provides
 
 - **Project-bound context and live session discovery**: Create or select versioned projects by CPU and language, or call `list_gxworks2_sessions` and `read_gxworks2_snapshot` without an Agent project to inspect a read-only snapshot of a program currently open in GX Works2. When GX Works2 is not running, `inspect_gxworks2_csv_files` takes an exported program CSV and comment CSV with an explicit CPU and returns the same kind of read-only `source_ref`.
-- **CPU-scoped engineering RAG**: Retrieval combines entity matching, full-text search, and dense/LSA vector retrieval with rank fusion. Structured facts supply exact operand, step-width, and modifier rules for known instructions, while residual retrieval adds manual evidence and project-authored examples without duplicating context.
+- **CPU-scoped engineering RAG**: Retrieval combines entity matching, full-text search, and dense/LSA vector retrieval with rank fusion (see [architecture and compact facts](#rag) for details). Structured facts supply exact operand, step-width, and modifier rules for known instructions, while residual retrieval adds technical evidence and project-authored examples without duplicating context.
 - **Deterministic Core validation and versioned artifacts**: Python Core owns PLC domain semantics—building IR, checking operands and timing, verifying FBD topology and declarations, and generating version-bound artifacts alongside native compilation, simulation, and device monitoring.
 - **Controlled GX Works2 delivery**: Under operator-configured approval policies, import the current Ladder version's `MAIN` and device comments into GX Works2, or execute native FBD/ST saves, compilations, and live session steps with version-bound operation receipts.
 
@@ -193,6 +204,6 @@ Implement emergency stops, safety interlocks, and overtravel protection in an in
 
 ## Guides and license
 
-[Release changes](CHANGELOG.md) · [Issues](https://github.com/Arienax/gxworks-agent/issues)
+[Release changes](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Issues](https://github.com/Arienax/gxworks-agent/issues)
 
 Project-authored Core, Web, MCP, and native-adapter source code is licensed under the [Apache License 2.0](LICENSE); see the [license scope](LICENSING.md) and [third-party notices](THIRD_PARTY_NOTICES.md) for details. Contributors retain their copyright, and previously distributed releases retain their original licenses. [NOTICE](NOTICE) records the original project, author and repository for copyrighted project material.

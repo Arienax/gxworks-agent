@@ -17,7 +17,7 @@
 
 <p align="center"><strong><a href="https://github.com/Arienax/gxworks-agent/releases/latest">ダウンロード</a> · <a href="#mcp">MCP と Web</a> · <a href="https://github.com/Arienax/gxworks-agent/issues">問題の報告</a></strong></p>
 
-<p align="center"><a href="#quick-start">クイックスタート</a> · <a href="#offline-gxw">GXW オフライン編集</a> · <a href="#ladder">ラダー</a> · <a href="#st">ST</a> · <a href="#fbd">FBD</a> · <a href="#native-session">ネイティブセッション</a> · <a href="#web">Web ワークベンチ</a> · <a href="#diagnostics">診断・検証</a></p>
+<p align="center"><a href="#quick-start">クイックスタート</a> · <a href="#offline-gxw">GXW オフライン編集</a> · <a href="#ladder">ラダー</a> · <a href="#st">ST</a> · <a href="#fbd">FBD</a> · <a href="#rag">設計 RAG</a> · <a href="#native-session">ネイティブセッション</a> · <a href="#web">Web ワークベンチ</a> · <a href="#diagnostics">診断・検証</a></p>
 
 <p align="center"><a href="README.zh-CN.md">简体中文</a> · <a href="README.md">English</a> · <strong>日本語</strong></p>
 
@@ -109,10 +109,21 @@ ST ワークフローは、単体テキストの生成と `.gxw` ネイティブ
 
 ラダーを GX に送信する際、ウィンドウタイトルのパスが省略されている場合やファイル名のみの場合は、確認ダイアログに現在開いている GXW のフルパスを入力してください。MCP では `import_current_program_to_gxworks2(project_path=...)` を指定します。この場合、現在の GX Works2 プロセスによるファイル使用を確認できなければインポートを拒否し、プロジェクトを開いたり切り替えたりはしません。タイトルにフルパスがある場合は省略できます。
 
+<a name="rag"></a>
+
+## CPU スコープの設計 RAG：アーキテクチャとコンパクト知識実装
+
+一般的なドキュメントチャンキング型 RAG は自由文 Q&A 向けに設計されており、外部サービス不要のスタンドアロン実行、型式ごとの厳密な技術仕様の隔離、コンパイラ水準の決定論的検証といった産業用制御の要件を満たすことが困難です。GXWorks Agent は、精査済みの技術的事実（Reviewed Technical Facts）および自作エンジニアリング事例に基づくコンパクト RAG 体系を実装しています（リリースパッケージにはメーカー製マニュアル PDF 原本や生テキストインデックスは含まれません）：
+
+- **ナレッジテキスト共有プールと BM25 統計量の保存性**：複数型式にまたがる重複記述を含む技術仕様や事例レコードに対し、[`exact_search_storage`](src/knowledge/exact_search_storage.py) は長文を SHA-256 去重プールに集約しつつ、論理バインディング層で型式ごとの独立した行と属性を保持し、ビュー経由で SQLite FTS5 に接続します。これにより物理ストレージを大幅に削減しながら、各型式コーパスの単語出現頻度と BM25 算出スコアを非圧縮時と完全に一致させています。また、SQL の `+rowid` 制約により型式絞り込み時の FTS 仮想テーブルのループ実行を抑制します。
+- **グラフ階層の知識プール化とオンデマンド水和**：トランスポート層には `owner-field-row-v3` 形式と [`fact_field_codec`](src/knowledge/fact_field_codec.py) を採用し、適用範囲、条件、依存関係、パラメータ仕様などの頻出構造化フィールドを整数参照としてプール化しています。実行時は `instruction_definitions.manifest.json` 経由で読み取り専用 SQLite をマウントし（[`OwnerDefinitionStore`](src/plc/instruction_owner_store.py)）、起動時は軽量なヘッダーのみを読み込んで CPU 適用判定を行い、検索確定後にのみ完全な事実グラフを水和（`hydrate_owner`）します。
+- **ドメインローカル順位融合（Domain-Local RRF）**：検索処理は [`knowledge.retriever`](src/knowledge/retriever.py) が統括し、完全一致ルーティング、BM25 全文検索、Dense/LSA ベクトル検索、および分かち書きカバレッジゲートを統合します。命令専用事実データベースと一般ナレッジデータベースをまたぐ検索では、ドメインローカル RRF（平滑化定数 $k=60.0$）と修飾子付き ID によりコーパス間の統計歪みを防止し、実体完全一致、ドメイン内相対スコア、クエリ網羅率、決定論的 ID の順で優先度を調停します。
+- **技術射影と決定論的 Core 検証**：検索でヒットした情報を直接実行可能な許可とはみなしません。LLM プロンプト生成時は [`model_context`](src/shared/model_context.py) により端子仕様やタイミング制約などのコンパクトな技術射影を渡してトークン消費を抑制し、生成されたコードは [`instruction_constraints`](src/plc/instruction_constraints.py) と Core ルールエンジンにより CPU 型式適合性、オペランド幅、排他関係の決定論的検査を受けます。
+
 ## ツールチェーンとアーキテクチャの役割分担
 
 - **プロジェクトコンテキストと稼働中セッションの検出**：CPU とプログラム形式を指定してバージョン管理されたプロジェクトを作成・選択できるほか、Agent プロジェクトを作らずに `list_gxworks2_sessions` と `read_gxworks2_snapshot` を呼び出し、現在開いている GX Works2 ウィンドウから読み取り専用スナップショットを取得してネットワーク単位で解析できます。GX Works2 を開いていない場合も、`inspect_gxworks2_csv_files` にプログラム CSV、デバイスコメント CSV、明示的な CPU を渡すと同種の読み取り専用 `source_ref` を取得できます。
-- **CPU スコープの設計 RAG**：エンティティ検索、全文検索、dense/LSA ベクトル検索を組み合わせて順位を統合します。既知の命令には構造化知識から正確なオペランド・ステップ数・修飾ルールを渡し、追加検索でマニュアル根拠とプロジェクト独自の事例を重複なく補います。
+- **CPU スコープの設計 RAG**：エンティティ検索、全文検索、dense/LSA ベクトル検索を組み合わせて順位を統合します（詳細は[アーキテクチャとコンパクト知識実装](#rag)を参照）。既知の命令には構造化知識から正確なオペランド・ステップ数・修飾ルールを渡し、追加検索で技術的根拠とプロジェクト独自の事例を重複なく補います。
 - **決定論的な Core 検証とバージョン成果物**：Python Core が PLC ドメインの意味論を保持し、IR 構築、オペランド・タイミング検査、FBD トポロジー・宣言照合、バージョン成果物の生成を担い、ネイティブコンパイルやシミュレーション、実機モニターと連携します。
 - **承認に基づく GX Works2 への受け渡し**：操作員が設定した承認ポリシーのもとで、現在のラダーバージョンの MAIN とデバイスコメントのインポートや、FBD/ST のネイティブ保存・コンパイル・セッション操作を実行し、バージョンに紐づく実行結果を返します。
 
@@ -193,6 +204,6 @@ Windows のネイティブアダプターは x86 プロセスで GX Works2 の�
 
 ## 資料とライセンス
 
-[リリースの変更点](CHANGELOG.md) · [Issue](https://github.com/Arienax/gxworks-agent/issues)
+[リリースの変更点](CHANGELOG.md) · [貢献ガイド](CONTRIBUTING.md) · [Issue](https://github.com/Arienax/gxworks-agent/issues)
 
 プロジェクト貢献者が権利を持つ Core、Web、MCP、ネイティブアダプターのソースコードには [Apache License 2.0](LICENSE) を適用します。詳細は[ライセンス範囲](LICENSING.md)と[第三者の権利表記](THIRD_PARTY_NOTICES.md)を参照してください。各貢献者は自身の著作権を保持し、過去に配布されたリリースにはそれぞれの配布時点のライセンスが適用されます。[NOTICE](NOTICE) にオリジナルプロジェクト、作者、リポジトリを記録しています。
