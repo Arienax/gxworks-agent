@@ -49,6 +49,46 @@ def test_generation_receipt_binding_tracks_the_selected_version_mode():
     assert GenerationToolHandlers._binding(project_only) == GenerationToolHandlers._binding(changed)
 
 
+@pytest.mark.parametrize('encoding', ['authored', 'legacy'])
+@pytest.mark.parametrize('has_purpose', [False, True])
+def test_existing_operand_purpose_projects_positive_facts_without_changing_backend(encoding, has_purpose):
+    from shared.model_context import technical_knowledge_text
+
+    facts = [{'id': 'operand-source', 'dimension': 'parameters.table',
+              'status': 'declared_unverified',
+              'value': [{'position': 'D', 'direction': 'output', 'data_type': 'WORD'}],
+              'scope': {'models': ['FX3U']},
+              'conditions': {'language': 'ladder', 'min_value': 0},
+              'requires': ['writable_device']}]
+    if has_purpose:
+        facts.append({'id': 'purpose-source', 'dimension': 'effects.operation',
+                      'status': 'declared_unverified', 'value': {'purpose': 'copy_source_to_destination'}})
+    packet = {'content_origin': 'authored_fact', 'kind': 'instruction', 'target': 'MOV',
+              'scope': {'model': 'FX3U'}, 'status': 'declared_unverified',
+              'value': {'facts': facts}}
+    if encoding == 'authored':
+        text = json.dumps(packet)
+    else:
+        text = ('[INSTRUCTION FACTS ' + json.dumps({'opcode': 'MOV', 'target_model': 'FX3U'})
+                + ']\n' + json.dumps({'groups': facts}) + '\n[/INSTRUCTION FACTS]')
+    record = {'text': text}
+    original = copy.deepcopy(record)
+    output = technical_knowledge_text(record)
+    projected = json.loads(output.removeprefix('[PLC KNOWLEDGE]\n').removesuffix('\n[/PLC KNOWLEDGE]'))
+    operand = projected['value']['facts'][0]
+
+    assert operand['value'] == facts[0]['value']
+    assert operand['scope'] == facts[0]['scope']
+    assert operand['conditions'] == facts[0]['conditions']
+    assert operand['requires'] == facts[0]['requires']
+    if has_purpose:
+        assert 'declared_unverified' not in output
+        assert projected['value']['facts'][1]['value'] == facts[1]['value']
+    else:
+        assert operand['knowledge_status'] == 'declared_unverified'
+    assert record == original
+
+
 def test_sorting_request_keeps_user_wiring_without_recalling_ordinary_device_chapters():
     from application.confirmed_generation_context import build_direct_generation_context
     requirement = ("X001：启动按钮；X003：停止按钮；D0：Vision Sensor 分类结果。\n"

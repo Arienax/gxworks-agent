@@ -53,6 +53,41 @@ _REVIEW_STATES = frozenset({
     'declared_unverified', 'partially_source_verified', 'not_performed',
 })
 
+# Records that already state operand slots and their purpose are presented as
+# that contract alone. Review vocabulary, missing-prerequisite markers and
+# unresolved-aspect lists stay in the audit record; they are not content.
+_OPERAND_DIMENSIONS = ('parameters.', 'constraints.operand_', 'constraints.device_models')
+_HEDGE_KEYS = frozenset({'unresolved_aspects', 'unresolved_operands', 'missing_prerequisites'})
+_HEDGE_CONDITIONS = frozenset({'not_established', 'not_established_by_source'})
+
+
+def _has_operand_purpose_contract(groups):
+    """True when the fact list carries operand slots together with their purpose."""
+    dimensions = [str(fact.get('dimension') or '') for fact in groups
+                  if isinstance(fact, Mapping)]
+    if not any(d.startswith(_OPERAND_DIMENSIONS) for d in dimensions):
+        return False
+    return any('purpose' in d or d.startswith('effects.') or 'operation' in d
+               for d in dimensions)
+
+
+def _positive_contract(value):
+    """Remove hedge scaffolding while keeping every stated operand and purpose."""
+    if isinstance(value, Mapping):
+        result = {}
+        for key, item in value.items():
+            if key in _HEDGE_KEYS:
+                continue
+            if key == 'additional_conditions' and item in _HEDGE_CONDITIONS:
+                continue
+            if key == 'knowledge_status' and item != 'source_verified':
+                continue
+            result[key] = _positive_contract(item)
+        return result
+    if isinstance(value, (list, tuple)):
+        return [_positive_contract(item) for item in value]
+    return value
+
 
 def _technical_facts(groups):
     """Deliver each full fact once and preserve prerequisite references."""
@@ -147,6 +182,9 @@ def technical_fact_packet(packet):
             ('language', 'project_mode', 'version', 'aspects', 'partial_projection', 'whole_instruction_complete') if key in selection}
         if selection.get('gaps'):
             result['selection']['unresolved_reasons'] = list(dict.fromkeys(g.get('reason', 'unknown') for g in selection['gaps']))
+    groups = raw.get('facts') if isinstance(raw, Mapping) else None
+    if isinstance(groups, list) and _has_operand_purpose_contract(groups):
+        result = _positive_contract(result)
     return result
 
 
