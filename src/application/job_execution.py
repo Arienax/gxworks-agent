@@ -74,6 +74,11 @@ class JobExecution:
                 source_payload = generate_candidate(out_dir, {**snapshot, 'text': scoped_text}, context, images, ctx)
                 metadata = source_payload['metadata']
                 metadata['artifacts'] = {key: entry['path'] for key, entry in source_payload['artifacts'].items()}
+            elif mode in ('st', 'sfc'):
+                from application.gxw_delivery import generate_source_candidate
+                source_payload = generate_source_candidate(out_dir, {**snapshot, 'text': scoped_text}, images, ctx, context)
+                metadata = source_payload['metadata']
+                metadata['artifacts'] = {key: entry['path'] for key, entry in source_payload['artifacts'].items()}
             elif project["target_mode"] == "fbd" or (version or {}).get("target_mode") == "fbd":
                 from application.fbd import generate_candidate
                 fbd_payload = generate_candidate(out_dir, snapshot, images, ctx)
@@ -86,11 +91,6 @@ class JobExecution:
                 repair_baseline = snapshot.get("repair_baseline") if repair_mode else None
                 repair_plan = snapshot.get("repair_plan") if repair_mode else None
                 fresh_confirmed_generation = bool(snapshot.get("fresh_confirmed_generation"))
-                st_baseline, st_context = None, None
-                if project['target_mode'] == 'st' and snapshot.get('fbd_baseline'):
-                    from gxw.st_program import project_context_snapshot
-                    st_baseline = base64.b64decode(snapshot['fbd_baseline'])
-                    st_context = project_context_snapshot(st_baseline, (version or {}).get('program_name'))
                 if repair_mode:
                     previous_json = copy.deepcopy(repair_baseline)
                 elif format_repair or fresh_confirmed_generation:
@@ -118,8 +118,7 @@ class JobExecution:
                     image_attachments=images, model_name=snapshot.get("model", {}).get("model"),
                     response_language=language, construction_examples=snapshot.get("construction_examples"),
                     fresh_confirmed_generation=fresh_confirmed_generation,
-                    direct_generation=kind == "direct_generation",
-                    st_native_baseline=st_baseline, st_project_context=st_context)
+                    direct_generation=kind == "direct_generation")
                 metadata = GenerationWorkflow(request, out_dir, ctx.emit, GenerationDependencies(
                     provider=provider, check_cancelled=ctx.checkpoint, preserve_rejected_candidate=True
                 )).run()
@@ -146,12 +145,9 @@ class JobExecution:
                        "normalization": metadata.get("normalization"),
                        "_construction_binding": copy.deepcopy((metadata.get('first_pass_pipeline') or {}).get('construction_binding')),
                        "change_scope": snapshot.get("change_scope")}
-            if metadata["target_mode"] == "ladder" and 'gxw' not in metadata['artifacts']:
-                payload["_candidate_ir"] = json.loads((out_dir / metadata["artifacts"]["ir"]).read_text(encoding="utf-8"))
-            else:
-                payload.update(staging_dir=str(out_dir), metadata=metadata, artifacts={k: {
-                    "path": v, "sha256": hashlib.sha256((out_dir / v).read_bytes()).hexdigest()}
-                    for k, v in metadata["artifacts"].items()})
+            payload.update(staging_dir=str(out_dir), metadata=metadata, artifacts={k: {
+                "path": v, "sha256": hashlib.sha256((out_dir / v).read_bytes()).hexdigest()}
+                for k, v in metadata["artifacts"].items()})
             with self.lock.thread_lock:
                 self.validate_snapshot(snapshot)
                 payload = self.previews.with_candidate_diff(project_id, (version or {}).get("id"), payload)
@@ -159,11 +155,15 @@ class JobExecution:
                     public_summary={"summary": text[:500], "validation": metadata["validation"], "normalization": metadata.get("normalization"), "diff": self.previews.diff_summary(payload["_preview_diff"])},
                     base_version_id=(version or {}).get("id"), request_id=ctx.job_id)
                 ctx.checkpoint()
-                proposal = self.save_local_proposal(proposal)
+                from application.gxw_delivery import delivery_progress
+                with delivery_progress(ctx.emit):
+                    proposal = self.save_local_proposal(proposal)
+            saved_metadata = self.store.get_version(project_id, proposal["result"]["version_id"])
+            output["generation"] = {**metadata, **saved_metadata}
             output.update(proposal_id=proposal["id"], version_id=proposal["result"]["version_id"],
-                          status='saved_behavior_draft' if proposal['result'].get('status') == 'saved_behavior_draft' else 'saved')
+                          status=proposal['result']['status'] if proposal['result'].get('status', '').startswith('saved_') else 'saved')
             ctx.emit("progress", {"stage": "version_saved", "version_id": output["version_id"],
-                "message": "程序已生成并自动保存；可选 Review、仿真或 GX 验证。"})
+                "message": "程序已保存；GXW 交付及自动原生编译结果已记录。"})
         elif kind == "agent":
             from agent_runtime.agent import run_tool_agent
             result = run_tool_agent(text, context=context, runtime=self.projects.runtime, provider=provider, read_only=True,

@@ -44,16 +44,16 @@ def test_st_shape_validation_receives_selected_cpu(tmp_path, monkeypatch, model)
     assert result["validation"]["status"] == "candidate_ready"
     assert result["validation"]["static"] == "passed"
     assert result["semantic_validation"]["requirements"] == "unverified"
-    assert (tmp_path / "program.st").read_text(encoding="utf-8") == "Y0 := X0;"
+    assert (tmp_path / "program.txt").read_text(encoding="utf-8") == "Y0 := X0;"
 
 
 def test_generation_runs_with_all_gui_imports_blocked(tmp_path):
-    script = '\nimport importlib.abc, json, sys\nclass BlockGUI(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if fullname == "main" or fullname == "qt_compat" or fullname.startswith(("PyQt", "PySide")):\n            raise AssertionError("GUI import: " + fullname)\nsys.meta_path.insert(0, BlockGUI())\nfrom application.generation import GenerationWorkflow, GenerationRequest, GenerationDependencies\nfrom application.review import InspectionWorkflow\nfrom application.planning import EvidenceDebugPlanWorkflow, SimulatorTestPlanWorkflow\nresult = GenerationWorkflow(\n    GenerationRequest("X0 controls Y0", target_mode="st", model_name="offline"), sys.argv[1],\n    dependencies=GenerationDependencies(stream_response=lambda *a, **k: ("", json.dumps({"st_code":"Y0 := X0;"}))),\n).run()\nassert result["artifacts"] == {"st": "program.st"}\nassert \'ui.desktop.main_window\' not in sys.modules and \'ui.desktop.qt\' not in sys.modules\n'
+    script = '\nimport importlib.abc, json, sys\nclass BlockGUI(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if fullname == "main" or fullname == "qt_compat" or fullname.startswith(("PyQt", "PySide")):\n            raise AssertionError("GUI import: " + fullname)\nsys.meta_path.insert(0, BlockGUI())\nfrom application.generation import GenerationWorkflow, GenerationRequest, GenerationDependencies\nfrom application.review import InspectionWorkflow\nfrom application.planning import EvidenceDebugPlanWorkflow, SimulatorTestPlanWorkflow\nresult = GenerationWorkflow(\n    GenerationRequest("X0 controls Y0", target_mode="st", model_name="offline"), sys.argv[1],\n    dependencies=GenerationDependencies(stream_response=lambda *a, **k: ("", json.dumps({"st_code":"Y0 := X0;"}))),\n).run()\nassert result["artifacts"]["st"] == "program.txt"\nassert "global_labels_csv" in result["artifacts"]\nassert \'ui.desktop.main_window\' not in sys.modules and \'ui.desktop.qt\' not in sys.modules\n'
     env = dict(os.environ, PYTHONPATH=str(Path("src").resolve()))
     completed = subprocess.run([sys.executable, "-c", script, str(tmp_path)],
                                env=env, capture_output=True, text=True)
     assert completed.returncode == 0, completed.stdout + completed.stderr
-    assert (tmp_path / "program.st").read_text(encoding="utf-8") == "Y0 := X0;"
+    assert (tmp_path / "program.txt").read_text(encoding="utf-8") == "Y0 := X0;"
 
 
 @pytest.mark.parametrize('cpu', ['FX1N', 'Q00J', 'Q03UDV', 'L02'])

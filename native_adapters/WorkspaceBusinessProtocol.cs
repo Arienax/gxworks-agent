@@ -36,8 +36,9 @@ namespace PlcAi.NativeAdapter
     // vendor language/type values, profiles and layouts stay inside this module.
     internal static class WorkspaceBusinessProtocol
     {
-        internal const int Version = 3;
+        internal const int Version = 4;
         static readonly Dictionary<string, string> Actions = new Dictionary<string, string> {
+            {"create_project", "create_project"},
             {"edit_program", "save_source"}, {"add_program_unit", "create_source"},
             {"assign_program", "bind_program_task"}, {"add_resource", "create_resource_scope"},
             {"add_task", "create_task_scope"}, {"check_project", "validate_project"},

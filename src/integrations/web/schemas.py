@@ -18,7 +18,7 @@ class Login(Command):
 class ProjectCreate(Command):
     name: str = Field(min_length=1, max_length=160)
     plc_model: str = Field(default="FX3U", max_length=96)
-    target_mode: Literal["ladder", "st", "fbd"] = "ladder"
+    target_mode: Literal["ladder", "st", "fbd", "sfc"] = "ladder"
     native_project_type: Literal["simple", "structured", "parameter"] | None = None
     use_labels: bool | None = None
 
@@ -26,7 +26,7 @@ class ProjectCreate(Command):
 class ProjectUpdate(Command):
     name: str | None = Field(default=None, min_length=1, max_length=160)
     plc_model: str | None = Field(default=None, max_length=96)
-    target_mode: Literal["ladder", "st", "fbd"] | None = None
+    target_mode: Literal["ladder", "st", "fbd", "sfc"] | None = None
     native_project_type: Literal["simple", "structured", "parameter"] | None = None
     use_labels: bool | None = None
     effort: Literal["low", "medium", "high"] | None = None  # deprecated, ignored

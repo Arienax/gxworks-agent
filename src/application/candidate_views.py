@@ -119,6 +119,12 @@ class CandidateViews:
         base_raw = None
         if base_version_id and 'gxw' in self.projects.raw_version(project_id, base_version_id).get('artifacts', {}):
             base_raw = self.projects.artifact(project_id, base_version_id, 'gxw').read_bytes()
+        if payload.get('target_mode') in ('fbd', 'sfc') and 'gxw' not in payload.get('artifacts', {}):
+            from application.fbd import staged_bytes
+            values = staged_bytes(payload, self.state_dir)
+            text = values[payload['target_mode']].decode('utf-8')
+            return {'kind': payload['target_mode'], 'has_changes': True, 'unified_diff': ''.join('+' + line + '\n' for line in text.splitlines()),
+                    'summary': 'New structured source candidate; GXW delivery is prepared on save.'}
         if "_candidate_ir" in payload:
             from plc.core import PLCCore
             before = self.projects.program(project_id, base_version_id) if base_version_id else None
@@ -318,8 +324,18 @@ class CandidateViews:
         if payload.get('target_mode') == 'ladder' and 'ir' in (payload.get('artifacts') or {}):
             from application.fbd import staged_bytes
             program = json.loads(staged_bytes(payload, self.state_dir)['ir'])
-            return {**self.render_ladder_preview(program, theme=theme), 'action': record['action'],
-                    'diff': public(payload.get('_preview_diff')), 'proposal_id': proposal_id}
+            return {**self.render_ladder_preview(program, theme=theme,
+                        confirmed_spec=payload.get('_confirmed_spec'),
+                        validation_profile=payload.get('_validation_profile', 'strict')),
+                    'diff': public(payload.get('_preview_diff'), document='preview_diff')}
+        if payload.get('target_mode') in ('fbd', 'sfc') and 'gxw' not in payload.get('artifacts', {}):
+            from application.fbd import staged_bytes
+            mode = payload['target_mode']
+            candidate = json.loads(staged_bytes(payload, self.state_dir)[mode])
+            return {'target_mode': mode, 'program': {'kind': 'source_candidate', 'target_mode': mode,
+                    'source': public(candidate, document='program')},
+                    'validation': public(payload['metadata']['validation']),
+                    'diff': public(payload['_preview_diff'], document='preview_diff')}
         if payload.get("target_mode") == "fbd":
             from application.fbd import editor_snapshot, staged_bytes
             artifacts = staged_bytes(payload, self.state_dir)

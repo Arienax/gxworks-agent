@@ -116,6 +116,9 @@ def resolve_tool_context(definition, context, arguments):
         requirement = "version"
     if definition.name == 'create_st_candidate' and arguments.get('operation') in {'create_st_program', 'edit_st_program'}:
         requirement = 'version'
+    if (definition.name == 'create_fbd_candidate' and arguments.get('operation') == 'create_st_fb'
+            and not context.version_id and context.project.get('target_mode') == 'fbd'):
+        requirement = 'project'
     if requirement == "none":
         return context
     if requirement == "model":

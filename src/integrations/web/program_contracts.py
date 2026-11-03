@@ -819,7 +819,13 @@ class SFCModel(ExtensibleResource):
     metadata: EngineeringObject | None = None
 
 
-ProgramDocument = PLCProgram | FBDModel | SFCModel | LadderDocument
+class SourceCandidateDocument(PublicResource):
+    kind: Literal['source_candidate']
+    target_mode: Literal['fbd', 'sfc']
+    source: EngineeringObject
+
+
+ProgramDocument = PLCProgram | FBDModel | SFCModel | LadderDocument | SourceCandidateDocument
 
 
 class CatalogNode(ExtensibleResource):

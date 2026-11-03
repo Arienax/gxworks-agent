@@ -65,6 +65,25 @@ def _source(source):
     return current
 
 
+def initialize_empty_sfc_source(source):
+    """Initialize the reference representation of a newly created empty block.
+
+    Called only for this request's native New-project output. Existing opaque
+    charts keep their normal edit rejection; no graph records are discarded.
+    """
+    from .sfc_pou import sfc_components, serialize_sfc_components
+    current = parse_sfc_pou(source.raw)
+    if current.graph_tokens is not None:
+        return current.raw
+    if current.layout['graph']['storage_words'] != [0, 1]:
+        raise GXWFormatError('new SFC block has an unknown initial graph representation')
+    children, actions = sfc_components(current)
+    if any(len(child['body']) != 20 for child in children):
+        raise GXWFormatError('new SFC block unexpectedly contains child instructions')
+    graph = struct.pack('<5I', 20, 0, 0, 4, 4)
+    return serialize_sfc_components(current, children=children, actions=actions, graph=graph)
+
+
 def decode_sfc_graph(source: SfcSource, *, cpu: str) -> dict:
     """Project ordered steps, transitions and explicit outgoing references.
 

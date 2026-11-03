@@ -25,7 +25,8 @@ def test_all_q_buffer_numbers_remain_decimal_in_source_validation_and_encoding(c
 
 
 @pytest.mark.parametrize('cpu', [cpu for cpu in Q_CPUS if cpu not in PARAMETER_ONLY])
-@pytest.mark.parametrize('operand', ['U9\\G36320.1', 'U0B\\G2000.8', 'U0B\\G8000.F'])
+@pytest.mark.parametrize('operand', ['U9\\G36320.1', 'U9\\G36320.2', 'U9\\G36320.3',
+    'U9\\G2000.8', 'U0B\\G2000.8', 'U0B\\G8000.8', 'U0B\\G8000.F'])
 def test_all_q_ordered_buffer_bits_keep_qualified_access_and_remain_source_unverified(cpu, operand):
     from plc.ordered_source import build_instruction_ir, validate_ordered_rung
     from plc.ir import analyze_instruction_access, validate_plc_ir

@@ -92,7 +92,7 @@ class ToolRegistry:
                 'description': '分页游标。使用 delivery.next 的完整参数继续，直到 delivery.complete=true；查询或工程/事实库变化后重新读取。'}
             definition = replace(definition, description=definition.description +
                 ' 返回 context_schema_version=3：document 引用 objects；按 delivery.next 读取全部页并合并 objects。'
-                ' 单次最多 6000 估算 token / 32 KiB，未完成交付不能当作知识缺失或改用网页搜索。')
+                ' 每页最多 6000 估算 token / 32 KiB；合并完成后使用完整 document。')
         if name in SOURCE_TOOL_NAMES:
             schema.setdefault("properties", {})["source_ref"] = {
                 "type": "string", "minLength": 1, "maxLength": 128,
@@ -100,7 +100,7 @@ class ToolRegistry:
         if name == "search_plc_manual":
             schema.setdefault("properties", {})["plc_model"] = {
                 "type": "string", "minLength": 1, "maxLength": 100,
-                "description": "无选中工程时必须明确 CPU；有工程时不得覆盖工程型号。"}
+                "description": "未选中工程时传入实际 CPU；已选中工程时沿用工程型号。"}
         definition = replace(definition, parameters=schema)
         if schema.get("type") != "object":
             raise ValueError(f"tool {name} parameters must be an object schema")

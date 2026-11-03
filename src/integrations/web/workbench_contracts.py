@@ -453,6 +453,7 @@ class DeliveryDiff(PublicResource):
 
 
 class DeliverySummary(ExtensibleResource):
+    delivery: JsonObject | None = None
     project_id: str
     project_name: str
     version_id: str

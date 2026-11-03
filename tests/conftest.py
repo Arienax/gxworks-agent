@@ -101,3 +101,10 @@ def gx_ready(monkeypatch):
             "message": "GX Works2 已运行。",
         },
     )
+
+
+@pytest.fixture(autouse=True)
+def isolate_gxw_delivery_installation(monkeypatch):
+    """Offline tests never launch vendor software installed on the developer machine."""
+    import application.gxw_delivery as delivery
+    monkeypatch.setattr(delivery, "installation", lambda: None)

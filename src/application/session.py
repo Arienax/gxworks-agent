@@ -43,6 +43,11 @@ class ProjectSession(SessionStore):
         if project is None:
             raise KeyError(project_id)
         metadata = copy.deepcopy(metadata)
+        if metadata.get('source_candidate_id') or metadata.get('delivery_requested'):
+            from application.gxw_delivery import finalize_saved
+            finalize_saved(self.version_dir(project_id, version_id), metadata)
+            if metadata.get('activation_blocked'):
+                activate = False
         spec = metadata.get('confirmed_spec_snapshot') or project.get('confirmed_spec')
         if spec and spec.get('behavior_constraints') and (metadata.get('artifacts') or {}).get('ir'):
             from simulator.bounded import check_confirmed_behavior
@@ -66,7 +71,7 @@ class ProjectSession(SessionStore):
         if project is None or version is None:
             raise KeyError(version_id)
         if version.get('activation_blocked'):
-            raise ValueError('已确认行为关系存在反例；诊断草稿不能激活。')
+            raise ValueError('诊断草稿尚未通过所需验证，不能激活。')
         spec = project.get('confirmed_spec')
         if spec and spec.get('behavior_constraints'):
             from simulator.bounded import check_confirmed_behavior

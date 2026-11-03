@@ -61,6 +61,13 @@ FBD_GENERATION_PROMPT = """Generate GX Works2 FBD/structured ladder parameters. 
 {"summary":"human-readable summary","model":{"schema_version":2,"program":"supplied program","networks":[...]}}.
 Use the supplied parameter_schema. This is a candidate, not a compiled or executed program.
 Honor the confirmed specification and explicit I/O. Never invent stop/emergency addresses.
+For a complex machine, use FBD to assemble cohesive ST function blocks through named interfaces.
+Encapsulate sequence/state, timing/counting, alarms and output interlocks in appropriate reusable
+FB types, with separate instances for independent state. Keep the main diagram in small, readable
+functional networks, using named intermediate signals and short connections. Do not flatten a
+state machine into a large collection of Boolean gates, or hide the whole machine in one opaque FB.
+Required ST implementations must be created through the project-definition workflow before graph
+assembly; do not invent missing interfaces or substitute a gate expansion for missing FB definitions.
 Core creates blocks, current interfaces, dimensions, IN_OUT positions and orthogonal wires.
 Do not return coordinates, dimensions, ports, canvas_height, source_offset or wire bend points.
 Each network accepts calls, nodes, wires and its saved block text. Networks execute in supplied order;

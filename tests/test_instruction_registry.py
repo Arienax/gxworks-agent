@@ -675,3 +675,121 @@ def test_pwm_channel_word_is_read_and_physical_output_is_written():
         assert 'D0' in reads and 'D0' not in writes
         _, writes = analyze_instruction_access('PWM', ['K10', 'K20', 'Y0'], plc_model=cpu)
         assert 'Y0' in writes
+
+
+@pytest.fixture
+def source_st_registry(tmp_path, monkeypatch):
+    """Load only public source resources, with no owner store or private corpus."""
+    import shutil
+    from pathlib import Path
+    from plc import instructions
+    directory = tmp_path / 'instructions'
+    directory.mkdir()
+    source = Path(__file__).resolve().parents[1] / 'resources/instructions/mitsubishi'
+    for name in ('common.json', 'fx3u.json', 'fx5u.json', 'fbd_language_rules.json', 'st_language_rules.json'):
+        shutil.copyfile(source / name, directory / name)
+    monkeypatch.delenv('GXW2_INSTRUCTION_OWNER_MANIFEST', raising=False)
+    monkeypatch.setattr(instructions, '_candidate_catalog_directories', lambda: (directory,))
+    from shared import paths
+    monkeypatch.setattr(paths, 'resource_path', lambda name: tmp_path / 'absent-runtime' / name)
+    registry = instructions.load_default_instruction_registry()
+    monkeypatch.setattr(instructions, 'DEFAULT_INSTRUCTION_REGISTRY', registry)
+    return registry, directory
+
+
+@pytest.mark.parametrize('expression,operator,left', [
+    ('D1 + D2 * D3', '+', 'atom'),
+    ('(D1 + D2) * D3', '*', 'binary'),
+    ('D1 < D2 = D3 < D4', '=', 'binary'),
+    ('M1 OR M2 AND M3', 'OR', 'atom'),
+    ('2.0 ** 3.0 ** 2.0', '**', 'binary'),
+    ('D1 - D2 - D3', '-', 'binary'),
+])
+def test_source_st_rules_bind_operator_precedence_and_associativity(source_st_registry, expression, operator, left):
+    from plc.st_frontend import parse_body
+    node = parse_body('D0 := ' + expression + ';').body[0][2]
+    assert node[0:2] == ('binary', operator)
+    assert node[2][0] == left
+    registry, _ = source_st_registry
+    feature = registry.language_feature('ST.OPERATORS', cpu='L02', language='st')
+    assert len(feature['facts']) == 1
+    assert feature['facts'][0]['status'] == 'source_verified'
+    assert len([row for row in registry.language_facts if row['target'].startswith('ST.')]) == 8
+
+
+@pytest.mark.parametrize('source', [
+    'IF X0 AND NOT X1 THEN D0 := D0 + 1; ELSE D0 := 0; END_IF;',
+    'FOR D0 := 0 TO 3 DO D1 := D1 + D0; END_FOR;',
+    'WHILE D0 < 3 DO D0 := D0 + 1; END_WHILE;',
+])
+def test_source_st_rules_parse_control_flow(source_st_registry, source):
+    from plc.st_frontend import parse_body
+    assert parse_body(source).body
+
+
+@pytest.mark.parametrize('name', ['st_language_rules.json', 'fbd_language_rules.json'])
+@pytest.mark.parametrize('change', ['write', 'delete'])
+def test_source_language_resource_changes_invalidate_checking_context(source_st_registry, name, change):
+    registry, directory = source_st_registry
+    assert registry.fact_bundle_current()
+    path = directory / name
+    if change == 'delete':
+        path.unlink()
+    else:
+        path.write_bytes(path.read_bytes() + b' ')
+    assert not registry.fact_bundle_current()
+    from plc.st_frontend import operator_binding, STUncovered
+    with pytest.raises(STUncovered, match='reload'):
+        operator_binding()
+
+
+@pytest.mark.parametrize('ambiguous', [False, True])
+def test_source_st_missing_or_ambiguous_binding_still_rejects(source_st_registry, ambiguous):
+    registry, _ = source_st_registry
+    feature = registry._language_features['ST.OPERATORS']
+    feature['facts'] = feature['facts'] * 2 if ambiguous else []
+    from plc.st_frontend import operator_binding, STUncovered
+    with pytest.raises(STUncovered, match='missing or ambiguous'):
+        operator_binding()
+
+
+def test_st_rule_resource_is_exported_and_collected(tmp_path):
+    import gzip
+    import json
+    import shutil
+    from pathlib import Path
+    from publication.source_policy import source_files
+    from scripts.runtime_knowledge_resources import INSTRUCTION_FILES, runtime_instruction_data
+    root = Path(__file__).resolve().parents[1]
+    name = 'resources/instructions/mitsubishi/st_language_rules.json'
+    assert root / name in source_files(root)
+    directory = tmp_path / 'resources/instructions/mitsubishi'
+    directory.mkdir(parents=True)
+    for filename in INSTRUCTION_FILES:
+        (directory / filename).write_text('{}', encoding='utf-8')
+    shutil.copyfile(root / name, tmp_path / name)
+    with gzip.open(directory / 'instruction_definitions.json.gz', 'wt', encoding='utf-8') as stream:
+        json.dump({'corpus_kind': 'authored_plc_facts_v1'}, stream)
+    collected = runtime_instruction_data(tmp_path)
+    assert (str(tmp_path / name), 'resources/instructions/mitsubishi') in collected
+
+
+@pytest.mark.parametrize('sources,expected', [
+    ([{'manual_id': 'reviewed', 'revision': 'K', 'primary_semantic_source': True}], 'reviewed'),
+    ([{'manual_id': 'reference', 'primary_semantic_source': False}], None),
+])
+def test_instruction_source_authority_uses_selected_owner_without_legacy_resource(monkeypatch, sources, expected):
+    from types import SimpleNamespace
+    from knowledge import source_authority
+    from plc import instructions
+    calls = []
+    def definition_entry(opcode, *, cpu):
+        calls.append((opcode, cpu))
+        return {'source_materials': sources}
+    monkeypatch.setattr(instructions, 'DEFAULT_INSTRUCTION_REGISTRY', SimpleNamespace(
+        _definition_owner_store=object(), definition_entry=definition_entry))
+    monkeypatch.setattr(source_authority, 'instruction_source_authorities',
+        lambda: pytest.fail('selected owner must not fall back to a legacy resource'))
+    result = source_authority.instruction_source_authority('DRVA', 'FX3U')
+    assert (result['manual_id'] if result else None) == expected
+    assert calls == [('DRVA', 'FX3U')]

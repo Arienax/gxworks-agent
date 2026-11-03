@@ -900,8 +900,7 @@ class InstructionRegistry:
         return store.database_path
 
     def fact_bundle_current(self):
-        core = getattr(self, '_core_language_resource', None)
-        if core is not None:
+        for core in getattr(self, '_core_language_resources', ()):
             try:
                 state = core[0].stat()
                 if (state.st_mtime_ns, state.st_size) != core[1:]:
@@ -1631,21 +1630,24 @@ def _candidate_catalog_directories() -> Tuple[Path, ...]:
 
 
 def _load_core_language_rules(registry, directory):
-    path = directory / 'fbd_language_rules.json'
-    if not path.is_file():
-        return registry
-    payload = json.loads(path.read_text(encoding='utf-8'))
-    if payload.get('schema_version') != 1:
-        raise ValueError('Unsupported core language rules')
-    features = _validated_language_features(payload['language_facts'])
     current = dict(getattr(registry, '_language_features', {}))
-    for target, feature in features.items():
-        if target not in current:
-            current[target] = feature
+    resources = []
+    for name in ('fbd_language_rules.json', 'st_language_rules.json'):
+        path = directory / name
+        if not path.is_file():
+            continue
+        payload = json.loads(path.read_text(encoding='utf-8'))
+        if payload.get('schema_version') != 1:
+            raise ValueError('Unsupported core language rules')
+        features = _validated_language_features(payload['language_facts'])
+        for target, feature in features.items():
+            if target not in current:
+                current[target] = feature
+        state = path.stat()
+        resources.append((path.resolve(), state.st_mtime_ns, state.st_size))
     registry._language_features = current
     registry.language_facts = tuple(current.values())
-    state = path.stat()
-    registry._core_language_resource = (path.resolve(), state.st_mtime_ns, state.st_size)
+    registry._core_language_resources = tuple(resources)
     return registry
 
 

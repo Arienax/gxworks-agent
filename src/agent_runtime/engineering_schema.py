@@ -217,7 +217,8 @@ def _engineering_st_schema():
     commands = _engineering_authoring_commands(visible=False)
     commands = {key: commands[key] for key in ('create_st_program', 'edit_st_program', 'edit_st_fb',
                                               'edit_st_function', 'edit_st_source')}
-    commands = {'from_candidate': _engineering_object({'candidate': {'type': 'object'}}, ['candidate']),
+    commands = {'generate': _engineering_object({'st_text': _engineering_text(), 'declarations': _engineering_declarations('any')}, ['st_text']),
+        'from_candidate': _engineering_object({'candidate': {'type': 'object'}}, ['candidate']),
         'import': _engineering_object({'data_base64': _engineering_text(),
         'program': _engineering_text(maximum=512)}, ['data_base64', 'program']), **commands}
     variants = [_engineering_object({'operation': {'type': 'string', 'enum': [name]},
@@ -225,6 +226,7 @@ def _engineering_st_schema():
         for name, rule in commands.items()]
     common = {key: value for rule in variants for key, value in rule['properties'].items()}
     common['operation'] = {'type': 'string', 'enum': list(commands)}
+    common['declarations'] = _engineering_declarations('any')
     return _engineering_object(common, ['operation'], oneOf=variants)
 
 
@@ -235,7 +237,7 @@ def _engineering_fbd_schema():
     commands.update({name: _engineering_object({'model': {'type': 'object'},
         'native_save': {'type': 'boolean'},
         **({'device_comments': {'type': 'object', 'additionalProperties': {'oneOf': [{'type': 'string'}, {'type': 'null'}]}},
-            'comment_table': text} if name == 'edit' else {})}, ['model'])
+            'comment_table': text})}, ['model'])
                      for name in ('generate', 'edit')})
     commands.update(import_library=_engineering_object({'data_base64': _engineering_text(), 'library_name': text},
                                                        ['data_base64', 'library_name']),

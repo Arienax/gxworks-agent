@@ -32,6 +32,7 @@
     "execution": {"heading": "Cross-cutting application and execution", "quick": ["tests/test_execution_read.py"]}
   },
   "rules": [
+    {"paths": ["src/application/gxw_delivery.py", "tests/test_gxw_delivery.py"], "domains": ["gxw", "generation", "native", "mcp", "web"], "quick": ["tests/test_gxw_delivery.py"]},
     {
       "paths": ["src/gxw/native_diagnostics.py", "src/gxw/diagnostic_*.py", "src/application/native_validation.py"],
       "domains": ["gxw", "plc", "native", "web", "mcp"],

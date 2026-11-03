@@ -67,6 +67,21 @@ def native_project_profile(cpu):
     return _PROFILES_BY_NAME.get(_cpu_key(cpu))
 
 
+def native_serialized_cpu(cpu):
+    """CPU name stored by Works2 for an exact menu selection.
+
+    L's combined hardware selections and FX3G/FX3GC use their base name in
+    engineering objects; the remaining combined selections retain the menu.
+    This representation does not change the selected concrete CPU identity.
+    """
+    profile = native_project_profile(cpu)
+    if profile is None or not profile.program_supported:
+        raise ValueError('No programmable GX Works2 target for ' + repr(cpu))
+    if profile.series[0] == 'LCPU' or profile.cpu == 'FX3G/FX3GC':
+        return profile.cpu.split('/')[0]
+    return profile.cpu
+
+
 def can_prepare_program_project(cpu):
     profile = native_project_profile(cpu)
     return bool(profile and profile.program_supported)

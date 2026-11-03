@@ -36,6 +36,7 @@ REQUIRED = {
     'src/gxw/templates/q-token-encoder-forms.json',
     'resources/instructions/mitsubishi/common.json',
     'resources/instructions/mitsubishi/fbd_language_rules.json',
+    'resources/instructions/mitsubishi/st_language_rules.json',
     'resources/instructions/mitsubishi/pwm_contract.generated.json',
     'resources/instructions/mitsubishi/fx3u.json',
     'resources/instructions/mitsubishi/fx5u.json',

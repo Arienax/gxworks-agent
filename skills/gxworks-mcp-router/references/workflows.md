@@ -1,5 +1,7 @@
 # 调用流程与示例
 
+默认交付优先返回 GXW。找到 GX Works2 后，共享保存流程自动编译、保存并冷重开；读取 delivery 与 validation 的实际结果，不根据文件存在宣称编译通过。GXW 无法生成时，Ladder 降级 CSV、ST 降级为代码 TXT 与全局标签 CSV、FBD/SFC 保留结构化候选及预览，并说明原因。原生编译失败仍保留 GXW 诊断候选，不改交 CSV。新建 ST/SFC 使用 get_generation_context 返回的 operation=generate 合同。GX Works2 1.635.0.1 配合 v4 工作区适配器，按实际 CPU 查询原生系列与子系列，无基底创建对应语言工程。遵守该 CPU 的工程类型和语言条件，读取实际创建及验证结果；不使用 IDE 新建对话框、隐藏窗口控件或预制完整工程。
+
 以下示例中的 `${...}` 均取自上一步工具的实际返回值；工具名称与参数字段以客户端当前连接的 `tools/list` schema 为准。
 
 ## 1. 只读分析外部 `.gxw` 文件
@@ -54,7 +56,7 @@
 ```
 
 3. **补充检索与提交候选**：优先使用上下文返回的 `generation_instructions`、规格与指令事实；仍需核对特定指令细节时调用 `search_plc_manual`。按合同生成 Ladder JSON（软元件注释遵守当前长度与格式要求），再调用 `create_program_candidate(ladder=..., generation_context_id=...)`。
-4. **查看产物**：版本保存成功后，可调用 `get_project_artifacts()` 获取生成的 JSON、SVG、衍生 ST 与 CSV 路径。
+4. **查看产物**：版本保存后调用 `get_project_artifacts()`，优先取得 `delivery.primary_artifact` 指向的 GXW；同时读取原生编译、保存与冷重开结果。GXW 无法生成时才按原因取得降级 CSV。
 
 ## 5. 离线修改 `.gxw` 中的单个或多个 POU
 
@@ -67,6 +69,8 @@
 ## 6. FBD / ST / SFC 工程读写
 
 ### FBD 与项目定义
+
+复杂设备的 FBD 主图按功能组装 ST FB。先明确运行、工序、定时计数、报警和输出互锁的职责、状态与接口；已有定义优先复用，缺少时通过 `create_fbd_candidate(operation="create_st_fb", source_name=..., declarations=..., st_text=...)` 建立真实实现。尚无保存版本时，首个定义先按所选 CPU 无基底创建本任务的 FBD 工程；随后定义复用该保存版本，读取新上下文后用 `operation="edit"` 组装主图。重复类型使用不同实例持有独立状态。主图保留少量功能网络、具名信号和短连线；不将完整状态机摊成门电路，不以空 FB 或单个整机黑盒代替模块设计。
 
 1. 选择实际 CPU 的 FBD 工程；外部 GXW 先导入为保存版本。生成或修改前调用 `get_generation_context`，带完整的 `user_requirement`。默认 `catalog_scope="task"` 按需求和源码依赖选择接口。
 2. 使用返回的 `generation_input`，重点读取下表。单独的 `get_fbd_catalog` 默认返回全目录，不能代替这些规则；缺少指定块时，用 `templates` 精确补取，并保留 `missing_templates`。需要将新增接口及依赖纳入生成时，用同一需求和明确 `templates` 重新获取上下文。
@@ -104,14 +108,14 @@
 
 查看图形、项目定义和用户库分别调用 `read_fbd_project`、`read_fbd_definition`、`read_fbd_libraries`。导入用户库时使用 `create_fbd_candidate(operation="import_library")`，绑定已保存的目标版本，传入来源 GXW 的 `data_base64` 与实际 `library_name`。当前只转移已覆盖的 ST 实现、接口和库内类型，FBD 库正文转移不受支持；目标源码、任务、调用者及声明保留。需要原生编译并保存时才对已保存版本调用 `operation="compile"`。
 
-`import`、`edit`、`generate` 的 `native_save` 必须是布尔值，只表示本次调用的选择：显式 `true` 请求原生保存，省略或 `false` 使用离线写入。历史版本曾原生保存不会授权本次保存；源码和声明未变时不会重复原生保存。`create_fb`、`create_program` 和 `import_library` 不接受该选项，继续使用各自的原生创建或导入路径。保存及回读成功仍不表示候选已确认、原生编译通过或运行通过。
+`native_save` 是布尔值，显式 `true` 可要求准备阶段原生保存；候选确认后的交付流程仍会在发现 GX Works2 后默认编译、保存及冷重开，`false` 不关闭该默认行为。`create_fb`、`create_program` 和 `import_library` 保留各自的创建或导入流程。根据实际验证字段判断结果，文件保存本身不能证明编译或运行通过。
 
 ### ST 程序与块定义
 
 1. 调用 `read_st_project` 读取既有 Program、FB、FUNCTION 的正文、返回类型、声明表和任务归属。
 2. 编辑既有对象时，以读取结果中的准确逻辑身份作为 `source_name`，调用 `create_st_candidate` 的 `edit_st_program`、`edit_st_fb`、`edit_st_function` 或通用 `edit_st_source`；多源码联合修改也可使用 `edit_gxw_project`。
 3. 只改正文时省略 `declarations`，保留原声明。需要改声明时传入完整目标列表：给出的列表整体替换原表，未列出的旧声明将删除，列表本身决定名称和顺序；`[]` 表示请求清空，仍须通过现有引用及类型检查。整表替换不与 `remove_declarations`、`renames` 或 `order` 混用。
-4. 新建普通 ST Program 时，结合 `get_generation_context` 与工程内实际存在的资源、任务名称构造 `task_binding`，通过 `create_st_candidate` 提交。
+4. 新工程尚无 GXW 版本时，按 `get_generation_context` 返回的 `operation=generate` 合同，通过 `create_st_candidate` 提交 `st_text` 与完整 `declarations`。后台工厂按实际 CPU 创建工程，并绑定读回的 Program 和任务；失败时报告具体阶段与原因。向已有工程新增 Program 时，仍使用读取到的资源和任务构造 `task_binding`。
 
 例如，只修改已读取对象的正文并保留声明：
 

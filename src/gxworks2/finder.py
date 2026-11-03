@@ -18,12 +18,74 @@ class GXWorks2Finder:
     )
 
     def find_executable(self):
-        configured = os.environ.get("GXWORKS2_EXE", "").strip()
-        candidates = ([Path(configured)] if configured else []) + list(self.INSTALL_CANDIDATES)
+        configured = os.path.expandvars(os.environ.get("GXWORKS2_EXE", "").strip().strip('"'))
+        if configured and Path(configured).is_file() and Path(configured).name.casefold() == 'gd2.exe':
+            return Path(configured).resolve()
+        candidates = [Path(configured)] if configured else []
+        candidates.extend(Path(session.executable) for session in self.list_running() if session.executable)
+        candidates.extend(self._registered_executables())
+        candidates.extend(self.INSTALL_CANDIDATES)
+        for root in self._fixed_drives():
+            candidates.extend(root / suffix for suffix in (
+                'Program Files (x86)/MELSOFT/GPPW2/GD2.exe',
+                'Program Files/MELSOFT/GPPW2/GD2.exe',
+                'MELSOFT/GPPW2/GD2.exe', 'MELSEC/GPPW2/GD2.exe', 'GXWORKS2/GPPW2/GD2.exe'))
+        seen = set()
         for candidate in candidates:
-            if candidate.is_file():
-                return candidate.resolve()
+            key = str(candidate).casefold()
+            if key not in seen:
+                seen.add(key)
+                if candidate.name.casefold() == 'gd2.exe' and candidate.is_file():
+                    return candidate.resolve()
         return None
+
+    @staticmethod
+    def _fixed_drives():
+        if os.name != 'nt':
+            return []
+        kernel = ctypes.windll.kernel32
+        mask = kernel.GetLogicalDrives()
+        return [Path(f'{chr(65 + index)}:\\') for index in range(26)
+                if mask & (1 << index) and kernel.GetDriveTypeW(f'{chr(65 + index)}:\\') == 3]
+
+    @staticmethod
+    def _registered_executables():
+        if os.name != 'nt':
+            return []
+        import winreg
+        candidates = []
+        for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+            for view in (winreg.KEY_WOW64_32KEY, winreg.KEY_WOW64_64KEY):
+                def value(key, name):
+                    try:
+                        return str(winreg.QueryValueEx(key, name)[0]).strip().strip('"')
+                    except OSError:
+                        return ''
+                try:
+                    with winreg.OpenKey(hive, r'SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\GD2.exe',
+                                        0, winreg.KEY_READ | view) as key:
+                        path = value(key, '')
+                        if path:
+                            candidates.append(Path(os.path.expandvars(path)))
+                except OSError:
+                    pass
+                try:
+                    with winreg.OpenKey(hive, r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
+                                        0, winreg.KEY_READ | view) as uninstall:
+                        for index in range(winreg.QueryInfoKey(uninstall)[0]):
+                            try:
+                                with winreg.OpenKey(uninstall, winreg.EnumKey(uninstall, index)) as key:
+                                    if value(key, 'DisplayName').strip().casefold() != 'gx works2':
+                                        continue
+                                    location = value(key, 'InstallLocation')
+                                    if location:
+                                        root = Path(os.path.expandvars(location))
+                                        candidates.extend((root / 'GPPW2/GD2.exe', root / 'GD2.exe'))
+                            except OSError:
+                                continue
+                except OSError:
+                    pass
+        return candidates
 
     def list_running(self, *, process_id=None):
         if process_id is not None and (type(process_id) is not int or process_id <= 0):

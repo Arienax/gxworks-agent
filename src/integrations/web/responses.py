@@ -10,7 +10,7 @@ from .response_types import (JsonObject, EngineeringObject, EngineeringMap, Engi
 from .program_contracts import (ProgramDocument, PLCProgram, LadderDocument, FBDModel, SFCModel,
     FBDNode, FBDLabel, FBDCatalog, FBDEditorView, FBDInspection, FBDDraftPreview, SFCSource,
     DeclarationEdit, IRNetwork, ProgramTiming, FBDParameterModel, SourceDefinition,
-    PropertyChange, ProgramPropertyChanges, SourceIssue)
+    PropertyChange, ProgramPropertyChanges, SourceIssue, SourceCandidateDocument)
 
 from .workbench_contracts import *
 from .native_contracts import NativeCheck, NativeDiagnostic, NativeCheckState
@@ -99,6 +99,7 @@ class Version(PublicResource):
     debug_attempts: list[JsonObject] | None = None
     generation_handoff: JsonObject | None = None
     maintainability_review: JsonObject | None = None
+    delivery: JsonObject | None = None
     artifacts: list[Artifact] = Field(default_factory=list)
     capabilities: Capabilities
 
@@ -493,7 +494,14 @@ class ExecutionPreview(PublicResource):
     plan: JsonObject | None = None
 
 
-ProposalPreview = LadderPreview | STPreview | FBDPreviewResource | SFCPreviewResource | ExecutionPreview
+class StructuredSourcePreview(PublicResource):
+    target_mode: Literal['fbd', 'sfc']
+    program: SourceCandidateDocument
+    validation: JsonObject
+    diff: EngineeringObject
+
+
+ProposalPreview = LadderPreview | STPreview | FBDPreviewResource | SFCPreviewResource | StructuredSourcePreview | ExecutionPreview
 # Existing Python consumers keep their imports; schema names distinguish these
 # resources from the request models with the same historical short names.
 FBDPreview = FBDPreviewResource
@@ -528,7 +536,13 @@ class GenerationSTPreview(STPreview):
     proposal_id: str | None = None
 
 
-GenerationPreview = GenerationLadderPreview | GenerationFBDPreview | GenerationSFCPreview | GenerationSTPreview
+class GenerationStructuredSourcePreview(StructuredSourcePreview):
+    job_id: str
+    read_only: bool
+    proposal_id: str | None = None
+
+
+GenerationPreview = GenerationLadderPreview | GenerationFBDPreview | GenerationSFCPreview | GenerationSTPreview | GenerationStructuredSourcePreview
 
 
 class ModelProfile(PublicResource):

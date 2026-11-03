@@ -23,7 +23,7 @@ from plc.device_profiles import (
 
 
 DEVICE_ADDRESS_RE = re.compile(
-    r"^(ZR|ER|SM|SD|SB|SW|ST|X|Y|M|D|T|C|S|L|F|B|W|R|V|Z)([0-9A-F]+)(?:\.([0-9A-F]+))?$", re.IGNORECASE
+    r"^(ZR|ER|SM|SD|SB|SW|ST|TC|TS|TN|CC|CS|CN|X|Y|M|D|T|C|S|L|F|B|W|R|V|Z)([0-9A-F]+)(?:\.([0-9A-F]+))?$", re.IGNORECASE
 )
 INDEXED_DEVICE_ADDRESS_RE = re.compile(
     r"^(?P<base>(?:SM|SD|X|Y|M|D|T|C|S)\d+)(?P<index>[VZ]\d*)$",

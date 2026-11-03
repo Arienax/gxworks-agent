@@ -1,6 +1,31 @@
 # Release changes
 
-## Unreleased
+## 0.4.0 — 2026-11-04
+
+- Ladder, ST, FBD and SFC candidates prefer GXW delivery. Saving automatically
+  compiles, saves and cold-reopens through an available GX Works2 installation;
+  failed compilation retains a diagnostic GXW without activating the version.
+- Workspace protocol v4 creates projects through background native components.
+  The GX Works2 1.635.0.1 acceptance covers 57 programmable CPU menu identities
+  and 226 supported default language combinations; this is software engineering
+  validation, not physical PLC verification.
+- Existing projects support source-bound offline edits, including complex Q
+  instruction formats, declarations, comments and SFC internal source objects.
+- ST source candidates bind their own declarations before static checks. When
+  GXW cannot be produced, delivery includes UTF-8 code TXT and a GX Works2 global
+  label CSV; properties not representable in CSV receive explicit diagnostics.
+- Preserve generation summaries and static diagnostics across delivery, retain
+  scoped edit requests and the selected version's language, and synchronize Web,
+  MCP and skill contracts.
+- Discover GX Works2 across explicit configuration, running instances, registry
+  installations and local fixed drives. Simulator observations expose typed
+  signals, tolerances and sampling summaries through shared tool schemas.
+- Existing operand and purpose knowledge is presented as usable manual content
+  with its recorded scope. This release does not install the separate full-corpus
+  RAG upgrade.
+- Scoped checks and package checks are reported separately. Remaining historical
+  fact-corpus, hardware-profile and native-sample regression failures are not
+  reported as passing; no full repository regression was run for this release.
 
 - A root `NOTICE` records the original project, author and repository. READMEs
   show the author at the top, first-party source files carry a short copyright

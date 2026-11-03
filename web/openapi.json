@@ -1111,6 +1111,20 @@
             ],
             "title": "Decision Receipt Status"
           },
+          "delivery": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery"
+          },
           "device_io": {
             "additionalProperties": {
               "$ref": "#/components/schemas/DeviceRecord"
@@ -1649,6 +1663,9 @@
                 "$ref": "#/components/schemas/LadderDocument"
               },
               {
+                "$ref": "#/components/schemas/SourceCandidateDocument"
+              },
+              {
                 "type": "null"
               }
             ],
@@ -1794,6 +1811,9 @@
               },
               {
                 "$ref": "#/components/schemas/LadderDocument"
+              },
+              {
+                "$ref": "#/components/schemas/SourceCandidateDocument"
               },
               {
                 "type": "null"
@@ -6575,6 +6595,65 @@
           "read_only"
         ],
         "title": "GenerationSTPreview",
+        "type": "object"
+      },
+      "GenerationStructuredSourcePreview": {
+        "additionalProperties": false,
+        "properties": {
+          "diff": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Diff",
+            "type": "object"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "program": {
+            "$ref": "#/components/schemas/SourceCandidateDocument"
+          },
+          "proposal_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal Id"
+          },
+          "read_only": {
+            "title": "Read Only",
+            "type": "boolean"
+          },
+          "target_mode": {
+            "enum": [
+              "fbd",
+              "sfc"
+            ],
+            "title": "Target Mode",
+            "type": "string"
+          },
+          "validation": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Validation",
+            "type": "object"
+          }
+        },
+        "required": [
+          "target_mode",
+          "program",
+          "validation",
+          "diff",
+          "job_id",
+          "read_only"
+        ],
+        "title": "GenerationStructuredSourcePreview",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -17167,7 +17246,8 @@
             "enum": [
               "ladder",
               "st",
-              "fbd"
+              "fbd",
+              "sfc"
             ],
             "title": "Target Mode",
             "type": "string"
@@ -17393,7 +17473,8 @@
                 "enum": [
                   "ladder",
                   "st",
-                  "fbd"
+                  "fbd",
+                  "sfc"
                 ],
                 "type": "string"
               },
@@ -22754,6 +22835,38 @@
         "title": "SimulatorPlanSave",
         "type": "object"
       },
+      "SourceCandidateDocument": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "source_candidate",
+            "title": "Kind",
+            "type": "string"
+          },
+          "source": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Source",
+            "type": "object"
+          },
+          "target_mode": {
+            "enum": [
+              "fbd",
+              "sfc"
+            ],
+            "title": "Target Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "target_mode",
+          "source"
+        ],
+        "title": "SourceCandidateDocument",
+        "type": "object"
+      },
       "SourceDefinition": {
         "additionalProperties": {
           "$ref": "#/components/schemas/JsonValue"
@@ -24280,6 +24393,44 @@
         "title": "StructureArrayAddresses",
         "type": "object"
       },
+      "StructuredSourcePreview": {
+        "additionalProperties": false,
+        "properties": {
+          "diff": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Diff",
+            "type": "object"
+          },
+          "program": {
+            "$ref": "#/components/schemas/SourceCandidateDocument"
+          },
+          "target_mode": {
+            "enum": [
+              "fbd",
+              "sfc"
+            ],
+            "title": "Target Mode",
+            "type": "string"
+          },
+          "validation": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Validation",
+            "type": "object"
+          }
+        },
+        "required": [
+          "target_mode",
+          "program",
+          "validation",
+          "diff"
+        ],
+        "title": "StructuredSourcePreview",
+        "type": "object"
+      },
       "TaskProgram": {
         "additionalProperties": false,
         "properties": {
@@ -25205,6 +25356,20 @@
               }
             ],
             "title": "Debug Attempts"
+          },
+          "delivery": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery"
           },
           "generation_handoff": {
             "anyOf": [
@@ -26458,6 +26623,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/GenerationSTPreview"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GenerationStructuredSourcePreview"
                     }
                   ],
                   "title": "Response Generation Preview Api Jobs  Job Id  Preview Get"
@@ -27943,6 +28111,9 @@
                       "$ref": "#/components/schemas/LadderDocument"
                     },
                     {
+                      "$ref": "#/components/schemas/SourceCandidateDocument"
+                    },
+                    {
                       "type": "null"
                     }
                   ],
@@ -28584,6 +28755,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/SFCPreviewResource"
+                    },
+                    {
+                      "$ref": "#/components/schemas/StructuredSourcePreview"
                     },
                     {
                       "$ref": "#/components/schemas/ExecutionPreview"

@@ -58,16 +58,20 @@ class ProposalWorkflow:
 
     def pending_proposal(self, pending, request_id, *, base_version_id=None, consent=None, direct_request=False,
                           change_scope=None):
-        if pending.get('type') in ('accept_fbd_candidate', 'accept_sfc_candidate', 'accept_st_candidate', 'accept_gxw_candidate'):
+        if '_prepared_candidate' in pending or pending.get('type') in ('accept_fbd_candidate', 'accept_sfc_candidate', 'accept_st_candidate', 'accept_gxw_candidate'):
             from application.fbd import unpack_candidate
             mode = pending['target_mode']
-            candidate_key = '_gxw_candidate' if pending['type'] == 'accept_gxw_candidate' else '_' + mode + '_candidate'
+            candidate_key = ('_prepared_candidate' if '_prepared_candidate' in pending else '_gxw_candidate' if pending['type'] == 'accept_gxw_candidate' else '_' + mode + '_candidate')
             # Runtime artifacts remain private; materialize them only inside
             # managed state while the existing proposal service freezes them.
             with tempfile.TemporaryDirectory(dir=self.state_dir, prefix=mode + '-tool-') as directory:
                 prepared = unpack_candidate(pending[candidate_key], directory)
                 payload = {key: value for key, value in pending.items() if key != candidate_key}
+                payload.pop('_candidate_ir', None)
                 payload.update(prepared, type='accept_generated_program')
+                for source, target in (('_generation_handoff', 'generation_handoff'), ('normalization', 'normalization'), ('maintainability_review', 'maintainability_review')):
+                    if source in pending:
+                        payload['metadata'][target] = pending[source]
                 return self.pending_proposal(payload, request_id, base_version_id=base_version_id,
                     consent=consent, direct_request=direct_request, change_scope=change_scope)
         kind = pending.get("type")

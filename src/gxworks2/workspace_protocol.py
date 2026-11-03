@@ -11,8 +11,9 @@ from __future__ import annotations
 from copy import deepcopy
 
 
-WORKSPACE_PROTOCOL = 3
+WORKSPACE_PROTOCOL = 4
 _ACTIONS = {
+    'create_project': 'create_project',
     'save_source': 'edit_program', 'create_source': 'add_program_unit',
     'bind_program_task': 'assign_program', 'create_resource_scope': 'add_resource',
     'create_task_scope': 'add_task', 'validate_project': 'check_project',

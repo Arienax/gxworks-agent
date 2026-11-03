@@ -45,6 +45,37 @@ from plc.instruction_steps import StepCursor, instruction_step_width
 STEP_SOURCES = ("source", "catalogue")
 
 
+def st_global_labels_csv(declarations):
+    """Export checked Program labels through the existing native CSV transport."""
+    import io
+    from gxworks2.engineering_files import _merge_label_csv
+    from gxw.declarations import CLASS_CODES
+    header = ['类', '标签名', '数据类型', '常量', '软元件', '地址', '注释']
+    buffer = io.StringIO(newline='')
+    csv.writer(buffer, delimiter='\t', quoting=csv.QUOTE_ALL, lineterminator='\r\n').writerows([['Global1'], header])
+    rows, issues = [], []
+    for original in declarations:
+        row = dict(original)
+        category = row.get('class_name', 'VAR')
+        constant = category in {'VAR_CONSTANT', 'VAR_GLOBAL_CONSTANT'}
+        if category not in {'VAR', 'VAR_CONSTANT', 'VAR_GLOBAL', 'VAR_GLOBAL_CONSTANT'}:
+            issues.append({'code': 'ST_LABEL_EXPORT_SCOPE', 'name': row['name'],
+                           'message': 'Global label CSV cannot preserve declaration class ' + category})
+            continue
+        if row.get('initial_value') and not constant:
+            issues.append({'code': 'ST_LABEL_EXPORT_INITIALIZER', 'name': row['name'],
+                           'initial_value': row['initial_value'],
+                           'message': 'GX Works2 label CSV has no variable initializer column; configure this initial value in the project.'})
+        row.update(class_code=CLASS_CODES['VAR_GLOBAL_CONSTANT' if constant else 'VAR_GLOBAL'])
+        row.setdefault('comment', '')
+        row.setdefault('initial_value', '')
+        if row.get('member_devices'):
+            issues.append({'code': 'ST_LABEL_EXPORT_MEMBERS', 'name': row['name'],
+                           'message': 'Structure member addresses require project declaration editing.'})
+        rows.append(row)
+    return _merge_label_csv(buffer.getvalue().encode('utf-16'), rows), issues
+
+
 def _bytes(value: str) -> int:
     return len(str(value or "").encode("gb18030"))
 

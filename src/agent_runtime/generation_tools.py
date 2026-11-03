@@ -5,6 +5,7 @@
 from __future__ import annotations
 from shared.privacy import credential_field, filesystem_field
 import copy
+from pathlib import Path
 import json
 from application.generation_wire import expand_context_document
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
@@ -20,7 +21,7 @@ from agent_runtime.native_tools import (
 )
 
 
-def _source_knowledge(context, arguments, source, language, confirmed_spec):
+def _source_knowledge(context, arguments, source, language, confirmed_spec, *, task_type='edit'):
     from application.generation_context import _build_knowledge_context
     from application.generation_support import _build_knowledge_query
     from knowledge.evidence import KnowledgeQuery
@@ -28,9 +29,20 @@ def _source_knowledge(context, arguments, source, language, confirmed_spec):
     query = _build_knowledge_query(arguments.get('user_requirement'), source)
     knowledge = _build_knowledge_context(KnowledgeQuery(query, precompiled=True,
         metadata={'target_mode': language, 'capability_requirement': str(query)}),
-        plc_model=context.plc_model, task_type='edit', confirmed_context=confirmed_spec)
+        plc_model=context.plc_model, task_type=task_type, confirmed_context=confirmed_spec)
+    extra = {}
+    if task_type == 'generate':
+        from application.capability_context import augment_generation_knowledge
+        from knowledge.evidence import context_manifest
+        from plc.specification.provenance import handoff_snapshot
+        knowledge = augment_generation_knowledge(str(query), knowledge, plc_model=context.plc_model,
+            target_mode=language, confirmed_spec=confirmed_spec)
+        manifest = context_manifest(knowledge, stage='generate')
+        handoff = handoff_snapshot(confirmed_spec, evidence=manifest)
+        handoff['capability_discovery'] = copy.deepcopy(manifest['capability_discovery'])
+        extra['generation_handoff'] = handoff
     return {'knowledge': technical_context_units(knowledge),
-            'knowledge_coverage': technical_knowledge_coverage(knowledge)}
+            'knowledge_coverage': technical_knowledge_coverage(knowledge), **extra}
 
 
 def _get_generation_context(
@@ -76,6 +88,9 @@ def _get_generation_context(
         CONFIRMED_GENERATION_REQUEST, project_confirmed_specification,
     )
     public_spec = public_generation_specification(confirmed_spec)
+    if target_mode in ('st', 'sfc') and context.native_snapshot is None:
+        from application.gxw_delivery import new_generation_context
+        return new_generation_context(context, arguments)
     if target_mode == 'sfc':
         snapshot = _read_sfc_project(context, {})
         return {'project_id': context.project_id, 'plc_model': snapshot['model']['cpu'], 'target_mode': 'sfc',
@@ -199,7 +214,7 @@ def _get_generation_context(
         graph_contract = {
             'tool': 'create_fbd_candidate', 'schema_version': 2,
             'input_shape': 'parameters', 'model_schema_ref': '#/generation_input/parameter_schema',
-            'operation': 'edit' if previous is not None else 'generate',
+            'operation': 'edit' if context.version_id and context.fbd_baseline is not None else 'generate',
         }
         joint = generation['generation_input']['supported_paths']['joint_multi_source_transaction']
         output_contract = graph_contract
@@ -231,6 +246,11 @@ def _get_generation_context(
                 'catalog_scope': scope,
                 'missing_templates': (generation['generation_handoff'].get('catalog_report') or {}).get('missing_templates') or [],
                 }
+        if not context.version_id:
+            data['generation_instructions'] += (
+                ' For missing ST function blocks, create_fbd_candidate(operation="create_st_fb") '
+                'can start this project through the headless CPU factory. Read the saved context '
+                'after adding definitions, then assemble its main diagram with operation="edit".')
         return data
     source = context.ladder
     if isinstance(context.program_ir, Mapping):
@@ -364,7 +384,20 @@ def _create_program_candidate(
         confirmed_spec=candidate_spec,
         previous_program=context.program_ir,
     )
-    compiled = core.compile_project(candidate["candidate_ir"], validation_profile=candidate["validation_profile"])
+    import tempfile
+    from application.fbd import pack_candidate
+    from application.session import ProjectSession
+    with tempfile.TemporaryDirectory(prefix="ladder-candidate-") as directory:
+        compiled = core.compile_project(candidate["candidate_ir"], directory, validation_profile=candidate["validation_profile"])
+        metadata = ProjectSession._ir_metadata(candidate["candidate_ir"])
+        metadata.update(target_mode="ladder", plc_model=context.plc_model,
+                        validation_profile=candidate["validation_profile"], validation=candidate["diagnostics"],
+                        delivery_requested=True)
+        import hashlib
+        payload = dict(target_mode="ladder", plc_model=context.plc_model, staging_dir=directory, metadata=metadata,
+                       artifacts={key: {"path": value, "sha256": hashlib.sha256((Path(directory) / value).read_bytes()).hexdigest()}
+                                  for key, value in compiled["artifacts"].items()})
+        frozen_candidate = pack_candidate(payload, directory)
     if not isinstance(generation_handoff, dict):
         from application.confirmed_generation_context import project_confirmed_specification
         from plc.specification.provenance import handoff_snapshot
@@ -400,6 +433,7 @@ def _create_program_candidate(
         "normalization": copy.deepcopy(candidate["normalization"]),
         "_generation_handoff": generation_handoff,
     }
+    action.update(target_mode="ladder", _prepared_candidate=frozen_candidate)
     if context.program_ir is not None:
         action.update(base_version_id=context.version_id, base_ir_sha256=canonical_sha256(context.program_ir))
     return {

@@ -3293,7 +3293,8 @@ def test_source_ports_match_frozen_native_formals_and_preserve_source_geometry(i
         assert all(port.formal_name is not None for port in block.ports)
 
 
-@pytest.mark.parametrize('case', json.loads((private_path('tests/fixtures/gxw_fbd_library_cpu_sections_native.json')).read_text())['cases'],
+@pytest.mark.parametrize('case', [*json.loads((private_path('tests/fixtures/gxw_fbd_library_cpu_sections_native.json')).read_text())['cases'],
+    {'cpu': 'FXU/FX2C', 'section': 'FX2C'}],
     ids=lambda case: case['cpu'])
 def test_native_cpu_name_selects_its_source_section_without_family_fallback(case):
     from src.gxw.callable_sources import ProjectCallableSources

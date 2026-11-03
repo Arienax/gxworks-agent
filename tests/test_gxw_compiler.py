@@ -363,7 +363,8 @@ namespace PlcAi.NativeAdapter {
     executable = root / 'workspace-memory.exe'
     source = Path(__file__).resolve().parents[1] / 'native_adapters'
     names = ['WorkspaceSourceSave.cs', 'WorkspaceValidation.cs', 'WorkspaceTasks.cs',
-             'WorkspaceSfcGraph.cs', 'NativeRequest.cs', 'WorkspaceBusinessProtocol.cs']
+             'WorkspaceSfcGraph.cs', 'NativeRequest.cs', 'WorkspaceBusinessProtocol.cs',
+             'WorkspaceProjectCreation.cs', 'NativeExceptionTrace.cs']
     result = subprocess.run([str(compiler), '/nologo', '/platform:x86', '/target:exe',
         '/main:PlcAi.NativeAdapter.MemoryHarness', '/reference:System.Web.Extensions.dll',
         '/reference:System.Windows.Forms.dll', '/out:' + str(executable), str(harness),
@@ -390,7 +391,7 @@ def test_compiled_workspace_serializes_the_exact_python_evidence_protocol(worksp
     lines = result.stdout.strip().splitlines()
     assert lines[-1] == 'passed'
     observed = json.loads(lines[0])
-    assert observed['protocol_version'] == WORKSPACE_PROTOCOL == 3
+    assert observed['protocol_version'] == WORKSPACE_PROTOCOL == 4
     assert len(observed['evidence']) == len(EvidenceOrigin) == 7
     assert {row['origin'] for row in observed['evidence']} == {origin.value for origin in EvidenceOrigin}
     for row in observed['evidence']:
@@ -4162,14 +4163,11 @@ def test_native_validation_transport_reads_copies_before_removing_its_workspace(
             raise PermissionError('native temporary directory is still in use')
     monkeypatch.setattr(adapter, '_clean_native_temp', clean)
     if cleanup_failure == 'workspace':
-        original_directory = adapter.tempfile.TemporaryDirectory
-        def directory(**kwargs):
-            temporary = original_directory(**kwargs)
-            def cleanup():
-                temporary.cleanup()
-                raise PermissionError('temporary workspace is still in use')
-            return types.SimpleNamespace(name=temporary.name, cleanup=cleanup)
-        monkeypatch.setattr(adapter.tempfile, 'TemporaryDirectory', directory)
+        original_remove = adapter.shutil.rmtree
+        def remove(directory):
+            original_remove(directory)
+            raise PermissionError('temporary workspace is still in use')
+        monkeypatch.setattr(adapter.shutil, 'rmtree', remove)
     result = adapter.NativeWorkspaceValidation(executable, tmp_path).validate(raw)
     assert cleaned and cleaned[0][0] == 123 and len(cleaned[0][1]) == 32
     assert not roots[0].exists()

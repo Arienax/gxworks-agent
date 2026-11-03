@@ -16,25 +16,29 @@ from .models import GXWFormatError
 from .template_data import template_bytes
 
 
-# Project support decision. Keep native menu facts and frozen template bytes.
-_UNSUPPORTED_FBD_GENERATION = {
-    'FX1': '当前 FBD 复现流程不支持 CPU FX1：全局 BOOL 验收被原生编译器以 0x050F1034 拒绝。',
-}
+def fbd_generation_models():
+    """Use the shared CPU/language choices, independently of captured files."""
+    from plc.project_capabilities import project_creation_options
+    return tuple(target['menu_cpu'] for target in project_creation_options()['native_targets']
+                 if target['program_supported'] and any(mode['value'] == 'fbd'
+                     for kind in target['project_types'] for mode in kind['target_modes']))
 
 
 def unsupported_fbd_models():
-    return [dict(cpu=cpu, status='unsupported', reason=reason)
-            for cpu, reason in _UNSUPPORTED_FBD_GENERATION.items()]
-
-
-def fbd_generation_models():
-    return tuple(cpu for cpu in blank_fbd_models() if cpu not in _UNSUPPORTED_FBD_GENERATION)
+    from gxworks2.project_profiles import NATIVE_PROJECT_PROFILES
+    supported = set(fbd_generation_models())
+    return [dict(cpu=profile.cpu, status='unsupported', reason=
+                 f'当前 GX Works2 CPU 菜单不提供 {profile.cpu} 的结构化 FBD 新建组合；'
+                 '既有工程源码按实际格式处理。')
+            for profile in NATIVE_PROJECT_PROFILES if profile.program_supported and profile.cpu not in supported]
 
 
 def require_fbd_generation_support(plc_model):
     profile = native_project_profile(plc_model)
-    if profile is not None and profile.cpu in _UNSUPPORTED_FBD_GENERATION:
-        raise GXWFormatError(_UNSUPPORTED_FBD_GENERATION[profile.cpu])
+    if profile is not None:
+        unavailable = next((row for row in unsupported_fbd_models() if row['cpu'] == profile.cpu), None)
+        if unavailable is not None:
+            raise GXWFormatError(unavailable['reason'])
 
 
 @lru_cache(maxsize=1)
@@ -43,8 +47,9 @@ def _templates():
     with ZipFile(BytesIO(lzma.decompress(template_bytes('blank-fbd-projects.zip.xz')))) as archive:
         manifest = json.loads(archive.read('manifest.json'))
         templates = {row['cpu']: (row, archive.read(row['file'])) for row in manifest['models']}
+    supported = set(fbd_generation_models())
     for cpu, (_, raw) in templates.items():
-        if cpu not in _UNSUPPORTED_FBD_GENERATION:
+        if cpu in supported:
             require_gui_project_entries(raw)
     return templates
 

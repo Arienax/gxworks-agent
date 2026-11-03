@@ -749,7 +749,7 @@ class GenerationWorkflow:
             if not st_text:
                 st_text = json_str
             self._emit("progress", {"stage": "parsed", "message": tr('模型输出已解析为 ST 候选')})
-            output_path = self.output_dir / "program.st"
+            output_path = self.output_dir / ("program.st" if native_prepared else "program.txt")
             output_path.write_text(st_text.strip(), encoding="utf-8")
             from plc.maintainability import review_maintainability
             from plc.st_validation import inspect_st_program
@@ -762,6 +762,13 @@ class GenerationWorkflow:
                 raise PLCJsonValidationError('ST candidate failed local checks: ' + '; '.join(
                     f['message'] for f in st_validation['findings'] if f['severity'] == 'error'))
             st_artifacts = {'st': output_path.name}
+            if not native_prepared:
+                from plc.st_candidate import prepare_source_candidate
+                from application.gxw_delivery import fallback
+                source_candidate, st_validation = prepare_source_candidate(st_text, parsed_json.get('declarations'),
+                    plc_model=self.plc_model, confirmed_spec=self.confirmed_context)
+                source_payload = fallback(self.output_dir, 'st', self.plc_model, source_candidate, None)
+                st_artifacts = {key: value['path'] for key, value in source_payload['artifacts'].items()}
             if native_prepared:
                 candidate_path = self.output_dir / 'st_candidate.json'
                 candidate_path.write_text(json.dumps(parsed_json, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -777,6 +784,8 @@ class GenerationWorkflow:
                 'native_plan': native_prepared['plan'] if native_prepared else None,
                 'candidate_program_name': native_prepared['candidate']['program']['name'] if native_prepared else None,
                 "semantic_validation": st_validation,
+                **({'label_export_diagnostics': source_payload['metadata'].get('label_export_diagnostics', [])}
+                   if not native_prepared else {}),
                 "behavior_check": st_validation.get('behavior_check'),
                 "validation": {
                     "status": "candidate_ready",

@@ -189,15 +189,17 @@ def test_imported_sfc_child_candidates_reuse_native_save_versions_and_current_so
     proposal = workbench.sfc.propose(proposal_command)
     assert proposal['status'] == 'accepted'
     version_id = proposal['result']['version_id']
-    assert workbench.sfc.propose(proposal_command) == proposal and calls == ['save', 'save']
+    assert workbench.sfc.propose(proposal_command) == proposal and calls == []
     view = workbench.projects.program(project['id'], version_id)
     assert view == preview['program'] == workbench.proposal_preview(proposal['id'])['program']
     assert preview['validation']['gx_compile'] == 'not_run'
-    assert preview['validation']['native_save'] == 'passed'
+    assert preview['validation']['native_save'] == 'not_run'
     assert preview['diff']['modified_children'] == [{'kind': child['kind'], 'name': child['name']}]
     assert view['graph'] == original_model['graph'] and view['labels'] == original_model['labels']
     assert workbench.projects.artifact(project['id'], base_id, 'gxw').read_bytes() == baseline
-    assert workbench.projects.artifact(project['id'], version_id, 'gxw').read_bytes() == candidate
+    saved_source = read_sfc_project_context(workbench.projects.artifact(project['id'], version_id, 'gxw').read_bytes()).source
+    assert {(row['kind'], row['name']): row['token_hex'] for row in saved_source.layout['children']} == {
+        (row['kind'], row['name']): row['token_hex'] for row in final.source.layout['children']}
     restarted = WorkbenchService(workbench.store.base_dir, workbench.state_dir, read_only=True)
     assert restarted.projects.program(project['id'], version_id) == view
     result = workbench.agent_call({'project_id': project['id'], 'version_id': version_id,
@@ -1221,7 +1223,9 @@ def test_native_st_result_uses_frozen_candidate_transaction_and_rejects_stale_de
     assert workbench.projects.raw_version(project_id, version_id)['validation']['source_binding'] == candidate['metadata']['validation']['source_binding']
 
 
-def test_plain_st_generation_candidate_keeps_existing_text_only_save_contract(workbench):
+def test_plain_st_generation_candidate_delivers_text_and_global_csv(workbench, monkeypatch):
+    from application import gxw_delivery
+    monkeypatch.setattr(gxw_delivery, "installation", lambda: None)
     import hashlib
     project = workbench.create_project(name='ordinary ST generated text', target_mode='st')
     directory = workbench.state_dir / 'staging' / 'plain-st'
@@ -1233,7 +1237,9 @@ def test_plain_st_generation_candidate_keeps_existing_text_only_save_contract(wo
     proposal = workbench.proposals.create('accept_local', project['id'], candidate, request_id='plain-st-source')
     saved = workbench.proposals.accept(proposal['id'])
     version = workbench.projects.raw_version(project['id'], saved['result']['version_id'])
-    assert version['artifacts'] == {'st': 'program.st'} and version['validation']['native'] == 'unverified'
+    assert version['artifacts']['st'] == 'program.txt'
+    assert version['artifacts']['global_labels_csv'] == 'global_labels.csv'
+    assert version['validation']['native'] == 'unverified'
 
 
 def _complete_generation_read(workbench, project_id, version_id, result):
@@ -1281,13 +1287,13 @@ def test_saved_st_generation_context_follows_the_version_after_an_fbd_project_ch
     assert workbench.projects.artifact(project['id'], version_id, 'gxw').read_bytes() == raw
 
 
-def test_plain_st_generation_context_keeps_the_text_protocol_when_no_saved_native_project_exists(workbench):
+def test_new_st_generation_context_returns_generate_without_native_project(workbench):
     project = workbench.create_project(name='plain ST generation context', target_mode='st', plc_model='FX3U')
     result = workbench.projects.invoke(project['id'], '', 'plain-st-generation-context',
         'get_generation_context', {'execution_mode': 'background'})
     assert not result.is_error, result.data
     data = _complete_generation_read(workbench, project['id'], '', result)
-    assert data['target_mode'] == 'st' and data['output_contract']['format'] == 'st_body_json'
+    assert data['target_mode'] == 'st' and data['output_contract']['operation'] == 'generate'
     assert 'current_context' not in data and 'selected_program' not in data
 
 

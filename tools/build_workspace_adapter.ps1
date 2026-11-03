@@ -7,7 +7,7 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
-    $OutputDirectory = Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)) "PLC AI Studio\workspace-adapter"
+    $OutputDirectory = Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)) "PLC AI Studio\workspace-adapter\v4"
 }
 $resolvedOutput = [IO.Path]::GetFullPath($OutputDirectory)
 $repositoryPrefix = $repositoryRoot.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
@@ -23,6 +23,7 @@ $executable = Join-Path $resolvedOutput "PlcAi.WorkspaceSourceSave.exe"
     "/win32manifest:$(Join-Path $repositoryRoot 'native_adapters\WorkspaceSourceSave.manifest')" /reference:System.Web.Extensions.dll `
     /reference:System.Windows.Forms.dll `
     (Join-Path $repositoryRoot "native_adapters\WorkspaceSourceSave.cs") `
+    (Join-Path $repositoryRoot "native_adapters\WorkspaceProjectCreation.cs") `
     (Join-Path $repositoryRoot "native_adapters\WorkspaceValidation.cs") `
     (Join-Path $repositoryRoot "native_adapters\WorkspaceTasks.cs") (Join-Path $repositoryRoot "native_adapters\WorkspaceSfcGraph.cs") `
     (Join-Path $repositoryRoot "native_adapters\NativeRequest.cs") (Join-Path $repositoryRoot "native_adapters\WorkspaceBusinessProtocol.cs") `

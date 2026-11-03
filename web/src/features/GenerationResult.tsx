@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import type { Job, Json } from "../api/client";
-import { api, freshGxCsvUrl } from "../api/client";
+import { api, artifactUrl, freshGxCsvUrl } from "../api/client";
 import { Button } from "../components/ui";
 import { CapabilityReview } from "./CapabilityReview";
 import { DirectClarification } from "./DirectClarification";
@@ -79,7 +79,12 @@ export function GenerationResult({ result, busy, onOpen, onRetry, onRepair, onSp
   const notes = result.metadata?.generator_notes;
   const generatorNotes = notes && typeof notes === "object" && !Array.isArray(notes) && notes.source === "generator"
     ? notes as Output : undefined;
-  const freshCsv = result.projectId && result.versionId ? (
+  const deliveryValue = result.metadata?.delivery;
+  const delivery = deliveryValue && typeof deliveryValue === 'object' && !Array.isArray(deliveryValue) ? deliveryValue as Output : undefined;
+  const primary = typeof delivery?.primary_artifact === 'string' ? delivery.primary_artifact : '';
+  const validationValue = result.metadata?.validation;
+  const validation = validationValue && typeof validationValue === 'object' && !Array.isArray(validationValue) ? validationValue as Output : undefined;
+  const freshCsv = result.projectId && result.versionId && (primary === 'program_csv' || !delivery && (!result.metadata?.target_mode || result.metadata?.target_mode === 'ladder')) ? (
     <Button
       disabled={busy}
       onClick={() => window.location.assign(freshGxCsvUrl(result.projectId, result.versionId))}
@@ -102,15 +107,18 @@ export function GenerationResult({ result, busy, onOpen, onRetry, onRepair, onSp
     </> : result.versionId && result.unverifiedCandidate ? <>
       <p role="status">{t("所选 CPU 缺少本地校验规则，已保留候选，程序正确性未验证。")}</p>
       <Button disabled={busy} onClick={onOpen}>{t("查看程序")}</Button>{" "}
+      {primary && primary !== 'program_csv' && <Button disabled={busy} onClick={() => window.location.assign(artifactUrl(result.projectId, result.versionId, primary, true))}>{t(primary === 'gxw' ? '下载 GXW 工程' : '下载候选源码')}</Button>}
       {freshCsv}
     </> : result.versionId && result.invalidCandidate ? <>
       <p className="error-text" role="status">{t("程序存在错误，请检查后再使用。")}</p>
       <Button disabled={busy} onClick={onOpen}>{t("查看问题")}</Button>{" "}
+      {primary && primary !== 'program_csv' && <Button disabled={busy} onClick={() => window.location.assign(artifactUrl(result.projectId, result.versionId, primary, true))}>{t(primary === 'gxw' ? '下载 GXW 工程' : '下载候选源码')}</Button>}
       {freshCsv}{" "}
       <Button disabled={busy} onClick={onRepair}>{t("局部修复")}</Button>
     </> : result.versionId ? <>
       <p role="status">{t("程序已保存")}</p>
       <Button disabled={busy} onClick={onOpen}>{t("查看程序")}</Button>{" "}
+      {primary && primary !== 'program_csv' && <Button disabled={busy} onClick={() => window.location.assign(artifactUrl(result.projectId, result.versionId, primary, true))}>{t(primary === 'gxw' ? '下载 GXW 工程' : '下载候选源码')}</Button>}
       {freshCsv}
     </> : result.proposalId ? <>
       {result.value?.status === 'awaiting_native_verification' ? <>
@@ -120,6 +128,11 @@ export function GenerationResult({ result, busy, onOpen, onRetry, onRepair, onSp
     </> : result.loading ? <p role="status">{t("正在读取生成结果")}</p> : <>
       <p className="error-text" role="alert">{t("暂时无法读取结果，请重试。")}</p>
     </>}
+    {result.versionId && primary === 'st' && delivery?.actual_format === 'txt' && (
+      <Button disabled={busy} onClick={() => window.location.assign(artifactUrl(result.projectId, result.versionId, 'global_labels_csv', true))}>
+        {t('下载全局标签 CSV')}
+      </Button>
+    )}
     {result.versionId && !result.needsInput && generatorNotes && (
       [["decisions", "实现说明"], ["open_items", "可选调整"]] as const
     ).map(([key, label]) => {
@@ -130,6 +143,8 @@ export function GenerationResult({ result, busy, onOpen, onRetry, onRepair, onSp
         <ul>{items.filter((item): item is string => typeof item === "string").map((item, index) => <li key={index}>{item}</li>)}</ul>
       </details> : null;
     })}
+    {delivery?.degraded === true && <p role="status">{t('已降级交付')}：{String(delivery.reason || '')}</p>}
+    {validation && <p role="status">{t('原生编译')}：{t(validation.gx_compile === 'passed' ? '通过' : validation.gx_compile === 'failed' ? '失败' : '未执行')}{validation.native_compile_message ? ` · ${String(validation.native_compile_message)}` : ''}</p>}
     <STVerification report={result.metadata?.semantic_validation} t={t} />
     <CapabilityReview metadata={result.metadata} t={t} />
     <Button disabled={busy} onClick={onRetry}>{t("重新读取结果")}</Button>

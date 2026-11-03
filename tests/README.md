@@ -425,6 +425,7 @@ Owns GXW container/object/ABI/declaration/network parsing, preservation and roun
 | `tests/test_gxw_sfc_offline.py` | existing SFC graph encoding, source-bound edits and unknown-region preservation |
 | `tests/test_gxw_offline_project.py` | whole-project offline instruction/comment transactions, ordered warehouse source and refusal boundaries |
 | `tests/test_gxw_offline_application.py` | offline GXW import, inspection and version/proposal parity across Web services and MCP |
+| `tests/test_gxw_delivery.py` | shared GXW-first delivery, automatic native compilation, source fallback and installation discovery |
 | `web/tests/gxw-import.test.mjs` | GXW composer upload/drop, source selection, import request identity and project/version adoption |
 | `tests/test_gxw_semantic_model.py` | focused coverage for gxw semantic model |
 | `tests/test_gxw_structured_reader.py` | Structured GXW parsing, unknown records and read-only POU CLI selection |

@@ -1665,6 +1665,10 @@ export interface components {
             decision_receipt_id?: string | null;
             /** Decision Receipt Status */
             decision_receipt_status?: string | null;
+            /** Delivery */
+            delivery?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
             /** Device Io */
             device_io: {
                 [key: string]: components["schemas"]["DeviceRecord"];
@@ -1820,7 +1824,7 @@ export interface components {
              * Program
              * @default null
              */
-            program: components["schemas"]["PLCProgram"] | components["schemas"]["FBDModel"] | components["schemas"]["SFCModel"] | components["schemas"]["LadderDocument"] | null;
+            program: components["schemas"]["PLCProgram"] | components["schemas"]["FBDModel"] | components["schemas"]["SFCModel"] | components["schemas"]["LadderDocument"] | components["schemas"]["SourceCandidateDocument"] | null;
             /**
              * Values
              * @default null
@@ -1859,7 +1863,7 @@ export interface components {
                 [key: string]: components["schemas"]["JsonValue"];
             } | null;
             /** Program */
-            program: components["schemas"]["PLCProgram"] | components["schemas"]["FBDModel"] | components["schemas"]["SFCModel"] | components["schemas"]["LadderDocument"] | null;
+            program: components["schemas"]["PLCProgram"] | components["schemas"]["FBDModel"] | components["schemas"]["SFCModel"] | components["schemas"]["LadderDocument"] | components["schemas"]["SourceCandidateDocument"] | null;
             /** St */
             st: string | null;
             /** Svg */
@@ -3210,6 +3214,29 @@ export interface components {
              * @constant
              */
             target_mode: "st";
+        };
+        /** GenerationStructuredSourcePreview */
+        GenerationStructuredSourcePreview: {
+            /** Diff */
+            diff: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /** Job Id */
+            job_id: string;
+            program: components["schemas"]["SourceCandidateDocument"];
+            /** Proposal Id */
+            proposal_id?: string | null;
+            /** Read Only */
+            read_only: boolean;
+            /**
+             * Target Mode
+             * @enum {string}
+             */
+            target_mode: "fbd" | "sfc";
+            /** Validation */
+            validation: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -6107,7 +6134,7 @@ export interface components {
              * @default ladder
              * @enum {string}
              */
-            target_mode: "ladder" | "st" | "fbd";
+            target_mode: "ladder" | "st" | "fbd" | "sfc";
             /** Use Labels */
             use_labels?: boolean | null;
         };
@@ -6162,7 +6189,7 @@ export interface components {
             /** Plc Model */
             plc_model?: string | null;
             /** Target Mode */
-            target_mode?: ("ladder" | "st" | "fbd") | null;
+            target_mode?: ("ladder" | "st" | "fbd" | "sfc") | null;
             /** Use Labels */
             use_labels?: boolean | null;
         };
@@ -7642,6 +7669,23 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** SourceCandidateDocument */
+        SourceCandidateDocument: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "source_candidate";
+            /** Source */
+            source: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /**
+             * Target Mode
+             * @enum {string}
+             */
+            target_mode: "fbd" | "sfc";
+        };
         /** SourceDefinition */
         SourceDefinition: {
             /** Declarations */
@@ -8004,6 +8048,23 @@ export interface components {
              */
             word_use_bit: 0 | 1;
         };
+        /** StructuredSourcePreview */
+        StructuredSourcePreview: {
+            /** Diff */
+            diff: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            program: components["schemas"]["SourceCandidateDocument"];
+            /**
+             * Target Mode
+             * @enum {string}
+             */
+            target_mode: "fbd" | "sfc";
+            /** Validation */
+            validation: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+        };
         /** TaskProgram */
         TaskProgram: {
             /** Line */
@@ -8260,6 +8321,10 @@ export interface components {
             debug_attempts?: {
                 [key: string]: components["schemas"]["JsonValue"];
             }[] | null;
+            /** Delivery */
+            delivery?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
             /** Generation Handoff */
             generation_handoff?: {
                 [key: string]: components["schemas"]["JsonValue"];
@@ -9105,7 +9170,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["GenerationLadderPreview"] | components["schemas"]["GenerationFBDPreview"] | components["schemas"]["GenerationSFCPreview"] | components["schemas"]["GenerationSTPreview"];
+                    "application/json": components["schemas"]["GenerationLadderPreview"] | components["schemas"]["GenerationFBDPreview"] | components["schemas"]["GenerationSFCPreview"] | components["schemas"]["GenerationSTPreview"] | components["schemas"]["GenerationStructuredSourcePreview"];
                 };
             };
             /** @description Validation Error */
@@ -10057,7 +10122,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PLCProgram"] | components["schemas"]["FBDModel"] | components["schemas"]["SFCModel"] | components["schemas"]["LadderDocument"] | null;
+                    "application/json": components["schemas"]["PLCProgram"] | components["schemas"]["FBDModel"] | components["schemas"]["SFCModel"] | components["schemas"]["LadderDocument"] | components["schemas"]["SourceCandidateDocument"] | null;
                 };
             };
             /** @description Validation Error */
@@ -10458,7 +10523,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LadderPreview"] | components["schemas"]["STPreview"] | components["schemas"]["FBDPreviewResource"] | components["schemas"]["SFCPreviewResource"] | components["schemas"]["ExecutionPreview"];
+                    "application/json": components["schemas"]["LadderPreview"] | components["schemas"]["STPreview"] | components["schemas"]["FBDPreviewResource"] | components["schemas"]["SFCPreviewResource"] | components["schemas"]["StructuredSourcePreview"] | components["schemas"]["ExecutionPreview"];
                 };
             };
             /** @description Validation Error */

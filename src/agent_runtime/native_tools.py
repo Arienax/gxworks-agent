@@ -208,6 +208,13 @@ def _create_fbd_candidate(context: ToolContext, arguments: Mapping[str, Any], *,
     if context.project.get('target_mode') != 'fbd' and (context.version or {}).get('target_mode') != 'fbd':
         raise ValueError('FBD 候选需要绑定 FBD 目标工程。')
     operation = arguments['operation']
+    if operation == 'generate':
+        if context.version_id and 'gxw' in (context.version or {}).get('artifacts', {}):
+            raise ValueError('New fbd generation requires a project without a saved version')
+        if 'data_base64' in arguments or 'program' in arguments:
+            raise ValueError('generate 的源码由 model 提供，不接受 data_base64 或 program。')
+        from application.gxw_delivery import source_candidate_action
+        return source_candidate_action(context, arguments, 'fbd')
     if 'native_save' in arguments and (operation not in {'import', 'edit', 'generate'}
                                        or type(arguments['native_save']) is not bool):
         raise ValueError('native_save 仅接受布尔值，用于本次 FBD import、edit 或 generate 的原生保存选择。')
@@ -221,19 +228,16 @@ def _create_fbd_candidate(context: ToolContext, arguments: Mapping[str, Any], *,
         raise ValueError('members、declarations、st_text 和 options 只用于编写项目定义或配置。')
     if operation in AUTHORING_OPERATIONS:
         if not context.version_id or context.fbd_baseline is None:
-            raise ValueError('编写项目定义需要已保存的 FBD 基础版本。')
-        kwargs = {'baseline': context.fbd_baseline, 'authoring': authoring_command(arguments),
-                  'program_name': context.version.get('program_name')}
+            if operation != 'create_st_fb' or context.version_id or context.fbd_baseline is not None:
+                raise ValueError('编写项目定义需要已保存的 FBD 基础版本。')
+            kwargs = {'authoring': authoring_command(arguments), 'create_new': True}
+        else:
+            kwargs = {'baseline': context.fbd_baseline, 'authoring': authoring_command(arguments),
+                      'program_name': context.version.get('program_name')}
     elif operation == 'compile':
         if not context.version_id or context.fbd_baseline is None or any(key in arguments for key in ('model','data_base64','program')):
             raise ValueError('编译保存需要当前 FBD 基础版本，不接受源码修改。')
         kwargs = {'baseline':context.fbd_baseline,'compile_save':True,'program_name':context.version.get('program_name')}
-    elif operation == 'generate':
-        if context.version is not None or context.fbd_baseline is not None:
-            raise ValueError('已有版本的 FBD 工程请使用 edit 并绑定基础版本。')
-        if 'data_base64' in arguments or 'program' in arguments:
-            raise ValueError('generate 的源码由 model 提供，不接受 data_base64 或 program。')
-        kwargs = {'model': arguments.get('model'), 'native_save': arguments.get('native_save') is True}
     elif operation == 'edit':
         if not context.version_id or context.fbd_baseline is None:
             raise ValueError('edit 需要绑定已保存的 FBD 基础版本。')
@@ -331,6 +335,11 @@ def _create_sfc_candidate(context: ToolContext, arguments: Mapping[str, Any]) ->
     from application.sfc import prepare_candidate
 
     operation = arguments['operation']
+    if operation == 'generate':
+        if context.version_id and 'gxw' in (context.version or {}).get('artifacts', {}):
+            raise ValueError('New sfc generation requires a project without a saved version')
+        from application.gxw_delivery import source_candidate_action
+        return source_candidate_action(context, arguments, 'sfc')
     if operation == 'import':
         if {'child_edits', 'graph_edits', 'declaration_edits', 'device_comments', 'comment_table'} & arguments.keys():
             raise ValueError('SFC 导入不接受子程序编辑。')
@@ -385,6 +394,11 @@ def _create_st_candidate(context: ToolContext, arguments: Mapping[str, Any]) -> 
     from application.fbd import _native_candidate, decode_upload, pack_candidate
     from application.native_st import prepare_candidate
     operation = arguments['operation']
+    if operation == 'generate':
+        if context.version_id and 'gxw' in (context.version or {}).get('artifacts', {}):
+            raise ValueError('New st generation requires a project without a saved version')
+        from application.gxw_delivery import source_candidate_action
+        return source_candidate_action(context, arguments, 'st')
     if operation == 'from_candidate':
         from application.native_st import candidate_native_plan
         baseline = context.native_snapshot or context.fbd_baseline
@@ -420,6 +434,7 @@ def _create_st_candidate(context: ToolContext, arguments: Mapping[str, Any]) -> 
         payload = prepare_candidate(directory, imported=raw, program_name=selected,
             plc_model=context.plc_model, summary=arguments.get('summary') or '普通 ST Program 工程候选')
         if authored is not None:
+            payload['metadata']['delivery_requested'] = True
             payload['metadata']['validation'].update(
                 native_save=authored.report.get('validation', {}).get('native_save', 'not_run'),
                 definition_readback='matched', write_backend=authored.report.get('write_backend', 'native'),

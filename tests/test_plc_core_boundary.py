@@ -456,6 +456,30 @@ def test_shared_device_status_keeps_invalid_and_uncovered_addresses_apart(cpu, a
     assert device_address_status(address, cpu) == status
 
 
+@pytest.mark.parametrize('prefix,bit,base', [
+    ('TC', True, 'T'), ('TS', True, 'T'), ('TN', False, 'T'),
+    ('CC', True, 'C'), ('CS', True, 'C'), ('CN', False, 'C'),
+])
+def test_l02_structured_timer_counter_views_preserve_type_range_and_native_limits(prefix, bit, base):
+    from plc.validation import parse_device_address, is_bit_device, device_address_status
+    from plc.device_profiles import DEVICE_LIMITS, device_address_rules
+    from plc.device_policy import DevicePolicyError, device_address
+    from plc.device_identity import device_tokens, canonical_device
+    maximum = DEVICE_LIMITS['L02'][base]
+    assert parse_device_address(prefix + '0', 'L02') == (prefix, 0)
+    assert parse_device_address(prefix + str(maximum), 'L02') == (prefix, maximum)
+    assert device_address_status(prefix + str(maximum + 1), 'L02') == 'invalid'
+    assert is_bit_device(prefix + '0', 'L02') is bit
+    assert canonical_device(prefix + '000') == prefix + '0'
+    assert device_tokens(prefix + '0') == (prefix + '0',)
+    family = device_address_rules('L02')['families'][prefix]
+    assert family['allocation']['shares_allocation_with'] == base
+    assert family['value_type'] == ('bit' if bit else 'word')
+    with pytest.raises(DevicePolicyError):
+        device_address(prefix + '0', 'L02', native=True)
+    assert parse_device_address(prefix + '0', 'L06') is None
+
+
 @pytest.mark.parametrize('cpu', ['FX3U', 'FX3UC', 'FX3U/FX3UC'])
 @pytest.mark.parametrize('source,status,code', [
     ('Y0 := X0;', 'passed', None),
@@ -800,10 +824,10 @@ def test_valid_st_mutations_are_not_claimed_as_requirement_or_runtime_failures(c
 
 
 @pytest.mark.parametrize("cpu,project_type,modes", [
-    ("FX3U/FX3UC", "simple", ["ladder"]),
+    ("FX3U/FX3UC", "simple", ["ladder", "sfc"]),
     ("FX0S/FX0", "structured", ["st", "fbd"]),
     ("Q02/Q02H", "structured", ["ladder", "st", "fbd"]),
-    ("L26-BT/L26-PBT", "simple", ["ladder", "st"]),
+    ("L26-BT/L26-PBT", "simple", ["ladder", "st", "sfc"]),
     ("LJ72GF15-T2", "parameter", []),
 ])
 def test_native_project_creation_languages_follow_core_catalogue(cpu, project_type, modes):
@@ -834,6 +858,7 @@ def test_native_project_creation_languages_follow_core_catalogue(cpu, project_ty
     ("FX0N", "ladder", "simple", True),
     ("FXU", "ladder", "simple", True),
     ("FX2C", "ladder", "simple", True),
+    ("FX3U", "sfc", "simple", True),
 ])
 def test_invalid_native_project_combination_is_rejected(cpu, mode, project_type, labels):
     from plc.project_capabilities import normalize_project_selection
@@ -849,9 +874,9 @@ def test_every_native_menu_target_has_the_official_language_matrix(profile):
     # Expected families and restrictions are frozen in the native catalogue and
     # official manuals, not derived from the new factory's language list.
     expected = ({'parameter': []} if not profile.program_supported else
-                {'simple':['ladder']} if profile.cpu == 'FX1' else
-                {'simple':['ladder'], 'structured':['st','fbd']} if profile.series == ('FXCPU',) else
-                {'simple':['ladder','st'], 'structured':['ladder','st','fbd']})
+                {'simple':['ladder','sfc']} if profile.cpu == 'FX1' else
+                {'simple':['ladder','sfc'], 'structured':['st','fbd']} if profile.series == ('FXCPU',) else
+                {'simple':['ladder','st','sfc'], 'structured':['ladder','st','fbd']})
     actual = {row['value']: [m['value'] for m in row['target_modes']] for row in target['project_types']}
     assert actual == expected
     for option in target['project_types']:
@@ -867,14 +892,15 @@ def test_all_declared_creation_modes_keep_cpu_and_language_in_native_menu_witnes
     fixture = json.loads((private_path('tests/fixtures/gxworks2_native_cpu_menu.json')).read_text(encoding='utf-8'))
     rows = fixture['project_mode_observation']['rows']
     types = {'simple': '简单工程', 'structured': '结构化工程'}
-    languages = {'ladder': '梯形图', 'st': 'ST', 'fbd': '结构化梯形图/FBD'}
+    languages = {'ladder': '梯形图', 'st': 'ST', 'fbd': '结构化梯形图/FBD', 'sfc': 'SFC'}
     for target in project_creation_options()['native_targets']:
         for kind in target['project_types']:
             if kind['value'] == 'parameter':
                 assert all(not r['language_enabled'] for r in rows if r['cpu'] == target['menu_cpu'])
                 continue
             for mode in kind['target_modes']:
-                labels = [True] if mode['labels_required'] else [False, True] if kind['labels_supported'] else [False]
+                labels = ([True] if mode['labels_required'] else [False, True]
+                          if kind['labels_supported'] and mode['labels_supported'] else [False])
                 for flag in labels:
                     match, = [r for r in rows if r['cpu'] == target['menu_cpu']
                               and r['requested_type'] == types[kind['value']] and r['requested_labels'] == flag]
@@ -1524,6 +1550,59 @@ def test_st_named_fb_parameters_bind_current_interface_and_verify_body():
     report=inspect_st_program(prefix+suffix.replace('A:=2','A:=2,Q=>D1'),plc_model='FX3U')
     assert report['syntax']=='passed' and report['semantic']=='unverified'
     assert 'ST_FB_OUTPUT_OPTION' in {r['code'] for r in report['findings']}
+
+
+@pytest.mark.parametrize('member', ['Ready', 'Missing'])
+def test_nested_st_fb_keeps_the_current_native_library_interface(member):
+    from plc.st_validation import inspect_st_program
+    from gxw.models import GXWFormatError
+    class Sources:
+        def label(self, name):
+            return None
+        def st_interface(self, name, kind):
+            if (name.upper(), kind) != ('NATIVETIMER', 'FUNCTION_BLOCK'):
+                raise GXWFormatError('Unknown native callable')
+            return {'inputs': [{'name': 'Enable', 'declared_type': 'BOOL', 'class_code': 3}],
+                    'outputs': [{'name': 'Ready', 'declared_type': 'BOOL', 'class_code': 4}]}
+    source = ('FUNCTION_BLOCK Wrapper VAR timer:NativeTimer; END_VAR '
+              'VAR_OUTPUT Done:BOOL; END_VAR timer(Enable:=TRUE); '
+              f'Done:=timer.{member}; END_FUNCTION_BLOCK '
+              'PROGRAM MAIN VAR wrapper1:Wrapper; END_VAR wrapper1(); '
+              'Y0:=wrapper1.Done; END_PROGRAM')
+    report = inspect_st_program(source, plc_model='Q00J', callable_sources=Sources())
+    errors = [row for row in report['findings'] if row['severity'] == 'error']
+    if member == 'Ready':
+        assert errors == [], report
+        assert any(row['definition'] == 'Wrapper' for row in report['calls'])
+    else:
+        assert any('Missing or ambiguous member: MISSING' in row['message'] for row in errors), report
+
+
+def test_nested_st_fb_resolves_library_in_the_callee_source_scope():
+    from plc.st_validation import inspect_st_program
+    from gxw.models import GXWFormatError
+    class Sources:
+        program_name = 'MAIN.Program.pou'
+        def label(self, name):
+            return None
+        def st_interface(self, name, kind):
+            if self.program_name != 'Wrapper.pou' or name.upper() != 'NATIVETIMER':
+                raise GXWFormatError('Wrong source scope')
+            return {'inputs': [{'name': 'Enable', 'declared_type': 'BOOL', 'class_code': 3}],
+                    'outputs': [{'name': 'Ready', 'declared_type': 'BOOL', 'class_code': 4}]}
+    source = Sources()
+    context = {'selected_source': 'MAIN.Program.pou', 'pous': [
+        {'name': 'MAIN', 'program': 'MAIN.Program.pou', 'kind': 'program', 'language': 'st',
+         'st_text': 'wrapper1(); Y0:=wrapper1.Done;',
+         'declarations': [{'name': 'wrapper1', 'data_type': 'Wrapper', 'class_name': 'VAR'}]},
+        {'name': 'Wrapper', 'program': 'Wrapper.pou', 'kind': 'function_block', 'language': 'st',
+         'st_text': 'timer(Enable:=TRUE); Done:=timer.Ready;',
+         'declarations': [{'name': 'timer', 'data_type': 'NativeTimer', 'class_name': 'VAR'},
+                          {'name': 'Done', 'data_type': 'BOOL', 'class_name': 'VAR_OUTPUT'}]}]}
+    report = inspect_st_program(context['pous'][0]['st_text'], plc_model='Q00J',
+                                project_context=context, callable_sources=source)
+    assert not [row for row in report['findings'] if row['severity'] == 'error'], report
+    assert source.program_name == 'MAIN.Program.pou'
 
 
 def test_st_candidate_v2_binds_real_task_and_preserves_existing_declarations():
