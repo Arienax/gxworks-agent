@@ -81,6 +81,28 @@ class ImportBaselineStore:
     def path_for(self, identity: Mapping[str, Any]) -> Path:
         return self.state_root / f"{self.project_key(identity)}.json"
 
+    def known_project_paths(self, session):
+        """Return saved path hints from existing records, never title-only keys.
+
+        These are not current-project bindings; the reader must still check
+        the caption and exact-file ownership before using any of them.
+        """
+        executable = str(getattr(session, "executable", "") or "").strip().casefold()
+        paths = set()
+        for record in self.state_root.glob("*.json"):
+            try:
+                payload = json.loads(record.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            identity = payload.get("project_identity") if isinstance(payload, dict) else None
+            if not isinstance(identity, dict) or identity.get("application") != "GX Works2":
+                continue
+            name = identity.get("project")
+            if (identity.get("executable") == executable and isinstance(name, str)
+                    and Path(name).is_absolute() and Path(name).suffix.casefold() == ".gxw"):
+                paths.add(name)
+        return sorted(paths)
+
     def load(self, identity: Mapping[str, Any]):
         path = self.path_for(identity)
         try:

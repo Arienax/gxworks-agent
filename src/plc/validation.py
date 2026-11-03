@@ -23,7 +23,7 @@ from plc.device_profiles import (
 
 
 DEVICE_ADDRESS_RE = re.compile(
-    r"^(ZR|ER|SM|SD|SB|SW|ST|X|Y|M|D|T|C|S|L|F|B|W|R|V|Z)([0-9A-F]+)(?:\.([0-9A-F]+))?$", re.IGNORECASE
+    r"^(ZR|ER|SM|SD|SB|SW|ST|TC|TS|TN|CC|CS|CN|X|Y|M|D|T|C|S|L|F|B|W|R|V|Z)([0-9A-F]+)(?:\.([0-9A-F]+))?$", re.IGNORECASE
 )
 INDEXED_DEVICE_ADDRESS_RE = re.compile(
     r"^(?P<base>(?:SM|SD|X|Y|M|D|T|C|S)\d+)(?P<index>[VZ]\d*)$",
@@ -372,6 +372,10 @@ def _validate_writable_device(value, path, plc_model="FX3U", *, opcode=None, all
     if not isinstance(value, str):
         return
     address = value.strip().upper()
+    # Write roles are known even when the catalogue has no verified operand
+    # type table. A literal is never storage; K4M100 remains a valid bit group.
+    if re.fullmatch(r'(?:K[+-]?\d+|H[0-9A-F]+)', address):
+        _fail(path, 'Expected a writable device operand, not a constant')
     if allow_unverified:
         from plc.ordered_source import (source_label_reference, source_extended_reference,
                                        source_grouped_reference, buffer_memory_reference)

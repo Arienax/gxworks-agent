@@ -2,6 +2,37 @@ import os
 
 import pytest
 
+
+@pytest.mark.parametrize('changed', [None, 'missing', 'window_handle', 'process_started',
+                                    'executable', 'software_version', 'project_path', 'cpu_menu'])
+def test_live_attach_reuses_only_the_original_frame_without_starting_a_process(monkeypatch, tmp_path, changed):
+    from types import SimpleNamespace
+    import gxworks2.engineering_driver as module
+    identity = dict(process_id=701, window_handle=702, process_started='original-start',
+        executable='GX.exe', software_version='1.635.0.1', project_path=str(tmp_path / 'work.gxw'),
+        cpu_menu='FX3U/FX3UC', native_ui_language='en', project_codepage=932)
+    actual = dict(identity)
+    if changed not in (None, 'missing'):
+        actual[changed] = 703 if changed == 'window_handle' else 'changed'
+    calls = []
+    finder = SimpleNamespace(find_running=lambda *, process_id:
+                             None if changed == 'missing' else SimpleNamespace(**actual))
+    monkeypatch.setattr(module, 'GXWorks2Finder', lambda: finder)
+    class Attached(module.NativeEngineeringDriver):
+        def __init__(self, session, path, cpu, **options):
+            calls.append('attach')
+        def inspect(self):
+            return actual
+        def close(self):
+            calls.append('release')
+    if changed is None:
+        assert isinstance(Attached.attach_to_saved(tmp_path / 'work.gxw', 'FX3U', identity=identity), Attached)
+        assert calls == ['attach']
+    else:
+        with pytest.raises(module.NativeEngineeringDriverError):
+            Attached.attach_to_saved(tmp_path / 'work.gxw', 'FX3U', identity=identity)
+        assert calls == (['attach', 'release'] if changed in ('project_path', 'cpu_menu') else [])
+
 from gxworks2.finder import GXWorks2Finder
 from gxworks2.ui_automation import PywinautoGXWorks2UIAutomation
 
@@ -5257,3 +5288,11 @@ def test_native_label_grid_sized_string_alias_keeps_the_current_named_type_colli
     assert result['status'] == 'partial' and declaration['data_type'] == display
     assert declaration['type_status'] == 'unresolved'
     assert any(issue['code'] == 'ambiguous_native_type_alias' for issue in result['issues'])
+
+def _fake_kernel32(langid):
+    import ctypes
+    from types import SimpleNamespace
+
+    def get_system_default_ui_language():
+        return langid
+    return SimpleNamespace(GetSystemDefaultUILanguage=get_system_default_ui_language)

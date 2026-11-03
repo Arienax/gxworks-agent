@@ -10,9 +10,10 @@ import {
   Workflow,
   X
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { activeJob } from "../api/client";
 import { Popover } from "../components/Popover";
+import { SelectMenu } from "../components/SelectMenu";
 import { Button } from "../components/ui";
 import { approvalLabels } from "../features/ApprovalSettings";
 import { ConversationControls } from "../features/ConversationControls";
@@ -66,6 +67,9 @@ export const composerPanelFields = [
   "workflow",
 ] as const;
 type Props = Pick<WorkbenchModel, typeof composerPanelFields[number]>;
+/** The composer grows with its text between two and about twelve lines. */
+const MIN_TEXTAREA = 76;
+const MAX_TEXTAREA = 260;
 export function ComposerPanel(props: Props) {
   const {
     analysisMode,
@@ -114,69 +118,20 @@ export function ComposerPanel(props: Props) {
   } = props;
   const uploadRef = useRef<HTMLInputElement>(null);
   const gxwRef = useRef<HTMLInputElement>(null);
+  const textArea = useRef<HTMLTextAreaElement>(null);
   const dragDepth = useRef(0);
   const [dragging, setDragging] = useState(false);
+  const [scopeOpen, setScopeOpen] = useState(scopeEnabled);
+  const scoped = version?.target_mode === "ladder" && task === "edit" && editAction === "edit";
+  useEffect(() => {
+    const area = textArea.current;
+    if (!area) return;
+    area.style.height = "auto";
+    area.style.height = `${Math.min(MAX_TEXTAREA, Math.max(area.scrollHeight, MIN_TEXTAREA))}px`;
+    area.style.overflowY = area.scrollHeight > MAX_TEXTAREA ? "auto" : "hidden";
+  }, [text, composerRoute.requiresText]);
   return (
     <>
-      {gxwSource.available && (
-        <label className="gxw-source-picker">
-          {t("编辑的程序")}
-          <select aria-label={t("编辑的程序")} value={gxwSource.selected}
-            disabled={!canWrite || gxwSource.loading || jobs.some(activeJob)}
-            onChange={(event) => gxwSource.select(event.target.value)}>
-            {(gxwSource.view?.programs || []).map((source) => (
-              <option key={source.source_name} value={source.source_name}>
-                {source.source_name} · {source.language?.toUpperCase()} · {source.unit_kind}
-              </option>
-            ))}
-          </select>
-          {gxwSource.loading && <small role="status">{t("正在读取…")}</small>}
-        </label>
-      )}
-      {version?.target_mode === "ladder" && task === "edit" && editAction === "edit" && (
-        <details className="scope-controls" open={scopeEnabled}>
-          <summary>
-            {t("修改范围")}
-            {scopeEnabled ? ` · ${t("局部约束已启用")}` : ` · ${t("整个程序")}`}
-          </summary>
-          <label>
-            <input
-              type="checkbox"
-              style={{ width: "auto" }}
-              checked={scopeEnabled}
-              onChange={(e) => setScopeEnabled(e.target.checked)}
-            />{" "}
-            {t("只允许修改指定范围")}
-          </label>
-          {scopeEnabled && (
-            <>
-              <label>
-                {t("允许修改的网络")}
-                <input
-                  value={scopeNetworks}
-                  onChange={(e) => setScopeNetworks(e.target.value)}
-                  placeholder="N0001, N0002"
-                />
-              </label>
-              <Button
-                disabled={!network}
-                onClick={() => setScopeNetworks(String(network?.id || ""))}
-              >
-                {t("使用选中网络")}
-              </Button>
-              <label>
-                {t("允许涉及的地址")}
-                <input
-                  value={scopeAddresses}
-                  onChange={(e) => setScopeAddresses(e.target.value)}
-                  placeholder="X0, Y0, M0"
-                />
-              </label>
-              <small>{t("网络和地址至少填写一项，同时填写时须同时满足。")}</small>
-            </>
-          )}
-        </details>
-      )}
       <div
         className={`composer${dragging ? " gxw-dragging" : ""}`}
         onDragOver={(event) => {
@@ -211,6 +166,82 @@ export function ComposerPanel(props: Props) {
           }
         }}
       >
+        {(gxwSource.available || scoped) && (
+          <div className="composer-context">
+            {gxwSource.available && (
+              <span className="gxw-source">
+                <SelectMenu
+                  className="gxw-source-picker"
+                  triggerClassName="composer-pill"
+                  label={t("编辑的程序")}
+                  mono
+                  value={gxwSource.selected}
+                  disabled={!canWrite || gxwSource.loading || jobs.some(activeJob)}
+                  onChange={(value) => gxwSource.select(value)}
+                  options={(gxwSource.view?.programs || []).map((source) => ({
+                    value: source.source_name,
+                    label: `${source.source_name} · ${source.language?.toUpperCase()} · ${source.unit_kind}`,
+                  }))}
+                />
+                {gxwSource.loading && <small role="status">{t("正在读取…")}</small>}
+              </span>
+            )}
+            {scoped && (
+              <button
+                className="composer-pill scope-pill"
+                aria-expanded={scopeOpen}
+                title={t("修改范围")}
+                onClick={() => setScopeOpen((value) => !value)}
+              >
+                {t("修改范围")}：{scopeEnabled ? t("局部约束已启用") : t("整个程序")}
+              </button>
+            )}
+          </div>
+        )}
+        {scoped && (
+          <div className="composer-scope" data-open={(scopeOpen && scoped) || undefined}>
+            <div>
+              <div className="scope-card">
+                <label className="inline">
+                  <input
+                    type="checkbox"
+                    style={{ width: "auto" }}
+                    checked={scopeEnabled}
+                    onChange={(e) => setScopeEnabled(e.target.checked)}
+                  />
+                  {t("只允许修改指定范围")}
+                </label>
+                {scopeEnabled && (
+                  <>
+                    <label>
+                      {t("允许修改的网络")}
+                      <input
+                        value={scopeNetworks}
+                        onChange={(e) => setScopeNetworks(e.target.value)}
+                        placeholder="N0001, N0002"
+                      />
+                    </label>
+                    <Button
+                      disabled={!network}
+                      onClick={() => setScopeNetworks(String(network?.id || ""))}
+                    >
+                      {t("使用选中网络")}
+                    </Button>
+                    <label>
+                      {t("允许涉及的地址")}
+                      <input
+                        value={scopeAddresses}
+                        onChange={(e) => setScopeAddresses(e.target.value)}
+                        placeholder="X0, Y0, M0"
+                      />
+                    </label>
+                    <small>{t("网络和地址至少填写一项，同时填写时须同时满足。")}</small>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
         {task !== "question" && attachments.length > 0 && (
           <div className="attachment-chips">
             {attachments.map((a) => (
@@ -230,6 +261,7 @@ export function ComposerPanel(props: Props) {
         )}
         {composerRoute.requiresText ? (
           <textarea
+            ref={textArea}
             rows={2}
             aria-label={t(answeringDirect ? "补充说明（选填）" : composerRoute.placeholder)}
             placeholder={t(answeringDirect ? "补充说明（选填）" : composerRoute.placeholder)}
@@ -255,80 +287,84 @@ export function ComposerPanel(props: Props) {
           onChange={(e) => void guarded(() => upload(e.target.files))}
         />
         <div className="composer-actions">
-          <Popover className="composer-menu" summaryClassName="composer-icon" label={t("添加")} title={t("添加")}
-            summary={<Plus size={17} />}>
-            <Button variant="ghost" disabled={!canWrite} aria-label={t("导入 GXW")}
-              onClick={() => gxwRef.current?.click()}>
-              <FileUp size={15} />{t("导入 GXW")}
-            </Button>
-            <Button
-              variant="ghost"
-              aria-label={t("添加图片")}
-              disabled={!canWrite || !pid || task === "question" || !composerRoute.requiresText}
-              onClick={() => uploadRef.current?.click()}
+          <div className="composer-tools">
+            <Popover className="composer-menu" summaryClassName="composer-icon" label={t("添加")} title={t("添加")}
+              summary={<Plus size={17} />}>
+              <Button variant="ghost" disabled={!canWrite} aria-label={t("导入 GXW")}
+                onClick={() => gxwRef.current?.click()}>
+                <FileUp size={15} />{t("导入 GXW")}
+              </Button>
+              <Button
+                variant="ghost"
+                aria-label={t("添加图片")}
+                disabled={!canWrite || !pid || task === "question" || !composerRoute.requiresText}
+                onClick={() => uploadRef.current?.click()}
+              >
+                <ImagePlus size={15} />{t("添加图片")}
+              </Button>
+              <Button variant="ghost" disabled={!canWrite || task === "question"} onClick={() => setModal("sfc")}>
+                <Workflow size={15} />{t("流程步骤")}
+              </Button>
+            </Popover>
+            <ConversationControls
+              task={task}
+              onTask={setTask}
+              workflow={workflow}
+              onWorkflow={setWorkflow}
+              editAction={editAction}
+              onEditAction={setEditAction}
+              analysisMode={analysisMode}
+              onAnalysisMode={setAnalysisMode}
+              hasVersions={!!hasSavedVersions}
+              targetMode={project?.target_mode || "ladder"}
+              analyzing={intent === "analysis"}
+              confirmed={!!project?.confirmed_spec && !reviewRequested}
+              onReview={() => {
+                setWorkflow("review");
+                setReviewRequested(true);
+              }}
+              disabled={!canWrite || jobs.some(activeJob)}
+              locale={locale}
+              t={t}
+            />
+          </div>
+          <div className="composer-meta">
+            <ModelSwitcher
+              compact
+              settings={settings}
+              job={jobs.find(activeJob)}
+              disabled={!canWrite}
+              onChange={setSettings}
+              onSettings={() => {
+                setSettingsTab("model");
+                setModal("settings");
+              }}
+              t={t}
+            />
+            <button
+              className={`approval-mode-indicator ${approvalSettings?.mode === "full" ? "full-access" : ""}`}
+              aria-label={t(approvalSettings ? approvalLabels[approvalSettings.mode] : "审批设置")}
+              title={`${t(approvalSettings ? approvalLabels[approvalSettings.mode] : "审批设置")} · ${t("在设置中调整审批模式")}`}
+              onClick={() => {
+                setSettingsTab("general");
+                setModal("settings");
+              }}
             >
-              <ImagePlus size={15} />{t("添加图片")}
+              <ShieldCheck size={13} />
+              <span>{t(approvalSettings ? approvalLabels[approvalSettings.mode] : "审批设置")}</span>
+            </button>
+            <Button
+              variant="primary"
+              className="composer-send"
+              title={`${t(composerRoute.submitLabel)} · Ctrl ↵`}
+              aria-label={t(composerRoute.submitLabel)}
+              disabled={!canSubmit}
+              onClick={() => void guarded(() => submitJob())}
+            >
+              <ArrowUp size={15} />
+              <span>{t(composerRoute.submitLabel)}</span>
             </Button>
-            <Button variant="ghost" disabled={!canWrite || task === "question"} onClick={() => setModal("sfc")}>
-              <Workflow size={15} />{t("流程步骤")}
-            </Button>
-          </Popover>
-          <ConversationControls
-            task={task}
-            onTask={setTask}
-            workflow={workflow}
-            onWorkflow={setWorkflow}
-            editAction={editAction}
-            onEditAction={setEditAction}
-            analysisMode={analysisMode}
-            onAnalysisMode={setAnalysisMode}
-            hasVersions={!!hasSavedVersions}
-            targetMode={project?.target_mode || "ladder"}
-            analyzing={intent === "analysis"}
-            confirmed={!!project?.confirmed_spec && !reviewRequested}
-            onReview={() => {
-              setWorkflow("review");
-              setReviewRequested(true);
-            }}
-            disabled={!canWrite || jobs.some(activeJob)}
-            locale={locale}
-            t={t}
-          />
-          <span className="spacer" />
-          <ModelSwitcher
-            compact
-            settings={settings}
-            job={jobs.find(activeJob)}
-            disabled={!canWrite}
-            onChange={setSettings}
-            onSettings={() => {
-              setSettingsTab("model");
-              setModal("settings");
-            }}
-            t={t}
-          />
-          <button
-            className={`approval-mode-indicator ${approvalSettings?.mode === "full" ? "full-access" : ""}`}
-            aria-label={t(approvalSettings ? approvalLabels[approvalSettings.mode] : "审批设置")}
-            title={`${t(approvalSettings ? approvalLabels[approvalSettings.mode] : "审批设置")} · ${t("在设置中调整审批模式")}`}
-            onClick={() => {
-              setSettingsTab("general");
-              setModal("settings");
-            }}
-          >
-            <ShieldCheck size={13} />
-            <span>{t(approvalSettings ? approvalLabels[approvalSettings.mode] : "审批设置")}</span>
-          </button>
-          <Button
-            variant="primary"
-            className="composer-send"
-            title={`${t(composerRoute.submitLabel)} · Ctrl ↵`}
-            disabled={!canSubmit}
-            onClick={() => void guarded(() => submitJob())}
-          >
-            <ArrowUp size={15} />
-            <span>{t(composerRoute.submitLabel)}</span>
-          </Button>
+          </div>
         </div>
       </div>
       <p className="gxw-drop-hint">

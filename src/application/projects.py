@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import mimetypes
 import re
 import uuid
@@ -23,6 +24,10 @@ from .workspace import artifact_relative_path
 
 class ProjectError(ValueError):
     pass
+
+
+class ProjectNotFoundError(KeyError):
+    """An indexed project record is absent, rather than invalid or unreadable."""
 
 
 def record_id(value: str) -> str:
@@ -66,6 +71,8 @@ class ProjectService:
         record_id(project_id)
         contained(self.store.project_path(project_id), self.workspace)
         project = self.store.get_project(project_id)
+        if project is None:
+            raise ProjectNotFoundError("Project not found")
         if not isinstance(project, dict) or project.get("id") != project_id:
             raise KeyError("Project not found")
         return project
@@ -75,7 +82,10 @@ class ProjectService:
         index = self.store._load_index()
         result = []
         for project_id in index.get("projects", []):
-            result.append(self.project(project_id, detail=False))
+            try:
+                result.append(self.project(project_id, detail=False))
+            except ProjectNotFoundError:
+                logging.getLogger(__name__).warning("Indexed project record is missing: %s", project_id)
         return sorted(result, key=lambda p: p.get("updated_at", ""), reverse=True)
 
     def project(self, project_id: str, *, detail=True) -> dict:
@@ -108,7 +118,7 @@ class ProjectService:
                 "gx_sync", "simulator_runs", "simulator_test_plans", "debug_attempts")
         result = {k: public(version.get(k)) for k in keys}
         result["confirmed_spec_snapshot"] = public(version.get("confirmed_spec_snapshot"), document="spec")
-        for key in ("generation_handoff", "maintainability_review"):
+        for key in ("generation_handoff", "maintainability_review", "delivery"):
             if key in version:
                 result[key] = public(version[key])
         result["artifacts"] = self.artifacts(project_id, version_id)
@@ -174,6 +184,10 @@ class ProjectService:
 
     def program(self, project_id: str, version_id: str) -> dict | None:
         version = self.raw_version(project_id, version_id)
+        if version.get('target_mode') in ('fbd', 'sfc') and 'gxw' not in version.get('artifacts', {}):
+            key = version['target_mode']
+            return {'kind': 'source_candidate', 'target_mode': key,
+                    'source': json.loads(self.artifact(project_id, version_id, key).read_bytes())}
         if version.get("target_mode") == "fbd":
             return self._fbd_context(project_id, version_id).object_model()
         if version.get('target_mode') == 'sfc':
@@ -235,10 +249,10 @@ class ProjectService:
             raise ProjectError("Selected ladder version has no readable program.")
         native_snapshot = self.artifact(project_id, selected, 'gxw').read_bytes() if version and 'gxw' in (version.get('artifacts') or {}) else None
         fbd_baseline = native_snapshot if version and version.get('target_mode') == 'fbd' else None
-        if version and version.get('target_mode') == 'fbd' and native_snapshot is None:
+        if version and version.get('target_mode') == 'fbd' and native_snapshot is None and not (version.get('delivery') or {}).get('degraded'):
             raise ProjectError('Selected FBD version has no GXW artifact.')
         st_text = self.artifact(project_id, selected, 'st').read_text(encoding='utf-8') if version and version.get('target_mode') == 'st' and 'st' in (version.get('artifacts') or {}) else None
-        sfc_graph = self.sfc_graph(project_id, selected) if version and version.get('target_mode') == 'sfc' else None
+        sfc_graph = self.sfc_graph(project_id, selected) if version and version.get('target_mode') == 'sfc' and native_snapshot is not None else None
         if self.raw_project(project_id) != project:
             raise ProjectError("Project changed during read; retry")
         return build_tool_context(project, version=version, program_ir=program,

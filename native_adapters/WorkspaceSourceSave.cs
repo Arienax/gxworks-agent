@@ -186,7 +186,7 @@ namespace PlcAi.NativeAdapter
             if (!String.Equals(actual, expected, StringComparison.OrdinalIgnoreCase)
                     || FileVersionInfo.GetVersionInfo(actual).FileVersion != NativeVersion)
                 throw new InvalidOperationException("unverified_native_workspace_version");
-            foreach (var entry in new[] { new[] { 1692, 0x78b7d }, new[] { 1688, 0x86487 }, new[] { 1552, 0x82bbb }, new[] { 1972, 0x86769 } })
+            foreach (var entry in new[] { new[] { 1692, 0x78b7d }, new[] { 1688, 0x86487 }, new[] { 1552, 0x82bbb }, new[] { 1972, 0x86769 }, new[] { 3200, 0x7e42d } })
                 if (Marshal.ReadIntPtr(Marshal.ReadIntPtr(workspace), entry[0]) != IntPtr.Add(module, entry[1]))
                     throw new InvalidOperationException("native_workspace_entry_mismatch");
         }
@@ -1205,7 +1205,8 @@ namespace PlcAi.NativeAdapter
                 string root = Path.GetFullPath(Text(request["directory"]));
                 if (!Directory.Exists(root)) throw new ArgumentException("isolated_directory_missing");
                 string operation = Text(request["operation"]);
-                if (operation == "save_source") { adapter.Save(root, request); status = "saved"; }
+                if (operation == "create_project") { adapter.CreateProject(root, request); status = "saved"; }
+                else if (operation == "save_source") { adapter.Save(root, request); status = "saved"; }
                 else if (operation == "create_source") { adapter.CreateSource(root, request); status = "saved"; }
                 else if (operation == "bind_program_task") { adapter.BindProgramTask(root, request); status = "saved"; }
                 else if (operation == "create_resource_scope") { adapter.CreateScope(root, request, false); status = "saved"; }

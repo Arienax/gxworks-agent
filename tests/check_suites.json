@@ -21,7 +21,7 @@
     "knowledge": {"heading": "Context, prompt and retrieval", "quick": ["tests/test_context_compiler.py", "tests/test_structured_fact_lookup.py"]},
     "generation": {"heading": "Generation, contracts, repair and delivery", "quick": ["tests/test_generation_repair_assembly.py", "tests/test_generation_repair_workflow.py"]},
     "plc": {"heading": "Deterministic PLC Core and instruction semantics", "quick": ["tests/test_review_noise_regressions.py", "tests/test_plc_core_boundary.py"]},
-    "gxw": {"heading": "GXW reverse engineering and round-trip", "quick": []},
+    "gxw": {"heading": "GXW reverse engineering and round-trip", "quick": ["tests/test_gxw_integrity.py::test_native_integrity_controls_and_noop_are_exact", "tests/test_gxw_integrity.py::test_corrupt_native_records_are_distinguished_from_unknown_layout"]},
     "native": {"heading": "GX Works2 native, CSV and synchronization", "quick": ["tests/test_gxworks2_import.py"]},
     "simulation": {"heading": "Simulation and verification", "quick": ["tests/test_simulation_workbench.py"]},
     "model": {"heading": "Model runtime and provider compatibility", "quick": ["tests/test_model_contract.py"]},
@@ -32,6 +32,7 @@
     "execution": {"heading": "Cross-cutting application and execution", "quick": ["tests/test_execution_read.py"]}
   },
   "rules": [
+    {"paths": ["src/application/gxw_delivery.py", "tests/test_gxw_delivery.py"], "domains": ["gxw", "generation", "native", "mcp", "web"], "quick": ["tests/test_gxw_delivery.py"]},
     {
       "paths": ["src/gxw/native_diagnostics.py", "src/gxw/diagnostic_*.py", "src/application/native_validation.py"],
       "domains": ["gxw", "plc", "native", "web", "mcp"],
@@ -47,13 +48,13 @@
         "tests/test_web_contract.py::test_*dynamic_public_fields*"
       ]
     },
-    {"paths": ["src/gxw/**"], "domains": ["gxw"], "domain_only": true},
-    {"paths": ["src/gxworks2/**", "native/**", "vendor/**"], "domains": ["native", "gxw"], "domain_only": true},
+    {"paths": ["src/gxw/**"], "domains": ["gxw"]},
+    {"paths": ["src/gxworks2/**", "native/**", "vendor/**"], "domains": ["native", "gxw"]},
     {"paths": ["src/plc/**"], "domains": ["plc", "generation"]},
     {"paths": ["src/simulator/**"], "domains": ["simulation"]},
     {"paths": ["src/model_runtime/**", "src/application/model_*.py"], "domains": ["model", "diagnostics"]},
     {"paths": ["src/knowledge/**", "resources/knowledge/**", "src/application/context_*.py", "src/agent_runtime/context_*.py"], "domains": ["knowledge"]},
-    {"paths": ["src/application/fbd*.py", "src/application/fbd/**"], "domains": ["web", "gxw"], "domain_only": true},
+    {"paths": ["src/application/fbd*.py", "src/application/fbd/**"], "domains": ["web", "gxw"]},
     {"paths": ["src/application/generation*.py", "src/application/delivery*.py", "src/plc/candidate_repair.py", "src/rendering/**"], "domains": ["generation"]},
     {"paths": ["src/application/analysis*.py", "src/application/planning*.py", "src/application/confirmed*.py"], "domains": ["analysis", "generation"]},
     {"paths": ["src/integrations/mcp/**", "src/mcp_server/**", "scripts/mcp_*.py"], "domains": ["mcp"]},
@@ -62,9 +63,9 @@
     {"paths": ["src/application/execution*.py", "src/application/live_*.py", "src/application/hardware*.py"], "domains": ["execution", "native"]},
     {"paths": ["src/application/**", "src/api.py"], "domains": ["web", "generation"]},
     {"paths": ["tools/**", "checks/**", "scripts/export_open_source.py", "publication/**", ".github/**", "tests/run_checks.py", "tests/check_*.py", "tests/check_suites.json", "tests/README.md"], "domains": ["architecture"]},
-    {"paths": ["tests/fixture_cache.py"], "domains": ["architecture", "gxw", "plc", "web"], "domain_only": true},
-    {"paths": ["resources/gxw/**", "resources/templates/**", "resources/native/**"], "domains": ["gxw", "native"], "domain_only": true},
-    {"paths": ["private/research/**", "private/tests/fixtures/**"], "domains": ["gxw", "native", "plc"], "domain_only": true},
+    {"paths": ["tests/fixture_cache.py"], "domains": ["architecture", "gxw", "plc", "web"]},
+    {"paths": ["resources/gxw/**", "resources/templates/**", "resources/native/**"], "domains": ["gxw", "native"]},
+    {"paths": ["private/research/**", "private/tests/fixtures/**"], "domains": ["gxw", "native", "plc"]},
     {"paths": ["README*", "LICENSE*", "NOTICE*", "docs/**", "skills/*.md", "private/skills/*.md", "private/docs/**", "private/acceptance/**", "private/local/**"], "domains": []}
   ]
 }

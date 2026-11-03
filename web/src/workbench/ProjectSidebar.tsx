@@ -113,8 +113,9 @@ export function ProjectSidebar(props: Props) {
 
   return (
     <aside className="project-sidebar" aria-label={t("工程")}>
+      <div className="sidebar-inner">
       <div className="sidebar-brand">
-        <CircuitBoard size={20} />
+        <CircuitBoard size={19} />
         <strong>GXWorks <span>Agent</span></strong>
         <button className="icon-button sidebar-collapse" aria-label={t("隐藏侧栏")} title={t("隐藏侧栏")}
           onClick={() => setLeftOpen(false)}>
@@ -130,9 +131,9 @@ export function ProjectSidebar(props: Props) {
         aria-label={t("GitHub 项目来源")}
         title="GitHub · Arienax/gxworks-agent"
       >
-        <Github size={19} />
-        <span><strong>GitHub</strong><small>Arienax/gxworks-agent</small></span>
-        <ArrowUpRight size={14} />
+        <Github size={16} />
+        <span>GitHub · Arienax/gxworks-agent</span>
+        <ArrowUpRight size={13} />
       </a>
       <button className="new-task-button" disabled={!canWrite && !!pid}
         onClick={() => (pid ? newTask() : setModal("new"))}>
@@ -170,8 +171,10 @@ export function ProjectSidebar(props: Props) {
                   <small>{p.plc_model} · {p.target_mode.toUpperCase()}</small>
                 </span>
               </button>
-              {selected && (
-                <div className="task-list" role="list" aria-label={t("任务记录")}>
+              {/* Kept mounted so the task list can animate open and closed. */}
+              <div className="task-list" data-open={selected || undefined} role="list"
+                aria-label={t("任务记录")} inert={selected ? undefined : true}>
+                <div className="task-list-inner">
                   {visibleJobs.map((job) => {
                     const state = listedJobStatus(job, jobId, displayedJobStatus);
                     return (
@@ -190,14 +193,14 @@ export function ProjectSidebar(props: Props) {
                       </button></div>
                     );
                   })}
-                  {!projectJobs.length && <p className="sidebar-empty">{t("暂无任务")}</p>}
-                  {projectJobs.length > VISIBLE_TASKS && (
+                  {selected && !projectJobs.length && <p className="sidebar-empty">{t("暂无任务")}</p>}
+                  {selected && projectJobs.length > VISIBLE_TASKS && (
                     <button className="task-more" onClick={() => setShowAll((value) => !value)}>
                       {t(showAll ? "收起" : "显示全部")} · {projectJobs.length}
                     </button>
                   )}
                 </div>
-              )}
+              </div>
             </div>
           );
         })}
@@ -209,6 +212,8 @@ export function ProjectSidebar(props: Props) {
           <Activity size={15} />
           <span>GX Works2</span>
           <span className="muted">{environment.status ? statusText(locale, String(environment.status)) : t("未运行")}</span>
+          <span className={`status-dot ${environment.status ? statusTone(String(environment.status)) : "neutral"}`}
+            aria-hidden="true" />
         </button>
         <Popover className="sidebar-menu" summaryClassName="sidebar-row"
           summary={<><Settings2 size={15} /><span>{t("设置")}</span><span className="connection-dot" title={t("已连接")} /></>}>
@@ -235,6 +240,7 @@ export function ProjectSidebar(props: Props) {
           </label>
           <p className="popover-footnote"><span className="connection-dot" />{t("本地服务")} · {t("已连接")}</p>
         </Popover>
+      </div>
       </div>
     </aside>
   );

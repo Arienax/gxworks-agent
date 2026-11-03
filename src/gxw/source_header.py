@@ -128,7 +128,7 @@ def _visible_header_save_policy(cpu, native_identity, operation):
 
 
 def normalize_visible_save_header(before: bytes, after: bytes, *, cpu: str, native_compiled=False,
-                                  native_identity=None, operation=None):
+                                  native_identity=None, operation=None, timestamp_policy="strict"):
     """Bound only the common save metadata witnessed for the current operation.
 
     The unchanged header passes through. Changed headers must have the exact
@@ -146,18 +146,28 @@ def normalize_visible_save_header(before: bytes, after: bytes, *, cpu: str, nati
     timestamp must always be valid. A currently compiled ST source may refresh
     that timestamp without changing its body; the same exact envelope and
     bound successful compilation are required.
+
+    Live preservation uses ``timestamp_policy="opaque"``: the timestamp bytes
+    are ignored for acceptance; every other changed field keeps its policy.
+    The default remains strict for non-live callers.
     """
     from datetime import datetime
+    if timestamp_policy not in ("strict", "opaque"):
+        raise GXWFormatError("unknown visible save timestamp policy")
     if type(native_compiled) is not bool:
         raise GXWFormatError('visible save compilation permission must be boolean')
     a, b = bytes(before), bytes(after)
     if a == b:
         return b, None
-    policy = _visible_header_save_policy(cpu, native_identity, operation)
+    timestamp_only = (timestamp_policy == 'opaque' and len(a) == len(b) and len(a) >= 54
+                      and a[:-20] == b[:-20] and a[-4:] == b[-4:]
+                      and source_payload_offset(a + b'\0') == len(a))
+    policy = (dict(initial_timestamp=False) if timestamp_only else
+              _visible_header_save_policy(cpu, native_identity, operation))
     if policy.get('compilation_required') and not native_compiled:
         raise GXWFormatError('visible save changed an unverified native header')
     prefix = bytes.fromhex('01000000000001000000000001000a00000000000200000001000000010000000000')
-    if (len(a) != 54 or len(b) != 54
+    if not timestamp_only and (len(a) != 54 or len(b) != 54
             or a[:34] != prefix or b[:34] != prefix
             or int.from_bytes(a[50:54], 'little') not in policy['before_flags']
             or int.from_bytes(b[50:54], 'little') not in policy.get('after_flags',
@@ -165,8 +175,8 @@ def normalize_visible_save_header(before: bytes, after: bytes, *, cpu: str, nati
         raise GXWFormatError('visible save changed an unverified native header')
 
     def stamp(raw, *, initial=False):
-        values = list(struct.unpack('<8H', raw[34:50]))
-        if initial and raw[34:50] == bytes(16):
+        values = list(struct.unpack('<8H', raw[-20:-4]))
+        if timestamp_policy == 'opaque' or (initial and raw[-20:-4] == bytes(16)):
             return values
         year, month, weekday, day, hour, minute, second, millis = values
         try:
@@ -177,11 +187,11 @@ def normalize_visible_save_header(before: bytes, after: bytes, *, cpu: str, nati
             raise GXWFormatError('visible save has an invalid native save weekday')
         return values
 
-    pending_after = int.from_bytes(b[50:54], 'little')
+    pending_after = int.from_bytes(b[-4:], 'little')
     observed = dict(status='native_header_metadata_inference',
                     timestamp_before=stamp(a, initial=policy['initial_timestamp']), timestamp_after=stamp(b),
-                    compile_pending_before=int.from_bytes(a[50:54], 'little'), compile_pending_after=pending_after)
-    if a[34:50] == bytes(16):
+                    compile_pending_before=int.from_bytes(a[-4:], 'little'), compile_pending_after=pending_after)
+    if a[-20:-4] == bytes(16):
         observed['timestamp_before_status'] = 'unset_native_default'
     if native_compiled and pending_after == 0:
         observed['native_compiled_permission_used'] = True

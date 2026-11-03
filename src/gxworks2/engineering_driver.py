@@ -115,11 +115,12 @@ class NativeEngineeringDriver:
         return driver
 
     @classmethod
-    def start_new(cls, path, cpu, *, timeout=30, progress=None, evidence_directory=None, language='fbd'):
+    def start_new(cls, path, cpu, *, timeout=30, progress=None, evidence_directory=None, language='fbd', block=None,
+                  initialize_allocation=True):
         if os.name != 'nt':
             raise NativeEngineeringDriverError('可见工程会话需要 Windows 交互桌面。')
-        if language not in ('fbd', 'st'):
-            raise NativeEngineeringDriverError('新建可见结构化工程的语言必须是 ST 或 FBD。')
+        if language not in ('fbd', 'st', 'ladder', 'sfc'):
+            raise NativeEngineeringDriverError('新建可见工程的语言必须是 Ladder、ST、FBD 或 SFC。')
         path = Path(path).expanduser().resolve()
         if (path.exists() or path.suffix.lower() != '.gxw' or not path.parent.is_dir()
                 or not 1 <= len(path.stem) <= 30):
@@ -135,15 +136,40 @@ class NativeEngineeringDriver:
                 break
             time.sleep(.1)
         if session is None or session.project_open:
-            raise NativeEngineeringDriverError('新建 GX Works2 进程没有明确的空白窗口。')
+            raise NativeEngineeringDriverError('新建 GX Works2 进程没有明确的空白窗口。', observation={
+                'startup_process_id': finder.started_process_id, 'requested_project': str(path),
+                'native_command_dispatched': False})
         driver = cls._bind_started_frame(session, path, cpu, timeout=timeout, progress=progress,
                                         evidence_directory=evidence_directory, finder=finder)
         import win32gui
         try:
+            driver._creation_block = block or {'data_name': 'Block', 'title': '', 'number': 0}
+            driver._initialize_creation_allocation = initialize_allocation
             win32gui.ShowWindow(session.window_handle, 3)
             driver._create_project(language=language)
         except Exception as error:
             raise driver._startup_error(error) from error
+        return driver
+
+    @classmethod
+    def attach_to_saved(cls, path, cpu, *, identity, timeout=30, progress=None, evidence_directory=None):
+        """Recreate wrappers for the exact retained frame, without opening a file."""
+        from gxw.live_context import _identity
+        finder = GXWorks2Finder()
+        session = finder.find_running(process_id=identity['process_id'])
+        if session is None:
+            raise NativeEngineeringDriverError('原 GX Works2 窗口已关闭；保留工作副本，未重建工程或重放步骤。')
+        if any(getattr(session, key) != identity[key] for key in (
+                'window_handle', 'process_started', 'executable', 'software_version')):
+            raise NativeEngineeringDriverError('原 GX Works2 进程或窗口身份已改变，未继续写入。')
+        driver = cls(session, path, cpu, timeout=timeout, progress=progress,
+                     evidence_directory=evidence_directory, finder=finder)
+        try:
+            if _identity(driver.inspect()) != _identity(identity):
+                raise NativeEngineeringDriverError('原 GX Works2 工程、CPU、语言或编码已改变，未继续写入。')
+        except Exception:
+            driver.close()
+            raise
         return driver
 
     @classmethod

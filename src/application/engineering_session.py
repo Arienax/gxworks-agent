@@ -155,11 +155,16 @@ class EngineeringSession:
         context = self.service.projects.tool_context(project_id, self.version_id, requirement='model')
         if not context.version_id:
             raise ValueError("The selected project has no saved version")
-        artifacts = self.service.projects.artifacts(project_id, context.version_id)
+        return self._version_artifacts(project_id, context.version_id)
+
+    def _version_artifacts(self, project_id, version_id):
+        version = self.service.projects.raw_version(project_id, version_id)
+        artifacts = self.service.projects.artifacts(project_id, version_id)
         for artifact in artifacts:
             if artifact["available"]:
-                artifact["path"] = str(self.service.projects.artifact(project_id, context.version_id, artifact["id"]))
-        return {"project_id": project_id, "version_id": context.version_id, "artifacts": artifacts}
+                artifact["path"] = str(self.service.projects.artifact(project_id, version_id, artifact["id"]))
+        return {"project_id": project_id, "version_id": version_id, "artifacts": artifacts,
+                "delivery": version.get('delivery'), "validation": version.get('validation')}
 
     def _operation_status(self, _context, arguments):
         context = build_tool_context(self.service.projects.raw_project(self._require_project()),
@@ -299,9 +304,15 @@ class EngineeringSession:
         if result.get('version_id') is not None:
             envelope['version_id'] = result['version_id']
         if proposal["action"] == "accept_local" and proposal["status"] == "accepted":
-            envelope["status"] = "saved"
+            diagnostic = result.get('status') == 'saved_native_diagnostic'
+            envelope["status"] = 'saved_native_diagnostic' if diagnostic else 'saved'
             data.update(requires_confirmation=False, version_id=result["version_id"], save_result=result)
-            data["message"] = "Validated local version saved by the shared application transaction."
+            saved = self.service.projects.raw_version(self.project_id, result['version_id'])
+            data.update(delivery=saved.get('delivery'), validation=saved.get('validation'))
+            data['artifacts'] = self._version_artifacts(self.project_id, result['version_id'])['artifacts']
+            data["message"] = (
+                "GXW candidate and diagnostics saved; native validation failed and this version was not activated."
+                if diagnostic else "Validated local version saved by the shared application transaction.")
             data.pop("pending_action", None)
         elif proposal["status"] == "pending":
             envelope["status"] = "execution_consent_required"

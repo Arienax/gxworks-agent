@@ -1183,7 +1183,7 @@ def _verify_saved_preservation(baseline, saved, context, old, new, *, native_com
             # are still checked independently below and against active pages.
             operation = 'compiled_st_source_save'
         normalized, changed = normalize_visible_save_header(before[:prefix_a], after[:prefix_b], cpu=old[0]['cpu'],
-            native_compiled=native_compiled, native_identity=header_identity, operation=operation)
+            native_compiled=native_compiled, native_identity=header_identity, operation=operation, timestamp_policy="opaque")
         if changed is not None:
             header_changes.append(dict(source=new_pous[owner], **changed))
         if before[prefix_a] == 193:
@@ -1239,27 +1239,30 @@ def _verify_saved_preservation(baseline, saved, context, old, new, *, native_com
         after = new[1].get(logical)
         if after is None:
             raise GXWFormatError('Stage save removed a current task')
-        if native_compiled:
-            previous_header, current_header = read_task_source(before)['header'], read_task_source(after)['header']
-            if previous_header != current_header and int.from_bytes(current_header[50:54], 'little') == 0:
-                operation = 'compiled_task_save' if header_identity is not None else 'source_save'
-                normalized, changed = normalize_visible_save_header(previous_header, current_header,
-                    cpu=old[0]['cpu'], native_compiled=True, native_identity=header_identity, operation=operation)
-                after = normalized + after[len(current_header):]
-                header_changes.append(dict(source=logical, **changed))
         changes = [row for row in appends if row['task'] + '.tsk' == logical]
         prior_rows = read_task_source(before)['rows']
         # A later Agent transaction may already use a prior stage save as its
         # baseline. Cumulative session receipts are not appended a second time.
         changes = [row for row in changes if not any(
             (prior['name'], prior['line']) == (row['program'], row['line']) for prior in prior_rows)]
+        previous_header, current_header = read_task_source(before)['header'], read_task_source(after)['header']
+        timestamp_only = (len(previous_header) == len(current_header)
+            and previous_header[:-20] == current_header[:-20] and previous_header[-4:] == current_header[-4:])
+        if previous_header != current_header and ((timestamp_only and not changes) or (native_compiled
+                and int.from_bytes(current_header[-4:], 'little') == 0)):
+            operation = 'compiled_task_save' if native_compiled and header_identity is not None else 'source_save'
+            normalized, changed = normalize_visible_save_header(previous_header, current_header,
+                cpu=old[0]['cpu'], native_compiled=native_compiled, native_identity=header_identity,
+                operation=operation, timestamp_policy="opaque")
+            after = normalized + after[len(current_header):]
+            header_changes.append(dict(source=logical, **changed))
         if not changes:
             if before != after:
                 raise GXWFormatError('Stage save changed retained unedited task bytes')
             continue
         from .fb_authoring import _visible_task_append_header
         normalized, changed = _visible_task_append_header(before, after, cpu=old[0]['cpu'],
-            native_identity=header_identity)
+            native_identity=header_identity, timestamp_policy="opaque")
         if changed is not None:
             header_changes.append(dict(source=logical, **changed))
         previous, current = read_task_source(before), read_task_source(normalized)

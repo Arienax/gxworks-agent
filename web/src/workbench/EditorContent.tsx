@@ -26,6 +26,7 @@ import type { IssueContext } from "../features/ProgramExplorer";
 import { IssueCards, ProgramExplorer } from "../features/ProgramExplorer";
 import type { CreationWorkflow, TaskPurpose } from "../features/conversationRouting";
 import type { CreationCapabilities } from "./useCapabilities";
+import { DataView } from "./ResultViews";
 
 const SimulationWorkbench = lazy(() =>
   import("../features/SimulationWorkbench").then((module) => ({
@@ -150,6 +151,8 @@ export function EditorContent({
         {t("新建工程")}
       </Button>
     </div>
+  ) : (visibleTab === 'fbd' || visibleTab === 'sfc') && visibleProgram && 'kind' in visibleProgram && visibleProgram.kind === 'source_candidate' ? (
+    <div className="canvas-document"><DataView value={visibleProgram.source} /></div>
   ) : visibleTab === "sfc" ? (
     <SFCPanel
       key={`${pid}:${vid}:${selectedProposal?.id || "version"}`}

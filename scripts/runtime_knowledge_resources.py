@@ -24,7 +24,7 @@ INSTRUCTION_FILES = (
     'fx3u_operand_semantic_promotions.json', 'fx3u_verified_opcodes.json', 'fx3u.json', 'fx5u.json',
     'instruction_capabilities.json', 'instruction_definitions.json.gz',
     'instruction_source_authority.json', 'modifier_rules.json',
-    'fx3u_step_widths.json', 'fbd_language_rules.json', 'pwm_contract.generated.json',
+    'fx3u_step_widths.json', 'fbd_language_rules.json', 'st_language_rules.json', 'pwm_contract.generated.json',
 )
 
 

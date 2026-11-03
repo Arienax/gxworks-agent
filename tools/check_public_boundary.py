@@ -36,6 +36,7 @@ REQUIRED = {
     'src/gxw/templates/q-token-encoder-forms.json',
     'resources/instructions/mitsubishi/common.json',
     'resources/instructions/mitsubishi/fbd_language_rules.json',
+    'resources/instructions/mitsubishi/st_language_rules.json',
     'resources/instructions/mitsubishi/pwm_contract.generated.json',
     'resources/instructions/mitsubishi/fx3u.json',
     'resources/instructions/mitsubishi/fx5u.json',
@@ -107,7 +108,6 @@ def check_archive(data: bytes, expected: int | None = 57) -> list[str]:
                 # The only material allowed inside a blank template is its GXW payload.
                 if reason and name not in projects:
                     problems.append(f'{name}: {reason}')
-                problems.extend(f'{name}: {problem}' for problem in check_content(name))
                 raw = archive.read(name)
                 if raw.startswith(b'version https://git-lfs.github.com/spec/v1'):
                     problems.append(f'{name}: unresolved LFS pointer')

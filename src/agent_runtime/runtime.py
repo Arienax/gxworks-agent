@@ -91,8 +91,17 @@ def _model_tool_value(name, value):
             if is_live_engineering_receipt(original):
                 return live_engineering_summary(original)
         if isinstance(current, Mapping) and isinstance(original, Mapping):
-            return {key: live_receipts(original[key], item) if key in original else item
-                    for key, item in current.items()}
+            restored = {key: live_receipts(original[key], item) if key in original else item
+                        for key, item in current.items()}
+            if (isinstance(original.get('delivery'), Mapping)
+                    and original['delivery'].get('preferred_format') == 'gxw'
+                    and isinstance(original.get('validation'), Mapping)):
+                # File delivery outcomes are operational results, not attached
+                # knowledge-review labels. Keep the bounded compilation result.
+                restored['validation'] = {key: original['validation'][key] for key in (
+                    'gx_compile', 'native_save', 'cold_reopen', 'public_check',
+                    'native_compile_message', 'native_compile_reason', 'native_phase') if key in original['validation']}
+            return restored
         if isinstance(current, list) and isinstance(original, (list, tuple)):
             return [live_receipts(before, after) for before, after in zip(original, current)]
         return current

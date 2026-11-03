@@ -180,7 +180,7 @@ _COMPARE_PREFIXES = frozenset({"=", "==", "<>", ">=", "<=", ">", "<"})
 _TYPED_OUTPUTS = frozenset({"COIL", "PLS", "PLF", "TIMER", "COUNTER"})
 
 
-def compact_response_schema(*, allow_construct=False, legacy=False):
+def compact_response_schema(*, allow_construct=False, legacy=False, partial=False):
     """Small transport schema; engineering validity remains in existing validators."""
     simple = {"type": "string", "minLength": 1, "maxLength": 160}
     parallel = {
@@ -238,7 +238,15 @@ def compact_response_schema(*, allow_construct=False, legacy=False):
         "required": ["r", "device_comments"],
         "additionalProperties": False,
     }
-    if allow_construct:
+    if partial:
+        rung['properties']['rung_id'] = {'type': 'integer', 'minimum': 0}
+        rung['required'].append('rung_id')
+        schema['properties']['r']['minItems'] = 0
+        schema['properties'].update(
+            mode={'type': 'string', 'enum': ['partial']},
+            delete_rung_ids={'type': 'array', 'items': {'type': 'integer', 'minimum': 0}})
+        schema['required'].extend(['mode', 'delete_rung_ids'])
+    elif allow_construct:
         reference = {'type': 'object', 'properties': {'construct': {'type': 'string', 'minLength': 1, 'maxLength': 64}},
                      'required': ['construct'], 'additionalProperties': False}
         schema['properties']['r']['items'] = {'anyOf': [schema['properties']['r']['items'], reference]}
@@ -272,7 +280,11 @@ def validate_compact_structure(value):
                 break
         else:
             return
-    parts = prefix + list(error.absolute_path)
+    _raise_schema_error(error, prefix)
+
+
+def _raise_schema_error(error, prefix=()):
+    parts = list(prefix) + list(error.absolute_path)
     if error.validator == "required" and isinstance(error.instance, dict):
         # Report the missing schema-owned field, not model-controlled error text.
         missing = next((key for key in error.validator_value if key not in error.instance), None)
@@ -422,15 +434,41 @@ def expand_compact_ladder(compact, projected=None):
     return {"device_comments": normalize_device_comments(comments), "rungs": rungs}
 
 
-def canonical_compact_example():
+def expand_compact_partial(value):
+    """Expand edit rows without renumbering targets or injecting unedited comments.
+
+    The existing partial merger owns duplicate/deleted identities and edit scope.
+    Conditions and actions use exactly the same decoder as fresh generation.
+    """
+    compact, _changes = normalize_compact(value)
+    error = next(Draft202012Validator(compact_response_schema(partial=True)).iter_errors(compact), None)
+    if error is not None:
+        _raise_schema_error(error)
+    rows = compact['r']
+    identities = [row.pop('rung_id') for row in rows]
+    if rows:
+        ladder = expand_compact_ladder({'r': rows, 'device_comments': compact['device_comments']})
+        for identity, rung in zip(identities, ladder['rungs']):
+            rung['rung_id'] = identity
+    else:
+        ladder = {'rungs': [], 'device_comments': normalize_device_comments(
+            {row['address']: row['comment'] for row in compact['device_comments']})}
+    return {'mode': 'partial', **ladder, 'delete_rung_ids': compact['delete_rung_ids']}
+
+
+def canonical_compact_example(*, partial=False):
     """One valid wire example; these example devices are not project allocations."""
-    return {"r": [{"c": ["NO M0"], "b": [{"i": [], "o": ["COIL M1"]}]}],
-            "device_comments": [{"address": "M0", "comment": "使能"}, {"address": "M1", "comment": "输出"}]}
+    example = {"r": [{"c": ["NO M0"], "b": [{"i": [], "o": ["COIL M1"]}]}],
+               "device_comments": [{"address": "M0", "comment": "使能"}, {"address": "M1", "comment": "输出"}]}
+    if partial:
+        example['r'][0]['rung_id'] = 1
+        example.update(mode='partial', delete_rung_ids=[])
+    return example
 
 
-def compact_protocol_prompt():
+def compact_protocol_prompt(*, partial=False):
     """Render required fields from the actual schema, not a second field list."""
-    schema = compact_response_schema()
+    schema = compact_response_schema(partial=partial)
     rung = schema["properties"]["r"]["items"]
     branch = rung["properties"]["b"]["items"]
     return (
@@ -440,7 +478,7 @@ def compact_protocol_prompt():
         + "每个输出分支必填字段：" + "、".join(branch["required"]) + "。\n"
         + "c 是所有输出分支共用的串联条件列表，i 是各分支追加的串联条件列表；二者始终为数组，无条件时写 []，不省略。\n"
         + "r 是梯级数组，b 是输出分支数组，i 本身是一维串联列表，o 是非空输出字符串数组。\n"
-        + "结构示例（不是本项目地址分配）：" + json.dumps(canonical_compact_example(), separators=(",", ":")) + "\n"
+        + "结构示例（不是本项目地址分配）：" + json.dumps(canonical_compact_example(partial=partial), separators=(",", ":")) + "\n"
         + "简单输入优先写 NO/NC/P/F 加地址；等价 Mitsubishi 触点助记符 "
         + "/".join(_MITSUBISHI_CONTACT_ALIASES)
         + " 也合法并由本地按触点语义归一化；比较写前缀表达式，例如 >= D0 K1。\n"
@@ -449,8 +487,27 @@ def compact_protocol_prompt():
         + "其他输出直接写 opcode 与空格分隔的 operands，例如 MOV K1 D0。\n"
         + 'device_comments 每项为 {"address":"软元件地址","comment":"用途短名称"}，'
         + f"用途名称最多 {GXWORKS2_DEVICE_COMMENT_MAX_CHARS} 字符；为程序中用途明确的软元件填写，保留原文及逐项问答已明确的用途，不为注释新增追问。\n"
-        + "注释仅用于展示，不作为电平、接线或控制语义的依据；已确认名称由本地优先补齐。编号、布局由本地补齐；仅输出协议 JSON。\n"
+        + "注释仅用于展示，不作为电平、接线或控制语义的依据；已确认名称由本地优先补齐。分支编号和布局由本地补齐；仅输出协议 JSON。\n"
+        + ('mode 必须为 partial；r 只列修改/新增的完整梯级，每项 rung_id 对应当前程序的原编号，新增使用未占用编号。'
+           'delete_rung_ids 只列明确删除的梯级编号，无删除写 []；未列出的梯级和注释由本地保留。'
+           '只改注释或只删除时 r 可为空。不得输出 branch_id、y_offset_level。\n' if partial else '')
     )
+
+
+def compact_generation_prompt(*, partial=False):
+    from plc.generation_contract import CYCLIC_ASSIGNMENT_PROMPT
+    return ("# Compact ladder generation\n"
+        + ("按本轮修改更新当前程序，只返回局部梯级计划。\n" if partial else "实现已确认规格，返回一个紧凑梯级计划。\n")
+        + CYCLIC_ASSIGNMENT_PROMPT + """
+- 实现已确认 I/O、参数、电平及 selected_approach.generation_contract；unverified_constraints 不升级为硬约束。
+- selected_approach.generation_contract 或 implementation_preferences 的 instruction_instances 中，opcode 与 operands 必须逐项原样使用，不省略、替换或重排。
+- NO 检查位=1，NC 检查位=0；active_when 与 run_permit_when 使用下方绑定谓词。
+- 不新增未确认 X/Y、停止/急停、硬件或模块寄存器。内部状态用普通 M/D/T/C；特殊软元件遵守本型号证据及显式禁用。
+- COIL 每扫描写导通真假；同一普通 Y/M 一个 COIL，完整条件放在同一输入路径，输出 branch 不是输入 OR。
+- 比较输入只比较；算术先用应用指令写入寄存器。
+- TIMER 使用 T，COUNTER 使用 C；普通定时器须有可变为 FALSE 的使能/复位路径。
+- 一次事件使用 P/F 边沿，持续条件使用电平；两者不互换。
+""" + compact_protocol_prompt(partial=partial))
 
 
 def compact_capability_prompt(plc_model, confirmed_spec):

@@ -8,6 +8,8 @@ import { api } from "../api/client";
 import type { Json, ModelSettings } from "../api/client";
 import type { components } from "../api/generated";
 import { Button, Badge, Modal } from "../components/ui";
+import { Popover } from "../components/Popover";
+import { Check, ChevronDown } from "lucide-react";
 import { ModelParameters } from "./ModelParameterControls";
 import { ENDPOINT_PRESETS, adoptSelections, modifiedParameters } from "./modelParameters";
 import { settingsTranslation } from "./modelSettingsLocale";
@@ -586,12 +588,26 @@ export function Settings({
           <label htmlFor="model-id">{t("模型")}</label>
           <div className="model-picker">
             <input id="model-id" value={model} onChange={e => changeModel(e.target.value)}
-              list="compatible-models" placeholder={t("输入模型 ID")} />
+              placeholder={t("输入模型 ID")} autoComplete="off" spellCheck={false} />
+            {/* The discovered list is a card menu, so it fades in like every other menu
+                instead of the browser's own dropdown, which cannot be themed. */}
+            <Popover className="model-choices" summaryClassName="model-choices-trigger"
+              label={t("可用模型")} title={t("可用模型")}
+              summary={<ChevronDown size={14} aria-hidden="true" />}>
+              {listing
+                ? <p className="select-note">{t("获取中…")}</p>
+                : discoveredModels.length
+                  ? discoveredModels.map(item => (
+                    <button type="button" key={item} aria-pressed={item === model}
+                      className={`select-option mono${item === model ? " selected" : ""}`}
+                      onClick={() => changeModel(item)}>
+                      <span>{item}</span>
+                      {item === model && <Check size={13} aria-hidden="true" />}
+                    </button>))
+                  : <p className="select-note">{t("点击“获取列表”读取可用模型")}</p>}
+            </Popover>
             <Button disabled={!discoverReady} onClick={discover}>{t(listing ? "获取中…" : "获取列表")}</Button>
           </div>
-          <datalist id="compatible-models">
-            {discoveredModels.map(item => <option value={item} key={item} />)}
-          </datalist>
         </div>
         {resolveError && <p role="alert">{t("无法读取模型配置")} <Button onClick={()=>retryResolve(n=>n+1)}>{t("重试")}</Button></p>}
         <details className="more-settings" ref={moreSettings}>

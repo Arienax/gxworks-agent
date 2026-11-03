@@ -14,6 +14,9 @@ from model_runtime.responses import ResponseContract
 
 _LADDER = ("device_comments.*", "rungs.**.label", "rungs.*.debug_note", "rungs.*.comment")
 LADDER_RESPONSE = ResponseContract("ladder", "json", _LADDER, annotation_paths=_LADDER)
+_COMPACT_EDIT = (*_LADDER, 'device_comments.*.comment')
+COMPACT_EDIT_RESPONSE = ResponseContract('compact_ladder_partial', 'json', _COMPACT_EDIT,
+    annotation_paths=_COMPACT_EDIT, structured_paths=('device_comments.*',))
 FIELD_PATCH_RESPONSE = ResponseContract("field_patch", "json", ())
 ANALYSIS_REPAIR_RESPONSE = ResponseContract("analysis_repair", "json", ())
 ST_RESPONSE = ResponseContract("st", "json", st_paths=("st_code",))

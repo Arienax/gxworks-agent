@@ -27,6 +27,20 @@ function resultComponent(reactOverrides = {}) {
   return module.exports;
 }
 
+test('ST text fallback exposes both source and global labels while GXW remains primary', () => {
+  const { GenerationResult } = resultComponent();
+  for (const [format, primary, labels] of [['txt', 'st', true], ['gxw', 'gxw', false]]) {
+    const markup = renderToStaticMarkup(createElement(GenerationResult, {
+      result: { id: 'job', projectId: 'p', versionId: 'v1', metadata: {
+        target_mode: 'st', delivery: { actual_format: format, primary_artifact: primary } } },
+      busy: false, onOpen() {}, onRepair() {}, onSpec() {}, t: key => key,
+    }));
+    assert.equal(markup.includes('下载全局标签 CSV'), labels);
+    assert.ok(markup.includes(labels ? '下载候选源码' : '下载 GXW 工程'));
+    assert.doesNotMatch(markup, /重新导出 GX Works2 CSV/);
+  }
+});
+
 test("Direct program actions precede collapsible generator notes with no required form", () => {
   const { GenerationResult } = resultComponent();
   const markup = renderToStaticMarkup(createElement(GenerationResult, {
@@ -250,3 +264,32 @@ for (const [locale, labels] of [
     assert.doesNotMatch(markup, /建立 ST 程序|修改 ST 程序|加入现有任务|连接端口|经过|移动图形对象|删除连接线|existing_task/);
   });
 }
+
+
+test("GXW delivery is primary and native compilation failure remains visible", () => {
+  const { GenerationResult } = resultComponent();
+  const markup = renderToStaticMarkup(createElement(GenerationResult, {
+    result: { id: "job", projectId: "project", versionId: "v0002", metadata: {
+      target_mode: "ladder", delivery: { primary_artifact: "gxw", actual_format: "gxw", degraded: false },
+      validation: { gx_compile: "failed", native_compile_message: "public check rejected" },
+    } }, busy: false, onOpen() {}, onRetry() {}, onRepair() {}, onSpec() {}, t: key => key,
+  }));
+  assert.match(markup, /下载 GXW 工程/);
+  assert.doesNotMatch(markup, /重新导出 GX Works2 CSV/);
+  assert.match(markup, /原生编译/);
+  assert.match(markup, /失败/);
+  assert.match(markup, /public check rejected/);
+});
+
+test("fallback delivery identifies the actual source and reason", () => {
+  const { GenerationResult } = resultComponent();
+  const markup = renderToStaticMarkup(createElement(GenerationResult, {
+    result: { id: "job", projectId: "project", versionId: "v0001", metadata: {
+      target_mode: "st", delivery: { primary_artifact: "st", actual_format: "st", degraded: true, reason: "GX Works2 not found" },
+    } }, busy: false, onOpen() {}, onRetry() {}, onRepair() {}, onSpec() {}, t: key => key,
+  }));
+  assert.match(markup, /下载候选源码/);
+  assert.match(markup, /已降级交付/);
+  assert.match(markup, /GX Works2 not found/);
+  assert.doesNotMatch(markup, /重新导出 GX Works2 CSV/);
+});

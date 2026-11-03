@@ -4,6 +4,7 @@
 """ST semantic binding over the existing GXW and PLC fact owners."""
 from __future__ import annotations
 from dataclasses import replace
+from copy import copy
 import re
 from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
 from plc.validation import (DEVICE_ADDRESS_RE, PLCJsonValidationError, is_bit_device,
@@ -805,6 +806,9 @@ class Inspector(_DeviceInspector):
             return
         declaration = self.reference(target, write=not initializing)
         left, right = self.value_type(target), self.value_type(value)
+        if declaration and declaration.address and not initializing:
+            self.device_fact(declaration.address, write=True)
+            self.guard(_validate_writable_device, declaration.address, '$.st_code', self.model)
         if target[0] == 'atom' and DEVICE_ADDRESS_RE.fullmatch(target[1]):
             self.device_fact(target[1], write=True)
             if self.model in SUPPORTED_PLC_MODELS:
@@ -858,7 +862,14 @@ class Inspector(_DeviceInspector):
                 self.finding('ST_CALL_GRAPH_COVERAGE', 'Recursive callable requires native and bounded execution checks', offset=offset, severity='unverified')
             elif key not in self._checked and getattr(definition, 'project_source', {}).get('language', 'st') == 'st':
                 self._checking.add(key)
-                symbols = Symbols(definition)
+                source = getattr(definition, 'project_source', {}).get('program')
+                callable_sources = self.symbols.callable_sources
+                if callable_sources is not None and source:
+                    callable_sources = copy(callable_sources)
+                    callable_sources.program_name = source
+                symbols = Symbols(definition, callable_sources=callable_sources)
+                symbols.context = (dict(self.symbols.context, selected_source=source)
+                                   if source else self.symbols.context)
                 symbols.globals, symbols.types, symbols.pous, symbols.options = self.symbols.globals, self.symbols.types, self.symbols.pous, self.symbols.options
                 child = Inspector(self.model, self.context, symbols=symbols)
                 child._checking, child._checked = self._checking, self._checked
@@ -925,6 +936,8 @@ class Inspector(_DeviceInspector):
     def declarations(self):
         for declaration in [*self.symbols.globals.values(), *self.symbols.locals.values()]:
             try:
+                if declaration.address:
+                    self.guard(_validate_device_address, declaration.address, '$.declarations', self.model)
                 base, _ = self.symbols.parts(declaration.data_type)
                 if base.upper() not in BASIC_TYPES and base.upper() not in self.symbols.types and base.upper() not in self.symbols.pous:
                     self.finding('ST_TYPE_COVERAGE', 'Declared type has no GX target evidence: ' + base, severity='unverified')

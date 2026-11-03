@@ -451,7 +451,7 @@ def test_workspace_wire_carries_business_objects_without_vendor_profiles(native_
     assert original == before
     assert wire['project'] == {'cpu': 'Q03UDV', 'encoding': 936}
     assert wire['change']['programs'] == [{'name': 'Program', 'language': language, 'body': 'AA=='}]
-    assert wire['action'] == 'check_project' and wire['schema_version'] == 3
+    assert wire['action'] == 'check_project' and wire['schema_version'] == 4
     encoded = json.dumps(wire)
     for forbidden in ('program_kind', 'pou_type', 'lexical_reader', 'graph_profile',
                       'compilation_method', 'ECCodeGenerator', 'native_cpu', '15.41'):
@@ -489,7 +489,7 @@ def test_built_workspace_boundary_rejects_vendor_plans_before_native_io(tmp_path
     executable = os.environ.get('GX_WORKSPACE_ADAPTER_TEST_EXE')
     if not executable:
         pytest.skip('Set GX_WORKSPACE_ADAPTER_TEST_EXE to the isolated freshly built adapter')
-    payload = {'schema_version': 3, 'action': 'read_sequence_chart',
+    payload = {'schema_version': 4, 'action': 'read_sequence_chart',
         'workspace': {'installation': str(tmp_path), 'directory': str(tmp_path), 'owner_token': 'protocol-only'},
         'project': {'cpu': 'FX3U/FX3UC', 'encoding': 936},
         'change': {'language': 'sfc', 'programs': [], 'libraries': []}}
@@ -497,7 +497,7 @@ def test_built_workspace_boundary_rejects_vendor_plans_before_native_io(tmp_path
         payload = {'operation': 'read_sfc_graph', 'protocol_version': 1, 'installation': str(tmp_path),
                    'directory': str(tmp_path), 'owner_token': 'protocol-only', 'source': {}}
     elif malformed == 'previous_wire_protocol':
-        payload['schema_version'] = 2
+        payload['schema_version'] = 3
     elif malformed == 'vendor_root':
         payload['change']['lexical_reader'] = {'module': 'arbitrary.dll', 'native_cpu': 209}
     elif malformed == 'vendor_child':
@@ -507,7 +507,7 @@ def test_built_workspace_boundary_rejects_vendor_plans_before_native_io(tmp_path
     elif malformed == 'boolean_protocol':
         payload['schema_version'] = True
     elif malformed == 'float_protocol':
-        payload['schema_version'] = 3.0
+        payload['schema_version'] = 4.0
     elif malformed == 'float_encoding':
         payload['project']['encoding'] = 936.0
     else:
@@ -516,7 +516,7 @@ def test_built_workspace_boundary_rejects_vendor_plans_before_native_io(tmp_path
         cwd=tmp_path, capture_output=True, timeout=10, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
     result = json.loads(process.stdout)
     assert process.returncode != 0 and result['status'] == 'failed'
-    assert result['protocol_version'] == 3 and result['calls'] == []
+    assert result['protocol_version'] == 4 and result['calls'] == []
     assert result['message'] in {'invalid_request_fields', 'vendor_plan_not_accepted',
         'vendor_child_type_not_accepted', 'invalid_native_integer', 'unobserved_sfc_graph_cpu_profile',
         'incompatible_workspace_protocol'}
@@ -531,7 +531,7 @@ def test_workspace_transport_sends_business_protocol_and_preserves_private_evide
         returncode = 0
         def communicate(self, message, timeout):
             requests.append(json.loads(message))
-            return json.dumps({'protocol_version': 3, 'status': 'observed',
+            return json.dumps({'protocol_version': 4, 'status': 'observed',
                 'calls': [{'operation': 'PrivateNativeRead', 'hresult': 0, 'code': 0}]}), ''
         def poll(self): return 0
     monkeypatch.setattr(adapter.subprocess, 'Popen', lambda *a, **k: Process())
@@ -542,12 +542,12 @@ def test_workspace_transport_sends_business_protocol_and_preserves_private_evide
     code, evidence = adapter._run_native_adapter('isolated-adapter', request, tmp_path, 10, adapter.WorkspaceSaveError)
     assert code == 0 and evidence['protocol_version'] == 1
     assert evidence['calls'][0]['operation'] == 'PrivateNativeRead'
-    assert len(requests) == 1 and requests[0]['schema_version'] == 3
+    assert len(requests) == 1 and requests[0]['schema_version'] == 4
     assert requests[0]['action'] == 'read_sequence_chart'
     assert requests[0]['change'] == {'language': 'sfc'}
 
 
-@pytest.mark.parametrize('version', [None, True, 1, 2, 3.0, 4])
+@pytest.mark.parametrize('version', [None, True, 1, 2, 3, 4.0, 5])
 def test_workspace_transport_rejects_previous_and_noncanonical_wire_versions(tmp_path, monkeypatch, version):
     import gxworks2.workspace_adapter as adapter
     class Process:
@@ -563,6 +563,165 @@ def test_workspace_transport_rejects_previous_and_noncanonical_wire_versions(tmp
         'source': {'cpu': 'Q03UDV', 'codepage': 936, 'program_kind': 240}}
     with pytest.raises(adapter.WorkspaceSaveError, match='协议版本不匹配'):
         adapter._run_native_adapter('isolated-adapter', request, tmp_path, 10, adapter.WorkspaceSaveError)
+
+
+@pytest.mark.parametrize('language', ['ladder', 'st', 'fbd', 'sfc'])
+def test_headless_creation_wire_needs_no_input_project(tmp_path, monkeypatch, language):
+    import gxworks2.workspace_adapter as adapter
+    messages = []
+    class Process:
+        pid = 987654
+        returncode = 0
+        def poll(self): return 0
+        def communicate(self, message, timeout):
+            messages.append(json.loads(message))
+            return json.dumps({'protocol_version': 4, 'status': 'saved', 'calls': []}), ''
+    monkeypatch.setattr(adapter.subprocess, 'Popen', lambda *a, **kw: Process())
+    monkeypatch.setattr(adapter, '_clean_native_temp', lambda *a: None)
+    source = {'cpu': 'L02', 'codepage': 936, 'language': language, 'project_name': '新建 工程',
+              'project_kind': 'structured' if language in {'st', 'fbd'} else 'simple',
+              'labels': language in {'st', 'fbd'}, 'block': {}}
+    request = dict(operation='create_project', protocol_version=1, installation='installed',
+                   directory=str(tmp_path), owner_token='owned', source=source)
+    code, result = adapter._run_native_adapter('adapter', request, tmp_path, 10, adapter.WorkspaceSaveError)
+    assert code == 0 and result['protocol_version'] == 1
+    assert messages == [{'schema_version': 4, 'action': 'create_project',
+        'workspace': {'installation': 'installed', 'directory': str(tmp_path), 'owner_token': 'owned'},
+        'project': {'cpu': 'L02', 'encoding': 936},
+        'change': {key: value for key, value in source.items() if key not in {'cpu', 'codepage'}}}]
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize('result', ['timeout', 'missing', 'invalid_object', 'cancelled'])
+def test_headless_creation_unconfirmed_result_retains_owned_workspace_without_replay(tmp_path, monkeypatch, result):
+    import os
+    if os.name != 'nt': pytest.skip('native creation is Windows-only')
+    import gxworks2.workspace_adapter as adapter
+    root = tmp_path / 'native-create'
+    root.mkdir()
+    monkeypatch.setattr(adapter.tempfile, 'mkdtemp', lambda **kwargs: str(root))
+    executable = tmp_path / 'adapter.exe'
+    executable.write_bytes(b'not-executed')
+    requests = []
+    class Process:
+        pid = 987654
+        returncode = 1
+        def poll(self): return self.returncode
+        def kill(self): self.returncode = -1
+        def communicate(self, message=None, timeout=None):
+            if message is None: return '', ''
+            requests.append(json.loads(message))
+            assert not (root / 'input.gxw').exists()
+            (root / 'partial-output').write_bytes(b'unconfirmed native work')
+            if result == 'timeout': raise adapter.subprocess.TimeoutExpired('adapter', timeout)
+            if result == 'cancelled': raise KeyboardInterrupt()
+            return ('' if result == 'missing' else '[]'), ''
+    monkeypatch.setattr(adapter.subprocess, 'Popen', lambda *a, **kw: Process())
+    monkeypatch.setattr(adapter, '_clean_native_temp', lambda *a: None)
+    with pytest.raises(KeyboardInterrupt if result == 'cancelled' else adapter.WorkspaceSaveError) as caught:
+        adapter.NativeWorkspaceSourceSave(executable=executable, installation=tmp_path).create_project('L02', 'st')
+    assert len(requests) == 1
+    assert caught.value.preserve_delivery and caught.value.phase == 'create_project'
+    assert caught.value.observation['status'] == 'unconfirmed'
+    assert root.is_dir()
+    retained = json.loads((root / 'creation_request.json').read_text(encoding='utf-8'))
+    assert adapter.workspace_business_request(retained) == requests[0]
+    assert (root / 'partial-output').read_bytes() == b'unconfirmed native work'
+
+
+@pytest.mark.parametrize('reply', ['missing', 'cancelled'])
+def test_definition_initialization_uncertainty_retains_its_workspace(tmp_path, monkeypatch, reply):
+    from pathlib import Path
+    import gxworks2.workspace_adapter as adapter
+    import gxw.project_metadata as metadata
+    root = tmp_path / 'initialization'
+    root.mkdir()
+    monkeypatch.setattr(adapter.tempfile, 'mkdtemp', lambda **kwargs: str(root))
+    monkeypatch.setattr(adapter, 'workspace_business_request', lambda request: {'action': 'author_project_definition'})
+    monkeypatch.setattr(metadata, 'gui_application_save_plan', lambda *args: None)
+    monkeypatch.setattr(adapter, '_clean_native_temp', lambda *args: None)
+    calls = []
+
+    class Process:
+        pid, returncode = 987654, 0
+        def poll(self): return self.returncode
+        def communicate(self, message, timeout):
+            calls.append(message)
+            if reply == 'cancelled': raise KeyboardInterrupt()
+            return '', ''
+
+    monkeypatch.setattr(adapter.subprocess, 'Popen', lambda *args, **kwargs: Process())
+    with pytest.raises(KeyboardInterrupt if reply == 'cancelled' else adapter.WorkspaceSaveError) as caught:
+        with adapter._native_workspace_directory(prefix='gxw-definition-') as directory:
+            (Path(directory) / 'input.gxw').write_bytes(b'this tasks new project')
+            adapter._run_native_adapter('adapter', {'operation': 'author_definition', 'owner_token': 'owned',
+                'source': {}}, Path(directory), 10, adapter.WorkspaceSaveError)
+    assert len(calls) == 1
+    assert caught.value.preserve_delivery is True
+    assert caught.value.observation == {'status': 'unconfirmed', 'workspace': str(root)}
+    assert (root / 'input.gxw').read_bytes() == b'this tasks new project'
+
+
+@pytest.mark.parametrize('wrong', ['cpu', 'language', 'task', None])
+@pytest.mark.parametrize('cpu,stored_cpu', [('L02-P', 'L02'), ('Q03UDV', 'Q03UDV'),
+    ('Q02H', 'Q02/Q02H'), ('FX3GC', 'FX3G'), ('FX2C', 'FXU/FX2C')])
+def test_headless_creation_checks_the_exported_project_not_only_adapter_claims(tmp_path, monkeypatch, wrong, cpu, stored_cpu):
+    import os
+    from types import SimpleNamespace
+    if os.name != 'nt': pytest.skip('native creation is Windows-only')
+    import gxworks2.workspace_adapter as adapter
+    import gxw.offline_project as projects
+    import gxw.native_write as writer
+    executable = tmp_path / 'adapter.exe'
+    executable.write_bytes(b'not-executed')
+    def run(executable, request, root, timeout, error_type):
+        assert list(root.iterdir()) == []
+        assert request['source']['cpu'] == stored_cpu
+        (root / 'candidate.gxw').write_bytes(b'child-output')
+        return 0, {'status': 'saved', 'native_version': '1.635.0.1', 'protocol_version': 1,
+            'creation': {'cpu': stored_cpu, 'encoding': 936, 'language': 'st', 'project_kind': 'structured',
+                         'labels': True, 'block': None, 'program': 'POU_01'},
+            'calls': [{'operation': op, 'hresult': 0, 'code': 0} for op in
+                      ['Creation.Factory', 'Creation.OpenProject', 'Creation.ReadCodePage', 'Creation.ReadCpu',
+                       'Creation.ReadLanguage', 'SaveProject', 'ExportOneFileProject']]}
+    monkeypatch.setattr(adapter, '_run_native_adapter', run)
+    monkeypatch.setattr(projects, 'read_offline_project', lambda raw: SimpleNamespace(
+        context={'cpu': 'ForeignCPU' if wrong == 'cpu' else stored_cpu, 'codepage': 936},
+        select=lambda _: {'language': 'fbd' if wrong == 'language' else 'st', 'name': 'POU_01'}))
+    monkeypatch.setattr(writer, '_native_scope_inventory', lambda raw: ({}, [
+        {'programs': [{'name': 'ForeignProgram' if wrong == 'task' else 'POU_01'}]}]))
+    native = adapter.NativeWorkspaceSourceSave(executable=executable, installation=tmp_path)
+    if wrong:
+        with pytest.raises(adapter.WorkspaceSaveError, match='readback differs'):
+            native.create_project(cpu, 'st')
+    else:
+        assert native.create_project(cpu, 'st') == b'child-output'
+
+
+@pytest.mark.parametrize('malformed', ['labels', 'language', 'project_kind', 'sfc_number', 'sfc_title'])
+def test_built_headless_creation_rejects_invalid_contract_before_native_io(tmp_path, malformed):
+    import os
+    import subprocess
+    executable = os.environ.get('GX_WORKSPACE_ADAPTER_TEST_EXE')
+    if not executable: pytest.skip('Set GX_WORKSPACE_ADAPTER_TEST_EXE to the freshly built adapter')
+    change = {'language': 'st', 'project_kind': 'structured', 'labels': True, 'project_name': 'Owned', 'block': {}}
+    if malformed == 'labels': change['labels'] = 1
+    elif malformed == 'language': change['language'] = 'arbitrary'
+    elif malformed == 'project_kind': change['project_kind'] = 'arbitrary'
+    else:
+        change.update(language='sfc', project_kind='simple', labels=False,
+                      block={'data_name': 'Block', 'title': '', 'number': 0})
+        if malformed == 'sfc_number': change['block']['number'] = -1
+        else: change['block']['title'] = 'x' * 129
+    request = {'schema_version': 4, 'action': 'create_project', 'project': {'cpu': 'L02', 'encoding': 936},
+               'workspace': {'installation': str(tmp_path), 'directory': str(tmp_path), 'owner_token': 'owned'},
+               'change': change}
+    process = subprocess.run([executable], input=json.dumps(request), text=True, encoding='utf-8-sig',
+        capture_output=True, timeout=10, cwd=tmp_path, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+    observed = json.loads(process.stdout)
+    assert process.returncode != 0 and observed['protocol_version'] == 4
+    assert observed['calls'] == []
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_web_and_mcp_public_projections_keep_diagnostics_without_native_implementation():
@@ -2733,14 +2892,15 @@ def test_native_failure_forensics_is_bounded_and_tolerates_missing_state(tmp_pat
     assert forensics['exception_trace_records'] is None and forensics['save_output_bytes'] is None
 
 
-def test_native_compile_save_rejection_attaches_forensics_and_report_sequence(tmp_path, monkeypatch):
+@pytest.mark.parametrize('phase', ['compile', 'public_check'])
+def test_native_compile_save_rejection_attaches_forensics_and_report_sequence(tmp_path, monkeypatch, phase):
     import gxworks2.workspace_adapter as adapter
     from tests.test_gxw_object_model import authored_fb_witness
 
     before = authored_fb_witness()[0]
     executable = tmp_path/'adapter.exe'
     executable.write_bytes(b'not-executed')
-    observation = {'protocol_version': 3, 'status': 'observed', 'message': '', 'exception_trace': 18,
+    observation = {'protocol_version': 4, 'status': 'observed', 'message': '', 'exception_trace': 18,
                    'cpu': 'Q03UDV', 'validation': {'events': [
                        {'operation': 'CompilePublicReports', 'reports': [
                            {'kind': 2, 'code': 0x500c5150, 'arguments': []},
@@ -2749,6 +2909,14 @@ def test_native_compile_save_rejection_attaches_forensics_and_report_sequence(tm
     result = {'compilation': {'acceptance': 'rejected',
                               'diagnostics': [{'code': 0x500c5150}]},
               'public_check': {'status': 'not_requested'}, 'adapter': {}}
+    if phase == 'public_check':
+        observation.update(status='failed', message='compile_save_requires_completed_accepted_build_and_public_check')
+        observation['validation']['events'] = [
+            {'operation': 'CompilePublicReports', 'reports': [{'kind': 1, 'code': code} for code in (256, 257, 260)]},
+            {'operation': 'ProgramCheckOriginalReports', 'reports': [
+                {'kind': 2, 'code': 0x050c9512, 'arguments': [{'text': 'MAIN'}, {'text': 'Y002'}]}]}]
+        result.update(compilation={'acceptance': 'accepted', 'diagnostics': []}, public_check={'status': 'failed'},
+                      diagnostic_projection={'public_diagnostics': observation['validation']['events'][1]['reports']})
 
     def run(_executable, request, root, timeout, error_type):
         assert (root/'input.gxw').read_bytes() == before
@@ -2760,12 +2928,43 @@ def test_native_compile_save_rejection_attaches_forensics_and_report_sequence(tm
     with pytest.raises(adapter.WorkspaceSaveError) as raised:
         checker.validate(before, timeout=10, _save_output=True)
     message = str(raised.value)
+    if phase == 'public_check':
+        assert 'compilation=accepted; public_check=failed; public_check_diagnostics=0x050c9512' in message
+        assert 'reports=0x00000100,0x00000101,0x00000104' in message
+        assert raised.value.validation['diagnostic_projection'] == result['diagnostic_projection']
+        return
     assert 'diagnostics=0x500c5150' in message and 'reports=0x500c5150,0x00000019' in message
     forensics = raised.value.observation['forensics']
     assert forensics['report_sequence'] == ['0x500c5150', '0x00000019']
     assert forensics['exception_trace_records'] == 18
     assert forensics['acceptance'] == 'rejected' and forensics['save_output_bytes'] is None
     assert 'input.gxw' in [row['name'] for row in forensics['workspace_entries']]
+
+
+@pytest.mark.parametrize('failure_at', ['validation', 'verification'])
+def test_native_compile_save_marks_cold_failure_as_reopen(tmp_path, monkeypatch, failure_at):
+    import gxworks2.workspace_adapter as adapter
+    from gxw.models import GXWFormatError
+    import gxw.native_write as native_write
+    cold = {'compilation': {'acceptance': 'accepted'}, 'public_check': {'status': 'failed'}}
+    class Checker:
+        def validate(self, raw, **options):
+            if options.get('_save_output'):
+                assert raw == b'before'
+                return b'saved', {}, {}, {}
+            assert raw == b'saved' and options['inspection']['saved_code'] is True
+            if failure_at == 'validation':
+                raise adapter.WorkspaceValidationError('cold read failed')
+            return cold
+    monkeypatch.setattr(adapter, 'NativeWorkspaceValidation', lambda **options: Checker())
+    def reject(*args):
+        raise GXWFormatError('cold check rejected')
+    monkeypatch.setattr(native_write, 'verify_native_compilation_save', reject)
+    with pytest.raises(adapter.WorkspaceAdapterError) as raised:
+        adapter.NativeWorkspaceSourceSave(tmp_path / 'unused.exe', tmp_path).compile_project(b'before')
+    assert raised.value.phase == 'reopen'
+    if failure_at == 'verification':
+        assert raised.value.validation == cold
 
 
 def test_native_failure_forensics_separates_internal_fault_from_source_diagnostics(tmp_path):
@@ -2791,7 +2990,7 @@ def test_native_compile_save_repeats_once_when_only_the_vendor_literal_was_repor
     roots = []
 
     def observation(status, reports):
-        return {'protocol_version': 3, 'status': status, 'message': '', 'exception_trace': 18, 'cpu': 'Q03UDV',
+        return {'protocol_version': 4, 'status': status, 'message': '', 'exception_trace': 18, 'cpu': 'Q03UDV',
                 'validation': {'events': [{'operation': 'CompilePublicReports', 'reports': reports}]}, 'calls': []}
 
     projections = [
@@ -2832,7 +3031,7 @@ def test_native_compile_save_does_not_repeat_a_source_rejection(tmp_path, monkey
 
     def run(_executable, request, root, timeout, error_type):
         calls.append(root)
-        return 0, {'protocol_version': 3, 'status': 'observed', 'message': '', 'cpu': 'Q03UDV',
+        return 0, {'protocol_version': 4, 'status': 'observed', 'message': '', 'cpu': 'Q03UDV',
                    'validation': {'events': [{'operation': 'CompilePublicReports', 'reports': [
                        {'kind': 2, 'code': 0x500c8042, 'arguments': []}]}]}, 'calls': []}
 
@@ -2858,7 +3057,7 @@ def test_native_compile_save_repeat_is_bounded_to_one_attempt(tmp_path, monkeypa
 
     def run(_executable, request, root, timeout, error_type):
         calls.append(root)
-        return 0, {'protocol_version': 3, 'status': 'observed', 'message': '', 'cpu': 'Q03UDV',
+        return 0, {'protocol_version': 4, 'status': 'observed', 'message': '', 'cpu': 'Q03UDV',
                    'validation': {'events': [{'operation': 'CompilePublicReports', 'reports': [
                        {'kind': 2, 'code': 0x500c5150, 'arguments': []}]}]}, 'calls': []}
 
@@ -2894,7 +3093,7 @@ def test_native_validation_only_repeats_the_vendor_literal_in_the_compile_only_p
 
     def run(_executable, request, root, timeout, error_type):
         calls.append(root)
-        return 0, {'protocol_version': 3, 'status': 'observed', 'message': '', 'cpu': 'Q03UDV',
+        return 0, {'protocol_version': 4, 'status': 'observed', 'message': '', 'cpu': 'Q03UDV',
                    'validation': {'events': [{'operation': 'CompilePublicReports', 'reports': [
                        {'kind': 2, 'code': 0x500c5150, 'arguments': []}]}]}, 'calls': []}
 
@@ -2918,7 +3117,7 @@ def test_native_compile_only_path_returns_the_rejected_result_when_the_repeat_al
 
     def run(_executable, request, root, timeout, error_type):
         calls.append(root)
-        return 0, {'protocol_version': 3, 'status': 'observed', 'message': '', 'cpu': 'Q03UDV',
+        return 0, {'protocol_version': 4, 'status': 'observed', 'message': '', 'cpu': 'Q03UDV',
                    'validation': {'events': [{'operation': 'CompilePublicReports', 'reports': [
                        {'kind': 2, 'code': 0x500c5150, 'arguments': []}]}]}, 'calls': []}
 
@@ -2945,7 +3144,7 @@ def test_native_repeat_keeps_the_first_failure_when_the_repeat_breaks(tmp_path, 
     def run(_executable, request, root, timeout, error_type):
         calls.append(root)
         if len(calls) == 1:
-            return 0, {'protocol_version': 3, 'status': 'observed', 'message': '', 'cpu': 'Q03UDV',
+            return 0, {'protocol_version': 4, 'status': 'observed', 'message': '', 'cpu': 'Q03UDV',
                        'validation': {'events': [{'operation': 'CompilePublicReports', 'reports': [
                            {'kind': 2, 'code': 0x500c5150, 'arguments': []}]}]}, 'calls': []}
         raise adapter.WorkspaceValidationError('原生命令行适配器在超时内未结束。', {})
@@ -2981,7 +3180,7 @@ def test_native_compile_only_repeat_also_keeps_the_first_failure(tmp_path, monke
     def run(_executable, request, root, timeout, error_type):
         calls.append(root)
         if len(calls) == 1:
-            return 0, {'protocol_version': 3, 'status': 'observed', 'message': '', 'cpu': 'Q03UDV',
+            return 0, {'protocol_version': 4, 'status': 'observed', 'message': '', 'cpu': 'Q03UDV',
                        'validation': {'events': [{'operation': 'CompilePublicReports', 'reports': [
                            {'kind': 2, 'code': 0x500c5150, 'arguments': []}]}]}, 'calls': []}
         raise adapter.WorkspaceValidationError('原生工作区没有返回检查过程记录。')
@@ -3024,5 +3223,8 @@ def test_native_exception_trace_is_opt_in_and_ships_with_the_adapter():
     assert 'AddVectoredExceptionHandler' in source
     build = (root/'tools/build_workspace_adapter.ps1').read_text(encoding='utf-8')
     assert 'NativeExceptionTrace.cs' in build
-    published = json.loads((root/'publication/public-files.json').read_text(encoding='utf-8'))['files']
-    assert 'native_adapters/NativeExceptionTrace.cs' in published
+    from publication.source_policy import source_files
+    published = set(source_files(root))
+    assert root/'native_adapters/NativeExceptionTrace.cs' in published
+    assert root/'native_adapters/WorkspaceProjectCreation.cs' in published
+    assert 'WorkspaceProjectCreation.cs' in build

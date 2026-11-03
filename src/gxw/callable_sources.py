@@ -59,7 +59,7 @@ def read_project_declarations(streams, *, source_groups=None, overrides=None):
 # certify one controller using the result of another controller's compilation.
 LIBRARY_CPU_SECTIONS = {
     'FX0S/FX0': 'FX0', 'FX1': 'FX1N', 'FX1N/FX1NC': 'FX1N',
-    'FX2/FX2C': 'FX2C', 'FX2N/FX2NC': 'FX2N', 'FX3U/FX3UC': 'FX3U',
+    'FX2/FX2C': 'FX2C', 'FXU/FX2C': 'FX2C', 'FX2N/FX2NC': 'FX2N', 'FX3U/FX3UC': 'FX3U',
     'FX3G/FX3GC': 'FX3G',
     'Q2A': 'QnA', 'Q2AS1': 'QnA', 'Q2AS(H)': 'QnA', 'Q2AS(H)S1': 'QnA',
     'Q3A': 'QnA', 'Q4A': 'QnA', 'Q00': 'Q00_Q01', 'Q01': 'Q00_Q01',

@@ -30,14 +30,19 @@ logger = logging.getLogger(__name__)
 
 @contextmanager
 def _native_workspace_directory(*, prefix):
-    directory = tempfile.TemporaryDirectory(prefix=prefix)
+    directory = Path(tempfile.mkdtemp(prefix=prefix)).resolve()
+    preserved = False
     try:
-        yield directory.name
+        yield str(directory)
+    except BaseException as error:
+        preserved = bool(getattr(error, 'preserve_delivery', False))
+        raise
     finally:
-        try:
-            directory.cleanup()
-        except OSError as error:
-            logger.warning('Native workspace temporary cleanup failed: %s', error)
+        if not preserved:
+            try:
+                shutil.rmtree(directory)
+            except OSError as error:
+                logger.warning('Native workspace temporary cleanup failed: %s', error)
 
 
 class WorkspaceAdapterError(GXWFormatError):
@@ -74,13 +79,19 @@ def _run_native_adapter(executable, request, root, timeout, error_type):
         raise ValueError('Native workspace timeout must be finite and positive')
     token = request['owner_token']
     wire_request = workspace_business_request(request)
-    if request['operation'] not in ('validate_project','export_library','read_sfc_graph'):
+    if request['operation'] not in ('create_project','validate_project','export_library','read_sfc_graph'):
         from gxw.project_metadata import gui_application_save_plan
         from base64 import b64encode
         gui = gui_application_save_plan((root/'input.gxw').read_bytes(), request['source'])
         if gui is not None:
             wire_request['change']['gui_application'] = b64encode(gui).decode('ascii')
     deadline = time.monotonic() + timeout
+    def incomplete(message):
+        error = error_type(message)
+        if request['operation'] in ('create_project', 'compile_save_project', 'author_definition'):
+            error.preserve_delivery = True
+            error.observation = {'status': 'unconfirmed', 'workspace': str(root)}
+        return error
     for attempt in range(3):
         try:
             process = subprocess.Popen([str(executable)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -95,7 +106,12 @@ def _run_native_adapter(executable, request, root, timeout, error_type):
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.communicate()
-                raise error_type('本次原生工作区操作超时，隔离进程已停止。') from None
+                raise incomplete('本次原生工作区操作超时，隔离进程已停止。') from None
+            except BaseException as error:
+                if request['operation'] in ('create_project', 'compile_save_project', 'author_definition'):
+                    error.preserve_delivery = True
+                    error.observation = {'status': 'unconfirmed', 'workspace': str(root)}
+                raise
         finally:
             if process.poll() is None:
                 process.kill()
@@ -107,9 +123,9 @@ def _run_native_adapter(executable, request, root, timeout, error_type):
         try:
             observation = json.loads(stdout.lstrip('\ufeff'))
         except (ValueError, TypeError):
-            raise error_type('原生工作区没有返回完整结果。') from None
+            raise incomplete('原生工作区没有返回完整结果。') from None
         if not isinstance(observation, dict):
-            raise error_type('原生工作区返回格式无效。')
+            raise incomplete('原生工作区返回格式无效。')
         if type(observation.get('protocol_version')) is not int or observation['protocol_version'] != WORKSPACE_PROTOCOL:
             raise error_type('原生工作区协议版本不匹配，请更新运行组件。', observation)
         observation['protocol_version'] = 1  # Internal evidence schema; not a wire fallback.
@@ -128,7 +144,7 @@ class _NativeWorkspaceAdapter:
     """Execute validated engineering objects with the version-bound runtime."""
 
     def __init__(self, executable=None, installation=None):
-        default = Path(os.environ.get('LOCALAPPDATA', '')) / 'PLC AI Studio/workspace-adapter/PlcAi.WorkspaceSourceSave.exe'
+        default = Path(os.environ.get('LOCALAPPDATA', '')) / f'PLC AI Studio/workspace-adapter/v{WORKSPACE_PROTOCOL}/PlcAi.WorkspaceSourceSave.exe'
         self.executable = Path(executable or os.environ.get('GX_WORKSPACE_ADAPTER_EXE')
                                or bundled_executable('workspace-adapter', 'PlcAi.WorkspaceSourceSave.exe')
                                or default).expanduser().resolve()
@@ -139,18 +155,112 @@ class _NativeWorkspaceAdapter:
 class NativeWorkspaceSourceSave(_NativeWorkspaceAdapter):
     """Save a Core-prepared edit and verify the native candidate bytes."""
 
+    def create_project(self, cpu, language, *, block=None, project_name='GXWProject', timeout=None):
+        """Create this task's own GXW through the proven native factory."""
+        from .project_profiles import native_serialized_cpu
+        from plc.project_capabilities import normalize_project_selection
+        try:
+            selection = normalize_project_selection(cpu, language)
+            native_cpu = native_serialized_cpu(cpu)
+        except ValueError as error:
+            raise WorkspaceSaveError(str(error)) from error
+        if language not in {'ladder', 'st', 'fbd', 'sfc'}:
+            raise ValueError('Unsupported headless project language')
+        if os.name != 'nt' or not self.executable.is_file():
+            raise WorkspaceSaveError('Headless creation requires the local GX Works2 workspace adapter.')
+        if self.installation is None:
+            raise WorkspaceSaveError('GX Works2 was not found for headless creation.')
+        structured = selection['native_project_type'] == 'structured'
+        block = {'data_name': 'Block', 'title': '', 'number': 0, **(block or {})} if language == 'sfc' else {}
+        with _native_workspace_directory(prefix='gxw-create-') as directory:
+            root = Path(directory)
+            request = {'operation': 'create_project', 'protocol_version': 1,
+                       'installation': str(self.installation), 'directory': str(root), 'owner_token': uuid.uuid4().hex,
+                       'source': {'cpu': native_cpu, 'codepage': 936, 'language': language,
+                                  'project_kind': 'structured' if structured else 'simple', 'labels': structured,
+                                  'project_name': project_name, 'block': block}}
+            try:
+                code, observed = _run_native_adapter(self.executable, request, root, timeout, WorkspaceSaveError)
+            except BaseException as error:
+                error.phase = 'create_project'
+                if getattr(error, 'preserve_delivery', False) or 'timeout' in str(error).lower() or '超时' in str(error):
+                    error.preserve_delivery = True
+                    error.observation = {'phase': 'create_project', 'status': 'unconfirmed', 'workspace': str(root)}
+                    (root / 'creation_request.json').write_text(json.dumps(request, ensure_ascii=False), encoding='utf-8')
+                raise
+            creation, calls = observed.get('creation') or {}, observed.get('calls')
+            required = {'Creation.Factory', 'Creation.OpenProject', 'Creation.ReadCodePage',
+                        'Creation.ReadCpu', 'Creation.ReadLanguage', 'SaveProject', 'ExportOneFileProject'}
+            if (code or observed.get('status') != 'saved' or observed.get('native_version') != '1.635.0.1'
+                    or observed.get('protocol_version') != 1 or creation.get('cpu') != native_cpu
+                    or creation.get('encoding') != 936 or creation.get('language') != language
+                    or creation.get('project_kind') != request['source']['project_kind']
+                    or creation.get('labels') is not structured or creation.get('block') != (
+                        {**block, 'language': 'sfc', 'execution': 'task_bound'} if language == 'sfc' else None)
+                    or not isinstance(calls, list) or any(not isinstance(row, dict) or row.get('hresult', -1) < 0
+                        or row.get('code') != 0 for row in calls)
+                    or not required.issubset(row.get('operation') for row in calls)):
+                error = WorkspaceSaveError('Headless project creation failed: ' + str(observed.get('message') or 'creation_readback_differs'), observed)
+                error.phase = 'create_project'
+                raise error
+            output = root / 'candidate.gxw'
+            if not output.is_file() or not 0 < output.stat().st_size <= 30 * 1024 * 1024:
+                raise WorkspaceSaveError('Headless creation did not export a valid GXW candidate.', observed)
+            raw = output.read_bytes()
+            from gxw.offline_project import read_offline_project
+            from gxw.native_write import _native_scope_inventory
+            project = read_offline_project(raw)
+            selected = project.select(None)
+            _, tasks = _native_scope_inventory(raw)
+            members = [row['name'] for task in tasks for row in task['programs']]
+            if (project.context['cpu'] != native_cpu or project.context['codepage'] != 936
+                    or selected['language'] != language or selected['name'] != creation.get('program')
+                    or members != [selected['name']]):
+                raise WorkspaceSaveError('Headless GXW CPU, language or task readback differs.', observed)
+            try:
+                return self._initialize_created_project(raw, timeout=timeout) if native_cpu == 'FX3U/FX3UC' else raw
+            except BaseException as error:
+                error.phase = 'create_project'
+                if getattr(error, 'preserve_delivery', False):
+                    (root / 'creation_request.json').write_text(json.dumps(request, ensure_ascii=False), encoding='utf-8')
+                raise
+
+    def _initialize_created_project(self, raw, *, timeout=None):
+        """Finish allocation settings only for this task's new factory project."""
+        from gxw.project_metadata import project_gui_configuration, initialize_created_project_gui
+        configuration = project_gui_configuration(raw)
+        if configuration.get('cpu_menu') != 'FX3U/FX3UC':
+            return raw
+        if configuration.get('word_device') != 0 or configuration.get('bit_device') != 3:
+            raise WorkspaceSaveError('New FX3U project requires the observed D/M allocation selectors.')
+        # The factory enables R alongside D, although the saved D selector
+        # disables R/W in the IDE. Use the existing native setter to align
+        # these inactive pools before materializing the new GUI mirror.
+        inactive = {name: None for name in ('R', 'W', 'B')
+                    if configuration['workspace_ranges'][name] != [0xffffffff, 0xffffffff]}
+        if inactive:
+            raw = self.author(raw, {'operation': 'configure_project',
+                'source_name': configuration['workspace_source'],
+                'options': {'system_variable_ranges': inactive}}, timeout=timeout).data
+        return initialize_created_project_gui(raw)
+
     def compile_project(self, raw, *, timeout=None):
         from gxw.native_write import verify_native_compilation_save
         checker = NativeWorkspaceValidation(executable=self.executable, installation=self.installation)
         saved, validation, observation, snapshots = checker.validate(raw, timeout=timeout, _save_output=True)
         cold_evidence = {}
-        cold = checker.validate(saved, timeout=timeout, inspection={'assignments': [], 'locations': [], 'saved_code': True},
-                                _evidence=cold_evidence)
+        try:
+            cold = checker.validate(saved, timeout=timeout, inspection={'assignments': [], 'locations': [], 'saved_code': True},
+                                    _evidence=cold_evidence)
+        except WorkspaceAdapterError as error:
+            error.phase = 'reopen'
+            raise
         try:
             result = verify_native_compilation_save(raw, saved, validation, cold, observation)
         except GXWFormatError as error:
             failure = WorkspaceSaveError('原生编译保存校验未通过：' + str(error), cold_evidence.get('observation', observation))
             failure.validation = cold
+            failure.phase = 'reopen'
             raise failure from error
         import base64
         result.report['native_evidence'] = {'observation': observation,
@@ -597,13 +707,17 @@ class NativeWorkspaceValidation(_NativeWorkspaceAdapter):
             if save_output:
                 output = root/'candidate.gxw'
                 if returncode or observation.get('status') != 'observed' or not output.is_file():
-                    detail = observation.get('message') or (
-                        'compilation=' + str(result['compilation']['acceptance']) +
-                        '; public_check=' + str(result['public_check']['status']))
+                    detail = (observation.get('message') + '; ' if observation.get('message') else '')
+                    detail += ('compilation=' + str(result['compilation']['acceptance']) +
+                               '; public_check=' + str(result['public_check']['status']))
                     codes = sorted({report['code'] for report in result['compilation'].get('diagnostics', [])
                                     if type(report.get('code')) is int})
                     if codes:
                         detail += '; diagnostics=' + ','.join(f'0x{code & 0xffffffff:08x}' for code in codes)
+                    check_codes = sorted({report['code'] for report in result.get('diagnostic_projection', {}).get('public_diagnostics', [])
+                                          if type(report.get('code')) is int})
+                    if check_codes:
+                        detail += '; public_check_diagnostics=' + ','.join(f'0x{code & 0xffffffff:08x}' for code in check_codes)
                     forensics = _native_failure_forensics(root, observation, result)
                     observation['forensics'] = forensics
                     sequence = forensics['report_sequence']

@@ -27,6 +27,12 @@ class EngineeringWindow:
         window = self.desktop.ui._application(self.desktop.session).window(handle=target)
         if win32gui.GetForegroundWindow() == target:
             return
+        # A newly launched frame can be activated directly. Attaching its input
+        # queue first can instead keep activation on the previous foreground.
+        if ctypes.windll.user32.SetForegroundWindow(target):
+            self.desktop._wait(lambda: win32gui.GetForegroundWindow() == target,
+                               '没有确认 GX Works2 工程窗口实际位于前台。')
+            return
         # A controller process does not necessarily own the foreground input
         # queue. Temporarily join the actual queues, and always detach again.
         current_thread = ctypes.windll.kernel32.GetCurrentThreadId()
@@ -51,8 +57,10 @@ class EngineeringWindow:
         finally:
             for other in reversed(attached):
                 ctypes.windll.user32.AttachThreadInput(current_thread, other, False)
-        if win32gui.GetForegroundWindow() != target:
-            raise NativeEngineeringDriverError('没有确认 GX Works2 工程窗口实际位于前台。')
+        # Foreground activation completes asynchronously after SetForegroundWindow.
+        # Wait for that requested transition before allowing any native command.
+        self.desktop._wait(lambda: win32gui.GetForegroundWindow() == target,
+                           '没有确认 GX Works2 工程窗口实际位于前台。')
 
     def _dialogs(self):
         import win32gui
@@ -287,8 +295,13 @@ class EngineeringWindow:
                 raise NativeEngineeringDriverError('原生工程对象路径不唯一。')
             return matches[0] if matches else None
         item = self.desktop._wait(tree_item, '原生工程对象路径尚未出现。')
-        document = self.desktop._active_document()
-        if re.search(title_pattern, document.window_text()):
+        try:
+            document = self.desktop._active_document()
+        except NativeEngineeringDriverError:
+            # A managed instance that just opened its project copy has no editor
+            # page yet; the tree/Enter path below opens the requested one.
+            document = None
+        if document is not None and re.search(title_pattern, document.window_text()):
             # A bound active editor can be read without stealing desktop
             # focus or reopening it (also while Simulator2 owns the desktop).
             return document

@@ -90,14 +90,31 @@ def _default_com():
 
 def _default_dependencies(operation):
     """Loading this bundle is permitted only inside an explicit worker task."""
+    if operation == 'native_background':
+        from gxworks2.workspace_adapter import NativeWorkspaceSourceSave
+        return {'compile_project': NativeWorkspaceSourceSave().compile_project}
     if operation == 'native_engineering':
         from gxworks2.engineering_driver import NativeEngineeringDriver
         from application.native_engineering import NativeEngineeringSession
         def live_session_factory(*args, **kwargs):
             from application.live_engineering import LiveEngineeringSession
             return LiveEngineeringSession(*args, **kwargs)
+        def restore_live_session(path, cpu, *, baseline, checkpoint, session_id, project_id, base_version_id):
+            from application.live_engineering import LiveEngineeringSession
+            from gxworks2.live_driver import LiveEngineeringDriver
+            driver = NativeEngineeringDriver.attach_to_saved(path, cpu, identity=checkpoint['fields']['_raw_identity'])
+            try:
+                live = LiveEngineeringDriver(driver, baseline, cpu, recovery=checkpoint['live'])
+                controller = LiveEngineeringSession(driver, cpu, baseline, session_id, project_id,
+                    base_version_id, live_driver=live)
+                controller.restore_checkpoint(checkpoint)
+                return controller
+            except Exception:
+                driver.close()
+                raise
         return {'driver_factory': NativeEngineeringDriver.start_from_saved,
-                'session_factory': NativeEngineeringSession, 'live_session_factory': live_session_factory}
+                'session_factory': NativeEngineeringSession, 'live_session_factory': live_session_factory,
+                'restore_live_session': restore_live_session}
     from gxworks2 import import_current_program
 
     bundle = {"importer": import_current_program}
@@ -477,6 +494,7 @@ class GXExecutionCoordinator:
             imported = _mapping(bundle["importer"](
                 paths[0], comment_csv_path=paths[1], start_if_needed=True,
                 create_project_path=directory / "gx_import.gxw",
+                project_path=payload.get("project_path"),
                 synchronize_comments=True, verify_roundtrip=False, save_project=True,
                 pre_import_policy=pre_import_policy,
                 progress=progress,
@@ -560,6 +578,24 @@ class GXExecutionCoordinator:
         from application.workspace import artifact_relative_path, contained
         if set(payload) - {'project_id', 'version_id', 'plan', 'type', 'change_scope'}:
             raise ValueError('Native engineering accepts only a version-bound domain plan')
+        if isinstance(payload.get('plan'), dict) and payload['plan'].get('mode') == 'background':
+            cpu = native_saved_cpu(version, self.store.get_project(project_id))
+            normalize_native_plan(payload['plan'], plc_model=cpu)
+            from application.native_engineering import (validate_background_artifacts, verified_background_result,
+                                                        background_engineering_failure)
+            from gxworks2.workspace_adapter import WorkspaceAdapterError
+            artifacts = {name: contained(root / artifact_relative_path(filename), root).read_bytes()
+                         for name, filename in version['artifacts'].items()}
+            raw = validate_background_artifacts(artifacts, version, plc_model=cpu)
+            if progress is not None:
+                progress('正在后台编译、保存并重开核对 GXW 工程。')
+            try:
+                result = self._dependencies_factory('native_background')['compile_project'](raw, timeout=None)
+            except WorkspaceAdapterError as error:
+                return background_engineering_failure(error)
+            verified = verified_background_result({'data': result.data, 'report': result.report}, raw)
+            return {'status': 'completed', 'passed': True,
+                    '_background_result': {'data': verified.data, 'report': verified.report}}
         if version.get('target_mode') not in {'fbd', 'st'}:
             raise ValueError('Native engineering requires a saved structured FBD or ST version')
         cpu = native_saved_cpu(version, self.store.get_project(project_id))
@@ -633,32 +669,126 @@ class GXExecutionCoordinator:
         return {'status': 'completed', 'passed': True, '_native_result': result}
 
     def _release_live_com(self):
-        if self._live_com is not None and not any(not row['closed'] for row in self._live_sessions.values()):
+        if self._live_com is not None and not any(not row['closed'] and not row.get('detached')
+                                                for row in self._live_sessions.values()):
             com, self._live_com = self._live_com, None
             com.CoUninitialize()
 
     def _persist_live_receipt(self, row):
         from application.workspace import atomic_json, contained
+        from application.live_engineering import encode_live_checkpoint
         with self._live_guard:
             durable = copy.deepcopy(row['cached'])
-        native_error = getattr(row['controller'], '_private_native_error', None)
+            controller = row.get('controller')
+            if controller is not None and hasattr(controller, 'checkpoint'):
+                row['checkpoint'] = controller.checkpoint()
+            durable['_recovery'] = dict(schema_version=1, project_id=row['project_id'],
+                session_id=durable['session_id'], base_version_id=row['base_version_id'],
+                origin_version_id=row.get('origin_version_id', row['base_version_id']),
+                working_file=row['path'].name, closed=row['closed'],
+                pending_save=encode_live_checkpoint(row['pending_save']),
+                checkpoint=encode_live_checkpoint(row.get('checkpoint')),
+                pending_result=encode_live_checkpoint(row.get('pending_result')))
+        native_error = getattr(controller, '_private_native_error', None) or row.get('private_native_observation')
         if native_error is not None:
             durable['private_native_observation'] = _native_diagnostic_value(native_error)
         atomic_json(contained(row['directory'] / 'receipt.json', row['directory']), durable)
+
+    def _load_live_row(self, project_id, session_id=None):
+        """Load metadata only; COM/native objects are recreated on the worker."""
+        from application.workspace import contained, read_json
+        from application.live_engineering import decode_live_checkpoint
+        root = self.store.project_dir(project_id)
+        directory = contained(root / 'gxw_runs' / 'live', root)
+        receipt_path = directory / 'receipt.json'
+        if not receipt_path.is_file():
+            legacy = (root / 'gxw_runs' / session_id / 'receipt.json') if session_id else None
+            candidates = [legacy] if legacy and legacy.is_file() else list((root / 'gxw_runs').glob('*/receipt.json'))
+            if candidates:
+                raise ValueError('旧原生会话记录缺少恢复信息；请明确绑定既有工作副本，未创建新副本或重放步骤。')
+            return None
+        durable = read_json(receipt_path)
+        recovery = durable.pop('_recovery', {})
+        private_observation = durable.pop('private_native_observation', None)
+        if recovery.get('schema_version') != 1 or recovery.get('project_id') != project_id:
+            raise ValueError('原生会话恢复记录不完整，未创建新副本或重放步骤。')
+        saved_id = _record_id(recovery.get('session_id'), 'session')
+        if session_id is not None and session_id != saved_id:
+            return None
+        if saved_id in self._live_sessions:
+            return self._live_sessions[saved_id]
+        name = recovery.get('working_file')
+        if not isinstance(name, str) or Path(name).name != name:
+            raise ValueError('Invalid retained native working file')
+        row = dict(project_id=project_id, base_version_id=recovery['base_version_id'],
+            origin_version_id=recovery['origin_version_id'], path=contained(directory / name, directory),
+            directory=directory, cached=durable, controller=None, busy=False, detached=True,
+            closed=recovery['closed'], pending_save=decode_live_checkpoint(recovery['pending_save']),
+            pending_result=decode_live_checkpoint(recovery.get('pending_result')),
+            private_native_observation=private_observation,
+            checkpoint=decode_live_checkpoint(recovery.get('checkpoint')))
+        self._live_sessions[saved_id] = row
+        return row
+
+    def _restore_live_row(self, row, cpu):
+        from application.workspace import artifact_relative_path, contained
+        if row.get('checkpoint') is None:
+            raise ValueError('旧原生会话记录缺少完整恢复信息，未重放任何步骤。')
+        origin = row['origin_version_id']
+        version = self.store.get_version(row['project_id'], origin)
+        if not version:
+            raise ValueError('原生会话的原始保存版本已不存在，未继续写入。')
+        root = self.store.version_dir(row['project_id'], origin)
+        baseline = contained(root / artifact_relative_path(version['artifacts']['gxw']), root).read_bytes()
+        if self._live_com is None:
+            self._worker_com.CoInitialize()
+            self._live_com = self._worker_com
+        try:
+            controller = self._dependencies_factory('native_engineering')['restore_live_session'](
+                row['path'], cpu, baseline=baseline, checkpoint=row['checkpoint'],
+                session_id=row['cached']['session_id'], project_id=row['project_id'],
+                base_version_id=row['base_version_id'])
+            row.update(controller=controller, detached=False)
+            controller.checkpoint_callback = lambda: self._checkpoint_live_row(row)
+            result = controller.rebind()
+            row['cached'] = _native_diagnostic_value(result)
+            if result.get('passed') is not True:
+                return result
+            stage = self._live_stage_save_receipt(result)
+            if stage:
+                row.update(pending_save=stage, pending_result=result)
+            self._persist_live_receipt(row)
+            return result
+        except Exception as error:
+            row['cached'].update(status='requires_reconciliation', passed=False,
+                error={'type': type(error).__name__, 'message': str(error)})
+            self._persist_live_receipt(row)
+            self._release_live_com()
+            raise
+
+    def _checkpoint_live_row(self, row):
+        with self._live_guard:
+            row['cached'] = _native_diagnostic_value(row['controller'].status())
+        self._persist_live_receipt(row)
 
     def _close_live_sessions(self):
         try:
             with self._live_guard:
                 rows = list(self._live_sessions.values())
             for row in rows:
-                if not row['closed']:
+                if not row['closed'] and not row.get('detached'):
                     controller_closed = False
+                    resumable = hasattr(row['controller'], 'detach')
                     try:
-                        result = row['controller'].close()
+                        result = (row['controller'].detach() if resumable else row['controller'].close())
                         if not isinstance(result, dict):
                             result = row['controller'].status()
                         with self._live_guard:
-                            row['cached'] = _native_diagnostic_value(result)
+                            cached = _native_diagnostic_value(result)
+                            if resumable and row['cached'].get('status') == 'requires_reconciliation':
+                                cached.update(status='requires_reconciliation', passed=False,
+                                              error=copy.deepcopy(row['cached'].get('error')))
+                            row['cached'] = cached
                         controller_closed = True
                     except Exception as error:
                         with self._live_guard:
@@ -666,9 +796,10 @@ class GXExecutionCoordinator:
                                                  error={'type': type(error).__name__, 'message': str(error)})
                     finally:
                         with self._live_guard:
-                            # The service worker is ending; this registry row
-                            # cannot be resumed even when native close refused.
-                            row['closed'] = True
+                            # End only this process's wrappers. A durable live
+                            # controller stays resumable in the next service.
+                            row['closed'] = not resumable
+                            row['detached'] = True
                             row['cached'].update(controller_closed=controller_closed,
                                                  ide_policy='keep_open', com_release='worker_shutdown')
                         try:
@@ -682,7 +813,9 @@ class GXExecutionCoordinator:
     def live_session_status(self, project_id, session_id=None):
         """Read a detached cache, without queueing work or touching native UI."""
         project_id = _record_id(project_id, 'project')
+        session_id = _record_id(session_id, 'session') if session_id is not None else None
         with self._live_guard:
+            self._load_live_row(project_id, session_id)
             if session_id is None:
                 active = [(key, value) for key, value in self._live_sessions.items()
                           if value['project_id'] == project_id and not value['closed']]
@@ -705,11 +838,14 @@ class GXExecutionCoordinator:
         """Signal a controller Event; no GUI call or desktop execution is queued."""
         project_id, session_id = _record_id(project_id, 'project'), _record_id(session_id, 'session')
         with self._live_guard:
+            self._load_live_row(project_id, session_id)
             row = self._live_sessions.get(session_id)
             if row is None or row['project_id'] != project_id:
                 raise KeyError('Live session not found in this project')
             if row['closed']:
                 raise ValueError('The live session is closed')
+            if row.get('detached'):
+                raise ValueError('会话已分离；先 rebind 接回原窗口，再请求暂停。')
             request = row['controller'].request_pause()
             row['cached']['pause_requested'] = True
             return {**copy.deepcopy(request), 'mode': 'live', 'project_id': project_id,
@@ -758,9 +894,10 @@ class GXExecutionCoordinator:
             if self.store.get_project(project_id).get('active_version_id') != new_base:
                 raise ValueError('Live session rebase requires the committed active version')
             row['controller'].set_base_version(new_base)
-            row.update(base_version_id=new_base, pending_save=False)
+            row.update(base_version_id=new_base, pending_save=False, pending_result=None)
             row['cached'] = _native_diagnostic_value(row['controller'].status())
             row['cached']['base_version_id'] = new_base
+            self._persist_live_receipt(row)
             return self.live_session_status(project_id, session_id)
 
     def _live_native_engineering(self, payload, version, root, project_id, cpu, progress):
@@ -773,8 +910,26 @@ class GXExecutionCoordinator:
         action = plan['session_action']
         if action == 'start':
             with self._live_guard:
-                if any(row['project_id'] == project_id and not row['closed'] for row in self._live_sessions.values()):
-                    raise ValueError('This project already has an active live session')
+                retained = self._load_live_row(project_id)
+                if retained and retained['closed']:
+                    checkpoint = retained.get('checkpoint')
+                    if checkpoint is None or 'fields' not in checkpoint:
+                        raise ValueError('已结束会话缺少完整恢复信息，未重建工程。')
+                    fields = checkpoint['fields']
+                    fields['closed'] = False
+                    fields['state'] = ('unconfirmed' if fields['_inflight'] is not None else
+                                       'paused' if fields['_pending'] else 'ready')
+                    retained.update(closed=False, detached=True, controller=None)
+                    retained['cached'].update(status=fields['state'], controller_closed=True)
+                    self._persist_live_receipt(retained)
+                existing = [row for row in self._live_sessions.values()
+                            if row['project_id'] == project_id and not row['closed']]
+                if existing:
+                    row = existing[0]
+                    passed = row['cached'].get('status') in ('ready', 'paused', 'completed', 'active')
+                    receipt = {**copy.deepcopy(row['cached']), 'passed': passed, 'replayed': False,
+                        'message': '已返回已有持续工程会话；本次 commands 未执行。读取当前修订后使用 continue 或 rebind。'}
+                    return {'status': receipt['status'], 'passed': passed, '_live_result': receipt}
             artifacts = {name: contained(root / artifact_relative_path(filename), root).read_bytes()
                          for name, filename in version['artifacts'].items()}
             if version['target_mode'] == 'st':
@@ -785,11 +940,18 @@ class GXExecutionCoordinator:
                 validate_candidate(artifacts)
             projection = validate_native_baseline(artifacts['gxw'], plc_model=cpu, live=True)
             session_id = uuid.uuid4().hex
-            directory = contained(self.store.project_dir(project_id) / 'gxw_runs' / session_id,
+            directory = contained(self.store.project_dir(project_id) / 'gxw_runs' / 'live',
                                   self.store.project_dir(project_id))
-            directory.mkdir(parents=True, exist_ok=False)
+            directory.mkdir(parents=True, exist_ok=True)
             path = directory / _native_engineering_filename(projection)
-            path.write_bytes(artifacts['gxw'])
+            if not path.exists():
+                if any(directory.glob('*.gxw')):
+                    raise ValueError('已有工作副本名称不同，未创建第二份工程。')
+                path.write_bytes(artifacts['gxw'])
+            elif not (directory / 'receipt.json').is_file():
+                raise ValueError('已有工作副本缺少恢复记录，未覆盖或创建新副本。')
+            else:
+                raise ValueError('已有工作副本的会话状态未能加载，未重新打开工程。')
             if self._live_com is None:
                 self._worker_com.CoInitialize()
                 self._live_com = self._worker_com
@@ -797,14 +959,18 @@ class GXExecutionCoordinator:
             try:
                 bundle = self._dependencies_factory('native_engineering')
                 driver = bundle['driver_factory'](path, cpu, timeout=30, progress=None,
-                    evidence_directory=directory / 'evidence')
+                    evidence_directory=None)
                 controller = bundle['live_session_factory'](driver, expected_cpu=cpu, baseline=artifacts['gxw'],
                     session_id=session_id, project_id=project_id, base_version_id=version['id'], progress=None)
                 row = dict(project_id=project_id, base_version_id=version['id'], controller=controller,
                     directory=directory, cached=_native_diagnostic_value(controller.status()),
-                    busy=False, closed=False, pending_save=False)
+                    origin_version_id=version['id'], path=path,
+                    busy=False, closed=False, detached=False, pending_save=False, pending_result=None)
                 with self._live_guard:
                     self._live_sessions[session_id] = row
+                if hasattr(controller, 'checkpoint'):
+                    controller.checkpoint_callback = lambda: self._checkpoint_live_row(row)
+                self._persist_live_receipt(row)
             except Exception:
                 try:
                     if driver is not None:
@@ -815,13 +981,49 @@ class GXExecutionCoordinator:
         else:
             session_id = _record_id(plan.get('session_id'), 'session')
             with self._live_guard:
+                self._load_live_row(project_id, session_id)
                 row = self._live_sessions.get(session_id)
                 if row is None or row['project_id'] != project_id:
                     raise KeyError('Live session not found in this project')
+                if row['base_version_id'] != version['id'] and row['pending_save']:
+                    committed = (version.get('generation_metadata') or {}).get('native_engineering') or {}
+                    pending = row.get('pending_result') or {}
+                    saved_stages = pending.get('stage_saves') or [{}]
+                    committed_stages = committed.get('stage_saves') or [{}]
+                    saved_operation = saved_stages[-1].get('operation_id') or (pending.get('save') or {}).get('operation_id')
+                    committed_operation = (committed_stages[-1].get('operation_id')
+                                           or (committed.get('save') or {}).get('operation_id'))
+                    if (committed.get('session_id') == session_id
+                            and committed.get('data_revision') == pending.get('data_revision')
+                            and saved_operation is not None
+                            and committed_operation == saved_operation):
+                        row['base_version_id'] = version['id']
+                        row['pending_save'], row['pending_result'] = False, None
+                        fields = (row.get('checkpoint') or {}).get('fields')
+                        if fields:
+                            fields['version_revision'] = committed['data_revision']
+                            fields['_pending_version_revision'] = None
+                            fields['_pending_delivery'] = None
+                        if row['controller'] is not None:
+                            row['controller'].set_base_version(version['id'])
+                        row['cached'].update(base_version_id=version['id'],
+                                             version_revision=committed['data_revision'])
+                        self._persist_live_receipt(row)
                 if row['closed'] or row['base_version_id'] != version['id']:
                     raise ValueError('Live session closed or saved project baseline changed')
-                if row['pending_save'] and action != 'end':
+            if row.get('detached'):
+                restored = self._restore_live_row(row, cpu)
+                if restored.get('passed') is not True:
+                    return {'status': restored['status'], 'passed': False, '_live_result': restored}
+                if action == 'rebind' and not row['pending_save']:
+                    return {'status': restored['status'], 'passed': True, '_live_result': restored}
+            if row['pending_save'] and action != 'end':
+                if row.get('pending_result') is None:
                     raise ValueError('The verified live save has not completed its version transaction')
+                # Finish the original saved-version transaction before any new
+                # command. Returning its receipt never sends another Save.
+                return {'status': row['pending_result']['status'], 'passed': True,
+                        '_live_result': copy.deepcopy(row['pending_result'])}
         with self._live_guard:
             row['busy'] = True
         try:
@@ -853,6 +1055,8 @@ class GXExecutionCoordinator:
             with self._live_guard:
                 row['cached'] = _native_diagnostic_value(result)
                 row['pending_save'] = row['pending_save'] or stage_save
+                if stage_save:
+                    row['pending_result'] = copy.deepcopy(result)
             self._persist_live_receipt(row)
             return {'status': result.get('status', 'unverified'), 'passed': result.get('passed') is True,
                     '_live_result': result}

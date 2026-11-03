@@ -640,6 +640,11 @@ def test_mcp_structured_read_edit_preview_download_and_reimport_without_native(t
         assert candidate['status'] == 'saved'
         v2 = candidate['data']['version_id']
         assert v2 != v1 and session.service.projects.raw_version(project_id, v2)['parent_version_id'] == v1
+        if kind == 'st':
+            saved = session.service.projects.raw_version(project_id, v2)
+            assert saved['delivery_requested'] is True
+            assert saved['delivery']['primary_artifact'] == 'gxw'
+            assert saved['validation']['gx_compile'] == 'not_run'
         preview = session.service.proposal_preview(candidate['proposal_id'])
         assert preview['target_mode'] == kind and preview['diff']['has_changes']
         if kind == 'st':

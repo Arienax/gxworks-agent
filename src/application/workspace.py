@@ -140,7 +140,7 @@ _PUBLIC_FIELDS = frozenset({
     "event_type", "payload", "diff", "validation", "findings", "rules_checked",
     "added", "deleted", "modified", "changes", "marker", "network", "comment",
     "device_comments_changed", "before_network_count", "after_network_count",
-    "rule", "severity", "code", "description", "messages", "network_id",
+    "rule", "severity", "code", "description", "messages", "network_id", "step",
     "text", "report_id", "plan_id", "run_id", "proposal_ids", "analysis_id",
     "outcome", "passed", "environment", "reasoning",
     "gx_compile_status", "simulation_status", "operation", "approval_id",
@@ -163,6 +163,8 @@ def public_payload(value: Any, *, native_live: bool = False) -> Any:
                 return live_engineering_summary(value)
         result = {key: public_payload(item, native_live=native_live)
                   for key, item in value.items() if key in _PUBLIC_FIELDS}
+        if value.get('operation') == 'native_engineering' and value.get('mode') == 'background':
+            result['mode'] = 'background'
         if "error_details" in value:
             # Diagnostic JSON paths are schema locations, not arbitrary file
             # paths. Reproject this one typed resource without widening the

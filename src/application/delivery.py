@@ -40,7 +40,7 @@ def delivery_summary(workbench, project_id, version_id):
         except (KeyError, ValueError):
             runs.append({"run_id": entry.get("run_id"), "status": "evidence_unavailable"})
     native = None
-    if version.get("target_mode") == "fbd":
+    if version.get("target_mode") == "fbd" and 'gxw' in version.get('artifacts', {}):
         from application.native_validation import NativeValidationService
         native = NativeValidationService(workbench).list(project_id, version_id)
     requirements = []
@@ -71,7 +71,7 @@ def delivery_summary(workbench, project_id, version_id):
         "generation_handoff": version.get("generation_handoff"),
         "decision_receipt_id": receipt_id, "decision_receipt": receipt,
         "decision_receipt_status": "available" if receipt else "not_recorded",
-        "static_validation": version.get("validation"), "simulation_runs": runs,
+        "delivery": version.get("delivery"), "static_validation": version.get("validation"), "simulation_runs": runs,
         "behavior_check": version.get('behavior_check'), "activation_blocked": version.get('activation_blocked', False),
         "construction_binding": (version.get('generation_metadata') or {}).get('construction_binding'),
         "requirements": requirements, "native_validation": native,

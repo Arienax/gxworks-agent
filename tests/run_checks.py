@@ -22,7 +22,8 @@ if str(ROOT) not in sys.path:
 from tests.check_inputs import (acquire_runner_lock, checkout_state, comparable_environment,
                                describe_environment_change, discover, environment_identity,
                                load_snapshot, save_snapshot, snapshot)
-from tests.check_approval import APPROVAL_OPTION, require_plan_approval, requires_full_approval
+from tests.check_approval import (APPROVAL_OPTION, require_plan_approval, requires_full_approval,
+                                selection_size, quick_scope_error)
 from tests.check_plan import load_config, make_plan, registry, test_functions
 from tools.offline_inputs import private_root
 
@@ -394,6 +395,9 @@ def main(argv=None):
     parser.add_argument('--level', choices=['quick', 'domain', 'full'], default='quick')
     parser.add_argument('--base', help='Git ref used as the source baseline (default: merge-base HEAD origin/main)')
     parser.add_argument('--paths', nargs='+', default=[], help='Additional source/private input paths, including ignored files')
+    parser.add_argument('--scope', nargs='+', default=[],
+                        help='Limit execution to contracts of these input files or changed directories; '
+                             'other detected changes remain pending (--paths stays additive)')
     parser.add_argument('--dry-run', action='store_true', help='Show the selection without running tests or changing snapshots')
     parser.add_argument('--align-baseline', metavar='USER_INSTRUCTION',
                         help='Record the current inputs and environment as the baseline without running tests; '
@@ -408,6 +412,17 @@ def main(argv=None):
         if not args.dry_run:
             lock = acquire_runner_lock(state_dir)
         config = load_config(ROOT)
+        from tests.check_inputs import _explicit_name
+        execution_scope = sorted({_explicit_name(value, ROOT, archive_root).rstrip('/') for value in args.scope})
+        if any(name in {'', '.', 'private'} for name in execution_scope):
+            raise ValueError('--scope requires specific input files or subdirectories')
+        if execution_scope and (args.level == 'full' or args.align_baseline is not None):
+            raise ValueError('--scope cannot be combined with --level full or --align-baseline')
+        selected_paths = list(args.paths)
+        for name in execution_scope:
+            path = archive_root / name[8:] if name.startswith('private/') else ROOT / name
+            if path.is_file():
+                selected_paths.append(name)
         if args.align_baseline is not None:
             if args.dry_run:
                 raise ValueError('--align-baseline changes the snapshot; it cannot be combined with --dry-run')
@@ -423,7 +438,7 @@ def main(argv=None):
             print(f"Alignment record: {state_dir / 'alignments' / (record['recorded_at'] + '.json')}")
             return 0
         changes, inputs, notes, base = discover(ROOT, archive_root, config, state_dir,
-                                                base=args.base, paths=args.paths)
+                                                base=args.base, paths=selected_paths)
         identity = environment_identity(ROOT)
         previous = load_snapshot(state_dir, ROOT, archive_root)
         verified_before = dict((previous or {}).get('verified') or {})
@@ -445,9 +460,9 @@ def main(argv=None):
         plan = make_plan(ROOT, archive_root, config, changes, args.level, debt_before,
                          environment_pending=owed_before, frontend_pending=frontend_before,
                          source_pending=((previous or {}).get('source_pending') or {}).get(identity, ()),
-                         unresolved_inputs=(previous or {}).get('unresolved_inputs'))
+                         unresolved_inputs=(previous or {}).get('unresolved_inputs'), execution_scope=execution_scope)
         pending_files = set()
-        retry_previous = not args.paths and not plan.targets and not plan.frontend
+        retry_previous = not args.paths and not execution_scope and not plan.targets and not plan.frontend
         for target in pending_before:
             if (ROOT / target.split('::')[0]).is_file():
                 file = target.split('::')[0]
@@ -472,6 +487,15 @@ def main(argv=None):
                                      if file + '::' + name not in plan.targets and file + '::' + name not in plan.live)
         print(f'Requested level: {args.level}')
         print(f'Level: {plan.level}; Python selectors: {len(plan.targets)}; Web tests/build: {plan.frontend}')
+        size = selection_size(plan, ROOT)
+        print(f"Python files: {size['files']}/{size['total_files']}; test functions: "
+              f"{size['functions']}/{size['total_functions']} ({size['fraction']:.1%}; parameter variants not expanded).")
+        print(f'Interpreter: {sys.executable}')
+        if execution_scope:
+            print('Execution inputs: ' + ', '.join(execution_scope) + '; other detected changes remain pending.')
+        scope_error = quick_scope_error(plan, ROOT, size)
+        if scope_error:
+            print(scope_error)
         if plan.full_reasons:
             print('Full selection reasons (dependency/runtime changes are not escalation reasons):')
             for reason in plan.full_reasons:
@@ -482,7 +506,8 @@ def main(argv=None):
         for note in [*notes, *plan.notes]:
             print(note)
         for target, reasons in plan.targets.items():
-            print(f'  {target}: {"; ".join(reasons)}')
+            extra = f'; +{len(reasons) - 3} other reasons' if len(reasons) > 3 else ''
+            print(f'  {target}: {"; ".join(reasons[:3])}{extra}')
         # Files re-verified in this plan are printed above; the rest keep the debt.
         listed = sorted(target for target in plan.verification
                         if target not in plan.targets and target.split('::')[0] not in plan.targets)
@@ -515,7 +540,7 @@ def main(argv=None):
                 print('No executable changes selected; no test result or baseline was recorded.')
                 return 0
             after_changes, after, _, _ = discover(ROOT, archive_root, config, state_dir,
-                                                   base=args.base, paths=args.paths)
+                                                   base=args.base, paths=selected_paths)
             if after != inputs or after_changes != changes:
                 print('Inputs changed while observing the environment; nothing was recorded.')
                 return 3
@@ -526,7 +551,7 @@ def main(argv=None):
             source_owed = remaining_source_verification(previous, identity, plan)
             save_snapshot(state_dir, updated_snapshot(
                 inputs, previous, identity, verified=verified_before, pending=pending_before,
-                debt=debt_before, environment_pending=owed if owed['tests'] or owed['unknown'] else {},
+                debt=debt_before | set(plan.affected_domains), environment_pending=owed if owed['tests'] or owed['unknown'] else {},
                 source_pending=source_owed, unresolved_inputs=plan.unresolved_inputs,
                 frontend_pending=frontend_owed, advance_inputs=False))
             print('No test was executable from the selected scope; input observations were recorded '
@@ -541,7 +566,7 @@ def main(argv=None):
         receipt.mkdir(parents=True)
         steps = execute(plan, ROOT, receipt, full_approval=approval)
         after_changes, after_inputs, _, _ = discover(ROOT, archive_root, config, state_dir,
-                                                    base=args.base, paths=args.paths)
+                                                    base=args.base, paths=selected_paths)
         unchanged = inputs == after_inputs and changes == after_changes
         if not unchanged:
             notes.append('Inputs changed during validation; this run cannot advance the baseline.')
@@ -559,7 +584,7 @@ def main(argv=None):
         pending_after = list(pending_before)
         owed_after = set(owed_before.get('tests') or ())
         unknown_after = set(owed_before.get('unknown') or ())
-        debt_after = set(debt_before)
+        debt_after = set(debt_before) | set(plan.affected_domains)
         environment_pending = dict(stored_pending.get(identity) or {})
         verified_files = set()
         if unchanged:
@@ -606,6 +631,7 @@ def main(argv=None):
             previous, identity, plan, executed if unchanged else {}, verified_files)
         record = {'version': 1, 'status': status, 'source_base': base, 'inputs': inputs,
                   'result_scope': 'selected_cases',
+                  'python_selection_size': size,
                   'environment_identity': identity,
                   'changed_paths': [item.path for item in changes], 'selection': asdict(plan),
                   'working_inputs': {item.path: {

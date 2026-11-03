@@ -127,14 +127,14 @@ def _empty_baseline_program(baseline, program=None):
     return project, selected, listing
 
 
-def build_ladder_project(program, *, plc_model, program_name=None, device_comments=None):
+def build_ladder_project(program, *, plc_model, program_name=None, device_comments=None, baseline=None):
     """Write one lowered Ladder program into the blank project captured for this CPU.
 
     ``program`` is the result of ``lower_ladder_program``: its ordered entries are inserted
     before the baseline's terminal END, instructions and text records alike. Its own
     trailing END is dropped because the baseline already carries one.
     """
-    baseline = blank_ladder_baseline(plc_model)
+    baseline = blank_ladder_baseline(plc_model) if baseline is None else baseline
     verify_ladder_baseline(baseline, plc_model)
     cpu = captured_project_cpu(baseline)
     project, selected, listing = _empty_baseline_program(baseline, program_name)

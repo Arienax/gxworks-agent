@@ -195,6 +195,9 @@ def test_exported_openapi_documents_all_major_read_resources_and_sse(tmp_path):
     output = export_schema(tmp_path / "openapi.json")
     schema = json.loads(output.read_text(encoding="utf-8"))
     models = schema["components"]["schemas"]
+    project_path = models["ExecutionProposal"]["properties"]["project_path"]
+    assert {"type": "string", "minLength": 1, "maxLength": 4096} in project_path["anyOf"]
+    assert "project_path" not in models["ExecutionProposal"]["required"]
     assert {"Project", "Version", "Artifact", "Job", "JobEvent", "Proposal", "ModelSettings"} <= set(models)
     checks = {
         ("/api/projects", "get", "200"): "ProjectList",

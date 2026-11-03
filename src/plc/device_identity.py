@@ -15,7 +15,7 @@ import re
 from collections.abc import Mapping
 
 DEVICE_PREFIXES = (
-    "ER", "SM", "SD", "TS", "TC", "CS", "CC",
+    "ER", "SM", "SD", "TS", "TC", "TN", "CS", "CC", "CN",
     "X", "Y", "M", "S", "T", "C", "D", "R", "V", "Z", "P", "I",
 )
 _DEVICE_PREFIX_PATTERN = "(?:" + "|".join(DEVICE_PREFIXES) + ")"
@@ -27,7 +27,7 @@ DEVICE_TOKEN_RE = re.compile(
 # Read-only manual references include Q/L hexadecimal I/O/link devices and
 # their additional device classes. This lexer grants neither an address range
 # nor writability/execution support; the generation validator stays separate.
-REFERENCE_DEVICE_PATTERN = r'(?:(?:SB|SW|DX|DY|[XYBW])[0-9A-F]+|(?:ZR|SM|SD|ST|TS|TC|CS|CC|ER|[MLFSTCDRVZPI])\d+)(?:\.[0-9A-F]+)?'
+REFERENCE_DEVICE_PATTERN = r'(?:(?:SB|SW|DX|DY|[XYBW])[0-9A-F]+|(?:ZR|SM|SD|ST|TS|TC|TN|CS|CC|CN|ER|[MLFSTCDRVZPI])\d+)(?:\.[0-9A-F]+)?'
 REFERENCE_DEVICE_TOKEN_RE = re.compile(r'(?<![A-Za-z0-9_])' + REFERENCE_DEVICE_PATTERN + r'(?![A-Za-z0-9_])', re.I)
 
 
@@ -39,14 +39,14 @@ def reference_device_tokens(value):
 def canonical_reference_device(value):
     if not isinstance(value, str) or not REFERENCE_DEVICE_TOKEN_RE.fullmatch(value.strip()):
         return value
-    match = re.fullmatch(r'(ZR|SM|SD|ST|SB|SW|DX|DY|TS|TC|CS|CC|ER|[A-Z])([0-9A-F]+)(.*)', value.strip().upper())
+    match = re.fullmatch(r'(ZR|SM|SD|ST|SB|SW|DX|DY|TS|TC|TN|CS|CC|CN|ER|[A-Z])([0-9A-F]+)(.*)', value.strip().upper())
     return match[1] + (match[2].lstrip('0') or '0') + match[3] if match else value
 
 
 def reference_device_parts(value):
     if not isinstance(value, str) or not REFERENCE_DEVICE_TOKEN_RE.fullmatch(value.strip()):
         return None
-    match = re.fullmatch(r'(ZR|SM|SD|ST|SB|SW|DX|DY|TS|TC|CS|CC|ER|[A-Z])([0-9A-F]+)', value.strip().upper())
+    match = re.fullmatch(r'(ZR|SM|SD|ST|SB|SW|DX|DY|TS|TC|TN|CS|CC|CN|ER|[A-Z])([0-9A-F]+)', value.strip().upper())
     return match.groups() if match else None
 _SIMPLE = re.compile("(" + _DEVICE_PREFIX_PATTERN + r")(\d+)", re.I)
 _INDEXED = re.compile(r"((?:SM|SD|[XYMDTCS])\d+)([VZ]\d+)", re.I)

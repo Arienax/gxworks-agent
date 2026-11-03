@@ -107,6 +107,19 @@ def instruction_source_authority(opcode, plc_model="FX3U", fact_type=None):
     """
     model = str(plc_model or "").strip().upper()
     form = str(opcode or "").strip().upper()
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+    if DEFAULT_INSTRUCTION_REGISTRY._definition_owner_store is not None:
+        owner = DEFAULT_INSTRUCTION_REGISTRY.definition_entry(opcode, cpu=plc_model) or {}
+        primary = [row for row in owner.get('source_materials', []) if row.get('primary_semantic_source') is True]
+        if len(primary) > 1:
+            raise ValueError('Conflicting primary semantic sources in selected instruction owner')
+        if not primary:
+            return None
+        source, = primary
+        return {'manual_id': source['manual_id'], 'revision': source.get('revision'),
+                'authority': 'primary_instruction_semantics', 'fact_types': [ALL_FACT_TYPES],
+                'reason': 'selected_instruction_owner', 'plc_models': [str(plc_model).upper()],
+                'opcodes': [str(opcode).upper()]}
     declared = instruction_source_authorities()
     if fact_type is None:
         rule = declared.get((model, form, ALL_FACT_TYPES))
@@ -153,6 +166,10 @@ def instruction_source_rules(opcode, plc_model, fact_type=None):
     rules keep working. A rule may also pin the material revision it was audited
     against, so a second revision of the same manual is not silently equivalent.
     """
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+    if DEFAULT_INSTRUCTION_REGISTRY._definition_owner_store is not None:
+        rule = instruction_source_authority(opcode, plc_model, fact_type)
+        return [rule] if rule else []
     model = str(plc_model or "").strip().upper()
     form = str(opcode or "").strip().upper()
     wanted = str(fact_type).strip() if fact_type else None

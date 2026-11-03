@@ -1,4 +1,5 @@
 import csv
+from dataclasses import replace
 import json
 import os
 import re
@@ -132,6 +133,129 @@ def _service(tmp_path, automation):
         CSVManager(),
         tmp_path / "backups",
     )
+
+
+@pytest.mark.parametrize("caption_kind", ["full", "abbreviated", "filename"])
+def test_same_named_saved_projects_keep_independent_sync_records(tmp_path, monkeypatch, caption_kind):
+    import gxworks2.engineering_files as files
+
+    programs = [tmp_path / f"program{index}.csv" for index in range(3)]
+    for index, path in enumerate(programs):
+        _write_program(path, output=f"Y00{index}")
+    comments = tmp_path / "comments.csv"
+    _write_comments(comments)
+    projects = [tmp_path / folder / "line.gxw" for folder in ("first", "second")]
+    for index, path in enumerate(projects):
+        path.parent.mkdir()
+        path.write_bytes(f"saved project {index}".encode())
+    current = projects[0]
+    finder = _Finder()
+    finder.session = replace(finder.session, process_started="123456")
+    automation = _RoundtripAutomation(programs[0], comments)
+    def inspect(session):
+        caption = str(current) if caption_kind == "full" else (
+            r"...\line.gxw" if caption_kind == "abbreviated" else "line.gxw")
+        return {"automation_available": True, "project_open": True, "program_ready": True,
+                "project_name": caption}
+    monkeypatch.setattr(automation, "inspect_project", inspect)
+    class FileUse:
+        def __init__(self, path):
+            self.path = path
+        def owns(self, pid, started):
+            assert (pid, started) == (10, "123456")
+            return self.path == current
+        def close(self):
+            pass
+    monkeypatch.setattr(files, "_NativeFileUse", FileUse)
+    importer = ImportService(finder, automation, CSVManager(), tmp_path / "backups")
+    results = []
+    for index, current in enumerate(projects):
+        result = importer.import_current_program(
+            programs[index], comment_csv_path=comments, project_path=current,
+            import_context={"project_id": "app", "version_id": f"v{index}"})
+        assert result.success
+        assert Path(result.backup_path).read_bytes() == current.read_bytes()
+        results.append(result)
+        if index == 0:
+            first_program, first_comments = automation.program_bytes, automation.comment_bytes
+            sync = GXWorks2SyncService(finder, automation, CSVManager(), importer.backup_root)
+            assert sync.inspect(programs[2], comments, save_project=False,
+                                persist_baseline=False).status == SyncStatus.NEEDS_PUSH
+
+    identities = [result.details["version_protection"]["project_identity"] for result in results]
+    assert identities[0] != identities[1]
+    assert len(list(importer.baseline_store.state_root.glob("*.json"))) == 2
+    for index, identity in enumerate(identities):
+        assert identity["project"] == str(projects[index].resolve()).casefold()
+        assert importer.baseline_store.load(identity)["import_context"]["version_id"] == f"v{index}"
+
+    current = projects[0]
+    automation.program_bytes, automation.comment_bytes = first_program, first_comments
+    # A fresh service must recover A from its saved record, not a last-used B cache.
+    sync = GXWorks2SyncService(finder, automation, CSVManager(), importer.backup_root)
+    after = sync.inspect(programs[2], comments, import_context={"project_id": "app"},
+                         save_project=False, persist_baseline=False)
+    assert after.status == SyncStatus.NEEDS_PUSH
+    assert after.details["project_identity"] == identities[0]
+    snapshot = sync.read_current_snapshot(save_project=False)
+    assert snapshot.success and snapshot.details["project_identity"] == identities[0]
+    # Changing how the same path is displayed must not change its record.
+    caption_kind = "abbreviated" if caption_kind == "full" else "full"
+    assert sync.inspect(programs[2], comments, save_project=False,
+                        persist_baseline=False).details["project_identity"] == identities[0]
+
+
+@pytest.mark.parametrize("ownership", ["none", "exception", "missing_pid", "missing_start",
+                                       "different_pid", "different_start", "ambiguous", "no_record"])
+def test_unconfirmed_saved_project_is_read_without_reusing_a_title_record(tmp_path, monkeypatch, ownership):
+    import gxworks2.engineering_files as files
+
+    program, comments = tmp_path / "program.csv", tmp_path / "comments.csv"
+    _write_program(program)
+    _write_comments(comments)
+    automation = _Automation(program, comments)
+    service = _service(tmp_path, automation)
+    session = replace(service.finder.session,
+        process_id=0 if ownership == "missing_pid" else (11 if ownership == "different_pid" else 10),
+        process_started="" if ownership == "missing_start" else (
+            "654321" if ownership == "different_start" else "123456"))
+    service.finder.session = session
+    caption = r"...\line.gxw"
+    monkeypatch.setattr(automation, "inspect_project", lambda _: {
+        "automation_available": True, "project_open": True, "program_ready": True, "project_name": caption})
+    identities = [service.baseline_store.project_identity(session, project_name=caption)]
+    if ownership != "no_record":
+        for folder in ("first", "second"):
+            path = tmp_path / folder / "line.gxw"
+            path.parent.mkdir()
+            path.write_bytes(b"saved GXW")
+            identities.append(service.baseline_store.project_identity(session, project_name=str(path)))
+    for identity in identities:
+        service.baseline_store.save(identity,
+            program_semantic_sha256=service.csv_manager.program_semantic_sha256(program),
+            program_file_sha256=service.csv_manager.file_sha256(program))
+    class FileUse:
+        def __init__(self, path):
+            pass
+        def owns(self, pid, started):
+            if ownership == "exception":
+                raise OSError("file ownership query unavailable")
+            return ownership not in {"none", "no_record"} and (pid, started) == (10, "123456")
+        def close(self):
+            pass
+    monkeypatch.setattr(files, "_NativeFileUse", FileUse)
+    def forbidden(*args, **kwargs):
+        pytest.fail("An unconfirmed project must not read or write a shared sync record")
+    monkeypatch.setattr(service.baseline_store, "load", forbidden)
+    monkeypatch.setattr(service.baseline_store, "save", forbidden)
+    result = service.inspect(program, comments, save_project=False)
+    assert result.success and result.status == SyncStatus.UNBOUND
+    assert result.details["project_identity"] == {}
+    assert result.details["baseline_write_enabled"] is False
+    assert Path(result.exported_program_path).is_file()
+    assert Path(result.exported_comment_path).is_file()
+    snapshot = service.read_current_snapshot(save_project=False)
+    assert snapshot.success and snapshot.details["project_identity"] == {}
 
 
 def test_comment_semantic_hash_ignores_document_title_and_row_order(tmp_path):
@@ -274,7 +398,7 @@ def test_csv_push_imports_program_comments_and_saves_without_export(tmp_path, mo
     saved = tmp_path / "existing.gxw"
     saved.write_bytes(b"saved GXW")
     inspect = automation.inspect_project
-    monkeypatch.setattr(automation, "inspect_project", lambda session: {**inspect(session), "project_path": str(saved)})
+    monkeypatch.setattr(automation, "inspect_project", lambda session: {**inspect(session), "project_name": str(saved)})
     def forbidden(*args, **kwargs):
         pytest.fail("A push must not export CSV before or after importing")
     monkeypatch.setattr(automation, "export_current_program", forbidden)

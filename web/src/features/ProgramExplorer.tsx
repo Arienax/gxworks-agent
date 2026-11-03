@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
 
 import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { Search } from "lucide-react";
 import { useResource } from "../lifecycle/useResource";
 import { Button } from "../components/ui";
 import { ChangeSummary } from "./ChangeSummary";
@@ -104,18 +105,20 @@ export const ProgramExplorer = memo(function ProgramExplorer({
       {error && <p role="alert">{error}</p>}
       {changeSummary && <ChangeSummary summary={changeSummary} t={t} />}
       <div className="explorer-toolbar">
-        <label>
-          {t("地址或注释")}
+        <label className="explorer-search">
+          <Search size={13} aria-hidden="true" />
           <input
             aria-label={t("搜索地址或注释")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={t("X0 / 电机")}
+            placeholder={t("地址或注释")}
           />
         </label>
-        <Button onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}>−</Button>
-        <Button onClick={() => setZoom(1)}>{Math.round(zoom * 100)}%</Button>
-        <Button onClick={() => setZoom((z) => Math.min(3, z + 0.25))}>+</Button>
+        <div className="explorer-zoom">
+          <Button aria-label={t("缩小")} title={t("缩小")} onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}>−</Button>
+          <Button aria-label={t("重置")} title={t("重置")} onClick={() => setZoom(1)}>{Math.round(zoom * 100)}%</Button>
+          <Button aria-label={t("放大")} title={t("放大")} onClick={() => setZoom((z) => Math.min(3, z + 0.25))}>+</Button>
+        </div>
       </div>
       <div className="explorer-main">
         <div className="explorer-canvas">
@@ -163,68 +166,77 @@ export const ProgramExplorer = memo(function ProgramExplorer({
           </div>
         </div>
         <aside className="explorer-detail">
-          <div className="address-results">
-            {matches.map(([a, d]) => (
-              <button
-                key={a}
-                className={address === a ? "selected" : ""}
-                onClick={() => setAddress(a)}
-              >
-                <strong>{a}</strong> {d.comment || t("未填写注释")}
-              </button>
-            ))}
-            {!matches.length && <p>{t("没有匹配地址")}</p>}
-          </div>
-          {device && (
-            <section>
-              <h3>
-                {address} · {device.comment || t("未填写注释")}
-              </h3>
-              {(
-                [
-                  ["读取位置", device.read_by],
-                  ["写入位置", device.written_by],
-                ] as [string, string[]][]
-              ).map(([label, refs]) => (
-                <div key={label}>
-                  <p>{t(label)}</p>
-                  <div className="reference-buttons">
-                    {refs.length ? (
-                      refs.map((id) => (
-                        <Button key={id} onClick={() => select(id)}>
-                          {id}
-                        </Button>
-                      ))
-                    ) : (
-                      <span className="muted">{t("当前程序无此类引用")}</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </section>
-          )}
-          {current && (
-            <section>
-              <h3>
-                {current.id} · {t("网络")} {current.bounds.display_number}
-              </h3>
-              <p>{current.comment || t("未填写注释")}</p>
-              <p>
-                {t("读取")}：{current.reads.join(", ") || "—"}
-              </p>
-              <p>
-                {t("写入")}：{current.writes.join(", ") || "—"}
-              </p>
-              <ol className="instruction-list">
-                {current.instructions.map((inst, i) => (
-                  <li key={i}>
-                    <code>
-                      {inst.op} {(inst.args || []).join(" ")}
-                    </code>
-                  </li>
+          <details className="explorer-card" open>
+            <summary><h3>{t("软元件注释")}</h3></summary>
+            <div className="explorer-card-body">
+              <div className="address-results">
+                {matches.map(([a, d]) => (
+                  <button
+                    key={a}
+                    className={address === a ? "selected" : ""}
+                    onClick={() => setAddress(a)}
+                  >
+                    <strong>{a}</strong> {d.comment || t("未填写注释")}
+                  </button>
                 ))}
-              </ol>
-            </section>
+                {!matches.length && <p>{t("没有匹配地址")}</p>}
+              </div>
+              {device && (
+                <div>
+                  <h4>
+                    {address} · {device.comment || t("未填写注释")}
+                  </h4>
+                  {(
+                    [
+                      ["读取位置", device.read_by],
+                      ["写入位置", device.written_by],
+                    ] as [string, string[]][]
+                  ).map(([label, refs]) => (
+                    <div key={label}>
+                      <p>{t(label)}</p>
+                      <div className="reference-buttons">
+                        {refs.length ? (
+                          refs.map((id) => (
+                            <Button key={id} onClick={() => select(id)}>
+                              {id}
+                            </Button>
+                          ))
+                        ) : (
+                          <span className="muted">{t("当前程序无此类引用")}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </details>
+          {current && (
+            <details className="explorer-card" open>
+              <summary><h3>{t("网络详情")}</h3></summary>
+              <div className="explorer-card-body">
+                <h4>
+                  {current.id} · {t("网络")} {current.bounds.display_number}
+                </h4>
+                <p>{current.comment || t("未填写注释")}</p>
+                <dl className="kv">
+                  <dt>{t("读取")}</dt>
+                  <dd>{current.reads.join(", ") || "—"}</dd>
+                  <dt>{t("写入")}</dt>
+                  <dd>{current.writes.join(", ") || "—"}</dd>
+                </dl>
+                <h4>{t("指令")}</h4>
+                <ol className="instruction-list">
+                  {current.instructions.map((inst, i) => (
+                    <li key={i}>
+                      <code>
+                        {inst.op} {(inst.args || []).join(" ")}
+                      </code>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </details>
           )}
         </aside>
       </div>

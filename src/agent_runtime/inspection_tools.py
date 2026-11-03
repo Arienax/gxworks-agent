@@ -9,25 +9,44 @@ from agent_runtime.tool_errors import ToolPreconditionError
 
 def register_inspection_tools(registry):
     from agent_runtime.plc_tools import ToolDefinition
+    from simulator.models import MAX_TRACE_DEVICES
+    from simulator.signals import SIGNAL_TYPES
     ref = {"type": "string", "minLength": 1, "maxLength": 128}
+    value = {"type": ["boolean", "number"]}
+    inputs = {"type": "object", "additionalProperties": value,
+              "description": "按 signals.id 填写 role=input 的信号值；BOOL 用 true/false 或 0/1，数值信号按声明类型填写。"}
     signal = {"type": "object", "properties": {
-        "id": {"type": "string", "maxLength": 96}, "label": {"type": "string", "maxLength": 160},
-        "address": {"type": "string", "maxLength": 32}, "data_type": {"enum": ["BOOL", "INT", "UINT", "WORD", "DINT", "UDINT", "DWORD", "REAL", "RAW"]},
-        "role": {"enum": ["input", "output", "state"]}, "unit": {"type": "string", "maxLength": 24}},
+        "id": {"type": "string", "minLength": 1, "maxLength": 96, "pattern": "^[A-Za-z_][A-Za-z0-9_.-]{0,95}$",
+               "description": "唯一信号名，供 initial/set/expect 及返回值引用。"},
+        "label": {"type": "string", "maxLength": 160, "description": "显示名称，默认使用 id。"},
+        "address": {"type": "string", "minLength": 1, "maxLength": 32,
+                    "description": "BOOL 使用位软元件；数值类型使用 D 起始地址，32 位类型自动读取连续两个字，低字在前。"},
+        "data_type": {"type": "string", "enum": list(SIGNAL_TYPES),
+                      "description": "软元件存储值的解码类型；RAW 保留原始整数，仅用于观察。"},
+        "role": {"type": "string", "enum": ["input", "output", "state"], "default": "state"},
+        "unit": {"type": "string", "maxLength": 24}},
         "required": ["id", "address", "data_type"], "additionalProperties": False}
     config = {"type": "object", "properties": {
-        "title": {"type": "string", "maxLength": 160}, "plc_model": {"type": "string", "maxLength": 64},
-        "signals": {"type": "array", "minItems": 1, "maxItems": 256, "items": signal},
-        "sample_ms": {"type": "integer", "minimum": 50, "maximum": 5000},
-        "duration_ms": {"type": "integer", "minimum": 50, "maximum": 300000},
-        "initial": {"type": "object"},
+        "title": {"type": "string", "maxLength": 160, "default": "仿真观察"},
+        "plc_model": {"type": "string", "maxLength": 64, "default": "FX3U",
+                      "description": "方案按此型号校验地址；实时 Simulator2 采样当前使用 FX3U 路由。"},
+        "signals": {"type": "array", "minItems": 1, "maxItems": MAX_TRACE_DEVICES, "items": signal,
+                    "description": f"最多 {MAX_TRACE_DEVICES} 个信号，展开并去重后的物理地址也最多 {MAX_TRACE_DEVICES} 个。"},
+        "sample_ms": {"type": "integer", "minimum": 50, "maximum": 5000, "default": 100},
+        "duration_ms": {"type": "integer", "minimum": 50, "maximum": 300000, "default": 10000},
+        "initial": {**inputs, "description": inputs["description"] + "覆盖 steps.set 中的全部输入信号。"},
         "steps": {"type": "array", "maxItems": 500, "items": {"type": "object", "properties": {
-            "at_ms": {"type": "integer", "minimum": 0}, "label": {"type": "string", "maxLength": 160},
-            "set": {"type": "object"}, "expect": {"type": "object"}},
+            "at_ms": {"type": "integer", "minimum": 0,
+                      "description": "相对开始的毫秒数，按非递减顺序排列且在 duration_ms 内。"},
+            "label": {"type": "string", "maxLength": 160}, "set": inputs,
+            "expect": {"type": "object", "description": "按 signals.id 填写期望值或 {value, tolerance}；tolerance 为非负绝对误差，默认 0。",
+                       "additionalProperties": {"oneOf": [value, {"type": "object", "properties": {
+                           "value": value, "tolerance": {"type": "number", "minimum": 0}},
+                           "required": ["value"], "additionalProperties": False}]}}},
             "required": ["at_ms"], "additionalProperties": False}}},
         "required": ["signals"], "additionalProperties": False}
     definitions = (
-        ('inspect_gxw_project', '直接读取上传 GXW 的 data_base64 或本机 path（二选一），无需打开 GX Works2 或选择 Agent 工程；返回 CPU、程序清单、注释、离线写回能力及只读 source_ref。多程序需显式 program；原文件保持不变。',
+        ('inspect_gxw_project', '离线读取 Ladder/ST/FBD/SFC GXW：提供 data_base64 或本机 path（二选一），无需打开 GX Works2 或选择 Agent 工程。返回实际 CPU、Program/FB/FUNCTION 清单、声明、注释和各源码读写能力；可分析的所选源码返回 source_ref，多程序用 program 选择。原文件保持不变。',
          {'data_base64': {'type': 'string', 'minLength': 1, 'maxLength': 41943040},
           'path': {'type': 'string', 'minLength': 1, 'maxLength': 32767},
           'program': {'type': 'string', 'minLength': 1, 'maxLength': 512}}, (), 'inspect_gxw_project'),
@@ -55,11 +74,11 @@ def register_inspection_tools(registry):
          ("target_ref", "addresses"), "read_simulator_devices"),
         ("connect_simulator", "连接现有 GX Simulator2，必要时启动本机专用网关并返回 target_ref；不启动、下载、编译、修改或停止 PLC 程序。当前原生路由只支持 FX3U。",
          {}, (), "connect_simulator"),
-        ("prepare_simulator_scenario", "通用类型化仿真方案：填写 signals 的名称、地址、BOOL/INT/UINT/WORD/DINT/UDINT/DWORD/REAL 类型，以及 initial、steps 的命名数值。返回现有测试 DSL suite 和共用 Web 总览 URL；不执行写入。实际测试沿用版本绑定、审批和既有执行器。",
+        ("prepare_simulator_scenario", "按 signals 定义类型化仿真方案，initial/steps 使用信号 id 和类型化数值，expect 支持绝对容差。返回测试 DSL suite、execution_started=false、view_ref 和 Web 时间轴 URL；实际执行通过既有版本绑定测试服务。RAW 信号用于观察。",
          {"config": config}, ("config",), "prepare_simulator_scenario"),
-        ("start_simulator_trace", "按 target_ref 对 signals 进行有限时长只读采样，自动返回 Web 风格的全部信号时间轴。sample_ms 最小 50，duration_ms 最大 300000；所有类型转换由 Core 完成。config.steps 只显示为计划，不执行写入或断言。",
+        ("start_simulator_trace", "对已连接的 FX3U Simulator2 target_ref 进行有限时长只读采样；按 data_type 解码位值或 D 字值，返回 view_ref、最新数值和 Web 时间轴 URL。sample_ms 默认100，duration_ms 默认10000。initial/steps 表达计划，采样期间不执行写入或断言；无需选择 Agent 工程。",
          {"target_ref": ref, "config": config}, ("target_ref", "config"), "start_simulator_trace"),
-        ("get_simulator_trace", "读取本会话仿真视图的实际状态、最新数值、采样数量和 URL。",
+        ("get_simulator_trace", "读取本会话视图的 status、latest.values/errors、sample_count、dropped_samples、elapsed_ms 和 URL；完整采样序列在 Web 时间轴查看，工具返回摘要（samples 为空数组）。",
          {"view_ref": ref}, ("view_ref",), "get_simulator_trace"),
         ("stop_simulator_trace", "停止指定视图的只读采样并保留回放；不停止模拟器或 PLC 程序。",
          {"view_ref": ref}, ("view_ref",), "stop_simulator_trace"),
@@ -136,12 +155,32 @@ def output_schema(name):
             "step_width": {"type": ["object", "null"]},
             "editable": {"const": False}, "read_at": {"type": "string"}},
         "list_simulator_targets": {"targets": {"type": "array"}, "available": {"type": "boolean"}},
+        "connect_simulator": {"targets": {"type": "array"}, "available": {"type": "boolean"}},
         "get_simulator_status": {"target_ref": {"type": "string"}, "values": {"type": "object"},
             "run_state": {"enum": ["run", "not_running"]}, "program_correspondence": {"const": "unverified"}},
         "read_simulator_devices": {"target_ref": {"type": "string"}, "values": {"type": "object"},
             "program_correspondence": {"const": "unverified"}},
     }
     properties = data_properties.get(name, {})
+    if name in {"prepare_simulator_scenario", "start_simulator_trace", "get_simulator_trace", "stop_simulator_trace"}:
+        properties = {
+            "view_ref": {"type": "string"}, "url": {"type": "string"},
+            "schema_version": {"const": 1}, "view_id": {"type": "string"},
+            "config": {"type": "object", "description": "规范化的信号、展开地址、采样周期及计划事件。"},
+            "source": {"type": "object", "description": "观察来源、目标及程序对应关系。"},
+            "binding": {"type": "object"}, "status": {"type": "string"}, "error": {"type": "string"},
+            "revision": {"type": "integer"}, "sequence": {"type": "integer"},
+            "sample_count": {"type": "integer", "description": "累计采样数，包含已移出的旧样本。"},
+            "dropped_samples": {"type": "integer"}, "elapsed_ms": {"type": "integer"},
+            "latest": {"type": ["object", "null"], "description": "最近一次采样；尚无采样时为 null。",
+                       "properties": {"seq": {"type": "integer"}, "at_ms": {"type": "integer"},
+                           "read_at": {"type": "string"}, "values": {"type": "object"},
+                           "errors": {"type": "object"}, "case": {"type": "string"}},
+                       "required": ["seq", "at_ms", "read_at", "values", "errors", "case"]},
+            "samples": {"type": "array", "maxItems": 0, "description": "摘要中为空；完整序列由 URL 对应的视图提供。"},
+        }
+        if name == "prepare_simulator_scenario":
+            properties.update(suite={"type": "object"}, execution_started={"const": False}, next_step={"type": "string"})
     if name in {"read_native_device_assignments", "compare_native_compiled_code", "locate_native_code_steps"}:
         properties = {"snapshot": {"type": "object"}, "compilation": {"type": "object"},
                       "public_check": {"type": "object"}, "diagnostic_projection": {"type": "object"},

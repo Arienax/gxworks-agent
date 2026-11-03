@@ -40,7 +40,7 @@ def fast_send(tmp_path, monkeypatch):
 @pytest.mark.parametrize("baseline_state", ["missing", "corrupt", "changed_and_other_project"])
 def test_fast_send_skips_all_exports_and_baseline_comparison(fast_send, baseline_state):
     service, automation, program, comments, send = fast_send
-    identity = service.baseline_store.project_identity(_session(), project_name="FixtureProject")
+    identity = service.baseline_store.project_identity(_session(), project_name=str(automation.project_path))
     path = service.baseline_store.path_for(identity)
     if baseline_state == "corrupt":
         path.parent.mkdir(parents=True)
@@ -151,26 +151,31 @@ def test_fast_send_cannot_silently_drop_roundtrip_or_rollback_guards(fast_send, 
 
 def test_public_import_api_forwards_explicit_policy(fast_send, monkeypatch):
     import gxworks2.api as api
-    service, _, program, comments, _ = fast_send
+    service, automation, program, comments, _ = fast_send
     monkeypatch.setattr(api, "_service", service)
-    result = api.import_current_program(program, comment_csv_path=comments, pre_import_policy="manual_backup")
+    result = api.import_current_program(program, comment_csv_path=comments, pre_import_policy="manual_backup",
+        project_path=str(automation.project_path))
     assert result.success and result.details["pre_import_policy"] == "project_file"
 
 
 @pytest.mark.parametrize("mode", ["ask", "auto", "full"])
-def test_http_confirmation_is_bound_and_dispatches_once(tmp_path, monkeypatch, mode):
+@pytest.mark.parametrize("project_path", [None, "D:/中文工程/线体3.gxw"])
+def test_http_confirmation_is_bound_and_dispatches_once(tmp_path, monkeypatch, mode, project_path):
     service = WorkbenchService(tmp_path / "workspace", tmp_path / "state")
     with TestClient(_app(service.store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as client:
         pid, vid, calls = setup_external(service, mode, monkeypatch)
         headers = _login(client)
         command = {"action": "gx_import", "project_id": pid, "version_id": vid,
                    "request_id": "confirmed-send", "manual_backup_acknowledged": True}
+        if project_path is not None:
+            command["project_path"] = project_path
         assert client.post("/api/proposals", json=command).status_code == 403
         assert client.post("/api/proposals", json=command, headers={**headers, "Origin": "https://evil.example"}).status_code == 403
         response = client.post("/api/proposals", json=command, headers=headers)
         assert response.status_code == 201, response.text
         proposal = response.json()
         assert service.proposals.read_private(proposal["id"])["manual_backup_acknowledged"] is True
+        assert service.proposals.read_private(proposal["id"]).get("project_path") == (str(Path(project_path)) if project_path else None)
         if mode == "full":
             job_id = proposal["execution_job_id"]
         else:
@@ -179,10 +184,14 @@ def test_http_confirmation_is_bound_and_dispatches_once(tmp_path, monkeypatch, m
             job_id = approved.json()["job"]["id"]
         service.jobs._futures[job_id].result(timeout=10)
         assert len(calls) == 1 and calls[0][0][1]["manual_backup_acknowledged"] is True
+        assert calls[0][0][1].get("project_path") == (str(Path(project_path)) if project_path else None)
         assert client.post("/api/proposals", json=command, headers=headers).json()["id"] == proposal["id"]
         replay = client.post(f'/api/proposals/{proposal["id"]}/decision', json={"decision": "accept"}, headers=headers)
         service.jobs._futures[replay.json()["job"]["id"]].result(timeout=10)
         assert len(calls) == 1
+        if project_path is not None:
+            changed = {**command, "project_path": "D:/another/线体3.gxw"}
+            assert client.post("/api/proposals", json=changed, headers=headers).status_code == 409
         # Reusing this request ID without the acknowledgement changes its immutable payload.
         command["manual_backup_acknowledged"] = False
         assert client.post("/api/proposals", json=command, headers=headers).status_code == 409
@@ -203,6 +212,23 @@ def test_acknowledgement_cannot_enable_other_operations(tmp_path, monkeypatch, c
                 "project_id": pid, "version_id": vid, "request_id": "wrong-action",
                 "manual_backup_acknowledged": "true" if case == "not_bool" else True})
         assert not calls and not service.proposals.list(pid)
+    finally:
+        service.close()
+
+
+@pytest.mark.parametrize("case", ["relative", "extension", "blank", "simulation", "fbd"])
+def test_project_path_rejects_invalid_or_unrelated_execution_requests(tmp_path, monkeypatch, case):
+    service = WorkbenchService(tmp_path / "workspace", tmp_path / "state")
+    service.start()
+    try:
+        pid, vid, calls = setup_external(service, "full", monkeypatch)
+        path = {"relative": "line.gxw", "extension": "D:/line.csv", "blank": "   "}.get(case, "D:/line.gxw")
+        if case == "fbd":
+            monkeypatch.setattr(service.projects, "raw_version", lambda *args: {"target_mode": "fbd"})
+        with pytest.raises(ValueError, match="project_path"):
+            service.execution_proposal({"action": "simulation" if case == "simulation" else "gx_import",
+                "project_id": pid, "version_id": vid, "project_path": path, "request_id": "invalid-path"})
+        assert calls == [] and service.proposals.list(pid) == []
     finally:
         service.close()
 
@@ -237,12 +263,14 @@ def test_coordinator_uses_file_backup_policy_for_all_csv_sends(tmp_path, acknowl
         calls.append(kwargs)
         return importer_service.import_current_program(*args, **kwargs).to_dict()
     payload = {"project_id": "p1", "version_id": "v1"}
+    payload["project_path"] = str(automation.project_path)
     if acknowledged is not None:
         payload["manual_backup_acknowledged"] = acknowledged
     with coordinator(store, tmp_path, importer, []) as service:
         result = service.submit_approved("gx_import", payload, approval_id="approved").result(5)
     assert result["status"] == "imported" and not result["passed"]
     assert calls[0]["pre_import_policy"] == "project_file"
+    assert calls[0]["project_path"] == str(automation.project_path)
     assert calls[0]["synchronize_comments"] and calls[0]["save_project"]
     assert calls[0]["verify_roundtrip"] is False
     assert len(calls) == 1 and automation.events == ["import_program", "import_comments", "save"]

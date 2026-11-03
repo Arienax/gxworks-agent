@@ -63,7 +63,9 @@ diagnostic category:
 
 ## Local incremental checks
 
-Use `python tests/run_checks.py` while editing. The default `quick` level selects
+Use the repository's `.venv` Python to run `tests/run_checks.py` while editing.
+The runner prints the actual interpreter; it does not enforce a particular venv.
+The default `quick` level selects
 the changed contracts and representative Web/MCP integration cases.
 `python tests/run_checks.py --level domain` runs the complete affected owners
 when a module is finished. Only explicit `--level full` selects the full level.
@@ -84,6 +86,16 @@ or writing a result/baseline, including a quick/domain selection whose actual
 coverage happens to include every Python test.
 The execution function enforces the same check independently of the CLI.
 
+Quick execution also stops when its selection exceeds 40% of Python test function
+definitions, even when it falls short of the complete suite. This is a size limit,
+not full-regression permission or a runtime estimate. Parameter variants are not
+expanded; live-only cases are excluded. The preview prints selected/total files,
+functions, the interpreter and whether Web tests/build will run. Narrow the task
+with `--scope`, or explicitly select `domain` for module acceptance. A full run
+requires `--level full` and its per-invocation authorization; `--full-approval`
+does not override the quick size limit. The size check runs before Python or Web
+starts and does not change recorded inputs or results.
+
 Direct pytest invocations covering the complete suite (the default test scope,
 the repository/test directory, or complete file/function lists) require the same
 explicit command-line option. Permission in `PYTEST_ADDOPTS`, pytest `addopts`, CI
@@ -98,9 +110,25 @@ Inspect the scope first with `--dry-run`. `--base <ref>` overrides the default
 local merge-base of `HEAD` and `origin/main`; the runner does not fetch.
 `--paths <path> [...]` adds explicit source-relative paths, `private/...` paths,
 or absolute paths within those two repositories. It supplements detected changes.
+`--scope <input file/directory> [...]` restricts execution to contracts associated
+with those inputs. An explicit file can be selected even when unchanged;
+directories filter detected changes. For example:
+see the [Windows workflow](#scoped-check-workflow-on-windows) below.
+All other changes are still discovered and retain their source, environment,
+failure and module-acceptance obligations. `--paths` remains additive and does
+not exclude changes; `--scope` is the explicit execution restriction. It cannot
+be combined with `full` or baseline alignment. Do not split a full regression
+into multiple scoped runs to bypass its authorization requirement.
 Staged, unstaged, untracked, committed-since-base, deleted and renamed inputs are
 included. Changed test functions select all their parameter variants. Fixture or
-module changes select their declared owner and statically known import users.
+test-module changes select that file and matching quick contracts for known
+import users; `domain` selects the complete owner. Owner-based quick selection uses
+declared quick contracts: an empty contract or an unmatched consumer stays pending rather
+than falling back to an entire owner or all consumers.
+Baseline blobs are read through one Git process per repository. Binary resources
+and JSON/JSONL/CSV/text/log/HTML resources larger than 1 MiB use file metadata for
+change detection; their contents are not copied into observations or receipts.
+Python inputs retain their bytes for function-level comparison.
 An unowned test can select itself while its missing ownership remains unresolved;
 other unmapped inputs stay explicitly pending until their association is known.
 Root temporary files are neither silently ignored nor reasons to run every test.
@@ -154,9 +182,9 @@ a second venv or checkout never overwrites another's records, and the same
 environment difference is recorded once. `local/test-checks/checkouts/<source path>`
 holds one checkout's state; a shared `inputs.json` from the earlier layout is still
 read when it belongs to the same checkout.
-`observed_inputs` records the actual source bytes already observed, including
-reversions and deletions, independently of the Git merge base. Repeated identical
-content creates no new change event. `source_pending` retains the unverified
+`observed_inputs` records source bytes or the resource metadata described above,
+including reversions and deletions, independently of the Git merge base. Repeated
+identical observations create no new change event. `source_pending` retains the unverified
 file/function selectors per interpreter/venv; new changes invalidate all known
 environments and a passing run clears only its own executed cases. Unresolved
 input associations remain in `unresolved_inputs` and are reconsidered when a
@@ -176,6 +204,40 @@ subsequent runs; failure, missing environment and incomplete results return nonz
 exit codes and still record input observations with their outstanding verification.
 Input changes during execution prevent successful-result and observation updates;
 failures and uncompleted obligations from that run are still retained.
+
+### Scoped check workflow on Windows
+
+Run from the repository root with its `.venv` interpreter. Replace the example
+input paths with the files changed for the current task; `--scope` takes input
+paths, not pytest function selectors. The planner selects their associated test
+contracts, which need not have the same paths as those inputs.
+
+```powershell
+# Preview this task's selection without starting tests or writing a receipt.
+.\.venv\Scripts\python.exe tests/run_checks.py --level quick --scope tests/check_plan.py tests/check_approval.py --dry-run
+
+# After reviewing the preview, execute the same scope.
+.\.venv\Scripts\python.exe tests/run_checks.py --level quick --scope tests/check_plan.py tests/check_approval.py
+```
+
+Before execution, review the selected files/functions and reasons, the function
+percentage, the interpreter, and `Web tests/build`. The percentage counts test
+definitions, not expanded parameter cases, measured code coverage or expected
+duration. Receipts store the requested inputs in `selection.execution_scope`
+and these counts in `python_selection_size`.
+
+| Preview or result | Next action |
+| --- | --- |
+| Scope matches this task and is within the quick limit | Run the same command without `--dry-run`. |
+| `Quick execution stopped` | Narrow `--scope` to the actual task. Use `domain` only when module acceptance is intended; do not split an intended full run into smaller batches. |
+| Dependency/environment changes list many files as owed | Keep those obligations pending outside this scope. An environment notice does not authorize executing every file or resetting the baseline. |
+| No executable tests selected | Read the pending/unresolved items. An empty selection is not a test pass; directories filter detected changes, while an explicit file can select its contract when unchanged. |
+| A local test fails | Fix it and rerun the affected cases. Keep other failures, skips and unfinished module acceptance pending. |
+
+An oversized `--dry-run` still exits successfully because it only previews the
+plan. Executing that oversized quick plan exits with code `2` before either
+Python tests or Web builds start and leaves recorded inputs/results unchanged.
+`--scope` cannot be combined with `--level full` or `--align-baseline`.
 
 Receipts describe only their selected scope. A module-level receipt can be reused
 within the same task while its source, tests, dependencies, evidence and execution
@@ -363,6 +425,7 @@ Owns GXW container/object/ABI/declaration/network parsing, preservation and roun
 | `tests/test_gxw_sfc_offline.py` | existing SFC graph encoding, source-bound edits and unknown-region preservation |
 | `tests/test_gxw_offline_project.py` | whole-project offline instruction/comment transactions, ordered warehouse source and refusal boundaries |
 | `tests/test_gxw_offline_application.py` | offline GXW import, inspection and version/proposal parity across Web services and MCP |
+| `tests/test_gxw_delivery.py` | shared GXW-first delivery, automatic native compilation, source fallback and installation discovery |
 | `web/tests/gxw-import.test.mjs` | GXW composer upload/drop, source selection, import request identity and project/version adoption |
 | `tests/test_gxw_semantic_model.py` | focused coverage for gxw semantic model |
 | `tests/test_gxw_structured_reader.py` | Structured GXW parsing, unknown records and read-only POU CLI selection |

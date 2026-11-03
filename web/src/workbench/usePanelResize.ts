@@ -6,17 +6,18 @@ import { useEffect, useRef, useState } from "react";
 
 const MIN_CANVAS = 380;
 const MIN_CONVERSATION = 400;
+const SIDEBAR_WIDTH = 268;
 
 /** The engineering canvas keeps room for the conversation and the task sidebar. */
 export function clampCanvasWidth(width: number, sidebarOpen = true) {
-  const sidebarWidth = sidebarOpen && window.innerWidth > 1100 ? 264 : 0;
+  const sidebarWidth = sidebarOpen && window.innerWidth > 1100 ? SIDEBAR_WIDTH : 0;
   const max = Math.max(MIN_CANVAS, window.innerWidth - sidebarWidth - MIN_CONVERSATION - 5);
   return Math.round(Math.max(MIN_CANVAS, Math.min(max, width)));
 }
 
 export function usePanelResize(sidebarOpen: boolean) {
   const [rightWidth, setRightWidth] = useState(() =>
-    clampCanvasWidth(Math.min(920, (window.innerWidth - 264) * 0.48), sidebarOpen),
+    clampCanvasWidth(Math.min(920, (window.innerWidth - SIDEBAR_WIDTH) * 0.48), sidebarOpen),
   );
   const panelDragCleanup = useRef<(() => void) | null>(null);
   useEffect(() => () => panelDragCleanup.current?.(), []);

@@ -18,7 +18,7 @@ class Login(Command):
 class ProjectCreate(Command):
     name: str = Field(min_length=1, max_length=160)
     plc_model: str = Field(default="FX3U", max_length=96)
-    target_mode: Literal["ladder", "st", "fbd"] = "ladder"
+    target_mode: Literal["ladder", "st", "fbd", "sfc"] = "ladder"
     native_project_type: Literal["simple", "structured", "parameter"] | None = None
     use_labels: bool | None = None
 
@@ -26,7 +26,7 @@ class ProjectCreate(Command):
 class ProjectUpdate(Command):
     name: str | None = Field(default=None, min_length=1, max_length=160)
     plc_model: str | None = Field(default=None, max_length=96)
-    target_mode: Literal["ladder", "st", "fbd"] | None = None
+    target_mode: Literal["ladder", "st", "fbd", "sfc"] | None = None
     native_project_type: Literal["simple", "structured", "parameter"] | None = None
     use_labels: bool | None = None
     effort: Literal["low", "medium", "high"] | None = None  # deprecated, ignored
@@ -89,6 +89,8 @@ class ExecutionProposal(Command):
     plan_id: str | None = None
     plan: dict[str, Any] | None = None
     request_id: str = Field(min_length=1, max_length=128)
+    project_path: str | None = Field(default=None, min_length=1, max_length=4096,
+        description="CSV 导入时当前 GX Works2 打开的 .gxw 完整绝对路径；标题被截断或只有文件名时须提供并核对文件占用，不会打开或切换工程。")
     manual_backup_acknowledged: bool = Field(default=False, strict=True, deprecated=True,
         description="Legacy CSV-send acknowledgement. All CSV imports now back up the existing GXW file automatically; this field does not change backup or execution approval.")
 

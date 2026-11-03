@@ -154,13 +154,22 @@ class ProposalService:
             if hashlib.sha256(data).hexdigest() != entry.get("sha256"):
                 raise ConflictError("Staged artifact hash changed")
             prepared.append((name, relative, data))
-        if payload.get("target_mode") == "fbd":
+        if payload.get("target_mode") == "fbd" and 'gxw' in manifest:
             from .fbd import validate_candidate
             validate_candidate({name: data for name, _relative, data in prepared})
         elif payload.get('target_mode') == 'ladder':
-            from .gxw_files import validate_ladder_candidate
-            validate_ladder_candidate({name: data for name, _relative, data in prepared})
-        elif payload.get("target_mode") == "sfc":
+            if 'gxw' in manifest:
+                from .gxw_files import validate_ladder_candidate
+                validate_ladder_candidate({name: data for name, _relative, data in prepared})
+            else:
+                from plc.ir import validate_plc_ir, ir_to_ladder
+                import json
+                values = {name: data for name, _relative, data in prepared}
+                program = json.loads(values['ir'])
+                validate_plc_ir(program, validate_ladder=False)
+                if ir_to_ladder(program) != json.loads(values['json']):
+                    raise ValueError('Candidate JSON differs from its prepared IR')
+        elif payload.get("target_mode") == "sfc" and 'gxw' in manifest:
             from .sfc import validate_candidate
             validate_candidate({name: data for name, _relative, data in prepared})
         elif payload.get("target_mode") == "st" and 'gxw' in manifest:
@@ -235,7 +244,7 @@ class ProposalService:
                         payload["base_ir_sha256"] = base["ir_sha256"]
                     payload["confirmed_spec_hash"] = canonical_sha256(spec) if spec is not None else None
                 elif payload.get("target_mode") not in ("st", "fbd", "sfc") and not (
-                        payload.get('target_mode') == 'ladder' and 'gxw' in (payload.get('artifacts') or {})):
+                        payload.get('target_mode') == 'ladder' and 'ir' in (payload.get('artifacts') or {})):
                     raise ValueError("Local candidate requires IR or staged source artifacts")
                 scope_summary = self._candidate_scope(project_id, selected, payload)
                 public_summary = {**(public_summary or {}), **scope_summary}
@@ -345,10 +354,13 @@ class ProposalService:
                     and (record['private_payload'].get('plan') or {}).get('mode') == 'live')
                 record.update(status=status, error_code=error_code,
                               result=public_payload(result, native_live=native_live))
-            except Exception:
+            except Exception as error:
                 # A callback may have performed its side effect before failing.
                 # Never retry it automatically or invite another approval click.
                 record.update(status="interrupted", error_code="execution_requires_reconciliation")
+                if getattr(error, 'preserve_delivery', False):
+                    record['result'] = {'status': 'interrupted', 'message': str(error),
+                                        'observation': getattr(error, 'observation', {})}
                 self._save(record)
                 raise
             self._save(record)
@@ -395,24 +407,37 @@ class ProposalService:
                     destination.parent.mkdir(parents=True, exist_ok=True)
                     destination.write_bytes(data)
                     artifacts[name] = entry["path"]
-                allowed = {"summary", "validation", "plc_model", "program_name", "generation_metadata",
-                           "generation_handoff", "maintainability_review"}
+                allowed = {"summary", "validation", "plc_model", "program_name", "generation_metadata", "delivery", "delivery_requested", "validation_profile", "normalization",
+                           "generation_handoff", "maintainability_review", "semantic_validation"}
                 metadata = {key: copy.deepcopy(value) for key, value in (payload.get("metadata") or {}).items() if key in allowed}
                 metadata.update(target_mode=payload["target_mode"], artifacts=artifacts, plc_model=payload.get("plc_model", "FX3U"))
                 if payload['target_mode'] == 'ladder':
                     import json
                     from .gxw_files import validate_ladder_candidate
-                    current = validate_ladder_candidate({key: (output / value).read_bytes() for key, value in artifacts.items()})
-                    metadata.update(self.store._ir_metadata(current['program_ir']))
+                    if 'gxw' in artifacts:
+                        current = validate_ladder_candidate({key: (output / value).read_bytes() for key, value in artifacts.items()})['program_ir']
+                    else:
+                        current = json.loads((output / artifacts['ir']).read_bytes())
+                    metadata.update(self.store._ir_metadata(current))
             metadata.update(summary=metadata.get("summary") or record.get("summary", {}).get("summary") or "已校验的程序",
                             parent_version_id=base_id, source_candidate_id=payload.get("candidate_id", record["id"]),
                             lifecycle_status="accepted", confirmed_spec_snapshot=copy.deepcopy(payload.get("_confirmed_spec")))
             from plc.ir import canonical_sha256
             metadata["confirmed_spec_hash"] = canonical_sha256(payload["_confirmed_spec"]) if payload.get("_confirmed_spec") is not None else None
+            if record['action'] == 'native_engineering':
+                metadata.setdefault('generation_metadata', {})['delivery_finalized'] = True
             version = self.store.complete_version(project_id, version_id, metadata, activate=True)
-            return {"version_id": version["id"], "status": 'saved_behavior_draft' if version.get('activation_blocked') else "accepted", "target_mode": version["target_mode"]}
-        except Exception:
-            if version_id is not None and self.store.get_version(project_id, version_id) is None:
+            status = ('saved_native_diagnostic' if version.get('activation_blocked') and
+                      version.get('validation', {}).get('gx_compile') == 'failed' else
+                      'saved_behavior_draft' if version.get('activation_blocked') else 'accepted')
+            return {"version_id": version["id"], "status": status, "target_mode": version["target_mode"]}
+        except Exception as error:
+            if getattr(error, 'preserve_delivery', False) and version_id is not None:
+                error.observation = {**(getattr(error, 'observation', None) or {}),
+                    'delivery_output': {'project_id': project_id, 'version_id': version_id,
+                                        'directory': str(output)}}
+            if (not getattr(error, 'preserve_delivery', False)
+                    and version_id is not None and self.store.get_version(project_id, version_id) is None):
                 self.store.discard_version(project_id, version_id)
             raise
 
@@ -431,7 +456,7 @@ class ProposalService:
             self._check_binding(record)
             base = self.store.get_version(record['project_id'], record['base_version_id'])
             mode = base.get('target_mode') if isinstance(base, dict) else None
-            if (not isinstance(candidate, dict) or mode not in ('fbd', 'st')
+            if (not isinstance(candidate, dict) or mode not in ('ladder', 'fbd', 'st', 'sfc')
                     or candidate.get('target_mode') != mode):
                 raise ValueError('Native engineering requires a verified candidate in the approved source mode')
             if mode == 'st':

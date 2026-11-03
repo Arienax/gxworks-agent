@@ -290,3 +290,117 @@ def test_grow_regular_stream_within_existing_fat_chain():
     reparsed = CompoundFile(patched)
     assert reparsed.read_stream("_hdb") == new_payload
     assert reparsed.get_stream_entry("_hdb").stream_size == 5100
+
+def _builder():
+    from src.gxw.container_builder import build_compound_file
+
+    return build_compound_file
+
+
+def _read_back(raw: bytes) -> dict[str, bytes]:
+    cfb = CompoundFile(raw)
+    return {entry.name: cfb.read_stream(entry.name) for entry in cfb.iter_streams()}
+
+
+@pytest.mark.parametrize(
+    "streams",
+    [
+        {"only": b"x"},
+        {"mini": b"hello", "regular": b"y" * 5000},
+        {"empty": b"", "cutoff_below": b"z" * 4095, "cutoff": b"w" * 4096},
+        {f"stream{index:02d}": bytes([index]) * (index * 97) for index in range(1, 24)},
+        {"wide": b"a" * 300000, "small": b"b"},
+    ],
+)
+def test_compound_file_round_trip_covers_mini_and_regular_sectors(streams):
+    from src.gxw.container_writer import validate_cfb_streams
+
+    raw = _builder()(streams)
+
+    assert validate_cfb_streams(raw) == streams
+    assert _read_back(raw) == streams
+
+
+def test_compound_file_nests_a_container_as_one_stream():
+    inner = _builder()({"MAIN.Program.pou": b"program", "FX3U.prj": b"p" * 600})
+    outer = _builder()({"projectdatalist.xml": b"<xml/>", "_hdb": inner})
+
+    assert _read_back(outer) == {"projectdatalist.xml": b"<xml/>", "_hdb": inner}
+    assert _read_back(_read_back(outer)["_hdb"]) == {
+        "MAIN.Program.pou": b"program",
+        "FX3U.prj": b"p" * 600,
+    }
+
+
+def test_compound_file_is_byte_stable_across_input_order():
+    streams = {"b": b"1", "a": b"2" * 6000, "c": b"", "d": b"3"}
+
+    first = _builder()(streams)
+    second = _builder()(dict(reversed(list(streams.items()))))
+
+    assert first == second
+    assert _read_back(first) == streams
+
+
+def test_compound_file_rejects_inputs_it_cannot_encode():
+    with pytest.raises(GXWFormatError):
+        _builder()({})
+    with pytest.raises(GXWFormatError):
+        _builder()({"": b"x"})
+    with pytest.raises(GXWFormatError):
+        _builder()({"name": "text"})
+    with pytest.raises(GXWFormatError):
+        _builder()({"n" * 32: b"x"})
+    with pytest.raises(GXWFormatError):
+        _builder()({'A': b'one', 'a': b'two'})
+
+
+def test_compound_file_header_declares_version_three_layout():
+    raw = _builder()({"stream": b"x" * 6000})
+
+    assert raw[:8] == CFB_SIGNATURE
+    assert struct.unpack_from("<H", raw, 0x1A)[0] == 3
+    assert struct.unpack_from("<H", raw, 0x1E)[0] == 9
+    assert struct.unpack_from("<H", raw, 0x20)[0] == 6
+    assert struct.unpack_from("<I", raw, 0x38)[0] == 4096
+    assert len(raw) % SECTOR_SIZE == 0
+
+
+def test_compound_file_difat_extension_preserves_large_stream():
+    payload = b'GXW!' * (2 * 1024 * 1024)
+    raw = _builder()({'large': payload, 'mini': b'metadata'})
+    assert struct.unpack_from('<I', raw, 0x48)[0] > 0
+    assert _read_back(raw) == {'large': payload, 'mini': b'metadata'}
+
+
+from hypothesis import given, example, settings, strategies as st
+
+
+@settings(max_examples=40, deadline=None)
+@example([b'', b'x'])
+@given(st.lists(st.binary(max_size=6000), min_size=1, max_size=48))
+def test_compound_directory_preserves_streams_and_red_black_invariants(payloads):
+    streams = {f'stream{index:03d}': value for index, value in enumerate(payloads)}
+    raw = _builder()(streams)
+    assert _read_back(raw) == streams
+    cfb = CompoundFile(raw)
+    directory = cfb._read_regular_stream(cfb.first_directory_sector)
+    entries = {row.index: row for row in cfb.directory_entries}
+    def color(index): return directory[index * 128 + 67]
+    seen = set()
+    def visit(index):
+        if index == 0xffffffff:
+            return 1, []
+        assert index not in seen
+        seen.add(index)
+        row = entries[index]
+        left_height, left_names = visit(row.left_sibling)
+        right_height, right_names = visit(row.right_sibling)
+        assert left_height == right_height
+        if color(index) == 0:
+            assert all(child == 0xffffffff or color(child) == 1 for child in (row.left_sibling, row.right_sibling))
+        return left_height + color(index), left_names + [row.name] + right_names
+    root = cfb.root_entry.child
+    assert color(root) == 1
+    _, names = visit(root)
+    assert names == sorted(streams, key=lambda name: (len(name), name.upper()))

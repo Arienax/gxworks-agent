@@ -6,6 +6,7 @@ import type { Job, Proposal } from "../api/client";
 export type GXSendSelection = {
   projectId: string; projectName: string; versionId: string;
   activeVersionId: string; epoch: number; requestId: string;
+  projectPath?: string;
 };
 export type GXSendRequest = <T>(path: string, method?: string, body?: unknown) => Promise<T>;
 
@@ -17,6 +18,7 @@ export async function submitGXSend(
   const proposal = await request<Proposal>("/proposals", "POST", {
     action: "gx_import", project_id: selection.projectId, version_id: selection.versionId,
     request_id: selection.requestId,
+    ...(selection.projectPath?.trim() ? { project_path: selection.projectPath.trim() } : {}),
   });
   // In full mode the policy may already have queued the operation. Never approve twice.
   if (!isCurrent()) return { proposal };

@@ -27,8 +27,9 @@ export function NewProjectDialog({ open, onClose, creation, t, busy, guarded, on
   const [newLabels, setNewLabels] = useState(false);
   const creationTarget = creation?.native_targets.find((row) => row.menu_cpu === newCPU);
   const creationType = creationTarget?.project_types.find((row) => row.value === newProjectType);
-  const labelsRequired = !!creationType?.target_modes.find((mode) => mode.value === newMode)
-    ?.labels_required;
+  const creationMode = creationType?.target_modes.find((mode) => mode.value === newMode);
+  const labelsRequired = !!creationMode?.labels_required;
+  const labelsSupported = creationType?.labels_supported !== false && creationMode?.labels_supported !== false;
   function selectCreationTarget(target: CreationTarget | undefined) {
     setNewCPU(target?.menu_cpu || "");
     setNewConcreteCPU(target?.default_plc_model || "");
@@ -55,7 +56,7 @@ export function NewProjectDialog({ open, onClose, creation, t, busy, guarded, on
               target_mode: newMode || "ladder",
               plc_model: newConcreteCPU,
               native_project_type: newProjectType,
-              use_labels: labelsRequired || (creationType?.labels_supported !== false && newLabels),
+              use_labels: labelsRequired || (labelsSupported && newLabels),
             });
             onCreated(p);
             setNewName("");
@@ -165,8 +166,8 @@ export function NewProjectDialog({ open, onClose, creation, t, busy, guarded, on
             <label className="creation-labels">
               <input
                 type="checkbox"
-                checked={labelsRequired || (creationType?.labels_supported !== false && newLabels)}
-                disabled={labelsRequired || creationType?.labels_supported === false}
+                checked={labelsRequired || (labelsSupported && newLabels)}
+                disabled={labelsRequired || !labelsSupported}
                 onChange={(e) => setNewLabels(e.target.checked)}
               />
               {t("使用标签")}

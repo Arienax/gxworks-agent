@@ -1,0 +1,3809 @@
+{
+  "schema_version": 1,
+  "language_facts": [
+    {
+      "aliases": [
+        "运算符",
+        "优先级",
+        "operator precedence"
+      ],
+      "facts": [
+        {
+          "depends_on": [],
+          "dimension": "parameters.operator_binding",
+          "id": "st:operator_binding",
+          "scope": {
+            "forms": [
+              "ST.OPERATORS"
+            ],
+            "languages": [
+              "st"
+            ],
+            "models": [
+              "FX0",
+              "FX0N",
+              "FX0S",
+              "FX1",
+              "FX1N",
+              "FX1NC",
+              "FX1S",
+              "FX2C",
+              "FX2N",
+              "FX2NC",
+              "FX3G",
+              "FX3GC",
+              "FX3S",
+              "FX3U",
+              "FX3UC",
+              "FXU",
+              "L02",
+              "L02-P",
+              "L02S",
+              "L02S-P",
+              "L06",
+              "L06-P",
+              "L26",
+              "L26-BT",
+              "L26-P",
+              "L26-PBT",
+              "Q00",
+              "Q00J",
+              "Q00U",
+              "Q00UJ",
+              "Q01",
+              "Q01U",
+              "Q02",
+              "Q02H",
+              "Q02PH",
+              "Q02U",
+              "Q03UD",
+              "Q03UDE",
+              "Q03UDV",
+              "Q04UDEH",
+              "Q04UDH",
+              "Q04UDPV",
+              "Q04UDV",
+              "Q06H",
+              "Q06PH",
+              "Q06UDEH",
+              "Q06UDH",
+              "Q06UDPV",
+              "Q06UDV",
+              "Q100UDEH",
+              "Q10UDEH",
+              "Q10UDH",
+              "Q12H",
+              "Q12PH",
+              "Q12PRH",
+              "Q13UDEH",
+              "Q13UDH",
+              "Q13UDPV",
+              "Q13UDV",
+              "Q20UDEH",
+              "Q20UDH",
+              "Q25H",
+              "Q25PH",
+              "Q25PRH",
+              "Q26UDEH",
+              "Q26UDH",
+              "Q26UDPV",
+              "Q26UDV",
+              "Q50UDEH"
+            ]
+          },
+          "sources": [
+            {
+              "id": "3203",
+              "manual_id": "structured_fundamentals_o",
+              "manual_number": "SH-080782ENG",
+              "pdf_pages": [
+                76
+              ],
+              "revision": "O"
+            }
+          ],
+          "status": "source_verified",
+          "value": {
+            "associativity": "left",
+            "precedence": {
+              "&": 3,
+              "*": 7,
+              "**": 9,
+              "+": 6,
+              "-": 6,
+              "/": 7,
+              "<": 5,
+              "<=": 5,
+              "<>": 4,
+              "=": 4,
+              ">": 5,
+              ">=": 5,
+              "AND": 3,
+              "MOD": 7,
+              "NOT": 8,
+              "OR": 1,
+              "XOR": 2
+            },
+            "types": {
+              "arithmetic": {
+                "inputs": [
+                  "ANY_NUM"
+                ],
+                "operators": [
+                  "*",
+                  "/",
+                  "+",
+                  "-"
+                ],
+                "result": "ANY_NUM"
+              },
+              "comparison": {
+                "inputs": [
+                  "ANY_SIMPLE"
+                ],
+                "operators": [
+                  "<",
+                  ">",
+                  "<=",
+                  ">=",
+                  "=",
+                  "<>"
+                ],
+                "result": "BOOL"
+              },
+              "logical": {
+                "inputs": [
+                  "ANY_BIT"
+                ],
+                "operators": [
+                  "AND",
+                  "&",
+                  "XOR",
+                  "OR",
+                  "NOT"
+                ],
+                "result": "ANY_BIT"
+              },
+              "modulus": {
+                "inputs": [
+                  "ANY_INT"
+                ],
+                "operators": [
+                  "MOD"
+                ],
+                "result": "ANY_INT"
+              },
+              "power": {
+                "inputs": [
+                  "ANY_REAL",
+                  "ANY_NUM"
+                ],
+                "operators": [
+                  "**"
+                ],
+                "result": "ANY_REAL"
+              }
+            }
+          },
+          "verification": "source_checked"
+        }
+      ],
+      "models": [
+        "FX0",
+        "FX0N",
+        "FX0S",
+        "FX1",
+        "FX1N",
+        "FX1NC",
+        "FX1S",
+        "FX2C",
+        "FX2N",
+        "FX2NC",
+        "FX3G",
+        "FX3GC",
+        "FX3S",
+        "FX3U",
+        "FX3UC",
+        "FXU",
+        "L02",
+        "L02-P",
+        "L02S",
+        "L02S-P",
+        "L06",
+        "L06-P",
+        "L26",
+        "L26-BT",
+        "L26-P",
+        "L26-PBT",
+        "Q00",
+        "Q00J",
+        "Q00U",
+        "Q00UJ",
+        "Q01",
+        "Q01U",
+        "Q02",
+        "Q02H",
+        "Q02PH",
+        "Q02U",
+        "Q03UD",
+        "Q03UDE",
+        "Q03UDV",
+        "Q04UDEH",
+        "Q04UDH",
+        "Q04UDPV",
+        "Q04UDV",
+        "Q06H",
+        "Q06PH",
+        "Q06UDEH",
+        "Q06UDH",
+        "Q06UDPV",
+        "Q06UDV",
+        "Q100UDEH",
+        "Q10UDEH",
+        "Q10UDH",
+        "Q12H",
+        "Q12PH",
+        "Q12PRH",
+        "Q13UDEH",
+        "Q13UDH",
+        "Q13UDPV",
+        "Q13UDV",
+        "Q20UDEH",
+        "Q20UDH",
+        "Q25H",
+        "Q25PH",
+        "Q25PRH",
+        "Q26UDEH",
+        "Q26UDH",
+        "Q26UDPV",
+        "Q26UDV",
+        "Q50UDEH"
+      ],
+      "target": "ST.OPERATORS"
+    },
+    {
+      "aliases": [
+        "**",
+        "幂运算",
+        "幂运算符",
+        "exponentiation"
+      ],
+      "facts": [
+        {
+          "depends_on": [],
+          "dimension": "parameters.operator_types",
+          "id": "st:power_type",
+          "scope": {
+            "forms": [
+              "ST.OPERATOR.POWER"
+            ],
+            "languages": [
+              "st"
+            ],
+            "models": [
+              "FX0",
+              "FX0N",
+              "FX0S",
+              "FX1",
+              "FX1N",
+              "FX1NC",
+              "FX1S",
+              "FX2C",
+              "FX2N",
+              "FX2NC",
+              "FX3G",
+              "FX3GC",
+              "FX3S",
+              "FX3U",
+              "FX3UC",
+              "FXU",
+              "L02",
+              "L02-P",
+              "L02S",
+              "L02S-P",
+              "L06",
+              "L06-P",
+              "L26",
+              "L26-BT",
+              "L26-P",
+              "L26-PBT",
+              "Q00",
+              "Q00J",
+              "Q00U",
+              "Q00UJ",
+              "Q01",
+              "Q01U",
+              "Q02",
+              "Q02H",
+              "Q02PH",
+              "Q02U",
+              "Q03UD",
+              "Q03UDE",
+              "Q03UDV",
+              "Q04UDEH",
+              "Q04UDH",
+              "Q04UDPV",
+              "Q04UDV",
+              "Q06H",
+              "Q06PH",
+              "Q06UDEH",
+              "Q06UDH",
+              "Q06UDPV",
+              "Q06UDV",
+              "Q100UDEH",
+              "Q10UDEH",
+              "Q10UDH",
+              "Q12H",
+              "Q12PH",
+              "Q12PRH",
+              "Q13UDEH",
+              "Q13UDH",
+              "Q13UDPV",
+              "Q13UDV",
+              "Q20UDEH",
+              "Q20UDH",
+              "Q25H",
+              "Q25PH",
+              "Q25PRH",
+              "Q26UDEH",
+              "Q26UDH",
+              "Q26UDPV",
+              "Q26UDV",
+              "Q50UDEH"
+            ]
+          },
+          "sources": [
+            {
+              "id": "3203",
+              "manual_id": "structured_fundamentals_o",
+              "manual_number": "SH-080782ENG",
+              "pdf_pages": [
+                76
+              ],
+              "revision": "O"
+            }
+          ],
+          "status": "source_verified",
+          "value": {
+            "inputs": [
+              "ANY_REAL",
+              "ANY_NUM"
+            ],
+            "operators": [
+              "**"
+            ],
+            "result": "ANY_REAL"
+          },
+          "verification": "source_checked"
+        },
+        {
+          "depends_on": [],
+          "dimension": "constraints.cpu_availability",
+          "id": "st:power_cpu_availability",
+          "scope": {
+            "forms": [
+              "ST.OPERATOR.POWER"
+            ],
+            "languages": [
+              "st"
+            ],
+            "models": [
+              "FX3U",
+              "FX3UC",
+              "FX3G",
+              "FX3GC",
+              "FX3S",
+              "FX2N",
+              "FX2NC",
+              "FX1N",
+              "FX1NC",
+              "FX1S",
+              "FXU",
+              "FX2C",
+              "FX0N",
+              "FX0",
+              "FX0S"
+            ]
+          },
+          "sources": [
+            {
+              "id": "2940",
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                270
+              ],
+              "revision": "K"
+            }
+          ],
+          "status": "source_verified",
+          "value": {
+            "code": "PLC_CPU_UNSUPPORTED",
+            "evidence_pages": [
+              270
+            ],
+            "model_states": {
+              "FX0": "unsupported",
+              "FX0N": "unsupported",
+              "FX0S": "unsupported",
+              "FX1N": "unsupported",
+              "FX1NC": "unsupported",
+              "FX1S": "unsupported",
+              "FX2C": "unsupported",
+              "FX2N": "unsupported",
+              "FX2NC": "unsupported",
+              "FX3G": "unsupported",
+              "FX3GC": "unsupported",
+              "FX3S": "unsupported",
+              "FX3U": "supported",
+              "FX3UC": "supported",
+              "FXU": "unsupported"
+            },
+            "rule": "instruction_not_supported_on_selected_CPU"
+          },
+          "verification": "source_checked"
+        },
+        {
+          "dimension": "constraints.native_numeric_profile",
+          "id": "st:power_native_domain",
+          "scope": {
+            "forms": [
+              "ST.OPERATOR.POWER"
+            ],
+            "languages": [
+              "st"
+            ],
+            "models": [
+              "FX1",
+              "Q00",
+              "Q00J",
+              "Q01",
+              "Q02",
+              "Q02H",
+              "Q02PH",
+              "Q06H",
+              "Q06PH",
+              "Q12H",
+              "Q12PH",
+              "Q12PRH",
+              "Q25H",
+              "Q25PH",
+              "Q25PRH"
+            ]
+          },
+          "sources": [
+            {
+              "id": "3203",
+              "manual_id": "structured_fundamentals_o",
+              "manual_number": "SH-080782ENG",
+              "pdf_pages": [
+                76
+              ],
+              "revision": "O"
+            }
+          ],
+          "status": "unknown",
+          "value": {
+            "rule": "native_numeric_domain_not_reviewed"
+          },
+          "verification": "not_performed"
+        },
+        {
+          "depends_on": [],
+          "dimension": "constraints.context_domain",
+          "id": "st:power_numeric_engine",
+          "scope": {
+            "forms": [
+              "ST.OPERATOR.POWER"
+            ],
+            "languages": [
+              "st"
+            ],
+            "models": [
+              "FX3U",
+              "FX3UC"
+            ]
+          },
+          "sources": [
+            {
+              "id": "2849",
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                174
+              ],
+              "revision": "K"
+            },
+            {
+              "id": "FXSimRun2:REAL-range",
+              "manual_id": "gx_simulator2_fx",
+              "revision": "11.60.0.0"
+            }
+          ],
+          "status": "source_verified",
+          "value": {
+            "allowed": [
+              "cpu_manual",
+              "gx_simulator2_fx"
+            ],
+            "code": "ST_NUMERIC_ENGINE",
+            "path": "numeric_engine",
+            "phase": "both",
+            "rule": "numeric_execution_target_not_bound"
+          },
+          "verification": "source_checked"
+        },
+        {
+          "conditions": [
+            {
+              "context": "numeric_precision",
+              "equals": 32
+            }
+          ],
+          "depends_on": [],
+          "dimension": "parameters.numeric_evaluation",
+          "id": "st:power_evaluation:32:preserve",
+          "scope": {
+            "forms": [
+              "ST.OPERATOR.POWER"
+            ],
+            "languages": [
+              "st"
+            ],
+            "models": [
+              "FX3U",
+              "FX3UC"
+            ]
+          },
+          "sources": [
+            {
+              "id": "2940",
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                270
+              ],
+              "revision": "K"
+            },
+            {
+              "id": "2847",
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                173
+              ],
+              "revision": "K"
+            },
+            {
+              "id": "C9146",
+              "manual_id": "gxworks2_messages_1_635_0_1",
+              "revision": "1.635.0.1"
+            }
+          ],
+          "status": "source_verified",
+          "value": {
+            "compiler_version": "1.635.0.1",
+            "pipeline": [
+              "log",
+              "multiply",
+              "exp"
+            ],
+            "precision": 32,
+            "result_underflow": "preserve",
+            "round_intermediates": true
+          },
+          "verification": "source_checked"
+        },
+        {
+          "conditions": [
+            {
+              "context": "numeric_precision",
+              "equals": 32
+            }
+          ],
+          "depends_on": [],
+          "dimension": "parameters.numeric_evaluation",
+          "id": "st:power_evaluation:32:zero",
+          "scope": {
+            "forms": [
+              "ST.OPERATOR.POWER"
+            ],
+            "languages": [
+              "st"
+            ],
+            "models": [
+              "Q00U",
+              "Q00UJ",
+              "Q01U",
+              "Q02U",
+              "Q03UD",
+              "Q03UDE",
+              "Q03UDV",
+              "Q04UDEH",
+              "Q04UDH",
+              "Q04UDPV",
+              "Q04UDV",
+              "Q06UDEH",
+              "Q06UDH",
+              "Q06UDPV",
+              "Q06UDV",
+              "Q100UDEH",
+              "Q10UDEH",
+              "Q10UDH",
+              "Q13UDEH",
+              "Q13UDH",
+              "Q13UDPV",
+              "Q13UDV",
+              "Q20UDEH",
+              "Q20UDH",
+              "Q26UDEH",
+              "Q26UDH",
+              "Q26UDPV",
+              "Q26UDV",
+              "Q50UDEH",
+              "L02",
+              "L02-P",
+              "L02S",
+              "L02S-P",
+              "L06",
+              "L06-P",
+              "L26",
+              "L26-BT",
+              "L26-P",
+              "L26-PBT"
+            ]
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            },
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            },
+            {
+              "id": "6060",
+              "manual_id": "sh080783engp",
+              "manual_number": "SH080783ENG",
+              "pdf_pages": [
+                609,
+                610
+              ],
+              "revision": "P"
+            },
+            {
+              "id": "6062",
+              "manual_id": "sh080783engp",
+              "manual_number": "SH080783ENG",
+              "pdf_pages": [
+                612,
+                613
+              ],
+              "revision": "P"
+            },
+            {
+              "id": "C9146",
+              "manual_id": "gxworks2_messages_1_635_0_1",
+              "revision": "1.635.0.1"
+            }
+          ],
+          "status": "source_verified",
+          "value": {
+            "compiler_version": "1.635.0.1",
+            "pipeline": [
+              "log",
+              "multiply",
+              "exp"
+            ],
+            "precision": 32,
+            "result_underflow": "zero",
+            "round_intermediates": true
+          },
+          "verification": "source_checked"
+        },
+        {
+          "conditions": [
+            {
+              "context": "numeric_precision",
+              "equals": 64
+            }
+          ],
+          "depends_on": [],
+          "dimension": "parameters.numeric_evaluation",
+          "id": "st:power_evaluation:64:zero",
+          "scope": {
+            "forms": [
+              "ST.OPERATOR.POWER"
+            ],
+            "languages": [
+              "st"
+            ],
+            "models": [
+              "Q00U",
+              "Q00UJ",
+              "Q01U",
+              "Q02U",
+              "Q03UD",
+              "Q03UDE",
+              "Q03UDV",
+              "Q04UDEH",
+              "Q04UDH",
+              "Q04UDPV",
+              "Q04UDV",
+              "Q06UDEH",
+              "Q06UDH",
+              "Q06UDPV",
+              "Q06UDV",
+              "Q100UDEH",
+              "Q10UDEH",
+              "Q10UDH",
+              "Q13UDEH",
+              "Q13UDH",
+              "Q13UDPV",
+              "Q13UDV",
+              "Q20UDEH",
+              "Q20UDH",
+              "Q26UDEH",
+              "Q26UDH",
+              "Q26UDPV",
+              "Q26UDV",
+              "Q50UDEH",
+              "L02",
+              "L02-P",
+              "L02S",
+              "L02S-P",
+              "L06",
+              "L06-P",
+              "L26",
+              "L26-BT",
+              "L26-P",
+              "L26-PBT"
+            ]
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            },
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            },
+            {
+              "id": "6060",
+              "manual_id": "sh080783engp",
+              "manual_number": "SH080783ENG",
+              "pdf_pages": [
+                609,
+                610
+              ],
+              "revision": "P"
+            },
+            {
+              "id": "6062",
+              "manual_id": "sh080783engp",
+              "manual_number": "SH080783ENG",
+              "pdf_pages": [
+                612,
+                613
+              ],
+              "revision": "P"
+            },
+            {
+              "id": "C9146",
+              "manual_id": "gxworks2_messages_1_635_0_1",
+              "revision": "1.635.0.1"
+            }
+          ],
+          "status": "source_verified",
+          "value": {
+            "compiler_version": "1.635.0.1",
+            "pipeline": [
+              "log",
+              "multiply",
+              "exp"
+            ],
+            "precision": 64,
+            "result_underflow": "zero",
+            "round_intermediates": true
+          },
+          "verification": "source_checked"
+        },
+        {
+          "depends_on": [],
+          "dimension": "constraints.cpu_availability",
+          "id": "st:power_ql_cpu_availability",
+          "scope": {
+            "forms": [
+              "ST.OPERATOR.POWER"
+            ],
+            "languages": [
+              "st"
+            ],
+            "models": [
+              "Q00J",
+              "Q00",
+              "Q01",
+              "Q02",
+              "Q02H",
+              "Q06H",
+              "Q12H",
+              "Q25H",
+              "Q02PH",
+              "Q06PH",
+              "Q12PH",
+              "Q25PH",
+              "Q12PRH",
+              "Q25PRH",
+              "Q00U",
+              "Q00UJ",
+              "Q01U",
+              "Q02U",
+              "Q03UD",
+              "Q03UDE",
+              "Q03UDV",
+              "Q04UDEH",
+              "Q04UDH",
+              "Q04UDPV",
+              "Q04UDV",
+              "Q06UDEH",
+              "Q06UDH",
+              "Q06UDPV",
+              "Q06UDV",
+              "Q100UDEH",
+              "Q10UDEH",
+              "Q10UDH",
+              "Q13UDEH",
+              "Q13UDH",
+              "Q13UDPV",
+              "Q13UDV",
+              "Q20UDEH",
+              "Q20UDH",
+              "Q26UDEH",
+              "Q26UDH",
+              "Q26UDPV",
+              "Q26UDV",
+              "Q50UDEH",
+              "L02",
+              "L02-P",
+              "L02S",
+              "L02S-P",
+              "L06",
+              "L06-P",
+              "L26",
+              "L26-BT",
+              "L26-P",
+              "L26-PBT"
+            ]
+          },
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ],
+          "status": "source_verified",
+          "value": {
+            "code": "PLC_CPU_UNSUPPORTED",
+            "evidence_pages": [
+              138
+            ],
+            "model_states": {
+              "L02": "supported",
+              "L02-P": "supported",
+              "L02S": "supported",
+              "L02S-P": "supported",
+              "L06": "supported",
+              "L06-P": "supported",
+              "L26": "supported",
+              "L26-BT": "supported",
+              "L26-P": "supported",
+              "L26-PBT": "supported",
+              "Q00": "supported",
+              "Q00J": "supported",
+              "Q00U": "supported",
+              "Q00UJ": "supported",
+              "Q01": "supported",
+              "Q01U": "supported",
+              "Q02": "supported",
+              "Q02H": "supported",
+              "Q02PH": "supported",
+              "Q02U": "supported",
+              "Q03UD": "supported",
+              "Q03UDE": "supported",
+              "Q03UDV": "supported",
+              "Q04UDEH": "supported",
+              "Q04UDH": "supported",
+              "Q04UDPV": "supported",
+              "Q04UDV": "supported",
+              "Q06H": "supported",
+              "Q06PH": "supported",
+              "Q06UDEH": "supported",
+              "Q06UDH": "supported",
+              "Q06UDPV": "supported",
+              "Q06UDV": "supported",
+              "Q100UDEH": "supported",
+              "Q10UDEH": "supported",
+              "Q10UDH": "supported",
+              "Q12H": "supported",
+              "Q12PH": "supported",
+              "Q12PRH": "supported",
+              "Q13UDEH": "supported",
+              "Q13UDH": "supported",
+              "Q13UDPV": "supported",
+              "Q13UDV": "supported",
+              "Q20UDEH": "supported",
+              "Q20UDH": "supported",
+              "Q25H": "supported",
+              "Q25PH": "supported",
+              "Q25PRH": "supported",
+              "Q26UDEH": "supported",
+              "Q26UDH": "supported",
+              "Q26UDPV": "supported",
+              "Q26UDV": "supported",
+              "Q50UDEH": "supported"
+            },
+            "rule": "instruction_not_supported_on_selected_CPU"
+          },
+          "verification": "source_checked"
+        }
+      ],
+      "models": [
+        "FX0",
+        "FX0N",
+        "FX0S",
+        "FX1",
+        "FX1N",
+        "FX1NC",
+        "FX1S",
+        "FX2C",
+        "FX2N",
+        "FX2NC",
+        "FX3G",
+        "FX3GC",
+        "FX3S",
+        "FX3U",
+        "FX3UC",
+        "FXU",
+        "L02",
+        "L02-P",
+        "L02S",
+        "L02S-P",
+        "L06",
+        "L06-P",
+        "L26",
+        "L26-BT",
+        "L26-P",
+        "L26-PBT",
+        "Q00",
+        "Q00J",
+        "Q00U",
+        "Q00UJ",
+        "Q01",
+        "Q01U",
+        "Q02",
+        "Q02H",
+        "Q02PH",
+        "Q02U",
+        "Q03UD",
+        "Q03UDE",
+        "Q03UDV",
+        "Q04UDEH",
+        "Q04UDH",
+        "Q04UDPV",
+        "Q04UDV",
+        "Q06H",
+        "Q06PH",
+        "Q06UDEH",
+        "Q06UDH",
+        "Q06UDPV",
+        "Q06UDV",
+        "Q100UDEH",
+        "Q10UDEH",
+        "Q10UDH",
+        "Q12H",
+        "Q12PH",
+        "Q12PRH",
+        "Q13UDEH",
+        "Q13UDH",
+        "Q13UDPV",
+        "Q13UDV",
+        "Q20UDEH",
+        "Q20UDH",
+        "Q25H",
+        "Q25PH",
+        "Q25PRH",
+        "Q26UDEH",
+        "Q26UDH",
+        "Q26UDPV",
+        "Q26UDV",
+        "Q50UDEH"
+      ],
+      "references": [
+        {
+          "models": [
+            "FX3U"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "EVALUATED_RESULT": "EVALUATED_RESULT",
+            "EXP_RESULT": "EXP_RESULT",
+            "In1": "LEFT",
+            "In2": "RIGHT",
+            "RESULT": "RESULT"
+          },
+          "sources": [
+            {
+              "id": "2940",
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                270
+              ],
+              "revision": "K"
+            }
+          ]
+        },
+        {
+          "models": [
+            "FX3UC"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "EVALUATED_RESULT": "EVALUATED_RESULT",
+            "EXP_RESULT": "EXP_RESULT",
+            "In1": "LEFT",
+            "In2": "RIGHT",
+            "RESULT": "RESULT"
+          },
+          "sources": [
+            {
+              "id": "2940",
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                270
+              ],
+              "revision": "K"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q00U"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q00UJ"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q01U"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q02U"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q03UD"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q03UDE"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q03UDV"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q04UDEH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q04UDH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q04UDPV"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q04UDV"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q06UDEH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q06UDH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q06UDPV"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q06UDV"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q100UDEH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q10UDEH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q10UDH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q13UDEH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q13UDH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q13UDPV"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q13UDV"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q20UDEH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q20UDH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q26UDEH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q26UDH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q26UDPV"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q26UDV"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q50UDEH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "L02"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "L02-P"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "L02S"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "L02S-P"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "L06"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "L06-P"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "L26"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "L26-BT"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "L26-P"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "L26-PBT"
+          ],
+          "opcode": "EXPT",
+          "parameters": {
+            "RESULT": "RESULT",
+            "S1": "LEFT",
+            "S2": "RIGHT"
+          },
+          "sources": [
+            {
+              "id": "8982",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                214
+              ],
+              "revision": "N"
+            }
+          ]
+        }
+      ],
+      "target": "ST.OPERATOR.POWER"
+    },
+    {
+      "aliases": [
+        "EN/ENO",
+        "EN ENO"
+      ],
+      "facts": [
+        {
+          "depends_on": [],
+          "dimension": "parameters.call_binding",
+          "id": "st:eneno",
+          "scope": {
+            "forms": [
+              "ST.CALL.ENENO"
+            ],
+            "languages": [
+              "st"
+            ],
+            "models": [
+              "FX0",
+              "FX0N",
+              "FX0S",
+              "FX1",
+              "FX1N",
+              "FX1NC",
+              "FX1S",
+              "FX2C",
+              "FX2N",
+              "FX2NC",
+              "FX3G",
+              "FX3GC",
+              "FX3S",
+              "FX3U",
+              "FX3UC",
+              "FXU",
+              "L02",
+              "L02-P",
+              "L02S",
+              "L02S-P",
+              "L06",
+              "L06-P",
+              "L26",
+              "L26-BT",
+              "L26-P",
+              "L26-PBT",
+              "Q00",
+              "Q00J",
+              "Q00U",
+              "Q00UJ",
+              "Q01",
+              "Q01U",
+              "Q02",
+              "Q02H",
+              "Q02PH",
+              "Q02U",
+              "Q03UD",
+              "Q03UDE",
+              "Q03UDV",
+              "Q04UDEH",
+              "Q04UDH",
+              "Q04UDPV",
+              "Q04UDV",
+              "Q06H",
+              "Q06PH",
+              "Q06UDEH",
+              "Q06UDH",
+              "Q06UDPV",
+              "Q06UDV",
+              "Q100UDEH",
+              "Q10UDEH",
+              "Q10UDH",
+              "Q12H",
+              "Q12PH",
+              "Q12PRH",
+              "Q13UDEH",
+              "Q13UDH",
+              "Q13UDPV",
+              "Q13UDV",
+              "Q20UDEH",
+              "Q20UDH",
+              "Q25H",
+              "Q25PH",
+              "Q25PRH",
+              "Q26UDEH",
+              "Q26UDH",
+              "Q26UDPV",
+              "Q26UDV",
+              "Q50UDEH"
+            ]
+          },
+          "sources": [
+            {
+              "id": "3206",
+              "manual_id": "structured_fundamentals_o",
+              "manual_number": "SH-080782ENG",
+              "pdf_pages": [
+                83
+              ],
+              "revision": "O"
+            }
+          ],
+          "status": "source_verified",
+          "value": {
+            "first_input": "EN",
+            "result": "ENO"
+          },
+          "verification": "source_checked"
+        }
+      ],
+      "models": [
+        "FX0",
+        "FX0N",
+        "FX0S",
+        "FX1",
+        "FX1N",
+        "FX1NC",
+        "FX1S",
+        "FX2C",
+        "FX2N",
+        "FX2NC",
+        "FX3G",
+        "FX3GC",
+        "FX3S",
+        "FX3U",
+        "FX3UC",
+        "FXU",
+        "L02",
+        "L02-P",
+        "L02S",
+        "L02S-P",
+        "L06",
+        "L06-P",
+        "L26",
+        "L26-BT",
+        "L26-P",
+        "L26-PBT",
+        "Q00",
+        "Q00J",
+        "Q00U",
+        "Q00UJ",
+        "Q01",
+        "Q01U",
+        "Q02",
+        "Q02H",
+        "Q02PH",
+        "Q02U",
+        "Q03UD",
+        "Q03UDE",
+        "Q03UDV",
+        "Q04UDEH",
+        "Q04UDH",
+        "Q04UDPV",
+        "Q04UDV",
+        "Q06H",
+        "Q06PH",
+        "Q06UDEH",
+        "Q06UDH",
+        "Q06UDPV",
+        "Q06UDV",
+        "Q100UDEH",
+        "Q10UDEH",
+        "Q10UDH",
+        "Q12H",
+        "Q12PH",
+        "Q12PRH",
+        "Q13UDEH",
+        "Q13UDH",
+        "Q13UDPV",
+        "Q13UDV",
+        "Q20UDEH",
+        "Q20UDH",
+        "Q25H",
+        "Q25PH",
+        "Q25PRH",
+        "Q26UDEH",
+        "Q26UDH",
+        "Q26UDPV",
+        "Q26UDV",
+        "Q50UDEH"
+      ],
+      "target": "ST.CALL.ENENO"
+    },
+    {
+      "aliases": [
+        "VAR_OUTPUT",
+        "FB 输出参数",
+        "Allow VAR_OUTPUT at FB call"
+      ],
+      "facts": [
+        {
+          "conditions": [
+            {
+              "context": "using_output_argument",
+              "equals": true
+            }
+          ],
+          "depends_on": [],
+          "dimension": "constraints.compile_option",
+          "id": "st:fb_output_option",
+          "scope": {
+            "forms": [
+              "ST.FB.OUTPUT_ARGUMENT"
+            ],
+            "languages": [
+              "st"
+            ],
+            "models": [
+              "FX0",
+              "FX0N",
+              "FX0S",
+              "FX1",
+              "FX1N",
+              "FX1NC",
+              "FX1S",
+              "FX2C",
+              "FX2N",
+              "FX2NC",
+              "FX3G",
+              "FX3GC",
+              "FX3S",
+              "FX3U",
+              "FX3UC",
+              "FXU",
+              "L02",
+              "L02-P",
+              "L02S",
+              "L02S-P",
+              "L06",
+              "L06-P",
+              "L26",
+              "L26-BT",
+              "L26-P",
+              "L26-PBT",
+              "Q00",
+              "Q00J",
+              "Q00U",
+              "Q00UJ",
+              "Q01",
+              "Q01U",
+              "Q02",
+              "Q02H",
+              "Q02PH",
+              "Q02U",
+              "Q03UD",
+              "Q03UDE",
+              "Q03UDV",
+              "Q04UDEH",
+              "Q04UDH",
+              "Q04UDPV",
+              "Q04UDV",
+              "Q06H",
+              "Q06PH",
+              "Q06UDEH",
+              "Q06UDH",
+              "Q06UDPV",
+              "Q06UDV",
+              "Q100UDEH",
+              "Q10UDEH",
+              "Q10UDH",
+              "Q12H",
+              "Q12PH",
+              "Q12PRH",
+              "Q13UDEH",
+              "Q13UDH",
+              "Q13UDPV",
+              "Q13UDV",
+              "Q20UDEH",
+              "Q20UDH",
+              "Q25H",
+              "Q25PH",
+              "Q25PRH",
+              "Q26UDEH",
+              "Q26UDH",
+              "Q26UDPV",
+              "Q26UDV",
+              "Q50UDEH"
+            ]
+          },
+          "sources": [
+            {
+              "id": "3206",
+              "manual_id": "structured_fundamentals_o",
+              "manual_number": "SH-080782ENG",
+              "pdf_pages": [
+                83
+              ],
+              "revision": "O"
+            }
+          ],
+          "status": "source_verified",
+          "value": {
+            "code": "ST_FB_OUTPUT_OPTION",
+            "predicate": {
+              "name": "OPTION",
+              "op": "parameter",
+              "type": {
+                "kind": "bool"
+              }
+            },
+            "rule": "allow_fb_output_arguments_required"
+          },
+          "verification": "source_checked"
+        }
+      ],
+      "models": [
+        "FX0",
+        "FX0N",
+        "FX0S",
+        "FX1",
+        "FX1N",
+        "FX1NC",
+        "FX1S",
+        "FX2C",
+        "FX2N",
+        "FX2NC",
+        "FX3G",
+        "FX3GC",
+        "FX3S",
+        "FX3U",
+        "FX3UC",
+        "FXU",
+        "L02",
+        "L02-P",
+        "L02S",
+        "L02S-P",
+        "L06",
+        "L06-P",
+        "L26",
+        "L26-BT",
+        "L26-P",
+        "L26-PBT",
+        "Q00",
+        "Q00J",
+        "Q00U",
+        "Q00UJ",
+        "Q01",
+        "Q01U",
+        "Q02",
+        "Q02H",
+        "Q02PH",
+        "Q02U",
+        "Q03UD",
+        "Q03UDE",
+        "Q03UDV",
+        "Q04UDEH",
+        "Q04UDH",
+        "Q04UDPV",
+        "Q04UDV",
+        "Q06H",
+        "Q06PH",
+        "Q06UDEH",
+        "Q06UDH",
+        "Q06UDPV",
+        "Q06UDV",
+        "Q100UDEH",
+        "Q10UDEH",
+        "Q10UDH",
+        "Q12H",
+        "Q12PH",
+        "Q12PRH",
+        "Q13UDEH",
+        "Q13UDH",
+        "Q13UDPV",
+        "Q13UDV",
+        "Q20UDEH",
+        "Q20UDH",
+        "Q25H",
+        "Q25PH",
+        "Q25PRH",
+        "Q26UDEH",
+        "Q26UDH",
+        "Q26UDPV",
+        "Q26UDV",
+        "Q50UDEH"
+      ],
+      "target": "ST.FB.OUTPUT_ARGUMENT"
+    },
+    {
+      "aliases": [
+        "嵌套注释",
+        "nested comments",
+        "ST 注释"
+      ],
+      "facts": [
+        {
+          "depends_on": [],
+          "dimension": "parameters.comment_syntax",
+          "id": "st:comment_syntax",
+          "scope": {
+            "forms": [
+              "ST.COMMENTS"
+            ],
+            "languages": [
+              "st"
+            ],
+            "models": [
+              "FX0",
+              "FX0N",
+              "FX0S",
+              "FX1",
+              "FX1N",
+              "FX1NC",
+              "FX1S",
+              "FX2C",
+              "FX2N",
+              "FX2NC",
+              "FX3G",
+              "FX3GC",
+              "FX3S",
+              "FX3U",
+              "FX3UC",
+              "FXU",
+              "L02",
+              "L02-P",
+              "L02S",
+              "L02S-P",
+              "L06",
+              "L06-P",
+              "L26",
+              "L26-BT",
+              "L26-P",
+              "L26-PBT",
+              "Q00",
+              "Q00J",
+              "Q00U",
+              "Q00UJ",
+              "Q01",
+              "Q01U",
+              "Q02",
+              "Q02H",
+              "Q02PH",
+              "Q02U",
+              "Q03UD",
+              "Q03UDE",
+              "Q03UDV",
+              "Q04UDEH",
+              "Q04UDH",
+              "Q04UDPV",
+              "Q04UDV",
+              "Q06H",
+              "Q06PH",
+              "Q06UDEH",
+              "Q06UDH",
+              "Q06UDPV",
+              "Q06UDV",
+              "Q100UDEH",
+              "Q10UDEH",
+              "Q10UDH",
+              "Q12H",
+              "Q12PH",
+              "Q12PRH",
+              "Q13UDEH",
+              "Q13UDH",
+              "Q13UDPV",
+              "Q13UDV",
+              "Q20UDEH",
+              "Q20UDH",
+              "Q25H",
+              "Q25PH",
+              "Q25PRH",
+              "Q26UDEH",
+              "Q26UDH",
+              "Q26UDPV",
+              "Q26UDV",
+              "Q50UDEH"
+            ]
+          },
+          "sources": [
+            {
+              "id": "3202",
+              "manual_id": "structured_fundamentals_o",
+              "manual_number": "SH-080782ENG",
+              "pdf_pages": [
+                75
+              ],
+              "revision": "O"
+            }
+          ],
+          "status": "source_verified",
+          "value": {
+            "block_close": "*)",
+            "block_open": "(*",
+            "nested_allowed": false,
+            "nested_diagnostic": "C1200"
+          },
+          "verification": "source_checked"
+        }
+      ],
+      "models": [
+        "FX0",
+        "FX0N",
+        "FX0S",
+        "FX1",
+        "FX1N",
+        "FX1NC",
+        "FX1S",
+        "FX2C",
+        "FX2N",
+        "FX2NC",
+        "FX3G",
+        "FX3GC",
+        "FX3S",
+        "FX3U",
+        "FX3UC",
+        "FXU",
+        "L02",
+        "L02-P",
+        "L02S",
+        "L02S-P",
+        "L06",
+        "L06-P",
+        "L26",
+        "L26-BT",
+        "L26-P",
+        "L26-PBT",
+        "Q00",
+        "Q00J",
+        "Q00U",
+        "Q00UJ",
+        "Q01",
+        "Q01U",
+        "Q02",
+        "Q02H",
+        "Q02PH",
+        "Q02U",
+        "Q03UD",
+        "Q03UDE",
+        "Q03UDV",
+        "Q04UDEH",
+        "Q04UDH",
+        "Q04UDPV",
+        "Q04UDV",
+        "Q06H",
+        "Q06PH",
+        "Q06UDEH",
+        "Q06UDH",
+        "Q06UDPV",
+        "Q06UDV",
+        "Q100UDEH",
+        "Q10UDEH",
+        "Q10UDH",
+        "Q12H",
+        "Q12PH",
+        "Q12PRH",
+        "Q13UDEH",
+        "Q13UDH",
+        "Q13UDPV",
+        "Q13UDV",
+        "Q20UDEH",
+        "Q20UDH",
+        "Q25H",
+        "Q25PH",
+        "Q25PRH",
+        "Q26UDEH",
+        "Q26UDH",
+        "Q26UDPV",
+        "Q26UDV",
+        "Q50UDEH"
+      ],
+      "target": "ST.COMMENTS"
+    },
+    {
+      "aliases": [
+        "C9146"
+      ],
+      "facts": [
+        {
+          "depends_on": [],
+          "dimension": "parameters.compiler_diagnostic",
+          "id": "st:diagnostic:c9146",
+          "scope": {
+            "forms": [
+              "ST.DIAGNOSTIC.C9146"
+            ],
+            "languages": [
+              "st"
+            ],
+            "models": [
+              "FX0",
+              "FX0N",
+              "FX0S",
+              "FX1",
+              "FX1N",
+              "FX1NC",
+              "FX1S",
+              "FX2C",
+              "FX2N",
+              "FX2NC",
+              "FX3G",
+              "FX3GC",
+              "FX3S",
+              "FX3U",
+              "FX3UC",
+              "FXU",
+              "L02",
+              "L02-P",
+              "L02S",
+              "L02S-P",
+              "L06",
+              "L06-P",
+              "L26",
+              "L26-BT",
+              "L26-P",
+              "L26-PBT",
+              "Q00",
+              "Q00J",
+              "Q00U",
+              "Q00UJ",
+              "Q01",
+              "Q01U",
+              "Q02",
+              "Q02H",
+              "Q02PH",
+              "Q02U",
+              "Q03UD",
+              "Q03UDE",
+              "Q03UDV",
+              "Q04UDEH",
+              "Q04UDH",
+              "Q04UDPV",
+              "Q04UDV",
+              "Q06H",
+              "Q06PH",
+              "Q06UDEH",
+              "Q06UDH",
+              "Q06UDPV",
+              "Q06UDV",
+              "Q100UDEH",
+              "Q10UDEH",
+              "Q10UDH",
+              "Q12H",
+              "Q12PH",
+              "Q12PRH",
+              "Q13UDEH",
+              "Q13UDH",
+              "Q13UDPV",
+              "Q13UDV",
+              "Q20UDEH",
+              "Q20UDH",
+              "Q25H",
+              "Q25PH",
+              "Q25PRH",
+              "Q26UDEH",
+              "Q26UDH",
+              "Q26UDPV",
+              "Q26UDV",
+              "Q50UDEH"
+            ]
+          },
+          "sources": [
+            {
+              "id": "C9146",
+              "manual_id": "gxworks2_messages_1_635_0_1",
+              "revision": "1.635.0.1"
+            }
+          ],
+          "status": "source_verified",
+          "value": {
+            "code": "C9146",
+            "compiler_base_minimum": 0,
+            "evaluation": "EXP(In2*LOG(In1))",
+            "native_code": "0x050C9146",
+            "runtime_domain_separate": true,
+            "severity": "warning",
+            "software_version": "1.635.0.1"
+          },
+          "verification": "source_checked"
+        }
+      ],
+      "models": [
+        "FX0",
+        "FX0N",
+        "FX0S",
+        "FX1",
+        "FX1N",
+        "FX1NC",
+        "FX1S",
+        "FX2C",
+        "FX2N",
+        "FX2NC",
+        "FX3G",
+        "FX3GC",
+        "FX3S",
+        "FX3U",
+        "FX3UC",
+        "FXU",
+        "L02",
+        "L02-P",
+        "L02S",
+        "L02S-P",
+        "L06",
+        "L06-P",
+        "L26",
+        "L26-BT",
+        "L26-P",
+        "L26-PBT",
+        "Q00",
+        "Q00J",
+        "Q00U",
+        "Q00UJ",
+        "Q01",
+        "Q01U",
+        "Q02",
+        "Q02H",
+        "Q02PH",
+        "Q02U",
+        "Q03UD",
+        "Q03UDE",
+        "Q03UDV",
+        "Q04UDEH",
+        "Q04UDH",
+        "Q04UDPV",
+        "Q04UDV",
+        "Q06H",
+        "Q06PH",
+        "Q06UDEH",
+        "Q06UDH",
+        "Q06UDPV",
+        "Q06UDV",
+        "Q100UDEH",
+        "Q10UDEH",
+        "Q10UDH",
+        "Q12H",
+        "Q12PH",
+        "Q12PRH",
+        "Q13UDEH",
+        "Q13UDH",
+        "Q13UDPV",
+        "Q13UDV",
+        "Q20UDEH",
+        "Q20UDH",
+        "Q25H",
+        "Q25PH",
+        "Q25PRH",
+        "Q26UDEH",
+        "Q26UDH",
+        "Q26UDPV",
+        "Q26UDV",
+        "Q50UDEH"
+      ],
+      "references": [
+        {
+          "models": [
+            "FX3U"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "2849",
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                174
+              ],
+              "revision": "K"
+            }
+          ]
+        },
+        {
+          "models": [
+            "FX3UC"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "2849",
+              "manual_id": "fxcpu_application_k",
+              "manual_number": "JY997D34801",
+              "pdf_pages": [
+                174
+              ],
+              "revision": "K"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q00U"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q00UJ"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q01U"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q02U"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q03UD"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q03UDE"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q03UDV"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q04UDEH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q04UDH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q04UDPV"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q04UDV"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q06UDEH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q06UDH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q06UDPV"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q06UDV"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q100UDEH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q10UDEH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q10UDH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q13UDEH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q13UDH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q13UDPV"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q13UDV"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q20UDEH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q20UDH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q26UDEH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q26UDH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q26UDPV"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q26UDV"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "Q50UDEH"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "L02"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "L02-P"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "L02S"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "L02S-P"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "L06"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "L06-P"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "L26"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "L26-BT"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "L26-P"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        },
+        {
+          "models": [
+            "L26-PBT"
+          ],
+          "opcode": "EXPT",
+          "parameters": {},
+          "sources": [
+            {
+              "id": "8942",
+              "manual_id": "sh080784engn",
+              "manual_number": "SH080784ENG",
+              "pdf_pages": [
+                138
+              ],
+              "revision": "N"
+            }
+          ]
+        }
+      ],
+      "target": "ST.DIAGNOSTIC.C9146"
+    },
+    {
+      "aliases": [
+        "C9215",
+        "字软元件比较",
+        "word device comparison"
+      ],
+      "facts": [
+        {
+          "depends_on": [],
+          "dimension": "parameters.compiler_diagnostic",
+          "id": "st:diagnostic:c9215",
+          "scope": {
+            "forms": [
+              "ST.DIAGNOSTIC.C9215"
+            ],
+            "languages": [
+              "st"
+            ],
+            "models": [
+              "FX0",
+              "FX0N",
+              "FX0S",
+              "FX1",
+              "FX1N",
+              "FX1NC",
+              "FX1S",
+              "FX2C",
+              "FX2N",
+              "FX2NC",
+              "FX3G",
+              "FX3GC",
+              "FX3S",
+              "FX3U",
+              "FX3UC",
+              "FXU",
+              "L02",
+              "L02-P",
+              "L02S",
+              "L02S-P",
+              "L06",
+              "L06-P",
+              "L26",
+              "L26-BT",
+              "L26-P",
+              "L26-PBT",
+              "Q00",
+              "Q00J",
+              "Q00U",
+              "Q00UJ",
+              "Q01",
+              "Q01U",
+              "Q02",
+              "Q02H",
+              "Q02PH",
+              "Q02U",
+              "Q03UD",
+              "Q03UDE",
+              "Q03UDV",
+              "Q04UDEH",
+              "Q04UDH",
+              "Q04UDPV",
+              "Q04UDV",
+              "Q06H",
+              "Q06PH",
+              "Q06UDEH",
+              "Q06UDH",
+              "Q06UDPV",
+              "Q06UDV",
+              "Q100UDEH",
+              "Q10UDEH",
+              "Q10UDH",
+              "Q12H",
+              "Q12PH",
+              "Q12PRH",
+              "Q13UDEH",
+              "Q13UDH",
+              "Q13UDPV",
+              "Q13UDV",
+              "Q20UDEH",
+              "Q20UDH",
+              "Q25H",
+              "Q25PH",
+              "Q25PRH",
+              "Q26UDEH",
+              "Q26UDH",
+              "Q26UDPV",
+              "Q26UDV",
+              "Q50UDEH"
+            ]
+          },
+          "sources": [
+            {
+              "id": "C9215",
+              "manual_id": "gxworks2_messages_1_635_0_1",
+              "revision": "1.635.0.1"
+            }
+          ],
+          "status": "source_verified",
+          "value": {
+            "check": "signed_word_comparison",
+            "code": "C9215",
+            "effect": {
+              "bits": 16,
+              "default_type": "INT",
+              "signed": true
+            },
+            "native_code": "0x050C9215",
+            "severity": "warning",
+            "software_version": "1.635.0.1"
+          },
+          "verification": "source_checked"
+        }
+      ],
+      "models": [
+        "FX0",
+        "FX0N",
+        "FX0S",
+        "FX1",
+        "FX1N",
+        "FX1NC",
+        "FX1S",
+        "FX2C",
+        "FX2N",
+        "FX2NC",
+        "FX3G",
+        "FX3GC",
+        "FX3S",
+        "FX3U",
+        "FX3UC",
+        "FXU",
+        "L02",
+        "L02-P",
+        "L02S",
+        "L02S-P",
+        "L06",
+        "L06-P",
+        "L26",
+        "L26-BT",
+        "L26-P",
+        "L26-PBT",
+        "Q00",
+        "Q00J",
+        "Q00U",
+        "Q00UJ",
+        "Q01",
+        "Q01U",
+        "Q02",
+        "Q02H",
+        "Q02PH",
+        "Q02U",
+        "Q03UD",
+        "Q03UDE",
+        "Q03UDV",
+        "Q04UDEH",
+        "Q04UDH",
+        "Q04UDPV",
+        "Q04UDV",
+        "Q06H",
+        "Q06PH",
+        "Q06UDEH",
+        "Q06UDH",
+        "Q06UDPV",
+        "Q06UDV",
+        "Q100UDEH",
+        "Q10UDEH",
+        "Q10UDH",
+        "Q12H",
+        "Q12PH",
+        "Q12PRH",
+        "Q13UDEH",
+        "Q13UDH",
+        "Q13UDPV",
+        "Q13UDV",
+        "Q20UDEH",
+        "Q20UDH",
+        "Q25H",
+        "Q25PH",
+        "Q25PRH",
+        "Q26UDEH",
+        "Q26UDH",
+        "Q26UDPV",
+        "Q26UDV",
+        "Q50UDEH"
+      ],
+      "target": "ST.DIAGNOSTIC.C9215"
+    },
+    {
+      "aliases": [
+        "F0207"
+      ],
+      "facts": [
+        {
+          "depends_on": [],
+          "dimension": "parameters.compiler_diagnostic",
+          "id": "st:diagnostic:f0207",
+          "scope": {
+            "forms": [
+              "ST.DIAGNOSTIC.F0207"
+            ],
+            "languages": [
+              "st"
+            ],
+            "models": [
+              "FX0",
+              "FX0N",
+              "FX0S",
+              "FX1",
+              "FX1N",
+              "FX1NC",
+              "FX1S",
+              "FX2C",
+              "FX2N",
+              "FX2NC",
+              "FX3G",
+              "FX3GC",
+              "FX3S",
+              "FX3U",
+              "FX3UC",
+              "FXU",
+              "L02",
+              "L02-P",
+              "L02S",
+              "L02S-P",
+              "L06",
+              "L06-P",
+              "L26",
+              "L26-BT",
+              "L26-P",
+              "L26-PBT",
+              "Q00",
+              "Q00J",
+              "Q00U",
+              "Q00UJ",
+              "Q01",
+              "Q01U",
+              "Q02",
+              "Q02H",
+              "Q02PH",
+              "Q02U",
+              "Q03UD",
+              "Q03UDE",
+              "Q03UDV",
+              "Q04UDEH",
+              "Q04UDH",
+              "Q04UDPV",
+              "Q04UDV",
+              "Q06H",
+              "Q06PH",
+              "Q06UDEH",
+              "Q06UDH",
+              "Q06UDPV",
+              "Q06UDV",
+              "Q100UDEH",
+              "Q10UDEH",
+              "Q10UDH",
+              "Q12H",
+              "Q12PH",
+              "Q12PRH",
+              "Q13UDEH",
+              "Q13UDH",
+              "Q13UDPV",
+              "Q13UDV",
+              "Q20UDEH",
+              "Q20UDH",
+              "Q25H",
+              "Q25PH",
+              "Q25PRH",
+              "Q26UDEH",
+              "Q26UDH",
+              "Q26UDPV",
+              "Q26UDV",
+              "Q50UDEH"
+            ]
+          },
+          "sources": [
+            {
+              "id": "F0207",
+              "manual_id": "gxworks2_messages_1_635_0_1",
+              "revision": "1.635.0.1"
+            }
+          ],
+          "status": "source_verified",
+          "value": {
+            "check": "special_relay_reset",
+            "code": "F0207",
+            "effect": {
+              "device": "M8023",
+              "value": false
+            },
+            "native_code": "0x050F0207",
+            "severity": "warning",
+            "software_version": "1.635.0.1"
+          },
+          "verification": "source_checked"
+        }
+      ],
+      "models": [
+        "FX0",
+        "FX0N",
+        "FX0S",
+        "FX1",
+        "FX1N",
+        "FX1NC",
+        "FX1S",
+        "FX2C",
+        "FX2N",
+        "FX2NC",
+        "FX3G",
+        "FX3GC",
+        "FX3S",
+        "FX3U",
+        "FX3UC",
+        "FXU",
+        "L02",
+        "L02-P",
+        "L02S",
+        "L02S-P",
+        "L06",
+        "L06-P",
+        "L26",
+        "L26-BT",
+        "L26-P",
+        "L26-PBT",
+        "Q00",
+        "Q00J",
+        "Q00U",
+        "Q00UJ",
+        "Q01",
+        "Q01U",
+        "Q02",
+        "Q02H",
+        "Q02PH",
+        "Q02U",
+        "Q03UD",
+        "Q03UDE",
+        "Q03UDV",
+        "Q04UDEH",
+        "Q04UDH",
+        "Q04UDPV",
+        "Q04UDV",
+        "Q06H",
+        "Q06PH",
+        "Q06UDEH",
+        "Q06UDH",
+        "Q06UDPV",
+        "Q06UDV",
+        "Q100UDEH",
+        "Q10UDEH",
+        "Q10UDH",
+        "Q12H",
+        "Q12PH",
+        "Q12PRH",
+        "Q13UDEH",
+        "Q13UDH",
+        "Q13UDPV",
+        "Q13UDV",
+        "Q20UDEH",
+        "Q20UDH",
+        "Q25H",
+        "Q25PH",
+        "Q25PRH",
+        "Q26UDEH",
+        "Q26UDH",
+        "Q26UDPV",
+        "Q26UDV",
+        "Q50UDEH"
+      ],
+      "target": "ST.DIAGNOSTIC.F0207"
+    }
+  ]
+}

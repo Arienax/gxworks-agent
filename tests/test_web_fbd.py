@@ -214,11 +214,7 @@ def test_native_engineering_shared_action_freezes_approval_and_commits_one_verif
     original = deepcopy(plan)
     plan['commands'].append({'operation': 'save', 'pid': 123})
     assert service.proposals.read_private(proposal_id)['plan'] == original
-    if mode == 'full':
-        job_id = response['execution_job_id']
-    else:
-        assert not calls and service.proposals.get(proposal_id)['status'] == 'pending'
-        job_id = service.decide(proposal_id, 'accept')['job']['id']
+    job_id = response['execution_job_id']
     service.jobs._futures[job_id].result(timeout=15)
     saved = service.proposals.get(proposal_id)
     assert saved['status'] == 'accepted', saved
@@ -262,8 +258,7 @@ def test_native_engineering_failed_delivery_never_activates_observed_bytes(servi
     monkeypatch.setattr(service.execution, 'submit_approved', execute)
     proposal = service.execution_proposal({'action': 'native_engineering', 'project_id': pid,
         'version_id': base, 'plan': plan, 'request_id': 'native-failure'})
-    job = service.decide(proposal['id'], 'accept')['job']
-    service.jobs._futures[job['id']].result(timeout=15)
+    service.jobs._futures[proposal['execution_job_id']].result(timeout=15)
     saved = service.proposals.get(proposal['id'])
     assert saved['status'] == 'interrupted', saved
     assert saved['result']['passed'] is False
@@ -273,26 +268,72 @@ def test_native_engineering_failed_delivery_never_activates_observed_bytes(servi
     assert 'private' not in json.dumps(saved) and 'data' not in saved['result']
 
 
-def test_http_native_engineering_accepts_only_explicit_saved_version_plan_with_operator_approval(tmp_path):
+def test_http_native_engineering_accepts_only_explicit_saved_version_plan_with_operator_approval(tmp_path, monkeypatch):
     from tests.test_web_api import AGENT
+    from concurrent.futures import Future
+    from tests.test_execution_coordinator import native_delivery_receipt
     service = WorkbenchService(tmp_path / 'workspace', tmp_path / 'state', model_factory=lambda: (None, {}))
     with TestClient(_app(service.store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as client:
         headers = _login(client)
         pid, base, _raw = visible_native_version(service)
         command = {'action': 'native_engineering', 'project_id': pid, 'version_id': base,
                    'plan': visible_native_plan(), 'request_id': 'native-http'}
+        calls = []
+        def execute(operation, payload, **options):
+            calls.append(payload)
+            future = Future()
+            future.set_result({'status': 'completed', 'passed': True,
+                '_native_result': native_delivery_receipt(_raw, payload['plan']['commands'])})
+            return future
+        monkeypatch.setattr(service.execution, 'submit_approved', execute)
         anonymous = TestClient(client.app, base_url=ORIGIN)
         assert anonymous.post('/api/proposals', json=command, headers={'Authorization': 'Bearer ' + AGENT}).status_code == 401
         assert client.post('/api/proposals', json=command).status_code == 403
-        response = client.post('/api/proposals', json=command, headers=headers)
-        assert response.status_code == 201, response.text
-        assert response.json()['action'] == 'native_engineering' and response.json()['status'] == 'pending'
-        assert service.execution._thread is None
         invalid = deepcopy(command)
         invalid.update(request_id='native-path')
         invalid['plan']['commands'][0]['path'] = r'D:\unmanaged.gxw'
         assert client.post('/api/proposals', json=invalid, headers=headers).status_code in (400, 422)
         assert service.store.get_project(pid)['active_version_id'] == base
+        assert not calls
+        response = client.post('/api/proposals', json=command, headers=headers)
+        assert response.status_code == 201, response.text
+        assert response.json()['action'] == 'native_engineering'
+        service.jobs._futures[response.json()['execution_job_id']].result(timeout=15)
+        saved = service.proposals.get(response.json()['id'])
+        assert saved['status'] == 'accepted' and len(calls) == 1
+        assert service.store.get_project(pid)['active_version_id'] != base
+        assert service.execution._thread is None
+
+
+def test_http_background_native_sfc_uses_shared_version_transaction(service, monkeypatch):
+    from concurrent.futures import Future
+    from tests.test_execution_coordinator import background_source, background_save_result
+    raw = background_source('sfc')
+    imported = service.gxw_files.import_project(data_base64=base64.b64encode(raw).decode(), filename='background.gxw')
+    pid, base = imported['project_id'], imported['version_id']
+    calls = []
+    def execute(operation, payload, **options):
+        assert operation == 'native_engineering' and options['approval_id']
+        calls.append(payload)
+        result = background_save_result(raw)
+        future = Future()
+        future.set_result({'status': 'completed', 'passed': True,
+            '_background_result': {'data': result.data, 'report': result.report}})
+        return future
+    monkeypatch.setattr(service.execution, 'submit_approved', execute)
+    with TestClient(_app(service.store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as client:
+        headers = _login(client)
+        command = dict(action='native_engineering', project_id=pid, version_id=base, request_id='background-http',
+            plan=dict(schema_version=1, mode='background',
+                commands=[{'operation': name} for name in ('compile', 'save', 'reopen')]))
+        response = client.post('/api/proposals', json=command, headers=headers)
+        assert response.status_code == 201, response.text
+        service.jobs._futures[response.json()['execution_job_id']].result(timeout=15)
+        result = service.proposals.get(response.json()['id'])['result']
+        assert result['status'] == 'completed' and result['mode'] == 'background'
+        assert service.projects.raw_version(pid, result['version_id'])['target_mode'] == 'sfc'
+        assert service.store.get_project(pid)['active_version_id'] == result['version_id'] != base
+        assert len(calls) == 1 and service.execution._thread is None
 
 
 def program_creation_native_replay(monkeypatch, tmp_path):

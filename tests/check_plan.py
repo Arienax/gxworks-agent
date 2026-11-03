@@ -31,6 +31,8 @@ class Plan:
     source_changes: dict[str, str] = field(default_factory=dict)
     unresolved_inputs: dict[str, str] = field(default_factory=dict)
     resolved_inputs: list[str] = field(default_factory=list)
+    execution_scope: list[str] = field(default_factory=list)
+    affected_domains: list[str] = field(default_factory=list)
 
 
 def load_config(root):
@@ -193,14 +195,28 @@ def affected_tests(root, archive_root, modules, graph=None):
 
 
 def make_plan(root, archive_root, config, changes, level='quick', pending_domains=(), environment_pending=None,
-              frontend_pending=False, source_pending=(), unresolved_inputs=None):
+              frontend_pending=False, source_pending=(), unresolved_inputs=None, execution_scope=()):
     owners = registry(root, config)
     by_file = {name: domain for domain, files in owners.items() for name in files}
     actual_tests = {path.relative_to(root).as_posix() for path in (root / 'tests').glob('test_*.py')}
     all_python = sorted(actual_tests)
     changes = list(changes)
     plan = Plan(level, live=list(config['live_tests']), requested_level=level,
-                frontend_pending=bool(frontend_pending), unresolved_inputs=dict(unresolved_inputs or {}))
+                frontend_pending=bool(frontend_pending), unresolved_inputs=dict(unresolved_inputs or {}),
+                execution_scope=list(execution_scope))
+    if execution_scope and level == 'full':
+        raise ValueError('--scope cannot restrict --level full; choose quick or domain')
+    def in_scope(path):
+        return not execution_scope or any(path == item or path.startswith(item.rstrip('/') + '/')
+                                          for item in execution_scope)
+    # An explicit file also selects its contracts when it has no new changes.
+    # Directories filter detected changes; they do not manufacture source edits.
+    from tests.check_inputs import Change, read_file
+    current_paths = {change.path for change in changes}
+    for path in execution_scope:
+        file = archive_root / path[8:] if path.startswith('private/') else root / path
+        if path not in current_paths and file.is_file():
+            changes.append(Change(path, None, read_file(file), forced=True, detail={'selection_only': True}))
     plan.source_verification = {target: 'earlier source input still needs verification' for target in source_pending}
     definitions, graph, literal_readers = {}, None, None
     dependency_details, shared = [], []
@@ -237,15 +253,17 @@ def make_plan(root, archive_root, config, changes, level='quick', pending_domain
             if target not in plan.live:
                 plan.targets.setdefault(target, []).append(reason)
 
-    def domains(names, reason, *, expand=False, quick=None):
+    def domains(names, reason, *, quick=None):
         plan.domains.update(names)
-        if level == 'quick' and quick is not None and not expand:
+        if level == 'quick' and quick is not None:
             for selector in quick:
                 add(selector, reason)
             return
         for name in names:
-            files = owners[name] if expand or level != 'quick' else config['domains'][name]['quick']
-            for target in files or owners[name]:
+            files = owners[name] if level != 'quick' else config['domains'][name]['quick']
+            if not files:
+                plan.notes.append(f'{name}: no quick contract; module acceptance stays pending (--level domain).')
+            for target in files:
                 if target.startswith('web/'):
                     plan.frontend = True
                 else:
@@ -256,6 +274,9 @@ def make_plan(root, archive_root, config, changes, level='quick', pending_domain
             for target in targets:
                 plan.source_verification[target] = reason
                 plan.source_changes[target] = reason
+                domain = by_file.get(target.split('::')[0])
+                if domain and domain not in plan.affected_domains:
+                    plan.affected_domains.append(domain)
         if unresolved:
             plan.unresolved_inputs[path] = unresolved
         elif path in plan.unresolved_inputs:
@@ -295,12 +316,10 @@ def make_plan(root, archive_root, config, changes, level='quick', pending_domain
             plan.domains.update(by_file[file] for file in files if file in by_file)
             return
         for domain in sorted({by_file[file] for file in files if file in by_file}):
-            contract = config['domains'][domain]['quick'] or owners[domain]
+            contract = config['domains'][domain]['quick']
             selected = [target for target in contract if target.split('::')[0] in files]
             if not selected:
-                # No declared representative reaches this input: test its known
-                # consumers in this owner instead of pretending it was covered.
-                selected = sorted(file for file in files if by_file.get(file) == domain)
+                plan.notes.append(f'{domain}: some consumers have no matching quick contract; their verification stays pending.')
             if selected:
                 plan.domains.add(domain)
                 for target in selected:
@@ -325,7 +344,6 @@ def make_plan(root, archive_root, config, changes, level='quick', pending_domain
             plan.resolved_inputs.append(key)
     # Reconsider unresolved inputs when an owner/reader mapping is later added.
     current_paths = {change.path for change in changes}
-    from tests.check_inputs import Change
     reconsider = [Change(path, None, None, detail={'reconsider': True})
                   for path in plan.unresolved_inputs if path not in current_paths and not path.startswith('<')]
     for change in [*changes, *reconsider]:
@@ -333,6 +351,7 @@ def make_plan(root, archive_root, config, changes, level='quick', pending_domain
         detail = change.detail if isinstance(change.detail, dict) else {}
         old_obligation = bool(detail.get('reconsider'))
         selection_only = bool(detail.get('selection_only'))
+        selectable = not old_obligation and in_scope(path)
         if detail.get('kind') == 'node':
             plan.frontend_pending = True
             plan.notes.append('Node/npm changed: Web validation stays owed until a frontend scope is selected.')
@@ -366,12 +385,14 @@ def make_plan(root, archive_root, config, changes, level='quick', pending_domain
                 tests = resource_tests(path, rules)
             reason = f'{path}: associated input changed'
             impact(path, tests, reason, unresolved=None if tests else 'no test association is known for this shared input')
-            if tests and not old_obligation and (not change.unknown or change.forced):
+            if tests and selectable and (not change.unknown or change.forced):
                 shared.append((tests, reason, change.forced))
             continue
         if path.startswith('web/'):
             impact(path, (), f'{path}: frontend input')
-            if not old_obligation:
+            if not selection_only:
+                plan.frontend_pending = True
+            if selectable:
                 plan.frontend = True
             continue
         if path.startswith('tests/test_') and path.endswith('.py'):
@@ -381,7 +402,7 @@ def make_plan(root, archive_root, config, changes, level='quick', pending_domain
                 if (root / path).is_file():
                     tests.add(path)
                 impact(path, tests, f'{path}: changed test', unresolved='test has no declared owner')
-                if not old_obligation and (not change.unknown or change.forced):
+                if selectable and (not change.unknown or change.forced):
                     for file in sorted(tests):
                         add(file, f'{path}: test or known consumer')
                 continue
@@ -389,7 +410,7 @@ def make_plan(root, archive_root, config, changes, level='quick', pending_domain
             if names is not None and level == 'quick':
                 targets = [path + '::' + name for name in names]
                 impact(path, targets, f'{path}: changed test functions')
-                if targets and not old_obligation:
+                if targets and selectable:
                     plan.domains.add(domain)
                     for target in targets:
                         add(target, f'{path}: changed test, including all parameter variants')
@@ -398,10 +419,16 @@ def make_plan(root, archive_root, config, changes, level='quick', pending_domain
             impact(path, tests, f'{path}: module or fixture changed',
                    unresolved=None if (root / path).is_file() else
                    'deleted test; its ownership and remaining consumers need confirmation')
-            if not old_obligation and (not change.unknown or change.forced):
-                domains([domain], f'{path}: module/fixture change or unavailable baseline', expand=True)
-                for consumer in dependent_tests(path):
-                    add(consumer, f'{path}: imports shared test inputs')
+            if selectable and (not change.unknown or change.forced):
+                reason = f'{path}: module/fixture change or unavailable baseline'
+                if level == 'quick':
+                    plan.domains.add(domain)
+                    if (root / path).is_file():
+                        add(path, reason)
+                    related_scope(dependent_tests(path) - {path}, f'{path}: imports shared test inputs')
+                else:
+                    domains([domain], reason)
+                    related_scope(dependent_tests(path), f'{path}: imports shared test inputs')
             continue
         rule = next((rule for rule in config['rules']
                      if any(fnmatchcase(path, pattern) for pattern in rule['paths'])), None)
@@ -410,17 +437,16 @@ def make_plan(root, archive_root, config, changes, level='quick', pending_domain
             if path.endswith('.py') and rule['domains']:
                 tests |= dependent_tests(path)
             impact(path, tests, f'{path}: declared owner or import consumer')
-            if not old_obligation and (not change.unknown or change.forced):
+            if selectable and (not change.unknown or change.forced):
                 domains(rule['domains'], f'{path}: declared contract',
-                        expand=rule.get('domain_only', False), quick=rule.get('quick'))
+                        quick=rule.get('quick'))
                 if path.startswith(('tests/', 'private/research/')) and path.endswith('.py'):
-                    for consumer in dependent_tests(path):
-                        add(consumer, f'{path}: imports shared helper')
+                    related_scope(dependent_tests(path), f'{path}: imports shared helper')
             continue
         tests = dependent_tests(path) if path.endswith('.py') else resource_tests(path, ())
         impact(path, tests, f'{path}: known import/resource consumers',
                unresolved=None if tests else 'unmapped input; its impact still needs confirmation')
-        if tests and not old_obligation and (not change.unknown or change.forced):
+        if tests and selectable and (not change.unknown or change.forced):
             related_scope(tests, f'{path}: known consumers')
 
     # Ordinary changes define the current scope. Broad shared inputs supplement
@@ -430,9 +456,9 @@ def make_plan(root, archive_root, config, changes, level='quick', pending_domain
     for tests, reason, forced in shared:
         if level != 'full' and (forced or not ordinary_scope):
             related_scope(tests, reason)
-    if level == 'domain' and not plan.targets and not plan.frontend and not any(c.forced for c in changes):
+    if level == 'domain' and not execution_scope and not plan.targets and not plan.frontend and not any(c.forced for c in changes):
         domains(sorted(set(pending_domains) & owners.keys()),
-                'module acceptance remains pending after quick validation', expand=True)
+                'module acceptance remains pending after quick validation')
     if plan.frontend_pending and any(any(file.startswith('web/') for file in owners.get(domain, ()))
                                      for domain in plan.domains):
         plan.frontend = True
@@ -490,6 +516,8 @@ def make_plan(root, archive_root, config, changes, level='quick', pending_domain
             plan.deferred.extend(file + '::' + name for name in functions(file)
                                  if file + '::' + name not in plan.targets and file + '::' + name not in plan.live)
     plan.notes.append('Results cover only selected cases; pending source inputs, environments and module acceptance stay separate.')
+    plan.notes = list(dict.fromkeys(plan.notes))
+    plan.affected_domains.sort()
     if pending_domains:
         plan.notes.append('Pending module acceptance (--level domain): ' + ', '.join(sorted(pending_domains)))
     return plan

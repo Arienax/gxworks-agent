@@ -1,6 +1,7 @@
 """Model configuration acceptance without network, real keys or user files."""
 import copy
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -349,7 +350,12 @@ def test_browser_demo_main_analysis_confirm_generation_autosaves_with_private_au
             assert proposal["status"] == "accepted" and proposal["action"] == "accept_local"
             assert proposal["summary"]["approval"]["source"] == "local_autosave"
             assert completed["result"]["version_id"] == proposal["result"]["version_id"]
-            assert service.proposals.read_private(proposal_id)["_candidate_ir"]
+            audit = service.proposals.read_private(proposal_id)
+            artifact = audit['artifacts']['ir']
+            frozen = json.loads((Path(audit['staging_dir']) / artifact['path']).read_text(encoding='utf-8'))
+            assert frozen['networks']
+            assert service.store.load_program_ir(project['id'], proposal['result']['version_id']) == frozen
+            assert 'staging_dir' not in json.dumps(proposal)
             assert len(service.store.get_project(project["id"])["versions"]) == 2
     monkeypatch.setattr(uvicorn, "run", run_locally)
     monkeypatch.setattr(sys, "argv", ["web_demo.py", "--model-delay", "0"])

@@ -18,7 +18,7 @@ import {
   Workflow
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { Suspense } from "react";
+import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Proposal } from "../api/client";
 import { activeJob, api, key } from "../api/client";
 import { RetainedPanel } from "../components/RetainedPanel";
@@ -119,6 +119,28 @@ export function ProgramWorkspace(props: Props) {
     st: ["ST", <Code2 size={14} />],
   };
   const [programTitle, programIcon] = programLabels[programView] || [programView.toUpperCase(), <Code2 size={14} />];
+  const nav = useRef<HTMLElement | null>(null);
+  const activeTab = useRef<HTMLButtonElement | null>(null);
+  const [slide, setSlide] = useState<{ left: number; width: number } | null>(null);
+  const [overflowing, setOverflowing] = useState(false);
+  // The active pill slides inside its own group; groups never overlap, so a
+  // single indicator measured against the active button is enough.
+  const measure = useCallback(() => {
+    const button = activeTab.current;
+    const bar = nav.current;
+    if (button) setSlide({ left: button.offsetLeft, width: button.offsetWidth });
+    if (bar) setOverflowing(bar.scrollWidth > bar.clientWidth + 1);
+  }, []);
+  // Re-measure whenever the active tab changes or its label swaps in, so the
+  // sliding indicator always lands on the button the operator just chose.
+  useLayoutEffect(() => { measure(); }, [measure, view]);
+  useEffect(() => {
+    const bar = nav.current;
+    if (!bar || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, [measure]);
   const versions = project?.id === pid ? project.versions?.slice().reverse() || [] : [];
   const open = (id: string) => {
     if (programViews.includes(id)) {
@@ -133,19 +155,20 @@ export function ProgramWorkspace(props: Props) {
       ["diagnostics", t("诊断"), <ShieldCheck size={14} />],
       ["reports", t("检查报告"), <FileCheck2 size={14} />],
       ["simulation", t("仿真记录"), <Activity size={14} />],
-      ["delivery", t("工程交付摘要"), <PackageCheck size={14} />],
     ],
     [
+      ["delivery", t("工程交付摘要"), <PackageCheck size={14} />],
       ["spec", t("需求"), <ListChecks size={14} />],
       ["proposals", t("审批记录"), <ClipboardCheck size={14} />],
       ["inspector", t("检查器"), <ScanSearch size={14} />],
     ],
   ];
+  const activeGroup = groups.findIndex((group) => group.some(([id]) => id === view));
 
   return (
     <main id="engineering-canvas" className="engineering-area" aria-label={t("工程画布")}>
       <header className="canvas-header">
-        <div className="canvas-title">
+        <div className="canvas-title-row">
           <h1>{project?.name || t("选择工程")}</h1>
           <div className="canvas-meta">
             <span>{project?.plc_model || "MITSUBISHI FX"}</span>
@@ -177,6 +200,12 @@ export function ProgramWorkspace(props: Props) {
             )}
             {version && status(displayedVersionStatus)}
           </div>
+          <button className="icon-button" aria-label={t("收起画布")} title={t("收起画布")} onClick={() => {
+            setCanvasOpen(false);
+            requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(".canvas-toggle")?.focus());
+          }}>
+            <PanelRightClose size={17} />
+          </button>
         </div>
         <ProjectToolbar
           pid={pid}
@@ -242,20 +271,26 @@ export function ProgramWorkspace(props: Props) {
             </>
           }
         />
-        <button className="icon-button" aria-label={t("收起画布")} title={t("收起画布")} onClick={() => {
-          setCanvasOpen(false);
-          requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(".canvas-toggle")?.focus());
-        }}>
-          <PanelRightClose size={17} />
-        </button>
       </header>
 
-      <nav className="canvas-tabs" aria-label={t("工程画布")}>
+      <nav className="canvas-tabs" aria-label={t("工程画布")} ref={nav} data-overflow={overflowing || undefined}>
         {groups.map((group, index) => (
           <div className="canvas-tab-group" key={index}>
+            {index === activeGroup && (
+              <span
+                className="tab-indicator"
+                aria-hidden="true"
+                style={{
+                  opacity: slide ? 1 : 0,
+                  transform: `translateX(${slide?.left ?? 0}px)`,
+                  width: slide?.width ?? 0,
+                }}
+              />
+            )}
             {group.map(([id, title, icon]) => (
               <button
                 key={id}
+                ref={id === view ? activeTab : undefined}
                 className={view === id ? "active" : ""}
                 aria-current={view === id ? "page" : undefined}
                 aria-label={title}
@@ -263,7 +298,7 @@ export function ProgramWorkspace(props: Props) {
                 onClick={() => open(id)}
               >
                 {icon}
-                <span>{title}</span>
+                {view === id && <span className="tab-label">{title}</span>}
                 {id === "proposals" && !!pendingCount && <span className="tab-count">{pendingCount}</span>}
               </button>
             ))}

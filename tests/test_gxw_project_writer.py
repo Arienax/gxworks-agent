@@ -581,3 +581,26 @@ def test_described_fbd_source_roundtrips_and_grows_with_native_body_unchanged(tm
     assert len(resulting) > len(source)
     rebuilt = parse_structured_pou(resulting, logical_name=logical)
     assert rebuilt.nodes[0].symbol == target.symbol + '_serialized_variable_width'
+
+@pytest.mark.parametrize('cpu', ['FX3U/FX3UC'])
+def test_container_builder_reproduces_a_readable_native_project_envelope(cpu):
+    from src.gxw.container_builder import build_compound_file
+    from src.gxw.offline_project import read_offline_project
+    from src.gxw.project_metadata import project_gui_configuration
+    from src.gxw.project_templates import blank_ladder_baseline
+
+    raw = blank_ladder_baseline(cpu)
+    outer = CompoundFile(raw)
+    streams = {entry.name: outer.read_stream(entry.name) for entry in outer.iter_streams()}
+    nested = CompoundFile(streams['_hdb'])
+    streams['_hdb'] = build_compound_file(
+        {entry.name: nested.read_stream(entry.name) for entry in nested.iter_streams()})
+    rebuilt = build_compound_file(streams)
+
+    original, copy = read_offline_project(raw), read_offline_project(rebuilt)
+    assert copy.context == original.context
+    assert copy.sources() == original.sources()
+    assert project_gui_configuration(rebuilt) == project_gui_configuration(raw)
+    assert sorted(streams) == sorted(entry.name for entry in CompoundFile(rebuilt).iter_streams())
+    # Rebuilding every sector reproduces the captured envelope extent exactly.
+    assert len(rebuilt) == len(raw)

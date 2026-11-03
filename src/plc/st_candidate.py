@@ -105,3 +105,50 @@ def normalize_candidate(data, *, project_context=None):
     candidate = dict(schema_version=2, language='st', program=dict(name=name, kind='program', body=program.body_text),
         declaration_edits={'upserts': list(by_name.values())}, task_binding=task)
     return candidate, parsed
+
+
+def prepare_source_candidate(text, declarations=None, *, plc_model, confirmed_spec=None):
+    """Bind a new Program's exact declaration set before any engineering work."""
+    from plc.st_validation import inspect_st_program
+    from gxw.fb_authoring import _name
+    from gxw.declarations import _type_parts
+    supplied = deepcopy(declarations or [])
+    seen = set()
+    for row in supplied:
+        _name(row['name'], 65001)
+        if row['name'].casefold() in seen:
+            raise ValueError('Duplicate declaration: ' + row['name'])
+        seen.add(row['name'].casefold())
+        _base, bounds = _type_parts(row['data_type'])
+        if len(bounds) > 1 or any(not -2**31 <= low <= high < 2**31 for low, high in bounds):
+            raise ValueError('Declarations require scalar or rank-one types')
+    parsed = parse_source(text)
+    programs = [unit for unit in parsed.units if unit.kind == 'program']
+    if len(programs) != 1 or len(parsed.units) != 1:
+        raise ValueError('New ST source requires one ordinary Program')
+    program, = programs
+    rows = {row['name'].casefold(): row for row in supplied}
+    source_names = set()
+    for declaration in [*parsed.declarations, *program.declarations]:
+        row = declaration.native_row()
+        key = row['name'].casefold()
+        if key in source_names:
+            raise ValueError('Duplicate source declaration: ' + row['name'])
+        source_names.add(key)
+        if key in rows:
+            old = rows[key]
+            if any(old.get(field, row[field]) != row[field] for field in
+                   ('data_type', 'class_name', 'initial_value', 'device') if row[field]):
+                raise ValueError('Source declaration conflicts with declarations: ' + row['name'])
+        rows[key] = {**row, **rows.get(key, {})}
+    context = {'selected_source': '__candidate__', 'pous': [{'name': program.name,
+        'program': '__candidate__', 'kind': 'program', 'language': 'st',
+        'declarations': list(rows.values()), 'st_text': program.body_text}], 'globals': [],
+        'structures': [], 'tasks': []}
+    checked = inspect_st_program(program.body_text, plc_model=plc_model,
+        project_context=context, confirmed_spec=confirmed_spec,
+        hardware_context=(confirmed_spec or {}).get('hardware_profile'))
+    if checked['status'] == 'failed':
+        raise ValueError('ST candidate failed local checks: ' + '; '.join(
+            finding['message'] for finding in checked['findings'] if finding['severity'] == 'error'))
+    return {'st_text': program.body_text, 'declarations': list(rows.values())}, checked

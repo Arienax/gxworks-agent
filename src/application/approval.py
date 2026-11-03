@@ -15,6 +15,8 @@ from .workspace import ConflictError, atomic_json, contained, read_json
 
 MODES = frozenset({"ask", "auto", "full"})
 EXTERNAL_ACTIONS = frozenset({"gx_import", "simulation", "debug", "native_engineering"})
+# Actions that execute on an explicit caller request instead of a saved mode.
+DIRECT_ACTIONS = frozenset({"native_engineering"})
 
 
 def allows(mode, action, payload):
@@ -24,7 +26,11 @@ def allows(mode, action, payload):
         return False
     if action in {"simulation", "debug", "native_engineering"} and not isinstance(payload.get("plan"), dict):
         return False
+    if action in DIRECT_ACTIONS:
+        return True
     return mode == "full" or (mode == "auto" and action in {"simulation", "debug"})
+
+
 
 
 class ApprovalPolicy:

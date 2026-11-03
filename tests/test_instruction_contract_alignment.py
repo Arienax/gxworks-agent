@@ -535,6 +535,23 @@ def test_rst_does_not_masquerade_as_two_operand_zone_reset():
         validate_ladder_full(_app_ladder("RST", ["M100", "M115"]), plc_model="FX3U")
 
 
+@pytest.mark.parametrize('constant', ['K7', 'K-1', 'HFF'])
+@pytest.mark.parametrize('opcode,operands,write_index', [
+    ('MOV', ['K1', 'D10'], 1),
+    ('ADD', ['D0', 'K1', 'D10'], 2),
+    ('BMOV', ['D0', 'D100', 'K8'], 1),
+    ('CMP', ['D0', 'K10', 'M20'], 2),
+    ('SFTL', ['M100', 'M1000', 'K128', 'K1'], 1),
+    ('INC', ['D10'], 0),
+])
+def test_catalogued_write_roles_reject_constant_destinations(opcode, operands, write_index, constant):
+    from plc.validation import validate_ladder_candidate_structure
+    invalid = list(operands)
+    invalid[write_index] = constant
+    with pytest.raises(PLCJsonValidationError, match='writable device'):
+        validate_ladder_candidate_structure(_app_ladder(opcode, invalid), plc_model='FX3U')
+
+
 def _analog_ladder(opcode, operands):
     return {
         "device_comments": {},

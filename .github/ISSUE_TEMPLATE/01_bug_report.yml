@@ -1,73 +1,73 @@
 name: 缺陷报告 / Bug report
-description: 报告使用、生成、界面、MCP 或无障碍问题。
+description: 报告运行时、代码生成、Web 界面、MCP 服务或原生工程操作中的缺陷。
 title: "[Bug] "
 body:
   - type: markdown
     attributes:
       value: |
-        中文或英文均可。只填写与问题相关的信息；未知内容请写“未知”。
-        漏洞、凭据泄露或未授权操作不要在这里公开详情；请通过维护者可用的私下渠道提前联系。
-        Do not include API keys, login links, customer projects or unsanitized diagnostics.
+        中文或英文均可。请只填写与问题直接相关的信息；未知项请明确写“未知”。
+        **安全漏洞、有效凭据泄露或可能导致设备失控的严重问题，切勿在此公开披露详情**；请通过私下渠道联系维护者。
+        Do not include API keys, login links, proprietary customer projects, or unsanitized diagnostics.
   - type: dropdown
     id: area
     attributes:
       label: 问题范围 / Area
       options:
-        - 安装或启动 / Setup
-        - 需求分析或规格确认 / Analysis
-        - 生成或修改程序 / Generation
-        - 知识检索 / RAG
-        - Web 界面或图形预览 / Web UI
-        - 原生工程读写或 GX Works2 / Native integration
-        - MCP
-        - 仿真 / Simulation
-        - 无障碍 / Accessibility
-        - 文档或其他 / Other
+        - 安装与环境启动 / Setup & Environment
+        - 需求分析与规格确认 / Requirement Analysis & Specs
+        - 程序生成与修改 / Code Generation & Patching
+        - 知识检索与指令事实 / RAG & Instruction Facts
+        - Web 工作台与图形预览 / Web UI & Previews
+        - 离线 GXW 文件读写 / Offline GXW Parsing & Saving
+        - 原生工程与 GX Works2 交互 / Native Integration
+        - MCP 服务与工具路由 / MCP Server & Routing
+        - 仿真与观察回放 / Simulation & Observation
+        - 文档与其他 / Documentation & Other
   - type: input
     id: version
     attributes:
       label: 项目版本 / Project version
-      description: 填 commit、包版本或来源；不知道时写“未知”。 / Commit, package version or unknown.
+      description: 填入 Git commit 哈希、发布包版本或获取来源；不知道时填写“未知”。 / Git commit hash, release version, or source.
     validations:
       required: true
   - type: textarea
     id: behavior
     attributes:
       label: 期望与实际行为 / Expected and actual behavior
-      description: 描述具体差异、错误信息和影响；截图请配文字说明。
+      description: 详细描述具体异常表现、错误日志与实际影响；截图请附文字说明。 / Describe the observed failure, error logs, and impact.
     validations:
       required: true
   - type: textarea
     id: reproduction
     attributes:
-      label: 最小复现 / Minimal reproduction
-      description: 提供可公开的最小需求和操作步骤。不能稳定复现时说明频率，不要为复现操作生产设备。
+      label: 最小复现步骤 / Minimal reproduction
+      description: 提供可公开的最小需求和操作步骤。无法稳定复现时请说明发生频率。切勿为复现而在生产设备上进行危险操作。
       placeholder: |
-        1. 使用的入口和初始状态：
-        2. 输入或操作：
-        3. 观察到的结果：
+        1. 使用的入口（Web / MCP / 命令行）与初始状态：
+        2. 具体输入数据或操作序列：
+        3. 实际观察到的错误或异常输出：
     validations:
       required: true
   - type: textarea
     id: environment
     attributes:
-      label: 相关环境 / Relevant environment
-      description: 只填相关项；不要求所有问题都安装 GX Works2 或配置模型。
+      label: 相关环境信息 / Relevant environment
+      description: 仅填写与该缺陷相关的项；不要求所有场景均配置模型或安装 GX Works2。
       placeholder: |
-        操作系统、浏览器或 MCP 客户端及版本：
-        源码运行或发布包；Python/Node.js 版本（相关时）：
-        PLC Series/Type、GX Works2 版本、Ladder/ST/FBD/SFC（相关时）：
-        模型服务与模型 ID、Direct/Design、相关参数（相关时，不含凭据或私有 URL）：
-        无障碍问题的缩放比例、键盘或辅助技术版本（可选，不含医疗信息）：
+        操作系统与版本：
+        使用入口与客户端（Web 浏览器 / Claude Desktop / Cursor / 其他 MCP 客户端）：
+        Python / Node.js 版本（源码运行时）：
+        目标 PLC 系列/型号、GX Works2 版本、程序语言（Ladder/ST/FBD/SFC，相关时）：
+        模型提供商、模型 ID 及参数配置（不含凭据或私有 URL）：
   - type: textarea
     id: evidence
     attributes:
-      label: 脱敏证据 / Sanitized evidence
-      description: 可选。提供任务 ID、错误片段、最小 IR 或带文字说明的截图；不要求完整 ZIP 或客户工程。
+      label: 脱敏证据与诊断 / Sanitized evidence
+      description: 可选。提供相关错误堆栈、最小 IR 代码片段、脱敏日志或带说明的截图；切勿上传客户专有工程原件。
   - type: checkboxes
     id: privacy
     attributes:
-      label: 公开前检查 / Before publishing
+      label: 提交前自检 / Before publishing
       options:
-        - label: 我已检查内容，不包含有效凭据、登录链接、未授权客户/第三方材料或无关个人信息。 / I reviewed this report for sensitive or unauthorized material.
+        - label: 我已检查所附材料，确认不包含有效 API 密钥、鉴权凭据、未授权客户数据或敏感隐私信息。 / I confirm that this submission contains no credentials, tokens, proprietary client data, or sensitive personal information.
           required: true

@@ -331,7 +331,7 @@ export function useWorkbenchController() {
   const editorVersion = version && gxwSource.view
     ? { ...version, target_mode: gxwSource.view.language, program_name: gxwSource.view.source_name } : version;
 
-  const networks = Array.isArray(visibleProgram?.networks)
+  const networks = visibleProgram && 'networks' in visibleProgram && Array.isArray(visibleProgram.networks)
     ? (visibleProgram.networks as Record<string, Json>[])
     : [];
 

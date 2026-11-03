@@ -460,14 +460,21 @@ def write_gui_system_variables(raw: bytes | None, ranges: dict, *, cpu: str | No
     newline = '\r\n' if '\r\n' in text else '\n'
     lines = text.splitlines(keepends=True)
     option = [i for i,line in enumerate(lines) if line.rstrip('\r\n').removeprefix('\ufeff') == '[Option]']
-    if len(option) > 1:
-        raise GXWFormatError('duplicate GUI Option section')
+    # Native factory exports repeat [Option] for unrelated subsections.
+    # Only the allocation subsection must have a unique owner.
+    allocation = []
+    for index in option:
+        end = next((j for j in range(index+1,len(lines)) if lines[j].startswith('[')),len(lines))
+        if any(line.rstrip('\r\n') == '\tSystemVariable:' for line in lines[index+1:end]):
+            allocation.append(index)
+    if len(allocation) > 1:
+        raise GXWFormatError('duplicate GUI SystemVariable section')
     if not option:
         if lines and not lines[-1].endswith(('\n','\r')):
             lines[-1] += newline
         lines.append('[Option]' + newline)
         option = [len(lines)-1]
-    start = option[0]+1
+    start = (allocation or option)[0]+1
     end = next((i for i in range(start,len(lines)) if lines[i].startswith('[')),len(lines))
     subsection = [i for i in range(start,end) if lines[i].rstrip('\r\n') == '\tSystemVariable:']
     if len(subsection) > 1:
@@ -538,6 +545,34 @@ def gui_application_save_plan(raw: bytes, source: dict) -> bytes | None:
     if not ranges:
         return None  # Preserve every byte, including unobserved selector modes.
     return write_gui_system_variables(application, ranges, cpu=cpu)
+
+
+def initialize_created_project_gui(raw: bytes) -> bytes:
+    """Materialize a new FX3U project's GUI mirror from its own workspace.
+
+    This is used only on freshly created projects, before candidate contents
+    are written. Existing imported projects retain their current GUI settings.
+    """
+    from .container_writer import validate_cfb_streams
+    from .container_builder import build_compound_file
+    from .offline_project import read_offline_project
+    from .project_writer import write_project_replacements
+    configuration = project_gui_configuration(raw)
+    if configuration.get('cpu_menu') != 'FX3U/FX3UC' or configuration['status'] == 'matched':
+        return raw
+    project = read_offline_project(raw)
+    name = next((name for name in project.streams if name.casefold() == 'gppw2.gpj'), None)
+    if name is None:
+        raise GXWFormatError('new structured project has no GUI application settings')
+    ranges = {key: tuple(value) for key, value in configuration['workspace_ranges'].items()
+              if key not in {'R', 'W', 'B'}}
+    original = project.streams[name]
+    updated = write_gui_system_variables(original, ranges, cpu='FX3U/FX3UC')
+    saved = write_project_replacements(raw, {name: (project.mapping[name], original, updated)}, invalidate=False)
+    result = build_compound_file(validate_cfb_streams(saved.data))
+    if project_gui_configuration(result)['status'] != 'matched':
+        raise GXWFormatError('new project GUI ranges differ from its workspace')
+    return result
 
 
 def require_gui_project_entries(raw: bytes) -> None:

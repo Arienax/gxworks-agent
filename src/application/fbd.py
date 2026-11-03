@@ -132,7 +132,10 @@ def unpack_candidate(snapshot, output):
     files = {name: base64.b64decode(data, validate=True) for name, data in snapshot['files'].items()}
     if set(files) != set(snapshot['artifacts']):
         raise ValueError('FBD candidate artifact manifest differs from its files')
-    if snapshot['target_mode'] == 'sfc':
+    if 'gxw' not in files:
+        from application.gxw_delivery import validate_source_artifacts
+        validate_source_artifacts(files, snapshot['target_mode'])
+    elif snapshot['target_mode'] == 'sfc':
         from .sfc import validate_candidate as validate_sfc_candidate
         validate_sfc_candidate(files)
     elif snapshot['target_mode'] == 'st':
@@ -243,13 +246,10 @@ def _target_baseline(baseline, plc_model):
     from gxworks2.project_profiles import native_project_profile
     from gxw.models import GXWFormatError
     from gxw.project_templates import require_fbd_generation_support
-    try:
-        require_fbd_generation_support(plc_model)
-    except GXWFormatError as error:
-        raise FBDValidationError(str(error)) from error
     if baseline is None:
         from gxw.project_templates import blank_fbd_baseline
         try:
+            require_fbd_generation_support(plc_model)
             baseline = blank_fbd_baseline(plc_model)
         except GXWFormatError as error:
             raise FBDValidationError(str(error)) from error
@@ -276,9 +276,15 @@ def prepare_candidate(output, *, model=None, baseline=None, imported=None, progr
                       summary="FBD 候选工程", source_ladder=None, plc_model="FX3U", source_name=None,
                       native_save=False, pou_kind='function_block', resource=None, task=None, scope_mode=None,
                       library_source=None, library_name=None, authoring=None, compile_save=False,
-                      _prepared_result=None, device_comments=None, comment_table=None, save_policy='checked'):
+                      _prepared_result=None, device_comments=None, comment_table=None, save_policy='checked',
+                      create_new=False):
     if save_policy not in ('draft', 'checked'):
         raise ValueError('save_policy must be draft or checked')
+    if create_new:
+        if baseline is not None or authoring is None or authoring.get('operation') != 'create_st_fb':
+            raise ValueError('A new FBD project starts with its first ST function block.')
+        from .gxw_delivery import create_blank
+        baseline = create_blank(output, 'fbd', plc_model)
     if compile_save and baseline is None:
         raise ValueError('编译保存需要当前已保存的 FBD 基础版本。')
     scoped = any(value is not None for value in (resource, task, scope_mode))
@@ -554,6 +560,15 @@ def generate_candidate(output, snapshot, images, ctx):
             or not isinstance(answer['summary'], str)):
         raise ValueError("FBD generation did not produce a supported object candidate")
     ctx.checkpoint()
+    if baseline is None:
+        from application.gxw_delivery import fallback
+        from gxw.object_model import prepare_object_project
+        prepare_object_project(answer['model'], baseline=source_context.raw)
+        result = fallback(output, 'fbd', project['plc_model'],
+            {key: answer[key] for key in ('model', 'device_comments', 'comment_table') if key in answer}, None)
+        result['metadata']['summary'] = answer['summary']
+        result['metadata']['generation_handoff'] = generation['generation_handoff']
+        return result
     result = prepare_candidate(output, model=answer["model"], baseline=source_context.raw,
                                summary=answer["summary"], plc_model=project.get("plc_model", "FX3U"),
                                native_save=snapshot.get('native_save') is True,

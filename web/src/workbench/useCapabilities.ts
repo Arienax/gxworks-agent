@@ -9,7 +9,7 @@ export type CreationType = {
   label: string;
   labels_required: boolean;
   labels_supported?: boolean;
-  target_modes: { value: string; label: string; labels_required: boolean }[];
+  target_modes: { value: string; label: string; labels_required: boolean; labels_supported?: boolean }[];
 };
 export type CreationTarget = {
   menu_cpu: string;

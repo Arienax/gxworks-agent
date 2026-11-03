@@ -1,6 +1,10 @@
 # 接入模式、回执判读与错误恢复
 
+默认交付优先返回 GXW。找到 GX Works2 后，共享保存流程自动编译、保存并冷重开；读取 delivery 与 validation 的实际结果，不根据文件存在宣称编译通过。GXW 无法生成时，Ladder 降级 CSV、ST 降级为代码 TXT 与全局标签 CSV、FBD/SFC 保留结构化候选及预览，并说明原因。原生编译失败仍保留 GXW 诊断候选，不改交 CSV。新建 ST/SFC 使用 get_generation_context 返回的 operation=generate 合同。GX Works2 1.635.0.1 配合 v4 工作区适配器，按实际 CPU 查询原生系列与子系列，无基底创建对应语言工程。遵守该 CPU 的工程类型和语言条件，读取实际创建及验证结果；不使用 IDE 新建对话框、隐藏窗口控件或预制完整工程。
+
 ## 三种接入模式的提交结果
+
+`status="saved_native_diagnostic"` 表示 GXW 候选及诊断已保存，原生验证失败，该版本未激活。使用返回的实际 `version_id` 和产物路径；需要继续读取时，先显式选择该诊断版本。不能将它表述为编译通过，也不要因为编译失败改交 CSV。
 
 | 模式 | 识别特征 | 生成与编辑工具的返回结果 |
 | --- | --- | --- |
@@ -32,29 +36,30 @@
 | `UNKNOWN_TOOL` 或工具未暴露 | 当前接入模式未注册该工具（如在 `service` 模式下调用 `local` 专有工具） | 查阅当前连接暴露的工具清单，改用当前模式支持的对应入口。 |
 | 原生组件启动或协议错误（如 `WORKSPACE_*`） | 本地 GX Works2 环境、辅助组件版本或桌面会话条件未满足 | 记录返回的 `error.code`、`details` 与失败阶段并如实告知用户，区分环境配置问题与 PLC 源码编译错误。 |
 | 原生编译报出源码诊断 | GX Works2 编译器或代码检查发现程序/声明错误 | 读取返回的诊断详情与定位信息，按用户要求修正对应源码或声明后重新提交。 |
-| 写入超时或结果未知 | 原生操作或长耗时任务尚未完成或连接中断 | 先调用 `get_operation_status` 或 `get_native_engineering_session` 查询实际完成阶段，需要恢复前台会话时使用 `rebind`。 |
+| 写入超时或结果未知 | 原生操作或长耗时任务尚未完成或连接中断 | 先调用 `get_operation_status` 或 `get_native_engineering_session` 查询实际完成阶段；Live 会话先 `rebind` 只读观察，不重放不确定动作。恢复已有队列用空命令列表及 `controls.resume_pending=true`。 |
+| Live 原目标丢失、身份不符或持久记录不完整 | 原进程、窗口、工作路径或 CPU 已变化，或旧记录缺少恢复字段 | 按返回错误协调目标；不重复 `start` 新建副本或自动重放。MCP 重启后先查持久状态，再用当前 `expected_revision` 继续。 |
 | `pending` / `confirmation_required` / `execution_consent_required` | 当前操作等待工作台批准或操作员配置原生执行许可 | 向用户说明当前待确认状态、提案编号或所需的执行许可配置。 |
-| `source_ref` / `session_id` / `target_ref` 失效 | 临时快照过期、GX 窗口重启或模拟器重新连接 | 重新调用对应的发现、快照或连接工具获取最新标识。 |
+| `source_ref` / 快照 `session_id` / `target_ref` 失效 | 临时快照过期、GX 窗口重启或模拟器重新连接 | 重新调用对应的发现、快照或连接工具获取最新标识；持续 Live 会话按上面的原目标恢复规则处理。 |
 
 ## 手册检索结果的判读
 
-`search_plc_manual` 先按 `delivery.next` 读完并合并对象；解析后的 `document` 包含 `results` 与 `coverage`。检索命中是“有相关证据”，不是“事实已成立”，也不是“可调用”；先读 `coverage`，再读命中正文。
+按 `delivery.next` 读完并合并对象后，使用 `document.results` 中的操作数、用途、条件和示例回答问题。`coverage` 帮助定位目标、已回答方面和待补资料；调用能力字段用于选择当前语言与工程的实现入口。
 
-| 字段 | 含义 | 不能由此声称 |
-| --- | --- | --- |
-| `coverage.targets[].identity_found` | 该指令、软元件或错误码的身份是否被定位 | 被问的具体方面已回答。 |
-| `coverage.targets[].status` | `complete` 表示被问方面已有 `source_verified` 事实；`incomplete` 附带 `reason` 与逐项 `aspects` | 未成立方面可以由相邻记录或常识补齐。 |
-| `aspects[].status` | `answered`（已核实）、`unverified`（有声明未核验）、`missing`（该方面无事实）、`unresolved`（仅有未知或冲突） | `unverified`/`missing`/`unresolved` 都按未建立处理，说明缺什么，而不是给出猜想的取值。 |
-| `call_available` / `call_admission` | 当前语言与工程能否构造调用；`st_not_admitted`、`unverified` 分别表示未准入和未核验 | 不能反推手册语义缺失或该指令不存在。 |
-| `documented_st_call_available` / `core_call_available` | 前者说明手册 ST 调用知识是否已核实；后者说明 Core 的调用能力。旧字段 `st_call_available` 仍表示 Core 准入。 | 手册中有调用式不等于 Core 已实现其执行语义。 |
-| `results[].knowledge` 中的 `facts[].knowledge_status` | `source_verified`、`candidate_evidence`、`declared_unverified`、`unknown`、`conflict`、`not_applicable` | `candidate_evidence` 与 `declared_unverified` 不能当作核实结论；`conflict` 与 `unknown` 必须原样披露。 |
-| `count` / `top_k` | `top_k` 只限制补充资料；明确目标及依赖不计入此限额，`count` 可以更大 | 不能据此认为手册没有相关内容，也不能把低相关记录算作答案。 |
+| 字段 | 如何使用 |
+| --- | --- |
+| `coverage.targets[].identity_found` | 定位指令、软元件或错误码身份。 |
+| `coverage.targets[].status` | `complete`：所问方面已有核实资料；`incomplete`：按 `reason` 和 `aspects` 定位待补方面，继续使用已返回的内容。 |
+| `aspects[].status` | `answered`：已核实内容；`unverified`：已有声明、待核验；`missing`：待补资料；`unresolved`：待解析或存在差异。按具体方面说明结果。 |
+| `call_available` / `call_admission` | 当前语言与工程的调用支持；`st_not_admitted` 表示当前 ST 入口未准入，`unverified` 表示调用能力待核验。手册中的操作数与用途按返回内容解释。 |
+| `documented_st_call_available` / `core_call_available` | 分别读取手册 ST 调用知识和 Core 调用支持；旧字段 `st_call_available` 对应 Core 准入。 |
+| `results[].knowledge.facts[].knowledge_status` | `source_verified`：核实内容；`candidate_evidence`：候选依据；`declared_unverified`：已有声明；`unknown`：待补内容；`conflict`：差异项；`not_applicable`：适用性说明。 |
+| `count` / `top_k` | `count` 为返回条数；`top_k` 限制补充资料，明确目标和依赖完整返回，条数可超过 `top_k`。 |
 
-错误码与症状分开处理：给出具体错误码时只把命中该码的记录当作候选，`corpus="absent"` 且 `reason="exact_fact_not_found"` 时表示实际查库无匹配；`delivery="pending"` 只表示尚待交付；只描述症状时返回的是候选错误码，须标明是候选并说明其 `cause`、`recovery`、`trigger` 是否 `unknown`。
+具体错误码按该码的记录读取原因、触发条件和恢复方法；症状检索按候选码组织结果。`corpus="absent"` 且 `reason="exact_fact_not_found"` 表示本次查库无精确匹配，`delivery="pending"` 表示后续页待取；各方面的 `unknown` 表示待补资料。
 
-空 `query` 返回 `INVALID_ARGUMENTS`；`UNKNOWN_PLC_MODEL` 表示型号不在手册检索范围（`details.known_model_count`），`KNOWLEDGE_UNAVAILABLE` 表示该型号事实尚未随插件发布（`details.knowledge_status`）。两者都不是 GX Works2 工程能力结论。先核对实际 CPU 身份及资源安装，不能为取得结果而把目标换成同系列另一型号。若任务明确要求修复知识缺口，按私有资料路线补齐来源、提炼与运行路径；纯工程调用则报告具体缺项。
+`INVALID_ARGUMENTS`：补齐有效查询；`UNKNOWN_PLC_MODEL`：核对 CPU 身份与 `details.known_model_count`；`KNOWLEDGE_UNAVAILABLE`：按 `details.knowledge_status` 补齐该型号运行资源。需要补充知识时，沿实际型号查资料并更新对应事实。
 
-精确地址命中的 `device_address_rule` 是当前 CPU 的编号规则，保留进制、空洞和字内位条件；默认分配、可配置最大范围、共享容量及硬件/版本条件分别读取。它不证明当前工程分配，也不表示模拟器或设备读写已获支持。
+`device_address_rule` 提供当前 CPU 的编号范围、进制、空洞和字内位条件；默认分配、可配置范围、共享容量及硬件/版本条件按各自字段使用。当前工程分配通过工程上下文读取。
 
 ## FBD 上下文与静态诊断
 
