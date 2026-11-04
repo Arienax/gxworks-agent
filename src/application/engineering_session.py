@@ -97,8 +97,10 @@ class EngineeringSession:
              ("name", "plc_model", "target_mode"), self._create_project),
             ("get_design_context", "Start Web Design analysis for a new program. Pass the complete human requirement. Use the returned instructions to design approaches before writing any program.",
              {"user_requirement": {"type": "string", "minLength": 1}, "instruction_details": {"type": "boolean"}}, (), self._design_context),
-            ("propose_design_plan", "Submit the external model's Web Design analysis JSON, including 1-3 approaches, or recall the current draft with empty arguments. Resolve required facts with the user before confirmation.",
-             {"analysis_id": {"type": "string"}, "analysis": {"type": "object"}}, (), self._design_proposal),
+            ("propose_design_plan", "Submit the external model's Web Design analysis JSON, including 1-3 approaches. If repair_required, submit only the listed path/value repairs for that repair_id. Empty arguments recall the draft or repair targets. Resolve required facts with the user before confirmation.",
+             {"analysis_id": {"type": "string"}, "analysis": {"type": "object"}, "repair_id": {"type": "string"},
+              "repairs": {"type": "array", "items": {"type": "object", "required": ["path", "value"],
+                  "properties": {"path": {"type": "string"}, "value": {}}, "additionalProperties": False}}}, (), self._design_proposal),
             ("confirm_design_plan", "Persist only the approach the user approved in this exact draft. Follow next_actions to generate from the confirmed specification.",
              {"draft_id": {"type": "string"}, "approach_id": {"type": "string"}}, ("draft_id", "approach_id"), self._design_confirmation),
             ("select_project", "Select an existing project for this MCP session. Optional version_id pins a saved baseline; it does not activate a version.",
@@ -171,7 +173,7 @@ class EngineeringSession:
 
     def _design_proposal(self, _context, arguments):
         project_id = self._new_design_project()
-        if 'analysis' in arguments:
+        if 'analysis' in arguments or 'repairs' in arguments:
             if self.registry._read_delivery is None:
                 raise ToolPreconditionError('DESIGN_CONTEXT_REQUIRED', '请先读取当前工程的 Design 上下文。',
                                             next_actions=[{'tool': 'get_design_context'}])

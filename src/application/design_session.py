@@ -35,6 +35,7 @@ class DesignSession:
 
     def context(self, project_id, requirement, *, manual_context=None):
         from application.analysis_context import assemble_analysis_prompt
+        from application.analysis_repair import design_submission_schema
         from application.analysis_results import attach_analysis_evidence
         from application.generation_context import _build_knowledge_context, _load_plc_models
         from knowledge.evidence import KnowledgeQuery
@@ -68,7 +69,7 @@ class DesignSession:
             plan = research_plan({'knowledge': discovery['candidates']})
             extra['instruction_research'] = include_manual_facts(plan, manual_context, language)
         return {'analysis_id': state['analysis_id'], 'analysis_mode': 'design', 'plc_model': model, **extra,
-                'target_mode': project['target_mode'], 'analysis_instructions': instructions,
+                'target_mode': project['target_mode'], 'analysis_instructions': instructions, 'analysis_schema': design_submission_schema(),
                 'knowledge': technical_context_units(prompt.knowledge_context),
                 'next_actions': [{'tool': 'propose_design_plan'}]}
 
@@ -87,12 +88,34 @@ class DesignSession:
         from plc.specification.confirmed import build_review_draft, validate_spec_draft
 
         state, project = self._pending(project_id)
-        if 'analysis' in args:
+        if 'analysis' in args or 'repairs' in args:
+            from application.analysis_repair import apply_analysis_repair, plan_analysis_repair
             if state['analysis_id'] != args.get('analysis_id'):
                 raise ValueError('analysis_id 必须来自当前工程的 get_design_context。')
-            result = _parse_analysis_response(json.dumps(args['analysis'], ensure_ascii=False),
-                project['plc_model'], state['requirement'], project.get('confirmed_spec'),
-                contract_stage=state['contract_stage'])
+            if 'repairs' in args and 'analysis' in args:
+                raise ValueError('请选择提交初稿或按路径修正。')
+            requirement = state['requirement']
+            model = project['plc_model']
+            spec = project.get('confirmed_spec')
+            if 'repairs' in args:
+                if 'repair' not in state or state.get('repair_id') != args.get('repair_id'):
+                    raise ValueError('修正必须对应当前待修草稿。')
+                payload, _ = apply_analysis_repair(state['repair'], {'repairs': args['repairs']}, requirement,
+                                                   plc_model=model, confirmed_spec=spec)
+            else:
+                payload = args['analysis']
+            plan = plan_analysis_repair(payload, requirement, plc_model=model, confirmed_spec=spec,
+                                        contract_stage=state['contract_stage'])
+            if plan['targets']:
+                state.pop('draft', None)
+                state.pop('draft_id', None)
+                state.update(repair=plan, repair_id=uuid4().hex, stage='propose_design_plan')
+                atomic_json(self._path(project_id), state)
+                return self._repair_request(state)
+            result = _parse_analysis_response(json.dumps(plan['base'], ensure_ascii=False),
+                model, requirement, spec, contract_stage=state['contract_stage'])
+            state.pop('repair', None)
+            state.pop('repair_id', None)
             result['analysis_mode'] = 'design'
             result['decision_receipt']['analysis_evidence'] = state['analysis_evidence']
             draft = build_review_draft(result, project.get('confirmed_spec'))
@@ -101,6 +124,8 @@ class DesignSession:
                 raise ValueError('每个设计方案需要独立的 approach_id，最多提供三个方案。')
             state.update(draft=draft, draft_id=uuid4().hex, stage='confirm_design_plan')
             atomic_json(self._path(project_id), state)
+        elif not args and 'repair' in state:
+            return self._repair_request(state)
         elif args or 'draft' not in state:
             raise ValueError('提交模型的 analysis 和 analysis_id；已有草稿可以用空参数重新查看。')
         draft = state['draft']
@@ -110,6 +135,16 @@ class DesignSession:
         return {'draft_id': state['draft_id'], 'user_requirement': state['requirement'], 'review': review,
                 'issues': validate_spec_draft(draft, project['plc_model']),
                 'next_actions': [{'tool': 'confirm_design_plan'}] if draft.get('approaches') else []}
+
+    @staticmethod
+    def _repair_request(state):
+        keys = ('path', 'mode', 'current_value', 'must_preserve', 'unsupported_structure', 'errors')
+        targets = [{k: item[k] for k in keys if k in item} for item in state['repair']['targets']]
+        return {'status': 'repair_required', 'analysis_id': state['analysis_id'], 'repair_id': state['repair_id'],
+                'repair_targets': targets, 'next_actions': [{'tool': 'propose_design_plan',
+                    'arguments': {'analysis_id': state['analysis_id'], 'repair_id': state['repair_id']},
+                    'instruction': 'Supply repairs [{path,value}] for just these fields. Use exact user evidence. '
+                                   'For claim targets return an array. Preserve the rest of the saved analysis.'}]}
 
     def confirm(self, project_id, draft_id, approach_id):
         state, project = self._pending(project_id)

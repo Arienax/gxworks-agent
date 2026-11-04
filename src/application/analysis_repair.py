@@ -15,13 +15,14 @@ from application.analysis_results import (
 )
 from model_runtime.provider import CollectedResponse
 from plc.execution_intent import (
+    TRIGGER_KINDS,
     execution_claim_anchors, execution_claim_preservable_fields,
     extract_explicit_execution_semantics,
 )
 from plc.specification.approach import SUPPORTED_STRUCTURES
 from plc.specification.explicit_constraint_claims import (
     OPERATIONS, SCOPES, compile_explicit_constraint_claims, explicit_claim_anchors,
-    explicit_constraint_protocol, normalize_explicit_claim_representations,
+    explicit_constraint_protocol, explicit_target_contracts, normalize_explicit_claim_representations,
 )
 
 
@@ -74,6 +75,39 @@ def _semantic_schema():
             "properties": {"kind": {"enum": ["structure"]}, "status": {"enum": ["required", "forbidden", "any_of"]},
                            "value": {"enum": sorted(SUPPORTED_STRUCTURES)},
                            "values": {"type": "array", "items": {"enum": sorted(SUPPORTED_STRUCTURES)}}}}
+
+
+def design_submission_schema():
+    """Wire shape for external Design models; grounding and acceptance still use the Web validators."""
+    text = {"type": "string"}
+    strings = {"type": "array", "items": text}
+    evidence = {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1},
+                "description": "Verbatim spans of the current user request."}
+
+    def record(fields, required=()):
+        return {"type": "object", "properties": fields, "required": list(required)}
+
+    def rows(item):
+        return {"type": "array", "items": item}
+
+    trigger = record({"kind": {"enum": sorted(TRIGGER_KINDS)}, "source_devices": strings,
+                      "from": {"enum": [0, 1]}, "to": {"enum": [0, 1]},
+                      "period_ms": {"type": "number", "exclusiveMinimum": 0}}, ["kind"])
+    execution = record({"trigger": trigger, "evidence": evidence,
+                        "effect": record({"kind": text, "devices": strings}),
+                        "rearm": {"type": ["string", "boolean"]}}, ["trigger", "evidence"])
+    explicit = record({"operation": {"enum": sorted(OPERATIONS)}, "scope": {"enum": sorted(SCOPES)},
+                       "target": {"anyOf": [c["schema"] for c in explicit_target_contracts().values()]},
+                       "evidence": evidence}, ["operation", "scope", "target", "evidence"])
+    approach = record({**dict.fromkeys(("approach_id", "name", "description", "pros", "cons", "generation_guide"), text),
+                       "implementation_semantics": rows(_semantic_schema())},
+                      ["approach_id", "name", "description", "implementation_semantics"])
+    return record({"summary": text, "approaches": {**rows(approach), "minItems": 1, "maxItems": 3},
+                   "execution_intent_claims": rows(execution), "explicit_constraint_claims": rows(explicit),
+                   "suggested_io": {"type": "object", "description": "Group user-declared address-to-label maps by device type."},
+                   "missing_info": rows(record({"id": text, "question": text, "required": {"type": "boolean"},
+                                                "options": strings}, ["id", "question"])),
+                   "hardware_config": {"type": "object"}, "assumptions": strings}, ["summary", "approaches"])
 
 
 def _field_schema(segments):

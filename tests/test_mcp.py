@@ -1922,6 +1922,25 @@ def test_local_design_implements_only_the_selected_web_approach(tmp_path, langua
                                    for key, title in [('state', 'Store a run flag'), ('contact', 'Output seal-in')]]}
         def propose():
             return _mcp_body(run('propose_design_plan', analysis_id=context['analysis_id'], analysis=analysis))['data']
+        if language == 'ladder':
+            validator = Draft202012Validator(context['analysis_schema'])
+            analysis['approaches'][0]['description'] = 'Remember run in a state bit.'
+            analysis['approaches'][1]['description'] = 'Use the output contact.'
+            validator.validate(analysis)
+            analysis['execution_intent_claims'] = [{'claim': 'Start on a button'}]
+            assert not validator.is_valid(analysis)
+            rejected = propose()
+            assert rejected['status'] == 'repair_required'
+            assert [item['path'] for item in rejected['repair_targets']] == ['/execution_intent_claims/0']
+            assert _mcp_body(run('propose_design_plan'))['data']['repair_id'] == rejected['repair_id']
+            assert run('confirm_design_plan', draft_id='pending', approach_id='state').is_error
+            binding = {'analysis_id': context['analysis_id'], 'repair_id': rejected['repair_id']}
+            assert run('propose_design_plan', **binding, repairs=[{'path': '/summary', 'value': ''}]).is_error
+            repairs = [{'path': '/execution_intent_claims/0', 'value': []}]
+            repaired = _mcp_body(run('propose_design_plan', **binding, repairs=repairs))['data']
+            assert [a['name'] for a in repaired['review']['approaches']] == ['Store a run flag', 'Output seal-in']
+            assert run('propose_design_plan', **binding, repairs=repairs).is_error
+            analysis['execution_intent_claims'] = []
         old = propose()
         analysis['approaches'][1]['generation_guide'] = 'Use the output feedback contact.'
         draft = propose()
