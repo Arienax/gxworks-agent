@@ -2556,6 +2556,8 @@ def test_manual_model_errors_retain_the_requested_identity(monkeypatch, model, s
                              None, {'plc_model': model})
     assert caught.value.code == code
     assert caught.value.details['plc_model'] == model
+    if code in {'KNOWLEDGE_UNAVAILABLE', 'KNOWLEDGE_INDEX_UNAVAILABLE'}:
+        assert not caught.value.next_actions
 
 
 def test_manual_availability_distinguishes_empty_model_facts_from_a_broken_index(tmp_path, monkeypatch):
@@ -3558,6 +3560,30 @@ def test_read_cursor_rejects_changed_request_and_bindings(changed):
                         else value for index, value in enumerate(binding))
     with pytest.raises(ToolPreconditionError, match='游标'):
         store.resume('search_plc_manual', next_args, binding)
+
+
+@pytest.mark.parametrize('project_mode,version_mode,requested,query,language,source', [
+    ('ladder', 'st', None, 'EN/ENO', 'st', 'project'),
+    ('fbd', None, None, 'EN/ENO', 'fbd', 'project'),
+    ('sfc', None, None, '转换条件', 'sfc', 'project'),
+    ('sfc', None, 'st', 'EN/ENO', 'st', 'explicit'),
+    (None, None, None, 'SFC步转换', 'sfc', 'query'),
+])
+def test_manual_search_inherits_language_and_reports_one_local_miss(
+        monkeypatch, project_mode, version_mode, requested, query, language, source):
+    from agent_runtime.manual_tools import _search_plc_manual
+    calls = []
+    def retrieve(query, **options):
+        calls.append((query, options['language']))
+        return []
+    monkeypatch.setattr('knowledge.retriever.retrieve_fact_aware_knowledge', retrieve)
+    monkeypatch.setattr('knowledge.structured_facts.retrieval_coverage', lambda *args, **kw: {'targets': []})
+    ctx = build_tool_context({'id': 'p', 'plc_model': 'FX3U', 'target_mode': project_mode} if project_mode else {},
+                             version={'target_mode': version_mode} if version_mode else None)
+    result = _search_plc_manual(ctx, {'query': query, 'debug': True, **({'language': requested} if requested else {})})
+    assert calls == [(query, language)]
+    assert (result['language'], result['language_source']) == (language, source)
+    assert result['coverage']['language']['missing_languages'] == [language]
 
 
 def test_instruction_selection_requires_relevant_complete_reads_before_submission():

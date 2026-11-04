@@ -121,8 +121,8 @@ def program_definitions(generation):
                     "type": "boolean", "default": False,
                     "description": "仅显式调试时设为 true，返回来源、证据和核验记录。普通生成与分析保持 false。",
                 },
-                "language": {'type': 'string', 'enum': ['ladder', 'st', 'fbd'],
-                    'description': '目标语言；省略时从问题识别，不以语言替代行为/时序问题。'},
+                "language": {'type': 'string', 'enum': ['ladder', 'st', 'fbd', 'sfc'],
+                    'description': '默认使用当前保存版本或工程语言，可显式查询另一种语言。无工程时从问题识别。coverage.language 给出本地匹配手册与缺项。'},
                 "aspects": {'type': 'array', 'items': {'type': 'string', 'enum': [
                     'arity', 'order', 'roles', 'purpose', 'unit', 'encoding', 'devices', 'types',
                     'effects', 'execution', 'constraints', 'st_call', 'fbd_call', 'operand_range', 'operand_condition',

@@ -63,7 +63,7 @@ metadata:
 
 每次返回最多 6,000 个估算 token 且不超过 32 KiB UTF-8。`STALE_READ_CURSOR` 表示查询、CPU、工程版本、事实库或会话发生变化，去掉游标重读；`READ_OBJECT_TOO_LARGE` 表示完整必需对象过大，缩小明确的读取范围，不能截断源码。独立 MCP 不采用 Web 模型配置推断客户端窗口。
 
-手册查询可显式传 `language=ladder|st|fbd` 和 `aspects`（如 `execution`、`effects`、`st_call`）。`top_k` 只限制补充资料，明确指令/地址/错误码及依赖全部解析。按正文的 `coverage`/`knowledge_coverage` 与 `delivery.complete` 分清库中存在、所问知识完整与已交付；手册行为说明、调用准入、Core 执行语义和原生结果分别判断。知识缺失先检查本地来源、提炼和交付，不自动改用网页搜索。
+手册查询可显式传 `language=ladder|st|fbd` 和 `aspects`（如 `execution`、`effects`、`st_call`）。`top_k` 只限制补充资料，明确指令/地址/错误码及依赖全部解析。按正文的 `coverage`/`knowledge_coverage` 与 `delivery.complete` 分清库中存在、所问知识完整与已交付；手册行为说明、调用准入、Core 执行语义和原生结果分别判断。手册查询默认继承保存版本或工程语言；跨语言接口可显式指定 language。读完本次查询后，合并说明影响选型的缺项。默认不为缺项重复查库或联网搜索；仅在用户要求外查时检索外部手册。
 
 ## 各类标识的用途
 

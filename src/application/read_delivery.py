@@ -401,6 +401,7 @@ class ReadDeliveryStore:
                 'binding': binding, 'review_binding': binding if review_binding is None else review_binding,
                 'pages': pages, 'last_read': 0, 'sequence': self._sequence,
                 'research': content.get('instruction_research'), 'receipt': content.get('generation_context_id'),
+                'language': content.get('target_mode') if tool == 'get_generation_context' else content.get('language'),
                 'targets': {row['target'] for row in coverage_targets if row.get('kind') == 'instruction'},
                 'unresolved': {row['target'] for row in coverage_targets if row.get('kind') == 'instruction'
                                and row.get('status') != 'complete'}}
@@ -438,7 +439,9 @@ class ReadDeliveryStore:
                     raise ToolPreconditionError('INSTRUCTION_REVIEW_REQUIRED',
                         '比较相关指令与普通实现后提交 implementation_review。')
                 return  # A simple mapping can have no instruction alternatives.
-            researched = {target for key in manuals for target in matching[key]['targets']}
+            # Other-language documents can supplement a comparison but do not establish this language's calls.
+            researched = {target for key in manuals if matching[key]['language'] == generation['language']
+                          for target in matching[key]['targets']}
             missing = missing_families(generation['research']['families'], researched, review)
             alternatives = review['alternatives']
             if (missing or not review['selected'].strip() or (generation['research']['families'] and not alternatives)
@@ -449,7 +452,7 @@ class ReadDeliveryStore:
             gaps = {target for key in manuals for target in matching[key]['unresolved']}
             if gaps and not review.get('limitations', '').strip():
                 raise ToolPreconditionError('INSTRUCTION_FACTS_UNRESOLVED',
-                    '手册仍有未证实方面。补查具体条件，或在 limitations 说明缺口及对选择的影响。',
+                    '手册仍有未证实方面。在 limitations 汇总影响选择的缺项；相同查询无需重复。',
                     details={'targets': sorted(gaps)})
 
 

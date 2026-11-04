@@ -43,6 +43,8 @@
 
 ## 手册检索结果的判读
 
+默认继承当前保存版本或工程的语言。结果中的 `language_source` 说明语言来源；`coverage.language.manuals_by_language` 列出当前型号与查询命中的语言专属手册，`missing_languages` 仅表示本次查询缺少该语言的专属事实。通用 CPU 指令仍按各自的资料范围使用。
+
 按 `delivery.next` 读完并合并对象后，使用 `document.results` 中的操作数、用途、条件和示例回答问题。`coverage` 帮助定位目标、已回答方面和待补资料；调用能力字段用于选择当前语言与工程的实现入口。
 
 | 字段 | 如何使用 |

@@ -31,7 +31,7 @@ WORKFLOW_INSTRUCTIONS = (
     "Stale cursors require restarting the same query. Each final MCP response "
     "is bounded to 6000 estimated tokens and 32 KiB UTF-8; indivisible oversized sources fail explicitly. "
     "top_k limits only supplementary search; explicit targets and their dependencies remain required. "
-    "Pass language and aspects for targeted manual questions. Use returned operands, purpose, conditions and examples; "
+    "Manual search inherits the saved project language. Override language for a cross-language question. Report material local coverage gaps together; do not repeat a lookup or search the web solely because a fact is missing. Use returned operands, purpose, conditions and examples; "
     "coverage identifies answered aspects and additional information, while call fields describe current Core support. "
     "get_current_project queries Agent project selection; selection_status=none is normal and does not block inspection. "
     "Use list_gxworks2_sessions to check installation and the executable path, including when no window is open. "
