@@ -7,6 +7,7 @@ import copy
 import json
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
+from application.instruction_research import CANDIDATE_TOOLS, REVIEW_SCHEMA, new_candidate, research_plan
 from agent_runtime.tool_schema import validate_schema
 from agent_runtime.tool_errors import ToolPreconditionError, PROJECT_ACTIONS, SOURCE_ACTIONS
 from agent_runtime.tool_policy import (
@@ -93,6 +94,11 @@ class ToolRegistry:
             definition = replace(definition, description=definition.description +
                 ' 返回 context_schema_version=3：document 引用 objects；按 delivery.next 读取全部页并合并 objects。'
                 ' 每页最多 6000 估算 token / 32 KiB；合并完成后使用完整 document。')
+        if name in CANDIDATE_TOOLS:
+            schema.setdefault('properties', {})['implementation_review'] = copy.deepcopy(REVIEW_SCHEMA)
+            for option in schema.get('oneOf', ()):
+                if option.get('properties', {}).get('operation', {}).get('enum') == ['generate']:
+                    option['properties']['implementation_review'] = copy.deepcopy(REVIEW_SCHEMA)
         if name in SOURCE_TOOL_NAMES:
             schema.setdefault("properties", {})["source_ref"] = {
                 "type": "string", "minLength": 1, "maxLength": 128,
@@ -158,6 +164,7 @@ class ToolRegistry:
                 },
             }
         try:
+            project_context = context
             context = resolve_tool_context(definition, context, decoded)
             from application.read_delivery import PAGED_READ_TOOLS, ReadDeliveryStore, read_binding
             if definition.name in PAGED_READ_TOOLS:
@@ -166,7 +173,15 @@ class ToolRegistry:
                 binding = read_binding(context)
                 if decoded.get('cursor'):
                     return self._read_delivery.resume(definition.name, decoded, binding)
+            review = None
+            if new_candidate(name, decoded):
+                review = decoded.pop('implementation_review', None)
+                if self._read_delivery is not None or review is not None:
+                    (self._read_delivery or ReadDeliveryStore()).check_review(
+                        read_binding(context), review, decoded.get('generation_context_id'))
             data = dict(definition.handler(context, decoded) or {})
+            if review is not None:
+                data['implementation_review'] = review
             if context.analysis_source is not None:
                 data["analysis_source"] = {key: copy.deepcopy(value) for key, value in context.analysis_source.items()
                                            if key != "raw_networks"}
@@ -209,7 +224,14 @@ class ToolRegistry:
                 public = _model_tool_value(definition.name, envelope)
                 if self.public_read_validator is not None:
                     self.public_read_validator(definition.name, public['data'])
-                return self._read_delivery.prepare(public, decoded, binding)
+                if (name == 'get_generation_context' and not context.version_id
+                        and (decoded.get('user_requirement') or data.get('has_confirmed_spec'))
+                        and data.get('output_contract', {}).get('tool') in CANDIDATE_TOOLS):
+                    public['data']['instruction_research'] = research_plan(public['data'])
+                # Manual lookup normalizes CPU aliases; compare against the original project snapshot.
+                review_binding = (read_binding(project_context) if name == 'search_plc_manual'
+                                  and project_context and project_context.plc_model != context.plc_model else binding)
+                return self._read_delivery.prepare(public, decoded, binding, review_binding=review_binding)
             except ToolPreconditionError as error:
                 return {'ok': False, 'tool': definition.name, 'error': error.payload()}
         if definition.confirmation_required:

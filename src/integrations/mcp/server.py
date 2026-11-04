@@ -63,7 +63,7 @@ WORKFLOW_INSTRUCTIONS = (
     "these are the same engineering context, output guidance and local RAG used by the built-in API. "
     "Fresh Ladder requests use Direct generation from the complete original requirement. "
     "If a real process fact is missing, ask only the necessary question and do not submit a candidate until answered. "
-    "Use search_plc_manual for remaining uncertain model or instruction facts, bound to the actual CPU. "
+    "Pass verbatim human requests only. Keep design choices separate. For a new design, use search_plc_manual on the actual CPU for representatives of each relevant instruction family, including companion operations. Finish every page, compare behavior and cost against an ordinary implementation and submit implementation_review with the candidate. "
     "Read device numbering, default allocations and configurable conditions from device facts; "
     "read actual allocations and native access through current-project tools. "
     "Design the ladder yourself and submit one full or partial response with create_program_candidate. "

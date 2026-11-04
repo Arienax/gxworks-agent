@@ -13,11 +13,11 @@ from knowledge.evidence import evidence_record
 # Concepts expand vocabulary, never map a requirement to a mandated opcode.
 FUNCTION_TERMS = (
     ("shift", r"移位|位移|bit\s+shift|word\s+shift", "bit shift left right word shift"),
-    ("queue", r"队列|先进先出|工件跟踪|跟踪工件|连续发料|连续工件|(?:同时|连续).{0,12}(?:物料|工件)|(?:物料|工件).{0,12}(?:跟踪|在途|并发)|\bmultiple\s+(?:items|workpieces|objects)\b|queue|fifo|tracking", "FIFO queue bit shift word shift"),
+    ("queue", r"队列|先进先出|(?:跟踪|追踪)(?:工件|物料|任务|事件)|连续发料|(?:同时|连续|多件|多个|多笔).{0,12}(?:物料|工件|任务|事件|请求)|(?:物料|工件|任务|事件|请求).{0,12}(?:跟踪|追踪|在途|并发)|\bmultiple\s+(?:items|workpieces|objects)\b|queue|fifo|tracking", "FIFO queue bit shift word shift"),
     ("bulk_reset", r"批量.{0,12}(?:清|复位)|(?:清空|清零|清除|复位|初始化).{0,20}(?:范围|连续|全部|所有|数组|状态)|(?:全部|所有|范围|连续|数组).{0,16}(?:清空|清零|清除|复位|初始化)|zone reset|(?:bulk|all|range|array).{0,10}(?:reset|clear|initialize)|(?:clear|reset|initialize).{0,10}(?:bulk|all|range|array)", "zone reset clear range fill move"),
     ("block_move", r"块传送|块复制|批量.{0,6}(?:传送|复制)|连续.{0,8}(?:复制|传送)|数组|block move|array|copy", "block move fill move array"),
     ("timer", r"延时|延迟|计时|倒计时|定时|timer|delay|timing", "timer on delay off delay timing"),
-    ("compare", r"比较|区间|大小判断|compare|comparison", "compare zone compare equal greater less"),
+    ("compare", r"比较|区间|大小判断|\d+\s*[～~至]\s*\d+\s*(?:表示|对应|判为|分为)|compare|comparison", "compare zone compare equal greater less"),
     ("loop", r"循环|遍历|迭代|\bloop\b|\biterat\w*\b|\btravers\w*\b", "program flow iteration loop repeat traverse array"),
     ("sequence", r"多阶段|交通灯|顺序控制|状态机|multi.?stage|state machine|sequence control", "state sequence step transition sequential control"),
     ("edge", r"上升沿|下降沿|边沿|每次|一次事件|rising|falling|edge", "rising falling edge pulse trigger"),

@@ -3558,6 +3558,55 @@ def test_read_cursor_rejects_changed_request_and_bindings(changed):
         store.resume('search_plc_manual', next_args, binding)
 
 
+def test_instruction_selection_requires_relevant_complete_reads_before_submission():
+    from application.instruction_research import research_plan
+    from application.read_delivery import ReadDeliveryStore
+    from agent_runtime.tool_errors import ToolPreconditionError
+    from knowledge.capability_discovery import functional_queries
+
+    for requirement in ('允许多件物料连续进入，应分别完成追踪。1～3 表示蓝色。',
+                        '并行处理多个事件，按 10 至 20 对应的区间分类。'):
+        assert {'queue', 'compare'} <= {row['function'] for row in functional_queries(requirement)}
+    store = ReadDeliveryStore(max_tokens=1200, max_bytes=4800)
+    binding = ('FX3U', 'project-1')
+    groups = research_plan({'knowledge': [{'kind': 'instruction', 'functions': ['queue'], 'name': 'SFWR'},
+                                          {'kind': 'instruction', 'functions': ['timer'], 'name': 'OUT'}]})
+    context = store.prepare({'tool': 'get_generation_context', 'data': {'instruction_research': groups}}, {}, binding)
+    def search(op):
+        return store.prepare({'tool': 'search_plc_manual', 'data': {'coverage': {'targets': [
+            {'kind': 'instruction', 'target': op, 'corpus': 'present'}]},
+            'facts': [{'id': str(i), 'value': 'x' * 480} for i in range(30)]}}, {'query': op}, binding)
+    def finish(page):
+        while (next_call := page['data']['delivery']['next']):
+            page = store.resume(next_call['tool'], next_call['arguments'], binding)
+
+    review = {'context_document': context['data']['delivery']['document_id'], 'manual_documents': [],
+              'selected': '定时比较', 'alternatives': [{'method': 'SFWR 保存记录', 'tradeoff': 'OUT 管理独立定时。'}]}
+    timer = search('OUT')
+    timer_id = timer['data']['delivery']['document_id']
+    review['manual_documents'].append(timer_id)
+    with pytest.raises(ToolPreconditionError) as error:
+        store.resume('search_plc_manual', {'query': 'OUT', 'cursor': timer_id + ':2'}, binding)
+    assert error.value.code == 'READ_PAGE_SKIPPED'
+    with pytest.raises(ToolPreconditionError) as error:
+        store.check_review(binding, review)
+    assert error.value.code == 'INSTRUCTION_READ_INCOMPLETE'
+    finish(timer)
+    with pytest.raises(ToolPreconditionError) as error:
+        store.check_review(binding, review)
+    assert error.value.details['missing_families'] == ['queue']
+    queue = search('SFWR')
+    finish(queue)
+    review['manual_documents'].append(queue['data']['delivery']['document_id'])
+    with pytest.raises(ToolPreconditionError) as error:
+        store.check_review(binding, review)
+    assert error.value.code == 'INSTRUCTION_FACTS_UNRESOLVED'
+    review['limitations'] = '队列容量与实际生产节拍尚待确认。'
+    store.check_review(binding, review)
+    with pytest.raises(ToolPreconditionError):
+        store.check_review(('Q03UDV', 'project-2'), review)
+
+
 def test_paged_read_rejects_indivisible_source_instead_of_truncating():
     from application.read_delivery import ReadDeliveryStore
     from agent_runtime.tool_errors import ToolPreconditionError

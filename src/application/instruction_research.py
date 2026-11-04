@@ -1,0 +1,52 @@
+# Copyright 2026 Arienax
+# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+
+"""Model-facing comparison of task-relevant instructions before a new design."""
+import re
+
+CANDIDATE_TOOLS = frozenset({'create_program_candidate', 'create_st_candidate',
+                             'create_fbd_candidate', 'create_sfc_candidate'})
+
+_TEXT = {'type': 'string', 'minLength': 1, 'maxLength': 4000}
+_DOCUMENT = {'type': 'string', 'pattern': r'read-[0-9a-f]{32}'}
+REVIEW_SCHEMA = {'type': 'object', 'additionalProperties': False,
+    'description': '新设计的选型记录。按实际型号查证每组相关指令，读完分页后填写；引用 delivery.document_id。',
+    'properties': {'context_document': _DOCUMENT,
+                   'manual_documents': {'type': 'array', 'items': _DOCUMENT, 'maxItems': 32},
+                   'limitations': {**_TEXT, 'description': '查询覆盖不完整时，具体说明仍未知的条件和对选型的影响。'},
+                   'selected': {**_TEXT, 'description': '最终采用的实现与理由。'},
+                   'alternatives': {'type': 'array', 'maxItems': 32, 'items': {'type': 'object',
+                       'properties': {'method': _TEXT, 'tradeoff': _TEXT}, 'required': ['method', 'tradeoff'],
+                       'additionalProperties': False},
+                       'description': '列出其他可行或已排除的方法，逐项比较具体指令、行为和资源取舍，说明未证实条件。'}},
+    'required': ['context_document', 'manual_documents', 'selected', 'alternatives']}
+
+
+def new_candidate(tool, arguments):
+    return tool == 'create_program_candidate' or (
+        tool in CANDIDATE_TOOLS and arguments.get('operation') == 'generate')
+
+
+def research_plan(data):
+    """Use the actual delivered candidate cards, never infer opcodes from task prose."""
+    groups = {}
+    for owner in (data, data.get('generation_input', {})):
+        for card in owner.get('knowledge') or []:
+            if not isinstance(card, dict) or card.get('kind') != 'instruction' or not card.get('name'):
+                continue
+            for function in card.get('functions', []):
+                names = groups.setdefault(function, [])
+                if card['name'] not in names:
+                    names.append(card['name'])
+    return {'families': groups,
+            'instructions': '按实际 CPU 和语言检索每组最相关的代表及配套操作；按任务补查列表外的相关指令；一组不适用时查证后说明原因。工程 FB 以当前目录接口为准。'
+                '读完每份手册与上下文的全部分页。比较普通实现与高级指令的语义、成本、限制，'
+                '将所选方案和取舍填入 implementation_review。'}
+
+
+def missing_families(groups, researched, review):
+    text = ' '.join([review['selected'], *(row['method'] + ' ' + row['tradeoff'] for row in review['alternatives'])])
+    mentioned = set(re.findall(r'[A-Z][A-Z0-9_]*(?:\.[A-Z0-9_]+)*', text.upper()))
+    considered = researched & mentioned
+    missing = [group for group, names in groups.items() if group != 'explicit' and considered.isdisjoint(names)]
+    return [*missing, *sorted(set(groups.get('explicit', [])) - considered)]

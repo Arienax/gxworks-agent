@@ -55,11 +55,11 @@ metadata:
 | 读取 Simulator2 状态与软元件 | `list_simulator_targets` → `get_simulator_status` / `read_simulator_devices` | 使用返回的 `target_ref` 读取状态和软元件值；需要建立连接时先调用 `connect_simulator`。 |
 | 信号波形采样或生成仿真方案 | `start_simulator_trace` / `prepare_simulator_scenario` | `start_simulator_trace` 对目标做只读周期采样并生成时间轴视图；`prepare_simulator_scenario` 生成类型化测试方案。 |
 | 查询异步任务或提案状态 | `get_operation_status` | 传入 `proposal_id` 或 `execution_job_id` 查询当前进度与执行回执。 |
-| 检索 CPU 指令或软元件事实 | `search_plc_manual` | 生成上下文之外仍需核对指令细节时调用；未选中工程时显式传入 `plc_model`。按返回的操作数、用途和条件回答问题，用 `coverage` 定位各方面资料、调用字段选择 Core 入口；字段说明见[手册检索结果的判读](references/result-handling.md#手册检索结果的判读)。 |
+| 检索 CPU 指令或软元件事实 | `search_plc_manual` | 新设计按实际型号查询各相关功能的代表指令和配套调用，读完分页再选型；未选中工程时显式传入 `plc_model`。按返回的操作数、用途和条件回答问题，用 `coverage` 定位各方面资料、调用字段选择 Core 入口；字段说明见[手册检索结果的判读](references/result-handling.md#手册检索结果的判读)。 |
 
 ## 完整读取知识与上下文
 
-`search_plc_manual`、`get_generation_context`、`get_fbd_catalog` 返回单份 JSON 正文，`data.context_schema_version=3`。先保存 `document` 和本页 `objects`；只要 `delivery.complete=false`，就原样调用 `delivery.next.tool` 与 `delivery.next.arguments`。合并同一 `document_id` 的全部 `objects` 后解析 `$ref`，再使用下文的 `generation_input`、`output_contract` 或 `results`。合并完成后使用完整资料。对象身份只在该次读取中使用。
+`search_plc_manual`、`get_generation_context`、`get_fbd_catalog` 返回单份 JSON 正文，`data.context_schema_version=3`。先保存 `document` 和本页 `objects`；只要 `delivery.complete=false`，就原样调用 `delivery.next.tool` 与 `delivery.next.arguments`。合并同一 `document_id` 的全部 `objects` 后解析 `$ref`，再使用下文的 `generation_input`、`output_contract` 或 `results`。新生成任务把完整用户消息逐字传给 user_requirement；自己的算法和内部地址只写入实现选择。按 instruction_research 查询各功能的代表与配套调用，比对普通实现和高级指令实现，再按提交工具的 implementation_review 填写上下文、手册 document_id、选型与比较理由。对象身份只在该次读取中使用。
 
 每次返回最多 6,000 个估算 token 且不超过 32 KiB UTF-8。`STALE_READ_CURSOR` 表示查询、CPU、工程版本、事实库或会话发生变化，去掉游标重读；`READ_OBJECT_TOO_LARGE` 表示完整必需对象过大，缩小明确的读取范围，不能截断源码。独立 MCP 不采用 Web 模型配置推断客户端窗口。
 

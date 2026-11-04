@@ -318,6 +318,7 @@ class ReadDeliveryStore:
         self.capacity, self.max_tokens, self.max_bytes = capacity, max_tokens, max_bytes
         self._documents = OrderedDict()
         self._lock = threading.RLock()
+        self._sequence = 0
 
     def resume(self, tool, arguments, binding):
         cursor = str(arguments.get('cursor') or '')
@@ -330,10 +331,13 @@ class ReadDeliveryStore:
                     or not 0 <= int(page) < len(saved['pages'])):
                 raise ToolPreconditionError('STALE_READ_CURSOR',
                     '读取游标已失效或查询、CPU、工程版本、事实库发生变化；请去掉 cursor 重新读取。')
+            if int(page) > saved['last_read'] + 1:
+                raise ToolPreconditionError('READ_PAGE_SKIPPED', '按 delivery.next 顺序读取，不能跳过中间页。')
+            saved['last_read'] = max(saved['last_read'], int(page))
             self._documents.move_to_end(identity)
             return copy.deepcopy(saved['pages'][int(page)])
 
-    def prepare(self, envelope, arguments, binding):
+    def prepare(self, envelope, arguments, binding, *, review_binding=None):
         tool = envelope['tool']
         content = copy.deepcopy(envelope['data'])
         coverage_targets = []
@@ -392,11 +396,56 @@ class ReadDeliveryStore:
         if any(not _fits(page, self.max_tokens, self.max_bytes) for page in pages):
             raise ToolPreconditionError('READ_OBJECT_TOO_LARGE', '查询参数或必需说明超过单次读取上限。')
         with self._lock:
+            self._sequence += 1
             self._documents[identity] = {'tool': tool, 'arguments': request,
-                'binding': copy.deepcopy(binding), 'pages': pages}
+                'binding': binding, 'review_binding': binding if review_binding is None else review_binding,
+                'pages': pages, 'last_read': 0, 'sequence': self._sequence,
+                'research': content.get('instruction_research'), 'receipt': content.get('generation_context_id'),
+                'targets': {row['target'] for row in coverage_targets if row.get('kind') == 'instruction'},
+                'unresolved': {row['target'] for row in coverage_targets if row.get('kind') == 'instruction'
+                               and row.get('status') != 'complete'}}
             while len(self._documents) > self.capacity:
                 self._documents.popitem(last=False)
         return copy.deepcopy(pages[0])
+
+    def check_review(self, binding, review, receipt=None):
+        from application.instruction_research import missing_families
+        with self._lock:
+            matching = {key: doc for key, doc in self._documents.items() if doc['review_binding'] == binding}
+            active = max(((doc['sequence'], key) for key, doc in matching.items()
+                          if doc['research'] is not None), default=None)
+            if not active and review is None:
+                return  # Programmatic callers can build a candidate without a generation conversation.
+            if not review or not active or active[1] != review['context_document']:
+                raise ToolPreconditionError('INSTRUCTION_REVIEW_REQUIRED',
+                    '请读取当前工程与需求的 get_generation_context，按 instruction_research 查证并提交 implementation_review。')
+            generation = matching[active[1]]
+            if receipt and generation['receipt'] != receipt:
+                raise ToolPreconditionError('INSTRUCTION_REVIEW_REQUIRED', '所引用的生成上下文不一致。')
+            manuals = set(review['manual_documents'])
+            if any(key not in matching or matching[key]['tool'] != 'search_plc_manual' for key in manuals):
+                raise ToolPreconditionError('STALE_MANUAL_DOCUMENT', '请使用当前工程、CPU 与事实库下的手册 document_id。')
+            relevant = {active[1], *manuals} | {key for key, doc in matching.items()
+                       if doc['tool'] == 'search_plc_manual' and doc['sequence'] > active[0]}
+            for key in relevant:
+                doc = matching[key]
+                if doc['last_read'] < len(doc['pages']) - 1:
+                    follow = doc['pages'][doc['last_read']]['data']['delivery']['next']
+                    raise ToolPreconditionError('INSTRUCTION_READ_INCOMPLETE', '资料尚有未读页，按 next_actions 续读。',
+                                                next_actions=(follow,))
+            researched = {target for key in manuals for target in matching[key]['targets']}
+            missing = missing_families(generation['research']['families'], researched, review)
+            alternatives = review['alternatives']
+            if (missing or not review['selected'].strip() or (generation['research']['families'] and not alternatives)
+                    or any(not row['method'].strip() or not row['tradeoff'].strip() for row in alternatives)):
+                raise ToolPreconditionError('INSTRUCTION_COMPARISON_INCOMPLETE',
+                    '请查证并在比较中指明每组的代表指令，说明所选实现的取舍与资料缺口。',
+                    details={'missing_families': missing})
+            gaps = {target for key in manuals for target in matching[key]['unresolved']}
+            if gaps and not review.get('limitations', '').strip():
+                raise ToolPreconditionError('INSTRUCTION_FACTS_UNRESOLVED',
+                    '手册仍有未证实方面。补查具体条件，或在 limitations 说明缺口及对选择的影响。',
+                    details={'targets': sorted(gaps)})
 
 
 def assemble_read_pages(pages):

@@ -181,7 +181,7 @@ def generation_definitions(generation):
             "properties": {
                 "user_requirement": {
                     "type": "string", "maxLength": 64000,
-                    "description": "本次生成或修改需求；省略时仍返回当前工程上下文。",
+                    "description": "逐字传入用户消息，可按时间顺序换行拼接多轮原文。不得加入模型提出的方案、容量、地址或检索词。省略时只读取工程上下文。",
                 },
                 "workflow": {"type": "string", "enum": ["direct_generation", "detailed"],
                              "description": "新 Ladder 有原始需求时默认 Direct；已确认规格可显式选 Direct，编辑仍沿用原入口。"},
