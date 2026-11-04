@@ -10,7 +10,7 @@ def _signals(pattern):
 
 
 IO_EXAMPLE_SCHEMA = {'type': 'object', 'additionalProperties': False, 'required': ['scan_ms', 'steps'],
-    'description': 'Optional short I/O example derived from the request, using a specified scan interval and zero initial ordinary memory. Only include observable expectations away from timing boundaries. Inputs persist until changed.',
+    'description': 'Optional short I/O example from the request. Ordinary written memory and external X inputs initially zero. Specify the scan interval; sample outputs inside their windows. Inputs persist until changed.',
     'properties': {'scan_ms': {'type': 'integer', 'minimum': 1, 'maximum': 100},
                    'steps': {'type': 'array', 'minItems': 2, 'maxItems': 16, 'items': {
                        'type': 'object', 'additionalProperties': False, 'required': ['at_ms'],
@@ -57,7 +57,8 @@ def check_io_example(ladder, plc_model, example):
     machine = ScanMachine(ladder, plc_model=plc_model, initial={}, execution_context={'program_type': 'scan'})
     accesses = machine.execution_context['program_accesses']
     written = {addr for record in accesses for addr in record['writes']}
-    inputs = {addr: 0 for step in steps for addr in step.get('set', {})}
+    inputs = {addr: 0 for record in accesses for addr in record['reads'] if addr.startswith('X')}
+    inputs.update({addr: 0 for step in steps for addr in step.get('set', {})})
     if written.intersection(inputs):
         return unknown('input_also_written_by_program')
     # Only program-written storage and explicit test inputs start at zero.

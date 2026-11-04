@@ -3735,6 +3735,8 @@ def test_candidate_io_example_uses_scan_order_and_distinguishes_missing_evidence
 
 def test_group_operations_require_scoped_region_facts(monkeypatch):
     from application.instruction_research import include_manual_facts
+    from application.read_delivery import ReadDeliveryStore
+    from agent_runtime.tool_errors import ToolPreconditionError
     def search(_, query):
         assert 'effects' in query['aspects']
         return {'plc_model': 'FX3U', 'coverage': {}, 'results': [{'knowledge': [
@@ -3745,6 +3747,15 @@ def test_group_operations_require_scoped_region_facts(monkeypatch):
     monkeypatch.setattr('agent_runtime.manual_tools._search_plc_manual', search)
     result = include_manual_facts({'families': {'block_move': ['BMOV', 'MOV', 'ALT']}}, None, 'ladder')
     assert result['group_operations'] == ['BMOV']
+    result['manual']['coverage'] = {'targets': [{'kind': 'instruction', 'target': 'BMOV', 'status': 'complete'}]}
+    store, binding = ReadDeliveryStore(), ('FX3U', 'direct')
+    page = store.prepare({'tool': 'get_generation_context', 'data': {'workflow_mode': 'direct_generation',
+        'instruction_research': result}}, {}, binding)
+    review = {'context_document': page['data']['delivery']['document_id'], 'manual_documents': [],
+              'selected': 'Copy individually.', 'reviewed_instructions': ['BMOV'], 'alternatives': []}
+    with pytest.raises(ToolPreconditionError, match='推进状态'):
+        store.check_review(binding, review)
+    store.check_review(binding, {**review, 'alternatives': [{'method': 'BMOV', 'tradeoff': 'Copies a contiguous region in a single operation.'}]})
 
 
 def test_instruction_selection_requires_relevant_complete_reads_before_submission():

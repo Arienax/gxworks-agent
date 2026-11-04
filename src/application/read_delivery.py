@@ -404,6 +404,8 @@ class ReadDeliveryStore:
                 'binding': binding, 'review_binding': binding if review_binding is None else review_binding,
                 'pages': pages, 'last_read': 0, 'sequence': self._sequence,
                 'research': ({'families': content['instruction_research']['families'],
+                              'group_operations': (content['instruction_research'].get('group_operations', [])
+                                  if content.get('workflow_mode') == 'direct_generation' else []),
                               'targets': content['instruction_research'].get('manual', {}).get('coverage', {}).get('targets', [])}
                              if 'instruction_research' in content else None),
                 'receipt': content.get('generation_context_id') or content.get('analysis_id'),
@@ -464,6 +466,12 @@ class ReadDeliveryStore:
             researched.update(row['target'] for row in embedded if row.get('kind') == 'instruction')
             missing = missing_families(generation['research']['families'], researched, review)
             alternatives = review['alternatives']
+            group_operations = generation['research']['group_operations']
+            if ('reviewed_instructions' in review and group_operations
+                    and not any(row['method'] in group_operations and row['tradeoff'].strip() for row in alternatives)):
+                raise ToolPreconditionError('INSTRUCTION_COMPARISON_INCOMPLETE',
+                    '用一两句说明一种已查成组操作如何推进状态，以及与逐项实现的实际取舍。',
+                    details={'group_operations': group_operations})
             if (missing or not review['selected'].strip() or (generation['research']['families']
                     and not alternatives and 'reviewed_instructions' not in review)
                     or not researched.issuperset(review.get('reviewed_instructions', ()))
