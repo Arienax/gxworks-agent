@@ -145,6 +145,16 @@ def test_unknown_contact_mnemonic_is_still_rejected():
         expand_compact_ladder(value)
 
 
+def test_parallel_guard_is_evaluated_once_for_unconditional_terminal_coils():
+    guard = ['NO M0', {'or': [['NO X0'], ['NO X1']]}]
+    candidate = {'r': [{'c': guard, 'b': [{'i': [], 'o': ['COIL Y0']}, {'i': [], 'o': ['COIL Y1']}]}]}
+    compacted, changes = normalize_compact(candidate)
+    assert compacted['r'] == [{'c': [], 'b': [{'i': guard, 'o': ['COIL Y0', 'COIL Y1']}]}]
+    assert changes and normalize_compact(compacted) == (compacted, [])
+    candidate['r'][0]['b'][1]['i'] = ['NC Y0']
+    assert normalize_compact(candidate) == (candidate, [])
+
+
 def test_single_wrapper_is_representation_only_and_idempotent():
     source = compact(wrapped=True, wrong=True)
     original = copy.deepcopy(source)
