@@ -107,7 +107,8 @@ def _history_example(identity, plc_model):
         ]
         timing = {'source': 'T0_elapsed_count_change', 'timer_fact': fact,
                   'nominal_tick_ms': fact['unit_ms'], 'pulse_width': '一个 PLC 扫描',
-                  'condition': '首次投入前须有停用扫描清除状态；扫描间隔须小于时基，计数不能一次跨多个单位。'
+                  'condition': '首次投入前须有停用扫描清除状态；相邻两次读到的当前值最多增加1。'
+                      '计数单位不能证明实际刷新周期；例如一次从10变为20时，<>只推进一次，不能按经过10个单位计算位移。'
                       'T0自由累计，每次当前值变化产生tick；仅到32767或停用时复位，不每tick复位。',
                   'sampling_error': '事件先锁存，下一tick采入；采样等待0至1个tick，加扫描观察误差。'
                       '时间分辨率为unit_ms；不保证任意现场扫描条件下的精确墙钟延迟。'}
@@ -151,8 +152,10 @@ def _history_template(shift, plc_model, registry):
             'effect_description': '原梯级条件表示事件，只在run时锁存pending。每个run且tick扫描将pending采入base[0]，'
                 '旧base[k]推进到base[k+1]，随后清pending。停用清pending及申请的全部普通M历史区。',
             'instructions': '必须放在独立单分支单输出事件梯级。run/tick是已有位；pending/base是独占普通M存储且互不重叠。'
+                '允许在各自run断开时重复RST/ZRST，运行期间的其他写入会破坏历史。'
                 '共享tick须为单扫描脉冲，各通道共用时基但分开pending和历史区。base[k]代表采入后经过k次tick；'
                 '若tick间隔Δ，k位对应kΔ的离散历史，事件到采入仍有0至Δ加扫描误差。'
+                '用定时器判变时，按实际可观察的更新频率选时基；可能跳计数时须处理经过的单位数，或用时间戳判定到期。'
                 '长度至少覆盖最大使用索引+1；自行选择的容量、周期必须标为implementation假设。'
                 '同通道同拍多事件会合并；要求每事件可区分身份或同拍计数时改用事件记录/时间戳，不适用此布尔构造。',
             'example': _history_example(identity, plc_model)}
@@ -232,7 +235,8 @@ def materialize_instruction_fragments(ladder, research, *, plc_model, target_mod
     current = {row['id']: row for row in executable_fragments(research, plc_model=plc_model, target_mode=target_mode)}
     receipts = []
     histories = {}
-    claimed, controls = set(), set()
+    storage_run = {}
+    controls = set()
     rows_key = next((key for key in ('r', 'root', 'rungs') if key in value), 'r')
     for source_index, rung in enumerate(value.get(rows_key, [])):
         for branch in rung.get('b', rung.get('branches', [])):
@@ -250,21 +254,29 @@ def materialize_instruction_fragments(ladder, research, *, plc_model, target_mod
                     raise DefinitionError('History fragment requires an independent single-output compact rung')
                 generated, receipt, owned, inputs = _materialize_history(
                     rung, template, parts[2:], plc_model=plc_model, confirmed_spec=confirmed_spec)
-                if claimed & (owned | inputs) or owned & controls:
+                if owned.union(inputs).intersection(storage_run) or owned & controls:
                     raise DefinitionError('History storage aliases another history or its controls')
-                claimed.update(owned)
+                storage_run.update(dict.fromkeys(owned, inputs[0]))
                 controls.update(inputs)
                 histories[source_index] = (generated, receipt)
-    # All history storage is exclusively owned by its construction. Reads of its
-    # delayed bits are intended, but independent writes would corrupt the trace.
-    if claimed:
+    # RST/ZRST under the same NC run guard repeats the fragment's own shutdown
+    # clear. Preserve the original output, including any non-history addresses.
+    if storage_run:
         for source_index, rung in enumerate(value[rows_key]):
             if source_index in histories:
                 continue
             for branch in rung.get('b', rung.get('branches', [])):
                 for output in branch.get('o', branch.get('outputs', [])):
-                    if claimed & _output_writes(output, current, plc_model, confirmed_spec):
-                        raise DefinitionError('History storage aliases another program output')
+                    opcode, writes = _output_write_access(output, current, plc_model, confirmed_spec)
+                    overlap = writes.intersection(storage_run)
+                    if not overlap:
+                        continue
+                    inactive = (_required_off_contacts(rung, branch) if opcode in {'RST', 'ZRST'} else set())
+                    for address in sorted(overlap):
+                        run = storage_run[address]
+                        if run not in inactive:
+                            raise DefinitionError(f'History storage {address} aliases {opcode} in network '
+                                                  f'{source_index}; only clearing with {run} off is allowed')
     for branch in branches(value):
         outputs = branch.get('o', branch.get('outputs', []))
         for index, output in enumerate(outputs):
@@ -341,10 +353,18 @@ def _materialize_history(rung, template, operands, *, plc_model, confirmed_spec)
         row(['NC ' + run], 'ZRST ' + base + ' ' + offset_device(base, length - 1))]
     return generated, {**receipt, 'binding_mode': 'boolean_event_history', 'fragment_id': template['id'],
                        'user_fact': False, 'owned_devices': sorted(region | {pending}),
-                       'tick_contract': 'one_scan_strobe', 'reset': copy.deepcopy(template['reset'])}, region | {pending}, {run, tick}
+                       'tick_contract': 'one_scan_strobe', 'reset': copy.deepcopy(template['reset'])}, region | {pending}, (run, tick)
 
 
-def _output_writes(output, fragments, plc_model, confirmed_spec):
+def _required_off_contacts(rung, branch):
+    from application.compact_protocol import _simple_input
+    from plc.device_identity import canonical_device
+    contacts = (_simple_input(item, '$.history_guard')
+                for item in [*rung.get('c', []), *branch.get('i', [])] if isinstance(item, str))
+    return {canonical_device(contact['address']) for contact in contacts if contact['type'] == 'NC'}
+
+
+def _output_write_access(output, fragments, plc_model, confirmed_spec):
     from application.compact_protocol import _output
     from plc.device_identity import canonical_device
     from plc.instruction_binding import instruction_write_footprint, materialize_operation_references
@@ -362,6 +382,6 @@ def _output_writes(output, fragments, plc_model, confirmed_spec):
         output = ' '.join([bound['opcode'], *bound['operands']])
     parsed = _output(output, '$.history_alias') if isinstance(output, str) else output
     if parsed.get('type') != 'APP_INSTR':
-        return {canonical_device(parsed['address'])} if parsed.get('address') else set()
+        return parsed['type'], {canonical_device(parsed['address'])} if parsed.get('address') else set()
     writes, _ = instruction_write_footprint(parsed, plc_model, DEFAULT_INSTRUCTION_REGISTRY)
-    return writes
+    return parsed['opcode'], writes

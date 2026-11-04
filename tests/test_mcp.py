@@ -3987,8 +3987,10 @@ def test_independent_acceptance_file_is_project_bound_and_separate_from_self_che
     assert check_independent_acceptance(ladder, 'FX3U', project_id='other')['reason'] == 'acceptance_project_mismatch'
     assert check_independent_acceptance(ladder, 'Q03UDV', project_id='acceptance')['reason'] == 'acceptance_model_mismatch'
     case['steps'][-1]['expect']['Y0'] = 1
+    case['steps'].append({'at_ms': 6100, 'expect': {'Y0': 1}})
     path.write_text(json.dumps({'schema_version': 1, 'project_id': 'acceptance', 'plc_model': 'FX3U', 'cases': [case]}), encoding='utf-8')
-    assert check_independent_acceptance(ladder, 'FX3U', project_id='acceptance')['status'] == 'passed_in_cases'
+    checked = check_independent_acceptance(ladder, 'FX3U', project_id='acceptance')
+    assert checked['status'] == 'passed_in_cases' and checked['cases'][0]['scans'] == 1221
 
 
 @pytest.mark.parametrize('example,reason', [
@@ -4260,6 +4262,13 @@ def test_boolean_event_history_expands_and_tracks_tick_windows(monkeypatch):
     valid, trace = materialize_instruction_fragments(single, research, plc_model='FX3U')
     assert trace['source_network_indexes'] == [0] * 5
     assert valid['r'][1]['b'][0]['o'] == ['SFTL M10 M100 K8 K1']
+    other = {'c': ['P X1'], 'b': [{'o': ['FRAG history-sftl X3 M1 M11 M110 K8']}]}
+    clear = {'c': ['NC X02'], 'b': [{'i': ['NC X3'], 'o': ['RST M10', 'ZRST M99 M118']}]}
+    shared, _ = materialize_instruction_fragments({'r': [*single['r'], other, clear]}, research, plc_model='FX3U')
+    assert shared['r'][-1] == clear  # Also preserve the cleared addresses between the two histories.
+    with pytest.raises(DefinitionError, match='M110 aliases ZRST in network 2'):
+        materialize_instruction_fragments({'r': [*single['r'], other,
+            {'c': ['NC X2'], 'b': [{'o': ['ZRST M99 M118']}]}]}, research, plc_model='FX3U')
     bad_calls = ['FRAG history-sftl X2 M1 M100 M100 K8',
                  'FRAG history-sftl M100 M1 M10 M100 K8',
                  'FRAG history-sftl X2 X2 M10 M100 K8',
@@ -4272,6 +4281,9 @@ def test_boolean_event_history_expands_and_tracks_tick_windows(monkeypatch):
         with pytest.raises((DefinitionError, ValueError)):
             materialize_instruction_fragments(invalid, research, plc_model='FX3U')
     for extra in [{'c': [], 'b': [{'o': ['COIL M00100']}]},
+                  {'c': ['NC X2'], 'b': [{'o': ['SET M100']}]},
+                  {'c': ['NO X2'], 'b': [{'o': ['ZRST M100 M107']}]},
+                  {'c': [], 'b': [{'i': [{'or': [['NC X2'], ['NO X1']]}], 'o': ['RST M100']}]},
                   {'c': ['P X1'], 'b': [{'o': ['FRAG history-sftl X2 M1 M11 M104 K8']}]},
                   {'c': ['P X1'], 'b': [{'o': ['FRAG history-sftl X2 M100 M11 M200 K8']}]}]:
         invalid = copy.deepcopy(single)

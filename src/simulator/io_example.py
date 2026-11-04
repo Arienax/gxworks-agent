@@ -58,7 +58,7 @@ def source_networks_for_output(ladder, plc_model, address):
                                        execution_context={'program_type': 'scan'}), address)
 
 
-def check_io_example(ladder, plc_model, example):
+def check_io_example(ladder, plc_model, example, *, acceptance_deadline=None):
     """A definite mismatch applies only to this explicit finite initial state and scan."""
     from plc.validation import device_address_status
     from simulator.bounded import ScanMachine
@@ -97,9 +97,9 @@ def check_io_example(ladder, plc_model, example):
     machine.previous_enables.update({f'{i}.{j}': False for i, row in enumerate(machine.instructions)
                                      for j in range(len(row))})
     events = {s['at_ms']: s for s in steps}
-    deadline = time.monotonic() + 2
+    deadline = time.monotonic() + 2 if acceptance_deadline is None else acceptance_deadline
     for t in range(0, times[-1] + 1, scan_ms):
-        if t // scan_ms > 1200 or time.monotonic() > deadline:
+        if (acceptance_deadline is None and t // scan_ms > 1200) or time.monotonic() >= deadline:
             return {**unknown('local_scan_budget'), 'checked_through_ms': t - scan_ms if t else None}
         step = events.get(t, {})
         inputs.update(step.get('set', {}))
@@ -203,9 +203,15 @@ def check_independent_acceptance(ladder, plc_model, *, project_id, confirmed_spe
                 return result
         result['reason'] = reason
         return result
+    # The operator's cases share one time allowance. A long run at a short
+    # scan interval can reach its last assertion without extending model self-checks.
+    deadline = time.monotonic() + 24
     for case in cases:
         example = {k: v for k, v in case.items() if k != 'case_id'}
-        checked = {'case_id': case['case_id'], **check_io_example(ladder, plc_model, example)}
+        checked = (check_io_example(ladder, plc_model, example, acceptance_deadline=deadline)
+                   if time.monotonic() < deadline else
+                   {'status': 'unverified', 'reason': 'local_scan_budget', 'checked_through_ms': None})
+        checked['case_id'] = case['case_id']
         result['cases'].append(checked)
         if checked['status'] == 'mismatch':
             result.update(checked)
