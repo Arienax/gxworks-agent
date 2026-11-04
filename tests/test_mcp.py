@@ -4137,12 +4137,22 @@ def test_independent_repair_uses_submitted_network_indexes_after_fragment_expans
     monkeypatch.setattr('application.instruction_fragments.materialize_instruction_fragments',
         lambda *args, **kw: (expanded, {'source_network_indexes': [0, 0, 1]}))
     monkeypatch.setattr('simulator.io_example.check_independent_acceptance', lambda *args, **kw: {
-        'status': 'mismatch', 'network_indexes': [0], 'address': 'Y0', 'at_ms': 10})
+        'status': 'mismatch', 'network_indexes': [0], 'address': 'Y0', 'at_ms': 10, 'case_id': 'mapping-case',
+        'cases': [{'case_id': 'other', 'network_indexes': [99]},
+                  {'case_id': 'mapping-case', 'network_indexes': [0],
+                   'counterexamples': [{'network_indexes': [0], 'address': 'Y0', 'at_ms': 10}]}],
+        'counterexamples': [{'network_indexes': [0], 'address': 'Y0', 'at_ms': 10},
+                            {'network_indexes': [0], 'address': 'M11', 'at_ms': 20}]})
     context = ToolContext(project={'id': 'mapping', 'plc_model': 'FX3U', 'target_mode': 'ladder'})
     with pytest.raises(ToolPreconditionError) as failure:
         _create_program_candidate(context, {'ladder': {'r': [network('M10'), network('Y0')], 'device_comments': []}})
     # Core combined all three equal-guard networks; only submitted row 1 drives Y0.
-    assert failure.value.payload()['behavior_result']['network_indexes'] == [1]
+    result = failure.value.payload()['behavior_result']
+    assert result['network_indexes'] == [0, 1]
+    assert [c['network_indexes'] for c in result['counterexamples']] == [[1], [0]]
+    assert result['cases'][0]['network_indexes'] == [99]
+    assert result['cases'][1]['network_indexes'] == [0, 1]
+    assert result['cases'][1]['counterexamples'] == result['counterexamples']
 
 
 def test_direct_choice_keeps_confirmed_targets_and_manual_conditions():
@@ -4303,3 +4313,62 @@ def test_boolean_event_history_expands_and_tracks_tick_windows(monkeypatch):
     with monkeypatch.context() as context:
         context.setattr('plc.runtime_semantics.control_runtime_facts', lambda model: {})
         assert [row['id'] for row in executable_fragments(plan, plc_model='FX3U', target_mode='ladder')] == ['range-sftl']
+
+
+def test_independent_replay_collects_distinct_output_groups_and_keeps_first_witness():
+    from simulator.io_example import check_io_example
+    from application.compact_protocol import expand_compact_ladder
+    program = expand_compact_ladder({'r': [
+        {'c': ['NO X0'], 'b': [{'i': [], 'o': ['COIL Y0', 'COIL Y1']}]},
+        {'c': ['NO X1'], 'b': [{'i': [], 'o': ['COIL Y2']}]}], 'device_comments': []})
+    example = {'scan_ms': 5, 'steps': [
+        {'at_ms': 0, 'set': {'X0': 0}, 'expect': {'Y0': 1, 'Y1': 1}},
+        {'at_ms': 5, 'set': {'X0': 1}, 'expect': {'Y0': 0, 'Y1': 0}},
+        {'at_ms': 10, 'expect': {'Y2': 1}},
+        {'at_ms': 15, 'set': {'X0': 0}, 'expect': {'Y2': 1}}]}
+    first = check_io_example(program, 'FX3U', example)
+    assert first['at_ms'] == 0 and 'counterexamples' not in first
+    result = check_io_example(program, 'FX3U', example, collect_counterexamples=True)
+    assert result['at_ms'] == first['at_ms'] and result['address'] == first['address']
+    assert [(c['at_ms'], c['address']) for c in result['counterexamples']] == [(0, 'Y0'), (5, 'Y0'), (10, 'Y2')]
+    assert result['network_indexes'] == [0, 1] and result['collection_complete']
+    assert result['input_sequence'] == [{'at_ms': 0, 'set': {'X0': 0}}]
+    assert result['case_input_sequence'] == [{'at_ms': 0, 'set': {'X0': 0}}, {'at_ms': 5, 'set': {'X0': 1}}]
+
+
+@pytest.mark.parametrize('stop', ['budget', 'gap'])
+def test_independent_replay_preserves_proved_counterexamples_when_collection_stops(monkeypatch, stop):
+    import simulator.io_example as replay
+    from simulator.bounded import ScanMachine
+    from application.compact_protocol import expand_compact_ladder
+    program = expand_compact_ladder({'r': [{'c': ['NO X0'], 'b': [{'i': [], 'o': ['COIL Y0']}]}], 'device_comments': []})
+    example = {'scan_ms': 5, 'steps': [{'at_ms': 0, 'expect': {'Y0': 1}}, {'at_ms': 10, 'expect': {'Y0': 1}}]}
+    if stop == 'budget':
+        readings = iter([0, 0, 100])
+        monkeypatch.setattr(replay.time, 'monotonic', lambda: next(readings))
+    else:
+        scan = ScanMachine.scan
+        def interrupted(machine, frame, **kwargs):
+            result = scan(machine, frame, **kwargs)
+            if frame['timestamp_ms'] == 5:
+                machine.gaps.append({'reason': 'source_edge_history_unverified'})
+            return result
+        monkeypatch.setattr(ScanMachine, 'scan', interrupted)
+    result = replay.check_io_example(program, 'FX3U', example,
+        acceptance_deadline=50 if stop == 'budget' else replay.time.monotonic() + 50, collect_counterexamples=True)
+    assert result['status'] == 'mismatch' and result['at_ms'] == 0
+    assert len(result['counterexamples']) == 1 and not result['collection_complete']
+    assert result['collection_reason'] == ('local_scan_budget' if stop == 'budget' else 'source_edge_history_unverified')
+
+
+def test_independent_replay_bounds_counterexample_count_without_changing_first():
+    from simulator.io_example import check_io_example, MAX_COUNTEREXAMPLES
+    from application.compact_protocol import expand_compact_ladder
+    outputs = [f'Y{i:o}' for i in range(10)]
+    program = expand_compact_ladder({'r': [{'c': ['NO X0'], 'b': [{'i': [], 'o': [f'COIL {address}']}]} for address in outputs],
+                                     'device_comments': []})
+    example = {'scan_ms': 5, 'steps': [{'at_ms': 0, 'expect': {address: 1 for address in outputs}}, {'at_ms': 5}]}
+    result = check_io_example(program, 'FX3U', example, collect_counterexamples=True)
+    assert result.get('address') == 'Y0', result
+    assert len(result['counterexamples']) == MAX_COUNTEREXAMPLES
+    assert not result['collection_complete'] and result['collection_reason'] == 'counterexample_limit'

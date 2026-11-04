@@ -58,7 +58,10 @@ def source_networks_for_output(ladder, plc_model, address):
                                        execution_context={'program_type': 'scan'}), address)
 
 
-def check_io_example(ladder, plc_model, example, *, acceptance_deadline=None):
+MAX_COUNTEREXAMPLES = 8
+
+
+def check_io_example(ladder, plc_model, example, *, acceptance_deadline=None, collect_counterexamples=False):
     """A definite mismatch applies only to this explicit finite initial state and scan."""
     from plc.validation import device_address_status
     from simulator.bounded import ScanMachine
@@ -70,6 +73,26 @@ def check_io_example(ladder, plc_model, example, *, acceptance_deadline=None):
     if not Draft202012Validator(IO_EXAMPLE_SCHEMA).is_valid(example):
         return unknown('invalid_io_example_shape')
     scan_ms, steps = example['scan_ms'], example['steps']
+    counterexamples, seen_failures, network_cache = [], set(), {}
+    omitted = False
+
+    def input_sequence(through_ms):
+        return [{'at_ms': s['at_ms'], 'set': dict(s['set'])}
+                for s in steps if s['at_ms'] <= through_ms and s.get('set')]
+
+    def finish(reason=None, checked_through_ms=None):
+        if not counterexamples:
+            return {**unknown(reason), **({'checked_through_ms': checked_through_ms}
+                    if reason == 'local_scan_budget' else {})}
+        first = counterexamples[0]
+        return {'status': 'mismatch', **first, 'scan_ms': scan_ms,
+                'input_sequence': input_sequence(first['at_ms']),
+                'counterexamples': counterexamples,
+                'network_indexes': sorted({i for item in counterexamples for i in item['network_indexes']}),
+                'case_input_sequence': input_sequence(counterexamples[-1]['at_ms']),
+                'collection_complete': reason is None and not omitted,
+                **({'collection_reason': reason or 'counterexample_limit'} if reason or omitted else {}),
+                'checked_through_ms': checked_through_ms}
     times = [step['at_ms'] for step in steps]
     if times[0] != 0 or times != sorted(set(times)) or any(t % scan_ms for t in times):
         return unknown('expected_increasing_scan_aligned_times_starting_at_zero')
@@ -100,23 +123,35 @@ def check_io_example(ladder, plc_model, example, *, acceptance_deadline=None):
     deadline = time.monotonic() + 2 if acceptance_deadline is None else acceptance_deadline
     for t in range(0, times[-1] + 1, scan_ms):
         if (acceptance_deadline is None and t // scan_ms > 1200) or time.monotonic() >= deadline:
-            return {**unknown('local_scan_budget'), 'checked_through_ms': t - scan_ms if t else None}
+            return finish('local_scan_budget', t - scan_ms if t else None)
         step = events.get(t, {})
         inputs.update(step.get('set', {}))
         machine.scan({'timestamp_ms': t, 'inputs': inputs}, first_scan=t == 0)
         if machine.gaps:
-            return unknown(machine.gaps[0]['reason'])
+            return finish(machine.gaps[0]['reason'], t - scan_ms if t else None)
         for address, expected in step.get('expect', {}).items():
             actual = machine.memory.get(address)
             if actual is None:
-                return unknown('unknown_output:' + address)
+                return finish('unknown_output:' + address, t)
             same = actual & 0xffff == expected & 0xffff if address.startswith('D') else actual == expected
             if not same:
-                return {'status': 'mismatch', 'at_ms': t, 'address': address, 'expected': expected,
-                        'actual': actual, 'network_indexes': _related_networks(machine, address),
-                        'scan_ms': scan_ms,
-                        'input_sequence': [{'at_ms': s['at_ms'], 'set': dict(s['set'])}
-                                           for s in steps if s['at_ms'] <= t and s.get('set')]}
+                if address not in network_cache:
+                    network_cache[address] = _related_networks(machine, address)
+                indexes = network_cache[address]
+                witness = {'at_ms': t, 'address': address, 'expected': expected,
+                           'actual': actual, 'network_indexes': indexes}
+                if not collect_counterexamples:
+                    return {'status': 'mismatch', **witness, 'scan_ms': scan_ms,
+                            'input_sequence': input_sequence(t)}
+                identity = (tuple(indexes) if indexes else address, expected, actual)
+                if identity not in seen_failures:
+                    seen_failures.add(identity)
+                    if len(counterexamples) < MAX_COUNTEREXAMPLES:
+                        counterexamples.append(witness)
+                    else:
+                        omitted = True
+    if counterexamples:
+        return finish(checked_through_ms=times[-1])
     return {'status': 'passed_in_example', 'scans': times[-1] // scan_ms + 1}
 
 
@@ -208,7 +243,7 @@ def check_independent_acceptance(ladder, plc_model, *, project_id, confirmed_spe
     deadline = time.monotonic() + 24
     for case in cases:
         example = {k: v for k, v in case.items() if k != 'case_id'}
-        checked = (check_io_example(ladder, plc_model, example, acceptance_deadline=deadline)
+        checked = (check_io_example(ladder, plc_model, example, acceptance_deadline=deadline, collect_counterexamples=True)
                    if time.monotonic() < deadline else
                    {'status': 'unverified', 'reason': 'local_scan_budget', 'checked_through_ms': None})
         checked['case_id'] = case['case_id']

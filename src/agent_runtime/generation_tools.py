@@ -417,17 +417,29 @@ def _create_program_candidate(
         project_id=context.project_id, confirmed_spec=confirmed_spec)
     if behavior_result['status'] == 'mismatch':
         source_indexes = (fragment_receipt or {}).get('source_network_indexes')
-        indexes = behavior_result.get('network_indexes', [])
-        if candidate['normalization'].get('changes'):
-            # Equivalent networks may be merged or split by Core. Locate the
-            # observed output in the pre-normalization program that the model submitted.
-            from simulator.io_example import source_networks_for_output
-            indexes = source_networks_for_output(ladder, context.plc_model, behavior_result.get('address'))
-        if source_indexes is not None:
-            indexes = (sorted({source_indexes[i] for i in indexes})
-                if len(source_indexes) == len(ladder['rungs']) and
-                all(0 <= i < len(source_indexes) for i in indexes) else [])
-        behavior_result['network_indexes'] = indexes
+        witnesses = behavior_result.get('counterexamples') or [behavior_result]
+        output_indexes = {}
+        for witness in witnesses:
+            indexes = witness.get('network_indexes', [])
+            if candidate['normalization'].get('changes'):
+                # Equivalent networks may be merged or split by Core. Locate
+                # each observed output in the model's pre-normalization program.
+                from simulator.io_example import source_networks_for_output
+                address = witness.get('address')
+                if address not in output_indexes:
+                    output_indexes[address] = source_networks_for_output(ladder, context.plc_model, address)
+                indexes = output_indexes[address]
+            if source_indexes is not None:
+                indexes = (sorted({source_indexes[i] for i in indexes})
+                    if len(source_indexes) == len(ladder['rungs']) and
+                    all(0 <= i < len(source_indexes) for i in indexes) else [])
+            witness['network_indexes'] = indexes
+        behavior_result['network_indexes'] = sorted({i for witness in witnesses for i in witness['network_indexes']})
+        if behavior_result.get('counterexamples'):
+            for case in behavior_result.get('cases', []):
+                if case.get('case_id') == behavior_result.get('case_id'):
+                    case['network_indexes'] = behavior_result['network_indexes']
+                    case['counterexamples'] = copy.deepcopy(behavior_result['counterexamples'])
         raise ToolPreconditionError('CANDIDATE_BEHAVIOR_MISMATCH', '独立用户验收用例发现确定反例。',
                                     details={'behavior_result': behavior_result})
     example_result = None
