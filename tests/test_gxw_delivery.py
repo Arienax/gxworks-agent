@@ -688,3 +688,49 @@ def test_web_new_source_generation_saves_shared_delivery_without_native_install(
         else:
             preview = client.get('/api/proposals/' + output['proposal_id'] + '/preview')
             assert preview.status_code == 200, preview.text
+
+
+@pytest.mark.parametrize('literal', ['HFFFF', 'H0FFFF', 'HABC', 'H0000'])
+def test_ladder_gxw_readback_accepts_only_hex_literal_leading_zero_spelling(literal):
+    from gxw.ladder_program_writer import build_ladder_project, _record_identity, _row_identity
+    from gxw.offline_project import read_offline_project, read_ordered_program
+    program = SimpleNamespace(device_comments={}, instructions=[
+        SimpleNamespace(mnemonic='MOV', operands=(literal, 'D900')),
+        SimpleNamespace(mnemonic='MOV', operands=('K0', 'D901'))])
+    result = build_ladder_project(program, plc_model='FX3U')
+    listing = read_ordered_program(read_offline_project(result.data), result.program)['listing']
+    actual = [_record_identity(row) for row in listing.instructions if row.mnemonic != 'END']
+    assert actual == [_row_identity({'op': 'MOV', 'args': [literal, 'D900']}),
+                      _row_identity({'op': 'MOV', 'args': ['K0', 'D901']})]
+    if literal == 'HFFFF':
+        assert listing.instructions[0].operands[0].text == 'H0FFFF'
+
+
+def test_ladder_gxw_readback_still_rejects_instruction_reordering(monkeypatch):
+    import gxw.ladder_program_writer as writer
+    from gxw.models import GXWFormatError
+    read = writer.read_ordered_program
+    reads = 0
+    def reordered(*args, **kwargs):
+        nonlocal reads
+        result = read(*args, **kwargs)
+        reads += 1
+        if reads == 2:
+            result = dict(result)
+            records = list(result['listing'].records)
+            records[0], records[1] = records[1], records[0]
+            result['listing'] = SimpleNamespace(records=records)
+        return result
+    monkeypatch.setattr(writer, 'read_ordered_program', reordered)
+    program = SimpleNamespace(device_comments={}, instructions=[
+        SimpleNamespace(mnemonic='MOV', operands=('HFFFF', 'D900')),
+        SimpleNamespace(mnemonic='MOV', operands=('K0', 'D901'))])
+    with pytest.raises(GXWFormatError, match='does not read back'):
+        writer.build_ladder_project(program, plc_model='FX3U')
+
+
+@pytest.mark.parametrize('changed', [['HFFFE', 'D900'], ['K65535', 'D900'], ['HFFFF', 'D901']])
+def test_ladder_gxw_readback_hex_normalization_keeps_values_kinds_and_targets(changed):
+    from gxw.ladder_program_writer import _row_identity
+    expected = _row_identity({'op': 'MOV', 'args': ['H0FFFF', 'D900']})
+    assert _row_identity({'op': 'MOV', 'args': changed}) != expected
