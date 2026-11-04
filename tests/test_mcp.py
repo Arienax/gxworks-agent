@@ -3569,6 +3569,8 @@ def test_instruction_selection_requires_relevant_complete_reads_before_submissio
         assert {'queue', 'compare'} <= {row['function'] for row in functional_queries(requirement)}
     store = ReadDeliveryStore(max_tokens=1200, max_bytes=4800)
     binding = ('FX3U', 'project-1')
+    store.prepare({'tool': 'get_generation_context', 'data': {'instruction_research': research_plan({})}}, {}, binding)
+    store.check_review(binding, None)
     groups = research_plan({'knowledge': [{'kind': 'instruction', 'functions': ['queue'], 'name': 'SFWR'},
                                           {'kind': 'instruction', 'functions': ['timer'], 'name': 'OUT'}]})
     context = store.prepare({'tool': 'get_generation_context', 'data': {'instruction_research': groups}}, {}, binding)

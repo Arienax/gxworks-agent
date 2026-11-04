@@ -416,13 +416,13 @@ class ReadDeliveryStore:
                           if doc['research'] is not None), default=None)
             if not active and review is None:
                 return  # Programmatic callers can build a candidate without a generation conversation.
-            if not review or not active or active[1] != review['context_document']:
+            if not active or (review and active[1] != review['context_document']):
                 raise ToolPreconditionError('INSTRUCTION_REVIEW_REQUIRED',
                     '请读取当前工程与需求的 get_generation_context，按 instruction_research 查证并提交 implementation_review。')
             generation = matching[active[1]]
             if receipt and generation['receipt'] != receipt:
                 raise ToolPreconditionError('INSTRUCTION_REVIEW_REQUIRED', '所引用的生成上下文不一致。')
-            manuals = set(review['manual_documents'])
+            manuals = set(review['manual_documents']) if review else set()
             if any(key not in matching or matching[key]['tool'] != 'search_plc_manual' for key in manuals):
                 raise ToolPreconditionError('STALE_MANUAL_DOCUMENT', '请使用当前工程、CPU 与事实库下的手册 document_id。')
             relevant = {active[1], *manuals} | {key for key, doc in matching.items()
@@ -433,6 +433,11 @@ class ReadDeliveryStore:
                     follow = doc['pages'][doc['last_read']]['data']['delivery']['next']
                     raise ToolPreconditionError('INSTRUCTION_READ_INCOMPLETE', '资料尚有未读页，按 next_actions 续读。',
                                                 next_actions=(follow,))
+            if not review:
+                if generation['research']['families']:
+                    raise ToolPreconditionError('INSTRUCTION_REVIEW_REQUIRED',
+                        '比较相关指令与普通实现后提交 implementation_review。')
+                return  # A simple mapping can have no instruction alternatives.
             researched = {target for key in manuals for target in matching[key]['targets']}
             missing = missing_families(generation['research']['families'], researched, review)
             alternatives = review['alternatives']
