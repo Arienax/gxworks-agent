@@ -21,18 +21,41 @@ IO_EXAMPLE_SCHEMA = {'type': 'object', 'additionalProperties': False, 'required'
                                       'set': _signals(r'[XD][0-9A-F]+'), 'expect': _signals(r'[YD][0-9A-F]+')}}}}}
 
 
+def _instruction_writes(instruction, writes, plc_model):
+    from plc.instruction_binding import instruction_write_footprint
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+    expanded, _complete = instruction_write_footprint(
+        {'opcode': instruction['op'], 'operands': instruction['args']}, plc_model, DEFAULT_INSTRUCTION_REGISTRY)
+    return set(writes) | expanded
+
+
 def _related_networks(machine, output):
     required, indexes = {output}, set()
-    for _ in range(len(machine.instructions)):
+    accesses = []
+    for row in machine.instructions:
+        reads, writes = set(), set()
+        for instruction, (sources, destinations) in row:
+            reads.update(sources)
+            writes.update(_instruction_writes(instruction, destinations, machine.model))
+        accesses.append((reads, writes))
+    for _ in range(len(accesses)):
         before = len(required)
-        for i, instructions in reversed(list(enumerate(machine.instructions))):
-            if any(required.intersection(writes) for _, (_, writes) in instructions):
+        for i in reversed(range(len(accesses))):
+            reads, writes = accesses[i]
+            if required.intersection(writes):
                 indexes.add(i)
-                for _, (reads, _) in instructions:
-                    required.update(reads)
+                required.update(reads)
         if len(required) == before:
             break
     return sorted(indexes)
+
+
+def source_networks_for_output(ladder, plc_model, address):
+    from simulator.bounded import ScanMachine
+    if not address:
+        return []
+    return _related_networks(ScanMachine(ladder, plc_model=plc_model, initial={},
+                                       execution_context={'program_type': 'scan'}), address)
 
 
 def check_io_example(ladder, plc_model, example):
@@ -52,8 +75,6 @@ def check_io_example(ladder, plc_model, example):
         return unknown('expected_increasing_scan_aligned_times_starting_at_zero')
     if not any(step.get('expect') for step in steps):
         return unknown('no_observable_expectation')
-    if times[-1] // scan_ms > 1200:
-        return unknown('local_scan_budget')
     for step in steps:
         for key in ('set', 'expect'):
             for address, value in step.get(key, {}).items():
@@ -62,7 +83,8 @@ def check_io_example(ladder, plc_model, example):
                     return unknown('invalid_example_operand:' + address)
     machine = ScanMachine(ladder, plc_model=plc_model, initial={}, execution_context={'program_type': 'scan'})
     accesses = machine.execution_context['program_accesses']
-    written = {addr for record in accesses for addr in record['writes']}
+    written = {addr for row in machine.instructions for instruction, (_, writes) in row
+               for addr in _instruction_writes(instruction, writes, plc_model)}
     inputs = {addr: 0 for record in accesses for addr in record['reads'] if addr.startswith('X')}
     inputs.update({addr: 0 for step in steps for addr in step.get('set', {})})
     if written.intersection(inputs):
@@ -77,8 +99,8 @@ def check_io_example(ladder, plc_model, example):
     events = {s['at_ms']: s for s in steps}
     deadline = time.monotonic() + 2
     for t in range(0, times[-1] + 1, scan_ms):
-        if time.monotonic() > deadline:
-            return unknown('local_scan_budget')
+        if t // scan_ms > 1200 or time.monotonic() > deadline:
+            return {**unknown('local_scan_budget'), 'checked_through_ms': t - scan_ms if t else None}
         step = events.get(t, {})
         inputs.update(step.get('set', {}))
         machine.scan({'timestamp_ms': t, 'inputs': inputs}, first_scan=t == 0)
@@ -172,6 +194,9 @@ def check_independent_acceptance(ladder, plc_model, *, project_id, confirmed_spe
                     frames = witness.get('input_sequence', [])
                     if frames and 'timestamp_ms' in frames[-1]:
                         result['at_ms'] = frames[-1]['timestamp_ms']
+                elif (checked.get('status') == 'no_violation_found_in_tested_scope'
+                      and checked.get('execution_status') == 'executed_in_tested_scope'):
+                    result['status'] = 'passed_in_cases'
                 else:
                     result['reason'] = ('confirmed_behavior_missing_execution_semantics' if checked.get('unsupported_or_missing')
                                         else 'confirmed_behavior_finite_scope_only')

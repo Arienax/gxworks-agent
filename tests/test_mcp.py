@@ -3727,6 +3727,9 @@ def test_candidate_io_example_uses_scan_order_and_distinguishes_missing_evidence
         {'at_ms': 5, 'set': {'X0': 1}, 'expect': {'Y1': 0}}]}
     result = check_io_example(program, 'FX3U', example)
     assert (result['status'], result['actual'], result['network_indexes']) == ('mismatch', True, [0, 1])
+    # A later sample outside the replay budget must not hide an earlier counterexample.
+    long_example = {**example, 'steps': [*example['steps'], {'at_ms': 6100, 'expect': {'Y1': 0}}]}
+    assert check_io_example(program, 'FX3U', long_example)['at_ms'] == 5
     example['steps'][1]['expect']['Y1'] = 1
     assert check_io_example(program, 'FX3U', example)['status'] == 'passed_in_example'
     example['steps'][1]['at_ms'] = 6
@@ -4014,6 +4017,23 @@ def test_independent_acceptance_reuses_only_confirmed_specification_rules(monkey
     assert result['status'] == 'mismatch'
     assert result['source'] == 'confirmed_specification'
     assert result['case_id'] == 'explicit'
+    row['predicate'] = yes
+    result = check_independent_acceptance(program, 'FX3U', project_id='p', confirmed_spec={'behavior_constraints': [row]})
+    assert result['status'] == 'passed_in_cases'
+    assert result['confirmed_behavior_check']['execution_status'] == 'executed_in_tested_scope'
+
+
+def test_io_example_initializes_formal_range_writes_and_links_last_word():
+    from simulator.io_example import check_io_example
+    program = {'rungs': [{'rung_id': 1, 'ordered_instructions': [
+        {'op': 'LD', 'args': ['X0']}, {'op': 'BMOV', 'args': ['D100', 'D200', 'K16']},
+        {'op': 'END', 'args': []}]}]}
+    case = {'scan_ms': 5, 'steps': [{'at_ms': 0, 'set': {'X0': 0}},
+        {'at_ms': 5, 'expect': {'D201': 0, 'D215': 0}}]}
+    assert check_io_example(program, 'FX3U', case)['status'] == 'passed_in_example'
+    case['steps'][-1]['expect']['D215'] = 1
+    result = check_io_example(program, 'FX3U', case)
+    assert (result['status'], result['address'], result['actual'], result['network_indexes']) == ('mismatch', 'D215', 0, [0])
 
 def test_executable_range_fragment_is_scoped_and_keeps_model_provenance(monkeypatch):
     """Authored range contract independent of private evidence installations."""
@@ -4103,6 +4123,26 @@ def test_instruction_review_returns_bound_fragments_and_separates_assumptions():
         store.check_review(binding, review)
 
 
+def test_independent_repair_uses_submitted_network_indexes_after_fragment_expansion(monkeypatch):
+    from agent_runtime.generation_tools import _create_program_candidate
+    from agent_runtime.tool_context import ToolContext
+    from agent_runtime.tool_errors import ToolPreconditionError
+
+    def network(address):
+        return {'c': ['NO X0'], 'b': [{'i': [], 'o': [f'COIL {address}']}]}
+
+    expanded = {'r': [network('M10'), network('M11'), network('Y0')], 'device_comments': []}
+    monkeypatch.setattr('application.instruction_fragments.materialize_instruction_fragments',
+        lambda *args, **kw: (expanded, {'source_network_indexes': [0, 0, 1]}))
+    monkeypatch.setattr('simulator.io_example.check_independent_acceptance', lambda *args, **kw: {
+        'status': 'mismatch', 'network_indexes': [0], 'address': 'Y0', 'at_ms': 10})
+    context = ToolContext(project={'id': 'mapping', 'plc_model': 'FX3U', 'target_mode': 'ladder'})
+    with pytest.raises(ToolPreconditionError) as failure:
+        _create_program_candidate(context, {'ladder': {'r': [network('M10'), network('Y0')], 'device_comments': []}})
+    # Core combined all three equal-guard networks; only submitted row 1 drives Y0.
+    assert failure.value.payload()['behavior_result']['network_indexes'] == [1]
+
+
 def test_direct_choice_keeps_confirmed_targets_and_manual_conditions():
     from application.instruction_research import direct_choice_input
 
@@ -4127,3 +4167,127 @@ def test_instruction_review_fragments_require_the_complete_document():
     while follow := page['data']['delivery']['next']:
         page = store.resume(follow['tool'], follow['arguments'], binding)
     assert store.check_review(binding, None)['executable_fragments'] == [{'id': 'fragment'}]
+
+
+def test_boolean_event_history_expands_and_tracks_tick_windows(monkeypatch):
+    from dataclasses import replace
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY, InstructionRegistry
+    from plc.instruction_definition import InstructionFactGroup, DefinitionError
+    from application.instruction_fragments import executable_fragments, materialize_instruction_fragments
+    from application.compact_protocol import expand_compact_ladder
+    from simulator.io_example import check_io_example
+    typ = {'kind': 'int', 'bits': 16, 'signed': False}
+    behavior = {'behavior': 'range_shift', 'source': 'S', 'region': 'D',
+        'count': {'op': 'parameter', 'name': 'N1', 'type': typ},
+        'shift': {'op': 'parameter', 'name': 'N2', 'type': typ}, 'direction': 'left',
+        'fill': 'source', 'element_type': {'kind': 'bool'}, 'max_count': 64,
+        'read_mode': 'snapshot', 'scope_limits': {'memory': 'ordinary_M_bit_regions'},
+        'source_must_differ': True}
+    group = InstructionFactGroup('history-shift-source', 'effects.range_shift', behavior,
+        'source_verified', sources=({'id': 'authored-unit-contract'},), verification='source_checked',
+        scope={'models': ['FX3U'], 'languages': ['ladder']})
+    shift = replace(DEFAULT_INSTRUCTION_REGISTRY.resolve_form('SFTL', cpu='FX3U').spec,
+        definition_facts=(group,), native_operand_order=('S', 'D', 'N1', 'N2'), execution_form='continuous')
+    boundary = InstructionFactGroup('history-reset-source', 'constraints.operand_devices',
+        {'rule': 'ZRST_requires_same_device_kind', 'kind': 'ordered_region', 'positions': [0, 1]},
+        'source_verified', sources=({'id': 'authored-unit-contract'},), verification='source_checked',
+        scope={'models': ['FX3U'], 'languages': ['ladder']})
+    reset = replace(DEFAULT_INSTRUCTION_REGISTRY.resolve_form('ZRST', cpu='FX3U').spec,
+                    definition_facts=(boundary,), native_operand_order=('D1', 'D2'))
+    registry = InstructionRegistry([spec for spec in DEFAULT_INSTRUCTION_REGISTRY._specs.values()
+                                    if spec.mnemonic not in {'SFTL', 'ZRST'}] + [shift, reset])
+    monkeypatch.setattr('plc.instructions.DEFAULT_INSTRUCTION_REGISTRY', registry)
+    # A closed authored constraint fixture for these small in-range values;
+    # execution behavior still uses the shared interpreter and runtime facts.
+    registry._definition_owners = {
+        ('mitsubishi', 'MOV', 'FX3U'): {'target_model': 'FX3U', 'opcode': 'MOV', 'facts': []},
+        ('mitsubishi', 'SFTL', 'FX3U'): {'target_model': 'FX3U', 'opcode': 'SFTL',
+            'facts': [{**group.as_mapping(), 'scope': {'models': ['FX3U'], 'forms': ['SFTL'], 'languages': ['ladder']}}]},
+        ('mitsubishi', 'ZRST', 'FX3U'): {'target_model': 'FX3U', 'opcode': 'ZRST',
+            'facts': [{**boundary.as_mapping(), 'scope': {'models': ['FX3U'], 'forms': ['ZRST'], 'languages': ['ladder']}}]},
+    }
+    monkeypatch.setattr('simulator.bounded.DEFAULT_INSTRUCTION_REGISTRY', registry)
+    plan = {'families': {'queue': ['SFTL'], 'timer': ['OUT']}}
+    fragments = executable_fragments(plan, plc_model='FX3U', target_mode='ladder')
+    assert [row['id'] for row in fragments] == ['history-sftl', 'range-sftl']
+    history = fragments[0]
+    assert history['reset']['control_sources'] and history['reset']['fact_groups'] == ['history-reset-source']
+    assert executable_fragments(plan, plc_model='FX5U', target_mode='ladder') == []
+    assert executable_fragments(plan, plc_model='FX3U', target_mode='st') == []
+    assert not any(row.get('construction') for row in executable_fragments(
+        {'families': {'queue': ['SFTL']}}, plc_model='FX3U', target_mode='ladder'))
+    research = {**plan, 'executable_fragments': fragments}
+    original = history['example']['program']
+    lowered, receipt = materialize_instruction_fragments(original, research, plc_model='FX3U')
+    assert len(original['r']) == 9 and len(lowered['r']) == 17
+    assert receipt['source_network_indexes'] == [0, 1, 2, 3, 4, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 7, 8]
+    assert receipt['receipts'][0]['binding_mode'] == 'boolean_event_history'
+    assert receipt['receipts'][0]['input']['provenance']['source'] == 'model_candidate'
+    assert original['r'][5]['b'][0]['o'][0].startswith('FRAG history-')
+    assert history['example']['timing']['nominal_tick_ms'] == 100
+    case = {'scan_ms': 5, 'steps': [
+        {'at_ms': 0, 'set': {'X2': 0, 'X0': 0, 'X1': 0}},
+        {'at_ms': 5, 'set': {'X2': 1}},
+        {'at_ms': 20, 'set': {'X0': 1, 'X1': 1}},
+        {'at_ms': 25, 'set': {'X0': 0, 'X1': 0}},
+        {'at_ms': 120, 'set': {'X0': 1, 'X1': 1}},
+        {'at_ms': 125, 'set': {'X0': 0, 'X1': 0}},
+        {'at_ms': 305, 'expect': {'Y0': 1, 'Y1': 0}},
+        {'at_ms': 405, 'expect': {'Y0': 1, 'Y1': 1}},
+        {'at_ms': 505, 'expect': {'Y0': 0, 'Y1': 1}},
+        {'at_ms': 705, 'expect': {'Y0': 0, 'Y1': 1}},
+        {'at_ms': 805, 'expect': {'Y1': 0}},
+        {'at_ms': 810, 'set': {'X2': 0}, 'expect': {'Y0': 0, 'Y1': 0}},
+        {'at_ms': 815, 'set': {'X2': 1}},
+        {'at_ms': 1115, 'expect': {'Y0': 0, 'Y1': 0}},
+    ]}
+    result = check_io_example(expand_compact_ladder(lowered), 'FX3U', case)
+    assert result['status'] == 'passed_in_example', result
+    # The same tick spacing survives timer rollover; do not reset every tick.
+    short_timer = copy.deepcopy(lowered)
+    short_timer['r'][0]['b'][0]['o'][0] = 'TIMER T0 K3'
+    assert check_io_example(expand_compact_ladder(short_timer), 'FX3U', case)['status'] == 'passed_in_example'
+    merged = copy.deepcopy(case)
+    merged['steps'][4:4] = [{'at_ms': 40, 'set': {'X0': 1, 'X1': 1}},
+                            {'at_ms': 45, 'set': {'X0': 0, 'X1': 0}}]
+    assert check_io_example(expand_compact_ladder(lowered), 'FX3U', merged)['status'] == 'passed_in_example'
+    stopped = {'scan_ms': 5, 'steps': [*case['steps'][:6],
+        {'at_ms': 145, 'set': {'X2': 0}}, {'at_ms': 150, 'set': {'X2': 1}},
+        {'at_ms': 450, 'expect': {'Y0': 0, 'Y1': 0}},
+        {'at_ms': 650, 'expect': {'Y0': 0, 'Y1': 0}}]}
+    assert check_io_example(expand_compact_ladder(lowered), 'FX3U', stopped)['status'] == 'passed_in_example'
+    single = {'r': [{'c': ['P X0'], 'b': [{'o': ['FRAG history-sftl X2 M1 M10 M100 K8']}]}]}
+    valid, trace = materialize_instruction_fragments(single, research, plc_model='FX3U')
+    assert trace['source_network_indexes'] == [0] * 5
+    assert valid['r'][1]['b'][0]['o'] == ['SFTL M10 M100 K8 K1']
+    bad_calls = ['FRAG history-sftl X2 M1 M100 M100 K8',
+                 'FRAG history-sftl M100 M1 M10 M100 K8',
+                 'FRAG history-sftl X2 X2 M10 M100 K8',
+                 'FRAG history-sftl X2 M1 M10 M100 K65',
+                 'FRAG history-sftl X2 M1 M10 M7998 K8',
+                 'FRAG history-sftl X2 M1 D10 M100 K8']
+    for call in bad_calls:
+        invalid = copy.deepcopy(single)
+        invalid['r'][0]['b'][0]['o'] = [call]
+        with pytest.raises((DefinitionError, ValueError)):
+            materialize_instruction_fragments(invalid, research, plc_model='FX3U')
+    for extra in [{'c': [], 'b': [{'o': ['COIL M00100']}]},
+                  {'c': ['P X1'], 'b': [{'o': ['FRAG history-sftl X2 M1 M11 M104 K8']}]},
+                  {'c': ['P X1'], 'b': [{'o': ['FRAG history-sftl X2 M100 M11 M200 K8']}]}]:
+        invalid = copy.deepcopy(single)
+        invalid['r'].append(extra)
+        with pytest.raises(DefinitionError, match='alias'):
+            materialize_instruction_fragments(invalid, research, plc_model='FX3U')
+    multi = copy.deepcopy(single)
+    multi['r'][0]['b'][0]['o'].append('COIL Y0')
+    with pytest.raises(DefinitionError, match='single-output'):
+        materialize_instruction_fragments(multi, research, plc_model='FX3U')
+    with monkeypatch.context() as context:
+        context.setattr('plc.runtime_semantics.timer_runtime_fact', lambda *args: None)
+        external = executable_fragments(plan, plc_model='FX3U', target_mode='ladder')[0]['example']
+        assert external['timing']['source'] == 'external_single_scan_tick'
+        assert 'nominal_tick_ms' not in external['timing']
+        assert len(external['program']['r']) == 4
+    with monkeypatch.context() as context:
+        context.setattr('plc.runtime_semantics.control_runtime_facts', lambda model: {})
+        assert [row['id'] for row in executable_fragments(plan, plc_model='FX3U', target_mode='ladder')] == ['range-sftl']
