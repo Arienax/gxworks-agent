@@ -3952,3 +3952,178 @@ def test_static_context_provider_keeps_session_revision_during_pagination():
     from application.read_delivery import read_binding
     provider = StaticToolContextProvider(build_tool_context({'id': 'memory', 'plc_model': 'FX3U'}))
     assert read_binding(provider.get_context()) == read_binding(provider.get_context())
+
+
+def test_independent_acceptance_file_is_project_bound_and_separate_from_self_check(tmp_path, monkeypatch):
+    import json
+    from agent_runtime.generation_tools import _create_program_candidate
+    from agent_runtime.tool_context import ToolContext
+    from agent_runtime.tool_errors import ToolPreconditionError
+    from simulator.io_example import check_independent_acceptance
+    from application.compact_protocol import expand_compact_ladder
+    program = {'r': [{'c': ['NO X0'], 'b': [{'i': [], 'o': ['COIL Y0']}]}], 'device_comments': []}
+    ladder = expand_compact_ladder(program)
+    case = {'case_id': 'start', 'scan_ms': 5, 'steps': [
+        {'at_ms': 0, 'set': {'X0': 0}}, {'at_ms': 5, 'set': {'X0': 1}, 'expect': {'Y0': 0}}]}
+    context = ToolContext(project={'id': 'acceptance', 'plc_model': 'FX3U', 'target_mode': 'ladder'})
+    monkeypatch.delenv('GXWORKS_ACCEPTANCE_CASES_FILE', raising=False)
+    result = _create_program_candidate(context, {'ladder': program, 'io_example': {k:v for k,v in case.items() if k != 'case_id'}})
+    assert result['io_example_result']['status'] == 'mismatch'
+    assert result['io_example_result']['source'] == 'generator_self_check'
+    assert result['behavior_result']['reason'] == 'no_independent_acceptance_cases'
+    assert result['requires_confirmation'] and not result['verification']['behavior_verified']
+    path = tmp_path / 'acceptance.json'
+    path.write_text(json.dumps({'schema_version': 1, 'project_id': 'acceptance', 'plc_model': 'FX3U', 'cases': [case]}), encoding='utf-8')
+    monkeypatch.setenv('GXWORKS_ACCEPTANCE_CASES_FILE', str(path))
+    with pytest.raises(ToolPreconditionError) as error:
+        _create_program_candidate(context, {'ladder': program})
+    assert error.value.code == 'CANDIDATE_BEHAVIOR_MISMATCH'
+    witness = error.value.details['behavior_result']
+    assert (witness['case_id'], witness['at_ms'], witness['address'], witness['network_indexes']) == ('start', 5, 'Y0', [0])
+    assert witness['input_sequence'] == [{'at_ms': 0, 'set': {'X0': 0}}, {'at_ms': 5, 'set': {'X0': 1}}]
+    assert check_independent_acceptance(ladder, 'FX3U', project_id='other')['reason'] == 'acceptance_project_mismatch'
+    assert check_independent_acceptance(ladder, 'Q03UDV', project_id='acceptance')['reason'] == 'acceptance_model_mismatch'
+    case['steps'][-1]['expect']['Y0'] = 1
+    path.write_text(json.dumps({'schema_version': 1, 'project_id': 'acceptance', 'plc_model': 'FX3U', 'cases': [case]}), encoding='utf-8')
+    assert check_independent_acceptance(ladder, 'FX3U', project_id='acceptance')['status'] == 'passed_in_cases'
+
+
+@pytest.mark.parametrize('example,reason', [
+    ({'scan_ms': 0, 'steps': []}, 'invalid_io_example_shape'),
+    ({'scan_ms': 5, 'steps': [{'at_ms': 0}, {'at_ms': 5}]}, 'no_observable_expectation'),
+    ({'scan_ms': 5, 'steps': [{'at_ms': 0}, {'at_ms': 6, 'expect': {'Y0': 1}}]}, 'expected_increasing_scan_aligned_times_starting_at_zero'),
+])
+def test_io_example_invalid_or_missing_evidence_stays_unverified(example, reason):
+    from simulator.io_example import check_io_example
+    assert check_io_example({}, 'FX3U', example) == {'status': 'unverified', 'reason': reason}
+
+
+def test_independent_acceptance_reuses_only_confirmed_specification_rules(monkeypatch):
+    from simulator.io_example import check_independent_acceptance
+    from application.compact_protocol import expand_compact_ladder
+    monkeypatch.delenv('GXWORKS_ACCEPTANCE_CASES_FILE', raising=False)
+    program = expand_compact_ladder({'r': [{'c': ['NO X0'], 'b': [{'i': [], 'o': ['COIL Y0']}]}], 'device_comments': []})
+    yes = {'op': 'constant', 'type': {'kind': 'bool'}, 'value': True}
+    no = {'op': 'constant', 'type': {'kind': 'bool'}, 'value': False}
+    row = {'id': 'explicit', 'kind': 'assertion', 'status': 'candidate',
+           'when': yes, 'predicate': no, 'provenance': {'source': 'model_candidate', 'evidence': ['user assertion']}}
+    result = check_independent_acceptance(program, 'FX3U', project_id='p', confirmed_spec={'behavior_constraints': [row]})
+    assert result['reason'] == 'no_independent_acceptance_cases'
+    row.update(status='confirmed', provenance={'source': 'user_confirmed', 'evidence': ['user assertion']})
+    result = check_independent_acceptance(program, 'FX3U', project_id='p', confirmed_spec={'behavior_constraints': [row]})
+    assert result['status'] == 'mismatch'
+    assert result['source'] == 'confirmed_specification'
+    assert result['case_id'] == 'explicit'
+
+def test_executable_range_fragment_is_scoped_and_keeps_model_provenance(monkeypatch):
+    """Authored range contract independent of private evidence installations."""
+    from dataclasses import replace
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY, InstructionRegistry
+    from plc.instruction_definition import InstructionFactGroup
+    typ = {'kind': 'int', 'bits': 16, 'signed': False}
+    count = {'op': 'parameter', 'name': 'N', 'type': typ}
+    behavior = {'behavior': 'range_copy', 'source': 'S', 'destination': 'D',
+                'count': count, 'element_type': typ, 'max_count': 32,
+                'read_mode': 'snapshot', 'required_state': {'M8024': False},
+                'scope_limits': {'memory': 'ordinary_D_word_regions_with_in_range_addresses'}}
+    group = InstructionFactGroup('reviewed-copy', 'effects.range_copy', behavior,
+        'source_verified', scope={'models': ['FX3U'], 'languages': ['ladder']})
+    base = DEFAULT_INSTRUCTION_REGISTRY.resolve_form('BMOV', cpu='FX3U').spec
+    registry = InstructionRegistry([replace(base, native_operand_order=('S', 'D', 'N'),
+        definition_facts=(group,), execution_form='continuous')])
+    monkeypatch.setattr('plc.instructions.DEFAULT_INSTRUCTION_REGISTRY', registry)
+    from application.instruction_fragments import executable_fragments, materialize_instruction_fragments
+    from plc.instruction_definition import DefinitionError
+    plan = {'families': {'block_move': ['BMOV']}}
+    fragments = executable_fragments(plan, plc_model='FX3U', target_mode='ladder')
+    assert len(fragments) == 1
+    assert fragments[0]['example']['rung'] == {
+        'c': ['P X0'], 'b': [{'i': [], 'o': ['FRAG range-bmov D100 D200 K16']}]}
+    assert executable_fragments(plan, plc_model='FX3U', target_mode='st') == []
+    assert executable_fragments(plan, plc_model='FX5U', target_mode='ladder') == []
+    for opcode, element_type in [('SFTL', {'kind': 'bool'}), ('WSFL', typ)]:
+        shift = {'behavior': 'range_shift', 'source': 'S', 'region': 'D',
+                 'count': {'op': 'parameter', 'name': 'N1', 'type': typ},
+                 'shift': {'op': 'parameter', 'name': 'N2', 'type': typ},
+                 'direction': 'left', 'fill': 'source', 'element_type': element_type}
+        registry.register(replace(base, mnemonic=opcode, native_operand_order=('S', 'D', 'N1', 'N2'),
+            definition_facts=(replace(group, id='reviewed-' + opcode, dimension='effects.range_shift', value=shift),)))
+    varied = executable_fragments({'families': {'shift': ['SFTL', 'WSFL']}}, plc_model='FX3U', target_mode='ladder')
+    assert [row['opcode'] for row in varied] == ['SFTL', 'WSFL']
+    research = {**plan, 'executable_fragments': fragments}
+    plain = {'r': [{'b': [{'o': ['COIL Y0']}]}]}
+    unchanged, no_receipt = materialize_instruction_fragments(plain, research, plc_model='FX3U')
+    assert unchanged is plain and no_receipt is None
+    program = {'r': [{'c': ['P X0'], 'b': [{'i': [], 'o': ['FRAG range-bmov D100 D200 K16', 'COIL Y0']}]}]}
+    lowered, trace = materialize_instruction_fragments(program, research, plc_model='FX3U')
+    assert lowered['r'][0]['b'][0]['o'] == ['BMOV D100 D200 K16', 'COIL Y0']
+    assert lowered['r'][0]['c'] == ['P X0']  # Never silently add state gates.
+    receipt = trace['receipts'][0]
+    assert receipt['input']['status'] == 'candidate'
+    assert receipt['input']['provenance']['source'] == 'model_candidate'
+    assert receipt['user_fact'] is False
+    assert receipt['required_state'] == {'M8024': False}
+    assert receipt['required_state_verification'] == 'not_established'
+    assert program['r'][0]['b'][0]['o'][0].startswith('FRAG ')
+    mixed = copy.deepcopy(program)
+    mixed['r'].append({'c': ['NC X1'], 'b': [{'i': ['NO M0'], 'o': ['COIL Y1']}]})
+    lowered_mixed, _ = materialize_instruction_fragments(mixed, research, plc_model='FX3U')
+    assert lowered_mixed['r'][1] == mixed['r'][1]
+    assert lowered_mixed['r'][0]['b'][0]['o'] == ['BMOV D100 D200 K16', 'COIL Y0']
+    for call in ['FRAG unknown D100 D200 K16', 'FRAG range-bmov D100 D200 K33',
+                 'FRAG range-bmov D100 D200 K0', 'FRAG range-bmov M100 D200 K16']:
+        with pytest.raises(DefinitionError):
+            materialize_instruction_fragments({'r': [{'b': [{'o': [call]}]}]}, research, plc_model='FX3U')
+    with pytest.raises(DefinitionError, match='Unknown'):
+        materialize_instruction_fragments(program, {'families': {}}, plc_model='FX3U')
+    stale = copy.deepcopy(research)
+    stale['executable_fragments'][0]['trigger'] = 'rising'
+    with pytest.raises(DefinitionError, match='stale'):
+        materialize_instruction_fragments(program, stale, plc_model='FX3U')
+
+
+def test_instruction_review_returns_bound_fragments_and_separates_assumptions():
+    from application.read_delivery import ReadDeliveryStore
+    from plc.instruction_definition import DefinitionError
+    store, binding = ReadDeliveryStore(), ('FX3U', 'fragments')
+    research = {'families': {}, 'executable_fragments': [{'id': 'example'}]}
+    page = store.prepare({'tool': 'get_generation_context', 'data': {
+        'generation_context_id': 'generation-1', 'instruction_research': research}},
+        {'user_requirement': '每次允许两件进入。'}, binding)
+    review = {'context_document': page['data']['delivery']['document_id'], 'manual_documents': [],
+        'selected': 'Use a local layout.', 'alternatives': [], 'assumptions': [
+            {'condition': '内部区域容量取16。', 'source': 'implementation'},
+            {'condition': '允许两件。', 'source': 'user', 'quote': '允许两件'}]}
+    result = store.check_review(binding, review, 'generation-1')
+    assert result['executable_fragments'] == research['executable_fragments']
+    result['executable_fragments'].clear()
+    assert store.check_review(binding, review)['executable_fragments']
+    review['assumptions'][1]['quote'] = '每件必须隔100ms'
+    with pytest.raises(DefinitionError, match='exact quote'):
+        store.check_review(binding, review)
+
+
+def test_direct_choice_keeps_confirmed_targets_and_manual_conditions():
+    from application.instruction_research import direct_choice_input
+
+    cards = [{'kind': 'device_family', 'target': 'X'}, {'kind': 'instruction', 'name': 'SFTL'},
+             {'kind': 'instruction', 'target': 'ZRN'}, {'kind': 'instruction', 'target': 'DSZR'},
+             {'kind': 'example', 'target': 'unrelated_example'}]
+    inputs = {'knowledge': cards, 'knowledge_coverage': {'targets': [{'target': 'ZRN'}]}}
+    research = {'families': {'shift': ['SFTL']}, 'executable_fragments': [{'id': 'range-sftl'}]}
+    assert direct_choice_input(inputs, research)['knowledge'] == cards[:3]
+    assert direct_choice_input(inputs, {}) is inputs and len(inputs['knowledge']) == 5
+
+
+def test_instruction_review_fragments_require_the_complete_document():
+    from application.read_delivery import ReadDeliveryStore
+    from agent_runtime.tool_errors import ToolPreconditionError
+    store, binding = ReadDeliveryStore(max_tokens=1300, max_bytes=5200), ('FX3U', 'paged-fragments')
+    page = store.prepare({'tool': 'get_generation_context', 'data': {
+        'instruction_research': {'families': {}, 'executable_fragments': [{'id': 'fragment'}]},
+        'evidence': [{'part': i, 'value': 'x' * 620} for i in range(15)]}}, {}, binding)
+    with pytest.raises(ToolPreconditionError, match='未读页'):
+        store.check_review(binding, None)
+    while follow := page['data']['delivery']['next']:
+        page = store.resume(follow['tool'], follow['arguments'], binding)
+    assert store.check_review(binding, None)['executable_fragments'] == [{'id': 'fragment'}]

@@ -276,6 +276,12 @@ def _bound_point_effects(behavior, bindings):
 
 
 def bind_operation_intent(raw, *, target_model, registry=None, confirmed_spec=None):
+    return _bind_operation_intent(raw, target_model=target_model, registry=registry,
+                                  confirmed_spec=confirmed_spec)
+
+
+def _bind_operation_intent(raw, *, target_model, registry=None, confirmed_spec=None,
+                           model_fragment=False):
     """Resolve one exact call or return a visible gap; never guess ambiguity."""
     if registry is None:
         from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
@@ -283,7 +289,7 @@ def bind_operation_intent(raw, *, target_model, registry=None, confirmed_spec=No
     intent = normalize_operation_intents([raw])[0]
     base = {"intent_id": intent["id"], "target_model": target_model, "input": intent,
             "source_verification": "not_established", "hardware_effect": "not_tested"}
-    if intent["status"] != "confirmed":
+    if intent["status"] != "confirmed" and not model_fragment:
         return {**base, "status": "unresolved", "reason": "intent_not_user_confirmed"}
     matches, failures = [], []
     for opcode in [intent["opcode"]] if intent["opcode"] else registry.known_mnemonics():

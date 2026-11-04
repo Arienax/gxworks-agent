@@ -356,7 +356,10 @@ def test_proposal_new_ir_acceptance_is_private_single_use_and_local(services):
     store, project, lock, state = services
     service = ProposalService(store, state, lock)
     before = _bytes(store.base_dir)
-    payload = {"_candidate_ir": _program(), "candidate_id": "candidate_unit"}
+    independent = {'source': 'operator_acceptance_file', 'status': 'passed_in_cases'}
+    self_check = {'source': 'generator_self_check', 'status': 'mismatch'}
+    payload = {"_candidate_ir": _program(), "candidate_id": "candidate_unit",
+               '_behavior_result': independent, '_io_example_result': self_check}
     proposal = service.create("accept_local", project["id"], payload,
                               public_summary={"summary": "new", "api_key": "hidden"}, request_id="new")
     assert _bytes(store.base_dir) == before
@@ -370,6 +373,8 @@ def test_proposal_new_ir_acceptance_is_private_single_use_and_local(services):
     current = store.get_project(project["id"])
     assert len(current["versions"]) == 1
     assert current["active_version_id"] == accepted["result"]["version_id"]
+    version = store.get_version(project['id'], accepted['result']['version_id'])
+    assert version['behavior_result'] == independent and version['io_example_result'] == self_check
     assert not (store.project_dir(project["id"]) / "GX Works2 Backups").exists()
 
 
@@ -486,13 +491,16 @@ def test_st_artifacts_are_frozen_and_managed(services):
     service = ProposalService(store, state, lock)
     payload = {"target_mode": "st", "staging_dir": str(staging), "artifacts": {
         "st": {"path": "program.st", "sha256": hashlib.sha256(data).hexdigest()}},
-        "metadata": {"summary": "ST candidate"}}
+        "metadata": {"summary": "ST candidate", 'behavior_result': {'source': 'operator_acceptance_file', 'status': 'passed_in_cases'},
+                     'io_example_result': {'source': 'generator_self_check', 'status': 'mismatch'}}}
     proposal = service.create("accept_local", project["id"], payload)
     (staging / "program.st").write_text("mutated", encoding="utf-8")
     accepted = service.accept(proposal["id"])
     version = store.get_version(project["id"], accepted["result"]["version_id"])
     assert (store.version_dir(project["id"], version["id"]) / version["artifacts"]["st"]).read_bytes() == data
     assert version["summary"] == "ST candidate"
+    assert version['behavior_result'] == payload['metadata']['behavior_result']
+    assert version['io_example_result'] == payload['metadata']['io_example_result']
     assert "staging_dir" not in json.dumps(accepted)
 
 

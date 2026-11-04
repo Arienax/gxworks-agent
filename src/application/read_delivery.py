@@ -403,11 +403,13 @@ class ReadDeliveryStore:
             self._documents[identity] = {'tool': tool, 'arguments': request,
                 'binding': binding, 'review_binding': binding if review_binding is None else review_binding,
                 'pages': pages, 'last_read': 0, 'sequence': self._sequence,
-                'research': ({'families': content['instruction_research']['families'],
+                'research': ({'executable_fragments': copy.deepcopy(content['instruction_research'].get('executable_fragments', [])),
+                              'families': content['instruction_research']['families'],
                               'group_operations': (content['instruction_research'].get('group_operations', [])
                                   if content.get('workflow_mode') == 'direct_generation' else []),
                               'targets': content['instruction_research'].get('manual', {}).get('coverage', {}).get('targets', [])}
                              if 'instruction_research' in content else None),
+                'user_requirement': str(request.get('user_requirement') or ''),
                 'receipt': content.get('generation_context_id') or content.get('analysis_id'),
                 'language': content.get('target_mode') if tool == 'get_generation_context' else content.get('language'),
                 'targets': {row['target'] for row in coverage_targets if row.get('kind') == 'instruction'},
@@ -430,7 +432,7 @@ class ReadDeliveryStore:
                                             next_actions=[follow])
 
     def check_review(self, binding, review, receipt=None):
-        from application.instruction_research import missing_families
+        from application.instruction_research import missing_families, validate_review_assumptions
         with self._lock:
             matching = {key: doc for key, doc in self._documents.items() if doc['review_binding'] == binding}
             active = max(((doc['sequence'], key) for key, doc in matching.items()
@@ -441,6 +443,8 @@ class ReadDeliveryStore:
                 raise ToolPreconditionError('INSTRUCTION_REVIEW_REQUIRED',
                     '请读取当前工程与需求的 get_generation_context，按 instruction_research 查证并提交 implementation_review。')
             generation = matching[active[1]]
+            if review is not None:
+                validate_review_assumptions(review, user_requirement=generation['user_requirement'])
             if receipt and generation['receipt'] != receipt:
                 raise ToolPreconditionError('INSTRUCTION_REVIEW_REQUIRED', '所引用的生成上下文不一致。')
             manuals = set(review['manual_documents']) if review else set()
@@ -458,7 +462,7 @@ class ReadDeliveryStore:
                 if generation['research']['families']:
                     raise ToolPreconditionError('INSTRUCTION_REVIEW_REQUIRED',
                         '比较相关指令与普通实现后提交 implementation_review。')
-                return  # A simple mapping can have no instruction alternatives.
+                return copy.deepcopy(generation['research'])  # No instruction alternatives.
             # Other-language documents can supplement a comparison but do not establish this language's calls.
             researched = {target for key in manuals if matching[key]['language'] == generation['language']
                           for target in matching[key]['targets']}
@@ -486,6 +490,7 @@ class ReadDeliveryStore:
                 raise ToolPreconditionError('INSTRUCTION_FACTS_UNRESOLVED',
                     '手册仍有未证实方面。在 limitations 汇总影响选择的缺项；相同查询无需重复。',
                     details={'targets': sorted(gaps)})
+            return copy.deepcopy(generation['research'])
 
 
 def assemble_read_pages(pages):

@@ -178,8 +178,12 @@ class ToolRegistry:
             if new_candidate(name, decoded):
                 review = decoded.pop('implementation_review', None)
                 if self._read_delivery is not None or review is not None:
-                    (self._read_delivery or ReadDeliveryStore()).check_review(
+                    research = (self._read_delivery or ReadDeliveryStore()).check_review(
                         read_binding(context), review, decoded.get('generation_context_id'))
+                    if name == 'create_program_candidate' and research and research.get('executable_fragments'):
+                        decoded['_instruction_research'] = research
+                if name == 'create_program_candidate' and review and review.get('assumptions'):
+                    decoded['_implementation_assumptions'] = review['assumptions']
             data = dict(definition.handler(context, decoded) or {})
             if review is not None:
                 data['implementation_review'] = review
@@ -233,6 +237,10 @@ class ToolRegistry:
                         from application.instruction_research import include_manual_facts
                         manual_context = resolve_tool_context(self._tools['search_plc_manual'], project_context, {})
                         plan = include_manual_facts(plan, manual_context, data['target_mode'])
+                        if data.get('workflow_mode') == 'direct_generation' and not data.get('has_confirmed_spec'):
+                            from application.instruction_research import direct_choice_input
+                            payload = public['data']
+                            payload['generation_input'] = direct_choice_input(payload['generation_input'], plan)
                     public['data']['instruction_research'] = plan
                 # Manual lookup normalizes CPU aliases; compare against the original project snapshot.
                 review_binding = (read_binding(project_context) if name == 'search_plc_manual'

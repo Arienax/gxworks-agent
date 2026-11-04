@@ -389,8 +389,13 @@ def _create_program_candidate(
     wrapped = set(ladder) == {'result'} or ('program' in ladder and set(ladder) <= {'program', 'decisions', 'open_items'})
     if is_direct or wrapped:
         ladder, notes = direct_response_parts(ladder)
+    fragment_receipt = None
     if 'r' in ladder or 'root' in ladder or (is_direct and set(ladder) <= {'rungs', 'device_comments'}):
         from application.confirmed_generation_context import project_confirmed_specification
+        from application.instruction_fragments import materialize_instruction_fragments
+        ladder, fragment_receipt = materialize_instruction_fragments(
+            ladder, arguments.get('_instruction_research') or {}, plc_model=context.plc_model,
+            confirmed_spec=candidate_spec)
         projected = candidate_spec if is_direct else project_confirmed_specification(candidate_spec)
         prepared = prepare_model_candidate(ladder, projected or {}, context.plc_model)
         ladder = prepared['ladder']
@@ -404,15 +409,19 @@ def _create_program_candidate(
         confirmed_spec=candidate_spec,
         previous_program=context.program_ir,
     )
+    from simulator.io_example import check_independent_acceptance, check_io_example
+    from plc.ir import ir_to_ladder
+    from agent_runtime.tool_errors import ToolPreconditionError
+    replay_ladder = ir_to_ladder(candidate['candidate_ir'])
+    behavior_result = check_independent_acceptance(replay_ladder, context.plc_model,
+        project_id=context.project_id, confirmed_spec=confirmed_spec)
+    if behavior_result['status'] == 'mismatch':
+        raise ToolPreconditionError('CANDIDATE_BEHAVIOR_MISMATCH', '独立用户验收用例发现确定反例。',
+                                    details={'behavior_result': behavior_result})
     example_result = None
     if 'io_example' in arguments:
-        from simulator.io_example import check_io_example
-        from plc.ir import ir_to_ladder
-        from agent_runtime.tool_errors import ToolPreconditionError
-        example_result = check_io_example(ir_to_ladder(candidate['candidate_ir']), context.plc_model, arguments['io_example'])
-        if example_result['status'] == 'mismatch':
-            raise ToolPreconditionError('CANDIDATE_IO_MISMATCH', '在给定初态与输入下，候选输出与用例不符。',
-                                        details={'io_result': example_result})
+        example_result = {'source': 'generator_self_check',
+                          **check_io_example(replay_ladder, context.plc_model, arguments['io_example'])}
     import tempfile
     from application.fbd import pack_candidate
     from application.session import ProjectSession
@@ -421,7 +430,8 @@ def _create_program_candidate(
         metadata = ProjectSession._ir_metadata(candidate["candidate_ir"])
         metadata.update(target_mode="ladder", plc_model=context.plc_model,
                         validation_profile=candidate["validation_profile"], validation=candidate["diagnostics"],
-                        delivery_requested=True)
+                        delivery_requested=True, behavior_result=copy.deepcopy(behavior_result),
+                        io_example_result=copy.deepcopy(example_result))
         import hashlib
         payload = dict(target_mode="ladder", plc_model=context.plc_model, staging_dir=directory, metadata=metadata,
                        artifacts={key: {"path": value, "sha256": hashlib.sha256((Path(directory) / value).read_bytes()).hexdigest()}
@@ -437,6 +447,10 @@ def _create_program_candidate(
                       "reason": "external_context_not_correlated"},
         )
     generation_handoff = copy.deepcopy(generation_handoff)
+    if fragment_receipt:
+        generation_handoff['instruction_fragments'] = fragment_receipt
+    if arguments.get('_implementation_assumptions'):
+        generation_handoff['implementation_assumptions'] = copy.deepcopy(arguments['_implementation_assumptions'])
     if notes is not None:
         generation_handoff['generator_notes'] = {'source': 'generator', **notes}
     generation_handoff["confirmed_spec_sha256"] = (
@@ -463,13 +477,15 @@ def _create_program_candidate(
         "_validation_profile": candidate["validation_profile"],
         "normalization": copy.deepcopy(candidate["normalization"]),
         "_generation_handoff": generation_handoff,
+        "_behavior_result": copy.deepcopy(behavior_result),
+        "_io_example_result": copy.deepcopy(example_result),
     }
     action.update(target_mode="ladder", _prepared_candidate=frozen_candidate)
     if context.program_ir is not None:
         action.update(base_version_id=context.version_id, base_ir_sha256=canonical_sha256(context.program_ir))
     return {
         "requires_confirmation": True,
-        "message": "程序候选已通过结构检查和临时编译，等待工程确认；行为与原生验证尚未执行。",
+        "message": "程序候选已通过结构检查和临时编译，等待工程确认；有限行为回放见独立结果，原生验证尚未执行。",
         "candidate_id": candidate["candidate_id"],
         "revision": candidate["revision"],
         "summary": copy.deepcopy(candidate["summary"]),
@@ -487,6 +503,7 @@ def _create_program_candidate(
                      "Input sequences, timing and requirement coverage still need independent verification.",
         },
         **({'io_example_result': example_result} if example_result is not None else {}),
+        'behavior_result': behavior_result,
         "pending_action": action,
     }
 

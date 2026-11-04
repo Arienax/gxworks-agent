@@ -11,7 +11,12 @@ _TEXT = {'type': 'string', 'minLength': 1, 'maxLength': 4000}
 _DOCUMENT = {'type': 'string', 'pattern': r'read-[0-9a-f]{32}'}
 REVIEW_SCHEMA = {'type': 'object', 'additionalProperties': False,
     'description': '新设计的选型记录。按实际型号查证每组相关指令，读完分页后填写；引用 delivery.document_id。',
-    'properties': {'context_document': _DOCUMENT,
+    'properties': {'assumptions': {'type': 'array', 'maxItems': 32, 'items': {
+                       'type': 'object', 'additionalProperties': False,
+                       'properties': {'condition': _TEXT, 'source': {'enum': ['user', 'implementation']},
+                                      'quote': _TEXT}, 'required': ['condition', 'source']},
+                       'description': '容量、节拍等新增实现选择记 implementation；user 必须附原消息逐字 quote，不能把模型选择写成用户限制。'},
+                   'context_document': _DOCUMENT,
                    'manual_documents': {'type': 'array', 'items': _DOCUMENT, 'maxItems': 32},
                    'reviewed_instructions': {'type': 'array', 'maxItems': 96,
                        'items': {'type': 'string', 'pattern': r'[A-Z][A-Z0-9_.]*', 'maxLength': 32},
@@ -71,6 +76,25 @@ def research_plan(data):
                 '在 implementation_review 中只记录会改变选择的取舍。'}
 
 
+def direct_choice_input(inputs, research):
+    """Use the task manual and its executable examples in place of speculative search hits."""
+    if not research.get('executable_fragments'):
+        return inputs
+    requested = {row.get('target') for row in (inputs.get('knowledge_coverage') or {}).get('targets', [])}
+    relevant = requested | {op for ops in research['families'].values() for op in ops}
+    knowledge = []
+    for card in inputs.get('knowledge', []):
+        if isinstance(card, dict):
+            target = card.get('target')
+            # A fuzzy example or unnamed search suggestion cannot override an explicit target.
+            if card.get('kind') == 'example' and target not in requested:
+                continue
+            if card.get('kind') == 'instruction' and target and target not in relevant:
+                continue
+        knowledge.append(card)
+    return {**inputs, 'knowledge': knowledge}
+
+
 def _describes_region_update(fact):
     if fact.get('selection_applicability') != 'applicable':
         return False
@@ -104,7 +128,10 @@ def include_manual_facts(plan, context, language):
         facts = unit.get('value', {}).get('facts', [])
         if any(_describes_region_update(fact) for fact in facts):
             group_operations.append(name)
-    return {**plan, **({'group_operations': group_operations} if group_operations else {}),
+    from application.instruction_fragments import executable_fragments
+    fragments = executable_fragments(plan, plc_model=manual['plc_model'], target_mode=language)
+    return {**plan, **({'executable_fragments': fragments} if fragments else {}),
+            **({'group_operations': group_operations} if group_operations else {}),
             'manual': {'plc_model': manual['plc_model'], 'language': language,
             'coverage': manual['coverage'],
             'knowledge': units}}
@@ -116,3 +143,25 @@ def missing_families(groups, researched, review):
     considered = researched & (mentioned | set(review.get('reviewed_instructions', ())))
     missing = [group for group, names in groups.items() if group != 'explicit' and considered.isdisjoint(names)]
     return [*missing, *sorted(set(groups.get('explicit', [])) - considered)]
+
+
+def validate_review_assumptions(review, *, user_requirement=None):
+    """Keep implementation assumptions separate; user quotations must be literal."""
+    from plc.instruction_definition import DefinitionError
+    rows = review.get('assumptions', [])
+    if not isinstance(rows, list) or len(rows) > 32:
+        raise DefinitionError('Implementation assumptions must be a bounded array')
+    result = []
+    for row in rows:
+        if (not isinstance(row, dict) or set(row) - {'condition', 'source', 'quote'}
+                or row.get('source') not in {'user', 'implementation'}
+                or not isinstance(row.get('condition'), str) or not row['condition'].strip()
+                or len(row['condition']) > 4000):
+            raise DefinitionError('Invalid implementation assumption')
+        quote = row.get('quote')
+        if quote is not None and (not isinstance(quote, str) or not quote.strip() or len(quote) > 4000):
+            raise DefinitionError('Invalid assumption quotation')
+        if row['source'] == 'user' and (not quote or not user_requirement or quote not in user_requirement):
+            raise DefinitionError('User assumption requires an exact quote from the original message')
+        result.append(dict(row))
+    return result
