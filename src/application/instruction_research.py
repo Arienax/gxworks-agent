@@ -71,18 +71,43 @@ def research_plan(data):
                 '在 implementation_review 中只记录会改变选择的取舍。'}
 
 
+def _describes_region_update(fact):
+    if fact.get('selection_applicability') != 'applicable':
+        return False
+    dimension = fact['dimension']
+    if dimension.startswith('effects.range_') or dimension == 'constraints.shift_lengths':
+        return True
+    if dimension.endswith('.purpose'):
+        operand = fact['value'].get('value')
+        return isinstance(operand, dict) and str(operand.get('semantic_role', '')).endswith('_region_length')
+    return False
+
+
 def include_manual_facts(plan, context, language):
     """Read the local functional candidates together, preserving fact scopes and gaps."""
     from agent_runtime.manual_tools import _search_plc_manual
     names = list(dict.fromkeys(name for family in plan['families'].values() for name in family))
     if not names:
         return plan
-    manual = _search_plc_manual(context, {'query': ' '.join(names), 'language': language,
-        'aspects': ['purpose', 'arity', 'order', 'roles', 'devices', 'execution', 'constraints'],
+    collection = {name for group in ('queue', 'shift', 'block_move') for name in plan['families'].get(group, [])}
+    aspects = ['purpose', 'arity', 'order', 'roles', 'devices', 'execution', 'constraints']
+    if collection:
+        aspects.append('effects')
+    manual = _search_plc_manual(context, {'query': ' '.join(names), 'language': language, 'aspects': aspects,
         'top_k': 1})
-    return {**plan, 'manual': {'plc_model': manual['plc_model'], 'language': language,
+    units = [unit for row in manual['results'] for unit in row['knowledge']]
+    group_operations = []
+    for unit in units:
+        name = unit.get('target')
+        if name not in collection or name in group_operations:
+            continue
+        facts = unit.get('value', {}).get('facts', [])
+        if any(_describes_region_update(fact) for fact in facts):
+            group_operations.append(name)
+    return {**plan, **({'group_operations': group_operations} if group_operations else {}),
+            'manual': {'plc_model': manual['plc_model'], 'language': language,
             'coverage': manual['coverage'],
-            'knowledge': [unit for row in manual['results'] for unit in row['knowledge']]}}
+            'knowledge': units}}
 
 
 def missing_families(groups, researched, review):

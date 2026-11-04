@@ -1825,7 +1825,8 @@ def test_generation_tool_schemas_describe_only_model_owned_input(empty_project):
     schema = schemas["create_program_candidate"]
     assert schema["required"] == ["ladder"]
     assert schema["additionalProperties"] is False
-    assert set(schema["properties"]) == {"program_name", "ladder", "generation_context_id", "implementation_review"}
+    assert set(schema["properties"]) == {"program_name", "ladder", "generation_context_id", "implementation_review", "io_example"}
+    assert schema["properties"]["io_example"]["properties"]["steps"]["maxItems"] == 16
     review = schema["properties"]["implementation_review"]
     assert set(review["required"]) == {"context_document", "manual_documents", "selected", "alternatives"}
     assert schema["properties"]["generation_context_id"]["type"] == "string"
@@ -3730,6 +3731,20 @@ def test_candidate_io_example_uses_scan_order_and_distinguishes_missing_evidence
     assert check_io_example(program, 'FX3U', example)['status'] == 'passed_in_example'
     example['steps'][1]['at_ms'] = 6
     assert check_io_example(program, 'FX3U', example)['status'] == 'unverified'
+
+
+def test_group_operations_require_scoped_region_facts(monkeypatch):
+    from application.instruction_research import include_manual_facts
+    def search(_, query):
+        assert 'effects' in query['aspects']
+        return {'plc_model': 'FX3U', 'coverage': {}, 'results': [{'knowledge': [
+            {'target': name, 'value': {'facts': [{'dimension': dimension, 'selection_applicability': status,
+                                                  'value': {}}]}}
+            for name, dimension, status in [('BMOV', 'effects.range_copy', 'applicable'),
+                ('MOV', 'effects.expression_write', 'applicable'), ('ALT', 'effects.range_copy', 'unverified')]]}]}
+    monkeypatch.setattr('agent_runtime.manual_tools._search_plc_manual', search)
+    result = include_manual_facts({'families': {'block_move': ['BMOV', 'MOV', 'ALT']}}, None, 'ladder')
+    assert result['group_operations'] == ['BMOV']
 
 
 def test_instruction_selection_requires_relevant_complete_reads_before_submission():
