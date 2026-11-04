@@ -42,7 +42,11 @@ def research_plan(data):
         guide = ' '.join(str(selected.get(key) or '') for key in ('name', 'description', 'generation_guide'))
         try:
             discovery = discover_capabilities(guide, plc_model=data['plc_model'], target_mode=data['target_mode'])
-            cards.extend(discovery['candidates'])
+            for candidate in discovery['candidates']:
+                # Explicit mentions in a model-authored implementation guide are research leads.
+                # Only the original request can require a particular mnemonic.
+                functions = ['selected_approach' if f == 'explicit' else f for f in candidate.get('functions', [])]
+                cards.append({**candidate, 'functions': functions})
             gaps = discovery.get('gaps', [])
         except (OSError, LookupError, ValueError) as error:
             gaps = [{'reason': 'discovery_unavailable', 'error_type': type(error).__name__}]
@@ -53,10 +57,13 @@ def research_plan(data):
             names = groups.setdefault(function, [])
             if card['name'] not in names:
                 names.append(card['name'])
+    comparison = ('沿用用户已选的总体方案，只在这个方案内比较实际指令、数据更新、时序和资源。'
+                  if selected and data.get('workflow_mode') != 'direct_generation' else
+                  '在写程序前，对各个整体方案使用相同的时基、输入节拍与边界条件，'
+                  '估算随工艺规模增长的网络、步数、状态和资源。')
     return {'families': groups, **({'gaps': gaps} if gaps else {}),
             'instructions': '按实际 CPU 和语言检索每组最相关的代表及配套操作；按任务补查列表外的相关指令；一组不适用时查证后说明原因。工程 FB 以当前目录接口为准。'
-                '同一查询可列出多个助记符。读完每份资料的全部分页。在写程序前，对各个整体方案使用相同的时基、输入节拍与边界条件，'
-                '估算随工艺规模增长的网络、步数、状态和资源；内部假设不能当成用户限制来排除另一方案。'
+                '同一查询可列出多个助记符。读完每份资料的全部分页。' + comparison + '内部假设不能当成用户限制。'
                 '在满足实际要求的方案中优先选择重复少、资源少且易维护的实现。比较普通实现与高级指令的语义、成本、限制，'
                 '将所选方案和取舍填入 implementation_review。'}
 

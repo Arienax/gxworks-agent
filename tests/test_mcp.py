@@ -3675,6 +3675,20 @@ def test_external_compact_candidate_uses_web_decoder(direct):
         assert result['generation_handoff']['generator_notes']['decisions'] == ['Use X0']
 
 
+def test_confirmed_guide_names_are_research_leads_separate_from_user_fixed_instructions(monkeypatch):
+    from application.instruction_research import research_plan
+    def discover(*args, **kwargs):
+        return {'candidates': [{'kind': 'instruction', 'name': 'BMOV', 'functions': ['explicit', 'copy']}],
+                'gaps': []}
+    monkeypatch.setattr('knowledge.retriever.discover_capabilities', discover)
+    packet = {'plc_model': 'FX3U', 'target_mode': 'ladder',
+              'knowledge': [{'kind': 'instruction', 'name': 'MOV', 'functions': ['explicit']}],
+              'confirmed_spec': {'selected_approach': {'name': 'Transfer a block'}}}
+    research = research_plan(packet)
+    assert research['families'] == {'explicit': ['MOV'], 'selected_approach': ['BMOV'], 'copy': ['BMOV']}
+    assert '已选' in research['instructions']
+
+
 def test_embedded_instruction_comparison_requires_complete_context_and_records_gaps():
     from application.read_delivery import ReadDeliveryStore
     from agent_runtime.tool_errors import ToolPreconditionError
