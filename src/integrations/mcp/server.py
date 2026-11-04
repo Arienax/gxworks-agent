@@ -63,7 +63,7 @@ WORKFLOW_INSTRUCTIONS = (
     "these are the same engineering context, output guidance and local RAG used by the built-in API. "
     "In local mode, follow create_project.next_actions. For a new Design project get_design_context with the verbatim human requirement, finish its pages, and author 1-3 approaches using the Web Design analysis instructions. Submit propose_design_plan, wait for the human choice, then confirm_design_plan and get_generation_context(workflow=detailed). Implement the chosen approach. Direct generation remains available when explicitly requested. "
     "If a real process fact is missing, ask only the necessary question and do not submit a candidate until answered. "
-    "Pass verbatim human requests only. Keep design choices separate. For a new design, use search_plc_manual on the actual CPU for representatives of each relevant instruction family, including companion operations. Finish every page, compare behavior and cost against an ordinary implementation and submit implementation_review with the candidate. "
+    "Pass verbatim human requests only. Keep design choices separate. For a new design, use instruction_details=true in get_generation_context to read CPU and language-specific instruction facts together, or search_plc_manual for relevant representatives and companion operations. Finish every page, compare behavior and cost against an ordinary implementation and submit implementation_review with the candidate. "
     "Read device numbering, default allocations and configurable conditions from device facts; "
     "read actual allocations and native access through current-project tools. "
     "Design the ladder yourself and submit one full or partial response with create_program_candidate. "

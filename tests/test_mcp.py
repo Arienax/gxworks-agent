@@ -1817,7 +1817,7 @@ def test_generation_tool_schemas_describe_only_model_owned_input(empty_project):
     adapter = MCPToolAdapter(build_default_tool_runtime(), SessionToolContextProvider(store.base_dir, project_id))
     schemas = {tool.name: tool.input_schema for tool in adapter.list_tools()}
     context_schema = schemas["get_generation_context"]
-    assert set(context_schema["properties"]) == {"user_requirement", "workflow", "execution_mode", "cursor", "catalog_scope", "templates"}
+    assert set(context_schema["properties"]) == {"user_requirement", "workflow", "execution_mode", "cursor", "catalog_scope", "templates", "instruction_details"}
     assert context_schema["properties"]["workflow"]["enum"] == ["direct_generation", "detailed"]
     assert context_schema["properties"]["execution_mode"]["enum"] == ["background", "live"]
     assert not context_schema.get("required")
@@ -1936,6 +1936,10 @@ def test_local_design_implements_only_the_selected_web_approach(tmp_path, langua
         assert spec['selected_approach']['approach_id'] == 'contact'
         assert 'output feedback' in spec['selected_approach']['generation_guide']
         assert generation['output_contract']['tool'] == ('create_program_candidate' if language == 'ladder' else f'create_{language}_candidate')
+        if language == 'ladder':
+            assert generation['output_contract']['protocol'] == 'compact_ladder/1.3'
+            Draft202012Validator(generation['generation_input']['output_schema']).validate(
+                {'r': [{'c': ['NO X0'], 'b': [{'i': [], 'o': ['COIL Y0']}]}], 'device_comments': [{'address': 'Y0', 'comment': 'Run'}]})
 
 
 def test_versionless_generation_context_and_candidate_over_mcp(empty_project):
@@ -3636,6 +3640,41 @@ def test_manual_search_inherits_language_and_reports_one_local_miss(
     assert calls == [(query, language)]
     assert (result['language'], result['language_source']) == (language, source)
     assert result['coverage']['language']['missing_languages'] == [language]
+
+
+@pytest.mark.parametrize("direct", [True, False])
+def test_external_compact_candidate_uses_web_decoder(direct):
+    from agent_runtime.generation_tools import _create_program_candidate
+    from agent_runtime.tool_context import ToolContext
+    ctx = ToolContext(project={'id': 'compact', 'name': 'Compact', 'plc_model': 'FX3U', 'target_mode': 'ladder'})
+    program = {'r': [{'c': ['NO X0'], 'b': [{'i': [], 'o': ['COIL Y0']}]}], 'device_comments': [{'address': 'Y0', 'comment': 'Run'}]}
+    handoff = {'mode': 'direct_generation', 'raw_requirement': 'X0 controls Y0.'} if direct else {'stage': 'generate'}
+    value = {'result': {'program': program, 'decisions': ['Use X0'], 'open_items': []}} if direct else program
+    result = _create_program_candidate(ctx, {'ladder': value}, generation_handoff=handoff)
+    assert result['summary']['network_count'] == 1
+    if direct:
+        assert result['generation_handoff']['generator_notes']['decisions'] == ['Use X0']
+
+
+def test_embedded_instruction_comparison_requires_complete_context_and_records_gaps():
+    from application.read_delivery import ReadDeliveryStore
+    from agent_runtime.tool_errors import ToolPreconditionError
+    store = ReadDeliveryStore(max_tokens=1400, max_bytes=5600)
+    binding = ('FX3U', 'vectors')
+    research = {'families': {'copy': ['BMOV']}, 'manual': {'coverage': {'targets': [
+        {'kind': 'instruction', 'target': 'BMOV', 'status': 'incomplete'}]}}}
+    page = store.prepare({'tool': 'get_generation_context', 'data': {'instruction_research': research,
+        'evidence': [{'part': i, 'value': 'x' * 620} for i in range(30)]}}, {}, binding)
+    review = {'context_document': page['data']['delivery']['document_id'], 'manual_documents': [],
+              'selected': 'BMOV copies the contiguous block.', 'alternatives': [{'method': 'MOV',
+              'tradeoff': 'Individual copies repeat once per element.'}]}
+    with pytest.raises(ToolPreconditionError, match='未读页'):
+        store.check_review(binding, review)
+    while follow := page['data']['delivery']['next']:
+        page = store.resume(follow['tool'], follow['arguments'], binding)
+    with pytest.raises(ToolPreconditionError, match='未证实'):
+        store.check_review(binding, review)
+    store.check_review(binding, {**review, 'limitations': 'Transfer overlap was not established.'})
 
 
 def test_instruction_selection_requires_relevant_complete_reads_before_submission():

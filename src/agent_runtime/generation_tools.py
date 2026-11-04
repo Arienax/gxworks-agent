@@ -293,27 +293,34 @@ def _get_generation_context(
     current_ladder = public_generation_ladder(source)
     user_requirement = public_generation_value(str(arguments.get("user_requirement") or ""))
     is_edit_mode = target_mode == "ladder" and current_ladder is not None
-    if (target_mode == "ladder" and not is_edit_mode
-            and arguments.get("workflow") != "detailed"
-            and (not confirmed_spec or arguments.get("workflow") == "direct_generation")
-            and str(arguments.get("user_requirement") or "").strip()):
-        from application.confirmed_generation_context import build_direct_generation_context
-        from application.generation_agent import _compact_wire_renderer, direct_response_schema
+    direct = (arguments.get('workflow') != 'detailed' and bool(user_requirement.strip()) and
+              (not confirmed_spec or arguments.get('workflow') == 'direct_generation'))
+    design = arguments.get('workflow') == 'detailed' and bool(confirmed_spec)
+    if target_mode == 'ladder' and not is_edit_mode and (direct or design):
+        from application.confirmed_generation_context import build_direct_generation_context, build_confirmed_generation_context
+        from application.generation_agent import _compact_wire_renderer
+        from application.construction_examples import prepare_construction_examples
         from application.compact_protocol import PROTOCOL_VERSION
-        raw = str(arguments["user_requirement"])
-        direct = build_direct_generation_context(raw, context.plc_model, confirmed_spec=confirmed_spec,
-            knowledge_builder=_build_knowledge_context, model_profile={},
-            wire_renderer=_compact_wire_renderer(context.plc_model, direct=True))
-        generation_input = expand_context_document(json.loads(direct.wire_packet['messages'][1]['content']))
-        return {"project_id": context.project_id, "plc_model": context.plc_model, "target_mode": target_mode,
-                "workflow_mode": "direct_generation", "has_confirmed_spec": bool(confirmed_spec),
-                "confirmed_spec_ref": '#/generation_input/confirmed_spec',
-                "generation_input": generation_input,
-                "current_version_id": None, "generation_request": raw,
-                "generation_instructions": direct.wire_packet["messages"][0]["content"],
-                "generation_handoff": direct.handoff,
-                "output_contract": {"tool": "create_program_candidate", "protocol": PROTOCOL_VERSION,
-                                    "schema_ref": '#/generation_input/output_schema', "needs_input": "向用户提出必要问题，解决前不得创建候选。"}}
+        projected = project_confirmed_specification(confirmed_spec)
+        examples = prepare_construction_examples(context.plc_model, None, projected)
+        options = dict(knowledge_builder=_build_knowledge_context, model_profile={},
+                       wire_renderer=_compact_wire_renderer(context.plc_model, direct=direct, example_block=examples))
+        if direct:
+            packet = build_direct_generation_context(str(arguments['user_requirement']), context.plc_model,
+                                                     confirmed_spec=confirmed_spec, **options)
+        else:
+            packet = build_confirmed_generation_context(projected, context.plc_model,
+                         decision_receipt_id=_decision_receipt_id(context), **options)
+        handoff = {**packet.handoff, 'construction_examples': examples.manifest(),
+                   'output_contract': {'protocol': PROTOCOL_VERSION}}
+        generation_input = expand_context_document(json.loads(packet.wire_packet['messages'][1]['content']))
+        return {'project_id': context.project_id, 'plc_model': context.plc_model, 'target_mode': target_mode,
+                'workflow_mode': 'direct_generation' if direct else 'detailed', 'has_confirmed_spec': bool(confirmed_spec),
+                'confirmed_spec_ref': '#/generation_input/confirmed_spec', 'generation_input': generation_input,
+                'current_version_id': None, 'generation_request': packet.generation_request,
+                'generation_instructions': packet.wire_packet['messages'][0]['content'], 'generation_handoff': handoff,
+                'output_contract': {'tool': 'create_program_candidate', 'protocol': PROTOCOL_VERSION,
+                                    'argument': 'ladder', 'schema_ref': '#/generation_input/output_schema'}}
     if target_mode == "ladder" and isinstance(confirmed_spec, Mapping) and confirmed_spec:
         public_spec = project_confirmed_specification(confirmed_spec)
         if not is_edit_mode:
@@ -373,12 +380,23 @@ def _create_program_candidate(
     confirmed_spec = copy.deepcopy(_confirmed_spec(context))
     candidate_spec = confirmed_spec
     ladder = arguments["ladder"]
-    if isinstance(generation_handoff, dict) and generation_handoff.get("mode") == "direct_generation":
+    from application.generation_agent import direct_response_parts, prepare_model_candidate
+    is_direct = (generation_handoff or {}).get('mode') == 'direct_generation'
+    notes = None
+    if is_direct:
         from application.confirmed_generation_context import project_direct_user_facts
-        from application.generation_agent import prepare_model_candidate
-        candidate_spec = project_direct_user_facts(generation_handoff["raw_requirement"], context.plc_model, confirmed_spec)
-        if isinstance(ladder, Mapping) and ("r" in ladder or "result" in ladder):
-            ladder = prepare_model_candidate(ladder, candidate_spec, context.plc_model)["ladder"]
+        candidate_spec = project_direct_user_facts(generation_handoff['raw_requirement'], context.plc_model, confirmed_spec)
+    wrapped = set(ladder) == {'result'} or ('program' in ladder and set(ladder) <= {'program', 'decisions', 'open_items'})
+    if is_direct or wrapped:
+        ladder, notes = direct_response_parts(ladder)
+    if 'r' in ladder or 'root' in ladder or (is_direct and set(ladder) <= {'rungs', 'device_comments'}):
+        from application.confirmed_generation_context import project_confirmed_specification
+        projected = candidate_spec if is_direct else project_confirmed_specification(candidate_spec)
+        prepared = prepare_model_candidate(ladder, projected or {}, context.plc_model)
+        ladder = prepared['ladder']
+        if generation_handoff is not None:
+            generation_handoff = {**generation_handoff, **{key: prepared[key] for key in (
+                'operation_binding', 'construction_binding', 'confirmed_predicate_binding')}}
     candidate = core.create_program_candidate(
         ladder,
         plc_model=context.plc_model,
@@ -410,6 +428,8 @@ def _create_program_candidate(
                       "reason": "external_context_not_correlated"},
         )
     generation_handoff = copy.deepcopy(generation_handoff)
+    if notes is not None:
+        generation_handoff['generator_notes'] = {'source': 'generator', **notes}
     generation_handoff["confirmed_spec_sha256"] = (
         canonical_sha256(confirmed_spec) if confirmed_spec is not None else None)
     generation_handoff["external_model_use"] = "not_observed"

@@ -228,7 +228,12 @@ class ToolRegistry:
                 if (name == 'get_generation_context' and not context.version_id
                         and (decoded.get('user_requirement') or data.get('has_confirmed_spec'))
                         and data.get('output_contract', {}).get('tool') in CANDIDATE_TOOLS):
-                    public['data']['instruction_research'] = research_plan(public['data'])
+                    plan = research_plan(public['data'])
+                    if decoded.get('instruction_details'):
+                        from application.instruction_research import include_manual_facts
+                        manual_context = resolve_tool_context(self._tools['search_plc_manual'], project_context, {})
+                        plan = include_manual_facts(plan, manual_context, data['target_mode'])
+                    public['data']['instruction_research'] = plan
                 # Manual lookup normalizes CPU aliases; compare against the original project snapshot.
                 review_binding = (read_binding(project_context) if name == 'search_plc_manual'
                                   and project_context and project_context.plc_model != context.plc_model else binding)

@@ -183,6 +183,7 @@ def generation_definitions(generation):
                     "type": "string", "maxLength": 64000,
                     "description": "逐字传入用户消息，可按时间顺序换行拼接多轮原文。不得加入模型提出的方案、容量、地址或检索词。省略时只读取工程上下文。",
                 },
+                "instruction_details": {"type": "boolean", "description": "新建程序时随上下文一次读取当前型号和工程语言的候选指令事实与缺项。读完后在同一次生成中比较和提交。"},
                 "workflow": {"type": "string", "enum": ["direct_generation", "detailed"],
                              "description": "新 Ladder 有原始需求时默认 Direct；已确认规格可显式选 Direct，编辑仍沿用原入口。"},
                 "execution_mode": {"type": "string", "enum": ["background", "live"],
@@ -208,7 +209,7 @@ def generation_definitions(generation):
                 },
                 "ladder": {
                     "type": "object",
-                    "description": "Full or partial ladder JSON from get_generation_context; the shared API parser validates and normalizes compatible encodings.",
+                    "description": "新程序按 output_schema 原样填入此字段：Direct 使用 {result:{program:{r:[...]},decisions:[],open_items:[]}}，已确认的 Design 使用 {r:[...]}。不要用示例或空工程试格式。编辑沿用当前合同。",
                 },
                 "generation_context_id": {
                     "type": "string", "maxLength": 128,

@@ -55,8 +55,24 @@ def research_plan(data):
                 names.append(card['name'])
     return {'families': groups, **({'gaps': gaps} if gaps else {}),
             'instructions': '按实际 CPU 和语言检索每组最相关的代表及配套操作；按任务补查列表外的相关指令；一组不适用时查证后说明原因。工程 FB 以当前目录接口为准。'
-                '读完每份手册与上下文的全部分页。比较普通实现与高级指令的语义、成本、限制，'
+                '同一查询可列出多个助记符。读完每份资料的全部分页。在写程序前，对各个整体方案使用相同的时基、输入节拍与边界条件，'
+                '估算随工艺规模增长的网络、步数、状态和资源；内部假设不能当成用户限制来排除另一方案。'
+                '在满足实际要求的方案中优先选择重复少、资源少且易维护的实现。比较普通实现与高级指令的语义、成本、限制，'
                 '将所选方案和取舍填入 implementation_review。'}
+
+
+def include_manual_facts(plan, context, language):
+    """Read the local functional candidates together, preserving fact scopes and gaps."""
+    from agent_runtime.manual_tools import _search_plc_manual
+    names = list(dict.fromkeys(name for family in plan['families'].values() for name in family))
+    if not names:
+        return plan
+    manual = _search_plc_manual(context, {'query': ' '.join(names), 'language': language,
+        'aspects': ['purpose', 'arity', 'order', 'roles', 'devices', 'execution', 'constraints'],
+        'top_k': 1})
+    return {**plan, 'manual': {'plc_model': manual['plc_model'], 'language': language,
+            'coverage': manual['coverage'],
+            'knowledge': [unit for row in manual['results'] for unit in row['knowledge']]}}
 
 
 def missing_families(groups, researched, review):

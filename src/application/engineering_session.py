@@ -96,7 +96,7 @@ class EngineeringSession:
               "use_labels": {"type": "boolean"}},
              ("name", "plc_model", "target_mode"), self._create_project),
             ("get_design_context", "Start Web Design analysis for a new program. Pass the complete human requirement. Use the returned instructions to design approaches before writing any program.",
-             {"user_requirement": {"type": "string", "minLength": 1}}, (), self._design_context),
+             {"user_requirement": {"type": "string", "minLength": 1}, "instruction_details": {"type": "boolean"}}, (), self._design_context),
             ("propose_design_plan", "Submit the external model's Web Design analysis JSON, including 1-3 approaches, or recall the current draft with empty arguments. Resolve required facts with the user before confirmation.",
              {"analysis_id": {"type": "string"}, "analysis": {"type": "object"}}, (), self._design_proposal),
             ("confirm_design_plan", "Persist only the approach the user approved in this exact draft. Follow next_actions to generate from the confirmed specification.",
@@ -152,6 +152,8 @@ class EngineeringSession:
         if mode == 'design':
             self.design.start(self.project_id)
             result['next_actions'] = [{'tool': 'get_design_context'}]
+        elif mode == 'direct':
+            result['next_actions'] = [{'tool': 'get_generation_context'}]
         return result
 
     def _new_design_project(self):
@@ -164,7 +166,8 @@ class EngineeringSession:
     def _design_context(self, _context, arguments):
         if not arguments.get('user_requirement'):
             raise ValueError('首次读取请传入完整 user_requirement；续页请直接使用 delivery.next。')
-        return self.design.context(self._new_design_project(), arguments['user_requirement'])
+        return self.design.context(self._new_design_project(), arguments['user_requirement'],
+                                   manual_context=_context if arguments.get('instruction_details') else None)
 
     def _design_proposal(self, _context, arguments):
         project_id = self._new_design_project()

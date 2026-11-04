@@ -33,7 +33,7 @@ class DesignSession:
             raise ToolPreconditionError('DESIGN_CONFIRMED', '请按已确认规格实施。',
                 next_actions=[{'tool': 'get_generation_context', 'arguments': {'workflow': 'detailed'}}])
 
-    def context(self, project_id, requirement):
+    def context(self, project_id, requirement, *, manual_context=None):
         from application.analysis_context import assemble_analysis_prompt
         from application.analysis_results import attach_analysis_evidence
         from application.generation_context import _build_knowledge_context, _load_plc_models
@@ -59,7 +59,15 @@ class DesignSession:
         instructions = prompt.system_prompt
         if prompt.knowledge_context.strip():
             instructions = instructions.replace(prompt.knowledge_context.strip(), 'See the knowledge field.', 1)
-        return {'analysis_id': state['analysis_id'], 'analysis_mode': 'design', 'plc_model': model,
+        extra = {}
+        if manual_context is not None:
+            from application.instruction_research import include_manual_facts, research_plan
+            from knowledge.retriever import discover_capabilities
+            language = project['target_mode']
+            discovery = discover_capabilities(requirement, plc_model=model, target_mode=language)
+            plan = research_plan({'knowledge': discovery['candidates']})
+            extra['instruction_research'] = include_manual_facts(plan, manual_context, language)
+        return {'analysis_id': state['analysis_id'], 'analysis_mode': 'design', 'plc_model': model, **extra,
                 'target_mode': project['target_mode'], 'analysis_instructions': instructions,
                 'knowledge': technical_context_units(prompt.knowledge_context),
                 'next_actions': [{'tool': 'propose_design_plan'}]}
@@ -104,7 +112,7 @@ class DesignSession:
                 'next_actions': [{'tool': 'confirm_design_plan'}] if draft.get('approaches') else []}
 
     def confirm(self, project_id, draft_id, approach_id):
-        state, _ = self._pending(project_id)
+        state, project = self._pending(project_id)
         if state.get('draft_id') != draft_id:
             raise ValueError('草稿已替换，请重新查看当前计划。')
         draft = state['draft']
@@ -116,6 +124,7 @@ class DesignSession:
         if not saved['valid']:
             return {'confirmed': False, 'issues': saved['issues'], 'next_actions': [{'tool': 'propose_design_plan'}]}
         atomic_json(self._path(project_id), {'stage': 'confirmed'})
-        return {'confirmed': True, 'approach_id': approach_id, 'spec_hash': saved['hash'],
+        return {'confirmed': True, 'project_id': project_id, 'target_mode': project['target_mode'],
+                'approach_id': approach_id, 'spec_hash': saved['hash'],
                 'decision_receipt_id': self.service.projects.raw_project(project_id)['confirmed_decision_receipt_id'],
                 'next_actions': [{'tool': 'get_generation_context', 'arguments': {'workflow': 'detailed'}}]}
