@@ -2359,6 +2359,7 @@ def test_gxworks2_installation_discovery_without_open_windows(tmp_path, monkeypa
     native = NativeReadBackend()
     session.inspection = ProgramInspectionService(native=native)
     path = tmp_path / "custom install" / "GPPW2" / "GD2.exe"
+    monkeypatch.setenv("PLC_AI_DATA_DIR", str(tmp_path / "user-data"))
     if located:
         path.parent.mkdir(parents=True)
         path.touch()

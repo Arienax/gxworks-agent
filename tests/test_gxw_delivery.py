@@ -414,6 +414,7 @@ def test_native_compile_rejection_keeps_saved_gxw_and_previous_active_version(tm
 @pytest.mark.parametrize('source', ['configured', 'running', 'registry'])
 def test_finder_accepts_custom_install_directories(tmp_path, monkeypatch, source):
     from gxworks2.finder import GXWorks2Finder
+    monkeypatch.setenv('PLC_AI_DATA_DIR', str(tmp_path / 'data'))
     folder = tmp_path / '非系统盘 自定义目录' / 'GPPW2'
     folder.mkdir(parents=True)
     executable = folder / 'GD2.exe'
@@ -427,9 +428,37 @@ def test_finder_accepts_custom_install_directories(tmp_path, monkeypatch, source
     assert GXWorks2Finder().find_executable() == executable.resolve()
 
 
+def test_finder_reuses_persisted_installation_and_recovers_after_move(tmp_path, monkeypatch):
+    from gxworks2.finder import GXWorks2Finder
+    monkeypatch.delenv('GXWORKS2_EXE', raising=False)
+    monkeypatch.setenv('PLC_AI_DATA_DIR', str(tmp_path / 'data'))
+    cache = tmp_path / 'data/gxworks2-installation.json'
+    old = tmp_path / 'old/GD2.exe'
+    new = tmp_path / 'new/GD2.exe'
+    old.parent.mkdir()
+    old.touch()
+    scans = []
+
+    def registered():
+        scans.append(1)
+        return [old, new]
+
+    monkeypatch.setattr(GXWorks2Finder, '_registered_executables', staticmethod(registered))
+    assert GXWorks2Finder().find_executable(sessions=[]) == old
+    assert json.loads(cache.read_text(encoding='utf-8')) == {'gx_works2_executable': str(old)}
+    assert GXWorks2Finder().find_executable(sessions=[]) == old
+    assert len(scans) == 1
+    new.parent.mkdir()
+    old.rename(new)
+    assert GXWorks2Finder().find_executable(sessions=[]) == new
+    assert len(scans) == 2
+    assert json.loads(cache.read_text(encoding='utf-8')) == {'gx_works2_executable': str(new)}
+
+
 @pytest.mark.parametrize('found', [True, False])
 def test_finder_checks_all_fixed_drives_and_ignores_stale_candidates(tmp_path, monkeypatch, found):
     from gxworks2.finder import GXWorks2Finder
+    monkeypatch.setenv('PLC_AI_DATA_DIR', str(tmp_path / 'data'))
     monkeypatch.setenv('GXWORKS2_EXE', str(tmp_path / 'missing/GD2.exe'))
     monkeypatch.setattr(GXWorks2Finder, 'INSTALL_CANDIDATES', ())
     monkeypatch.setattr(GXWorks2Finder, 'list_running', lambda self: [])
