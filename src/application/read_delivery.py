@@ -464,7 +464,9 @@ class ReadDeliveryStore:
             researched.update(row['target'] for row in embedded if row.get('kind') == 'instruction')
             missing = missing_families(generation['research']['families'], researched, review)
             alternatives = review['alternatives']
-            if (missing or not review['selected'].strip() or (generation['research']['families'] and not alternatives)
+            if (missing or not review['selected'].strip() or (generation['research']['families']
+                    and not alternatives and 'reviewed_instructions' not in review)
+                    or not researched.issuperset(review.get('reviewed_instructions', ()))
                     or any(not row['method'].strip() or not row['tradeoff'].strip() for row in alternatives)):
                 raise ToolPreconditionError('INSTRUCTION_COMPARISON_INCOMPLETE',
                     '请查证并在比较中指明每组的代表指令，说明所选实现的取舍与资料缺口。',

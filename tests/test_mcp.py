@@ -3708,6 +3708,28 @@ def test_embedded_instruction_comparison_requires_complete_context_and_records_g
     with pytest.raises(ToolPreconditionError, match='未证实'):
         store.check_review(binding, review)
     store.check_review(binding, {**review, 'limitations': 'Transfer overlap was not established.'})
+    compact = {**review, 'selected': 'Copy the block.', 'alternatives': [],
+               'reviewed_instructions': ['BMOV'], 'limitations': 'Transfer overlap is unspecified.'}
+    store.check_review(binding, compact)
+    with pytest.raises(ToolPreconditionError, match='代表指令'):
+        store.check_review(binding, {**compact, 'reviewed_instructions': ['UNREAD']})
+
+
+def test_candidate_io_example_uses_scan_order_and_distinguishes_missing_evidence():
+    from application.compact_protocol import expand_compact_ladder
+    from simulator.io_example import check_io_example
+    # Acknowledging one request must not admit the second output on that same scan.
+    program = expand_compact_ladder({'r': [
+        {'c': ['NO X0'], 'b': [{'i': [], 'o': ['SET M0']}]},
+        {'c': ['NO X0', 'NO M0'], 'b': [{'i': [], 'o': ['COIL Y1']}]}], 'device_comments': []})
+    example = {'scan_ms': 5, 'steps': [{'at_ms': 0, 'set': {'X0': 0}},
+        {'at_ms': 5, 'set': {'X0': 1}, 'expect': {'Y1': 0}}]}
+    result = check_io_example(program, 'FX3U', example)
+    assert (result['status'], result['actual'], result['network_indexes']) == ('mismatch', True, [0, 1])
+    example['steps'][1]['expect']['Y1'] = 1
+    assert check_io_example(program, 'FX3U', example)['status'] == 'passed_in_example'
+    example['steps'][1]['at_ms'] = 6
+    assert check_io_example(program, 'FX3U', example)['status'] == 'unverified'
 
 
 def test_instruction_selection_requires_relevant_complete_reads_before_submission():

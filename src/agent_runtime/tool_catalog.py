@@ -6,6 +6,7 @@ from __future__ import annotations
 from itertools import chain
 from agent_runtime.tool_policy import SAFE_TOOL_NAMES
 from agent_runtime.tool_registry import ToolDefinition
+from simulator.io_example import IO_EXAMPLE_SCHEMA
 from agent_runtime.engineering_schema import (
     _engineering_object,
     _engineering_native_schema,
@@ -211,6 +212,7 @@ def generation_definitions(generation):
                     "type": "object",
                     "description": "新程序按 output_schema 原样填入此字段：Direct 使用 {result:{program:{r:[...]},decisions:[],open_items:[]}}，已确认的 Design 使用 {r:[...]}。不要用示例或空工程试格式。编辑沿用当前合同。",
                 },
+                "io_example": IO_EXAMPLE_SCHEMA,
                 "generation_context_id": {
                     "type": "string", "maxLength": 128,
                     "description": "Copy the ID returned by get_generation_context to preserve source lineage. Optional; absence or expiry is recorded as a trace gap, not a validation failure.",

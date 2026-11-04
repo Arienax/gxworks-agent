@@ -13,6 +13,9 @@ REVIEW_SCHEMA = {'type': 'object', 'additionalProperties': False,
     'description': '新设计的选型记录。按实际型号查证每组相关指令，读完分页后填写；引用 delivery.document_id。',
     'properties': {'context_document': _DOCUMENT,
                    'manual_documents': {'type': 'array', 'items': _DOCUMENT, 'maxItems': 32},
+                   'reviewed_instructions': {'type': 'array', 'maxItems': 96,
+                       'items': {'type': 'string', 'pattern': r'[A-Z][A-Z0-9_.]*', 'maxLength': 32},
+                       'description': '各相关功能已读的代表助记符。方案取舍在 alternatives 只写一次。'},
                    'limitations': {**_TEXT, 'description': '查询覆盖不完整时，具体说明仍未知的条件和对选型的影响。'},
                    'selected': {**_TEXT, 'description': '最终采用的实现与理由。'},
                    'alternatives': {'type': 'array', 'maxItems': 32, 'items': {'type': 'object',
@@ -59,13 +62,13 @@ def research_plan(data):
                 names.append(card['name'])
     comparison = ('沿用用户已选的总体方案，只在这个方案内比较实际指令、数据更新、时序和资源。'
                   if selected and data.get('workflow_mode') != 'direct_generation' else
-                  '在写程序前，对各个整体方案使用相同的时基、输入节拍与边界条件，'
-                  '估算随工艺规模增长的网络、步数、状态和资源。')
+                  '若准备按元素或通道复制逻辑，用一两句话比较另一种状态表示：什么保存状态、什么事件推进状态，'
+                  '哪条原始要求使其中一种不适用。一个用法的缺点不能排除该指令的其他用法。')
     return {'families': groups, **({'gaps': gaps} if gaps else {}),
             'instructions': '按实际 CPU 和语言检索每组最相关的代表及配套操作；按任务补查列表外的相关指令；一组不适用时查证后说明原因。工程 FB 以当前目录接口为准。'
                 '同一查询可列出多个助记符。读完每份资料的全部分页。' + comparison + '内部假设不能当成用户限制。'
-                '在满足实际要求的方案中优先选择重复少、资源少且易维护的实现。比较普通实现与高级指令的语义、成本、限制，'
-                '将所选方案和取舍填入 implementation_review。'}
+                '在满足实际要求的方案中优先选择重复少且易维护的实现。用 reviewed_instructions 记已查指令，'
+                '在 implementation_review 中只记录会改变选择的取舍。'}
 
 
 def include_manual_facts(plan, context, language):
@@ -85,6 +88,6 @@ def include_manual_facts(plan, context, language):
 def missing_families(groups, researched, review):
     text = ' '.join([review['selected'], *(row['method'] + ' ' + row['tradeoff'] for row in review['alternatives'])])
     mentioned = set(re.findall(r'[A-Z][A-Z0-9_]*(?:\.[A-Z0-9_]+)*', text.upper()))
-    considered = researched & mentioned
+    considered = researched & (mentioned | set(review.get('reviewed_instructions', ())))
     missing = [group for group, names in groups.items() if group != 'explicit' and considered.isdisjoint(names)]
     return [*missing, *sorted(set(groups.get('explicit', [])) - considered)]

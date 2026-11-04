@@ -404,6 +404,15 @@ def _create_program_candidate(
         confirmed_spec=candidate_spec,
         previous_program=context.program_ir,
     )
+    example_result = None
+    if 'io_example' in arguments:
+        from simulator.io_example import check_io_example
+        from plc.ir import ir_to_ladder
+        from agent_runtime.tool_errors import ToolPreconditionError
+        example_result = check_io_example(ir_to_ladder(candidate['candidate_ir']), context.plc_model, arguments['io_example'])
+        if example_result['status'] == 'mismatch':
+            raise ToolPreconditionError('CANDIDATE_IO_MISMATCH', '在给定初态与输入下，候选输出与用例不符。',
+                                        details={'io_result': example_result})
     import tempfile
     from application.fbd import pack_candidate
     from application.session import ProjectSession
@@ -477,6 +486,7 @@ def _create_program_candidate(
             "scope": "API structural acceptance, IR consistency and temporary artifact compilation only. Static findings are diagnostics. "
                      "Input sequences, timing and requirement coverage still need independent verification.",
         },
+        **({'io_example_result': example_result} if example_result is not None else {}),
         "pending_action": action,
     }
 
