@@ -2208,6 +2208,9 @@ class _InspectionNative:
     def sessions(self):
         return self.current
 
+    def installed_executable(self, sessions):
+        return Path(r"D:\MELSOFT\GPPW2\GD2.exe")
+
     def identity(self, session, program="MAIN"):
         return {"cpu_menu": self.cpu, "program_name": program,
                 "project_name": session.project_name, "program_source_confirmed": True,
@@ -2348,6 +2351,43 @@ def test_simulator_scenario_schema_exposes_tolerance_and_core_signal_limit():
         normalize_scenario({"signals": signals})
 
 
+@pytest.mark.parametrize("located", [True, False])
+def test_gxworks2_installation_discovery_without_open_windows(tmp_path, monkeypatch, located):
+    from application.program_inspection import NativeReadBackend, ProgramInspectionService
+    from integrations.mcp.local_adapter import LocalMCPToolAdapter
+    session, _ = _inspection_session(tmp_path)
+    native = NativeReadBackend()
+    session.inspection = ProgramInspectionService(native=native)
+    path = tmp_path / "custom install" / "GPPW2" / "GD2.exe"
+    if located:
+        path.parent.mkdir(parents=True)
+        path.touch()
+    monkeypatch.delenv("GXWORKS2_EXE", raising=False)
+    monkeypatch.setattr(native.finder, "list_running", lambda: [])
+    monkeypatch.setattr(native.finder, "_registered_executables", lambda: [path])
+    monkeypatch.setattr(native.finder, "INSTALL_CANDIDATES", ())
+    monkeypatch.setattr(native.finder, "_fixed_drives", lambda: [])
+    adapter = LocalMCPToolAdapter(session)
+    result = adapter.call_tool("list_gxworks2_sessions", {}, "inventory")
+    assert not result.is_error
+    data = _mcp_body(result)["data"]
+    assert data["gx_works2_installed"] is located
+    assert data["gx_works2_executable"] == (str(path) if located else None)
+    assert data["sessions"] == [] and data["selection_status"] == "none"
+
+
+def test_gxworks2_window_without_a_project_keeps_installation_visible(tmp_path):
+    from dataclasses import replace
+    from integrations.mcp.local_adapter import LocalMCPToolAdapter
+    session, native = _inspection_session(tmp_path)
+    native.current = [replace(window, project_name="", project_open=False, project_state_known=known)
+                      for window, known in zip(native.current, [True, False])]
+    result = LocalMCPToolAdapter(session).call_tool("list_gxworks2_sessions", {}, "inventory")
+    data = _mcp_body(result)["data"]
+    assert data["gx_works2_installed"] and data["gx_works2_executable"]
+    assert [window["project_open"] for window in data["sessions"]] == [False, None]
+
+
 def test_unselected_mcp_discovers_and_analyzes_explicit_native_source_without_saving(tmp_path):
     import jsonschema
     from integrations.mcp.local_adapter import LocalMCPToolAdapter
@@ -2357,6 +2397,7 @@ def test_unselected_mcp_discovers_and_analyzes_explicit_native_source_without_sa
     listed = adapter.call_tool("list_gxworks2_sessions", {}, "inventory")
     assert not listed.is_error
     assert _mcp_body(listed)["data"]["selection_status"] == "ambiguous"
+    assert all(row["project_open"] for row in _mcp_body(listed)["data"]["sessions"])
     schemas = {tool.name: tool.output_schema for tool in adapter.list_tools()}
     jsonschema.validate(_mcp_body(listed), schemas["list_gxworks2_sessions"])
     ref = _mcp_body(listed)["data"]["sessions"][0]["session_id"]

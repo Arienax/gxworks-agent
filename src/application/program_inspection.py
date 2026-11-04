@@ -75,6 +75,9 @@ class NativeReadBackend:
     def sessions(self):
         return self.finder.list_running()
 
+    def installed_executable(self, sessions):
+        return self.finder.find_executable(sessions=sessions)
+
     def identity(self, session, program="MAIN"):
         from gxworks2.ui_automation import PywinautoGXWorks2UIAutomation
         return PywinautoGXWorks2UIAutomation(program=program).inspect_read_identity(session)
@@ -130,6 +133,7 @@ class ProgramInspectionService:
     def list_gxworks2_sessions(self):
         candidates = []
         current = self.native.sessions()
+        executable = self.native.installed_executable(current)
         for session in current:
             existing = next((key for key, item in self._sessions.items()
                              if _session_identity(item["session"]) == _session_identity(session)
@@ -146,10 +150,13 @@ class ProgramInspectionService:
             self._sessions[ref] = {"session": session, "identity": identity, "created": self._clock()}
             candidates.append({"session_id": ref, "process_id": session.process_id,
                 "window_handle": session.window_handle, "project_hint": session.project_name,
+                "project_open": session.project_open if session.project_open or session.project_state_known else None,
                 "software_version": session.software_version or None,
                 "native_identity": identity, "readable": identity is not None,
                 "readability_reason": reason})
-        return {"sessions": candidates, "selection_status": "none" if not candidates else
+        return {"gx_works2_installed": executable is not None,
+                "gx_works2_executable": str(executable) if executable is not None else None,
+                "sessions": candidates, "selection_status": "none" if not candidates else
                 "ambiguous" if len(candidates) > 1 else "candidate", "selected_session_id": None,
                 "next_actions": [{"tool": "read_gxworks2_snapshot", "required_arguments": ["session_id"]}]
                                  if candidates else []}

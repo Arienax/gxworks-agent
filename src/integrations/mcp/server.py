@@ -34,6 +34,8 @@ WORKFLOW_INSTRUCTIONS = (
     "Pass language and aspects for targeted manual questions. Use returned operands, purpose, conditions and examples; "
     "coverage identifies answered aspects and additional information, while call fields describe current Core support. "
     "get_current_project queries Agent project selection; selection_status=none is normal and does not block inspection. "
+    "Use list_gxworks2_sessions to check installation and the executable path, including when no window is open. "
+    "Use gx_works2_installed and gx_works2_executable for installation, and sessions for visible windows. "
     "For an already-open/imported program, call list_gxworks2_sessions, explicitly choose the matching session_id, "
     "then read_gxworks2_snapshot. Use its source_ref with get_current_program_info/read_network and static checks. "
     "When GX Works2 is not running but the exported program CSV and comment CSV are at hand, call "

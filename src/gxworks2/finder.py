@@ -17,12 +17,14 @@ class GXWorks2Finder:
         Path(r"D:\GXWORKS2\GPPW2\GD2.exe"),
     )
 
-    def find_executable(self):
+    def find_executable(self, *, sessions=None):
         configured = os.path.expandvars(os.environ.get("GXWORKS2_EXE", "").strip().strip('"'))
         if configured and Path(configured).is_file() and Path(configured).name.casefold() == 'gd2.exe':
             return Path(configured).resolve()
         candidates = [Path(configured)] if configured else []
-        candidates.extend(Path(session.executable) for session in self.list_running() if session.executable)
+        if sessions is None:
+            sessions = self.list_running()
+        candidates.extend(Path(session.executable) for session in sessions if session.executable)
         candidates.extend(self._registered_executables())
         candidates.extend(self.INSTALL_CANDIDATES)
         for root in self._fixed_drives():

@@ -35,6 +35,7 @@ metadata:
 
 | 用户意图 / 已有输入 | 入口工具 | 调用要点 |
 | --- | --- | --- |
+| 确认 GX Works2 是否安装、实际路径或原生操作的前提 | `list_gxworks2_sessions` | 按后端的 `gx_works2_installed` 和 `gx_works2_executable` 报告。空 `sessions` 表示未发现可见窗口；各窗口的 `project_open` 表示工程打开状态。不要用默认 C 盘路径推断。旧后端缺少安装字段时，报告安装状态未知。 |
 | 解释、检查上传或本机 GXW | `inspect_gxw_project` | 传入 `path` 或 `data_base64`，用返回的 `source_ref` 做后续只读分析；多程序工程按返回清单指定程序名。 |
 | 修改一个尚未导入的 GXW | `import_gxw_project`（`local` 模式） | 导入为受管理版本后，依次调用 `read_gxw_source` 与 `edit_gxw_project`；其他模式使用当前暴露的导入入口。 |
 | 查看当前打开的 GX Works2 程序 | `list_gxworks2_sessions` | 选中匹配的窗口后调用 `read_gxworks2_snapshot`，凭返回的 `source_ref` 读取网络或执行静态分析。 |

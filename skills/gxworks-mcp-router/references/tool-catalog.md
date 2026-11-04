@@ -21,7 +21,7 @@
 | 工具 | 范围 | 适用场景 | 参数要点 | 主要产出与说明 |
 | --- | --- | --- | --- | --- |
 | `inspect_gxw_project` | 共享 | 只读检查外部 `.gxw` 文件 | `path` 或 `data_base64`；可选 `program` | 返回文件的 CPU、程序清单、格式能力与只读 `source_ref`。 |
-| `list_gxworks2_sessions` | 共享 | 发现本机已打开的 GX Works2 窗口 | 无参数 | 返回当前运行的 GX Works2 窗口候选及各自的 `session_id`。 |
+| `list_gxworks2_sessions` | 共享 | 检测 GX Works2 安装、可执行路径及可见窗口 | 无参数 | `gx_works2_installed` 和 `gx_works2_executable` 独立于窗口列表；每个窗口包含 `session_id` 和 `project_open`，后者未知时为 `null`。 |
 | `read_gxworks2_snapshot` | 共享 | 读取指定 GX Works2 窗口中的程序 | `session_id`；可选 `program`（默认 `MAIN`） | 导出临时只读快照并返回 `source_ref`。 |
 | `inspect_gxworks2_csv_files` | 共享 | 分析导出的程序 CSV 与注释 CSV | `program_path`/`program_data_base64`、`comment_path`/`comment_data_base64`、`plc_model`；可选 `program_name` | 解析两份 CSV 并返回只读 `source_ref`。 |
 | `get_current_program_info` | 共享 | 读取程序摘要与网络列表 | 可选 `source_ref` | 返回当前程序或指定快照的源码标识、网络摘要与软元件统计。 |
