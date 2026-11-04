@@ -61,7 +61,7 @@ WORKFLOW_INSTRUCTIONS = (
     "For generation or normal edits call get_generation_context with user_requirement containing the user's request. "
     "Use its generation_instructions, generation_request, confirmed specification and current program: "
     "these are the same engineering context, output guidance and local RAG used by the built-in API. "
-    "Fresh Ladder requests use Direct generation from the complete original requirement. "
+    "In local mode, follow create_project.next_actions. For a new Design project get_design_context with the verbatim human requirement, finish its pages, and author 1-3 approaches using the Web Design analysis instructions. Submit propose_design_plan, wait for the human choice, then confirm_design_plan and get_generation_context(workflow=detailed). Implement the chosen approach. Direct generation remains available when explicitly requested. "
     "If a real process fact is missing, ask only the necessary question and do not submit a candidate until answered. "
     "Pass verbatim human requests only. Keep design choices separate. For a new design, use search_plc_manual on the actual CPU for representatives of each relevant instruction family, including companion operations. Finish every page, compare behavior and cost against an ordinary implementation and submit implementation_review with the candidate. "
     "Read device numbering, default allocations and configurable conditions from device facts; "

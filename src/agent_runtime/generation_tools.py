@@ -351,6 +351,8 @@ def _get_generation_context(
                              if hasattr(instructions, 'wire_packet') else {}),
         "output_contract": {**{key: value for key, value in generation_output_contract(
             allow_partial=is_edit_mode, plc_model=context.plc_model, target_mode=target_mode).items() if key != 'schema'},
+            **({'tool': 'create_program_candidate'} if target_mode == 'ladder' and not is_edit_mode
+               and arguments.get('workflow') == 'detailed' else {}),
             'schema_ref': '#/generation_input/output_schema'},
         "current_version_id": context.version_id or None,
         "generation_instructions": instructions,

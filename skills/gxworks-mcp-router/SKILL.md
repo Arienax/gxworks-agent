@@ -40,7 +40,8 @@ metadata:
 | 修改一个尚未导入的 GXW | `import_gxw_project`（`local` 模式） | 导入为受管理版本后，依次调用 `read_gxw_source` 与 `edit_gxw_project`；其他模式使用当前暴露的导入入口。 |
 | 查看当前打开的 GX Works2 程序 | `list_gxworks2_sessions` | 选中匹配的窗口后调用 `read_gxworks2_snapshot`，凭返回的 `source_ref` 读取网络或执行静态分析。 |
 | 仅有原生导出的 CSV | `inspect_gxworks2_csv_files` | 传入程序 CSV、注释 CSV 和明确的 `plc_model`，直接获取只读 `source_ref`。 |
-| 新建 Ladder 程序 | 选择或创建工程 → `get_generation_context` | 新需求默认使用 `workflow=direct_generation`，按返回合同构造 Ladder JSON 后提交 `create_program_candidate`。 |
+| 根据需求设计并生成新程序 | `create_project` → `get_design_context` → `propose_design_plan` → `confirm_design_plan` | Harness 新工程默认 Design。用用户原文读取设计上下文与分页，让当前模型按实际 CPU、语言和工艺提出 1～3 个方案。用户选择后用 `get_generation_context(workflow="detailed")` 按已确认规格实施。 |
+| 用户明确要求直接生成 | 新建时指定 `generation_mode="direct"` → `get_generation_context` | 跳过设计阶段；Ladder 可用 `workflow="direct_generation"`，其他语言按其生成合同提交。 |
 | 修改已有 Ladder 的局部网络或指令 | `get_current_program_info` / `read_network` 或 `read_gxw_source` | 按需读取 `get_generation_context`；单程序局部修改用 `patch_program`，多源码或含声明/注释的联合修改用 `edit_gxw_project`。 |
 | FBD 生成或修改 | `get_generation_context(user_requirement=...)` | 使用必需语言规则、当前 CPU 地址规则和源码依赖；按 `output_contract` 选择单图候选或 ST/FBD 联合事务。目录不足时精确补取 `get_fbd_catalog(templates=...)`，详见[流程 6](references/workflows.md#fbd-与项目定义)。 |
 | FBD 定义、标签、库的查看与维护 | `get_fbd_catalog`，配合 `read_fbd_definition` / `read_fbd_libraries` | 按实际定义和能力执行维护操作；目录命中不能代替生成上下文，也不证明库正文可以导入。 |

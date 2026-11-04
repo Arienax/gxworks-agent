@@ -28,17 +28,32 @@ def new_candidate(tool, arguments):
 
 
 def research_plan(data):
-    """Use the actual delivered candidate cards, never infer opcodes from task prose."""
+    """Group actual CPU catalogue entries for implementation research."""
     groups = {}
-    for owner in (data, data.get('generation_input', {})):
-        for card in owner.get('knowledge') or []:
-            if not isinstance(card, dict) or card.get('kind') != 'instruction' or not card.get('name'):
-                continue
-            for function in card.get('functions', []):
-                names = groups.setdefault(function, [])
-                if card['name'] not in names:
-                    names.append(card['name'])
-    return {'families': groups,
+    inputs = data.get('generation_input', {})
+    cards = [*(data.get('knowledge') or []), *(inputs.get('knowledge') or [])]
+    spec = data.get('confirmed_spec') or inputs.get('confirmed_spec') or {}
+    selected = spec.get('selected_approach') or {}
+    gaps = []
+    if selected and data.get('workflow_mode') != 'direct_generation':
+        from knowledge.retriever import discover_capabilities
+        # The architecture is settled. Discover implementation instructions
+        # for its guide; rejected architectures must not become search inputs.
+        guide = ' '.join(str(selected.get(key) or '') for key in ('name', 'description', 'generation_guide'))
+        try:
+            discovery = discover_capabilities(guide, plc_model=data['plc_model'], target_mode=data['target_mode'])
+            cards.extend(discovery['candidates'])
+            gaps = discovery.get('gaps', [])
+        except (OSError, LookupError, ValueError) as error:
+            gaps = [{'reason': 'discovery_unavailable', 'error_type': type(error).__name__}]
+    for card in cards:
+        if not isinstance(card, dict) or card.get('kind') != 'instruction' or not card.get('name'):
+            continue
+        for function in card.get('functions', []):
+            names = groups.setdefault(function, [])
+            if card['name'] not in names:
+                names.append(card['name'])
+    return {'families': groups, **({'gaps': gaps} if gaps else {}),
             'instructions': '按实际 CPU 和语言检索每组最相关的代表及配套操作；按任务补查列表外的相关指令；一组不适用时查证后说明原因。工程 FB 以当前目录接口为准。'
                 '读完每份手册与上下文的全部分页。比较普通实现与高级指令的语义、成本、限制，'
                 '将所选方案和取舍填入 implementation_review。'}

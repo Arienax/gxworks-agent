@@ -1886,6 +1886,58 @@ def test_generation_schema_and_core_reject_output_escape_hatches(invalid):
         PLCCore().create_program_candidate(ladder, plc_model="FX3U")
 
 
+@pytest.mark.parametrize('language', ['ladder', 'st', 'fbd', 'sfc'])
+def test_local_design_implements_only_the_selected_web_approach(tmp_path, language):
+    from application.engineering_session import EngineeringSession
+    from integrations.mcp.local_adapter import LocalMCPToolAdapter
+    from itertools import count
+
+    with EngineeringSession(tmp_path / 'workspace', state_dir=tmp_path / 'state') as session:
+        adapter = LocalMCPToolAdapter(session)
+        sequence = count()
+
+        def run(tool, **args):
+            return adapter.call_tool(tool, args, str(next(sequence)))
+
+        def read(tool, **args):
+            from application.read_delivery import assemble_read_pages
+            pages = []
+            while True:
+                result = run(tool, **args)
+                assert not result.is_error, result.content
+                pages.append(_mcp_body(result))
+                follow = pages[-1]['data']['delivery']['next']
+                if not follow:
+                    return assemble_read_pages(pages)
+                tool, args = follow['tool'], follow['arguments']
+
+        assert not run('create_project', name='Design', plc_model='FX3U', target_mode=language,
+                       generation_mode='design').is_error
+        text = 'X0 starts Y0; X1 stops Y0. Hold the output until stopped.'
+        assert _mcp_body(run('get_generation_context'))['error']['code'] == 'DESIGN_PENDING'
+        context = read('get_design_context', user_requirement=text)
+        assert 'Analysis mode: design' in context['analysis_instructions'] and context['target_mode'] == language
+        analysis = {'summary': text, 'execution_intent_claims': [], 'explicit_constraint_claims': [],
+                    'approaches': [{'approach_id': key, 'name': title, 'implementation_semantics': []}
+                                   for key, title in [('state', 'Store a run flag'), ('contact', 'Output seal-in')]]}
+        def propose():
+            return _mcp_body(run('propose_design_plan', analysis_id=context['analysis_id'], analysis=analysis))['data']
+        old = propose()
+        analysis['approaches'][1]['generation_guide'] = 'Use the output feedback contact.'
+        draft = propose()
+        assert not session.service.projects.raw_project(session.project_id)['confirmed_spec']
+        assert run('confirm_design_plan', draft_id=old['draft_id'], approach_id='contact').is_error
+        assert run('confirm_design_plan', draft_id=draft['draft_id'], approach_id='invented').is_error
+        confirmed = _mcp_body(run('confirm_design_plan', draft_id=draft['draft_id'], approach_id='contact'))['data']
+        assert confirmed['confirmed'] and session.service.projects.raw_project(session.project_id)['confirmed_decision_receipt_id']
+        assert run('get_generation_context', user_requirement=text, workflow='direct_generation').is_error
+        generation = read('get_generation_context', workflow='detailed')
+        spec = generation.get('confirmed_spec') or generation['generation_input']['confirmed_spec']
+        assert spec['selected_approach']['approach_id'] == 'contact'
+        assert 'output feedback' in spec['selected_approach']['generation_guide']
+        assert generation['output_contract']['tool'] == ('create_program_candidate' if language == 'ladder' else f'create_{language}_candidate')
+
+
 def test_versionless_generation_context_and_candidate_over_mcp(empty_project):
     store, project_id = empty_project
     before = _files(store.base_dir)

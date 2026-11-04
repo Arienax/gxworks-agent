@@ -43,7 +43,9 @@
 ## 4. 根据需求新建 Ladder 程序
 
 1. **选择或创建工程**：若当前已选中匹配的工程则直接复用；在 `local` 模式下新建工程可调用 `create_project(name, plc_model, target_mode="ladder")`，切换已有工程用 `list_projects` → `select_project`。
-2. **获取生成上下文**：
+2. **Design 先做计划**。Harness 新工程默认进入 Design。调用 `get_design_context(user_requirement=完整用户原文)`，读完 `delivery.next`。由当前模型根据分析指令和资料编写方案，将分析 JSON 与 `analysis_id` 提交给 `propose_design_plan`。需补工艺条件时向用户提问，用含答复的用户原文更新设计。用户可选择任一方案或要求修改；仅在明确选定后调用 `confirm_design_plan`。用返回的 `get_generation_context(workflow="detailed")` 读取已确认规格。该路径适用于支持新建的四种语言。
+
+   **用户明确要求直接生成时**，建工程使用 `generation_mode="direct"`，Ladder 的生成上下文如下。
 
 ```json
 {

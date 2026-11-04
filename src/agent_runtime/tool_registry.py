@@ -43,6 +43,7 @@ class ToolDefinition:
     def context_requirement(self):
         if self.name in DISCOVERY_TOOL_NAMES or self.name in {
                 "list_projects", "create_project", "select_project", "import_gxw_project", "get_project_artifacts", "get_operation_status",
+                "get_design_context", "propose_design_plan", "confirm_design_plan",
                 "get_native_engineering_session", "pause_native_engineering_session"}:
             return "none"
         if self.name == "search_plc_manual":

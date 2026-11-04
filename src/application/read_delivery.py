@@ -20,7 +20,7 @@ from collections.abc import Mapping
 from agent_runtime.tool_errors import ToolPreconditionError
 from knowledge.evidence import estimate_tokens
 
-PAGED_READ_TOOLS = frozenset({'search_plc_manual', 'get_generation_context', 'get_fbd_catalog'})
+PAGED_READ_TOOLS = frozenset({'search_plc_manual', 'get_generation_context', 'get_fbd_catalog', 'get_design_context'})
 MAX_READ_TOKENS = 6000
 MAX_READ_BYTES = 32 * 1024
 DELIVERY_VERSION = 1
@@ -28,6 +28,8 @@ DELIVERY_VERSION = 1
 # The registered tool selects its business result contract before projection.
 # These are transport shapes; PLC and source validation stay with their owners.
 READ_RESULT_SCHEMAS = {
+    'get_design_context': {'type': 'object', 'required': ['analysis_id', 'analysis_instructions', 'knowledge'],
+                           'properties': {'analysis_instructions': {'type': 'string'}, 'knowledge': {'type': 'array'}}},
     'search_plc_manual': {'type': 'object', 'properties': {
         'results': {'type': 'array', 'items': {'type': 'object'}},
         'coverage': {'type': 'object'},
@@ -348,7 +350,8 @@ class ReadDeliveryStore:
                                else 'see_delivery_complete')
         document, objects, locations = _split_document(content)
         identity = 'read-' + uuid.uuid4().hex
-        request = {k: copy.deepcopy(v) for k, v in arguments.items() if k != 'cursor'}
+        request = ({} if tool == 'get_design_context' else
+                   {k: copy.deepcopy(v) for k, v in arguments.items() if k != 'cursor'})
         items, pages = list(objects.items()), []
 
         def make_page(values, index, complete):
@@ -400,7 +403,7 @@ class ReadDeliveryStore:
             self._documents[identity] = {'tool': tool, 'arguments': request,
                 'binding': binding, 'review_binding': binding if review_binding is None else review_binding,
                 'pages': pages, 'last_read': 0, 'sequence': self._sequence,
-                'research': content.get('instruction_research'), 'receipt': content.get('generation_context_id'),
+                'research': content.get('instruction_research'), 'receipt': content.get('generation_context_id') or content.get('analysis_id'),
                 'language': content.get('target_mode') if tool == 'get_generation_context' else content.get('language'),
                 'targets': {row['target'] for row in coverage_targets if row.get('kind') == 'instruction'},
                 'unresolved': {row['target'] for row in coverage_targets if row.get('kind') == 'instruction'
@@ -408,6 +411,18 @@ class ReadDeliveryStore:
             while len(self._documents) > self.capacity:
                 self._documents.popitem(last=False)
         return copy.deepcopy(pages[0])
+
+    def check_design_read(self, analysis_id):
+        with self._lock:
+            document = next((doc for doc in self._documents.values()
+                             if doc['tool'] == 'get_design_context' and doc['receipt'] == analysis_id), None)
+            if document is None:
+                raise ToolPreconditionError('DESIGN_CONTEXT_REQUIRED', '请重新读取当前 Design 上下文。',
+                                            next_actions=[{'tool': 'get_design_context'}])
+            follow = document['pages'][document['last_read']]['data']['delivery']['next']
+            if follow:
+                raise ToolPreconditionError('DESIGN_READ_INCOMPLETE', '设计资料尚有未读页。',
+                                            next_actions=[follow])
 
     def check_review(self, binding, review, receipt=None):
         from application.instruction_research import missing_families

@@ -22,6 +22,8 @@ from agent_runtime.plc_tools import (SAFE_TOOL_NAMES, READ_ONLY_TOOL_NAMES, DISC
 from agent_runtime.tool_errors import ToolPreconditionError, PROJECT_ACTIONS
 from agent_runtime.runtime import public_tool_result_data
 from application.workbench import WorkbenchService
+from application.design_session import DesignSession
+from application.instruction_research import new_candidate
 from application.workspace import (
     ConflictError, WorkspaceBusyError, atomic_json, canonical_hash,
     default_state_dir, read_json, record_id,
@@ -31,7 +33,7 @@ from storage.session import default_workspace_dir
 
 SESSION_TOOL_NAMES = (
     "list_projects", "create_project", "select_project", "import_gxw_project",
-    "get_project_artifacts", "get_operation_status",
+    "get_project_artifacts", "get_operation_status", "get_design_context", "propose_design_plan", "confirm_design_plan",
 )
 
 
@@ -65,6 +67,7 @@ class EngineeringSession:
             raise ValueError("Application state must be outside the engineering workspace")
         self.service = WorkbenchService(self.workspace, state_dir,
                                         settings=_ExternalClientSettings())
+        self.design = DesignSession(self.service)
         self.project_id = record_id(project_id, "project") if project_id else None
         self.version_id = record_id(version_id, "version") if version_id else None
         if self.version_id and not self.project_id:
@@ -86,10 +89,18 @@ class EngineeringSession:
             ("create_project", "Create and select a PLC project using the shared project service; specify the actual CPU and source type.",
              {"name": {"type": "string", "minLength": 1, "maxLength": 200},
               "plc_model": {"type": "string", "minLength": 1, "maxLength": 100},
-              "target_mode": {"type": "string", "minLength": 1, "maxLength": 32},
+              "target_mode": {"type": "string", "enum": ["ladder", "st", "fbd", "sfc"]},
+              "generation_mode": {"type": "string", "enum": ["design", "direct"],
+                                  "description": "Design compares approaches before human approval. Harness defaults to design. Use direct only when requested."},
               "native_project_type": {"type": "string", "minLength": 1, "maxLength": 32},
               "use_labels": {"type": "boolean"}},
              ("name", "plc_model", "target_mode"), self._create_project),
+            ("get_design_context", "Start Web Design analysis for a new program. Pass the complete human requirement. Use the returned instructions to design approaches before writing any program.",
+             {"user_requirement": {"type": "string", "minLength": 1}}, (), self._design_context),
+            ("propose_design_plan", "Submit the external model's Web Design analysis JSON, including 1-3 approaches, or recall the current draft with empty arguments. Resolve required facts with the user before confirmation.",
+             {"analysis_id": {"type": "string"}, "analysis": {"type": "object"}}, (), self._design_proposal),
+            ("confirm_design_plan", "Persist only the approach the user approved in this exact draft. Follow next_actions to generate from the confirmed specification.",
+             {"draft_id": {"type": "string"}, "approach_id": {"type": "string"}}, ("draft_id", "approach_id"), self._design_confirmation),
             ("select_project", "Select an existing project for this MCP session. Optional version_id pins a saved baseline; it does not activate a version.",
              {"project_id": {"type": "string", "minLength": 1, "maxLength": 128},
               "version_id": {"type": "string", "minLength": 1, "maxLength": 128}},
@@ -133,9 +144,39 @@ class EngineeringSession:
                 "selected_project_id": self.project_id, "pinned_version_id": self.version_id}
 
     def _create_project(self, _context, arguments):
-        project = self.service.create_project(**arguments)
+        options = dict(arguments)
+        mode = options.pop('generation_mode', os.environ.get('GXWORKS_MCP_NEW_PROJECT_MODE', 'direct'))
+        project = self.service.create_project(**options)
         self.project_id, self.version_id = project["id"], None
-        return {"status": "created", "project": project, "selected_project_id": self.project_id}
+        result = {"status": "created", "project": project, "selected_project_id": self.project_id}
+        if mode == 'design':
+            self.design.start(self.project_id)
+            result['next_actions'] = [{'tool': 'get_design_context'}]
+        return result
+
+    def _new_design_project(self):
+        project_id = self._require_project()
+        context = self.service.projects.tool_context(project_id, self.version_id, requirement='model')
+        if context.version_id:
+            raise ValueError('Design 新建程序需要尚无程序版本的工程。已有版本请使用当前版本的编辑流程。')
+        return project_id
+
+    def _design_context(self, _context, arguments):
+        if not arguments.get('user_requirement'):
+            raise ValueError('首次读取请传入完整 user_requirement；续页请直接使用 delivery.next。')
+        return self.design.context(self._new_design_project(), arguments['user_requirement'])
+
+    def _design_proposal(self, _context, arguments):
+        project_id = self._new_design_project()
+        if 'analysis' in arguments:
+            if self.registry._read_delivery is None:
+                raise ToolPreconditionError('DESIGN_CONTEXT_REQUIRED', '请先读取当前工程的 Design 上下文。',
+                                            next_actions=[{'tool': 'get_design_context'}])
+            self.registry._read_delivery.check_design_read(arguments.get('analysis_id'))
+        return self.design.propose(project_id, arguments)
+
+    def _design_confirmation(self, _context, arguments):
+        return self.design.confirm(self._new_design_project(), **arguments)
 
     def _select_project(self, _context, arguments):
         project_id = record_id(arguments["project_id"], "project")
@@ -210,6 +251,8 @@ class EngineeringSession:
             with self._call_lock:
                 if self._closed:
                     return self._error(call, 'SESSION_CLOSED', 'The engineering session is closed')
+                if self.project_id and (call.name == 'get_generation_context' or new_candidate(call.name, arguments)):
+                    self.design.guard_generation(self.project_id, arguments)
                 # Inspection never initializes a writer, migrates projects, or
                 # inherits an execution approval merely to read a source.
                 if call.name in READ_ONLY_TOOL_NAMES and not arguments.get("native"):
@@ -246,7 +289,9 @@ class EngineeringSession:
                     envelope = saved["response"]
                 elif call.name in SESSION_TOOL_NAMES:
                     with self.service.lock.thread_lock:
-                        envelope = self.registry.call(call.name, arguments, None)
+                        selected = (self.service.projects.tool_context(self._require_project(), self.version_id, requirement='model')
+                                    if call.name == 'get_design_context' else None)
+                        envelope = self.registry.call(call.name, arguments, selected)
                         atomic_json(path, {"input_hash": digest, "response": envelope})
                 else:
                     response = self.service.agent_call({"project_id": self._require_project(),
@@ -258,6 +303,9 @@ class EngineeringSession:
                         self.service.jobs.wait(response['execution_job_id'])
                     envelope = self._completed_response(response)
                     atomic_json(path, {"input_hash": digest, "response": envelope})
+            if call.name == 'get_design_context' and envelope.get('ok'):
+                from application.read_delivery import PreparedReadEnvelope
+                envelope = PreparedReadEnvelope(envelope)
             public = public_tool_result_data(ToolResult(call.id, call.name, "", envelope))
             return ToolResult(call.id, call.name, json.dumps(public, ensure_ascii=False), public, is_error=not bool(public.get("ok")))
         except WorkspaceBusyError:
