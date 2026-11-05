@@ -4153,7 +4153,6 @@ def test_range_fragments_follow_the_normal_candidate_path(monkeypatch, opcode, o
 
 def test_instruction_review_returns_bound_fragments_and_separates_assumptions():
     from application.read_delivery import ReadDeliveryStore
-    from plc.instruction_definition import DefinitionError
     store, binding = ReadDeliveryStore(), ('FX3U', 'fragments')
     research = {'families': {}, 'executable_fragments': [{'id': 'example'}]}
     page = store.prepare({'tool': 'get_generation_context', 'data': {
@@ -4164,12 +4163,21 @@ def test_instruction_review_returns_bound_fragments_and_separates_assumptions():
             {'condition': '内部区域容量取16。', 'source': 'implementation'},
             {'condition': '允许两件。', 'source': 'user', 'quote': '允许两件'}]}
     result = store.check_review(binding, review, 'generation-1')
+    assert [row['source'] for row in review['assumptions']] == ['implementation', 'user']
     assert result['executable_fragments'] == research['executable_fragments']
     result['executable_fragments'].clear()
     assert store.check_review(binding, review)['executable_fragments']
     review['assumptions'][1]['quote'] = '每件必须隔100ms'
-    with pytest.raises(DefinitionError, match='exact quote'):
-        store.check_review(binding, review)
+    store.check_review(binding, review)
+    assert review['assumptions'][1]['source'] == 'unverified'
+    assert review['assumptions'][1]['quote'] == '每件必须隔100ms'
+    store.check_review(binding, review)  # Normalization is idempotent.
+    assert review['assumptions'][1]['source'] == 'unverified'
+    for original, quote in [('换一种说法', None), ('| A | 1s |', '│ A │ 1s │'), ('', '原句')]:
+        from application.instruction_research import validate_review_assumptions
+        claim = {'condition': '模型转述', 'source': 'user', **({'quote': quote} if quote else {})}
+        normalized = validate_review_assumptions({'assumptions': [claim]}, user_requirement=original)
+        assert normalized[0]['source'] == 'unverified' and claim['source'] == 'user'
 
 
 def test_independent_repair_uses_submitted_network_indexes_after_fragment_expansion(monkeypatch):
