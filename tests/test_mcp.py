@@ -1828,7 +1828,7 @@ def test_generation_tool_schemas_describe_only_model_owned_input(empty_project):
     assert set(schema["properties"]) == {"program_name", "ladder", "generation_context_id", "implementation_review", "io_example"}
     assert schema["properties"]["io_example"]["properties"]["steps"]["maxItems"] == 16
     review = schema["properties"]["implementation_review"]
-    assert set(review["required"]) == {"context_document", "manual_documents", "selected", "alternatives"}
+    assert set(review["required"]) == {"context_document", "manual_documents"}
     assert schema["properties"]["generation_context_id"]["type"] == "string"
     assert "generation_context_id" not in schema["required"]
     assert schema["properties"]["program_name"]["default"] == "MAIN"
