@@ -58,11 +58,17 @@ def _body_of(stream):
 
 
 def _device(text):
-    """Stored spelling, not display spelling: X000 and X0 are one device."""
+    """Stored spelling: device and hexadecimal-literal leading zeros are lexical."""
     import re
 
-    match = re.fullmatch(r"([A-Z]+)0*(\d+)", str(text).upper())
-    return match.group(1) + match.group(2) if match else str(text).upper()
+    value = str(text).upper()
+    hexadecimal = re.fullmatch(r"H([0-9A-F]+)", value)
+    if hexadecimal:
+        # The instruction/parameter owns the width. The native reader adds a
+        # zero before A-F in some literal spellings (HFFFF -> H0FFFF).
+        return "H" + (hexadecimal[1].lstrip("0") or "0")
+    match = re.fullmatch(r"([A-Z]+)0*(\d+)", value)
+    return match.group(1) + match.group(2) if match else value
 
 
 def _entry_rows(entries):

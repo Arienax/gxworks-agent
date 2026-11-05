@@ -414,6 +414,7 @@ def test_native_compile_rejection_keeps_saved_gxw_and_previous_active_version(tm
 @pytest.mark.parametrize('source', ['configured', 'running', 'registry'])
 def test_finder_accepts_custom_install_directories(tmp_path, monkeypatch, source):
     from gxworks2.finder import GXWorks2Finder
+    monkeypatch.setenv('PLC_AI_DATA_DIR', str(tmp_path / 'data'))
     folder = tmp_path / '非系统盘 自定义目录' / 'GPPW2'
     folder.mkdir(parents=True)
     executable = folder / 'GD2.exe'
@@ -427,9 +428,37 @@ def test_finder_accepts_custom_install_directories(tmp_path, monkeypatch, source
     assert GXWorks2Finder().find_executable() == executable.resolve()
 
 
+def test_finder_reuses_persisted_installation_and_recovers_after_move(tmp_path, monkeypatch):
+    from gxworks2.finder import GXWorks2Finder
+    monkeypatch.delenv('GXWORKS2_EXE', raising=False)
+    monkeypatch.setenv('PLC_AI_DATA_DIR', str(tmp_path / 'data'))
+    cache = tmp_path / 'data/gxworks2-installation.json'
+    old = tmp_path / 'old/GD2.exe'
+    new = tmp_path / 'new/GD2.exe'
+    old.parent.mkdir()
+    old.touch()
+    scans = []
+
+    def registered():
+        scans.append(1)
+        return [old, new]
+
+    monkeypatch.setattr(GXWorks2Finder, '_registered_executables', staticmethod(registered))
+    assert GXWorks2Finder().find_executable(sessions=[]) == old
+    assert json.loads(cache.read_text(encoding='utf-8')) == {'gx_works2_executable': str(old)}
+    assert GXWorks2Finder().find_executable(sessions=[]) == old
+    assert len(scans) == 1
+    new.parent.mkdir()
+    old.rename(new)
+    assert GXWorks2Finder().find_executable(sessions=[]) == new
+    assert len(scans) == 2
+    assert json.loads(cache.read_text(encoding='utf-8')) == {'gx_works2_executable': str(new)}
+
+
 @pytest.mark.parametrize('found', [True, False])
 def test_finder_checks_all_fixed_drives_and_ignores_stale_candidates(tmp_path, monkeypatch, found):
     from gxworks2.finder import GXWorks2Finder
+    monkeypatch.setenv('PLC_AI_DATA_DIR', str(tmp_path / 'data'))
     monkeypatch.setenv('GXWORKS2_EXE', str(tmp_path / 'missing/GD2.exe'))
     monkeypatch.setattr(GXWorks2Finder, 'INSTALL_CANDIDATES', ())
     monkeypatch.setattr(GXWorks2Finder, 'list_running', lambda self: [])
@@ -659,3 +688,49 @@ def test_web_new_source_generation_saves_shared_delivery_without_native_install(
         else:
             preview = client.get('/api/proposals/' + output['proposal_id'] + '/preview')
             assert preview.status_code == 200, preview.text
+
+
+@pytest.mark.parametrize('literal', ['HFFFF', 'H0FFFF', 'HABC', 'H0000'])
+def test_ladder_gxw_readback_accepts_only_hex_literal_leading_zero_spelling(literal):
+    from gxw.ladder_program_writer import build_ladder_project, _record_identity, _row_identity
+    from gxw.offline_project import read_offline_project, read_ordered_program
+    program = SimpleNamespace(device_comments={}, instructions=[
+        SimpleNamespace(mnemonic='MOV', operands=(literal, 'D900')),
+        SimpleNamespace(mnemonic='MOV', operands=('K0', 'D901'))])
+    result = build_ladder_project(program, plc_model='FX3U')
+    listing = read_ordered_program(read_offline_project(result.data), result.program)['listing']
+    actual = [_record_identity(row) for row in listing.instructions if row.mnemonic != 'END']
+    assert actual == [_row_identity({'op': 'MOV', 'args': [literal, 'D900']}),
+                      _row_identity({'op': 'MOV', 'args': ['K0', 'D901']})]
+    if literal == 'HFFFF':
+        assert listing.instructions[0].operands[0].text == 'H0FFFF'
+
+
+def test_ladder_gxw_readback_still_rejects_instruction_reordering(monkeypatch):
+    import gxw.ladder_program_writer as writer
+    from gxw.models import GXWFormatError
+    read = writer.read_ordered_program
+    reads = 0
+    def reordered(*args, **kwargs):
+        nonlocal reads
+        result = read(*args, **kwargs)
+        reads += 1
+        if reads == 2:
+            result = dict(result)
+            records = list(result['listing'].records)
+            records[0], records[1] = records[1], records[0]
+            result['listing'] = SimpleNamespace(records=records)
+        return result
+    monkeypatch.setattr(writer, 'read_ordered_program', reordered)
+    program = SimpleNamespace(device_comments={}, instructions=[
+        SimpleNamespace(mnemonic='MOV', operands=('HFFFF', 'D900')),
+        SimpleNamespace(mnemonic='MOV', operands=('K0', 'D901'))])
+    with pytest.raises(GXWFormatError, match='does not read back'):
+        writer.build_ladder_project(program, plc_model='FX3U')
+
+
+@pytest.mark.parametrize('changed', [['HFFFE', 'D900'], ['K65535', 'D900'], ['HFFFF', 'D901']])
+def test_ladder_gxw_readback_hex_normalization_keeps_values_kinds_and_targets(changed):
+    from gxw.ladder_program_writer import _row_identity
+    expected = _row_identity({'op': 'MOV', 'args': ['H0FFFF', 'D900']})
+    assert _row_identity({'op': 'MOV', 'args': changed}) != expected

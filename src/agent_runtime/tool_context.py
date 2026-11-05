@@ -145,7 +145,8 @@ def resolve_tool_context(definition, context, arguments):
             unavailable = status["status"] == "index_unavailable"
             raise ToolPreconditionError("KNOWLEDGE_INDEX_UNAVAILABLE" if unavailable else "KNOWLEDGE_UNAVAILABLE",
                 "知识索引不可用，无法完成手册检索。" if unavailable else f"当前资料未覆盖请求的型号 {model}。",
-                details=status, next_actions=({"tool": "search_plc_manual", "required_arguments": ["query", "plc_model"]},))
+                details={**status, "language": arguments.get("language") or (context.version or {}).get("target_mode")
+                         or context.project.get("target_mode")})
         return replace(context, project={**context.project, "plc_model": model},
                        version={**context.version, "plc_model": model} if context.version is not None else None)
     if not context.project_id and context.analysis_source is None:

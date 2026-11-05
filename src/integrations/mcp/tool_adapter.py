@@ -25,7 +25,7 @@ def mcp_tool(schema):
     function = schema["function"]
     return Tool(name=function["name"], description=function.get("description", ""),
                 input_schema=copy.deepcopy(dict(function["parameters"])),
-                output_schema=(None if function["name"] in {"search_plc_manual", "get_generation_context", "get_fbd_catalog"}
+                output_schema=(None if function["name"] in {"search_plc_manual", "get_generation_context", "get_fbd_catalog", "get_design_context"}
                                else output_schema(function["name"])),
                 annotations={"readOnlyHint": function["name"] in {
                     "get_current_project", "get_current_program_info", "read_network", "search_plc_manual",

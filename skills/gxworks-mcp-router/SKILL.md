@@ -31,15 +31,22 @@ metadata:
 
 用户已给出的 CPU 型号、I/O 分配、文件路径与程序名直接复用；仅在读取工程后仍缺少关键现场工艺条件或存在真实多选歧义时向用户确认。检查外部文件或已打开的 GX Works2 窗口时可直接调用发现与快照工具，编辑并保存版本时再选择或创建 Agent 工程。
 
+## 新建 Ladder 的 Desktop 入口
+
+创建工程后遵循返回的 next_actions。宿主提供 `gxworks_generate_ladder` 时，新建 Direct 和已经确认的 Design 都用它生成整份程序；传当前 project_id。它通过本轮选用的 Harness 模型生成一次，自动传入当前型号的本地指令资料、读完分页，按 Web 协议提交。首次需求可以省略 user_requirement 由宿主从真实消息取得。多轮合并只引用相关的完整用户消息。编写或生成程序属于普通新建需求，只有用户明确选择直接模式才传 generation_mode=direct。Desktop 的 Design 入口自动读取设计资料、展示可选方案，收到用户选择后再实施。
+不要为试格式创建示例版本。如果上下文返回了已有版本，按其编辑入口工作。其他宿主继续使用下表的 MCP 工具。
+
 ## 按任务选择入口
 
 | 用户意图 / 已有输入 | 入口工具 | 调用要点 |
 | --- | --- | --- |
+| 确认 GX Works2 是否安装、实际路径或原生操作的前提 | `list_gxworks2_sessions` | 按后端的 `gx_works2_installed` 和 `gx_works2_executable` 报告。空 `sessions` 表示未发现可见窗口；各窗口的 `project_open` 表示工程打开状态。不要用默认 C 盘路径推断。旧后端缺少安装字段时，报告安装状态未知。 |
 | 解释、检查上传或本机 GXW | `inspect_gxw_project` | 传入 `path` 或 `data_base64`，用返回的 `source_ref` 做后续只读分析；多程序工程按返回清单指定程序名。 |
 | 修改一个尚未导入的 GXW | `import_gxw_project`（`local` 模式） | 导入为受管理版本后，依次调用 `read_gxw_source` 与 `edit_gxw_project`；其他模式使用当前暴露的导入入口。 |
 | 查看当前打开的 GX Works2 程序 | `list_gxworks2_sessions` | 选中匹配的窗口后调用 `read_gxworks2_snapshot`，凭返回的 `source_ref` 读取网络或执行静态分析。 |
 | 仅有原生导出的 CSV | `inspect_gxworks2_csv_files` | 传入程序 CSV、注释 CSV 和明确的 `plc_model`，直接获取只读 `source_ref`。 |
-| 新建 Ladder 程序 | 选择或创建工程 → `get_generation_context` | 新需求默认使用 `workflow=direct_generation`，按返回合同构造 Ladder JSON 后提交 `create_program_candidate`。 |
+| 根据需求设计并生成新程序 | `create_project` → `get_design_context` → `propose_design_plan` → `confirm_design_plan` | Harness 新工程默认 Design。用用户原文读取设计上下文与分页，让当前模型按实际 CPU、语言和工艺提出 1～3 个方案。用户选择后用 `get_generation_context(workflow="detailed")` 按已确认规格实施。 |
+| 用户明确要求直接生成 | 新建时指定 `generation_mode="direct"` → `get_generation_context` | 跳过设计阶段；Ladder 可用 `workflow="direct_generation"`，其他语言按其生成合同提交。 |
 | 修改已有 Ladder 的局部网络或指令 | `get_current_program_info` / `read_network` 或 `read_gxw_source` | 按需读取 `get_generation_context`；单程序局部修改用 `patch_program`，多源码或含声明/注释的联合修改用 `edit_gxw_project`。 |
 | FBD 生成或修改 | `get_generation_context(user_requirement=...)` | 使用必需语言规则、当前 CPU 地址规则和源码依赖；按 `output_contract` 选择单图候选或 ST/FBD 联合事务。目录不足时精确补取 `get_fbd_catalog(templates=...)`，详见[流程 6](references/workflows.md#fbd-与项目定义)。 |
 | FBD 定义、标签、库的查看与维护 | `get_fbd_catalog`，配合 `read_fbd_definition` / `read_fbd_libraries` | 按实际定义和能力执行维护操作；目录命中不能代替生成上下文，也不证明库正文可以导入。 |
@@ -54,15 +61,15 @@ metadata:
 | 读取 Simulator2 状态与软元件 | `list_simulator_targets` → `get_simulator_status` / `read_simulator_devices` | 使用返回的 `target_ref` 读取状态和软元件值；需要建立连接时先调用 `connect_simulator`。 |
 | 信号波形采样或生成仿真方案 | `start_simulator_trace` / `prepare_simulator_scenario` | `start_simulator_trace` 对目标做只读周期采样并生成时间轴视图；`prepare_simulator_scenario` 生成类型化测试方案。 |
 | 查询异步任务或提案状态 | `get_operation_status` | 传入 `proposal_id` 或 `execution_job_id` 查询当前进度与执行回执。 |
-| 检索 CPU 指令或软元件事实 | `search_plc_manual` | 生成上下文之外仍需核对指令细节时调用；未选中工程时显式传入 `plc_model`。按返回的操作数、用途和条件回答问题，用 `coverage` 定位各方面资料、调用字段选择 Core 入口；字段说明见[手册检索结果的判读](references/result-handling.md#手册检索结果的判读)。 |
+| 检索 CPU 指令或软元件事实 | `search_plc_manual` | 新设计按实际型号查询各相关功能的代表指令和配套调用，读完分页再选型；未选中工程时显式传入 `plc_model`。按返回的操作数、用途和条件回答问题，用 `coverage` 定位各方面资料、调用字段选择 Core 入口；字段说明见[手册检索结果的判读](references/result-handling.md#手册检索结果的判读)。 |
 
 ## 完整读取知识与上下文
 
-`search_plc_manual`、`get_generation_context`、`get_fbd_catalog` 返回单份 JSON 正文，`data.context_schema_version=3`。先保存 `document` 和本页 `objects`；只要 `delivery.complete=false`，就原样调用 `delivery.next.tool` 与 `delivery.next.arguments`。合并同一 `document_id` 的全部 `objects` 后解析 `$ref`，再使用下文的 `generation_input`、`output_contract` 或 `results`。合并完成后使用完整资料。对象身份只在该次读取中使用。
+`search_plc_manual`、`get_generation_context`、`get_fbd_catalog` 返回单份 JSON 正文，`data.context_schema_version=3`。先保存 `document` 和本页 `objects`；只要 `delivery.complete=false`，就原样调用 `delivery.next.tool` 与 `delivery.next.arguments`。合并同一 `document_id` 的全部 `objects` 后解析 `$ref`，再使用下文的 `generation_input`、`output_contract` 或 `results`。新生成任务把完整用户消息逐字传给 user_requirement；自己的算法和内部地址只写入实现选择。按 instruction_research 查询各功能的代表与配套调用，比对普通实现和高级指令实现，再按提交工具的 implementation_review 填写上下文、手册 document_id、选型与比较理由。对象身份只在该次读取中使用。
 
 每次返回最多 6,000 个估算 token 且不超过 32 KiB UTF-8。`STALE_READ_CURSOR` 表示查询、CPU、工程版本、事实库或会话发生变化，去掉游标重读；`READ_OBJECT_TOO_LARGE` 表示完整必需对象过大，缩小明确的读取范围，不能截断源码。独立 MCP 不采用 Web 模型配置推断客户端窗口。
 
-手册查询可显式传 `language=ladder|st|fbd` 和 `aspects`（如 `execution`、`effects`、`st_call`）。`top_k` 只限制补充资料，明确指令/地址/错误码及依赖全部解析。按正文的 `coverage`/`knowledge_coverage` 与 `delivery.complete` 分清库中存在、所问知识完整与已交付；手册行为说明、调用准入、Core 执行语义和原生结果分别判断。知识缺失先检查本地来源、提炼和交付，不自动改用网页搜索。
+手册查询可显式传 `language=ladder|st|fbd` 和 `aspects`（如 `execution`、`effects`、`st_call`）。`top_k` 只限制补充资料，明确指令/地址/错误码及依赖全部解析。按正文的 `coverage`/`knowledge_coverage` 与 `delivery.complete` 分清库中存在、所问知识完整与已交付；手册行为说明、调用准入、Core 执行语义和原生结果分别判断。手册查询默认继承保存版本或工程语言；跨语言接口可显式指定 language。读完本次查询后，合并说明影响选型的缺项。默认不为缺项重复查库或联网搜索；仅在用户要求外查时检索外部手册。
 
 ## 各类标识的用途
 

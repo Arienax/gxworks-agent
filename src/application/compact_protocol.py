@@ -148,12 +148,17 @@ def normalize_compact(value):
                     changes.append({"rule": "single_series_input_wrapper",
                                     "path": f"content.r.{index}.b.{branch_index}.i",
                                     "from_type": "wrapped_array", "to_type": "array"})
-            # A sole output branch evaluates the complete condition before its
-            # outputs. Relocate this observed representation without repeating
-            # a common guard across multiple branches or admitting a new PLC
-            # container. Unknown keys/shapes still meet the ordinary schema.
+            # Evaluate the shared parallel guard once. Unconditional terminal
+            # coils on separate branches have the same enable and ordered writes.
             common_field = "c" if "c" in row else "s"
             shared = row.get(common_field)
+            if (isinstance(shared, list) and any(isinstance(item, dict) and set(item) == {'or'} for item in shared)
+                    and len(row['b']) > 1 and all(isinstance(branch, dict) and set(branch) == {'i', 'o'}
+                        and branch['i'] == [] and isinstance(branch['o'], list) and branch['o']
+                        and all(isinstance(op, str) and op.startswith('COIL ') for op in branch['o'])
+                        for branch in row['b'])):
+                row['b'] = [{'i': [], 'o': [op for branch in row['b'] for op in branch['o']]}]
+                changes.append({'rule': 'shared_parallel_terminal_coils', 'path': f'content.r.{index}.b'})
             if (len(row["b"]) == 1 and isinstance(row["b"][0], dict)
                     and isinstance(row["b"][0].get("i", []), list)
                     and isinstance(shared, list)

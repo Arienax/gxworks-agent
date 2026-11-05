@@ -51,7 +51,7 @@ ANALYSIS_REQUIREMENTS_PROMPT = """# Analysis information stage: requirements
 
 
 ANALYSIS_DIRECT_PROMPT = """# Analysis mode: direct
-用户选择直接实现：approaches 恰好 1 项（exactly one approach），不是方案咨询。没有既有方案时确定一种满足明确需求的实现；不搜索替代架构，不比较其他数据模型或指令族，正文提及“比较/优化”也不改变本轮模式。
+用户选择直接实现：approaches 恰好 1 项（exactly one approach），不是方案咨询。没有用户指定方案时，先结合实际 CPU 的资料比较相关指令族与常规实现，再返回所选方案。模型提出的实现选择不得进入用户要求。
 可见方案保持最小：name 是短名称，description 只说明控制结构，pros 和 cons 用空字符串；明确结构写入 implementation_semantics。
 generation_guide 只补结构化字段表达不了的非显然方案差异，通常应为空字符串。不自行选择具体 opcode/operands/内部软元件；用户已写死的低层条件只报告到 explicit_constraint_claims，不展开扫描周期等通用知识。
 assumptions 无实际非必要不确定性时用 []。

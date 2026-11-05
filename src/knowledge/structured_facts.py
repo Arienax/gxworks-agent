@@ -48,6 +48,18 @@ _VERSION = "structured-facts-v3-process-needs"
 from knowledge.scope import OFFICIAL_INSTRUCTION_TYPES as _OFFICIAL_INSTRUCTION_TYPES
 
 
+def query_languages(query, preferred=None):
+    languages = {preferred} if preferred in {'ladder', 'st', 'fbd', 'sfc'} else set()
+    for name, pattern in (
+            ('fbd', r'(?<![A-Za-z0-9_])FBD(?![A-Za-z0-9_])|结构化梯形图|功能块图'),
+            ('st', r'(?<![A-Za-z0-9_])ST(?![A-Za-z0-9_])|结构化文本'),
+            ('sfc', r'(?<![A-Za-z0-9_])SFC(?![A-Za-z0-9_])|顺序功能图'),
+            ('ladder', r'(?<![A-Za-z0-9_])LADDER(?![A-Za-z0-9_])|(?<!结构化)梯形图')):
+        if re.search(pattern, str(query), re.I):
+            languages.add(name)
+    return languages
+
+
 def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None, language=None):
     """Return exact fact identities without retrieving any manual prose."""
     from knowledge.analysis_router import route_analysis_request
@@ -98,14 +110,9 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None, langu
     query_metadata = getattr(query, 'metadata', {})
     target_language = language or (str(query_metadata.get('target_mode', '')).casefold()
                                   if isinstance(query_metadata, Mapping) else '')
-    requested_languages = {target_language} if target_language in {'ladder', 'st', 'fbd'} else set()
-    if re.search(r'\bFBD\b|结构化梯形图', str(query), re.I):
-        requested_languages.add('fbd')
-    if re.search(r'\bST\b|结构化文本', str(query), re.I):
-        requested_languages.add('st')
+    requested_languages = query_languages(query, target_language)
     st_context = 'st' in requested_languages
-    applicable_features = {}
-    feature_languages = {}
+    feature_languages, feature_aliases = {}, {}
     for original in getattr(DEFAULT_INSTRUCTION_REGISTRY, 'language_facts', ()):
         feature = DEFAULT_INSTRUCTION_REGISTRY.language_feature(original['target'], cpu=plc_model)
         if feature is None:
@@ -115,11 +122,16 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None, langu
         if len(languages) != 1:
             continue
         language = next(iter(languages))
-        applicable_features[feature['target']] = feature
         feature_languages[feature['target']] = language
         if requested_languages and language not in requested_languages:
             continue
-        for alias in feature.get('aliases', []):
+        aliases = list(feature.get('aliases', []))
+        if language in requested_languages:
+            # A declared alias like "FBD EN/ENO" also matches "EN/ENO" in an FBD project.
+            prefix = language.upper() + ' '
+            aliases += [alias[len(prefix):] for alias in aliases if alias.upper().startswith(prefix)]
+        feature_aliases[feature['target']] = aliases
+        for alias in aliases:
             if alias == '**':
                 matched = '**' in str(query) and (st_context or str(query).strip() == '**'
                     or bool(re.search(r'\bST\b|幂|运算|\d\s*\*\*\s*\d', str(query), re.I)))
@@ -131,12 +143,10 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None, langu
                 break
     language_features.sort(key=lambda target: feature_scores[target], reverse=True)
     remaining_by_language, selected_features = {}, []
-    feature_by_target = applicable_features
     for target in language_features:
-        feature = feature_by_target[target]
         language = feature_languages[target]
         remaining = remaining_by_language.get(language, str(query))
-        aliases = feature['aliases']
+        aliases = feature_aliases[target]
         if not any(alias in remaining if alias == '**' else alias_occurs(remaining, alias) for alias in aliases):
             continue
         selected_features.append(target)

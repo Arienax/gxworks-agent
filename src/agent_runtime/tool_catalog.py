@@ -6,6 +6,7 @@ from __future__ import annotations
 from itertools import chain
 from agent_runtime.tool_policy import SAFE_TOOL_NAMES
 from agent_runtime.tool_registry import ToolDefinition
+from simulator.io_example import IO_EXAMPLE_SCHEMA
 from agent_runtime.engineering_schema import (
     _engineering_object,
     _engineering_native_schema,
@@ -121,8 +122,8 @@ def program_definitions(generation):
                     "type": "boolean", "default": False,
                     "description": "仅显式调试时设为 true，返回来源、证据和核验记录。普通生成与分析保持 false。",
                 },
-                "language": {'type': 'string', 'enum': ['ladder', 'st', 'fbd'],
-                    'description': '目标语言；省略时从问题识别，不以语言替代行为/时序问题。'},
+                "language": {'type': 'string', 'enum': ['ladder', 'st', 'fbd', 'sfc'],
+                    'description': '默认使用当前保存版本或工程语言，可显式查询另一种语言。无工程时从问题识别。coverage.language 给出本地匹配手册与缺项。'},
                 "aspects": {'type': 'array', 'items': {'type': 'string', 'enum': [
                     'arity', 'order', 'roles', 'purpose', 'unit', 'encoding', 'devices', 'types',
                     'effects', 'execution', 'constraints', 'st_call', 'fbd_call', 'operand_range', 'operand_condition',
@@ -181,8 +182,9 @@ def generation_definitions(generation):
             "properties": {
                 "user_requirement": {
                     "type": "string", "maxLength": 64000,
-                    "description": "本次生成或修改需求；省略时仍返回当前工程上下文。",
+                    "description": "逐字传入用户消息，可按时间顺序换行拼接多轮原文。不得加入模型提出的方案、容量、地址或检索词。省略时只读取工程上下文。",
                 },
+                "instruction_details": {"type": "boolean", "description": "新建程序时随上下文一次读取当前型号和工程语言的候选指令事实与缺项。读完后在同一次生成中比较和提交。"},
                 "workflow": {"type": "string", "enum": ["direct_generation", "detailed"],
                              "description": "新 Ladder 有原始需求时默认 Direct；已确认规格可显式选 Direct，编辑仍沿用原入口。"},
                 "execution_mode": {"type": "string", "enum": ["background", "live"],
@@ -208,8 +210,9 @@ def generation_definitions(generation):
                 },
                 "ladder": {
                     "type": "object",
-                    "description": "Full or partial ladder JSON from get_generation_context; the shared API parser validates and normalizes compatible encodings.",
+                    "description": "新程序按 output_schema 原样填入此字段：Direct 使用 {result:{program:{r:[...]},decisions:[],open_items:[]}}，已确认的 Design 使用 {r:[...]}。不要用示例或空工程试格式。编辑沿用当前合同。",
                 },
+                "io_example": IO_EXAMPLE_SCHEMA,
                 "generation_context_id": {
                     "type": "string", "maxLength": 128,
                     "description": "Copy the ID returned by get_generation_context to preserve source lineage. Optional; absence or expiry is recorded as a trace gap, not a validation failure.",

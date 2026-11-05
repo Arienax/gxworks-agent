@@ -284,7 +284,7 @@ def test_compact_complex_request_reaches_csv_once(monkeypatch, tmp_path, strict,
     pytest.param({'c': ['NO M0'], 'b': [{'i': [], 'o': ['ZRST M100 M115 M120']}]}, id='extra-operand'),
     pytest.param({'c': ['NO M0'], 'b': [{'i': [], 'o': ['ADD D0 K1 K7']}]}, id='literal-destination'),
     pytest.param({'c': [{'or': [['NO M0'], ['NO M1']]}], 'b': [
-        {'i': [], 'o': ['COIL M100']}, {'i': [], 'o': ['COIL M101']}]}, id='parallel-common-to-multiple-outputs'),
+        {'i': ['NC M2'], 'o': ['COIL M100']}, {'i': [], 'o': ['COIL M101']}]}, id='parallel-common-to-conditioned-outputs'),
     pytest.param({'c': [], 'b': [{'i': [{'or': [[{'or': [['NO M0'], ['NO M1']]}], ['NO M2']]}],
                                  'o': ['COIL M100']}]}, id='nested-parallel'),
 ])

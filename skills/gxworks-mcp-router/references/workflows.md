@@ -43,7 +43,9 @@
 ## 4. 根据需求新建 Ladder 程序
 
 1. **选择或创建工程**：若当前已选中匹配的工程则直接复用；在 `local` 模式下新建工程可调用 `create_project(name, plc_model, target_mode="ladder")`，切换已有工程用 `list_projects` → `select_project`。
-2. **获取生成上下文**：
+2. **Design 先做计划**。Harness 新工程默认进入 Design。调用 `get_design_context(user_requirement=完整用户原文)`，读完 `delivery.next`。由当前模型根据分析指令和资料编写方案，将分析 JSON 与 `analysis_id` 提交给 `propose_design_plan`。需补工艺条件时向用户提问，用含答复的用户原文更新设计。用户可选择任一方案或要求修改；仅在明确选定后调用 `confirm_design_plan`。用返回的 `get_generation_context(workflow="detailed")` 读取已确认规格。该路径适用于支持新建的四种语言。
+
+   **用户明确要求直接生成时**，建工程使用 `generation_mode="direct"`，Ladder 的生成上下文如下。
 
 ```json
 {
@@ -55,7 +57,7 @@
 }
 ```
 
-3. **补充检索与提交候选**：优先使用上下文返回的 `generation_instructions`、规格与指令事实；仍需核对特定指令细节时调用 `search_plc_manual`。按合同生成 Ladder JSON（软元件注释遵守当前长度与格式要求），再调用 `create_program_candidate(ladder=..., generation_context_id=...)`。
+3. **按型号查证、比较再提交**。给 `get_generation_context.user_requirement` 传完整用户原文，后续明确答复可按顺序换行追加。模型拟定的内部地址、数据结构和容量单列为实现选择。在实际 CPU 上用 `search_plc_manual` 查询 `instruction_research.families` 每组与任务相关的代表及必要配套指令；读完上下文和各查询的 `delivery.next`。比较常规实现与应用指令实现的行为、扫描顺序、边界、资源及可减少的重复代码，写清采用与排除的理由、未证实条件。按合同提交候选，并在 `implementation_review` 中填写上下文和手册的 `delivery.document_id`、所选方案及比较。用户指定的方案保持约束，相关调用仍按型号核对。
 4. **查看产物**：版本保存后调用 `get_project_artifacts()`，优先取得 `delivery.primary_artifact` 指向的 GXW；同时读取原生编译、保存与冷重开结果。GXW 无法生成时才按原因取得降级 CSV。
 
 ## 5. 离线修改 `.gxw` 中的单个或多个 POU

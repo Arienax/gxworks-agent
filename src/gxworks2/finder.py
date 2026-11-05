@@ -2,10 +2,14 @@
 # Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
 
 import ctypes
+import json
 import os
+from itertools import chain
 from pathlib import Path
 import subprocess
 
+from storage.session import SessionStore
+from storage.user_data import user_data_dir
 from .models import GXWorks2Session
 
 
@@ -17,27 +21,47 @@ class GXWorks2Finder:
         Path(r"D:\GXWORKS2\GPPW2\GD2.exe"),
     )
 
-    def find_executable(self):
+    def find_executable(self, *, sessions=None):
         configured = os.path.expandvars(os.environ.get("GXWORKS2_EXE", "").strip().strip('"'))
         if configured and Path(configured).is_file() and Path(configured).name.casefold() == 'gd2.exe':
             return Path(configured).resolve()
-        candidates = [Path(configured)] if configured else []
-        candidates.extend(Path(session.executable) for session in self.list_running() if session.executable)
-        candidates.extend(self._registered_executables())
-        candidates.extend(self.INSTALL_CANDIDATES)
-        for root in self._fixed_drives():
-            candidates.extend(root / suffix for suffix in (
-                'Program Files (x86)/MELSOFT/GPPW2/GD2.exe',
-                'Program Files/MELSOFT/GPPW2/GD2.exe',
-                'MELSOFT/GPPW2/GD2.exe', 'MELSEC/GPPW2/GD2.exe', 'GXWORKS2/GPPW2/GD2.exe'))
+        cache_file = user_data_dir() / "gxworks2-installation.json"
+        cached = self._cached_executable(cache_file)
+        if sessions is None:
+            sessions = self.list_running()
+        running = (Path(session.executable) for session in sessions if session.executable)
+        candidates = chain(running, [cached] if cached else [], self._installation_candidates())
         seen = set()
         for candidate in candidates:
             key = str(candidate).casefold()
             if key not in seen:
                 seen.add(key)
                 if candidate.name.casefold() == 'gd2.exe' and candidate.is_file():
-                    return candidate.resolve()
+                    executable = candidate.resolve()
+                    if executable != cached:
+                        try:
+                            SessionStore._write_json(cache_file, {"gx_works2_executable": str(executable)})
+                        except OSError:
+                            pass  # A read-only user data directory must still support discovery.
+                    return executable
         return None
+
+    @staticmethod
+    def _cached_executable(cache_file):
+        try:
+            record = json.loads(cache_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        value = record.get("gx_works2_executable") if isinstance(record, dict) else None
+        return Path(value) if isinstance(value, str) and Path(value).is_absolute() else None
+
+    def _installation_candidates(self):
+        yield from self._registered_executables()
+        yield from self.INSTALL_CANDIDATES
+        for root in self._fixed_drives():
+            for suffix in ('Program Files (x86)/MELSOFT/GPPW2/GD2.exe', 'Program Files/MELSOFT/GPPW2/GD2.exe',
+                           'MELSOFT/GPPW2/GD2.exe', 'MELSEC/GPPW2/GD2.exe', 'GXWORKS2/GPPW2/GD2.exe'):
+                yield root / suffix
 
     @staticmethod
     def _fixed_drives():

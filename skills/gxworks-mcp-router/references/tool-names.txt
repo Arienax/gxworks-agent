@@ -1,5 +1,8 @@
 list_projects
 create_project
+get_design_context
+propose_design_plan
+confirm_design_plan
 select_project
 import_gxw_project
 get_current_project
