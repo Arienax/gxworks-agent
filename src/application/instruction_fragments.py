@@ -152,7 +152,7 @@ def _history_template(shift, plc_model, registry):
             'effect_description': '原梯级条件表示事件，只在run时锁存pending。每个run且tick扫描将pending采入base[0]，'
                 '旧base[k]推进到base[k+1]，随后清pending。停用清pending及申请的全部普通M历史区。',
             'instructions': '必须放在独立单分支单输出事件梯级。run/tick是已有位；pending/base是独占普通M存储且互不重叠。'
-                '允许在各自run断开时重复RST/ZRST，运行期间的其他写入会破坏历史。'
+                '允许停用时重复RST/ZRST；外部写入可能改变历史，后端无法确定触发关系时仅提示未验证，不要求固定保护条件写法。'
                 '共享tick须为单扫描脉冲，各通道共用时基但分开pending和历史区。base[k]代表采入后经过k次tick；'
                 '若tick间隔Δ，k位对应kΔ的离散历史，事件到采入仍有0至Δ加扫描误差。'
                 '用定时器判变时，按实际可观察的更新频率选时基；可能跳计数时须处理经过的单位数，或用时间戳判定到期。'
@@ -187,6 +187,7 @@ def materialize_instruction_fragments(ladder, research, *, plc_model, target_mod
     histories = {}
     storage_run = {}
     controls = set()
+    interference_findings = []
     rows_key = next((key for key in ('r', 'root', 'rungs') if key in value), 'r')
     for source_index, rung in enumerate(value.get(rows_key, [])):
         for branch in rung.get('b', rung.get('branches', [])):
@@ -209,8 +210,9 @@ def materialize_instruction_fragments(ladder, research, *, plc_model, target_mod
                 storage_run.update(dict.fromkeys(owned, inputs[0]))
                 controls.update(inputs)
                 histories[source_index] = (generated, receipt)
-    # RST/ZRST under the same NC run guard repeats the fragment's own shutdown
-    # clear. Preserve the original output, including any non-history addresses.
+    # A local NC run guard establishes a harmless shutdown clear. Other guards
+    # may depend on earlier networks or state we do not analyze here. An overlap
+    # alone is not a behavioral counterexample, so retain the original program.
     if storage_run:
         for source_index, rung in enumerate(value[rows_key]):
             if source_index in histories:
@@ -222,11 +224,11 @@ def materialize_instruction_fragments(ladder, research, *, plc_model, target_mod
                     if not overlap:
                         continue
                     inactive = (_required_off_contacts(rung, branch) if opcode in {'RST', 'ZRST'} else set())
-                    for address in sorted(overlap):
-                        run = storage_run[address]
-                        if run not in inactive:
-                            raise DefinitionError(f'History storage {address} aliases {opcode} in network '
-                                                  f'{source_index}; only clearing with {run} off is allowed')
+                    unresolved = sorted(address for address in overlap if storage_run[address] not in inactive)
+                    if unresolved:
+                        interference_findings.append({'network_index': source_index, 'opcode': opcode,
+                            'storage': unresolved, 'run_devices': sorted({storage_run[a] for a in unresolved}),
+                            'reason': 'external_write_activation_not_established'})
     for branch in branches(value):
         outputs = branch.get('o', branch.get('outputs', []))
         for index, output in enumerate(outputs):
@@ -256,7 +258,10 @@ def materialize_instruction_fragments(ladder, research, *, plc_model, target_mod
             mapping.append(source_index)
     value[rows_key] = expanded
     return value, ({'stage': 'Core_instruction_fragments', 'receipts': receipts, 'model_calls': 0,
-                    'source_network_indexes': mapping} if receipts else None)
+                    'source_network_indexes': mapping,
+                    'interference_review': {'status': 'not_established', 'blocking': False,
+                        'scope': 'Known external storage writes only; activation and complete behavior are not proved.',
+                        'findings': interference_findings}} if receipts else None)
 
 
 def _materialize_history(rung, template, operands, *, plc_model):

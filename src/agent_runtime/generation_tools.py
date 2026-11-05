@@ -455,7 +455,8 @@ def _create_program_candidate(
         metadata.update(target_mode="ladder", plc_model=context.plc_model,
                         validation_profile=candidate["validation_profile"], validation=candidate["diagnostics"],
                         delivery_requested=True, behavior_result=copy.deepcopy(behavior_result),
-                        io_example_result=copy.deepcopy(example_result))
+                        io_example_result=copy.deepcopy(example_result),
+                        fragment_review=copy.deepcopy((fragment_receipt or {}).get('interference_review')))
         import hashlib
         payload = dict(target_mode="ladder", plc_model=context.plc_model, staging_dir=directory, metadata=metadata,
                        artifacts={key: {"path": value, "sha256": hashlib.sha256((Path(directory) / value).read_bytes()).hexdigest()}
@@ -502,6 +503,7 @@ def _create_program_candidate(
         "normalization": copy.deepcopy(candidate["normalization"]),
         "_generation_handoff": generation_handoff,
         "_behavior_result": copy.deepcopy(behavior_result),
+        "_fragment_review": copy.deepcopy((fragment_receipt or {}).get('interference_review')),
         "_io_example_result": copy.deepcopy(example_result),
     }
     action.update(target_mode="ladder", _prepared_candidate=frozen_candidate)
@@ -528,6 +530,7 @@ def _create_program_candidate(
         },
         **({'io_example_result': example_result} if example_result is not None else {}),
         'behavior_result': behavior_result,
+        'fragment_review': copy.deepcopy((fragment_receipt or {}).get('interference_review')),
         "pending_action": action,
     }
 

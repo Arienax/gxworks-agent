@@ -3663,15 +3663,22 @@ def test_manual_search_inherits_language_and_reports_one_local_miss(
 
 
 @pytest.mark.parametrize("direct", [True, False])
-def test_external_compact_candidate_uses_web_decoder(direct):
+def test_external_compact_candidate_uses_web_decoder(direct, monkeypatch):
     from agent_runtime.generation_tools import _create_program_candidate
     from agent_runtime.tool_context import ToolContext
     ctx = ToolContext(project={'id': 'compact', 'name': 'Compact', 'plc_model': 'FX3U', 'target_mode': 'ladder'})
     program = {'r': [{'c': ['NO X0'], 'b': [{'i': [], 'o': ['COIL Y0']}]}], 'device_comments': [{'address': 'Y0', 'comment': 'Run'}]}
+    review = {'status': 'not_established', 'blocking': False,
+              'findings': [{'network_index': 0, 'reason': 'external_write_activation_not_established'}]}
+    monkeypatch.setattr('application.instruction_fragments.materialize_instruction_fragments',
+        lambda ladder, *args, **kwargs: (ladder, {'interference_review': review}))
     handoff = {'mode': 'direct_generation', 'raw_requirement': 'X0 controls Y0.'} if direct else {'stage': 'generate'}
     value = {'result': {'program': program, 'decisions': ['Use X0'], 'open_items': []}} if direct else program
     result = _create_program_candidate(ctx, {'ladder': value}, generation_handoff=handoff)
     assert result['summary']['network_count'] == 1
+    assert result['fragment_review'] == review
+    assert result['pending_action']['_fragment_review'] == review
+    assert result['generation_handoff']['instruction_fragments']['interference_review'] == review
     if direct:
         assert result['generation_handoff']['generator_notes']['decisions'] == ['Use X0']
 
@@ -4319,11 +4326,13 @@ def test_boolean_event_history_expands_and_tracks_tick_windows(monkeypatch):
     assert expanded['r'][-1]['b'][0]['o'] == ['ZRST M100 M164']
     other = {'c': ['P X1'], 'b': [{'o': ['FRAG history-sftl X3 M1 M11 M110 K8']}]}
     clear = {'c': ['NC X02'], 'b': [{'i': ['NC X3'], 'o': ['RST M10', 'ZRST M99 M118']}]}
-    shared, _ = materialize_instruction_fragments({'r': [*single['r'], other, clear]}, research, plc_model='FX3U')
+    shared, trace = materialize_instruction_fragments({'r': [*single['r'], other, clear]}, research, plc_model='FX3U')
     assert shared['r'][-1] == clear  # Also preserve the cleared addresses between the two histories.
-    with pytest.raises(DefinitionError, match='M110 aliases ZRST in network 2'):
-        materialize_instruction_fragments({'r': [*single['r'], other,
-            {'c': ['NC X2'], 'b': [{'o': ['ZRST M99 M118']}]}]}, research, plc_model='FX3U')
+    assert trace['interference_review']['findings'] == []
+    _, trace = materialize_instruction_fragments({'r': [*single['r'], other,
+        {'c': ['NC X2'], 'b': [{'o': ['ZRST M99 M118']}]}]}, research, plc_model='FX3U')
+    assert trace['interference_review']['findings'][0]['run_devices'] == ['X3']
+    assert len(trace['interference_review']['findings']) == 1
     bad_calls = ['FRAG history-sftl X2 M1 M100 M100 K8',
                  'FRAG history-sftl M100 M1 M10 M100 K8',
                  'FRAG history-sftl X2 X2 M10 M100 K8',
@@ -4338,8 +4347,26 @@ def test_boolean_event_history_expands_and_tracks_tick_windows(monkeypatch):
     for extra in [{'c': [], 'b': [{'o': ['COIL M00100']}]},
                   {'c': ['NC X2'], 'b': [{'o': ['SET M100']}]},
                   {'c': ['NO X2'], 'b': [{'o': ['ZRST M100 M107']}]},
-                  {'c': [], 'b': [{'i': [{'or': [['NC X2'], ['NO X1']]}], 'o': ['RST M100']}]},
-                  {'c': ['P X1'], 'b': [{'o': ['FRAG history-sftl X2 M1 M11 M104 K8']}]},
+                  {'c': [], 'b': [{'i': [{'or': [['NC X2'], ['NO X1']]}], 'o': ['RST M100']}]}]:
+        source = {'r': [*single['r'], extra]}
+        expanded, trace = materialize_instruction_fragments(source, research, plc_model='FX3U')
+        assert expanded['r'][-1] == extra and source['r'][-1] == extra
+        review = trace['interference_review']
+        assert review['status'] == 'not_established' and review['blocking'] is False
+        assert len(review['findings']) == 1 and review['findings'][0]['network_index'] == 1
+        from shared.model_context import technical_value
+        assert technical_value({'fragment_review': review})['fragment_review'] == review
+    # Indirect stop logic is not inferred. Different device names and an earlier
+    # state assignment must survive lowering unchanged, without a repair demand.
+    indirect = {'r': [
+        {'c': ['NC X7'], 'b': [{'o': ['COIL M20']}]},
+        {'c': ['NO X7'], 'b': [{'o': ['ZRST M200 M207']}]},
+        {'c': ['P X4'], 'b': [{'o': ['FRAG history-sftl M20 M21 M22 M200 K8']}]}]}
+    expanded, trace = materialize_instruction_fragments(indirect, research, plc_model='FX3U')
+    assert expanded['r'][:2] == indirect['r'][:2]
+    assert trace['interference_review']['findings'][0]['network_index'] == 1
+    # Concrete allocation collisions still violate the fragment's own contract.
+    for extra in [{'c': ['P X1'], 'b': [{'o': ['FRAG history-sftl X2 M1 M11 M104 K8']}]},
                   {'c': ['P X1'], 'b': [{'o': ['FRAG history-sftl X2 M100 M11 M200 K8']}]}]:
         invalid = copy.deepcopy(single)
         invalid['r'].append(extra)

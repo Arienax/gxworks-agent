@@ -390,7 +390,8 @@ class ProposalService:
                 metadata["normalization"] = copy.deepcopy(payload.get("normalization"))
                 metadata["generation_handoff"] = copy.deepcopy(payload.get("_generation_handoff"))
                 metadata["maintainability_review"] = copy.deepcopy(payload.get("maintainability_review"))
-                for source, target in (('_behavior_result', 'behavior_result'), ('_io_example_result', 'io_example_result')):
+                for source, target in (('_behavior_result', 'behavior_result'), ('_io_example_result', 'io_example_result'),
+                                       ('_fragment_review', 'fragment_review')):
                     if source in payload:
                         metadata[target] = copy.deepcopy(payload[source])
                 if payload.get('_construction_binding'):
@@ -411,7 +412,7 @@ class ProposalService:
                     destination.write_bytes(data)
                     artifacts[name] = entry["path"]
                 allowed = {"summary", "validation", "plc_model", "program_name", "generation_metadata", "delivery", "delivery_requested", "validation_profile", "normalization",
-                           "generation_handoff", "maintainability_review", "semantic_validation", "behavior_result", "io_example_result"}
+                           "generation_handoff", "maintainability_review", "semantic_validation", "behavior_result", "io_example_result", "fragment_review"}
                 metadata = {key: copy.deepcopy(value) for key, value in (payload.get("metadata") or {}).items() if key in allowed}
                 metadata.update(target_mode=payload["target_mode"], artifacts=artifacts, plc_model=payload.get("plc_model", "FX3U"))
                 if payload['target_mode'] == 'ladder':
