@@ -432,7 +432,7 @@ class ReadDeliveryStore:
                                             next_actions=[follow])
 
     def check_review(self, binding, review, receipt=None):
-        from application.instruction_research import missing_families, validate_review_assumptions
+        from application.instruction_research import missing_families, normalize_review_assumptions
         with self._lock:
             matching = {key: doc for key, doc in self._documents.items() if doc['review_binding'] == binding}
             active = max(((doc['sequence'], key) for key, doc in matching.items()
@@ -444,7 +444,7 @@ class ReadDeliveryStore:
                     '请读取当前工程与需求的 get_generation_context，按 instruction_research 查证并提交 implementation_review。')
             generation = matching[active[1]]
             if review is not None:
-                review['assumptions'] = validate_review_assumptions(review, user_requirement=generation['user_requirement'])
+                review['assumptions'] = normalize_review_assumptions(review)
             if receipt and generation['receipt'] != receipt:
                 raise ToolPreconditionError('INSTRUCTION_REVIEW_REQUIRED', '所引用的生成上下文不一致。')
             manuals = set(review['manual_documents']) if review else set()

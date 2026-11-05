@@ -12,10 +12,9 @@ _DOCUMENT = {'type': 'string', 'pattern': r'read-[0-9a-f]{32}'}
 REVIEW_SCHEMA = {'type': 'object', 'additionalProperties': False,
     'description': '新设计的选型记录。按实际型号查证每组相关指令，读完分页后填写；引用 delivery.document_id。',
     'properties': {'assumptions': {'type': 'array', 'maxItems': 32, 'items': {
-                       'type': 'object', 'additionalProperties': False,
-                       'properties': {'condition': _TEXT, 'source': {'enum': ['user', 'implementation', 'unverified']},
-                                      'quote': _TEXT}, 'required': ['condition', 'source']},
-                       'description': '容量、节拍等新增实现选择记 implementation；user 附原消息逐字 quote。无法核实出处的转述记 unverified，不写入用户需求，也不阻止候选处理。'},
+                       'type': 'object', 'additionalProperties': True,
+                       'properties': {'condition': _TEXT}, 'required': ['condition']},
+                       'description': '记录模型选择的容量、节拍等实现假设，与原始用户需求分开保存。'},
                    'context_document': _DOCUMENT,
                    'manual_documents': {'type': 'array', 'items': _DOCUMENT, 'maxItems': 32},
                    'reviewed_instructions': {'type': 'array', 'maxItems': 96,
@@ -145,24 +144,19 @@ def missing_families(groups, researched, review):
     return [*missing, *sorted(set(groups.get('explicit', [])) - considered)]
 
 
-def validate_review_assumptions(review, *, user_requirement=None):
-    """Keep unverifiable attributions out of user facts without blocking generation."""
+def normalize_review_assumptions(review):
+    """Store model notes separately; self-assigned provenance has no authority."""
     from plc.instruction_definition import DefinitionError
     rows = review.get('assumptions', [])
     if not isinstance(rows, list) or len(rows) > 32:
         raise DefinitionError('Implementation assumptions must be a bounded array')
     result = []
     for row in rows:
-        if (not isinstance(row, dict) or set(row) - {'condition', 'source', 'quote'}
-                or row.get('source') not in {'user', 'implementation', 'unverified'}
+        if (not isinstance(row, dict)
                 or not isinstance(row.get('condition'), str) or not row['condition'].strip()
                 or len(row['condition']) > 4000):
             raise DefinitionError('Invalid implementation assumption')
-        quote = row.get('quote')
-        if quote is not None and (not isinstance(quote, str) or not quote.strip() or len(quote) > 4000):
-            raise DefinitionError('Invalid assumption quotation')
-        normalized = dict(row)
-        if row['source'] == 'user' and (not quote or not user_requirement or quote not in user_requirement):
-            normalized['source'] = 'unverified'
-        result.append(normalized)
+        # Older clients may send source/quote annotations. They cannot establish
+        # user facts and do not affect admission; only retain the model's note.
+        result.append({'condition': row['condition']})
     return result
