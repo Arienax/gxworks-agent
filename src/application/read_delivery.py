@@ -458,38 +458,18 @@ class ReadDeliveryStore:
                     follow = doc['pages'][doc['last_read']]['data']['delivery']['next']
                     raise ToolPreconditionError('INSTRUCTION_READ_INCOMPLETE', '资料尚有未读页，按 next_actions 续读。',
                                                 next_actions=(follow,))
-            if not review:
-                if generation['research']['families']:
-                    raise ToolPreconditionError('INSTRUCTION_REVIEW_REQUIRED',
-                        '比较相关指令与普通实现后提交 implementation_review。')
-                return copy.deepcopy(generation['research'])  # No instruction alternatives.
             # Other-language documents can supplement a comparison but do not establish this language's calls.
             researched = {target for key in manuals if matching[key]['language'] == generation['language']
                           for target in matching[key]['targets']}
             embedded = generation['research']['targets']
             researched.update(row['target'] for row in embedded if row.get('kind') == 'instruction')
-            missing = missing_families(generation['research']['families'], researched, review)
-            alternatives = review['alternatives']
-            group_operations = generation['research']['group_operations']
-            if ('reviewed_instructions' in review and group_operations
-                    and not any(row['method'] in group_operations and row['tradeoff'].strip() for row in alternatives)):
-                raise ToolPreconditionError('INSTRUCTION_COMPARISON_INCOMPLETE',
-                    '用一两句说明一种已查成组操作如何推进状态，以及与逐项实现的实际取舍。',
-                    details={'group_operations': group_operations})
-            if (missing or not review['selected'].strip() or (generation['research']['families']
-                    and not alternatives and 'reviewed_instructions' not in review)
-                    or not researched.issuperset(review.get('reviewed_instructions', ()))
-                    or any(not row['method'].strip() or not row['tradeoff'].strip() for row in alternatives)):
-                raise ToolPreconditionError('INSTRUCTION_COMPARISON_INCOMPLETE',
-                    '请查证并在比较中指明每组的代表指令，说明所选实现的取舍与资料缺口。',
+            missing = missing_families(generation['research']['families'], researched)
+            if missing:
+                raise ToolPreconditionError('INSTRUCTION_READ_INCOMPLETE',
+                    '相关指令资料尚未读取，请读取缺少功能的手册资料。',
                     details={'missing_families': missing})
-            gaps = {target for key in manuals for target in matching[key]['unresolved']}
-            gaps.update(row['target'] for row in embedded if row.get('kind') == 'instruction'
-                        and row.get('status') != 'complete')
-            if gaps and not review.get('limitations', '').strip():
-                raise ToolPreconditionError('INSTRUCTION_FACTS_UNRESOLVED',
-                    '手册仍有未证实方面。在 limitations 汇总影响选择的缺项；相同查询无需重复。',
-                    details={'targets': sorted(gaps)})
+            # Selection prose is a model note, not a certificate. Missing names,
+            # comparison wording or caveats cannot reject an otherwise usable program.
             return copy.deepcopy(generation['research'])
 
 

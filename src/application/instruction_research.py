@@ -26,7 +26,7 @@ REVIEW_SCHEMA = {'type': 'object', 'additionalProperties': False,
                        'properties': {'method': _TEXT, 'tradeoff': _TEXT}, 'required': ['method', 'tradeoff'],
                        'additionalProperties': False},
                        'description': '列出其他可行或已排除的方法，逐项比较具体指令、行为和资源取舍，说明未证实条件。'}},
-    'required': ['context_document', 'manual_documents', 'selected', 'alternatives']}
+    'required': ['context_document', 'manual_documents']}
 
 
 def new_candidate(tool, arguments):
@@ -136,12 +136,10 @@ def include_manual_facts(plan, context, language):
             'knowledge': units}}
 
 
-def missing_families(groups, researched, review):
-    text = ' '.join([review['selected'], *(row['method'] + ' ' + row['tradeoff'] for row in review['alternatives'])])
-    mentioned = set(re.findall(r'[A-Z][A-Z0-9_]*(?:\.[A-Z0-9_]+)*', text.upper()))
-    considered = researched & (mentioned | set(review.get('reviewed_instructions', ())))
-    missing = [group for group, names in groups.items() if group != 'explicit' and considered.isdisjoint(names)]
-    return [*missing, *sorted(set(groups.get('explicit', [])) - considered)]
+def missing_families(groups, researched):
+    """Check actual document reads, not whether the model repeats their names."""
+    missing = [group for group, names in groups.items() if group != 'explicit' and researched.isdisjoint(names)]
+    return [*missing, *sorted(set(groups.get('explicit', [])) - researched)]
 
 
 def normalize_review_assumptions(review):
