@@ -281,7 +281,7 @@ def prepare_ladder_candidate(
     # the immutable baseline spelling outside their authorized scope.
     if previous_ladder is None and not repair_mode:
         parsed = canonical_ladder_devices(parsed)
-    progress(tr('正在解析模型输出：检查结构与地址'))
+    progress(tr('程序已生成，开始验证。将按已有规格和验收用例检查逻辑与动作时序。'))
     validate_ladder_candidate_structure(parsed, plc_model=plc_model, require_catalogued_instructions=True)
     from plc.condition_normalizer import normalize_shared_conditions
     parsed, normalization = normalize_shared_conditions(parsed, allowed_rung_ids=normalization_scope, plc_model=plc_model)

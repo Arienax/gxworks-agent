@@ -358,8 +358,9 @@ def test_proposal_new_ir_acceptance_is_private_single_use_and_local(services):
     before = _bytes(store.base_dir)
     independent = {'source': 'operator_acceptance_file', 'status': 'passed_in_cases'}
     self_check = {'source': 'generator_self_check', 'status': 'mismatch'}
+    review = {'status': 'not_established', 'blocking': False, 'findings': [{'network_index': 0}]}
     payload = {"_candidate_ir": _program(), "candidate_id": "candidate_unit",
-               '_behavior_result': independent, '_io_example_result': self_check}
+               '_behavior_result': independent, '_io_example_result': self_check, '_fragment_review': review}
     proposal = service.create("accept_local", project["id"], payload,
                               public_summary={"summary": "new", "api_key": "hidden"}, request_id="new")
     assert _bytes(store.base_dir) == before
@@ -375,6 +376,7 @@ def test_proposal_new_ir_acceptance_is_private_single_use_and_local(services):
     assert current["active_version_id"] == accepted["result"]["version_id"]
     version = store.get_version(project['id'], accepted['result']['version_id'])
     assert version['behavior_result'] == independent and version['io_example_result'] == self_check
+    assert version['fragment_review'] == review
     assert not (store.project_dir(project["id"]) / "GX Works2 Backups").exists()
 
 

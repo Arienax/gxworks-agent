@@ -1828,7 +1828,7 @@ def test_generation_tool_schemas_describe_only_model_owned_input(empty_project):
     assert set(schema["properties"]) == {"program_name", "ladder", "generation_context_id", "implementation_review", "io_example"}
     assert schema["properties"]["io_example"]["properties"]["steps"]["maxItems"] == 16
     review = schema["properties"]["implementation_review"]
-    assert set(review["required"]) == {"context_document", "manual_documents", "selected", "alternatives"}
+    assert set(review["required"]) == {"context_document", "manual_documents"}
     assert schema["properties"]["generation_context_id"]["type"] == "string"
     assert "generation_context_id" not in schema["required"]
     assert schema["properties"]["program_name"]["default"] == "MAIN"
@@ -3663,15 +3663,22 @@ def test_manual_search_inherits_language_and_reports_one_local_miss(
 
 
 @pytest.mark.parametrize("direct", [True, False])
-def test_external_compact_candidate_uses_web_decoder(direct):
+def test_external_compact_candidate_uses_web_decoder(direct, monkeypatch):
     from agent_runtime.generation_tools import _create_program_candidate
     from agent_runtime.tool_context import ToolContext
     ctx = ToolContext(project={'id': 'compact', 'name': 'Compact', 'plc_model': 'FX3U', 'target_mode': 'ladder'})
     program = {'r': [{'c': ['NO X0'], 'b': [{'i': [], 'o': ['COIL Y0']}]}], 'device_comments': [{'address': 'Y0', 'comment': 'Run'}]}
+    review = {'status': 'not_established', 'blocking': False,
+              'findings': [{'network_index': 0, 'reason': 'external_write_activation_not_established'}]}
+    monkeypatch.setattr('application.instruction_fragments.materialize_instruction_fragments',
+        lambda ladder, *args, **kwargs: (ladder, {'interference_review': review}))
     handoff = {'mode': 'direct_generation', 'raw_requirement': 'X0 controls Y0.'} if direct else {'stage': 'generate'}
     value = {'result': {'program': program, 'decisions': ['Use X0'], 'open_items': []}} if direct else program
     result = _create_program_candidate(ctx, {'ladder': value}, generation_handoff=handoff)
     assert result['summary']['network_count'] == 1
+    assert result['fragment_review'] == review
+    assert result['pending_action']['_fragment_review'] == review
+    assert result['generation_handoff']['instruction_fragments']['interference_review'] == review
     if direct:
         assert result['generation_handoff']['generator_notes']['decisions'] == ['Use X0']
 
@@ -3706,14 +3713,13 @@ def test_embedded_instruction_comparison_requires_complete_context_and_records_g
         store.check_review(binding, review)
     while follow := page['data']['delivery']['next']:
         page = store.resume(follow['tool'], follow['arguments'], binding)
-    with pytest.raises(ToolPreconditionError, match='未证实'):
-        store.check_review(binding, review)
+    store.check_review(binding, review)
     store.check_review(binding, {**review, 'limitations': 'Transfer overlap was not established.'})
     compact = {**review, 'selected': 'Copy the block.', 'alternatives': [],
                'reviewed_instructions': ['BMOV'], 'limitations': 'Transfer overlap is unspecified.'}
     store.check_review(binding, compact)
-    with pytest.raises(ToolPreconditionError, match='代表指令'):
-        store.check_review(binding, {**compact, 'reviewed_instructions': ['UNREAD']})
+    store.check_review(binding, {**compact, 'reviewed_instructions': ['UNREAD']})
+    store.check_review(binding, {'context_document': review['context_document'], 'manual_documents': []})
 
 
 def test_candidate_io_example_uses_scan_order_and_distinguishes_missing_evidence():
@@ -3756,8 +3762,7 @@ def test_group_operations_require_scoped_region_facts(monkeypatch):
         'instruction_research': result}}, {}, binding)
     review = {'context_document': page['data']['delivery']['document_id'], 'manual_documents': [],
               'selected': 'Copy individually.', 'reviewed_instructions': ['BMOV'], 'alternatives': []}
-    with pytest.raises(ToolPreconditionError, match='推进状态'):
-        store.check_review(binding, review)
+    store.check_review(binding, review)
     store.check_review(binding, {**review, 'alternatives': [{'method': 'BMOV', 'tradeoff': 'Copies a contiguous region in a single operation.'}]})
 
 
@@ -3803,9 +3808,7 @@ def test_instruction_selection_requires_relevant_complete_reads_before_submissio
     queue = search('SFWR')
     finish(queue)
     review['manual_documents'].append(queue['data']['delivery']['document_id'])
-    with pytest.raises(ToolPreconditionError) as error:
-        store.check_review(binding, review)
-    assert error.value.code == 'INSTRUCTION_FACTS_UNRESOLVED'
+    store.check_review(binding, review)
     review['limitations'] = '队列容量与实际生产节拍尚待确认。'
     store.check_review(binding, review)
     with pytest.raises(ToolPreconditionError):
@@ -4092,8 +4095,8 @@ def test_executable_range_fragment_is_scoped_and_keeps_model_provenance(monkeypa
     lowered_mixed, _ = materialize_instruction_fragments(mixed, research, plc_model='FX3U')
     assert lowered_mixed['r'][1] == mixed['r'][1]
     assert lowered_mixed['r'][0]['b'][0]['o'] == ['BMOV D100 D200 K16', 'COIL Y0']
-    for call in ['FRAG unknown D100 D200 K16', 'FRAG range-bmov D100 D200 K33',
-                 'FRAG range-bmov D100 D200 K0', 'FRAG range-bmov M100 D200 K16']:
+    for call in ['FRAG unknown D100 D200 K16', 'FRAG range-bmov D100 D200',
+                 'FRAG range-bmov D100 D200 K16 K1']:
         with pytest.raises(DefinitionError):
             materialize_instruction_fragments({'r': [{'b': [{'o': [call]}]}]}, research, plc_model='FX3U')
     with pytest.raises(DefinitionError, match='Unknown'):
@@ -4104,9 +4107,48 @@ def test_executable_range_fragment_is_scoped_and_keeps_model_provenance(monkeypa
         materialize_instruction_fragments(program, stale, plc_model='FX3U')
 
 
+@pytest.mark.parametrize('opcode,operands', [
+    ('SFTL', ['M9', 'M3100', 'K500', 'D910']),
+    ('SFTL', ['M9', 'M3100', 'K500', 'K1']),
+    ('WSFL', ['D100', 'D200', 'K64', 'D910']),
+    ('BMOV', ['D100', 'D200', 'D910']),
+    ('BMOV', ['D100', 'D200', 'K64']),
+])
+def test_range_fragments_follow_the_normal_candidate_path(monkeypatch, opcode, operands):
+    from dataclasses import replace
+    from application.generation_agent import prepare_model_candidate
+    from application.instruction_fragments import executable_fragments, materialize_instruction_fragments
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY, InstructionRegistry
+    from plc.instruction_definition import InstructionFactGroup
+    typ = {'kind': 'int', 'bits': 16, 'signed': False}
+    count = {'op': 'parameter', 'name': 'N1' if len(operands) == 4 else 'N', 'type': typ}
+    behavior = {'behavior': 'range_copy', 'source': 'S', 'destination': 'D',
+                'count': count, 'element_type': typ, 'max_count': 16}
+    if len(operands) == 4:
+        behavior.pop('destination')
+        behavior.update(behavior='range_shift', region='D', direction='left', fill='source',
+                        shift={'op': 'parameter', 'name': 'N2', 'type': typ},
+                        element_type={'kind': 'bool'} if opcode == 'SFTL' else typ)
+    group = InstructionFactGroup('authored-range', 'effects.range', behavior,
+        'source_verified', scope={'models': ['FX3U'], 'languages': ['ladder']})
+    spec = DEFAULT_INSTRUCTION_REGISTRY.resolve_form(opcode, cpu='FX3U').spec
+    registry = InstructionRegistry([replace(spec, definition_facts=(group,),
+        native_operand_order=('S', 'D', 'N1', 'N2') if len(operands) == 4 else ('S', 'D', 'N'))])
+    monkeypatch.setattr('plc.instructions.DEFAULT_INSTRUCTION_REGISTRY', registry)
+    plan = {'families': {'range': [opcode]}}
+    research = {**plan, 'executable_fragments': executable_fragments(plan, plc_model='FX3U', target_mode='ladder')}
+    call = f'FRAG range-{opcode.lower()} ' + ' '.join(operands)
+    program = {'r': [{'c': ['P X0'], 'b': [{'i': [], 'o': [call]}]}], 'device_comments': []}
+    lowered, receipt = materialize_instruction_fragments(program, research, plc_model='FX3U')
+    ordinary = copy.deepcopy(program)
+    ordinary['r'][0]['b'][0]['o'] = [' '.join([opcode, *operands])]
+    assert lowered == ordinary
+    assert receipt['receipts'][0]['status'] == 'expanded'
+    assert prepare_model_candidate(lowered, {}, 'FX3U')['ladder'] == prepare_model_candidate(ordinary, {}, 'FX3U')['ladder']
+
+
 def test_instruction_review_returns_bound_fragments_and_separates_assumptions():
     from application.read_delivery import ReadDeliveryStore
-    from plc.instruction_definition import DefinitionError
     store, binding = ReadDeliveryStore(), ('FX3U', 'fragments')
     research = {'families': {}, 'executable_fragments': [{'id': 'example'}]}
     page = store.prepare({'tool': 'get_generation_context', 'data': {
@@ -4117,12 +4159,21 @@ def test_instruction_review_returns_bound_fragments_and_separates_assumptions():
             {'condition': '内部区域容量取16。', 'source': 'implementation'},
             {'condition': '允许两件。', 'source': 'user', 'quote': '允许两件'}]}
     result = store.check_review(binding, review, 'generation-1')
+    assert review['assumptions'] == [{'condition': '内部区域容量取16。'}, {'condition': '允许两件。'}]
     assert result['executable_fragments'] == research['executable_fragments']
     result['executable_fragments'].clear()
     assert store.check_review(binding, review)['executable_fragments']
     review['assumptions'][1]['quote'] = '每件必须隔100ms'
-    with pytest.raises(DefinitionError, match='exact quote'):
-        store.check_review(binding, review)
+    store.check_review(binding, review)
+    assert review['assumptions'][1] == {'condition': '允许两件。'}
+    store.check_review(binding, review)  # Normalization is idempotent.
+    assert review['assumptions'][1] == {'condition': '允许两件。'}
+    for quote in [None, '│ A │ 1s │', '原句']:
+        from application.instruction_research import normalize_review_assumptions, REVIEW_SCHEMA
+        claim = {'condition': '模型转述', 'source': 'user', **({'quote': quote} if quote else {})}
+        normalized = normalize_review_assumptions({'assumptions': [claim]})
+        assert normalized == [{'condition': '模型转述'}] and claim['source'] == 'user'
+    assert set(REVIEW_SCHEMA['properties']['assumptions']['items']['properties']) == {'condition'}
 
 
 def test_independent_repair_uses_submitted_network_indexes_after_fragment_expansion(monkeypatch):
@@ -4272,17 +4323,24 @@ def test_boolean_event_history_expands_and_tracks_tick_windows(monkeypatch):
     valid, trace = materialize_instruction_fragments(single, research, plc_model='FX3U')
     assert trace['source_network_indexes'] == [0] * 5
     assert valid['r'][1]['b'][0]['o'] == ['SFTL M10 M100 K8 K1']
+    longer = copy.deepcopy(single)
+    longer['r'][0]['b'][0]['o'] = ['FRAG history-sftl X2 M1 M10 M100 K65']
+    expanded, _ = materialize_instruction_fragments(longer, research, plc_model='FX3U')
+    assert expanded['r'][1]['b'][0]['o'] == ['SFTL M10 M100 K65 K1']
+    assert expanded['r'][-1]['b'][0]['o'] == ['ZRST M100 M164']
     other = {'c': ['P X1'], 'b': [{'o': ['FRAG history-sftl X3 M1 M11 M110 K8']}]}
     clear = {'c': ['NC X02'], 'b': [{'i': ['NC X3'], 'o': ['RST M10', 'ZRST M99 M118']}]}
-    shared, _ = materialize_instruction_fragments({'r': [*single['r'], other, clear]}, research, plc_model='FX3U')
+    shared, trace = materialize_instruction_fragments({'r': [*single['r'], other, clear]}, research, plc_model='FX3U')
     assert shared['r'][-1] == clear  # Also preserve the cleared addresses between the two histories.
-    with pytest.raises(DefinitionError, match='M110 aliases ZRST in network 2'):
-        materialize_instruction_fragments({'r': [*single['r'], other,
-            {'c': ['NC X2'], 'b': [{'o': ['ZRST M99 M118']}]}]}, research, plc_model='FX3U')
+    assert trace['interference_review']['findings'] == []
+    _, trace = materialize_instruction_fragments({'r': [*single['r'], other,
+        {'c': ['NC X2'], 'b': [{'o': ['ZRST M99 M118']}]}]}, research, plc_model='FX3U')
+    assert trace['interference_review']['findings'][0]['run_devices'] == ['X3']
+    assert len(trace['interference_review']['findings']) == 1
     bad_calls = ['FRAG history-sftl X2 M1 M100 M100 K8',
                  'FRAG history-sftl M100 M1 M10 M100 K8',
                  'FRAG history-sftl X2 X2 M10 M100 K8',
-                 'FRAG history-sftl X2 M1 M10 M100 K65',
+                 'FRAG history-sftl X2 M1 M10 M100 K0',
                  'FRAG history-sftl X2 M1 M10 M7998 K8',
                  'FRAG history-sftl X2 M1 D10 M100 K8']
     for call in bad_calls:
@@ -4293,8 +4351,26 @@ def test_boolean_event_history_expands_and_tracks_tick_windows(monkeypatch):
     for extra in [{'c': [], 'b': [{'o': ['COIL M00100']}]},
                   {'c': ['NC X2'], 'b': [{'o': ['SET M100']}]},
                   {'c': ['NO X2'], 'b': [{'o': ['ZRST M100 M107']}]},
-                  {'c': [], 'b': [{'i': [{'or': [['NC X2'], ['NO X1']]}], 'o': ['RST M100']}]},
-                  {'c': ['P X1'], 'b': [{'o': ['FRAG history-sftl X2 M1 M11 M104 K8']}]},
+                  {'c': [], 'b': [{'i': [{'or': [['NC X2'], ['NO X1']]}], 'o': ['RST M100']}]}]:
+        source = {'r': [*single['r'], extra]}
+        expanded, trace = materialize_instruction_fragments(source, research, plc_model='FX3U')
+        assert expanded['r'][-1] == extra and source['r'][-1] == extra
+        review = trace['interference_review']
+        assert review['status'] == 'not_established' and review['blocking'] is False
+        assert len(review['findings']) == 1 and review['findings'][0]['network_index'] == 1
+        from shared.model_context import technical_value
+        assert technical_value({'fragment_review': review})['fragment_review'] == review
+    # Indirect stop logic is not inferred. Different device names and an earlier
+    # state assignment must survive lowering unchanged, without a repair demand.
+    indirect = {'r': [
+        {'c': ['NC X7'], 'b': [{'o': ['COIL M20']}]},
+        {'c': ['NO X7'], 'b': [{'o': ['ZRST M200 M207']}]},
+        {'c': ['P X4'], 'b': [{'o': ['FRAG history-sftl M20 M21 M22 M200 K8']}]}]}
+    expanded, trace = materialize_instruction_fragments(indirect, research, plc_model='FX3U')
+    assert expanded['r'][:2] == indirect['r'][:2]
+    assert trace['interference_review']['findings'][0]['network_index'] == 1
+    # Concrete allocation collisions still violate the fragment's own contract.
+    for extra in [{'c': ['P X1'], 'b': [{'o': ['FRAG history-sftl X2 M1 M11 M104 K8']}]},
                   {'c': ['P X1'], 'b': [{'o': ['FRAG history-sftl X2 M100 M11 M200 K8']}]}]:
         invalid = copy.deepcopy(single)
         invalid['r'].append(extra)

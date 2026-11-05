@@ -12,10 +12,9 @@ _DOCUMENT = {'type': 'string', 'pattern': r'read-[0-9a-f]{32}'}
 REVIEW_SCHEMA = {'type': 'object', 'additionalProperties': False,
     'description': '新设计的选型记录。按实际型号查证每组相关指令，读完分页后填写；引用 delivery.document_id。',
     'properties': {'assumptions': {'type': 'array', 'maxItems': 32, 'items': {
-                       'type': 'object', 'additionalProperties': False,
-                       'properties': {'condition': _TEXT, 'source': {'enum': ['user', 'implementation']},
-                                      'quote': _TEXT}, 'required': ['condition', 'source']},
-                       'description': '容量、节拍等新增实现选择记 implementation；user 必须附原消息逐字 quote，不能把模型选择写成用户限制。'},
+                       'type': 'object', 'additionalProperties': True,
+                       'properties': {'condition': _TEXT}, 'required': ['condition']},
+                       'description': '记录模型选择的容量、节拍等实现假设，与原始用户需求分开保存。'},
                    'context_document': _DOCUMENT,
                    'manual_documents': {'type': 'array', 'items': _DOCUMENT, 'maxItems': 32},
                    'reviewed_instructions': {'type': 'array', 'maxItems': 96,
@@ -27,7 +26,7 @@ REVIEW_SCHEMA = {'type': 'object', 'additionalProperties': False,
                        'properties': {'method': _TEXT, 'tradeoff': _TEXT}, 'required': ['method', 'tradeoff'],
                        'additionalProperties': False},
                        'description': '列出其他可行或已排除的方法，逐项比较具体指令、行为和资源取舍，说明未证实条件。'}},
-    'required': ['context_document', 'manual_documents', 'selected', 'alternatives']}
+    'required': ['context_document', 'manual_documents']}
 
 
 def new_candidate(tool, arguments):
@@ -137,31 +136,25 @@ def include_manual_facts(plan, context, language):
             'knowledge': units}}
 
 
-def missing_families(groups, researched, review):
-    text = ' '.join([review['selected'], *(row['method'] + ' ' + row['tradeoff'] for row in review['alternatives'])])
-    mentioned = set(re.findall(r'[A-Z][A-Z0-9_]*(?:\.[A-Z0-9_]+)*', text.upper()))
-    considered = researched & (mentioned | set(review.get('reviewed_instructions', ())))
-    missing = [group for group, names in groups.items() if group != 'explicit' and considered.isdisjoint(names)]
-    return [*missing, *sorted(set(groups.get('explicit', [])) - considered)]
+def missing_families(groups, researched):
+    """Check actual document reads, not whether the model repeats their names."""
+    missing = [group for group, names in groups.items() if group != 'explicit' and researched.isdisjoint(names)]
+    return [*missing, *sorted(set(groups.get('explicit', [])) - researched)]
 
 
-def validate_review_assumptions(review, *, user_requirement=None):
-    """Keep implementation assumptions separate; user quotations must be literal."""
+def normalize_review_assumptions(review):
+    """Store model notes separately; self-assigned provenance has no authority."""
     from plc.instruction_definition import DefinitionError
     rows = review.get('assumptions', [])
     if not isinstance(rows, list) or len(rows) > 32:
         raise DefinitionError('Implementation assumptions must be a bounded array')
     result = []
     for row in rows:
-        if (not isinstance(row, dict) or set(row) - {'condition', 'source', 'quote'}
-                or row.get('source') not in {'user', 'implementation'}
+        if (not isinstance(row, dict)
                 or not isinstance(row.get('condition'), str) or not row['condition'].strip()
                 or len(row['condition']) > 4000):
             raise DefinitionError('Invalid implementation assumption')
-        quote = row.get('quote')
-        if quote is not None and (not isinstance(quote, str) or not quote.strip() or len(quote) > 4000):
-            raise DefinitionError('Invalid assumption quotation')
-        if row['source'] == 'user' and (not quote or not user_requirement or quote not in user_requirement):
-            raise DefinitionError('User assumption requires an exact quote from the original message')
-        result.append(dict(row))
+        # Older clients may send source/quote annotations. They cannot establish
+        # user facts and do not affect admission; only retain the model's note.
+        result.append({'condition': row['condition']})
     return result

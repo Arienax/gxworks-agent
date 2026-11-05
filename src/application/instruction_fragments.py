@@ -6,7 +6,7 @@ from __future__ import annotations
 import copy
 import re
 
-from plc.instruction_definition import DefinitionError, Expression, ValueType, select_fact_dependencies
+from plc.instruction_definition import DefinitionError, Expression, select_fact_dependencies
 from plc.instruction_effects import validate_behavior
 
 
@@ -65,7 +65,7 @@ def executable_fragments(plan, *, plc_model, target_mode, registry=None):
                             'scope': '示例地址、长度和事件由工程实际条件替换'},
                 'syntax': 'FRAG ' + identity + ' ' + ' '.join('<' + p + '>' for p in form.spec.native_operand_order),
                 'instructions': '按形参顺序提供地址/常数；梯级输入给出完整使能。触发=' + trigger +
-                    '；required_state 必须由程序满足；范围、重叠及容量按 behavior 边界检查。内部容量或节拍选择单独记作 implementation 假设。'})
+                    '；按原生操作数顺序展开，地址和常数沿用普通指令的编译检查。required_state 是运行条件。内部容量或节拍选择单独记作 implementation 假设。'})
             kinds.add(kind)
             break
     # Prefer a shift and a copy when both are relevant; otherwise retain
@@ -152,7 +152,7 @@ def _history_template(shift, plc_model, registry):
             'effect_description': '原梯级条件表示事件，只在run时锁存pending。每个run且tick扫描将pending采入base[0]，'
                 '旧base[k]推进到base[k+1]，随后清pending。停用清pending及申请的全部普通M历史区。',
             'instructions': '必须放在独立单分支单输出事件梯级。run/tick是已有位；pending/base是独占普通M存储且互不重叠。'
-                '允许在各自run断开时重复RST/ZRST，运行期间的其他写入会破坏历史。'
+                '允许停用时重复RST/ZRST；外部写入可能改变历史，后端无法确定触发关系时仅提示未验证，不要求固定保护条件写法。'
                 '共享tick须为单扫描脉冲，各通道共用时基但分开pending和历史区。base[k]代表采入后经过k次tick；'
                 '若tick间隔Δ，k位对应kΔ的离散历史，事件到采入仍有0至Δ加扫描误差。'
                 '用定时器判变时，按实际可观察的更新频率选时基；可能跳计数时须处理经过的单位数，或用时间戳判定到期。'
@@ -161,68 +161,18 @@ def _history_template(shift, plc_model, registry):
             'example': _history_example(identity, plc_model)}
 
 
-def _instantiate(template, operands, *, plc_model, confirmed_spec):
-    from plc.instruction_binding import _bind_operation_intent
-    behavior = template['behavior']
-    names = template['parameters']
-    if len(operands) != len(names):
+def _instantiate(template, operands):
+    """Expand the selected instruction without requiring a static effect proof."""
+    if len(operands) != len(template['parameters']):
         raise DefinitionError('Fragment operand count does not match delivered parameters')
-    parameter_types = {}
-    def collect(raw):
-        expression = Expression.from_mapping(raw)
-        def walk(expr):
-            if expr.op == 'parameter':
-                parameter_types[expr.name] = expr.value_type
-            for child in expr.args:
-                walk(child)
-        walk(expression)
-    collect(behavior['count'])
-    if behavior['behavior'] == 'range_shift':
-        collect(behavior['shift'])
-    for condition in behavior.get('preconditions', []):
-        collect(condition)
-    bindings = {}
-    for name, token in zip(names, operands):
-        typ = parameter_types.get(name, ValueType('opaque'))
-        if re.fullmatch(r'(?:SM|SD|[MDR])\d+', token, re.I):
-            value = Expression('device', typ, name=token.upper())
-        elif re.fullmatch(r'K[+-]?\d+', token, re.I):
-            value = Expression('constant', typ, value=int(token[1:]))
-        elif re.fullmatch(r'H[0-9A-F]+', token, re.I):
-            value = Expression('constant', typ, value=int(token[1:], 16))
-        else:
-            raise DefinitionError('Fragment requires a plain memory address or integer constant')
-        # Validate representation/range before passing values to the shared matcher.
-        value = Expression.from_mapping(value.as_mapping())
-        bindings[name] = value
-    def substitute(raw):
-        expr = raw if isinstance(raw, Expression) else Expression.from_mapping(raw)
-        if expr.op == 'parameter':
-            if expr.name not in bindings:
-                raise DefinitionError('Fragment has an unbound parameter')
-            return bindings[expr.name]
-        return Expression(expr.op, expr.value_type, tuple(substitute(a) for a in expr.args),
-                          expr.name, expr.value, expr.overflow)
-    target = behavior.get('destination') or behavior.get('region')
-    effect = {'kind': behavior['behavior'], 'target': {'device': bindings[target].name,
-        'kind': 'bit' if behavior['element_type']['kind'] == 'bool' else 'word'},
-        'source': bindings[behavior['source']].as_mapping(), 'count': substitute(behavior['count']).as_mapping()}
-    if behavior['behavior'] == 'range_shift':
-        effect.update(shift=substitute(behavior['shift']).as_mapping(), direction=behavior['direction'])
-    intent = {'id': template['id'], 'opcode': template['opcode'], 'effects': [effect],
-        'enable': Expression('constant', ValueType('bool'), value=True).as_mapping(),
-        'parameters': {name: value.as_mapping() for name, value in bindings.items()},
-        'status': 'candidate', 'provenance': {'source': 'model_candidate'},
-        'execution': {'trigger': template['trigger'], 'required_state': behavior.get('required_state', {})}}
-    receipt = _bind_operation_intent(intent, target_model=plc_model,
-                                    confirmed_spec=confirmed_spec, model_fragment=True)
-    if receipt['status'] != 'bound' or receipt['source_verification'] != 'source_checked':
-        raise DefinitionError('Fragment binding failed: ' + receipt.get('reason', 'unverified_fact'))
-    return receipt
+    # The ordinary program validator and native compiler handle these operands,
+    # including device-valued counts and shifts, exactly as for handwritten calls.
+    return {'status': 'expanded', 'opcode': template['opcode'], 'operands': list(operands),
+            'input': {'status': 'candidate', 'provenance': {'source': 'model_candidate'}}}
 
 
 def materialize_instruction_fragments(ladder, research, *, plc_model, target_mode='ladder', confirmed_spec=None):
-    """Lower only explicitly referenced, delivered templates through the shared binder."""
+    """Expand explicitly referenced templates into ordinary Ladder instructions."""
     def branches(program):
         for rung in program.get('r', program.get('root', program.get('rungs', []))):
             yield from rung.get('b', rung.get('branches', []))
@@ -237,6 +187,7 @@ def materialize_instruction_fragments(ladder, research, *, plc_model, target_mod
     histories = {}
     storage_run = {}
     controls = set()
+    interference_findings = []
     rows_key = next((key for key in ('r', 'root', 'rungs') if key in value), 'r')
     for source_index, rung in enumerate(value.get(rows_key, [])):
         for branch in rung.get('b', rung.get('branches', [])):
@@ -253,14 +204,15 @@ def materialize_instruction_fragments(ladder, research, *, plc_model, target_mod
                         or len(rung.get('b', [])) != 1 or len(branch.get('o', [])) != 1):
                     raise DefinitionError('History fragment requires an independent single-output compact rung')
                 generated, receipt, owned, inputs = _materialize_history(
-                    rung, template, parts[2:], plc_model=plc_model, confirmed_spec=confirmed_spec)
+                    rung, template, parts[2:], plc_model=plc_model)
                 if owned.union(inputs).intersection(storage_run) or owned & controls:
                     raise DefinitionError('History storage aliases another history or its controls')
                 storage_run.update(dict.fromkeys(owned, inputs[0]))
                 controls.update(inputs)
                 histories[source_index] = (generated, receipt)
-    # RST/ZRST under the same NC run guard repeats the fragment's own shutdown
-    # clear. Preserve the original output, including any non-history addresses.
+    # A local NC run guard establishes a harmless shutdown clear. Other guards
+    # may depend on earlier networks or state we do not analyze here. An overlap
+    # alone is not a behavioral counterexample, so retain the original program.
     if storage_run:
         for source_index, rung in enumerate(value[rows_key]):
             if source_index in histories:
@@ -272,11 +224,11 @@ def materialize_instruction_fragments(ladder, research, *, plc_model, target_mod
                     if not overlap:
                         continue
                     inactive = (_required_off_contacts(rung, branch) if opcode in {'RST', 'ZRST'} else set())
-                    for address in sorted(overlap):
-                        run = storage_run[address]
-                        if run not in inactive:
-                            raise DefinitionError(f'History storage {address} aliases {opcode} in network '
-                                                  f'{source_index}; only clearing with {run} off is allowed')
+                    unresolved = sorted(address for address in overlap if storage_run[address] not in inactive)
+                    if unresolved:
+                        interference_findings.append({'network_index': source_index, 'opcode': opcode,
+                            'storage': unresolved, 'run_devices': sorted({storage_run[a] for a in unresolved}),
+                            'reason': 'external_write_activation_not_established'})
     for branch in branches(value):
         outputs = branch.get('o', branch.get('outputs', []))
         for index, output in enumerate(outputs):
@@ -287,7 +239,7 @@ def materialize_instruction_fragments(ladder, research, *, plc_model, target_mod
                 raise DefinitionError('Unknown or stale instruction fragment')
             if current[parts[1]].get('construction') == 'boolean_event_history':
                 continue
-            receipt = _instantiate(current[parts[1]], parts[2:], plc_model=plc_model, confirmed_spec=confirmed_spec)
+            receipt = _instantiate(current[parts[1]], parts[2:])
             receipts.append({**receipt, 'binding_mode': 'model_instruction_fragment',
                 'fragment_id': parts[1], 'user_fact': False,
                 'required_state': copy.deepcopy(current[parts[1]]['behavior'].get('required_state', {})),
@@ -306,10 +258,13 @@ def materialize_instruction_fragments(ladder, research, *, plc_model, target_mod
             mapping.append(source_index)
     value[rows_key] = expanded
     return value, ({'stage': 'Core_instruction_fragments', 'receipts': receipts, 'model_calls': 0,
-                    'source_network_indexes': mapping} if receipts else None)
+                    'source_network_indexes': mapping,
+                    'interference_review': {'status': 'not_established', 'blocking': False,
+                        'scope': 'Known external storage writes only; activation and complete behavior are not proved.',
+                        'findings': interference_findings}} if receipts else None)
 
 
-def _materialize_history(rung, template, operands, *, plc_model, confirmed_spec):
+def _materialize_history(rung, template, operands, *, plc_model):
     from plc.device_identity import canonical_device
     from plc.device_policy import device_address
     from plc.instruction_binding import offset_device
@@ -318,8 +273,8 @@ def _materialize_history(rung, template, operands, *, plc_model, confirmed_spec)
         raise DefinitionError('History requires run tick pending base Klength')
     run, tick, pending, base = [canonical_device(token) for token in operands[:4]]
     length = int(operands[-1][1:])
-    if not 1 <= length <= template['behavior'].get('max_count', 1024):
-        raise DefinitionError('History length is outside the formal range')
+    if length < 1:
+        raise DefinitionError('History length must be positive')
     if not all(re.fullmatch(r'M\d+', address) for address in (pending, base)):
         raise DefinitionError('History storage requires ordinary M bit regions')
     region = {offset_device(base, i) for i in range(length)}
@@ -339,8 +294,7 @@ def _materialize_history(rung, template, operands, *, plc_model, confirmed_spec)
     args = {behavior['source']: pending, behavior['region']: base,
             count.name: 'K' + str(length), shift.name: 'K1'}
     native = {**template, 'parameters': template['native_parameters']}
-    receipt = _instantiate(native, [args[p] for p in native['parameters']],
-                           plc_model=plc_model, confirmed_spec=confirmed_spec)
+    receipt = _instantiate(native, [args[p] for p in native['parameters']])
     capture = copy.deepcopy(rung)
     capture['b'][0]['i'] = [*capture['b'][0].get('i', []), 'NO ' + run]
     capture['b'][0]['o'] = ['SET ' + pending]
@@ -378,7 +332,7 @@ def _output_write_access(output, fragments, plc_model, confirmed_spec):
         template = fragments.get(parts[1])
         if template is None:
             raise DefinitionError('Unknown instruction fragment')
-        bound = _instantiate(template, parts[2:], plc_model=plc_model, confirmed_spec=confirmed_spec)
+        bound = _instantiate(template, parts[2:])
         output = ' '.join([bound['opcode'], *bound['operands']])
     parsed = _output(output, '$.history_alias') if isinstance(output, str) else output
     if parsed.get('type') != 'APP_INSTR':
