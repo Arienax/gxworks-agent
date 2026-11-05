@@ -4092,8 +4092,8 @@ def test_executable_range_fragment_is_scoped_and_keeps_model_provenance(monkeypa
     lowered_mixed, _ = materialize_instruction_fragments(mixed, research, plc_model='FX3U')
     assert lowered_mixed['r'][1] == mixed['r'][1]
     assert lowered_mixed['r'][0]['b'][0]['o'] == ['BMOV D100 D200 K16', 'COIL Y0']
-    for call in ['FRAG unknown D100 D200 K16', 'FRAG range-bmov D100 D200 K33',
-                 'FRAG range-bmov D100 D200 K0', 'FRAG range-bmov M100 D200 K16']:
+    for call in ['FRAG unknown D100 D200 K16', 'FRAG range-bmov D100 D200',
+                 'FRAG range-bmov D100 D200 K16 K1']:
         with pytest.raises(DefinitionError):
             materialize_instruction_fragments({'r': [{'b': [{'o': [call]}]}]}, research, plc_model='FX3U')
     with pytest.raises(DefinitionError, match='Unknown'):
@@ -4102,6 +4102,46 @@ def test_executable_range_fragment_is_scoped_and_keeps_model_provenance(monkeypa
     stale['executable_fragments'][0]['trigger'] = 'rising'
     with pytest.raises(DefinitionError, match='stale'):
         materialize_instruction_fragments(program, stale, plc_model='FX3U')
+
+
+@pytest.mark.parametrize('opcode,operands', [
+    ('SFTL', ['M9', 'M3100', 'K500', 'D910']),
+    ('SFTL', ['M9', 'M3100', 'K500', 'K1']),
+    ('WSFL', ['D100', 'D200', 'K64', 'D910']),
+    ('BMOV', ['D100', 'D200', 'D910']),
+    ('BMOV', ['D100', 'D200', 'K64']),
+])
+def test_range_fragments_follow_the_normal_candidate_path(monkeypatch, opcode, operands):
+    from dataclasses import replace
+    from application.generation_agent import prepare_model_candidate
+    from application.instruction_fragments import executable_fragments, materialize_instruction_fragments
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY, InstructionRegistry
+    from plc.instruction_definition import InstructionFactGroup
+    typ = {'kind': 'int', 'bits': 16, 'signed': False}
+    count = {'op': 'parameter', 'name': 'N1' if len(operands) == 4 else 'N', 'type': typ}
+    behavior = {'behavior': 'range_copy', 'source': 'S', 'destination': 'D',
+                'count': count, 'element_type': typ, 'max_count': 16}
+    if len(operands) == 4:
+        behavior.pop('destination')
+        behavior.update(behavior='range_shift', region='D', direction='left', fill='source',
+                        shift={'op': 'parameter', 'name': 'N2', 'type': typ},
+                        element_type={'kind': 'bool'} if opcode == 'SFTL' else typ)
+    group = InstructionFactGroup('authored-range', 'effects.range', behavior,
+        'source_verified', scope={'models': ['FX3U'], 'languages': ['ladder']})
+    spec = DEFAULT_INSTRUCTION_REGISTRY.resolve_form(opcode, cpu='FX3U').spec
+    registry = InstructionRegistry([replace(spec, definition_facts=(group,),
+        native_operand_order=('S', 'D', 'N1', 'N2') if len(operands) == 4 else ('S', 'D', 'N'))])
+    monkeypatch.setattr('plc.instructions.DEFAULT_INSTRUCTION_REGISTRY', registry)
+    plan = {'families': {'range': [opcode]}}
+    research = {**plan, 'executable_fragments': executable_fragments(plan, plc_model='FX3U', target_mode='ladder')}
+    call = f'FRAG range-{opcode.lower()} ' + ' '.join(operands)
+    program = {'r': [{'c': ['P X0'], 'b': [{'i': [], 'o': [call]}]}], 'device_comments': []}
+    lowered, receipt = materialize_instruction_fragments(program, research, plc_model='FX3U')
+    ordinary = copy.deepcopy(program)
+    ordinary['r'][0]['b'][0]['o'] = [' '.join([opcode, *operands])]
+    assert lowered == ordinary
+    assert receipt['receipts'][0]['status'] == 'expanded'
+    assert prepare_model_candidate(lowered, {}, 'FX3U')['ladder'] == prepare_model_candidate(ordinary, {}, 'FX3U')['ladder']
 
 
 def test_instruction_review_returns_bound_fragments_and_separates_assumptions():
@@ -4272,6 +4312,11 @@ def test_boolean_event_history_expands_and_tracks_tick_windows(monkeypatch):
     valid, trace = materialize_instruction_fragments(single, research, plc_model='FX3U')
     assert trace['source_network_indexes'] == [0] * 5
     assert valid['r'][1]['b'][0]['o'] == ['SFTL M10 M100 K8 K1']
+    longer = copy.deepcopy(single)
+    longer['r'][0]['b'][0]['o'] = ['FRAG history-sftl X2 M1 M10 M100 K65']
+    expanded, _ = materialize_instruction_fragments(longer, research, plc_model='FX3U')
+    assert expanded['r'][1]['b'][0]['o'] == ['SFTL M10 M100 K65 K1']
+    assert expanded['r'][-1]['b'][0]['o'] == ['ZRST M100 M164']
     other = {'c': ['P X1'], 'b': [{'o': ['FRAG history-sftl X3 M1 M11 M110 K8']}]}
     clear = {'c': ['NC X02'], 'b': [{'i': ['NC X3'], 'o': ['RST M10', 'ZRST M99 M118']}]}
     shared, _ = materialize_instruction_fragments({'r': [*single['r'], other, clear]}, research, plc_model='FX3U')
@@ -4282,7 +4327,7 @@ def test_boolean_event_history_expands_and_tracks_tick_windows(monkeypatch):
     bad_calls = ['FRAG history-sftl X2 M1 M100 M100 K8',
                  'FRAG history-sftl M100 M1 M10 M100 K8',
                  'FRAG history-sftl X2 X2 M10 M100 K8',
-                 'FRAG history-sftl X2 M1 M10 M100 K65',
+                 'FRAG history-sftl X2 M1 M10 M100 K0',
                  'FRAG history-sftl X2 M1 M10 M7998 K8',
                  'FRAG history-sftl X2 M1 D10 M100 K8']
     for call in bad_calls:
