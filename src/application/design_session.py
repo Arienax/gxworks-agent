@@ -137,6 +137,24 @@ class DesignSession:
             state.pop('repair_id', None)
             result['analysis_mode'] = 'design'
             result['decision_receipt']['analysis_evidence'] = state['analysis_evidence']
+            # Claims the request cannot support stay in the receipt: the window
+            # shows them, and the confirmed specification still records what the
+            # model proposed but could not ground.
+            dropped = state.get('dropped_claims') or []
+            for field in ('explicit_constraint_receipt', 'execution_intent_receipt'):
+                for row in (result.get(field) or {}).get('rejected') or []:
+                    claim = row.get('claim')
+                    if not isinstance(claim, dict):
+                        details = row.get('details') or []
+                        actual = details[0].get('actual') if details and isinstance(details[0], dict) else None
+                        claim = actual if isinstance(actual, dict) else {'summary': str(row.get('reason') or '')}
+                    entry = {'field': field.replace('_receipt', ''), 'reason': str(row.get('reason') or ''),
+                             'claim': copy.deepcopy(claim)}
+                    if entry not in dropped:
+                        dropped.append(entry)
+            state['dropped_claims'] = dropped
+            if dropped:
+                result['decision_receipt']['dropped_claims'] = copy.deepcopy(dropped)
             draft = build_review_draft(result, project.get('confirmed_spec'))
             ids = [a.get('approach_id') for a in draft['approaches']]
             if None in ids or len(set(ids)) != len(ids) or len(ids) > 3:

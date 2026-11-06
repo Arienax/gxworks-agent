@@ -24,7 +24,7 @@ approaches 每项含 approach_id、name、description、pros、cons、generation
 X/Y/M/D/T/C/S 用“地址:用途”对象分组，如 {"X":{"X10":"到位检测"}}；不得只给地址数组。special_relays/special_registers 可用数组或对象，SM/SD 分别归类。未知地址不填 suggested_io；需确认地址只放 missing_info，不同时预分配一个“建议地址”。hardware_config 只放相关硬件事实。
 
 # Explicit low-level claims
-explicit_constraint_claims 只报告本轮写死/撤销的条件，不选择 opcode、完整操作数或地址。项含 operation、scope=global|scoped|ambiguous、target、evidence[]（本轮逐字，实例含完整指令）；仅 global 投影。target 形状及允许操作：
+explicit_constraint_claims 只报告本轮写死/撤销的条件，不选择 opcode、完整操作数或地址。项含 operation、scope=global|scoped|ambiguous、target、evidence[]（本轮逐字，实例含完整指令）；仅 global 投影。未明说的推断写 inferred=true、evidence 留空：只进回执，不成为约束，不要编造原文。target 形状及允许操作：
 __EXPLICIT_TARGETS__
 category 仅用于 clear，value=opcodes/devices/instruction_instances/all。device.values 只放具体设备；方法禁令留原文，不伪装成地址。
 
@@ -37,7 +37,7 @@ category 仅用于 clear，value=opcodes/devices/instruction_instances/all。dev
 
 
 ANALYSIS_BOUND_PROMPT = """# Execution intent
-execution_intent_claims 项的合法示例：__EXECUTION_EXAMPLE__。上升沿 from=0,to=1；下降沿 from=1,to=0，单值，不用 from_states/to_states。level 无需 from/to。kind 仅 level/transition/first_scan/cyclic/interrupt/clear；evidence 逐字来自本轮，必须含该 claim 全部设备（可用等价地址）；不能借另一句的地址补证据。不输出 execution_semantics。
+execution_intent_claims 项的合法示例：__EXECUTION_EXAMPLE__。上升沿 from=0,to=1；下降沿 from=1,to=0，单值，不用 from_states/to_states。level 无需 from/to。kind 仅 level/transition/first_scan/cyclic/interrupt/clear；evidence 逐字来自本轮，必须含该 claim 全部设备（可用等价地址）；不能借另一句的地址补证据。仅推断的执行意图写 inferred=true 并留空 evidence，只进回执。不输出 execution_semantics。
 首扫只能来自明确要求。按钮用途不确定触发沿或有效电平；未确认时不声明 transition 或 level，保留必要问题。
 
 # Operation effect candidates

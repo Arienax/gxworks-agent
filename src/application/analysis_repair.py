@@ -81,8 +81,10 @@ def design_submission_schema():
     """Wire shape for external Design models; grounding and acceptance still use the Web validators."""
     text = {"type": "string"}
     strings = {"type": "array", "items": text}
-    evidence = {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1},
+    evidence = {"type": "array", "minItems": 0, "items": {"type": "string", "minLength": 1},
                 "description": "Verbatim spans of the current user request."}
+    inferred = {"type": "boolean",
+                "description": "Inferred, not quoted: receipt only, never binding."}
 
     def record(fields, required=()):
         return {"type": "object", "properties": fields, "required": list(required)}
@@ -93,12 +95,12 @@ def design_submission_schema():
     trigger = record({"kind": {"enum": sorted(TRIGGER_KINDS)}, "source_devices": strings,
                       "from": {"enum": [0, 1]}, "to": {"enum": [0, 1]},
                       "period_ms": {"type": "number", "exclusiveMinimum": 0}}, ["kind"])
-    execution = record({"trigger": trigger, "evidence": evidence,
+    execution = record({"trigger": trigger, "evidence": evidence, "inferred": inferred,
                         "effect": record({"kind": text, "devices": strings}),
                         "rearm": {"type": ["string", "boolean"]}}, ["trigger", "evidence"])
     explicit = record({"operation": {"enum": sorted(OPERATIONS)}, "scope": {"enum": sorted(SCOPES)},
                        "target": {"anyOf": [c["schema"] for c in explicit_target_contracts().values()]},
-                       "evidence": evidence}, ["operation", "scope", "target", "evidence"])
+                       "evidence": evidence, "inferred": inferred}, ["operation", "scope", "target", "evidence"])
     approach = record({**dict.fromkeys(("approach_id", "name", "description", "pros", "cons", "generation_guide"), text),
                        "implementation_semantics": rows(_semantic_schema())},
                       ["approach_id", "name", "description", "implementation_semantics"])
