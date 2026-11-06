@@ -3,6 +3,7 @@
 
 """External-model entry to the Web Design analysis and confirmation workflow."""
 from uuid import uuid4
+import copy
 import json
 
 from agent_runtime.tool_errors import ToolPreconditionError
@@ -106,6 +107,24 @@ class DesignSession:
                 payload = args['analysis']
             plan = plan_analysis_repair(payload, requirement, plc_model=model, confirmed_spec=spec,
                                         contract_stage=state['contract_stage'])
+            state.pop('dropped_claims', None)
+            # These optional claims are model projections. The exact user
+            # request is kept in the confirmed intent and used in generation.
+            rejected_claims = {target['path'] for target in plan['targets'] if target['mode'] == 'claim'}
+            if rejected_claims:
+                dropped = []
+                for field in ('explicit_constraint_claims', 'execution_intent_claims'):
+                    if isinstance(plan['base'].get(field), list):
+                        for i, claim in enumerate(plan['base'][field]):
+                            if f'/{field}/{i}' in rejected_claims:
+                                dropped.append({'field': field, 'claim': copy.deepcopy(claim)})
+                        plan['base'][field] = [claim for i, claim in enumerate(plan['base'][field])
+                                               if f'/{field}/{i}' not in rejected_claims]
+                # The user asked for these explicitly, so removing them silently
+                # would hide a lost requirement; the review shows them instead.
+                state['dropped_claims'] = dropped
+                plan = plan_analysis_repair(plan['base'], requirement, plc_model=model, confirmed_spec=spec,
+                                            contract_stage=state['contract_stage'])
             if plan['targets']:
                 state.pop('draft', None)
                 state.pop('draft_id', None)
@@ -134,6 +153,7 @@ class DesignSession:
                   'operation_intents', 'user_notes') if draft.get(k)}
         return {'draft_id': state['draft_id'], 'user_requirement': state['requirement'], 'review': review,
                 'issues': validate_spec_draft(draft, project['plc_model']),
+                **({'dropped_claims': state['dropped_claims']} if state.get('dropped_claims') else {}),
                 'next_actions': [{'tool': 'confirm_design_plan'}] if draft.get('approaches') else []}
 
     @staticmethod
@@ -146,7 +166,7 @@ class DesignSession:
                     'instruction': 'Supply repairs [{path,value}] for just these fields. Use exact user evidence. '
                                    'For claim targets return an array. Preserve the rest of the saved analysis.'}]}
 
-    def confirm(self, project_id, draft_id, approach_id):
+    def confirm(self, project_id, draft_id, approach_id, parameter_answers=None):
         state, project = self._pending(project_id)
         if state.get('draft_id') != draft_id:
             raise ValueError('草稿已替换，请重新查看当前计划。')
@@ -154,6 +174,11 @@ class DesignSession:
         choice = next((a for a in draft['approaches'] if a['approach_id'] == approach_id), None)
         if not choice:
             raise ValueError('所选方案不在当前草稿中。')
+        parameters = {row['id']: row for row in draft.get('parameters', []) if row.get('id')}
+        for key, value in (parameter_answers or {}).items():
+            if key not in parameters or not value.strip():
+                raise ValueError('参数答案必须对应当前草稿中的参数 ID，且不能为空。')
+            parameters[key].update(value=value.strip(), source='user')
         draft['selected_approach'] = choice
         saved = self.service.set_spec(project_id, draft, expected_hash=state['base_hash'])
         if not saved['valid']:

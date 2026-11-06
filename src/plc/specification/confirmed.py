@@ -3,6 +3,7 @@
 
 import copy
 import difflib
+import hashlib
 import re
 
 from plc.device_identity import canonical_device
@@ -954,12 +955,25 @@ def _parameter_choice_metadata(item):
 def _missing_info_to_parameters(missing_info):
     parameters = []
     questions = normalize_missing_info(missing_info)
+    used_ids = set()
     for item in questions:
         if not isinstance(item, dict):
             continue
         name = str(item.get("question", "")).strip()
         if not name:
             continue
+        # Answers are keyed by parameter id, so a question without one can never
+        # be answered and would block confirmation forever. Derive a stable id
+        # from the question itself instead of dropping the row.
+        question_id = str(item.get("id", "")).strip()
+        if not question_id:
+            question_id = "q_" + hashlib.sha256(name.encode("utf-8")).hexdigest()[:8]
+        unique_id, suffix = question_id, 2
+        while unique_id in used_ids:
+            unique_id = f"{question_id}_{suffix}"
+            suffix += 1
+        question_id = unique_id
+        used_ids.add(question_id)
         options = [str(option) for option in item.get("options", [])]
         default = item.get("default")
         # An AI-proposed default is a suggestion, not user confirmation.  Keep
@@ -971,7 +985,7 @@ def _missing_info_to_parameters(missing_info):
         if default is not None and str(default).strip():
             notes.append(f"AI建议：{str(default).strip()}（尚未确认）")
         parameter = {
-            "id": str(item.get("id", "")).strip(),
+            "id": question_id,
             "name": name,
             "value": value,
             "source": str(item.get("source", "")).strip() or "analysis",

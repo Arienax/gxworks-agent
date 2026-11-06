@@ -1929,26 +1929,37 @@ def test_local_design_implements_only_the_selected_web_approach(tmp_path, langua
             analysis['approaches'][1]['description'] = 'Use the output contact.'
             validator.validate(analysis)
             analysis['execution_intent_claims'] = [{'claim': 'Start on a button'}]
+            analysis['approaches'][0]['implementation_semantics'] = 'unsupported'
             assert not validator.is_valid(analysis)
             rejected = propose()
             assert rejected['status'] == 'repair_required'
-            assert [item['path'] for item in rejected['repair_targets']] == ['/execution_intent_claims/0']
+            assert [item['path'] for item in rejected['repair_targets']] == ['/approaches/0/implementation_semantics']
             assert _mcp_body(run('propose_design_plan'))['data']['repair_id'] == rejected['repair_id']
             assert run('confirm_design_plan', draft_id='pending', approach_id='state').is_error
             binding = {'analysis_id': context['analysis_id'], 'repair_id': rejected['repair_id']}
             assert run('propose_design_plan', **binding, repairs=[{'path': '/summary', 'value': ''}]).is_error
-            repairs = [{'path': '/execution_intent_claims/0', 'value': []}]
+            repairs = [{'path': '/approaches/0/implementation_semantics', 'value': []}]
             repaired = _mcp_body(run('propose_design_plan', **binding, repairs=repairs))['data']
             assert [a['name'] for a in repaired['review']['approaches']] == ['Store a run flag', 'Output seal-in']
             assert run('propose_design_plan', **binding, repairs=repairs).is_error
-            analysis['execution_intent_claims'] = []
+            analysis['approaches'][0]['implementation_semantics'] = []
         old = propose()
         analysis['approaches'][1]['generation_guide'] = 'Use the output feedback contact.'
+        if language == 'ladder':
+            analysis['missing_info'] = [{'id': 'restart_behavior', 'question': 'How should the motor restart?',
+                                         'required': True, 'options': ['Wait for start', 'Resume automatically']}]
         draft = propose()
+        assert draft['user_requirement'] == text
         assert not session.service.projects.raw_project(session.project_id)['confirmed_spec']
         assert run('confirm_design_plan', draft_id=old['draft_id'], approach_id='contact').is_error
         assert run('confirm_design_plan', draft_id=draft['draft_id'], approach_id='invented').is_error
-        confirmed = _mcp_body(run('confirm_design_plan', draft_id=draft['draft_id'], approach_id='contact'))['data']
+        approval = {'draft_id': draft['draft_id'], 'approach_id': 'contact'}
+        if language == 'ladder':
+            assert [issue['code'] for issue in draft['issues']['errors']] == ['required_parameter_missing']
+            assert not _mcp_body(run('confirm_design_plan', **approval))['data']['confirmed']
+            assert run('confirm_design_plan', **approval, parameter_answers={'unknown': 'Start'}).is_error
+            approval['parameter_answers'] = {'restart_behavior': 'Wait for start'}
+        confirmed = _mcp_body(run('confirm_design_plan', **approval))['data']
         assert confirmed['confirmed'] and session.service.projects.raw_project(session.project_id)['confirmed_decision_receipt_id']
         assert run('get_generation_context', user_requirement=text, workflow='direct_generation').is_error
         generation = read('get_generation_context', workflow='detailed')
@@ -1957,6 +1968,10 @@ def test_local_design_implements_only_the_selected_web_approach(tmp_path, langua
         assert 'output feedback' in spec['selected_approach']['generation_guide']
         assert generation['output_contract']['tool'] == ('create_program_candidate' if language == 'ladder' else f'create_{language}_candidate')
         if language == 'ladder':
+            persisted = session.service.projects.raw_project(session.project_id)['confirmed_spec']
+            answer = next(row for row in persisted['parameters'] if row['id'] == 'restart_behavior')
+            assert answer['value'] == 'Wait for start' and answer['source'] == 'user'
+            assert spec['intent_context']['requests'][-1]['text'] == text
             assert generation['output_contract']['protocol'] == 'compact_ladder/1.3'
             Draft202012Validator(generation['generation_input']['output_schema']).validate(
                 {'r': [{'c': ['NO X0'], 'b': [{'i': [], 'o': ['COIL Y0']}]}], 'device_comments': [{'address': 'Y0', 'comment': 'Run'}]})

@@ -848,3 +848,21 @@ def test_recovery_keeps_existing_origin_and_legacy_exact_choice_notes_stay_revie
         result = restore_review_choices(draft, analysis)
         assert result["parameters"][0] == {**draft["parameters"][0], "options": ["A", "B"]}
         assert "note" not in generation_parameters(result["parameters"])[0]
+
+
+def test_question_without_an_id_still_gets_an_answerable_parameter_id():
+    """Answers are keyed by parameter id, so an id-less question used to be unanswerable."""
+    from plc.specification.confirmed import build_review_draft
+    analysis = {"summary": "s",
+                "approaches": [{"approach_id": "a", "name": "n", "description": "d",
+                                "implementation_semantics": []}],
+                "missing_info": [{"question": "停机后在途物料怎样处理", "options": ["保留", "清除"]},
+                                 {"question": "件间是否回 0"}]}
+    first = build_review_draft(analysis, None)["parameters"]
+    second = build_review_draft(analysis, None)["parameters"]
+    assert all(row["id"] for row in first)
+    assert [row["id"] for row in first] == [row["id"] for row in second]
+    assert len({row["id"] for row in first}) == len(first)
+    by_name = {row["name"]: row for row in first}
+    assert by_name["停机后在途物料怎样处理"]["options"] == ["保留", "清除"]
+    assert by_name["停机后在途物料怎样处理"]["id"].startswith("q_")
