@@ -9,7 +9,7 @@
 | 工具 | 范围 | 适用场景 | 参数要点 | 主要产出与说明 |
 | --- | --- | --- | --- | --- |
 | `list_projects` | local | 查看已有 Agent 工程列表 | 无参数 | 返回工程清单及当前会话选中的工程与版本。 |
-| `create_project` | local | 新建 Agent 工程 | `name`, `plc_model`, `target_mode`；可选 `generation_mode`（`direct`/`design`）, `native_project_type`, `use_labels` | 按指定 CPU、语言与生成模式（完备规格/转写用 `direct`，开放式方案比较用 `design`）创建并选中工程。 |
+| `create_project` | local | 新建 Agent 工程 | `name`, `plc_model`, `target_mode`；可选 `generation_mode`（`direct`/`design`）, `native_project_type`, `use_labels` | `plc_model` 只接受 GX Works2 新建对话框的 CPU 系列名（如 `FX3U`、`FX3U/FX3UC`、`FX3G/FX3GC`、`L02/L02-P`、`Q03UDV`），**不带点数与规格后缀**：传 `FX3U-48M`、`FX3U-48MR/ES` 这类完整订货型号会直接失败。输入/输出点数、输出类型与环境等级属于工程创建后的参数设置，不进入 `create_project`。按指定 CPU、语言与生成模式（完备规格/转写用 `direct`，开放式方案比较用 `design`）创建并选中工程。 |
 | `get_design_context` | local | 读取开放式新需求的 Design 分析上下文 | `user_requirement`；可选 `instruction_details` | 返回当前 CPU 与语言的 Design 分析指令、提交 schema 与知识分页；代码转写或完整规格任务无需调用。 |
 | `propose_design_plan` | local | 提交或局部修复 1～3 个 Design 方案草稿 | `analysis_id` + `analysis`，或 `analysis_id` + `repair_id` + `repairs`；空参可回读当前草稿 | 校验方案与约束锚点，返回待用户确认的 `draft_id` 或需修补路径。 |
 | `confirm_design_plan` | local | 持久化用户选定的方案与参数答复 | `draft_id`, `approach_id`；可选 `parameter_answers` | 保存确认规格并返回后续 `get_generation_context(workflow="detailed")` 动作。 |
