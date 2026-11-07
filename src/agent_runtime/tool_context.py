@@ -153,6 +153,13 @@ def resolve_tool_context(definition, context, arguments):
         raise ToolPreconditionError("NO_PROJECT_SELECTED", "未选中 Agent 工程；可先发现原生工程并读取分析快照。",
                                     next_actions=PROJECT_ACTIONS)
     if requirement == "version" and not context.version_id:
+        if definition.name in {"create_fbd_candidate", "create_st_candidate", "create_sfc_candidate"}:
+            extra = '（如需先建 ST 功能块也可使用 operation="create_st_fb"）' if definition.name == "create_fbd_candidate" else ''
+            raise ToolPreconditionError(
+                "NO_PROGRAM_SOURCE",
+                f'此操作需要已保存的工程版本；全新空工程请使用 {definition.name}(operation="generate"){extra}。',
+                next_actions=({"tool": definition.name, "arguments": {"operation": "generate"}}, *SOURCE_ACTIONS),
+            )
         raise ToolPreconditionError("NO_PROGRAM_SOURCE", "此操作需要已保存的工程版本。", next_actions=SOURCE_ACTIONS)
     if requirement == "program" and not any((context.program_ir, context.ladder, context.native_snapshot,
                                              context.fbd_baseline, context.st_text, context.analysis_source)):

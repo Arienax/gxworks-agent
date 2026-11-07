@@ -1114,8 +1114,11 @@ def _scope_paragraph(selection, rules, paths=None):
         lines.append("- 可以返回 `edit_gxw_project`：在一次提交中同时修改 ST 接口/正文与全部受影响 "
                      "FBD 调用者（" + ", ".join(joint.get("editable_sources") or ()) + "）。")
     else:
-        lines.append("- 本次没有可编辑的已保存源码，只返回 {\"summary\",\"model\"} 的新图形；"
-                     "跨源码事务需要已保存版本入口。")
+        lines.append("- 本次没有可编辑的已保存源码：Web 生成响应只返回 {\"summary\",\"model\"}；"
+                     "MCP 调用 `create_fbd_candidate` 时直接将 `parameter_schema` 图形对象作为顶层 `model` 参数传入"
+                     "（do not wrap another {summary, model} object inside model）。"
+                     "缺少 ST 功能块时可先用 `create_fbd_candidate(operation=\"create_st_fb\")` 无基底创建定义，"
+                     "再读取保存版本并用 `operation=\"edit\"` 组装主图；跨源码事务需要已保存版本入口。")
     return "\n".join(lines)
 
 
@@ -1222,6 +1225,28 @@ def compose_fbd_context(*, request, plc_model, catalog, confirmed_spec=None, pre
         "project_options": {
             "compile_options": catalog.get("compile_options"),
             "configuration": catalog.get("project_configuration"),
+            "reserved_auto_allocation_ranges": {
+                key: {
+                    "device_family": ("T" if key == "T10" else key),
+                    "low": pair[0],
+                    "high": pair[1],
+                    "display": (
+                        f"{'T' if key == 'T10' else key}{pair[0]:X}..{'T' if key == 'T10' else key}{pair[1]:X}"
+                        if key in ("W", "B")
+                        else f"{'T' if key == 'T10' else key}{pair[0]}..{'T' if key == 'T10' else key}{pair[1]}"
+                    ),
+                }
+                for key, pair in ((catalog.get("project_configuration") or {}).get("system_variable_ranges") or {}).items()
+                if isinstance(pair, (list, tuple))
+                and len(pair) == 2
+                and all(isinstance(v, int) and 0 <= v < 0xFFFFFFFF for v in pair)
+                and pair[0] <= pair[1]
+            },
+            "allocation_rule": (
+                "Ranges in reserved_auto_allocation_ranges (system_variable_ranges) are reserved for the GX Works2 "
+                "compiler's automatic label allocation; explicit global label devices or direct graph operands inside "
+                "these ranges fail native compilation with 0x500f1028."
+            ),
         },
         "context_gaps": _context_gaps(catalog, source, selection),
         "unknown_boundaries": _unknown_boundaries(catalog, rules),

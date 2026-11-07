@@ -129,8 +129,12 @@ def _get_generation_context(
                     'Provide its complete st_text body. Omitted declarations retain the current table; '
                     'if changed, declarations is the complete ordered list. Keep callers and task registration. '
                     'Unsafe interface changes are rejected by the shared source checks.',
-                'output_contract': {'tool': 'create_st_candidate' if selected[0]['kind'] == 'function' else 'create_fbd_candidate', 'operation': operation,
-                    'source_name': selected_name, 'editable_fields': ['st_text', 'declarations']}}
+                'output_contract': {
+                    'tool': 'create_st_candidate', 'operation': operation,
+                    'source_name': selected_name, 'editable_fields': ['st_text', 'declarations'],
+                    **({'alternatives': [{'tool': 'create_fbd_candidate', 'operation': operation,
+                                          'source_name': selected_name}]}
+                       if selected[0]['kind'] == 'function_block' else {})}}
         if (len(selected) != 1 or selected[0]['kind'] != 'program' or selected[0]['language'] != 'st'
                 or selected[0]['source_status'] != 'available' or len(selected[0]['task_bindings']) != 1
                 or not isinstance(context.st_text, str)
@@ -211,10 +215,23 @@ def _get_generation_context(
             catalog_scope=scope, templates=arguments.get('templates'),
             device_comments=comments, comment_tables=tables,
             source_baseline=context.fbd_baseline)
+        is_new_fbd = not (context.version_id and context.fbd_baseline is not None)
+        from application.gxw_delivery import gxw_delivery_capability
         graph_contract = {
             'tool': 'create_fbd_candidate', 'schema_version': 2,
             'input_shape': 'parameters', 'model_schema_ref': '#/generation_input/parameter_schema',
-            'operation': 'edit' if context.version_id and context.fbd_baseline is not None else 'generate',
+            'operation': 'generate' if is_new_fbd else 'edit',
+            'required_fields': ['operation', 'model'] + (['implementation_review'] if is_new_fbd else []),
+            **({'gxw_delivery': gxw_delivery_capability(context.plc_model),
+                'review_contract': {'argument': 'implementation_review',
+                                    'required_fields': ['context_document', 'manual_documents']}}
+               if is_new_fbd else {}),
+            'instructions': (
+                'Pass the parameter_schema object ({"schema_version": 2, "networks": [...]}) directly as the '
+                'top-level model argument and summary as the top-level summary argument; do not wrap another '
+                '{summary, model} object inside model.'
+                + (' Include top-level implementation_review referencing this delivery.document_id when operation="generate".'
+                   if is_new_fbd else '')),
         }
         joint = generation['generation_input']['supported_paths']['joint_multi_source_transaction']
         output_contract = graph_contract
@@ -246,11 +263,6 @@ def _get_generation_context(
                 'catalog_scope': scope,
                 'missing_templates': (generation['generation_handoff'].get('catalog_report') or {}).get('missing_templates') or [],
                 }
-        if not context.version_id:
-            data['generation_instructions'] += (
-                ' For missing ST function blocks, create_fbd_candidate(operation="create_st_fb") '
-                'can start this project through the headless CPU factory. Read the saved context '
-                'after adding definitions, then assemble its main diagram with operation="edit".')
         return data
     source = context.ladder
     if isinstance(context.program_ir, Mapping):
@@ -293,9 +305,21 @@ def _get_generation_context(
     current_ladder = public_generation_ladder(source)
     user_requirement = public_generation_value(str(arguments.get("user_requirement") or ""))
     is_edit_mode = target_mode == "ladder" and current_ladder is not None
+    receipt_id = _decision_receipt_id(context)
     direct = (arguments.get('workflow') != 'detailed' and bool(user_requirement.strip()) and
               (not confirmed_spec or arguments.get('workflow') == 'direct_generation'))
-    design = arguments.get('workflow') == 'detailed' and bool(confirmed_spec)
+    design = bool(confirmed_spec) and (
+        arguments.get('workflow') == 'detailed'
+        or (
+            arguments.get('workflow') is None
+            and bool(receipt_id)
+            and (bool(user_requirement.strip()) or str(context.project.get('generation_mode') or '') == 'design')
+        )
+    )
+    gxw_delivery = None
+    if target_mode == 'ladder' and not is_edit_mode:
+        from application.gxw_delivery import gxw_delivery_capability
+        gxw_delivery = gxw_delivery_capability(context.plc_model)
     if target_mode == 'ladder' and not is_edit_mode and (direct or design):
         from application.confirmed_generation_context import build_direct_generation_context, build_confirmed_generation_context
         from application.generation_agent import _compact_wire_renderer
@@ -310,7 +334,7 @@ def _get_generation_context(
                                                      confirmed_spec=confirmed_spec, **options)
         else:
             packet = build_confirmed_generation_context(projected, context.plc_model,
-                         decision_receipt_id=_decision_receipt_id(context), **options)
+                         decision_receipt_id=receipt_id, **options)
         handoff = {**packet.handoff, 'construction_examples': examples.manifest(),
                    'output_contract': {'protocol': PROTOCOL_VERSION}}
         generation_input = expand_context_document(json.loads(packet.wire_packet['messages'][1]['content']))
@@ -319,8 +343,14 @@ def _get_generation_context(
                 'confirmed_spec_ref': '#/generation_input/confirmed_spec', 'generation_input': generation_input,
                 'current_version_id': None, 'generation_request': packet.generation_request,
                 'generation_instructions': packet.wire_packet['messages'][0]['content'], 'generation_handoff': handoff,
-                'output_contract': {'tool': 'create_program_candidate', 'protocol': PROTOCOL_VERSION,
-                                    'argument': 'ladder', 'schema_ref': '#/generation_input/output_schema'}}
+                'output_contract': {
+                    'tool': 'create_program_candidate', 'protocol': PROTOCOL_VERSION,
+                    'argument': 'ladder', 'schema_ref': '#/generation_input/output_schema',
+                    'required_fields': ['ladder', 'implementation_review'],
+                    'review_contract': {'argument': 'implementation_review',
+                                        'required_fields': ['context_document', 'manual_documents']},
+                    'gxw_delivery': gxw_delivery,
+                }}
     if target_mode == "ladder" and isinstance(confirmed_spec, Mapping) and confirmed_spec:
         public_spec = project_confirmed_specification(confirmed_spec)
         if not is_edit_mode:
@@ -344,7 +374,6 @@ def _get_generation_context(
         on_context=capture_context,
         model_profile={},
     )
-    receipt_id = _decision_receipt_id(context)
     if receipt_id:
         generation_handoff["decision_receipt_id"] = receipt_id
     return {
@@ -358,8 +387,11 @@ def _get_generation_context(
                              if hasattr(instructions, 'wire_packet') else {}),
         "output_contract": {**{key: value for key, value in generation_output_contract(
             allow_partial=is_edit_mode, plc_model=context.plc_model, target_mode=target_mode).items() if key != 'schema'},
-            **({'tool': 'create_program_candidate'} if target_mode == 'ladder' and not is_edit_mode
-               and arguments.get('workflow') == 'detailed' else {}),
+            **({'tool': 'create_program_candidate', 'argument': 'ladder',
+                'review_contract': {'argument': 'implementation_review',
+                                    'required_fields': ['context_document', 'manual_documents']},
+                'gxw_delivery': gxw_delivery}
+               if target_mode == 'ladder' and not is_edit_mode else {}),
             'schema_ref': '#/generation_input/output_schema'},
         "current_version_id": context.version_id or None,
         "generation_instructions": instructions,
@@ -379,7 +411,24 @@ def _create_program_candidate(
     core = PLCCore()
     confirmed_spec = copy.deepcopy(_confirmed_spec(context))
     candidate_spec = confirmed_spec
-    ladder = arguments["ladder"]
+    ladder = copy.deepcopy(arguments["ladder"])
+    if isinstance(ladder, Mapping) and not ({'r', 'root', 'rungs', 'result', 'program'} & set(ladder)):
+        if 'ladder' in ladder:
+            raise ValueError(
+                "Pass the ladder program object directly as the 'ladder' argument; "
+                "do not wrap another {'ladder': ...} object inside 'ladder'."
+            )
+        if 'networks' in ladder:
+            raise ValueError(
+                "create_program_candidate expects compact {'r': [...]} (or Direct "
+                "{'result': {'program': {'r': [...]}, 'decisions': [], 'open_items': []}}) "
+                "or ladder_v1 {'rungs': [...]}; 'networks' belongs to patch_program / create_fbd_candidate."
+            )
+        if 'content' in ladder:
+            raise ValueError(
+                "Pass the ladder program object directly as 'ladder' without an outer {'content': ...} wrapper."
+            )
+    from application.compact_alias import _hybrid_to_compact
     from application.generation_agent import direct_response_parts, prepare_model_candidate
     is_direct = (generation_handoff or {}).get('mode') == 'direct_generation'
     notes = None
@@ -389,8 +438,21 @@ def _create_program_candidate(
     wrapped = set(ladder) == {'result'} or ('program' in ladder and set(ladder) <= {'program', 'decisions', 'open_items'})
     if is_direct or wrapped:
         ladder, notes = direct_response_parts(ladder)
+    if isinstance(ladder, Mapping):
+        raw_comments = ladder.get('device_comments')
+        if ('r' in ladder or 'root' in ladder) and isinstance(raw_comments, Mapping) and all(
+            isinstance(k, str) and isinstance(v, str) for k, v in raw_comments.items()
+        ):
+            ladder['device_comments'] = [{'address': k, 'comment': v} for k, v in raw_comments.items()]
+        elif 'rungs' in ladder and isinstance(raw_comments, list) and all(
+            isinstance(row, Mapping) and set(row) == {'address', 'comment'}
+            and isinstance(row.get('address'), str) and isinstance(row.get('comment'), str)
+            for row in raw_comments
+        ):
+            ladder['device_comments'] = {row['address']: row['comment'] for row in raw_comments}
     fragment_receipt = None
-    if 'r' in ladder or 'root' in ladder or (is_direct and set(ladder) <= {'rungs', 'device_comments'}):
+    if ('r' in ladder or 'root' in ladder or _hybrid_to_compact(ladder) is not None
+            or (is_direct and set(ladder) <= {'rungs', 'device_comments'})):
         from application.confirmed_generation_context import project_confirmed_specification
         from application.instruction_fragments import materialize_instruction_fragments
         ladder, fragment_receipt = materialize_instruction_fragments(

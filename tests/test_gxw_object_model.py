@@ -7720,3 +7720,116 @@ def test_fbd_semantics_serialized_operator_contract_is_not_borrowed_from_st(symb
         with pytest.raises(ValueError) as error:
             generate_object_project(model,baseline=raw)
         assert any(row['code'] in ('fbd_net_type_conflict','fbd_call_type_conflict') for row in error.value.findings)
+
+
+@pytest.mark.parametrize('code,expected_category,expected_substring', [
+    (0x500F1028, 'system_variable_pool_overlap', 'system_variable_ranges'),
+    (0x500C5100, 'declaration_iec_mismatch', '%IX8'),
+    (0x050F1000, 'declaration_iec_format', 'without .bit'),
+    (0x500C2010, 'unconnected_graphic_pin', "input('TRUE')"),
+    (0x500C2020, 'floating_wire_segment', '0x500c2010'),
+    (0x500C2032, 'network_label_syntax', 'block_comment'),
+    (0x500C1205, 'unconnected_sink_element', 'IN port'),
+    (0x500C5027, 'unsupported_declaration_type', 'Unsupported data type'),
+    (0x500C5150, 'compiler_summary_failure', 'summary failure'),
+])
+def test_native_diagnostic_code_explanations_cover_observed_hex_reports(code, expected_category, expected_substring):
+    from gxw.diagnostic_scope import explain_native_diagnostic_code, explain_native_diagnostic_codes
+
+    single = explain_native_diagnostic_code(code)
+    assert single is not None
+    assert single['category'] == expected_category
+    assert expected_substring in single['summary']
+    mapped = explain_native_diagnostic_codes([code, 0x12345678])
+    assert list(mapped) == [f'0x{code:08x}']
+    assert explain_native_diagnostic_code(0x12345678) is None
+
+
+@pytest.mark.parametrize('network,expected_code', [
+    (
+        dict(
+            title='N01_StartStop',
+            nodes=[dict(id='in0', template='input', symbol='X0'), dict(id='out0', template='output', symbol='Y0')],
+            wires=[dict(**{'from': 'in0.OUT', 'to': 'out0.IN'})],
+        ),
+        'fbd_network_title_label',
+    ),
+    (
+        dict(nodes=[dict(id='c0', template='coil', symbol='Y0')], wires=[]),
+        'fbd_unconnected_sink',
+    ),
+    (
+        dict(nodes=[dict(id='o0', template='output', symbol='Y0')], wires=[]),
+        'fbd_unconnected_sink',
+    ),
+    (
+        dict(
+            nodes=[dict(id='in0', template='input', symbol='M3840'), dict(id='out0', template='output', symbol='Y0')],
+            wires=[dict(**{'from': 'in0.OUT', 'to': 'out0.IN'})],
+        ),
+        'fbd_system_pool_overlap',
+    ),
+    (
+        dict(
+            nodes=[dict(id='mov0', template='function:DMOV', symbol='DMOV', arguments=dict(EN='X0', s='D10', d='D511'))],
+            wires=[],
+        ),
+        'fbd_system_pool_overlap',
+    ),
+])
+def test_fbd_v2_static_checks_reject_invalid_title_isolated_sink_and_pool_overlap(network, expected_code):
+    from gxw.object_model import generate_object_project
+    from gxw.project_templates import blank_fbd_baseline
+
+    raw = blank_fbd_baseline('FX3U')
+    with pytest.raises(ValueError) as error:
+        generate_object_project(dict(networks=[network]), baseline=raw)
+    assert any(row['code'] == expected_code for row in error.value.findings)
+
+
+def test_fbd_v2_powered_vs_unpowered_contact_and_valid_jump_label():
+    from gxw.object_model import generate_object_project, read_project_context, source_checks
+    from gxw.project_templates import blank_fbd_baseline
+
+    raw = blank_fbd_baseline('FX3U')
+    unpowered = generate_object_project(
+        dict(
+            networks=[
+                dict(
+                    title='',
+                    block_comment=' descriptive heading belongs in block_comment ',
+                    nodes=[dict(id='k0', template='contact', symbol='X0'), dict(id='y0', template='coil', symbol='Y0')],
+                    wires=[dict(**{'from': 'k0.OUT', 'to': 'y0.IN'})],
+                )
+            ]
+        ),
+        baseline=raw,
+    ).data
+    unpowered_findings = source_checks(read_project_context(unpowered))['findings']
+    assert any(
+        row['code'] == 'fbd_unpowered_contact_input' and row['severity'] == 'unverified'
+        for row in unpowered_findings
+    )
+
+    powered = generate_object_project(
+        dict(
+            networks=[
+                dict(
+                    title='Step_01:',
+                    block_comment='Jump target label ends with colon',
+                    nodes=[
+                        dict(id='rail', template='input', symbol='TRUE'),
+                        dict(id='k0', template='contact', symbol='X0'),
+                        dict(id='y0', template='coil', symbol='Y0'),
+                    ],
+                    wires=[
+                        dict(**{'from': 'rail.OUT', 'to': 'k0.IN'}),
+                        dict(**{'from': 'k0.OUT', 'to': 'y0.IN'}),
+                    ],
+                )
+            ]
+        ),
+        baseline=raw,
+    ).data
+    powered_findings = source_checks(read_project_context(powered))['findings']
+    assert not any(row['code'] == 'fbd_unpowered_contact_input' for row in powered_findings)

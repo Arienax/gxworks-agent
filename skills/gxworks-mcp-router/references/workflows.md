@@ -40,18 +40,20 @@
 
 取得 `source_ref` 后即可按网络读取指令、查看绘图预览结果并运行静态分析。
 
-## 4. 根据需求新建 Ladder 程序
+## 4. 根据需求新建程序（Design 与 Direct 分流）
 
-1. **选择或创建工程**：若当前已选中匹配的工程则直接复用；在 `local` 模式下新建工程可调用 `create_project(name, plc_model, target_mode="ladder")`，切换已有工程用 `list_projects` → `select_project`。
-2. **Design 先做计划**。Harness 新工程默认进入 Design。调用 `get_design_context(user_requirement=完整用户原文)`，读完 `delivery.next`。由当前模型根据分析指令和资料编写方案，将分析 JSON 与 `analysis_id` 提交给 `propose_design_plan`。需补工艺条件时向用户提问，用含答复的用户原文更新设计。用户可选择任一方案或要求修改；仅在明确选定后调用 `confirm_design_plan`。用返回的 `get_generation_context(workflow="detailed")` 读取已确认规格。该路径适用于支持新建的四种语言。
-
-   **用户明确要求直接生成时**，建工程使用 `generation_mode="direct"`，Ladder 的生成上下文如下。
+1. **选择或创建工程**：若当前已选中匹配的工程则直接复用；在 `local` 模式下新建工程调用 `create_project(name, plc_model, target_mode=..., generation_mode=...)`，切换已有工程用 `list_projects` → `select_project`。按任务规格完备度选择 `generation_mode`：
+   - **`generation_mode="direct"`**：跨品牌/跨语言程序移植与转写（如西门子 SCL/STL/LAD、CODESYS、欧姆龙转三菱）、完整逻辑/步序/时序/算法规格已给出、确定性工具 FB/FUNCTION 编写，或用户明确要求直接生成。
+   - **`generation_mode="design"`**：存在架构、工序组织或状态表示取舍的开放式控制需求。
+2. **获取生成规格或直接上下文**：
+   - **开放式需求（Design）**：调用 `get_design_context(user_requirement=完整用户原文)`，读完 `delivery.next`。由当前模型根据分析指令和资料编写 1～3 个方案，将分析 JSON 与 `analysis_id` 提交给 `propose_design_plan`。需补工艺条件时向用户提问，用含答复的用户原文更新设计；仅在用户明确选定后调用 `confirm_design_plan`，再用 `get_generation_context(workflow="detailed")` 读取已确认规格（适用于四种语言）。
+   - **已明确规格 / 代码转写（Direct）**：直接调用 `get_generation_context`（仅在存在真实硬件或地址映射缺口时针对性提问，不虚构多方案）。若当前工程已处于未确认的 Design 会话，Ladder/ST/FBD/SFC 四种语言均可显式传入 `workflow="direct_generation"` 配合 `user_requirement` 退出 Design 并进入直接生成：
 
 ```json
 {
   "tool":"get_generation_context",
   "arguments":{
-    "user_requirement":"${完整原始工程需求}",
+    "user_requirement":"${完整原始工程需求或待转写源码要求}",
     "workflow":"direct_generation"
   }
 }

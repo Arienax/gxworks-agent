@@ -743,6 +743,43 @@ def _draft_declaration_checks(before, documents, changed, *, cpu):
                         normalize_declaration_address_pair(pair, cpu=cpu)
                 except ValueError as error:
                     findings.append(dict(code='DECLARATION_ADDRESS', severity='error', name=row.name, message=str(error)))
+            if document.scope == 'global' and getattr(before, 'system_variable_ranges', None) and (
+                old is None or (old.device, old.data_type, old.value_extension) != (row.device, row.data_type, row.value_extension)
+            ):
+                from .fb_authoring import explicit_device_pool_overlap
+                pool_ranges = before.system_variable_ranges
+                if row.unknown_u32 == 1:
+                    try:
+                        members = before.structure(_type_parts(row.data_type)[0]).members
+                        member_map = structure_address_fields(row, members=members)
+                    except (GXWFormatError, ValueError):
+                        member_map = {}
+                    member_types = {m.name: m.data_type for m in members} if member_map else {}
+                    for member_name, pair in member_map.items():
+                        overlap = explicit_device_pool_overlap(
+                            pair.get('device', ''),
+                            cpu=cpu,
+                            system_variable_ranges=pool_ranges,
+                            data_type=member_types.get(member_name, 'BOOL'),
+                        )
+                        if overlap is not None:
+                            findings.append(dict(
+                                code='DECLARATION_SYSTEM_POOL_OVERLAP',
+                                severity='error',
+                                name=f'{row.name}.{member_name}',
+                                message=overlap['message'],
+                            ))
+                elif row.unknown_u32 == 0 and row.device:
+                    overlap = explicit_device_pool_overlap(
+                        row.device, cpu=cpu, system_variable_ranges=pool_ranges, data_type=row.data_type
+                    )
+                    if overlap is not None:
+                        findings.append(dict(
+                            code='DECLARATION_SYSTEM_POOL_OVERLAP',
+                            severity='error',
+                            name=row.name,
+                            message=overlap['message'],
+                        ))
             if row.initial_value and (old is None or old.initial_value != row.initial_value or old.data_type != row.data_type):
                 initializer_rows.append(row)
         if initializer_rows:

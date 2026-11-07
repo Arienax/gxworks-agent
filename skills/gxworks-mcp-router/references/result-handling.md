@@ -1,6 +1,6 @@
 # 接入模式、回执判读与错误恢复
 
-默认交付优先返回 GXW。找到 GX Works2 后，共享保存流程自动编译、保存并冷重开；读取 delivery 与 validation 的实际结果，不根据文件存在宣称编译通过。GXW 无法生成时，Ladder 降级 CSV、ST 降级为代码 TXT 与全局标签 CSV、FBD/SFC 保留结构化候选及预览，并说明原因。原生编译失败仍保留 GXW 诊断候选，不改交 CSV。新建 ST/SFC 使用 get_generation_context 返回的 operation=generate 合同。GX Works2 1.635.0.1 配合 v4 工作区适配器，按实际 CPU 查询原生系列与子系列，无基底创建对应语言工程。遵守该 CPU 的工程类型和语言条件，读取实际创建及验证结果；不使用 IDE 新建对话框、隐藏窗口控件或预制完整工程。
+默认交付优先返回 GXW。找到 GX Works2 后，共享保存流程自动编译、保存并冷重开；读取 delivery 与 validation 的实际结果，不根据文件存在宣称编译通过。GXW 无法生成时（例如仅参数目标或未安装 GX Works2，见 output_contract.gxw_delivery），Ladder 降级 CSV、ST 降级为代码 TXT 与全局标签 CSV、FBD/SFC 保留结构化候选及预览，并说明原因。原生编译失败仍保留 GXW 诊断候选，不改交 CSV。新建 ST/SFC 使用 get_generation_context 返回的 operation=generate 合同。GX Works2 1.635.0.1 配合 v4 工作区适配器，按实际 CPU 查询原生系列与子系列，无基底创建对应语言工程。遵守该 CPU 的工程类型和语言条件，读取实际创建及验证结果；不使用 IDE 新建对话框、隐藏窗口控件或预制完整工程。
 
 ## 三种接入模式的提交结果
 
@@ -32,6 +32,8 @@
 | --- | --- | --- |
 | `selection_status="none"` | 当前会话尚未选中 Agent 工程 | 只读外部文件或 GX 窗口时直接调用发现/快照工具；需要操作工程版本时先 `list_projects` → `select_project`，或调用 `create_project` / `import_gxw_project`。 |
 | `NO_PROJECT_SELECTED` / `NO_PROGRAM_SOURCE` | 当前工具需要已选中的工程或已保存的 `.gxw` 版本 | 按返回的 `next_actions` 先选中/导入含 `.gxw` 的版本；若只需分析临时快照，改用接受 `source_ref` 的读取工具。 |
+| `DESIGN_PENDING` / `DESIGN_CONFIRMED` | 工程处于未确认的 Design 流程，或已有确认规格却请求 `direct_generation` | 开放式需求按 `next_actions` 完成 Design 并由用户确认；跨品牌代码转写或完整规格任务在确认前可调用 `get_generation_context(workflow="direct_generation", user_requirement=...)` 退出 Design 直接生成；规格确认后统一传 `workflow="detailed"` 实施。 |
+| `INSTRUCTION_REVIEW_REQUIRED` / `INSTRUCTION_READ_INCOMPLETE` / `STALE_MANUAL_DOCUMENT` | 尚未读取当前工程的 `get_generation_context`、`context_document` 过期，或 `missing_families` 中的候选指令尚未读完手册分页 | 按返回的 `next_actions` 与 `details`（`expected_context_document`、`missing_candidates`）读取最新 `get_generation_context` 或调用 `search_plc_manual` 读完全部分页后，在候选工具顶层提交 `implementation_review={context_document, manual_documents, ...}`。 |
 | 参数校验错误 | 参数字段与当前工具 schema 或读取到的对象名称不一致 | 对照 `tools/list` schema 及上一步读取到的程序名、声明表名、`record_index` 修正参数后重交。 |
 | `UNKNOWN_TOOL` 或工具未暴露 | 当前接入模式未注册该工具（如在 `service` 模式下调用 `local` 专有工具） | 查阅当前连接暴露的工具清单，改用当前模式支持的对应入口。 |
 | 原生组件启动或协议错误（如 `WORKSPACE_*`） | 本地 GX Works2 环境、辅助组件版本或桌面会话条件未满足 | 记录返回的 `error.code`、`details` 与失败阶段并如实告知用户，区分环境配置问题与 PLC 源码编译错误。 |

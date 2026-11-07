@@ -82,3 +82,87 @@ PUBLIC_CHECK_REPORT_CONVERSION_CPUS = frozenset((
     'Q13UDPV', 'Q13UDV', 'Q20UDEH', 'Q20UDH', 'Q25H', 'Q25PH', 'Q25PRH',
     'Q26UDEH', 'Q26UDH', 'Q26UDPV', 'Q26UDV', 'Q50UDEH',
 ))
+
+
+# Observed GX Works2 1.635.0.1 compiler/check report codes verified against
+# isolated structured FBD/ST/declaration witnesses. Unknown codes remain raw.
+NATIVE_DIAGNOSTIC_CODE_HINTS: dict[int, dict[str, str]] = {
+    0x500F1028: {
+        'category': 'system_variable_pool_overlap',
+        'summary': (
+            "Explicit device address overlaps the project's reserved automatic label allocation range "
+            '(system_variable_ranges); pick an address outside that pool or omit device to let the compiler auto-allocate'
+        ),
+    },
+    0x500C5100: {
+        'category': 'declaration_iec_mismatch',
+        'summary': (
+            'Global declaration MELSEC device and IEC address disagree '
+            '(for example FX3U octal X10 maps to %IX8, Q-series hex X10 maps to %IX16, '
+            'M0 maps to %MX0.0, D0 maps to %MW0.0); omit iec_address to auto-derive'
+        ),
+    },
+    0x050F1000: {
+        'category': 'declaration_iec_format',
+        'summary': (
+            'Invalid declaration IEC address or unsupported device mapping column '
+            '(X/Y require %IX<decimal_index>/%QX<decimal_index> without .bit; M/D require %MX0.<n>/%MW0.<n>)'
+        ),
+    },
+    0x500C2010: {
+        'category': 'unconnected_graphic_pin',
+        'summary': (
+            'Graphic element has an unconnected input pin '
+            "(structured FBD parameter networks have no implicit left power rail; "
+            "drive contacts from input('TRUE') or use input/output terminals)"
+        ),
+    },
+    0x500C2020: {
+        'category': 'floating_wire_segment',
+        'summary': (
+            'Floating or unpowered wire segment in structured diagram '
+            '(often cascades from an unconnected upstream contact/input 0x500c2010)'
+        ),
+    },
+    0x500C2032: {
+        'category': 'network_label_syntax',
+        'summary': (
+            'Structured network block or Jump label error '
+            '(network.title must be empty "" or a valid <identifier>: Jump label; '
+            'put descriptive headings in block_comment)'
+        ),
+    },
+    0x500C1205: {
+        'category': 'unconnected_sink_element',
+        'summary': 'Unconnected or isolated output/coil element (IN port has no incoming wire)',
+    },
+    0x500C5027: {
+        'category': 'unsupported_declaration_type',
+        'summary': 'Unsupported data type in declaration for the selected CPU',
+    },
+    0x500C5150: {
+        'category': 'compiler_summary_failure',
+        'summary': 'Vendor compiler outer summary failure code; inspect the preceding specific diagnostic codes',
+    },
+}
+
+
+def explain_native_diagnostic_code(code: int) -> dict[str, str] | None:
+    """Return observed root-cause guidance for a known 32-bit native report code."""
+    if type(code) is not int:
+        return None
+    normalized = code & 0xFFFFFFFF
+    entry = NATIVE_DIAGNOSTIC_CODE_HINTS.get(normalized)
+    if entry is None:
+        return None
+    return {'code_hex': f'0x{normalized:08x}', **entry}
+
+
+def explain_native_diagnostic_codes(codes) -> dict[str, str]:
+    """Map observed native report codes in `codes` to concise explanations."""
+    seen = sorted({code & 0xFFFFFFFF for code in codes if type(code) is int})
+    return {
+        f'0x{code:08x}': NATIVE_DIAGNOSTIC_CODE_HINTS[code]['summary']
+        for code in seen
+        if code in NATIVE_DIAGNOSTIC_CODE_HINTS
+    }

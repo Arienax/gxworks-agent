@@ -17,6 +17,8 @@ from gxw.diagnostic_scope import (
     SFC_CHILD_INSTRUCTION_POSITION_CPUS,
     _id,
     PUBLIC_CHECK_REPORT_CONVERSION_CPUS,
+    explain_native_diagnostic_code,
+    explain_native_diagnostic_codes,
 )
 from gxw.diagnostic_sources import (
     _native_validation_sources,
@@ -600,6 +602,25 @@ def _project_native_validation(raw, observation, snapshots, *, event_index=None)
         programs,
     )
     result['diagnostic_projection']['source_diagnostics'] = diagnostics
+    for row in (*compile_diagnostics, *diagnostics):
+        if not isinstance(row, dict):
+            continue
+        code = (row.get('original') or {}).get('code') if isinstance(row.get('original'), dict) else row.get('code')
+        if type(code) is int:
+            row.setdefault('code_hex', f'0x{code & 0xffffffff:08x}')
+            hint = explain_native_diagnostic_code(code)
+            if hint is not None:
+                row.setdefault('code_explanation', hint['summary'])
+    compile_hints = explain_native_diagnostic_codes(
+        report.get('code') for report in result['compilation'].get('diagnostics', ()) if isinstance(report, dict)
+    )
+    if compile_hints:
+        result['compilation']['code_explanations'] = compile_hints
+    check_hints = explain_native_diagnostic_codes(
+        report.get('code') for report in result['diagnostic_projection'].get('public_diagnostics', ()) if isinstance(report, dict)
+    )
+    if check_hints:
+        result['diagnostic_projection']['code_explanations'] = check_hints
     result.update(native_version=observation['native_version'], cpu=context['cpu'], codepage=context['codepage'],
         adapter={'status': observation['status'], 'message': observation.get('message') or ''},
         source_bodies={**source_bodies, 'phase_reads_complete': phase_reads_complete},

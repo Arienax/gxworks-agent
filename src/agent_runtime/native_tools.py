@@ -210,26 +210,34 @@ def _create_fbd_candidate(context: ToolContext, arguments: Mapping[str, Any], *,
     operation = arguments['operation']
     if operation == 'generate':
         if context.version_id and 'gxw' in (context.version or {}).get('artifacts', {}):
-            raise ValueError('New fbd generation requires a project without a saved version')
+            raise ValueError('New fbd generation requires a project without a saved version; use operation="edit" on saved projects')
+        if 'declarations' in arguments:
+            raise ValueError(
+                "generate 不接受顶层 declarations；请放入 model.declaration_edits（如 'Global1.gh' / 局部 '.Labels.lh' 的 upserts）。"
+            )
         if 'data_base64' in arguments or 'program' in arguments:
-            raise ValueError('generate 的源码由 model 提供，不接受 data_base64 或 program。')
+            raise ValueError('generate 的源码由 model 提供，不接受顶层 data_base64 或 program（请在 model 内填写 networks/declaration_edits）。')
         from application.gxw_delivery import source_candidate_action
         return source_candidate_action(context, arguments, 'fbd')
     if 'native_save' in arguments and (operation not in {'import', 'edit', 'generate'}
                                        or type(arguments['native_save']) is not bool):
         raise ValueError('native_save 仅接受布尔值，用于本次 FBD import、edit 或 generate 的原生保存选择。')
     if operation not in ('create_fb', 'create_program', *AUTHORING_OPERATIONS) and 'source_name' in arguments:
-        raise ValueError('source_name 只用于新建 FBD POU。')
+        raise ValueError('source_name 只用于新建 FBD POU 或项目定义操作（如 edit_global_labels/create_st_fb）。')
     if operation != 'import_library' and 'library_name' in arguments:
         raise ValueError('library_name 只用于导入用户库。')
     if operation != 'create_program' and any(key in arguments for key in ('resource', 'task', 'scope_mode')):
         raise ValueError('资源和任务选择只用于新建普通 FBD Program。')
     if operation not in AUTHORING_OPERATIONS and any(key in arguments for key in ('members', 'declarations', 'st_text', 'options')):
+        if operation == 'edit' and 'declarations' in arguments:
+            raise ValueError(
+                "edit 不接受顶层 declarations；请使用 model.declaration_edits，或单独调用 operation='edit_global_labels'/'edit_pou_labels'。"
+            )
         raise ValueError('members、declarations、st_text 和 options 只用于编写项目定义或配置。')
     if operation in AUTHORING_OPERATIONS:
         if not context.version_id or context.fbd_baseline is None:
             if operation != 'create_st_fb' or context.version_id or context.fbd_baseline is not None:
-                raise ValueError('编写项目定义需要已保存的 FBD 基础版本。')
+                raise ValueError('编写项目定义需要已保存的 FBD 基础版本（空工程仅可先执行 create_st_fb 或 generate）。')
             kwargs = {'authoring': authoring_command(arguments), 'create_new': True}
         else:
             kwargs = {'baseline': context.fbd_baseline, 'authoring': authoring_command(arguments),
@@ -240,9 +248,9 @@ def _create_fbd_candidate(context: ToolContext, arguments: Mapping[str, Any], *,
         kwargs = {'baseline':context.fbd_baseline,'compile_save':True,'program_name':context.version.get('program_name')}
     elif operation == 'edit':
         if not context.version_id or context.fbd_baseline is None:
-            raise ValueError('edit 需要绑定已保存的 FBD 基础版本。')
+            raise ValueError('edit 需要绑定已保存的 FBD 基础版本；全新空工程请使用 operation="generate"（或先用 create_st_fb 创建功能块）。')
         if 'data_base64' in arguments or 'program' in arguments:
-            raise ValueError('edit 的 Program.pou 由 model.program 指定。')
+            raise ValueError('edit 不接受顶层 program 或 data_base64；目标 Program.pou 请由 model.program 指定。')
         kwargs = {'model': arguments.get('model'), 'baseline': context.fbd_baseline,
                   'native_save': arguments.get('native_save') is True,
                   'device_comments': arguments.get('device_comments'), 'comment_table': arguments.get('comment_table')}

@@ -271,11 +271,64 @@ def inspect_graph(program, sources):
                         kind='enable' if port.get('formal_name') == 'EN' else 'data', net=net.index))
 
     for key, port in endpoints.items():
+        node = nodes[key[0]]
         if key[0] in calls and port.get('side') == 'in' and key not in bound_inputs:
             # Native interface records do not currently encode an optional/default
             # marker. Never invent one or silently treat omission as validated.
             add('fbd_unbound_formal_coverage', 'Unconnected input requires a current optional/default-input contract',
-                node=nodes[key[0]], severity='unverified', port=port['name'], formal=port.get('formal_name'))
+                node=node, severity='unverified', port=port['name'], formal=port.get('formal_name'))
+        elif (
+            node.kind in (COIL_NODE_KINDS | {NodeKind.OUTPUT, NodeKind.JUMP, NodeKind.RETURN, NodeKind.INOUT})
+            and port.get('side') == 'in'
+            and key not in bound_inputs
+        ):
+            add(
+                'fbd_unconnected_sink',
+                f"{node.kind.value} '{node.symbol}' input pin is unconnected (native compile error 0x500c1205)",
+                node=node,
+                port=port['name'],
+            )
+        elif (
+            node.kind in GRAPH_CONTACT_NODE_KINDS
+            and port.get('side') == 'in'
+            and key not in bound_inputs
+            and node.port_point(key[1]).x != 1
+        ):
+            add(
+                'fbd_unpowered_contact_input',
+                (
+                    f"{node.kind.value} '{node.symbol}' IN port has no left power rail or upstream BOOL driver "
+                    "(structured FBD parameter networks do not inject a left rail; drive contacts from "
+                    "input('TRUE') or use input/output terminals to avoid native 0x500c2010/0x500c2020)"
+                ),
+                node=node,
+                severity='unverified',
+                port=port['name'],
+            )
+
+    pool_ranges = getattr(sources, 'system_variable_ranges', None)
+    if pool_ranges:
+        from .fb_authoring import explicit_device_pool_overlap
+        for offset, value in actuals.items():
+            if value.get('kind') != 'device':
+                continue
+            view_bits = max(
+                (
+                    ep.get('storage_view_bits') or 0
+                    for (node_offset, _), ep in endpoints.items()
+                    if node_offset == offset
+                ),
+                default=0,
+            ) or None
+            overlap = explicit_device_pool_overlap(
+                value['text'],
+                cpu=sources.cpu,
+                system_variable_ranges=pool_ranges,
+                data_type=value.get('data_type') or 'BOOL',
+                view_bits=view_bits,
+            )
+            if overlap is not None:
+                add('fbd_system_pool_overlap', overlap['message'], node=nodes[offset], expression=value['text'])
 
     composites = {kind for port in endpoints.values() for kind in (port.get('types') or ())
                   if kind.startswith(('STRUCT:', 'FB:', 'ARRAY'))}
@@ -364,8 +417,8 @@ def introduced_findings(before, after):
                                       str(port.get('declaration_source'))) for port in row.get('ports', ())))
         # A new preceding network shifts block numbers without changing this
         # error. Keep multiplicity, symbols and contracts, not layout positions.
-        return (row.get('code'), row.get('source_name'), row.get('symbol'), row.get('port'),
-                row.get('expression'), row.get('message'), port_identity)
+        return (row.get('code'), row.get('source_name'), row.get('stream'), row.get('name'),
+                row.get('symbol'), row.get('port'), row.get('expression'), row.get('message'), port_identity)
     old = Counter(key(row) for row in before if row.get('severity') == 'error')
     result = []
     for row in after:

@@ -49,7 +49,7 @@ ST_SYSTEM_PROMPT = """# Role
 - 编译警告必须按同一事实中的类型、输入域、精度和副作用规则处理；编译无错误不等于这些检查已经通过。幂运算采用当前 CPU 的实际计算规则，不能假设与宿主语言的幂运算相同。
 
 # Output
-没有 Actual GXW context 时只返回 `{\"st_code\":\"完整 ST 代码\"}`。提供该上下文时按其 ST candidate v2 契约输出，正文和声明分开，任务取自实际工程。不得输出 Markdown、分析过程或额外正文。"""
+Web 无 GXW 上下文时只返回 `{\"st_code\":\"完整 ST 代码\"}`；MCP 调用 `create_st_candidate` 时传 `st_text` 与 `declarations`。提供 GXW 上下文时正文和声明分开，任务取自实际工程。不得输出 Markdown、分析过程或额外正文。"""
 
 LADDER_SYSTEM_PROMPT = """# Role
 你是三菱 PLC ladder_v1 JSON 生成器。把当前确认规格转换为所选 PLC 型号的梯形图 JSON。

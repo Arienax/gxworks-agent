@@ -1061,6 +1061,51 @@ def test_fbd_mcp_generation_delivers_cpu_rules_and_executable_output_contract(cp
             'operation': contract['operation'], 'model': {'networks': []}})
 
 
+def test_versionless_fbd_generate_saves_gxw_and_rejects_wrapped_model(tmp_path, monkeypatch):
+    from application.engineering_session import EngineeringSession
+    from application.read_delivery import assemble_read_pages
+    from gxw.project_templates import blank_fbd_baseline
+    from integrations.mcp.local_adapter import LocalMCPToolAdapter
+    from itertools import count
+
+    monkeypatch.setattr('application.gxw_delivery.create_blank', lambda _out, _lang, cpu, **_kw: blank_fbd_baseline(cpu))
+    monkeypatch.setattr('application.gxw_delivery.installation', lambda: None)
+    with EngineeringSession(tmp_path / 'ws', state_dir=tmp_path / 'st') as session:
+        adapter = LocalMCPToolAdapter(session)
+        seq = count()
+        run = lambda tool, **kw: adapter.call_tool(tool, kw, str(next(seq)))
+        assert not run('create_project', name='NewFBD', plc_model='FX3U', target_mode='fbd').is_error
+        pages, tool, args = [], 'get_generation_context', {'user_requirement': 'X0 delays 1s to Y0', 'instruction_details': True}
+        while True:
+            page_res = run(tool, **args)
+            assert not page_res.is_error, page_res.content
+            pages.append(_mcp_body(page_res))
+            nxt = pages[-1]['data']['delivery']['next']
+            if not nxt:
+                break
+            tool, args = nxt['tool'], nxt['arguments']
+        assembled = assemble_read_pages(pages)
+        assert 'do not wrap another {summary, model} object inside model' in assembled['generation_instructions']
+        review = {'context_document': pages[0]['data']['delivery']['document_id'], 'manual_documents': [],
+                  'selected': 'Use TON FB', 'alternatives': [{'method': 'Direct coil', 'tradeoff': 'No delay'}]}
+        inner_model = {'schema_version': 2, 'networks': [
+            {'calls': [{'id': 't1', 'type': 'TON', 'instance': 'Timer1', 'arguments': {'IN': 'X0', 'PT': 'T#1s', 'Q': 'Y0'}}]}]}
+
+        wrapped = _mcp_body(run('create_fbd_candidate', operation='generate', implementation_review=review,
+                                model={'summary': 'wrapped', 'model': inner_model}))
+        assert not wrapped['ok'] and "must not wrap another 'model' object" in wrapped['error']['message']
+
+        missing_networks = _mcp_body(run('create_fbd_candidate', operation='generate', implementation_review=review, model={}))
+        assert not missing_networks['ok'] and "top-level 'networks'" in missing_networks['error']['message']
+
+        saved = _mcp_body(run('create_fbd_candidate', operation='generate', summary='TON 1s',
+                              implementation_review=review, model=inner_model))
+        assert saved['ok'], saved
+        assert saved['data']['version_id'] == 'v0001'
+        assert saved['data']['delivery']['actual_format'] == 'gxw'
+        assert session.service.projects.project(session.project_id)['version_count'] == 1
+
+
 def test_fbd_mcp_contract_submits_st_and_caller_as_one_offline_candidate(tmp_path, monkeypatch):
     from application.fbd import unpack_candidate
     from gxw.object_model import read_project_context
@@ -1915,7 +1960,10 @@ def test_local_design_implements_only_the_selected_web_approach(tmp_path, langua
         assert not run('create_project', name='Design', plc_model='FX3U', target_mode=language,
                        generation_mode='design').is_error
         text = 'X0 starts Y0; X1 stops Y0. Hold the output until stopped.'
-        assert _mcp_body(run('get_generation_context'))['error']['code'] == 'DESIGN_PENDING'
+        pending_err = _mcp_body(run('get_generation_context'))['error']
+        assert pending_err['code'] == 'DESIGN_PENDING'
+        assert {'tool': 'get_design_context'} in pending_err['next_actions']
+        assert {'tool': 'get_generation_context', 'arguments': {'workflow': 'direct_generation'}} in pending_err['next_actions']
         context = read('get_design_context', user_requirement=text)
         assert 'Analysis mode: design' in context['analysis_instructions'] and context['target_mode'] == language
         analysis = {'summary': text, 'execution_intent_claims': [], 'explicit_constraint_claims': [],
@@ -1929,26 +1977,37 @@ def test_local_design_implements_only_the_selected_web_approach(tmp_path, langua
             analysis['approaches'][1]['description'] = 'Use the output contact.'
             validator.validate(analysis)
             analysis['execution_intent_claims'] = [{'claim': 'Start on a button'}]
+            analysis['approaches'][0]['implementation_semantics'] = 'unsupported'
             assert not validator.is_valid(analysis)
             rejected = propose()
             assert rejected['status'] == 'repair_required'
-            assert [item['path'] for item in rejected['repair_targets']] == ['/execution_intent_claims/0']
+            assert [item['path'] for item in rejected['repair_targets']] == ['/approaches/0/implementation_semantics']
             assert _mcp_body(run('propose_design_plan'))['data']['repair_id'] == rejected['repair_id']
             assert run('confirm_design_plan', draft_id='pending', approach_id='state').is_error
             binding = {'analysis_id': context['analysis_id'], 'repair_id': rejected['repair_id']}
             assert run('propose_design_plan', **binding, repairs=[{'path': '/summary', 'value': ''}]).is_error
-            repairs = [{'path': '/execution_intent_claims/0', 'value': []}]
+            repairs = [{'path': '/approaches/0/implementation_semantics', 'value': []}]
             repaired = _mcp_body(run('propose_design_plan', **binding, repairs=repairs))['data']
             assert [a['name'] for a in repaired['review']['approaches']] == ['Store a run flag', 'Output seal-in']
             assert run('propose_design_plan', **binding, repairs=repairs).is_error
-            analysis['execution_intent_claims'] = []
+            analysis['approaches'][0]['implementation_semantics'] = []
         old = propose()
         analysis['approaches'][1]['generation_guide'] = 'Use the output feedback contact.'
+        if language == 'ladder':
+            analysis['missing_info'] = [{'id': 'restart_behavior', 'question': 'How should the motor restart?',
+                                         'required': True, 'options': ['Wait for start', 'Resume automatically']}]
         draft = propose()
+        assert draft['user_requirement'] == text
         assert not session.service.projects.raw_project(session.project_id)['confirmed_spec']
         assert run('confirm_design_plan', draft_id=old['draft_id'], approach_id='contact').is_error
         assert run('confirm_design_plan', draft_id=draft['draft_id'], approach_id='invented').is_error
-        confirmed = _mcp_body(run('confirm_design_plan', draft_id=draft['draft_id'], approach_id='contact'))['data']
+        approval = {'draft_id': draft['draft_id'], 'approach_id': 'contact'}
+        if language == 'ladder':
+            assert [issue['code'] for issue in draft['issues']['errors']] == ['required_parameter_missing']
+            assert not _mcp_body(run('confirm_design_plan', **approval))['data']['confirmed']
+            assert run('confirm_design_plan', **approval, parameter_answers={'unknown': 'Start'}).is_error
+            approval['parameter_answers'] = {'restart_behavior': 'Wait for start'}
+        confirmed = _mcp_body(run('confirm_design_plan', **approval))['data']
         assert confirmed['confirmed'] and session.service.projects.raw_project(session.project_id)['confirmed_decision_receipt_id']
         assert run('get_generation_context', user_requirement=text, workflow='direct_generation').is_error
         generation = read('get_generation_context', workflow='detailed')
@@ -1957,9 +2016,63 @@ def test_local_design_implements_only_the_selected_web_approach(tmp_path, langua
         assert 'output feedback' in spec['selected_approach']['generation_guide']
         assert generation['output_contract']['tool'] == ('create_program_candidate' if language == 'ladder' else f'create_{language}_candidate')
         if language == 'ladder':
+            persisted = session.service.projects.raw_project(session.project_id)['confirmed_spec']
+            answer = next(row for row in persisted['parameters'] if row['id'] == 'restart_behavior')
+            assert answer['value'] == 'Wait for start' and answer['source'] == 'user'
+            assert spec['intent_context']['requests'][-1]['text'] == text
             assert generation['output_contract']['protocol'] == 'compact_ladder/1.3'
             Draft202012Validator(generation['generation_input']['output_schema']).validate(
                 {'r': [{'c': ['NO X0'], 'b': [{'i': [], 'o': ['COIL Y0']}]}], 'device_comments': [{'address': 'Y0', 'comment': 'Run'}]})
+
+
+@pytest.mark.parametrize('language', ['ladder', 'st', 'fbd', 'sfc'])
+def test_unconfirmed_design_escapes_to_direct_generation_across_languages(tmp_path, language):
+    from application.engineering_session import EngineeringSession
+    from integrations.mcp.local_adapter import LocalMCPToolAdapter
+    from itertools import count
+
+    porting_req = 'Port Siemens SCL network: IF I0.0 AND NOT I0.1 THEN Q0.0 := TRUE; END_IF; map I0.0->X0, I0.1->X1, Q0.0->Y0.'
+    with EngineeringSession(tmp_path / 'workspace', state_dir=tmp_path / 'state') as session:
+        adapter = LocalMCPToolAdapter(session)
+        sequence = count()
+
+        def run(tool, **args):
+            return adapter.call_tool(tool, args, str(next(sequence)))
+
+        def read(tool, **args):
+            from application.read_delivery import assemble_read_pages
+            pages = []
+            while True:
+                result = run(tool, **args)
+                assert not result.is_error, result.content
+                pages.append(_mcp_body(result))
+                follow = pages[-1]['data']['delivery']['next']
+                if not follow:
+                    return assemble_read_pages(pages)
+                tool, args = follow['tool'], follow['arguments']
+
+        created = _mcp_body(run('create_project', name=f'Direct-{language}', plc_model='FX3U', target_mode=language))['data']
+        assert created['next_actions'] == [{'tool': 'get_generation_context'}]
+
+        assert not run('create_project', name=f'Escape-{language}', plc_model='FX3U',
+                       target_mode=language, generation_mode='design').is_error
+        # Even after entering get_design_context (unconfirmed), porting/spec-complete tasks can exit Design cleanly.
+        design_ctx = read('get_design_context', user_requirement=porting_req)
+        assert design_ctx['target_mode'] == language
+        pending_err = _mcp_body(run('get_generation_context', user_requirement=porting_req))['error']
+        assert pending_err['code'] == 'DESIGN_PENDING'
+        assert {'tool': 'propose_design_plan'} in pending_err['next_actions']
+        assert {'tool': 'get_generation_context', 'arguments': {'workflow': 'direct_generation'}} in pending_err['next_actions']
+
+        direct_ctx = read('get_generation_context', user_requirement=porting_req,
+                          workflow='direct_generation', instruction_details=True)
+        expected_tool = 'create_program_candidate' if language == 'ladder' else f'create_{language}_candidate'
+        assert direct_ctx['target_mode'] == language
+        assert direct_ctx['output_contract']['tool'] == expected_tool
+        assert not session.design._path(session.project_id).exists()
+        # Subsequent generation context reads stay in direct mode without DESIGN_PENDING.
+        follow_up = read('get_generation_context', user_requirement=porting_req)
+        assert follow_up['output_contract']['tool'] == expected_tool
 
 
 def test_versionless_generation_context_and_candidate_over_mcp(empty_project):
@@ -4448,3 +4561,272 @@ def test_independent_replay_bounds_counterexample_count_without_changing_first()
     assert result.get('address') == 'Y0', result
     assert len(result['counterexamples']) == MAX_COUNTEREXAMPLES
     assert not result['collection_complete'] and result['collection_reason'] == 'counterexample_limit'
+
+
+def test_confirmed_design_ladder_context_and_candidate_boundary_guards(tmp_path, monkeypatch):
+    from application.engineering_session import EngineeringSession
+    from application.read_delivery import assemble_read_pages
+    from gxw.project_templates import blank_ladder_baseline
+    from integrations.mcp.local_adapter import LocalMCPToolAdapter
+    from itertools import count
+
+    monkeypatch.setattr('application.gxw_delivery.create_blank', lambda _out, _lang, cpu, **_kw: blank_ladder_baseline(cpu))
+    monkeypatch.setattr('application.gxw_delivery.installation', lambda: None)
+    with EngineeringSession(tmp_path / 'workspace', state_dir=tmp_path / 'state') as session:
+        adapter = LocalMCPToolAdapter(session)
+        seq = count()
+        run = lambda tool, **kw: adapter.call_tool(tool, kw, str(next(seq)))
+
+        def read_all(tool, **kw):
+            pages = []
+            while True:
+                res = run(tool, **kw)
+                assert not res.is_error, res.content
+                pages.append(_mcp_body(res))
+                nxt = pages[-1]['data']['delivery']['next']
+                if not nxt:
+                    return pages[0]['data']['delivery']['document_id'], assemble_read_pages(pages)
+                tool, kw = nxt['tool'], nxt['arguments']
+
+        # 1. Parameter-only GX Works2 target (LJ72GF15-T2) reports cpu_supported=False upfront in output_contract.gxw_delivery.
+        from application.gxw_delivery import gxw_delivery_capability
+        param_meta = gxw_delivery_capability('LJ72GF15-T2')
+        assert param_meta['cpu_supported'] is False and 'LJ72GF15-T2' in param_meta['reason']
+
+        # 2. Confirmed Design project omitting workflow="detailed" still returns compact_ladder/1.3.
+        assert not run('create_project', name='Design-Ladder', plc_model='FX3U',
+                       target_mode='ladder', generation_mode='design').is_error
+        req = 'X0 starts Y0; X1 stops Y0. Hold the output until stopped.'
+        _, design_ctx = read_all('get_design_context', user_requirement=req)
+        draft = _mcp_body(run('propose_design_plan', analysis_id=design_ctx['analysis_id'], analysis={
+            'summary': req, 'execution_intent_claims': [], 'explicit_constraint_claims': [],
+            'approaches': [{'approach_id': 'contact', 'name': 'Seal-in',
+                            'description': 'Use output contact.', 'implementation_semantics': []}],
+        }))['data']
+        assert _mcp_body(run('confirm_design_plan', draft_id=draft['draft_id'], approach_id='contact'))['data']['confirmed']
+
+        doc_id, gen_ctx = read_all('get_generation_context', user_requirement=req, instruction_details=True)
+        contract = gen_ctx['output_contract']
+        assert contract['protocol'] == 'compact_ladder/1.3'
+        assert contract['required_fields'] == ['ladder', 'implementation_review']
+        assert contract['review_contract']['argument'] == 'implementation_review'
+        assert contract['gxw_delivery']['cpu_supported'] is True
+        review = {'context_document': doc_id, 'manual_documents': [],
+                  'selected': 'Output seal-in', 'alternatives': []}
+
+        # 3. Outer wrapper mistakes return explicit, actionable errors instead of $.rungs empty.
+        wrapped_ladder = _mcp_body(run('create_program_candidate', implementation_review=review,
+                                       ladder={'ladder': {'r': [{'b': [{'i': ['NO X0'], 'o': ['COIL Y0']}]}]}}))
+        assert not wrapped_ladder['ok'] and "do not wrap another {'ladder': ...}" in wrapped_ladder['error']['message']
+
+        networks_wrap = _mcp_body(run('create_program_candidate', implementation_review=review,
+                                      ladder={'networks': [{'id': 'N1'}]}))
+        assert not networks_wrap['ok'] and "'networks' belongs to patch_program" in networks_wrap['error']['message']
+
+        # 4. Compact with dict device_comments saves v0001 GXW cleanly; ordered GXW patch_program guides to instruction_edits.
+        saved = _mcp_body(run('create_program_candidate', implementation_review=review, ladder={
+            'r': [{'b': [{'i': [{'or': [['NO X0'], ['NO Y0']]}, 'NC X1'], 'o': ['COIL Y0']}]}],
+            'device_comments': {'X0': '启动', 'X1': '停止', 'Y0': '电机'},
+        }))
+        assert saved['ok'] and saved['data']['delivery']['actual_format'] == 'gxw'
+
+        bad_patch = _mcp_body(run('patch_program', patch={
+            'operations': [{'operation': 'delete_network', 'network': 'N1'}],
+        }))
+        assert not bad_patch['ok']
+        assert 'saved GXW ladder versions use ordered source instructions' in bad_patch['error']['message']
+        assert 'patch.instruction_edits' in bad_patch['error']['message']
+
+        # 5. Hybrid compact without generation_context_id and ladder_v1 with list device_comments both normalize cleanly.
+        assert not run('create_project', name='Hybrid-Ladder', plc_model='FX3U', target_mode='ladder').is_error
+        doc2, _ = read_all('get_generation_context', user_requirement='X0 drives Y0', instruction_details=True)
+        rev2 = {'context_document': doc2, 'manual_documents': [], 'selected': 'Direct', 'alternatives': []}
+        hybrid_saved = _mcp_body(run('create_program_candidate', implementation_review=rev2, ladder={
+            'rungs': [{'branches': [{'inputs': ['NO X0'], 'outputs': ['COIL Y0']}]}],
+            'device_comments': [{'address': 'X0', 'comment': '输入'}, {'address': 'Y0', 'comment': '输出'}],
+        }))
+        assert hybrid_saved['ok'], hybrid_saved
+
+        assert not run('create_project', name='V1-Ladder', plc_model='FX3U', target_mode='ladder').is_error
+        v1_saved = _mcp_body(run('create_program_candidate', ladder={
+            **_generation_ladder(),
+            'device_comments': [{'address': 'X0', 'comment': 'Start'}, {'address': 'X1', 'comment': 'Stop'}, {'address': 'Y0', 'comment': 'Motor'}],
+        }))
+        assert v1_saved['ok'], v1_saved
+
+
+def test_instruction_review_errors_expose_expected_document_and_manual_actions():
+    from application.instruction_research import research_plan
+    from application.read_delivery import ReadDeliveryStore
+    from agent_runtime.tool_errors import ToolPreconditionError
+
+    store = ReadDeliveryStore()
+    binding = ('FX3U', 'review-guidance')
+    fake_review = {'context_document': 'read-' + '0' * 32, 'manual_documents': []}
+
+    with pytest.raises(ToolPreconditionError) as missing_ctx:
+        store.check_review(binding, fake_review)
+    assert missing_ctx.value.code == 'INSTRUCTION_REVIEW_REQUIRED'
+    assert missing_ctx.value.next_actions == [{'tool': 'get_generation_context'}]
+
+    plan = research_plan({'knowledge': [{'kind': 'instruction', 'functions': ['queue'], 'name': 'SFWR'}]})
+    page = store.prepare({'tool': 'get_generation_context', 'data': {
+        'plc_model': 'FX3U', 'target_mode': 'ladder', 'instruction_research': plan,
+    }}, {}, binding)
+    doc_id = page['data']['delivery']['document_id']
+
+    with pytest.raises(ToolPreconditionError) as wrong_doc:
+        store.check_review(binding, fake_review)
+    assert wrong_doc.value.code == 'INSTRUCTION_REVIEW_REQUIRED'
+    assert wrong_doc.value.details['expected_context_document'] == doc_id
+    assert wrong_doc.value.next_actions == [{'tool': 'get_generation_context'}]
+
+    with pytest.raises(ToolPreconditionError) as missing_manual:
+        store.check_review(binding, None)
+    assert missing_manual.value.code == 'INSTRUCTION_READ_INCOMPLETE'
+    assert missing_manual.value.details['missing_families'] == ['queue']
+    assert missing_manual.value.details['missing_candidates'] == {'queue': ['SFWR']}
+    assert missing_manual.value.details['expected_context_document'] == doc_id
+    assert missing_manual.value.next_actions == [{
+        'tool': 'search_plc_manual', 'arguments': {'query': 'SFWR', 'language': 'ladder'}}]
+
+    with pytest.raises(ToolPreconditionError) as stale_manual:
+        store.check_review(binding, {'context_document': doc_id, 'manual_documents': ['read-' + 'f' * 32]})
+    assert stale_manual.value.code == 'STALE_MANUAL_DOCUMENT'
+    assert stale_manual.value.details['expected_context_document'] == doc_id
+    assert stale_manual.value.next_actions == [{'tool': 'search_plc_manual'}]
+
+
+def test_st_code_alias_accepted_by_mcp_create_st_candidate(tmp_path, monkeypatch):
+    from application.engineering_session import EngineeringSession
+    from application.read_delivery import assemble_read_pages
+    from integrations.mcp.local_adapter import LocalMCPToolAdapter
+    from itertools import count
+
+    monkeypatch.setattr('application.gxw_delivery.installation', lambda: None)
+    with EngineeringSession(tmp_path / 'ws', state_dir=tmp_path / 'st') as session:
+        adapter = LocalMCPToolAdapter(session)
+        seq = count()
+        run = lambda tool, **kw: adapter.call_tool(tool, kw, str(next(seq)))
+        assert not run('create_project', name='STAlias', plc_model='FX3U', target_mode='st').is_error
+        pages, tool, kw = [], 'get_generation_context', {'user_requirement': 'X0 drives Y0', 'instruction_details': True}
+        while True:
+            page = _mcp_body(run(tool, **kw))
+            pages.append(page)
+            nxt = page['data']['delivery']['next']
+            if not nxt:
+                break
+            tool, kw = nxt['tool'], nxt['arguments']
+        ctx = assemble_read_pages(pages)
+        assert ctx['output_contract']['review_contract']['argument'] == 'implementation_review'
+        review = {'context_document': pages[0]['data']['delivery']['document_id'], 'manual_documents': []}
+
+        both = _mcp_body(run('create_st_candidate', operation='generate', st_text='Y0 := X0;',
+                             st_code='Y0 := X0;', implementation_review=review))
+        assert not both['ok'] and both['error']['code'] == 'INVALID_ARGUMENTS'
+
+        saved = _mcp_body(run('create_st_candidate', operation='generate', st_code='Y0 := X0;\n',
+                              implementation_review=review))
+        assert saved['ok'], saved
+        assert saved['data']['version_id'] == 'v0001'
+
+
+def test_fresh_fbd_generate_remaps_local_label_table_and_surfaces_pool_rules(tmp_path, monkeypatch):
+    from itertools import count
+    from application.engineering_session import EngineeringSession
+    from application.read_delivery import assemble_read_pages
+    from gxw.object_model import read_project_context
+    from gxw.project_templates import blank_fbd_baseline
+    from integrations.mcp.local_adapter import LocalMCPToolAdapter
+
+    monkeypatch.setattr('application.gxw_delivery.installation', lambda: None)
+    monkeypatch.setattr('application.gxw_delivery.create_blank', lambda output, mode, cpu, **kw: blank_fbd_baseline(cpu))
+
+    with EngineeringSession(tmp_path / 'ws', state_dir=tmp_path / 'st') as session:
+        adapter = LocalMCPToolAdapter(session)
+        seq = count()
+        run = lambda tool, **kw: adapter.call_tool(tool, kw, str(next(seq)))
+        assert not run('create_project', name='FreshFBD', plc_model='FX3U', target_mode='fbd').is_error
+
+        pages, tool, kw = [], 'get_generation_context', {'user_requirement': 'X010 drives Y010 via local flag', 'instruction_details': True}
+        while True:
+            page = _mcp_body(run(tool, **kw))
+            assert page['ok'], page
+            pages.append(page)
+            nxt = page['data']['delivery']['next']
+            if not nxt:
+                break
+            tool, kw = nxt['tool'], nxt['arguments']
+        ctx = assemble_read_pages(pages)
+        doc_id = pages[0]['data']['delivery']['document_id']
+        gen_ctx_id = ctx['generation_context_id']
+        reserved = ctx['generation_input']['project_options']['reserved_auto_allocation_ranges']
+        assert reserved['M']['display'] == 'M3840..M7679'
+        assert reserved['D']['display'] == 'D512..D999'
+
+        wrong_edit = _mcp_body(
+            run(
+                'create_fbd_candidate',
+                operation='edit',
+                generation_context_id=gen_ctx_id,
+                model={'schema_version': 2, 'networks': []},
+            )
+        )
+        assert not wrong_edit['ok']
+        assert 'operation="generate"' in wrong_edit['error']['message']
+
+        wrong_decl = _mcp_body(
+            run(
+                'create_fbd_candidate',
+                operation='generate',
+                generation_context_id=gen_ctx_id,
+                implementation_review={'context_document': doc_id, 'manual_documents': []},
+                declarations=[],
+                model={'schema_version': 2, 'networks': []},
+            )
+        )
+        assert not wrong_decl['ok']
+
+        saved = _mcp_body(
+            run(
+                'create_fbd_candidate',
+                operation='generate',
+                generation_context_id=gen_ctx_id,
+                implementation_review={'context_document': doc_id, 'manual_documents': []},
+                summary='Fresh FBD with global X/Y and local label',
+                model={
+                    'schema_version': 2,
+                    'declaration_edits': {
+                        'Global1.gh': {
+                            'upserts': [
+                                {'name': 'IN_START', 'data_type': 'BOOL', 'device': 'X010'},
+                                {'name': 'OUT_RUN', 'data_type': 'BOOL', 'device': 'Y010'},
+                            ]
+                        },
+                        'POU_01.Labels.lh': {
+                            'upserts': [{'name': 'LocalPermit', 'data_type': 'BOOL', 'initial_value': 'TRUE'}]
+                        },
+                    },
+                    'networks': [
+                        {
+                            'title': '',
+                            'block_comment': 'Start logic',
+                            'nodes': [
+                                {'id': 'a0', 'template': 'function:@AND-2', 'symbol': '@AND-2',
+                                 'arguments': {'0': 'IN_START', '1': 'LocalPermit', '2': 'OUT_RUN'}},
+                            ],
+                            'wires': [],
+                        }
+                    ],
+                },
+            )
+        )
+        assert saved['ok'], saved
+        assert saved['data']['version_id'] == 'v0001'
+        gxw_artifact = next(a for a in saved['data']['artifacts'] if a['id'] == 'gxw')
+        built = read_project_context(Path(gxw_artifact['path']).read_bytes())
+        global_rows = {row.name: row for row in built.declarations['Global1.gh'].rows}
+        assert global_rows['IN_START'].iec_address == '%IX8'
+        assert global_rows['OUT_RUN'].iec_address == '%QX8'
+        local_rows = {row.name: row for row in built.declarations[built.sources.local_table].rows}
+        assert 'LocalPermit' in local_rows

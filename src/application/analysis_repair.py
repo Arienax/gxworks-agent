@@ -81,8 +81,10 @@ def design_submission_schema():
     """Wire shape for external Design models; grounding and acceptance still use the Web validators."""
     text = {"type": "string"}
     strings = {"type": "array", "items": text}
-    evidence = {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1},
+    evidence = {"type": "array", "minItems": 0, "items": {"type": "string", "minLength": 1},
                 "description": "Verbatim spans of the current user request."}
+    inferred = {"type": "boolean",
+                "description": "Inferred, not quoted: receipt only, never binding."}
 
     def record(fields, required=()):
         return {"type": "object", "properties": fields, "required": list(required)}
@@ -93,12 +95,12 @@ def design_submission_schema():
     trigger = record({"kind": {"enum": sorted(TRIGGER_KINDS)}, "source_devices": strings,
                       "from": {"enum": [0, 1]}, "to": {"enum": [0, 1]},
                       "period_ms": {"type": "number", "exclusiveMinimum": 0}}, ["kind"])
-    execution = record({"trigger": trigger, "evidence": evidence,
+    execution = record({"trigger": trigger, "evidence": evidence, "inferred": inferred,
                         "effect": record({"kind": text, "devices": strings}),
-                        "rearm": {"type": ["string", "boolean"]}}, ["trigger", "evidence"])
+                        "rearm": {"type": ["string", "boolean"]}}, ["trigger"])
     explicit = record({"operation": {"enum": sorted(OPERATIONS)}, "scope": {"enum": sorted(SCOPES)},
                        "target": {"anyOf": [c["schema"] for c in explicit_target_contracts().values()]},
-                       "evidence": evidence}, ["operation", "scope", "target", "evidence"])
+                       "evidence": evidence, "inferred": inferred}, ["operation", "scope", "target"])
     approach = record({**dict.fromkeys(("approach_id", "name", "description", "pros", "cons", "generation_guide"), text),
                        "implementation_semantics": rows(_semantic_schema())},
                       ["approach_id", "name", "description", "implementation_semantics"])
@@ -172,7 +174,7 @@ def plan_analysis_repair(payload, user_text, *, plc_model="FX3U", confirmed_spec
                         elif not preserve["source_devices"] and not preserve["effect_devices"]:
                             preserve["unsupported_candidate"] = True
                 target["must_preserve"] = preserve
-                target["value_schema"] = {"type": "array", "items": {"type": "object", "required": ["evidence", "target" if family == "explicit_constraint_claims" else "trigger"]}}
+                target["value_schema"] = {"type": "array", "items": {"type": "object", "required": ["target" if family == "explicit_constraint_claims" else "trigger"]}}
             else:
                 target["value_schema"] = {"type": "null"} if mode == "remove" else _field_schema(segments)
                 if len(segments) == 4 and "implementation_semantics" in segments and isinstance(current, dict):
@@ -257,21 +259,29 @@ def _validate_claim_replacement(target, values, user_text, plc_model, confirmed_
             _reject(path, "scan repair must retain its explicit current-request evidence")
     if path.startswith("/explicit_constraint_claims/"):
         receipt = compile_explicit_constraint_claims(values, user_text, plc_model)
-        if receipt["rejected"]:
-            _reject(path, "replacement has ungrounded targets or evidence: " + receipt["rejected"][0]["reason"])
+        non_inferred = [row for row in receipt["rejected"] if row.get("reason") != "inferred_claim_not_grounded"]
+        if non_inferred:
+            _reject(path, "replacement has ungrounded targets or evidence: " + non_inferred[0]["reason"])
         actual = set()
-        for claim in receipt["accepted"]:
+        inferred_claims = [row["claim"] for row in receipt["rejected"]
+                           if row.get("reason") == "inferred_claim_not_grounded" and isinstance(row.get("claim"), dict)]
+        for claim in [*receipt["accepted"], *inferred_claims]:
             for name in ("operation", "scope"):
-                if name in preserve and claim[name] != str(preserve[name]).strip().casefold():
+                if name in preserve and str(claim.get(name) or "").strip().casefold() != str(preserve[name]).strip().casefold():
                     _reject(path, "repair changes a valid " + name)
-            actual.update(_target_identities(claim["target"]))
+            if "claim_id" in claim:
+                actual.update(_target_identities(claim["target"]))
+            else:
+                for anchor in explicit_claim_anchors(claim, user_text, plc_model):
+                    actual.update(_target_identities(anchor))
         expected = set().union(*(_target_identities(t) for t in preserve["targets"])) if preserve["targets"] else set()
         if expected and actual != expected:
             _reject(path, "repair loses or adds an identified user-fixed target")
     else:
         from plc.execution_intent import compile_execution_intent_claims, execution_claim_anchors
         receipt = compile_execution_intent_claims(values, user_text, confirmed_spec=confirmed_spec)
-        if receipt["rejected"]:
+        non_inferred = [row for row in receipt["rejected"] if row.get("reason") != "inferred_claim_not_grounded"]
+        if non_inferred:
             _reject(path, "replacement has ungrounded execution evidence")
         actual = {"source_devices": set(), "effect_devices": set()}
         for claim in values:

@@ -151,6 +151,10 @@ class ToolRegistry:
             }
         try:
             decoded = self._decode_arguments(arguments)
+            if definition.name == 'create_st_candidate' and 'st_code' in decoded:
+                if 'st_text' in decoded:
+                    raise ValueError('Provide st_text (do not pass both st_text and st_code)')
+                decoded['st_text'] = decoded.pop('st_code')
             self._validate_arguments(definition.parameters, decoded)
             if definition.name in {'execute_native_engineering', 'create_fbd_candidate', 'create_st_candidate'} | NATIVE_INSPECTION_TOOL_NAMES:
                 _validate_engineering_input(definition.name, definition.parameters, decoded)
@@ -227,8 +231,6 @@ class ToolRegistry:
                 except ValueError as error:
                     raise ToolPreconditionError('INVALID_TOOL_RESULT', '工具业务结果结构无效。') from error
                 public = _model_tool_value(definition.name, envelope)
-                if self.public_read_validator is not None:
-                    self.public_read_validator(definition.name, public['data'])
                 if (name == 'get_generation_context' and not context.version_id
                         and (decoded.get('user_requirement') or data.get('has_confirmed_spec'))
                         and data.get('output_contract', {}).get('tool') in CANDIDATE_TOOLS):
@@ -241,7 +243,11 @@ class ToolRegistry:
                             from application.instruction_research import direct_choice_input
                             payload = public['data']
                             payload['generation_input'] = direct_choice_input(payload['generation_input'], plan)
-                    public['data']['instruction_research'] = plan
+                    public['data']['instruction_research'] = _model_tool_value(
+                        definition.name, {'instruction_research': plan}
+                    )['instruction_research']
+                if self.public_read_validator is not None:
+                    self.public_read_validator(definition.name, public['data'])
                 # Manual lookup normalizes CPU aliases; compare against the original project snapshot.
                 review_binding = (read_binding(project_context) if name == 'search_plc_manual'
                                   and project_context and project_context.plc_model != context.plc_model else binding)

@@ -19,7 +19,8 @@ from .declarations import (BASIC_TYPES, CLASS_CODES, _type_parts, local_table_fo
 from .library_sources import decode_library_archive, parse_library_source, parse_library_declarations
 from .models import GXWFormatError, NodeKind
 from .project_metadata import (current_rows, project_stream_mapping, read_project_text_context,
-                               read_project_compile_options, project_source_groups, existing_source_groups)
+                               read_project_compile_options, read_project_system_variables,
+                               project_source_groups, existing_source_groups)
 from .semantic import (FunctionBlockCategory, FunctionBlockPortSpec, FunctionBlockSpec,
                        SemanticPortRole)
 
@@ -328,6 +329,7 @@ class ProjectCallableSources:
         self.project_structures = dict(project_structures or {})
         self.project_structure_names = frozenset(project_structure_names) | frozenset(self.project_structures)
         self.global_variable_hiding = global_variable_hiding
+        self.system_variable_ranges = None
         self.library_cpu = LIBRARY_CPU_SECTIONS.get(cpu, cpu)
         self.catalog = defaultdict(list)
         self.issues = []
@@ -421,10 +423,16 @@ class ProjectCallableSources:
         except GXWFormatError as error:
             hiding = None
             issues.append({'code': 'project_compile_option_gap', 'stream': project_name, 'message': str(error)})
+        try:
+            system_ranges = read_project_system_variables(project_raw)['ranges']
+        except GXWFormatError as error:
+            system_ranges = None
+            issues.append({'code': 'project_system_variable_gap', 'stream': project_name, 'message': str(error)})
         result = cls(contexts[0]['cpu'], program_name, declarations, libraries, global_variable_hiding=hiding,
                      user_library_owners=user_library_owners, source_groups=source_groups,
                      library_structures=structures, project_structure_names=project_types,
                      project_structures=project_structures)
+        result.system_variable_ranges = system_ranges
         result.issues[:0] = issues
         result.declaration_gaps = {issue['stream'] for issue in declaration_issues}
         result.declaration_owners = {group['labels']: name for name, group in

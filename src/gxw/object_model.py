@@ -448,11 +448,54 @@ def source_checks(context, *, semantic=None):
     """
     from .fbd_validation import inspect_graph
     findings = [dict(issue) for issue in context.object_model()['issues']]
+    from .declarations import structure_address_fields
+    from .fb_authoring import explicit_device_pool_overlap, normalize_declaration_address_pair
+    pool_ranges = getattr(context.sources, 'system_variable_ranges', None)
     for name,document in context.declarations.items():
         if name==context.sources.local_table or document.scope=='global':
             findings.extend(dict(code='fbd_retain_execution_unverified',severity='unverified',stream=name,
                 name=row.name,message='VAR_RETAIN is preserved; reset and power-cycle retention execution is unverified')
                 for row in document.rows if row.class_code==10)
+        if document.scope == 'global':
+            for row in document.rows:
+                if row.device or row.iec_address or row.value_extension:
+                    try:
+                        if row.unknown_u32 == 1:
+                            pairs = structure_address_fields(row)
+                        elif row.unknown_u32 == 2:
+                            addresses = structure_address_fields(row)
+                            from plc.device_policy import device_address
+                            for field in ('word_address', 'bit_address'):
+                                if addresses[field]:
+                                    device_address(addresses[field], context.sources.cpu)
+                            pairs = []
+                        else:
+                            pairs = [dict(device=row.device, iec_address=row.iec_address)]
+                        for pair in pairs:
+                            normalize_declaration_address_pair(pair, cpu=context.sources.cpu)
+                    except ValueError as error:
+                        findings.append(dict(
+                            code='DECLARATION_ADDRESS',
+                            severity='error',
+                            stream=name,
+                            name=row.name,
+                            message=str(error),
+                        ))
+                if pool_ranges and row.unknown_u32 == 0 and row.device:
+                    overlap = explicit_device_pool_overlap(
+                        row.device,
+                        cpu=context.sources.cpu,
+                        system_variable_ranges=pool_ranges,
+                        data_type=row.data_type,
+                    )
+                    if overlap is not None:
+                        findings.append(dict(
+                            code='DECLARATION_SYSTEM_POOL_OVERLAP',
+                            severity='error',
+                            stream=name,
+                            name=row.name,
+                            message=overlap['message'],
+                        ))
     semantic = semantic if semantic is not None else inspect_graph(context.program, context.sources)
     findings.extend(row for row in semantic['findings'] if row not in findings)
     from .structured_pou import structured_block_text
@@ -460,8 +503,21 @@ def source_checks(context, *, semantic=None):
     for index,block in enumerate(context.program.blocks):
         title,_ = structured_block_text(block.raw_header)
         value = title.strip()
-        if value.endswith(':') and value[:-1].strip():
-            destinations.setdefault(value[:-1].strip().casefold(),[]).append(index)
+        if value:
+            if not re.fullmatch(r'[^\W\d]\w*:', value, re.UNICODE):
+                findings.append(dict(
+                    code='fbd_network_title_label',
+                    severity='error',
+                    source_name=context.program.logical_name,
+                    block=index,
+                    title=title,
+                    message=(
+                        f"network title {title!r} is not a valid '<identifier>:' Jump label "
+                        "(native compile error 0x500c2032); leave title empty '' and put headings in block_comment"
+                    ),
+                ))
+            else:
+                destinations.setdefault(value[:-1].strip().casefold(),[]).append(index)
     for node in context.program.nodes:
         if node.kind==NodeKind.JUMP and len(destinations.get(node.symbol.casefold(),()))!=1:
             findings.append(dict(code='fbd_jump_target_unresolved',severity='error',
@@ -808,6 +864,19 @@ def prepare_object_project(model, *, baseline=None, save_policy='checked', decla
         raise GXWFormatError('save_policy must be draft or checked')
     if not isinstance(model, dict):
         raise GXWFormatError("GXW object model must be an object")
+    if 'networks' not in model:
+        if isinstance(model.get('model'), dict):
+            raise GXWFormatError(
+                "FBD model must not wrap another 'model' object; pass the parameter_schema object "
+                "(with top-level 'networks') directly as the model argument")
+        if not ('nodes' in model and 'wires' in model):
+            raise GXWFormatError(
+                "FBD model requires top-level 'networks' (parameter_schema) or a v1/v2 GXW object model "
+                "with 'nodes', 'wires' and 'schema_version'")
+        if model.get('schema_version') not in (1, 2):
+            raise GXWFormatError(
+                "unsupported GXW object model version: object model with 'nodes'/'wires' requires "
+                "schema_version 1 or 2; for parameter generation provide top-level 'networks'")
     raw = default_baseline() if baseline is None else baseline
     if 'networks' in model:
         from .ladder_lowering import fbd_topology_to_object_model
