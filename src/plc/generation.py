@@ -281,16 +281,7 @@ def prepare_ladder_candidate(
     # the immutable baseline spelling outside their authorized scope.
     if previous_ladder is None and not repair_mode:
         parsed = canonical_ladder_devices(parsed)
-    import os
-    has_behavior_cases = bool(
-        os.environ.get('GXWORKS_ACCEPTANCE_CASES_FILE')
-        or (isinstance(confirmed_spec, dict) and (
-            confirmed_spec.get('behavior_constraints') or confirmed_spec.get('execution_semantics')
-            or candidate_origin == CONFIRMED_AGENT_ORIGIN
-        ))
-    )
-    progress(tr('程序已生成，开始验证。将按已有规格和验收用例检查逻辑与动作时序。') if has_behavior_cases
-             else tr('程序已生成，开始结构与本地校验（未配置独立验收用例时，动作时序需通过仿真确认）。'))
+    progress(tr('程序已生成，开始验证。将按已有规格和验收用例检查逻辑与动作时序。'))
     validate_ladder_candidate_structure(parsed, plc_model=plc_model, require_catalogued_instructions=True)
     from plc.condition_normalizer import normalize_shared_conditions
     parsed, normalization = normalize_shared_conditions(parsed, allowed_rung_ids=normalization_scope, plc_model=plc_model)
