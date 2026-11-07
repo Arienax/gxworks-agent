@@ -329,7 +329,7 @@ class ReadDeliveryStore:
             saved = self._documents.get(identity)
             request = {k: v for k, v in arguments.items() if k != 'cursor'}
             if (not separator or not page.isdigit() or saved is None or saved['tool'] != tool
-                    or saved['arguments'] != request or saved['binding'] != binding
+                    or request not in ({}, saved['arguments'], saved.get('full_arguments', saved['arguments'])) or saved['binding'] != binding
                     or not 0 <= int(page) < len(saved['pages'])):
                 raise ToolPreconditionError('STALE_READ_CURSOR',
                     '读取游标已失效或查询、CPU、工程版本、事实库发生变化；请去掉 cursor 重新读取。')
@@ -350,8 +350,9 @@ class ReadDeliveryStore:
                                else 'see_delivery_complete')
         document, objects, locations = _split_document(content)
         identity = 'read-' + uuid.uuid4().hex
-        request = ({} if tool == 'get_design_context' else
-                   {k: copy.deepcopy(v) for k, v in arguments.items() if k != 'cursor'})
+        full_request = {k: copy.deepcopy(v) for k, v in arguments.items() if k != 'cursor'}
+        request = ({} if tool == 'get_design_context' else full_request)
+
         items, pages = list(objects.items()), []
 
         def make_page(values, index, complete):
@@ -400,7 +401,7 @@ class ReadDeliveryStore:
             raise ToolPreconditionError('READ_OBJECT_TOO_LARGE', '查询参数或必需说明超过单次读取上限。')
         with self._lock:
             self._sequence += 1
-            self._documents[identity] = {'tool': tool, 'arguments': request,
+            self._documents[identity] = {'tool': tool, 'arguments': request, 'full_arguments': full_request, 'plc_model': content.get('plc_model'),
                 'binding': binding, 'review_binding': binding if review_binding is None else review_binding,
                 'pages': pages, 'last_read': 0, 'sequence': self._sequence,
                 'research': ({'executable_fragments': copy.deepcopy(content['instruction_research'].get('executable_fragments', [])),
@@ -409,7 +410,7 @@ class ReadDeliveryStore:
                                   if content.get('workflow_mode') == 'direct_generation' else []),
                               'targets': content['instruction_research'].get('manual', {}).get('coverage', {}).get('targets', [])}
                              if 'instruction_research' in content else None),
-                'user_requirement': str(request.get('user_requirement') or ''),
+                'user_requirement': str(full_request.get('user_requirement') or ''),
                 'receipt': content.get('generation_context_id') or content.get('analysis_id'),
                 'language': content.get('target_mode') if tool == 'get_generation_context' else content.get('language'),
                 'targets': {row['target'] for row in coverage_targets if row.get('kind') == 'instruction'},
@@ -439,19 +440,42 @@ class ReadDeliveryStore:
                           if doc['tool'] == 'get_generation_context' and doc['research'] is not None), default=None)
             if not active and review is None:
                 return  # Programmatic callers can build a candidate without a generation conversation.
-            if not active or (review and active[1] != review['context_document']):
-                raise ToolPreconditionError('INSTRUCTION_REVIEW_REQUIRED',
-                    '请读取当前工程与需求的 get_generation_context，按 instruction_research 查证并提交 implementation_review。')
+            if not active:
+                raise ToolPreconditionError(
+                    'INSTRUCTION_REVIEW_REQUIRED',
+                    '请先读取当前工程与需求的 get_generation_context，按 instruction_research 查证后在 implementation_review 中填入返回的 delivery.document_id。',
+                    next_actions=[{'tool': 'get_generation_context'}],
+                )
+            if review and active[1] != review['context_document']:
+                raise ToolPreconditionError(
+                    'INSTRUCTION_REVIEW_REQUIRED',
+                    f'implementation_review.context_document 与当前最新 get_generation_context 不一致（当前应为 {active[1]}）。',
+                    details={'expected_context_document': active[1]},
+                    next_actions=[{'tool': 'get_generation_context'}],
+                )
             generation = matching[active[1]]
             if review is not None:
                 review['assumptions'] = normalize_review_assumptions(review)
             if receipt and generation['receipt'] != receipt:
-                raise ToolPreconditionError('INSTRUCTION_REVIEW_REQUIRED', '所引用的生成上下文不一致。')
-            manuals = set(review['manual_documents']) if review else set()
-            if any(key not in matching or matching[key]['tool'] != 'search_plc_manual' for key in manuals):
-                raise ToolPreconditionError('STALE_MANUAL_DOCUMENT', '请使用当前工程、CPU 与事实库下的手册 document_id。')
-            relevant = {active[1], *manuals} | {key for key, doc in matching.items()
-                       if doc['tool'] == 'search_plc_manual' and doc['sequence'] > active[0]}
+                raise ToolPreconditionError(
+                    'INSTRUCTION_REVIEW_REQUIRED',
+                    'generation_context_id 与当前最新 get_generation_context 不一致，请使用最新上下文回执或重新读取 get_generation_context。',
+                    details={'expected_context_document': active[1],
+                             **({'expected_generation_context_id': generation['receipt']} if generation.get('receipt') else {})},
+                    next_actions=[{'tool': 'get_generation_context'}],
+                )
+            effective_review = review if review is not None else generation.get('verified_review')
+            manuals = set(effective_review['manual_documents']) if effective_review else set()
+            stale = sorted(key for key in manuals if key not in matching or matching[key]['tool'] != 'search_plc_manual')
+            if stale:
+                raise ToolPreconditionError(
+                    'STALE_MANUAL_DOCUMENT',
+                    'implementation_review.manual_documents 包含非当前工程、CPU 或事实库下的手册 document_id，请重新调用 search_plc_manual。',
+                    details={'invalid_manual_documents': stale, 'expected_context_document': active[1]},
+                    next_actions=[{'tool': 'search_plc_manual'}],
+                )
+            relevant = {active[1], *manuals}
+
             for key in relevant:
                 doc = matching[key]
                 if doc['last_read'] < len(doc['pages']) - 1:
@@ -459,17 +483,42 @@ class ReadDeliveryStore:
                     raise ToolPreconditionError('INSTRUCTION_READ_INCOMPLETE', '资料尚有未读页，按 next_actions 续读。',
                                                 next_actions=(follow,))
             # Other-language documents can supplement a comparison but do not establish this language's calls.
-            researched = {target for key in manuals if matching[key]['language'] == generation['language']
+            researched = {target for key in manuals if matching[key]['language'] in (generation['language'], None)
                           for target in matching[key]['targets']}
             embedded = generation['research']['targets']
             researched.update(row['target'] for row in embedded if row.get('kind') == 'instruction')
-            missing = missing_families(generation['research']['families'], researched)
+            researched.update(generation['targets'] - generation['unresolved'])
+            missing = missing_families(generation['research']['families'], researched, plc_model=generation.get('plc_model'))
+
             if missing:
-                raise ToolPreconditionError('INSTRUCTION_READ_INCOMPLETE',
-                    '相关指令资料尚未读取，请读取缺少功能的手册资料。',
-                    details={'missing_families': missing})
+                families_map = generation['research'].get('families') or {}
+                missing_candidates = {family: list(families_map.get(family) or []) for family in missing}
+                sample_ops = list(dict.fromkeys(op for family in missing for op in missing_candidates[family][:3]))
+                search_args = ({'query': ' '.join(sample_ops),
+                                **({'language': generation['language']} if generation.get('language') else {})}
+                               if sample_ops else None)
+                next_action = ({'tool': 'search_plc_manual', 'arguments': search_args}
+                               if search_args else {'tool': 'search_plc_manual'})
+                message = (
+                    '相关指令资料尚未查证且未提交有效 implementation_review：请按 missing_candidates 调用 search_plc_manual 读完分页'
+                    '（或在 get_generation_context 中传 instruction_details=true），再提交含 context_document 与 manual_documents 的 implementation_review。'
+                    if effective_review is None else
+                    '相关指令资料尚未完整读取：请按 missing_candidates 调用 search_plc_manual 读完分页，并将返回的 delivery.document_id 加入 implementation_review.manual_documents。'
+                )
+                raise ToolPreconditionError(
+                    'INSTRUCTION_READ_INCOMPLETE',
+                    message,
+                    details={
+                        'missing_families': missing,
+                        'missing_candidates': missing_candidates,
+                        'expected_context_document': active[1],
+                    },
+                    next_actions=[next_action],
+                )
             # Selection prose is a model note, not a certificate. Missing names,
             # comparison wording or caveats cannot reject an otherwise usable program.
+            if review is not None:
+                generation['verified_review'] = copy.deepcopy(review)
             return copy.deepcopy(generation['research'])
 
 

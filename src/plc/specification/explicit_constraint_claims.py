@@ -152,12 +152,13 @@ def explicit_constraint_claim_details(value, path="$.explicit_constraint_claims"
         evidence = claim.get("evidence")
         inferred = claim.get("inferred") is True
         # A claim the model only inferred has no user span to quote. Accepting an
-        # empty list with the explicit flag stops it from inventing evidence; the
-        # claim is still dropped before it can reach the contract.
-        empty_ok = inferred and evidence in (None, [])
-        if (not isinstance(evidence, list)
-                or (not evidence and not empty_ok)
-                or any(not isinstance(item, str) or not item.strip() for item in evidence or [])):
+        # empty list or omitted evidence with the explicit flag stops it from
+        # inventing evidence; the claim is still dropped before it can reach the contract.
+        if inferred and evidence in (None, []):
+            pass
+        elif (not isinstance(evidence, list)
+                or not evidence
+                or any(not isinstance(item, str) or not item.strip() for item in evidence)):
             add(root + ".evidence", "one or more exact user-text spans are required",
                 evidence, schema=_STRINGS)
         target = claim.get("target")

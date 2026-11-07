@@ -121,14 +121,14 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None, langu
                      {item for fact in feature.get('facts', []) for item in fact.get('scope', {}).get('languages', [])})
         if len(languages) != 1:
             continue
-        language = next(iter(languages))
-        feature_languages[feature['target']] = language
-        if requested_languages and language not in requested_languages:
+        feature_lang = next(iter(languages))
+        feature_languages[feature['target']] = feature_lang
+        if requested_languages and feature_lang not in requested_languages:
             continue
         aliases = list(feature.get('aliases', []))
-        if language in requested_languages:
+        if feature_lang in requested_languages:
             # A declared alias like "FBD EN/ENO" also matches "EN/ENO" in an FBD project.
-            prefix = language.upper() + ' '
+            prefix = feature_lang.upper() + ' '
             aliases += [alias[len(prefix):] for alias in aliases if alias.upper().startswith(prefix)]
         feature_aliases[feature['target']] = aliases
         for alias in aliases:
@@ -144,15 +144,15 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None, langu
     language_features.sort(key=lambda target: feature_scores[target], reverse=True)
     remaining_by_language, selected_features = {}, []
     for target in language_features:
-        language = feature_languages[target]
-        remaining = remaining_by_language.get(language, str(query))
+        feature_lang = feature_languages[target]
+        remaining = remaining_by_language.get(feature_lang, str(query))
         aliases = feature_aliases[target]
         if not any(alias in remaining if alias == '**' else alias_occurs(remaining, alias) for alias in aliases):
             continue
         selected_features.append(target)
         for alias in sorted(aliases, key=len, reverse=True):
             remaining = re.sub(re.escape(alias), ' ', remaining, flags=re.I)
-        remaining_by_language[language] = remaining
+        remaining_by_language[feature_lang] = remaining
     language_features = selected_features
     # Cxxxx is also a counter spelling. A compiler diagnostic request carries
     # its own namespace; it must not retrieve a counter or incidental examples.

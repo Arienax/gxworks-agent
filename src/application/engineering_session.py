@@ -91,11 +91,11 @@ class EngineeringSession:
               "plc_model": {"type": "string", "minLength": 1, "maxLength": 100},
               "target_mode": {"type": "string", "enum": ["ladder", "st", "fbd", "sfc"]},
               "generation_mode": {"type": "string", "enum": ["design", "direct"],
-                                  "description": "Design compares approaches before human approval. Harness defaults to design. Use direct only when requested."},
+                                  "description": "Select by specification completeness: use direct for cross-vendor/cross-language program porting or translation, complete logic/step/timing/algorithm specifications, deterministic FB/FUNCTION authoring, or explicit direct requests; use design for open-ended process/machine requirements that benefit from comparing 1-3 approaches before human approval."},
               "native_project_type": {"type": "string", "minLength": 1, "maxLength": 32},
               "use_labels": {"type": "boolean"}},
              ("name", "plc_model", "target_mode"), self._create_project),
-            ("get_design_context", "Start Web Design analysis for a new program. Pass the complete human requirement. Use the returned instructions to design approaches before writing any program.",
+            ("get_design_context", "Start Web Design analysis for an open-ended new program requirement. Pass the complete human requirement and use the returned instructions to compare 1-3 approaches before writing any program. Skip Design (use direct) when porting existing PLC code or implementing an already complete specification.",
              {"user_requirement": {"type": "string", "minLength": 1}, "instruction_details": {"type": "boolean"}}, (), self._design_context),
             ("propose_design_plan", "Submit the external model's Web Design analysis JSON, including 1-3 approaches. If repair_required, submit only the listed path/value repairs for that repair_id. Empty arguments recall the draft or repair targets. Resolve required facts with the user before confirmation.",
              {"analysis_id": {"type": "string"}, "analysis": {"type": "object"}, "repair_id": {"type": "string"},
@@ -177,10 +177,12 @@ class EngineeringSession:
     def _design_proposal(self, _context, arguments):
         project_id = self._new_design_project()
         if 'analysis' in arguments or 'repairs' in arguments:
-            if self.registry._read_delivery is None:
-                raise ToolPreconditionError('DESIGN_CONTEXT_REQUIRED', '请先读取当前工程的 Design 上下文。',
-                                            next_actions=[{'tool': 'get_design_context'}])
-            self.registry._read_delivery.check_design_read(arguments.get('analysis_id'))
+            if not self.design.is_read_complete(project_id, arguments.get('analysis_id')):
+                if self.registry._read_delivery is None:
+                    raise ToolPreconditionError('DESIGN_CONTEXT_REQUIRED', '请先读取当前工程的 Design 上下文。',
+                                                next_actions=[{'tool': 'get_design_context'}])
+                self.registry._read_delivery.check_design_read(arguments.get('analysis_id'))
+                self.design.mark_read_complete(project_id, arguments.get('analysis_id'))
         return self.design.propose(project_id, arguments)
 
     def _design_confirmation(self, _context, arguments):
@@ -233,6 +235,10 @@ class EngineeringSession:
             return self._error(call, "UNKNOWN_TOOL", "Tool is not in the engineering tool registry")
         try:
             arguments = ToolRegistry._decode_arguments(call.arguments)
+            if call.name == 'create_st_candidate' and 'st_code' in arguments:
+                if 'st_text' in arguments:
+                    raise ValueError('Provide st_text (do not pass both st_text and st_code)')
+                arguments['st_text'] = arguments.pop('st_code')
             digest = canonical_hash({"name": call.name, "arguments": arguments})
         except ValueError as error:
             return self._error(call, "INVALID_ARGUMENTS", str(error))
@@ -260,7 +266,7 @@ class EngineeringSession:
                 if self._closed:
                     return self._error(call, 'SESSION_CLOSED', 'The engineering session is closed')
                 if self.project_id and (call.name == 'get_generation_context' or new_candidate(call.name, arguments)):
-                    self.design.guard_generation(self.project_id, arguments)
+                    self.design.guard_generation(self.project_id, arguments, tool_name=call.name)
                 # Inspection never initializes a writer, migrates projects, or
                 # inherits an execution approval merely to read a source.
                 if call.name in READ_ONLY_TOOL_NAMES and not arguments.get("native"):
@@ -290,7 +296,8 @@ class EngineeringSession:
                             confirm_full_access=self.confirm_full_access)
                     self._consent_initialized = True
                 path = self.service.state_dir / "mcp_calls" / (hashlib.sha256(call.id.encode()).hexdigest() + ".json")
-                if path.is_file():
+                is_cursor_read = bool(arguments.get('cursor'))
+                if not is_cursor_read and path.is_file():
                     saved = read_json(path)
                     if saved["input_hash"] != digest:
                         raise ConflictError("MCP call ID was already used with other arguments")
@@ -300,7 +307,8 @@ class EngineeringSession:
                         selected = (self.service.projects.tool_context(self._require_project(), self.version_id, requirement='model')
                                     if call.name == 'get_design_context' else None)
                         envelope = self.registry.call(call.name, arguments, selected)
-                        atomic_json(path, {"input_hash": digest, "response": envelope})
+                        if not is_cursor_read:
+                            atomic_json(path, {"input_hash": digest, "response": envelope})
                 else:
                     response = self.service.agent_call({"project_id": self._require_project(),
                         "version_id": self.version_id, "name": call.name,
@@ -310,7 +318,8 @@ class EngineeringSession:
                     if response.get('execution_job_id'):
                         self.service.jobs.wait(response['execution_job_id'])
                     envelope = self._completed_response(response)
-                    atomic_json(path, {"input_hash": digest, "response": envelope})
+                    if not is_cursor_read:
+                        atomic_json(path, {"input_hash": digest, "response": envelope})
             if call.name == 'get_design_context' and envelope.get('ok'):
                 from application.read_delivery import PreparedReadEnvelope
                 envelope = PreparedReadEnvelope(envelope)

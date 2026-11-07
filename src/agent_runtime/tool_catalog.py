@@ -186,7 +186,7 @@ def generation_definitions(generation):
                 },
                 "instruction_details": {"type": "boolean", "description": "新建程序时随上下文一次读取当前型号和工程语言的候选指令事实与缺项。读完后在同一次生成中比较和提交。"},
                 "workflow": {"type": "string", "enum": ["direct_generation", "detailed"],
-                             "description": "新 Ladder 有原始需求时默认 Direct；已确认规格可显式选 Direct，编辑仍沿用原入口。"},
+                             "description": "新程序直接生成（含跨品牌代码移植转写与已给定完整规格）使用 direct_generation；Ladder/ST/FBD/SFC 处于未确认 Design 会话时，均可显式传 direct_generation 配合 user_requirement 退出 Design 切换为直接生成；已确认 Design 规格按 detailed 实施（确认后的 Design 工程省略此项时也默认返回 compact_ladder），已有版本编辑沿用原入口。"},
                 "execution_mode": {"type": "string", "enum": ["background", "live"],
                     "description": "选择保存版本的后台上下文或持续原生会话当前确认的源码。省略时优先使用已启动的原生会话。"},
                 "catalog_scope": {"type": "string", "enum": ["task", "full"], "default": "task",
@@ -200,7 +200,7 @@ def generation_definitions(generation):
     )
     yield ToolDefinition(
         "create_program_candidate",
-        "提交完整或局部 ladder JSON，经共享解析、结构检查和本地编译生成待确认候选。确认保存将指令、声明与注释装配为 GXW，发现可用 GX Works2 后自动编译、保存及冷重开；无法生成 GXW 时返回程序与注释 CSV 及降级原因。device_comments 填最多16字符的软元件用途短名称。",
+        "提交完整或局部 ladder JSON，经共享解析、结构检查和本地编译生成待确认候选。新建含 instruction_research 的上下文需同时提交顶层 implementation_review（含当前 delivery.document_id 与已读 manual_documents）。确认保存优先通过本机 GX Works2 与 v4 后台组件按所选 CPU 无基底创建并编译保存 GXW（型号是否支持 Program 工程见 output_contract.gxw_delivery；仅参数型号或未安装 GX Works2 时返回程序与注释 CSV 及降级原因）。device_comments 填最多16字符的软元件用途短名称。",
         {
             "type": "object",
             "properties": {
@@ -210,7 +210,7 @@ def generation_definitions(generation):
                 },
                 "ladder": {
                     "type": "object",
-                    "description": "新程序按 output_schema 原样填入此字段：Direct 使用 {result:{program:{r:[...]},decisions:[],open_items:[]}}，已确认的 Design 使用 {r:[...]}。不要用示例或空工程试格式。编辑沿用当前合同。",
+                    "description": "按 output_schema 直接将程序对象传入此字段（不要再外包一层 {ladder:...} 或 {networks:...}）：Direct 使用 {result:{program:{r:[...]},decisions:[],open_items:[]}}，已确认的 Design 使用 {r:[...]}，旧版上下文兼容 ladder_v1 {rungs:[...]}；device_comments 兼容 [{address,comment}] 与 {address:comment}。不要用示例或空工程试格式。",
                 },
                 "io_example": IO_EXAMPLE_SCHEMA,
                 "generation_context_id": {
@@ -236,7 +236,7 @@ def generation_definitions(generation):
                 },
                 "patch": {
                     "type": "object",
-                    "description": "基于当前 revision/sha256 的 Network 补丁；有序 GXW 源码改用 instruction_edits，保留真实执行顺序。",
+                    "description": "基于当前 revision/sha256 的补丁：图形 IR 版本使用 operations；导入或保存的有序 GXW Ladder 版本仅接受 instruction_edits（按原始 record_index 与精确 expected 编辑，不接受图形 operations），可与 device_comments、declaration_edits 联合提交。",
                     "properties": {
                         "base_revision": {"type": "integer"},
                         "base_ir_sha256": {"type": "string"},

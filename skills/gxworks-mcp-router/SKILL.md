@@ -16,7 +16,7 @@ metadata:
 ---
 
 
-默认交付优先返回 GXW。找到 GX Works2 后，共享保存流程自动编译、保存并冷重开；读取 delivery 与 validation 的实际结果，不根据文件存在宣称编译通过。GXW 无法生成时，Ladder 降级 CSV、ST 降级为代码 TXT 与全局标签 CSV、FBD/SFC 保留结构化候选及预览，并说明原因。原生编译失败仍保留 GXW 诊断候选，不改交 CSV。新建 ST/SFC 使用 get_generation_context 返回的 operation=generate 合同。GX Works2 1.635.0.1 配合 v4 工作区适配器，按实际 CPU 查询原生系列与子系列，无基底创建对应语言工程。遵守该 CPU 的工程类型和语言条件，读取实际创建及验证结果；不使用 IDE 新建对话框、隐藏窗口控件或预制完整工程。
+默认交付优先返回 GXW。找到 GX Works2 后，共享保存流程自动编译、保存并冷重开；读取 delivery 与 validation 的实际结果，不根据文件存在宣称编译通过。GXW 无法生成时（例如仅参数目标或未安装 GX Works2，可提前查看 output_contract.gxw_delivery），Ladder 降级 CSV、ST 降级为代码 TXT 与全局标签 CSV、FBD/SFC 保留结构化候选及预览，并说明原因。原生编译失败仍保留 GXW 诊断候选，不改交 CSV。新建 ST/SFC 使用 get_generation_context 返回的 operation=generate 合同。GX Works2 1.635.0.1 配合 v4 工作区适配器，按实际 CPU 查询原生系列与子系列，无基底创建对应语言工程。遵守该 CPU 的工程类型和语言条件，读取实际创建及验证结果；不使用 IDE 新建对话框、隐藏窗口控件或预制完整工程。
 # GXWorks MCP 任务路由
 
 根据用户提供的输入形态与目标操作，直接选用对应的 GXWorks Agent MCP 工具链完成工程读取、程序生成、离线修改、原生编译检查或仿真观察。
@@ -33,7 +33,7 @@ metadata:
 
 ## 新建 Ladder 的 Desktop 入口
 
-创建工程后遵循返回的 next_actions。宿主提供 `gxworks_generate_ladder` 时，新建 Direct 和已经确认的 Design 都用它生成整份程序；传当前 project_id。它通过本轮选用的 Harness 模型生成一次，自动传入当前型号的本地指令资料、读完分页，按 Web 协议提交。首次需求可以省略 user_requirement 由宿主从真实消息取得。多轮合并只引用相关的完整用户消息。编写或生成程序属于普通新建需求，只有用户明确选择直接模式才传 generation_mode=direct。Desktop 的 Design 入口自动读取设计资料、展示可选方案，收到用户选择后再实施。
+创建工程时按需求完备度选择 `generation_mode` 并遵循返回的 `next_actions`。宿主提供 `gxworks_generate_ladder` 时，新建 Direct 和已经确认的 Design 都用它生成整份程序；传当前 `project_id`。它通过本轮选用的 Harness 模型生成一次，自动传入当前型号的本地指令资料、读完分页，按 Web 协议提交。首次需求可以省略 `user_requirement` 由宿主从真实消息取得。多轮合并只引用相关的完整用户消息。跨品牌/跨语言代码移植转写（如西门子/CODESYS/欧姆龙转三菱）、完整步序/时序/算法规格已给定、确定性工具 FB/FUNCTION 编写或用户要求直接生成时传 `generation_mode="direct"`；存在方案取舍的开放式工艺/整机控制需求使用 `generation_mode="design"`。Desktop 的 Design 入口自动读取设计资料、展示可选方案，收到用户选择后再实施。
 不要为试格式创建示例版本。如果上下文返回了已有版本，按其编辑入口工作。其他宿主继续使用下表的 MCP 工具。
 
 ## 按任务选择入口
@@ -45,8 +45,8 @@ metadata:
 | 修改一个尚未导入的 GXW | `import_gxw_project`（`local` 模式） | 导入为受管理版本后，依次调用 `read_gxw_source` 与 `edit_gxw_project`；其他模式使用当前暴露的导入入口。 |
 | 查看当前打开的 GX Works2 程序 | `list_gxworks2_sessions` | 选中匹配的窗口后调用 `read_gxworks2_snapshot`，凭返回的 `source_ref` 读取网络或执行静态分析。 |
 | 仅有原生导出的 CSV | `inspect_gxworks2_csv_files` | 传入程序 CSV、注释 CSV 和明确的 `plc_model`，直接获取只读 `source_ref`。 |
-| 根据需求设计并生成新程序 | `create_project` → `get_design_context` → `propose_design_plan` → `confirm_design_plan` | Harness 新工程默认 Design。用用户原文读取设计上下文与分页，让当前模型按实际 CPU、语言和工艺提出 1～3 个方案。用户选择后用 `get_generation_context(workflow="detailed")` 按已确认规格实施。 |
-| 用户明确要求直接生成 | 新建时指定 `generation_mode="direct"` → `get_generation_context` | 跳过设计阶段；Ladder 可用 `workflow="direct_generation"`，其他语言按其生成合同提交。 |
+| 开放式工艺/整机需求设计并生成新程序 | `create_project(generation_mode="design")` → `get_design_context` → `propose_design_plan` → `confirm_design_plan` | 适用于存在架构或状态表示取舍的开放式需求。用用户原文读取设计上下文与分页，按实际 CPU、语言和工艺提出 1～3 个方案；用户选定确认后用 `get_generation_context(workflow="detailed")` 按已确认规格实施。 |
+| 跨品牌程序转写、已给定完整规格或直接生成 | `create_project(generation_mode="direct")` → `get_generation_context` | 西门子/CODESYS/欧姆龙等跨品牌或跨语言程序移植转写、完整步序/时序/公式规格已给定、确定性工具 FB/FUNCTION 编写或用户要求直接生成时跳过 Design，不虚构多方案（仅在存在真实硬件/地址映射缺口时针对性提问）。若工程处于未确认 Design 会话，Ladder/ST/FBD/SFC 均可传 `workflow="direct_generation"` 配合 `user_requirement` 退出 Design 直接生成。 |
 | 修改已有 Ladder 的局部网络或指令 | `get_current_program_info` / `read_network` 或 `read_gxw_source` | 按需读取 `get_generation_context`；单程序局部修改用 `patch_program`，多源码或含声明/注释的联合修改用 `edit_gxw_project`。 |
 | FBD 生成或修改 | `get_generation_context(user_requirement=...)` | 使用必需语言规则、当前 CPU 地址规则和源码依赖；按 `output_contract` 选择单图候选或 ST/FBD 联合事务。目录不足时精确补取 `get_fbd_catalog(templates=...)`，详见[流程 6](references/workflows.md#fbd-与项目定义)。 |
 | FBD 定义、标签、库的查看与维护 | `get_fbd_catalog`，配合 `read_fbd_definition` / `read_fbd_libraries` | 按实际定义和能力执行维护操作；目录命中不能代替生成上下文，也不证明库正文可以导入。 |
@@ -84,7 +84,7 @@ metadata:
 
 **复杂 FBD 的组织方式。** 主图用于组装职责清晰的 ST 功能块；工序状态、定时计数、报警及互锁在相应实现内封装，独立状态使用独立实例。优先使用具名端口、标签和简短连接，避免把整套状态机展开为大量布尔门，也不把整机塞进一个黑盒块。缺少实现时先通过定义工具创建 ST FB；尚无版本时，首个 `create_st_fb` 按实际 CPU 无基底创建 FBD 工程。随后读取保存版本，补齐定义并用 `edit` 组装主图。不能只画空块或假定接口存在。
 
-**新需求生成。** 复用已给出的 CPU 与 I/O 信息，调用 `get_generation_context` 获取输出合同后直接生成候选并提交。仅在缺少关键现场工艺事实时向用户提问；工程内可读取的事实先通过工具读取。
+**新需求生成（按规格完备度路由 Design / Direct）。** 存在架构或工艺取舍的开放式需求走 `generation_mode="design"` 比较方案并由用户确认后再实施；跨品牌/跨语言程序移植转写、已提供完整逻辑/步序/时序/公式规格、确定性工具 FB/FUNCTION 编写或用户要求直接生成时走 `generation_mode="direct"`（若工程已处于未确认 Design 状态，四语言均可通过 `get_generation_context(workflow="direct_generation", user_requirement=...)` 退出 Design），复用已给出的 CPU 与 I/O 信息按输出合同直接生成并提交。仅在缺少关键现场硬件映射或工艺事实时向用户提问；工程内可读取的事实先通过工具读取。
 
 **已有文件读写。** 只读分析直接走 `inspect_*` 或窗口快照获取 `source_ref`；需要修改并保存新版本时，先将 `.gxw` 导入为工程版本，再通过离线编辑工具在可编辑对象范围内提交修改。
 

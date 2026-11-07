@@ -242,11 +242,12 @@ def execution_intent_claim_violations(value, path="$.execution_intent_claims"):
         inferred = claim.get("inferred") is True
         # An inferred claim carries no user span by definition; requiring one
         # only pushes the model to invent a quote.
-        empty_ok = inferred and evidence in (None, [])
-        if (
+        if inferred and evidence in (None, []):
+            pass
+        elif (
             not isinstance(evidence, list)
-            or (not evidence and not empty_ok)
-            or any(not isinstance(item, str) or not item.strip() for item in evidence or [])
+            or not evidence
+            or any(not isinstance(item, str) or not item.strip() for item in evidence)
         ):
             violations.append(root + ".evidence: one or more exact user-text spans are required")
     return violations

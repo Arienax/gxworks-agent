@@ -952,6 +952,19 @@ def _parameter_choice_metadata(item):
     return metadata
 
 
+def _derived_question_id(name: str) -> str:
+    return "q_" + hashlib.sha256(name.encode("utf-8")).hexdigest()[:8]
+
+
+def _has_derived_question_id(row: dict) -> bool:
+    raw_id = str(row.get("id", "")).strip()
+    name = str(row.get("name", "")).strip()
+    if not raw_id or not name:
+        return not raw_id
+    base = _derived_question_id(name)
+    return raw_id == base or (raw_id.startswith(base + "_") and raw_id[len(base) + 1:].isdigit())
+
+
 def _missing_info_to_parameters(missing_info):
     parameters = []
     questions = normalize_missing_info(missing_info)
@@ -965,14 +978,16 @@ def _missing_info_to_parameters(missing_info):
         # Answers are keyed by parameter id, so a question without one can never
         # be answered and would block confirmation forever. Derive a stable id
         # from the question itself instead of dropping the row.
-        question_id = str(item.get("id", "")).strip()
-        if not question_id:
-            question_id = "q_" + hashlib.sha256(name.encode("utf-8")).hexdigest()[:8]
-        unique_id, suffix = question_id, 2
-        while unique_id in used_ids:
-            unique_id = f"{question_id}_{suffix}"
-            suffix += 1
-        question_id = unique_id
+        raw_id = str(item.get("id", "")).strip()
+        if not raw_id:
+            base_id = _derived_question_id(name)
+            unique_id, suffix = base_id, 2
+            while unique_id in used_ids:
+                unique_id = f"{base_id}_{suffix}"
+                suffix += 1
+            question_id = unique_id
+        else:
+            question_id = raw_id
         used_ids.add(question_id)
         options = [str(option) for option in item.get("options", [])]
         default = item.get("default")
@@ -1100,12 +1115,18 @@ def _merge_parameters(base_parameters, incoming_parameters):
             clean["required_when"] = copy.deepcopy(item["required_when"])
         stable_id = clean["id"].casefold()
         name_key = name.casefold()
+        incoming_unkeyed = not stable_id or _has_derived_question_id(clean)
         position = by_id.get(stable_id) if stable_id else None
         if position is None:
             candidate = by_name.get(name_key)
             # Different stable identities can share a display label (e.g.
-            # two motors' start inputs). Wording alone must not merge them.
-            if candidate is not None and (not stable_id or not merged[candidate].get("id")):
+            # two motors' start inputs). Wording alone must not merge them,
+            # except when one side only has a hash-derived fallback id.
+            if candidate is not None and (
+                incoming_unkeyed
+                or not merged[candidate].get("id")
+                or _has_derived_question_id(merged[candidate])
+            ):
                 position = candidate
         if position is not None:
             existing = merged[position]
@@ -1144,7 +1165,7 @@ def _merge_parameters(base_parameters, incoming_parameters):
                     )
                 else:
                     clean.pop("required_when", None)
-            if not clean.get("id") and existing.get("id"):
+            if incoming_unkeyed and existing.get("id") and not _has_derived_question_id(existing):
                 clean["id"] = existing["id"]
             merged[position] = clean
         else:
@@ -1422,7 +1443,10 @@ def restore_review_choices(draft, analysis):
         candidates = by_id.get(identifier, [])
         if not candidates:
             candidates = by_name.get(str(parameter.get("name", "")).strip().casefold(), [])
-            candidates = [item for item in candidates if not identifier or not item.get("id")]
+            candidates = [
+                item for item in candidates
+                if not identifier or not item.get("id") or _has_derived_question_id(item)
+            ]
         if len(candidates) == 1:
             item = candidates[0]
             # An explicit different semantic owner also defeats an id/label

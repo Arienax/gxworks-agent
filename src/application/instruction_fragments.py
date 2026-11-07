@@ -171,6 +171,15 @@ def _instantiate(template, operands):
             'input': {'status': 'candidate', 'provenance': {'source': 'model_candidate'}}}
 
 
+def _fragment_matches_current(delivered_row, current_row):
+    if current_row is None:
+        return False
+    if delivered_row == current_row:
+        return True
+    from agent_runtime.runtime import _model_tool_value
+    return delivered_row == _model_tool_value('get_generation_context', {'fragment': current_row})['fragment']
+
+
 def materialize_instruction_fragments(ladder, research, *, plc_model, target_mode='ladder', confirmed_spec=None):
     """Expand explicitly referenced templates into ordinary Ladder instructions."""
     def branches(program):
@@ -195,7 +204,7 @@ def materialize_instruction_fragments(ladder, research, *, plc_model, target_mod
                 if not isinstance(output, str) or not output.startswith('FRAG '):
                     continue
                 parts = output.split()
-                if len(parts) < 2 or parts[1] not in delivered or delivered[parts[1]] != current.get(parts[1]):
+                if len(parts) < 2 or parts[1] not in delivered or not _fragment_matches_current(delivered[parts[1]], current.get(parts[1])):
                     raise DefinitionError('Unknown or stale instruction fragment')
                 template = current[parts[1]]
                 if template.get('construction') != 'boolean_event_history':
@@ -235,7 +244,7 @@ def materialize_instruction_fragments(ladder, research, *, plc_model, target_mod
             if not isinstance(output, str) or not output.startswith('FRAG '):
                 continue
             parts = output.split()
-            if len(parts) < 2 or parts[1] not in delivered or delivered[parts[1]] != current.get(parts[1]):
+            if len(parts) < 2 or parts[1] not in delivered or not _fragment_matches_current(delivered[parts[1]], current.get(parts[1])):
                 raise DefinitionError('Unknown or stale instruction fragment')
             if current[parts[1]].get('construction') == 'boolean_event_history':
                 continue

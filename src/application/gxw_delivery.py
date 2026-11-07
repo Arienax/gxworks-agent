@@ -59,6 +59,19 @@ def installation():
     return GXWorks2Finder().find_executable()
 
 
+def gxw_delivery_capability(cpu: str) -> dict:
+    from gxworks2.project_profiles import native_project_profile
+    profile = native_project_profile(cpu)
+    supported = bool(profile is not None and profile.program_supported)
+    return {
+        'cpu': cpu,
+        'cpu_supported': supported,
+        'requires_gxworks2': True,
+        'reason': (None if supported else
+                   f'GX Works2 has no supported Program project for {cpu}; saving falls back to source exports.'),
+    }
+
+
 def create_blank(output, language, cpu, *, block=None):
     """Admit only proven headless creation, with an explicit source fallback."""
     from gxworks2.project_profiles import native_project_profile
@@ -186,9 +199,20 @@ def prepare_generated(output, mode, cpu, candidate, *, baseline=None, block=None
         payload = prepare_candidate(output, imported=result.data, program_name=name, plc_model=cpu)
     elif mode == 'fbd':
         from application.fbd import prepare_candidate
+        from gxw.object_model import read_project_context
         options = candidate if 'model' in candidate else {}
         model = copy.deepcopy(options.get('model', candidate))
         model['program'] = name
+        if baseline is None and isinstance(model.get('declaration_edits'), dict):
+            target_ctx = read_project_context(raw, name)
+            local_table = target_ctx.sources.local_table
+            edits = model['declaration_edits']
+            foreign_locals = [
+                key for key in edits
+                if isinstance(key, str) and key.endswith('.lh') and key not in target_ctx.declarations
+            ]
+            if len(foreign_locals) == 1 and local_table and local_table not in edits:
+                edits[local_table] = edits.pop(foreign_locals[0])
         payload = prepare_candidate(output, model=model, baseline=raw, plc_model=cpu,
             device_comments=options.get('device_comments'), comment_table=options.get('comment_table'))
     elif mode == 'sfc':
@@ -220,15 +244,27 @@ def source_candidate_action(context, arguments, mode):
         candidate, checked = prepare_source_candidate(arguments['st_text'], arguments.get('declarations'),
             plc_model=context.plc_model, confirmed_spec=_confirmed_spec(context))
     elif mode == 'fbd':
+        if not isinstance(arguments.get('model'), dict):
+            raise ValueError("FBD generate requires a JSON object in 'model' (matching parameter_schema)")
         candidate = {key: arguments[key] for key in ('model', 'device_comments', 'comment_table') if key in arguments}
         # Source-bound expansion checks ports and literals before any native
         # operation. The catalog is a read input, never the delivered project.
         from application.fbd import _target_baseline
-        from gxw.object_model import prepare_object_project
+        from gxw.object_model import prepare_object_project, read_project_context
         from gxw.offline_project import read_offline_project
         catalog = _target_baseline(None, context.plc_model)
         model = copy.deepcopy(candidate['model'])
         model['program'] = read_offline_project(catalog).select(None)['source_name']
+        if isinstance(model.get('declaration_edits'), dict):
+            catalog_ctx = read_project_context(catalog, model['program'])
+            local_table = catalog_ctx.sources.local_table
+            edits = model['declaration_edits']
+            foreign_locals = [
+                key for key in edits
+                if isinstance(key, str) and key.endswith('.lh') and key not in catalog_ctx.declarations
+            ]
+            if len(foreign_locals) == 1 and local_table and local_table not in edits:
+                edits[local_table] = edits.pop(foreign_locals[0])
         prepare_object_project(model, baseline=catalog)
     else:
         candidate = {key: arguments[key] for key in ('graph_edits', 'child_edits', 'declaration_edits', 'device_comments', 'block') if key in arguments}
@@ -262,9 +298,11 @@ def new_generation_context(context, arguments):
     if mode == 'st':
         schema = next(rule for rule in schema['oneOf'] if rule['properties']['operation'].get('enum') == ['generate'])
     from agent_runtime.generation_tools import _source_knowledge
-    knowledge = _source_knowledge(context, arguments, '', mode, _confirmed_spec(context), task_type='generate')
+    confirmed = _confirmed_spec(context)
+    knowledge = _source_knowledge(context, arguments, '', mode, confirmed, task_type='generate')
     knowledge['generation_handoff']['decision_receipt_id'] = context.project.get('confirmed_decision_receipt_id')
     return {**knowledge, 'project_id': context.project_id, 'plc_model': context.plc_model, 'target_mode': mode,
+            'has_confirmed_spec': isinstance(confirmed, dict),
             'current_version_id': context.version_id or None, 'generation_request': arguments.get('user_requirement', ''),
             'generation_instructions': 'Create a complete new ' + mode.upper() + ' program for the exact CPU. '
                 'Submit the returned generate contract. Delivery prefers GXW and automatically compiles when GX Works2 is found. '
@@ -279,8 +317,17 @@ def new_generation_context(context, arguments):
                 'rather than expanding the process into many Boolean gates or one opaque whole-machine FB. '
                 'For new SFC, create zoom bodies with instructions and action registrations with qualifier/zoom; actions do not contain instructions. '
                 'The initial action and transition use logical names action_0/transition_0 and number=0; their actual native identities are resolved on save.',
-            'generation_input': {'plc_model': context.plc_model, 'confirmed_spec': _confirmed_spec(context), 'output_schema': schema},
-            'output_contract': {'tool': name, 'operation': 'generate', 'parameter_schema': schema}}
+            'generation_input': {'plc_model': context.plc_model, 'confirmed_spec': confirmed, 'output_schema': schema},
+            'output_contract': {
+                'tool': name, 'operation': 'generate', 'parameter_schema': schema,
+                'gxw_delivery': gxw_delivery_capability(context.plc_model),
+                'review_contract': {
+                    'argument': 'implementation_review',
+                    'required_fields': ['context_document', 'manual_documents'],
+                    'instructions': 'When submitting via MCP after reading all pages, include implementation_review '
+                                    'with context_document=delivery.document_id and read manual document_ids.',
+                },
+            }}
 
 
 def generate_source_candidate(output, snapshot, images, job, context):

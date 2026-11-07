@@ -24,7 +24,7 @@ approaches 每项含 approach_id、name、description、pros、cons、generation
 X/Y/M/D/T/C/S 用“地址:用途”对象分组，如 {"X":{"X10":"到位检测"}}；不得只给地址数组。special_relays/special_registers 可用数组或对象，SM/SD 分别归类。未知地址不填 suggested_io；需确认地址只放 missing_info，不同时预分配一个“建议地址”。hardware_config 只放相关硬件事实。
 
 # Explicit low-level claims
-explicit_constraint_claims 只报告本轮写死/撤销的条件，不选择 opcode、完整操作数或地址。项含 operation、scope=global|scoped|ambiguous、target、evidence[]（本轮逐字，实例含完整指令）；仅 global 投影。未明说的推断写 inferred=true、evidence 留空：只进回执，不成为约束，不要编造原文。target 形状及允许操作：
+explicit_constraint_claims 只报告本轮写死/撤销的条件，不选择 opcode、完整操作数或地址。项含 operation、scope=global|scoped|ambiguous、target、evidence[]（本轮逐字，实例含完整指令）；仅 global 投影。未明说的推断设 inferred=true 且省去 evidence（只进回执，不编造原文）。target 形状及允许操作：
 __EXPLICIT_TARGETS__
 category 仅用于 clear，value=opcodes/devices/instruction_instances/all。device.values 只放具体设备；方法禁令留原文，不伪装成地址。
 
@@ -37,7 +37,7 @@ category 仅用于 clear，value=opcodes/devices/instruction_instances/all。dev
 
 
 ANALYSIS_BOUND_PROMPT = """# Execution intent
-execution_intent_claims 项的合法示例：__EXECUTION_EXAMPLE__。上升沿 from=0,to=1；下降沿 from=1,to=0，单值，不用 from_states/to_states。level 无需 from/to。kind 仅 level/transition/first_scan/cyclic/interrupt/clear；evidence 逐字来自本轮，必须含该 claim 全部设备（可用等价地址）；不能借另一句的地址补证据。仅推断的执行意图写 inferred=true 并留空 evidence，只进回执。不输出 execution_semantics。
+execution_intent_claims 项的合法示例：__EXECUTION_EXAMPLE__。上升沿 from=0,to=1；下降沿 from=1,to=0，单值，不用 from_states/to_states。level 无需 from/to。kind 仅 level/transition/first_scan/cyclic/interrupt/clear；evidence 逐字来自本轮，必须含该 claim 全部设备（可用等价地址）；不能借另一句的地址补证据。仅推断的执行意图设 inferred=true 并省去或留空 evidence，只进回执。不输出 execution_semantics。
 首扫只能来自明确要求。按钮用途不确定触发沿或有效电平；未确认时不声明 transition 或 level，保留必要问题。
 
 # Operation effect candidates
@@ -46,7 +46,7 @@ behavior_claims[] 可选，使用同一表达式类型，附id、label、provena
 """.replace("__EXECUTION_EXAMPLE__", json.dumps(execution_intent_claim_example(), ensure_ascii=False, separators=(",", ":")))
 
 ANALYSIS_REQUIREMENTS_PROMPT = """# Analysis information stage: requirements
-本轮仍在确认逻辑 I/O 身份和必要现场参数。保留所有明确工艺要求、优先级、时序、恢复条件和用户写死的限制，写清控制意图及必要问题；不要为未知地址构造执行约束、效果表达式、行为构造或内部范围。execution_intent_claims 用 []；不输出 operation_intent_claims、behavior_claims 或 construction_plan。逻辑身份只用 io_binding，地址与极性分题时沿用同一 binding_id。不以常规起保停推导必须源上升沿启动、恢复后必须重新按启动等额外要求。已知要求不能变成新问题，未知接线不猜地址或电平。
+本轮仍在确认逻辑 I/O 与必要现场参数。保留所有明确工艺要求、优先级、时序、恢复条件及写死限制；不为未知地址构造执行约束、效果/行为表达式或内部范围。execution_intent_claims 用 []；不输出 operation_intent_claims、behavior_claims、construction_plan。逻辑身份用 io_binding。不从常规起保停推导源上升沿启动或恢复后重按启动。已知要求不变新问题，未知接线不猜地址或电平。
 """
 
 

@@ -866,3 +866,24 @@ def test_question_without_an_id_still_gets_an_answerable_parameter_id():
     by_name = {row["name"]: row for row in first}
     assert by_name["停机后在途物料怎样处理"]["options"] == ["保留", "清除"]
     assert by_name["停机后在途物料怎样处理"]["id"].startswith("q_")
+
+
+def test_reanalyzed_idless_question_merges_with_answered_semantic_id_parameter():
+    from plc.specification.confirmed import build_review_draft
+
+    existing_spec = {
+        "parameters": [
+            {"id": "stop_wip", "name": "停机后在途物料怎样处理", "required": True,
+             "value": "保留", "source": "user", "options": ["保留", "清除"]},
+        ],
+    }
+    reanalyzed = {
+        "summary": "s",
+        "approaches": [{"approach_id": "a", "name": "n", "description": "d", "implementation_semantics": []}],
+        "missing_info": [{"question": "停机后在途物料怎样处理", "required": True, "options": ["保留", "清除", "报警"]}],
+    }
+    merged = build_review_draft(reanalyzed, existing_spec)["parameters"]
+    assert len(merged) == 1
+    assert merged[0]["id"] == "stop_wip"
+    assert merged[0]["value"] == "保留"
+    assert merged[0]["options"] == ["保留", "清除", "报警"]

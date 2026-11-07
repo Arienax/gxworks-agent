@@ -10,28 +10,47 @@ from agent_runtime.tool_context import (
 )
 
 
-def _language_coverage(rows, languages):
+def _language_coverage(rows, languages, *, debug=False, explicit_query_langs=frozenset()):
     from knowledge.structured_facts import authored_packet
     matches = {language: set() for language in languages}
-    for row in rows:
-        if not row.get('_explicit_target'):
-            continue
+    explicit_rows = [row for row in rows if row.get('_explicit_target')]
+    universal_only = (
+        bool(explicit_rows)
+        and not explicit_query_langs
+        and all(row.get('fact_kind') in {'device', 'device_family', 'error', 'positioning'} for row in explicit_rows)
+    )
+    for row in explicit_rows:
         packet = authored_packet(row)
+        packet_lang = packet.get('language')
+        if packet_lang in matches:
+            sources = packet.get('sources') or []
+            matches[packet_lang].update(
+                (source.get('manual_id') or 'authored') for source in (sources or [{'manual_id': 'authored'}])
+            )
         for fact in (packet.get('value') or {}).get('facts', []):
             if fact.get('selection_applicability') not in (None, 'applicable'):
                 continue
-            for language in languages.intersection(fact.get('scope', {}).get('languages', ())):
+            scoped_langs = fact.get('scope', {}).get('languages', ())
+            for language in languages.intersection(scoped_langs):
                 sources = fact.get('sources') or packet.get('sources') or []
-                matches[language].update(source['manual_id'] for source in sources if source.get('manual_id'))
-    missing = sorted(language for language, manuals in matches.items() if not manuals)
-    result = {'manuals_by_language': {lang: sorted(ids) for lang, ids in sorted(matches.items())},
-              'missing_languages': missing}
+                matches[language].update(
+                    (source.get('manual_id') or 'authored') for source in (sources or [{'manual_id': 'authored'}])
+                )
+    missing = [] if universal_only else sorted(language for language, manuals in matches.items() if not manuals)
+    result = {'missing_languages': missing}
+    if debug:
+        result['manuals_by_language'] = {
+            lang: sorted(mid for mid in ids if mid != 'authored') for lang, ids in sorted(matches.items())
+        }
+    else:
+        result['covered_languages'] = sorted(lang for lang, ids in matches.items() if ids)
     if missing:
         result['message'] = '本次查询缺少所列语言的专属手册事实。已有通用 CPU 事实按原适用范围使用。'
     return result
 
 
 def _search_plc_manual(context: ToolContext, arguments: Mapping[str, Any]) -> Dict[str, Any]:
+    import re
     from knowledge.retriever import retrieve_fact_aware_knowledge
     from knowledge.structured_facts import retrieval_coverage
     from knowledge.evidence import evidence_record
@@ -43,16 +62,33 @@ def _search_plc_manual(context: ToolContext, arguments: Mapping[str, Any]) -> Di
             next_actions=({"tool": "search_plc_manual", "required_arguments": ["query", "plc_model"]},))
     from knowledge.structured_facts import query_languages
     project_language = (context.version or {}).get('target_mode') or context.project.get('target_mode')
-    language = arguments.get('language') or project_language or ('ladder' if context.project_id else None)
-    languages = query_languages(query, language)
+    explicit_query_langs = query_languages(query)
+    inherited = project_language or ('ladder' if context.project_id else None)
     if arguments.get('language'):
+        language = arguments['language']
         source = 'explicit'
-    elif language:
+    elif (inherited and len(explicit_query_langs) == 1 and inherited not in explicit_query_langs
+            and not re.search(r'equivalent|对比|对照|对应|区别', query, re.I)):
+        from knowledge.instruction_facts import instruction_fact_targets
+        from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+        q_lang = next(iter(explicit_query_langs))
+        ops = [row.get('opcode') for row in instruction_fact_targets(query, {}) if row.get('opcode')]
+        project_only = any(
+            (spec := DEFAULT_INSTRUCTION_REGISTRY.resolve_form(op, cpu=context.plc_model)) is not None
+            and getattr(spec.spec, 'category', '') == 'contact'
+            for op in ops
+        ) if inherited == 'ladder' and ops else False
+        if project_only:
+            language, source = inherited, 'project'
+        else:
+            language, source = q_lang, 'query'
+    elif inherited:
+        language = inherited
         source = 'project'
     else:
-        source = 'query' if languages else 'unspecified'
-        if len(languages) == 1:
-            language = next(iter(languages))
+        source = 'query' if explicit_query_langs else 'unspecified'
+        language = next(iter(explicit_query_langs)) if len(explicit_query_langs) == 1 else None
+    languages = query_languages(query, language)
     top_k = int(arguments.get("top_k", 5))
     rows = retrieve_fact_aware_knowledge(
         query,
@@ -64,7 +100,9 @@ def _search_plc_manual(context: ToolContext, arguments: Mapping[str, Any]) -> Di
     coverage = retrieval_coverage(query, rows, plc_model=context.plc_model, language=language,
                                   aspects=arguments.get('aspects'))
     if languages:
-        coverage['language'] = _language_coverage(rows, languages)
+        coverage['language'] = _language_coverage(
+            rows, languages, debug=bool(arguments.get('debug', False)), explicit_query_langs=explicit_query_langs
+        )
     scope = {'query': query, 'plc_model': context.plc_model, 'language': language,
              'language_source': source, 'coverage': coverage}
     results = []

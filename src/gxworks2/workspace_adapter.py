@@ -718,11 +718,25 @@ class NativeWorkspaceValidation(_NativeWorkspaceAdapter):
                                           if type(report.get('code')) is int})
                     if check_codes:
                         detail += '; public_check_diagnostics=' + ','.join(f'0x{code & 0xffffffff:08x}' for code in check_codes)
+                    from gxw.diagnostic_scope import explain_native_diagnostic_codes
                     forensics = _native_failure_forensics(root, observation, result)
                     observation['forensics'] = forensics
                     sequence = forensics['report_sequence']
                     if sequence:
                         detail += '; reports=' + ','.join(sequence[:8]) + (',...' if len(sequence) > 8 else '')
+                    parsed_seq_codes = []
+                    for entry in sequence:
+                        token = str(entry).split('@', 1)[0].split(':', 1)[-1]
+                        if token.startswith('0x'):
+                            try:
+                                parsed_seq_codes.append(int(token, 16))
+                            except ValueError:
+                                pass
+                    hints = explain_native_diagnostic_codes([*codes, *check_codes, *parsed_seq_codes])
+                    if hints:
+                        observation['code_explanations'] = hints
+                        non_summary = {k: v for k, v in hints.items() if k != '0x500c5150'} or hints
+                        detail += '; code_hints=' + ' | '.join(f'{k}: {v}' for k, v in non_summary.items())
                     if retry is not None:
                         detail += '; attempts=2'
                     failure = WorkspaceSaveError('原生编译保存未产生工程：' + detail, observation)

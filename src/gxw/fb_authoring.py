@@ -30,17 +30,108 @@ def normalize_declaration_address_pair(pair, *, cpu):
     if result.get('device'):
         address = device_address(result['device'], cpu)
         family, number = parse_device_address(address, cpu)
-        if family in ('M', 'D') and re.fullmatch(r'[MD][0-9]+', address):
+        if (
+            (family in ('M', 'D') and re.fullmatch(r'[MD][0-9]+', address))
+            or (family in ('X', 'Y') and re.fullmatch(r'[XY][0-9A-Fa-f]+', address))
+        ):
             from .compiler_assignment import iec_device_address
             expected = iec_device_address(family, number)
-            if result.get('iec_address') and result['iec_address'] != expected:
-                raise GXWFormatError('MELSEC and IEC declaration addresses disagree')
+            if result.get('iec_address') and result['iec_address'].upper() != expected:
+                hint = (
+                    "; GX Works2 X/Y IEC addresses use flat decimal bit index %IX<n>/%QX<n> without '.bit'"
+                    if family in ('X', 'Y') and '.' in result['iec_address']
+                    else ''
+                )
+                raise GXWFormatError(
+                    f"MELSEC and IEC declaration addresses disagree: {address} ({cpu}) expects {expected}, got {result['iec_address']}{hint}"
+                )
             result['iec_address'] = expected
         elif not result.get('iec_address'):
             raise GXWFormatError('this device spelling requires an explicit IEC declaration address')
-    if result.get('iec_address') and not re.fullmatch(r'%[IQM][XBWDL][0-9]+(?:\.[0-9]+)?', result['iec_address'], re.I):
-        raise GXWFormatError('unsupported IEC declaration address')
+    if result.get('iec_address'):
+        iec = result['iec_address']
+        if not re.fullmatch(r'%[IQM][XBWDL][0-9]+(?:\.[0-9]+)?', iec, re.I):
+            raise GXWFormatError('unsupported IEC declaration address')
+        if re.fullmatch(r'%[IQ]X[0-9]+\.[0-9]+', iec, re.I):
+            raise GXWFormatError(
+                "unsupported IEC declaration address: GX Works2 X/Y IEC addresses use %IX<n>/%QX<n> without '.bit'"
+            )
     return result
+
+
+_32BIT_SCALAR_TYPES = frozenset({'DINT', 'UDINT', 'DWORD', 'REAL', 'TIME'})
+_64BIT_SCALAR_TYPES = frozenset({'LINT', 'ULINT', 'LWORD', 'LREAL'})
+
+
+def explicit_device_pool_overlap(
+    device: str,
+    *,
+    cpu: str,
+    system_variable_ranges: dict | None,
+    data_type: str = 'BOOL',
+    view_bits: int | None = None,
+) -> dict | None:
+    """Return pool overlap metadata when an explicit device falls inside `system_variable_ranges`."""
+    if not device or not isinstance(device, str) or not system_variable_ranges:
+        return None
+    from plc.device_policy import device_address
+    from plc.validation import is_bit_device, parse_device_address
+    try:
+        address = device_address(device, cpu)
+        family, number = parse_device_address(address, cpu)
+    except ValueError:
+        return None
+    try:
+        base, bounds = _type_parts(data_type or 'BOOL')
+    except ValueError:
+        base, bounds = 'BOOL', ()
+    elements = 1
+    for low_bound, high_bound in bounds:
+        if high_bound >= low_bound:
+            elements *= (high_bound - low_bound + 1)
+    upper_base = base.upper()
+    if view_bits is not None and view_bits > 0:
+        bits = view_bits
+    elif upper_base in _64BIT_SCALAR_TYPES:
+        bits = 64
+    elif upper_base in _32BIT_SCALAR_TYPES:
+        bits = 32
+    else:
+        bits = 1 if is_bit_device(address, cpu) else 16
+    if family in ('D', 'R', 'W'):
+        span = elements * max(1, (bits + 15) // 16)
+    elif family in ('M', 'B', 'S'):
+        span = elements * max(1, bits)
+    else:
+        span = max(1, elements)
+    end = number + span - 1
+    pool_keys = ('T', 'T10') if family == 'T' else (family,)
+    for pool_key in pool_keys:
+        pair = system_variable_ranges.get(pool_key)
+        if not (isinstance(pair, (list, tuple)) and len(pair) == 2):
+            continue
+        low, high = pair
+        if not (isinstance(low, int) and isinstance(high, int) and 0 <= low <= high < 0xFFFFFFFF):
+            continue
+        if number <= high and end >= low:
+            fmt = (lambda n: f'{family}{n:X}') if family in ('W', 'B') else (lambda n: f'{family}{n}')
+            occupied = fmt(number) if span == 1 else f'{fmt(number)}..{fmt(end)}'
+            pool_text = f'{fmt(low)}..{fmt(high)}'
+            return {
+                'family': family,
+                'pool_key': pool_key,
+                'address': address,
+                'start': number,
+                'end': end,
+                'pool_low': low,
+                'pool_high': high,
+                'message': (
+                    f"explicit device {occupied} overlaps reserved automatic label allocation range "
+                    f"{pool_text} (system_variable_ranges[{pool_key!r}], native compile error 0x500f1028); "
+                    f"choose an address outside {pool_text} or omit device so the compiler auto-allocates"
+                ),
+            }
+    return None
 
 
 def _global_snapshot(sources, logical):
@@ -132,6 +223,27 @@ def _global_plan(config, sources, command, caller):
         for pair in [item,*item.get('member_devices',{}).values()]:
             pair.update(normalize_declaration_address_pair({key: pair.get(key, '') for key in ('device','iec_address')},
                                                            cpu=device_profile))
+        pool_ranges = getattr(sources, 'system_variable_ranges', None)
+        if pool_ranges:
+            if item.get('device') and (old is None or (old.get('device'), old.get('data_type')) != (item['device'], item['data_type'])):
+                overlap = explicit_device_pool_overlap(
+                    item['device'], cpu=device_profile, system_variable_ranges=pool_ranges, data_type=item['data_type']
+                )
+                if overlap is not None:
+                    raise GXWFormatError(overlap['message'])
+            if members is not None:
+                member_types = {m.name: m.data_type for m in members}
+                old_members = (old or {}).get('member_devices', {})
+                for member_name, pair in item.get('member_devices', {}).items():
+                    if pair.get('device') and old_members.get(member_name, {}).get('device') != pair['device']:
+                        overlap = explicit_device_pool_overlap(
+                            pair['device'],
+                            cpu=device_profile,
+                            system_variable_ranges=pool_ranges,
+                            data_type=member_types.get(member_name, 'BOOL'),
+                        )
+                        if overlap is not None:
+                            raise GXWFormatError(overlap['message'])
         if any(not isinstance(v,str) or '\0' in v for k,v in item.items() if k!='member_devices'):
             raise GXWFormatError('global declaration fields require text without NUL')
         if old is not None: rows[rows.index(old)]=item

@@ -17,9 +17,13 @@ from .models import GXWFormatError
 
 
 def iec_device_address(family: str, number: int) -> str:
-    """Observed M/D address spelling shared by declarations and assignment views."""
-    if family not in ('M', 'D') or type(number) is not int or number < 0:
-        raise ValueError('IEC assignment spelling requires a nonnegative M/D address')
+    """Observed X/Y/M/D IEC address spelling shared by declarations and assignment views."""
+    if family not in ('X', 'Y', 'M', 'D') or type(number) is not int or number < 0:
+        raise ValueError('IEC assignment spelling requires a nonnegative X/Y/M/D address')
+    if family == 'X':
+        return f'%IX{number}'
+    if family == 'Y':
+        return f'%QX{number}'
     return f"{'%MX0' if family == 'M' else '%MW0'}.{number}"
 
 

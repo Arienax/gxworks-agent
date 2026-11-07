@@ -826,9 +826,11 @@ def test_explicit_st_fb_import_generation_context_definition_edit_and_reimport(t
         generation = invoke(session, 'get_generation_context', {'execution_mode': 'background',
             'user_requirement': '保留接口，将输出算式增加 17'}, 'fb-context')['data']
         assert generation['target_mode'] == 'st' and generation['execution_mode'] == 'offline'
-        assert generation['output_contract']['tool'] == 'create_fbd_candidate'
+        assert generation['output_contract']['tool'] == 'create_st_candidate'
         assert generation['output_contract']['operation'] == 'edit_st_fb'
         assert generation['output_contract']['source_name'] == logical
+        assert generation['output_contract']['alternatives'] == [{
+            'tool': 'create_fbd_candidate', 'operation': 'edit_st_fb', 'source_name': logical}]
         definition = invoke(session, 'read_fbd_definition', {'source_name': 'ScaleValue'}, 'read-definition')['data']
         original, = definition['definitions']
         assert original['kind'] == 'function_block' and original['language'] == 'st'

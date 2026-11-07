@@ -72,11 +72,22 @@ Core creates blocks, current interfaces, dimensions, IN_OUT positions and orthog
 Do not return coordinates, dimensions, ports, canvas_height, source_offset or wire bend points.
 Each network accepts calls, nodes, wires and its saved block text. Networks execute in supplied order;
 Core separates disconnected diagrams into native blocks while retaining that order.
-A network's title is the native network title, which is also the label a Jump addresses; block_comment
-is the native network comment. Keep both unchanged unless the request edits that text. comment stays
-the text of the graphical comment records drawn inside the block; it is not the network comment.
+A network's title is the native network title, which is also the label a Jump addresses; it MUST be empty
+"" unless this network is a Jump target formatted as "<identifier>:" (with trailing colon, otherwise native
+compile rejects with 0x500c2032). Put human-readable network headings in block_comment. Keep both unchanged
+unless the request edits that text. comment stays the text of the graphical comment records drawn inside
+the block; it is not the network comment.
 Keep source_block on every existing network you did not delete, and keep the supplied network order, so
 each block keeps its own title, label and comment instead of being recreated without them.
+Structured FBD parameter networks have NO implicit left power rail: an unconnected contact IN port triggers
+native compile errors 0x500c2010/0x500c2020. Prefer input/output variable or device terminals driving FBs/functions
+(or Boolean operators @AND-2/@OR-2/NOT); if using relay contact/coil nodes in a parameter network, feed the
+first contact IN port from an input terminal with symbol "TRUE".
+Never assign explicit M/D/T/C/S/R/W/B devices inside project_options.reserved_auto_allocation_ranges
+(system_variable_ranges, e.g. FX3U M3840..M7679 and D512..D999), which are reserved for compiler auto-allocation
+(native error 0x500f1028). Omit device on internal labels or choose addresses outside those reserved pools.
+In global declarations, omit iec_address for X/Y/M/D so Core derives the CPU-radix IEC address automatically
+(X/Y use flat decimal index %IX<n>/%QX<n> without .bit, e.g. FX3U octal X10 -> %IX8, Q hex X10 -> %IX16).
 For a normal FB call use {"id":"power","type":"SourceFb","instance":"Power1",
 "arguments":{"Enable":"Enable1","Axis":"Axis1","Status":"Status1"}} inside calls.
 Argument keys are current source formal names; values are variable/device/GX Works2 FBD constant strings.

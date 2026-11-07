@@ -11,6 +11,18 @@ from application.projects import public_spec_hash
 from application.workspace import atomic_json, read_json
 
 
+def _should_auto_drop_claim_target(target):
+    if target.get('mode') != 'claim':
+        return False
+    current = target.get('current_value')
+    if isinstance(current, dict) and current.get('inferred') is True:
+        return True
+    preserve = target.get('must_preserve') or {}
+    if preserve.get('unsupported_target') or preserve.get('unsupported_candidate'):
+        return True
+    return not any(preserve.get(key) for key in ('targets', 'source_devices', 'effect_devices', 'explicit_scan_evidence'))
+
+
 class DesignSession:
     def __init__(self, service):
         self.service = service
@@ -21,15 +33,46 @@ class DesignSession:
     def start(self, project_id):
         atomic_json(self._path(project_id), {'stage': 'get_design_context'})
 
-    def guard_generation(self, project_id, arguments):
+    def is_read_complete(self, project_id, analysis_id):
+        path = self._path(project_id)
+        if not analysis_id or not path.is_file():
+            return False
+        state = read_json(path)
+        return state.get('analysis_id') == analysis_id and bool(state.get('read_complete'))
+
+    def mark_read_complete(self, project_id, analysis_id):
+        path = self._path(project_id)
+        if not analysis_id or not path.is_file():
+            return
+        state = read_json(path)
+        if state.get('analysis_id') == analysis_id and not state.get('read_complete'):
+            state['read_complete'] = True
+            atomic_json(path, state)
+
+    def guard_generation(self, project_id, arguments, *, tool_name=None):
         path = self._path(project_id)
         if not path.is_file():
+            return
+        project = self.service.projects.raw_project(project_id)
+        if project.get('versions'):
             return
         state = read_json(path)
         stage = state['stage']
         if stage != 'confirmed':
-            raise ToolPreconditionError('DESIGN_PENDING', '先完成当前 Design 计划并由用户确认。',
-                                        next_actions=[{'tool': stage}])
+            if (tool_name in (None, 'get_generation_context')
+                    and arguments.get('workflow') == 'direct_generation'
+                    and str(arguments.get('user_requirement') or '').strip()
+                    and not project.get('confirmed_spec')):
+                path.unlink(missing_ok=True)
+                return
+            raise ToolPreconditionError(
+                'DESIGN_PENDING',
+                '当前工程处于未确认的 Design 流程：开放式工艺方案请先完成 Design 并由用户确认；若为跨品牌/跨语言代码移植转写或规格已完整给定的任务，可调用 get_generation_context(workflow="direct_generation", user_requirement=...) 切换为直接生成。',
+                next_actions=[
+                    {'tool': stage},
+                    {'tool': 'get_generation_context', 'arguments': {'workflow': 'direct_generation'}},
+                ],
+            )
         if arguments.get('workflow') == 'direct_generation' and not arguments.get('cursor'):
             raise ToolPreconditionError('DESIGN_CONFIRMED', '请按已确认规格实施。',
                 next_actions=[{'tool': 'get_generation_context', 'arguments': {'workflow': 'detailed'}}])
@@ -103,28 +146,35 @@ class DesignSession:
                     raise ValueError('修正必须对应当前待修草稿。')
                 payload, _ = apply_analysis_repair(state['repair'], {'repairs': args['repairs']}, requirement,
                                                    plc_model=model, confirmed_spec=spec)
+                dropped = list(state.get('dropped_claims') or [])
             else:
                 payload = args['analysis']
+                dropped = []
             plan = plan_analysis_repair(payload, requirement, plc_model=model, confirmed_spec=spec,
                                         contract_stage=state['contract_stage'])
             state.pop('dropped_claims', None)
-            # These optional claims are model projections. The exact user
-            # request is kept in the confirmed intent and used in generation.
-            rejected_claims = {target['path'] for target in plan['targets'] if target['mode'] == 'claim'}
+            # Inferred or unanchored prose claims cannot bind; drop them to the
+            # receipt while keeping user-anchored claims for structural repair.
+            rejected_claims = {
+                target['path']: ((target.get('errors') or [{}])[0].get('code') or 'unanchored_claim')
+                for target in plan['targets'] if _should_auto_drop_claim_target(target)
+            }
             if rejected_claims:
-                dropped = []
                 for field in ('explicit_constraint_claims', 'execution_intent_claims'):
                     if isinstance(plan['base'].get(field), list):
                         for i, claim in enumerate(plan['base'][field]):
-                            if f'/{field}/{i}' in rejected_claims:
-                                dropped.append({'field': field, 'claim': copy.deepcopy(claim)})
+                            path_key = f'/{field}/{i}'
+                            if path_key in rejected_claims:
+                                entry = {'field': field, 'reason': rejected_claims[path_key],
+                                         'claim': copy.deepcopy(claim)}
+                                if entry not in dropped:
+                                    dropped.append(entry)
                         plan['base'][field] = [claim for i, claim in enumerate(plan['base'][field])
                                                if f'/{field}/{i}' not in rejected_claims]
-                # The user asked for these explicitly, so removing them silently
-                # would hide a lost requirement; the review shows them instead.
-                state['dropped_claims'] = dropped
                 plan = plan_analysis_repair(plan['base'], requirement, plc_model=model, confirmed_spec=spec,
                                             contract_stage=state['contract_stage'])
+            if dropped:
+                state['dropped_claims'] = dropped
             if plan['targets']:
                 state.pop('draft', None)
                 state.pop('draft_id', None)
@@ -200,7 +250,12 @@ class DesignSession:
         draft['selected_approach'] = choice
         saved = self.service.set_spec(project_id, draft, expected_hash=state['base_hash'])
         if not saved['valid']:
-            return {'confirmed': False, 'issues': saved['issues'], 'next_actions': [{'tool': 'propose_design_plan'}]}
+            atomic_json(self._path(project_id), state)
+            errors = saved['issues'].get('errors') or []
+            parameter_only = bool(errors) and all(str(item.get('path') or '').startswith('$.parameters') for item in errors)
+            next_tool = ({'tool': 'confirm_design_plan', 'arguments': {'draft_id': draft_id, 'approach_id': approach_id}}
+                         if parameter_only else {'tool': 'propose_design_plan'})
+            return {'confirmed': False, 'issues': saved['issues'], 'next_actions': [next_tool]}
         atomic_json(self._path(project_id), {'stage': 'confirmed'})
         return {'confirmed': True, 'project_id': project_id, 'target_mode': project['target_mode'],
                 'approach_id': approach_id, 'spec_hash': saved['hash'],

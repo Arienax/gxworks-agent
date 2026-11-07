@@ -803,3 +803,62 @@ def test_existing_structure_input_formal_and_st_body_share_a_source_bound_draft_
             assert after[name][source_payload_offset(after[name]):] == value[source_payload_offset(value):]
         else:
             assert after[name] == value
+
+
+@pytest.mark.parametrize('cpu,device,supplied_iec,expected_iec', [
+    ('FX3U/FX3UC', 'X000', '', '%IX0'),
+    ('FX3U/FX3UC', 'X010', '', '%IX8'),
+    ('FX3U/FX3UC', 'Y017', '', '%QX15'),
+    ('FX3U/FX3UC', 'M100', '', '%MX0.100'),
+    ('FX3U/FX3UC', 'D100', '', '%MW0.100'),
+    ('Q03UDV', 'X10', '', '%IX16'),
+    ('Q03UDV', 'Y1A', '%qx26', '%QX26'),
+])
+def test_global_declaration_xy_iec_radix_derivation_and_persistence(cpu, device, supplied_iec, expected_iec):
+    from gxw.fb_authoring import normalize_declaration_address_pair
+    from gxw.offline_authoring import write_existing_definition
+    from gxw.project_templates import blank_fbd_baseline
+
+    normalized = normalize_declaration_address_pair({'device': device, 'iec_address': supplied_iec}, cpu=cpu)
+    assert normalized['iec_address'] == expected_iec
+
+    raw = blank_fbd_baseline(cpu)
+    dtype = 'INT' if device.startswith('D') else 'BOOL'
+    written = write_existing_definition(
+        raw,
+        {
+            'operation': 'edit_global_labels',
+            'source_name': 'Global1.gh',
+            'declarations': [{'name': 'IO_TAG', 'data_type': dtype, 'device': device, **({'iec_address': supplied_iec} if supplied_iec else {})}],
+        },
+    )
+    from gxw.object_model import read_project_context
+    saved = next(row for row in read_project_context(written.data).declarations['Global1.gh'].rows if row.name == 'IO_TAG')
+    assert saved.iec_address == expected_iec
+
+
+@pytest.mark.parametrize('declaration,expected_code', [
+    ({'name': 'BAD_DOT', 'data_type': 'BOOL', 'device': 'X000', 'iec_address': '%IX0.0'}, 'DECLARATION_ADDRESS'),
+    ({'name': 'BAD_OCTAL', 'data_type': 'BOOL', 'device': 'X010', 'iec_address': '%IX10'}, 'DECLARATION_ADDRESS'),
+    ({'name': 'POOL_M', 'data_type': 'BOOL', 'device': 'M3840'}, 'DECLARATION_SYSTEM_POOL_OVERLAP'),
+    ({'name': 'POOL_D', 'data_type': 'INT', 'device': 'D512'}, 'DECLARATION_SYSTEM_POOL_OVERLAP'),
+    ({'name': 'POOL_D32', 'data_type': 'DINT', 'device': 'D511'}, 'DECLARATION_SYSTEM_POOL_OVERLAP'),
+])
+def test_global_declaration_rejects_bad_xy_iec_and_system_pool_overlap(declaration, expected_code):
+    from gxw.models import GXWFormatError
+    from gxw.offline_authoring import write_existing_definition
+    from gxw.project_templates import blank_fbd_baseline
+
+    raw = blank_fbd_baseline('FX3U/FX3UC')
+    with pytest.raises(GXWFormatError) as exc:
+        write_existing_definition(
+            raw,
+            {'operation': 'edit_global_labels', 'source_name': 'Global1.gh', 'declarations': [declaration]},
+        )
+    assert any(row['code'] == expected_code for row in exc.value.findings)
+    draft = write_existing_definition(
+        raw,
+        {'operation': 'edit_global_labels', 'source_name': 'Global1.gh', 'declarations': [declaration]},
+        save_policy='draft',
+    )
+    assert draft.data

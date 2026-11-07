@@ -117,7 +117,7 @@ def include_manual_facts(plan, context, language):
     if collection:
         aspects.append('effects')
     manual = _search_plc_manual(context, {'query': ' '.join(names), 'language': language, 'aspects': aspects,
-        'top_k': 1})
+        'top_k': 0})
     units = [unit for row in manual['results'] for unit in row['knowledge']]
     group_operations = []
     for unit in units:
@@ -136,10 +136,29 @@ def include_manual_facts(plan, context, language):
             'knowledge': units}}
 
 
-def missing_families(groups, researched):
+def _opcode_variants(names, plc_model=None):
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+    expanded = set()
+    for raw in names or ():
+        token = str(raw or '').strip().upper()
+        if not token:
+            continue
+        expanded.add(token)
+        resolved = DEFAULT_INSTRUCTION_REGISTRY.resolve_form(token, cpu=plc_model)
+        if resolved is not None and getattr(resolved.spec, 'mnemonic', None):
+            expanded.add(str(resolved.spec.mnemonic).upper())
+    return expanded
+
+
+def missing_families(groups, researched, *, plc_model=None):
     """Check actual document reads, not whether the model repeats their names."""
-    missing = [group for group, names in groups.items() if group != 'explicit' and researched.isdisjoint(names)]
-    return [*missing, *sorted(set(groups.get('explicit', [])) - researched)]
+    covered = _opcode_variants(researched, plc_model=plc_model)
+    missing = [group for group, names in groups.items()
+               if group != 'explicit' and covered.isdisjoint(_opcode_variants(names, plc_model=plc_model))]
+    explicit_missing = [op for op in dict.fromkeys(groups.get('explicit', []))
+                        if not (_opcode_variants([op], plc_model=plc_model) & covered)]
+    return [*missing, *sorted(explicit_missing)]
+
 
 
 def normalize_review_assumptions(review):

@@ -268,7 +268,14 @@ def ladder_patch_candidate(context, patch):
     if patch.get('target_revision') not in (None, context.program_ir['revision'] + 1):
         raise ValueError('instruction patch target_revision must be the next source revision')
     if patch.get('operations'):
-        raise ValueError('ordered instruction edits cannot be mixed with graphical network replacements')
+        if patch.get('instruction_edits'):
+            raise ValueError(
+                "ordered instruction edits cannot be mixed with graphical network replacements; "
+                "omit 'operations' and edit by original record_index in 'instruction_edits'")
+        raise ValueError(
+            "saved GXW ladder versions use ordered source instructions (cannot be mixed with graphical network "
+            "replacements in 'operations'); call get_generation_context first to read raw_networks record_index "
+            "values, then submit patch.instruction_edits")
     result = edit_ladder_project(context.native_snapshot, context.program_ir['program_name'],
         patch.get('instruction_edits', []), device_comments=patch.get('device_comments'),
         comment_table=patch.get('comment_table'), declaration_edits=patch.get('declaration_edits'),
