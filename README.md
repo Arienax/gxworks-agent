@@ -1,4 +1,4 @@
-<h1 align="center">GXWorks Agent</h1>
+![GXWorks Agent: MCP engineering tools and an AI workbench for Mitsubishi PLC](resources/assets/banner-en.png)
 
 <p align="center"><strong>Originally created by <a href="https://github.com/Arienax">Arienax</a></strong> · <a href="https://github.com/Arienax/gxworks-agent">github.com/Arienax/gxworks-agent</a></p>
 
@@ -25,7 +25,9 @@ GXWorks Agent brings together project context, CPU-scoped instruction facts, det
 
 On GX Works2 **1.635.0.1**, all **226 default legal language combinations** across 57 programmable CPU menu entries (42 Q, 5 L, 10 FX; 69 concrete members) have completed creation without a base GXW, substantial content authoring, existing-source editing, native compilation, complete public checks, saving, and cold reopening. Ladder/SFC default to simple projects; ST/FBD use structured projects. FX1 is absent from the native structured menu; this creation restriction does not block reading existing sources. All four languages prefer GXW delivery and compile automatically when an installation is found. Complex FBD programs assemble actual ST function blocks. These results cover the stated software version and project operations, not physical execution on every member or support for every instruction and construct.
 
-Connect any MCP client—such as Codex, Claude Desktop, or Cursor—to use the engineering tools with your own model for planning, generation, live native editing, and verification, while saving versioned engineering artifacts. The standalone MCP server runs independently; the optional **Web workbench** adds browser-based Direct generation, graphical diff review, simulation testing, and operator-approved GX Works2 delivery.
+Connect any MCP client—such as Codex, Claude Desktop, or the DeepSeek Harness plugin—to use the engineering tools with your own model for planning, generation, live native editing, and verification, while saving versioned engineering artifacts. The standalone MCP server runs independently; the optional **Web workbench** adds browser-based Direct generation, graphical diff review, simulation testing, and operator-approved GX Works2 delivery.
+
+![System architecture: MCP clients and the Web workbench reach the Python Core, which drives GX Works2, GX Simulator2, PLC monitoring and file delivery](resources/assets/feature-architecture-en.png)
 
 <a name="offline-gxw"></a>
 
@@ -41,6 +43,8 @@ Imported Ladder sources automatically display contacts, coils, and branches, inc
 
 The four languages share an offline transaction. Ladder supports source-bound instruction, float, string, and P/I label edits and moves while preserving `MPS/MRD/MPP` order and unchanged record bytes. ST edits existing Program, FB, and FUNCTION bodies and declarations, including existing interfaces, parameter order, and return types, with caller checks. FBD edits objects, connections, networks, variables, and instances of existing FB definitions. Existing SFC charts support step, transition, action, branch, merge, jump, and child-program edits with internal registrations maintained. Declaration rows may be added, removed, or reordered; actual QCD comments retain their complete text.
 
+![Ladder, ST, FBD and SFC editing capabilities with the operations each language supports](resources/assets/feature-languages-en.png)
+
 After import, use **Program to edit** to select another source in the same file. MCP `read_gxw_source` returns its editing model; `edit_gxw_project` submits several source, declaration, and comment edits against one current `version_id`, with differences shown per source. The new entry defaults to `save_policy="draft"`, saving an editable intermediate version with source diagnostics once file structure and storage references pass checks; `checked` rejects newly introduced recognized errors.
 
 The FX/Q/L model catalogue participates in file capability checks, returning support scoped to CPU, format, object, and operation. Unknown records retain their original bytes while parsed objects remain editable; edits with unresolved dependencies report the specific object and reason. This workflow focuses on offline edits to existing source objects, declarations, and comments.
@@ -53,11 +57,7 @@ Modifying source or declarations marks earlier compilation results stale. Saving
 
 ## Ladder: from engineering context to deliverable artifacts
 
-![Ladder context retrieval, instruction evidence, candidate construction and saved artifacts](resources/assets/ladder-rag-core-demo-en.gif)
-
 In this FX3U conveyor example, the agent retrieves CPU-specific facts and manual evidence for `WSFL`, `INC`, and `T200`, constructs a Ladder candidate, and commits it through MCP. Python Core validates structure and operands, merges shared conditions, and checks maintainability. Each saved version produces Ladder JSON, PLC IR, SVG diagrams, traceable ST derived from IR, and GX Works2 import CSVs for `MAIN` and device comments. For targeted fixes on an existing version, `read_network` and `patch_program` apply scoped network patches.
-
-The animation shows an external client constructing a candidate from the MCP context, validating it, and saving the resulting artifacts.
 
 <a name="st"></a>
 
@@ -74,9 +74,7 @@ The local ST checker quickly validates supported syntax and semantics and highli
 
 ## FBD: project creation and full GXW editing
 
-![MCP adds fault latching, reset and delayed enable to the first axis of an existing FBD project](resources/assets/fbd-control-logic-demo-en.gif)
-
-Above, MCP adds fault latching, reset, and a 500 ms enable delay to the first axis of [Mitsubishi Electric's MotionControl JEC example](https://eu-assets.contentstack.com/v3/assets/blt5412ff9af9aef77f/blt9206f69c182f67c3/634ea5238602a36d8e991e63/MotionControl_JEC_a.zip). The edit preserves existing FB implementations and Axis `IN_OUT` wiring, inserts SR/TON logic, and routes the motion permit into the existing power-control block.
+As an example, MCP adds fault latching, reset, and a 500 ms enable delay to the first axis of [Mitsubishi Electric's MotionControl JEC example](https://eu-assets.contentstack.com/v3/assets/blt5412ff9af9aef77f/blt9206f69c182f67c3/634ea5238602a36d8e991e63/MotionControl_JEC_a.zip). The edit preserves existing FB implementations and Axis `IN_OUT` wiring, inserts SR/TON logic, and routes the motion permit into the existing power-control block.
 
 Beyond wiring edits on imported files, the FBD module supports end-to-end project authoring:
 
@@ -104,7 +102,7 @@ Native engineering sessions require an interactive Windows desktop, GX Works2 `1
 
 ## Web workbench: Direct generation, visual review, and export
 
-![Web workbench showing a saved Ladder program, network and device inspection, and the export menu](resources/assets/web-gui-view-deliver-en.gif)
+![The web workbench: project sidebar, conversation, and the program panel showing a saved Ladder network](resources/assets/web-workbench-en.png)
 
 Configure a model API in the workbench to use the built-in **Direct generation workflow**—analyzing requirements, confirming specifications, and generating programs—then inspect Ladder networks, FBD/SFC graphs, device usage, version diffs, and downloadable artifacts. Direct shares the same engineering context and RAG pipeline as MCP while reducing external agent orchestration overhead; workbench Q&A can still invoke read-only tools as needed.
 
@@ -118,9 +116,13 @@ New and edited Ladder, ST, FBD and SFC candidates prefer `program.gxw`. Existing
 
 If GXW creation is unavailable, delivery explicitly falls back to Ladder program/comment CSVs, ST source, or FBD/SFC structured candidates and available previews. The result reports the actual format and reason. A successfully generated offline GXW remains deliverable without GX Works2, with native compilation marked as not run. Installation discovery uses `GXWORKS2_EXE`, running instances, Windows registration and common folders on local drives, including installations outside C:.
 
+![Workflow from offline editing to native delivery, with the example tool call output](resources/assets/feature-workflow-en.png)
+
 <a name="rag"></a>
 
 ## CPU-scoped engineering RAG: architecture and compact facts
+
+![CPU-scoped engineering RAG: query, entity/BM25/dense routes, domain-local RRF, technical projection, Core validation and versioned artifacts](resources/assets/feature-rag-en.png)
 
 Generic document-chunking RAG frameworks are tailored for open-ended text Q&A and struggle with industrial control requirements such as zero-external-service deployments, strict isolation across CPU models, and compiler-grade deterministic verification. GXWorks Agent implements an engineered, compact RAG architecture based on reviewed technical facts and project-authored engineering records (release packages exclude vendor manual PDFs and raw manual-text indexes):
 
@@ -130,6 +132,8 @@ Generic document-chunking RAG frameworks are tailored for open-ended text Q&A an
 - **Technical projection and deterministic Core validation**: Retrieval hits are never treated as direct execution permission. For LLM generation, [`model_context`](src/shared/model_context.py) extracts compact technical constraints (pin specifications, step widths, prerequisite conditions) to manage prompt budget. Generated logic must subsequently pass deterministic CPU whitelist, operand bit-width, and timing checks enforced by [`instruction_constraints`](src/plc/instruction_constraints.py) and the Core validation engine.
 
 ## What the toolchain provides
+
+![Function overview: main function modules and their MCP tools](resources/assets/feature-functions-en.png)
 
 - **Project-bound context and live session discovery**: Create or select versioned projects by CPU and language, or call `list_gxworks2_sessions` and `read_gxworks2_snapshot` without an Agent project to inspect a read-only snapshot of a program currently open in GX Works2. When GX Works2 is not running, `inspect_gxworks2_csv_files` takes an exported program CSV and comment CSV with an explicit CPU and returns the same kind of read-only `source_ref`.
 - **CPU-scoped engineering RAG**: Retrieval combines entity matching, full-text search, and dense/LSA vector retrieval with rank fusion (see [architecture and compact facts](#rag) for details). Structured facts supply exact operand, step-width, and modifier rules for known instructions, while residual retrieval adds technical evidence and project-authored examples without duplicating context.
@@ -159,10 +163,10 @@ On Windows 10/11 x64, download the package you need from the [releases page](htt
 
 | Package | Best for | Entry point |
 | --- | --- | --- |
-| `GXWorks-Agent-MCP-windows-x64.zip` | Connecting an MCP client (Codex, Claude Desktop, Cursor) and using its model | `gxworks-agent-mcp.exe --local` |
+| `GXWorks-Agent-MCP-windows-x64.zip` | Connecting an MCP client (Codex, Claude Desktop, DeepSeek Harness) and using its model | `gxworks-agent-mcp.exe --local` |
 | `GXWorks-Agent-Full-windows-x64.zip` | Running the Web workbench and MCP with shared runtime resources | `start-web.cmd` / `gxworks-agent-mcp.exe --local` |
 
-The lean `MCP` package omits the Web server, model SDK, offline PDF ingestion dependencies, and demo animations, while keeping the engineering tools, RAG retrieval, engineering templates, native helpers, and the simulator timeline viewer. `Full` includes both entrypoints: its MCP server runs independently with `--local`, or connects to a running Web workbench with `--service` to share projects and review flows.
+The lean `MCP` package omits the Web server, model SDK, offline PDF ingestion dependencies, while keeping the engineering tools, RAG retrieval, engineering templates, native helpers, and the simulator timeline viewer. `Full` includes both entrypoints: its MCP server runs independently with `--local`, or connects to a running Web workbench with `--service` to share projects and review flows.
 
 <a name="mcp"></a>
 
@@ -175,6 +179,8 @@ Try a prompt like:
 > “Create an FX3U Ladder project and read the generation context and relevant instruction evidence first. Count each press of X0, turn on Y0 after 3 counts, and reset with X1. Save the candidate version and show its artifacts and any remaining diagnostics.”
 
 External clients use their own models without starting Web. GX import and native operations follow configured execution consent; add the Web workbench whenever you want shared visual review.
+
+**DeepSeek Harness plugin**: [`dsh-gxworks`](https://github.com/Arienax/dsh-gxworks) packages this server as a DeepSeek Harness plugin. Install it with one command and the bundled MCP backend and `gxworks-mcp-router` skill are ready, so there is no separate MCP client to register or configure.
 
 **Bundled MCP router skill**: Both the source repository and the release packages include an Agent Skill under [`skills/gxworks-mcp-router/`](skills/gxworks-mcp-router) (`SKILL.md` and `references/`) covering MCP tool selection, key parameters, and call sequences for common PLC tasks—such as read-only snapshots versus versioned edits, offline `.gxw` changes versus live GX Works2 sessions, local artifact generation versus headless native compilation checks, and receipt handling across `local`, `service`, and `context` modes. Once MCP is connected, copy the `gxworks-mcp-router/` directory into your client's skills folder to enable it.
 

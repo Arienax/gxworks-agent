@@ -489,6 +489,7 @@ Owns MCP tool schemas, service/onboarding/client/product-launcher behavior and M
 | Test file | File-level focus |
 | --- | --- |
 | `tests/test_mcp.py` | public MCP tool contracts and end-to-end MCP data paths |
+| `tests/test_design_claim_receipts.py` | design claim receipt persistence and dropped-claim reporting |
 | `tests/test_mcp_client_activity.py` | focused coverage for mcp client activity |
 | `tests/test_mcp_local_onboarding.py` | focused coverage for mcp local onboarding |
 | `tests/test_mcp_onboarding_routes.py` | focused coverage for mcp onboarding routes |
