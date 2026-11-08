@@ -1,0 +1,1643 @@
+{
+  "schema_version": 1,
+  "scope": "Reviewed, source-bound subset; absent definitions remain unknown. This is not a CPU support catalogue.",
+  "definitions": [
+    {
+      "id": "fx1s_selectable_timer",
+      "devices": [
+        "M8028"
+      ],
+      "models": [
+        "FX1S"
+      ],
+      "status": "source_verified",
+      "description": "ON selects 10 ms resolution for T32..T62; OFF selects 100 ms.",
+      "access": "user",
+      "conditions": [],
+      "notes": [],
+      "search_terms": [
+        "selectable timer",
+        "timer resolution",
+        "定时器时基",
+        "10ms 时基",
+        "10ms时基"
+      ],
+      "sources": [
+        {
+          "manual_id": "jy992d88101e",
+          "manual_number": "JY992D88101",
+          "revision": "E",
+          "pdf_pages": [
+            88,
+            233,
+            346,
+            353
+          ],
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy992d88101/jy992d88101e.pdf"
+        }
+      ],
+      "value_type": "bit",
+      "semantic_facts": {
+        "function": "timer_resolution_select",
+        "range": {
+          "prefix": "T",
+          "first": 32,
+          "last": 62
+        },
+        "on_unit_ms": 10,
+        "off_unit_ms": 100
+      }
+    },
+    {
+      "id": "fx1n_m8028_absent",
+      "devices": [
+        "M8028"
+      ],
+      "models": [
+        "FX1N"
+      ],
+      "status": "not_applicable",
+      "description": "M8028 is explicitly marked Not FX1N.",
+      "access": "unknown",
+      "conditions": [],
+      "notes": [],
+      "search_terms": [
+        "selectable timer",
+        "timer resolution",
+        "FROM/TO",
+        "定时器时基"
+      ],
+      "sources": [
+        {
+          "manual_id": "jy992d88101e",
+          "manual_number": "JY992D88101",
+          "revision": "E",
+          "pdf_pages": [
+            88,
+            233,
+            346,
+            353
+          ],
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy992d88101/jy992d88101e.pdf"
+        }
+      ],
+      "value_type": "bit",
+      "semantic_facts": {
+        "definition_applicability": false
+      }
+    },
+    {
+      "id": "fx2n_from_to_interrupt",
+      "devices": [
+        "M8028"
+      ],
+      "models": [
+        "FX2N",
+        "FX2NC"
+      ],
+      "status": "source_verified",
+      "description": "ON allows immediate interrupts during FROM/TO; transfer resumes after interrupt return. This is not timer resolution control.",
+      "access": "user",
+      "conditions": [
+        {
+          "field": "cpu_version",
+          "operator": "at_least",
+          "value": "3.00",
+          "note": "FX2N/FX2NC V3.00 and above"
+        }
+      ],
+      "notes": [],
+      "search_terms": [
+        "FROM/TO",
+        "中断",
+        "interrupt"
+      ],
+      "sources": [
+        {
+          "manual_id": "jy992d88101e",
+          "manual_number": "JY992D88101",
+          "revision": "E",
+          "pdf_pages": [
+            88,
+            233,
+            346,
+            353
+          ],
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy992d88101/jy992d88101e.pdf"
+        }
+      ],
+      "value_type": "bit",
+      "semantic_facts": {
+        "function": "interrupt_permission_during_transfer",
+        "instructions": [
+          "FROM",
+          "TO"
+        ],
+        "on": "allow_immediate_interrupt",
+        "transfer_resumes_after_return": true,
+        "timer_resolution_control": false
+      }
+    },
+    {
+      "id": "fx_small_input_filter",
+      "devices": [
+        "D8020"
+      ],
+      "models": [
+        "FX1S",
+        "FX1N"
+      ],
+      "status": "source_verified",
+      "description": "Input filter setting for main-unit X000..X007, in milliseconds. Default 10 ms; zero has a distinct microsecond response.",
+      "access": "user",
+      "conditions": [
+        {
+          "field": "input_voltage",
+          "operator": "equals",
+          "value": "24V DC",
+          "note": "Main-unit 24V DC input filters only; AC input filters cannot be adjusted."
+        }
+      ],
+      "notes": [],
+      "search_terms": [
+        "input filter",
+        "输入滤波"
+      ],
+      "sources": [
+        {
+          "manual_id": "jy992d88101e",
+          "manual_number": "JY992D88101",
+          "revision": "E",
+          "pdf_pages": [
+            88,
+            233,
+            346,
+            353
+          ],
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy992d88101/jy992d88101e.pdf"
+        }
+      ],
+      "value_type": "word",
+      "semantic_facts": {
+        "function": "input_filter",
+        "inputs": {
+          "first": "X000",
+          "last": "X007"
+        },
+        "unit": "ms",
+        "default": 10,
+        "zero_mode": "microsecond_response"
+      }
+    },
+    {
+      "id": "fx2n_input_filter",
+      "devices": [
+        "D8020"
+      ],
+      "models": [
+        "FX2N",
+        "FX2NC"
+      ],
+      "status": "source_verified",
+      "description": "Input filter setting for main-unit X000..X017, in milliseconds. Default 10 ms; zero has a distinct microsecond response.",
+      "access": "user",
+      "conditions": [
+        {
+          "field": "input_voltage",
+          "operator": "equals",
+          "value": "24V DC",
+          "note": "Main-unit 24V DC input filters only; AC input filters cannot be adjusted."
+        }
+      ],
+      "notes": [],
+      "search_terms": [
+        "input filter",
+        "输入滤波"
+      ],
+      "sources": [
+        {
+          "manual_id": "jy992d88101e",
+          "manual_number": "JY992D88101",
+          "revision": "E",
+          "pdf_pages": [
+            88,
+            233,
+            346,
+            353
+          ],
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy992d88101/jy992d88101e.pdf"
+        }
+      ],
+      "value_type": "word",
+      "semantic_facts": {
+        "function": "input_filter",
+        "inputs": {
+          "first": "X000",
+          "last": "X017"
+        },
+        "unit": "ms",
+        "default": 10,
+        "zero_mode": "microsecond_response"
+      }
+    },
+    {
+      "id": "fx1s_second_input_filter",
+      "devices": [
+        "D8021"
+      ],
+      "models": [
+        "FX1S"
+      ],
+      "status": "source_verified",
+      "description": "Input filter setting for main-unit X010..X017, in milliseconds.",
+      "access": "user",
+      "conditions": [
+        {
+          "field": "input_voltage",
+          "operator": "equals",
+          "value": "24V DC",
+          "note": "Main-unit 24V DC input filters only; AC input filters cannot be adjusted."
+        }
+      ],
+      "notes": [],
+      "search_terms": [
+        "input filter",
+        "输入滤波"
+      ],
+      "sources": [
+        {
+          "manual_id": "jy992d88101e",
+          "manual_number": "JY992D88101",
+          "revision": "E",
+          "pdf_pages": [
+            88,
+            233,
+            346,
+            353
+          ],
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy992d88101/jy992d88101e.pdf"
+        }
+      ],
+      "value_type": "word",
+      "semantic_facts": {
+        "function": "input_filter",
+        "inputs": {
+          "first": "X010",
+          "last": "X017"
+        },
+        "unit": "ms"
+      }
+    },
+    {
+      "id": "fx_d8021_excluded",
+      "devices": [
+        "D8021"
+      ],
+      "models": [
+        "FX1N",
+        "FX2N",
+        "FX2NC"
+      ],
+      "status": "not_applicable",
+      "description": "This input-filter register is explicitly marked Not FX1N, FX2N, FX2NC.",
+      "access": "unknown",
+      "conditions": [],
+      "notes": [],
+      "search_terms": [],
+      "sources": [
+        {
+          "manual_id": "jy992d88101e",
+          "manual_number": "JY992D88101",
+          "revision": "E",
+          "pdf_pages": [
+            88,
+            233,
+            346,
+            353
+          ],
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy992d88101/jy992d88101e.pdf"
+        }
+      ],
+      "value_type": "word",
+      "semantic_facts": {
+        "definition_applicability": false
+      }
+    },
+    {
+      "id": "fx0_potentiometer",
+      "devices": [
+        "D8013"
+      ],
+      "models": [
+        "FX0S",
+        "FX0"
+      ],
+      "status": "source_verified",
+      "description": "Built-in analog potentiometer integer value, 0..255.",
+      "access": "unknown",
+      "conditions": [],
+      "notes": [
+        "Value definition reviewed; user write permission is not established by this source excerpt."
+      ],
+      "search_terms": [
+        "potentiometer",
+        "电位器"
+      ],
+      "sources": [
+        {
+          "manual_id": "fxcpu_device_common_l",
+          "manual_number": "JY997D26001",
+          "revision": "L",
+          "pdf_pages": [
+            232
+          ],
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d26001/jy997d26001l.pdf"
+        }
+      ],
+      "value_type": "word",
+      "semantic_facts": {
+        "function": "potentiometer_value",
+        "encoding": "integer",
+        "min": 0,
+        "max": 255
+      }
+    },
+    {
+      "id": "fx0n_potentiometers",
+      "devices": [
+        "D8013",
+        "D8030",
+        "D8031"
+      ],
+      "models": [
+        "FX0N"
+      ],
+      "status": "source_verified",
+      "description": "VR1 value is D8013 (D8030); VR2 value is D8031. Values are integers 0..255.",
+      "access": "unknown",
+      "conditions": [],
+      "notes": [
+        "Value definition reviewed; user write permission is not established by this source excerpt."
+      ],
+      "search_terms": [
+        "potentiometer",
+        "电位器"
+      ],
+      "sources": [
+        {
+          "manual_id": "fxcpu_device_common_l",
+          "manual_number": "JY997D26001",
+          "revision": "L",
+          "pdf_pages": [
+            232
+          ],
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d26001/jy997d26001l.pdf"
+        }
+      ],
+      "value_type": "word",
+      "semantic_facts": {
+        "function": "potentiometer_value",
+        "encoding": "integer",
+        "min": 0,
+        "max": 255,
+        "VR2": "D8031",
+        "VR1_addresses": [
+          "D8013",
+          "D8030"
+        ],
+        "VR1_alias_binding": "unresolved"
+      }
+    },
+    {
+      "id": "fx_potentiometers",
+      "devices": [
+        "D8030",
+        "D8031"
+      ],
+      "models": [
+        "FX1S",
+        "FX1N",
+        "FX3G"
+      ],
+      "status": "source_verified",
+      "description": "VR1 value is D8030; VR2 value is D8031. Values are integers 0..255.",
+      "access": "unknown",
+      "conditions": [],
+      "notes": [
+        "Value definition reviewed; user write permission is not established by this source excerpt."
+      ],
+      "search_terms": [
+        "potentiometer",
+        "电位器"
+      ],
+      "sources": [
+        {
+          "manual_id": "fxcpu_device_common_l",
+          "manual_number": "JY997D26001",
+          "revision": "L",
+          "pdf_pages": [
+            232
+          ],
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d26001/jy997d26001l.pdf"
+        }
+      ],
+      "value_type": "word",
+      "semantic_facts": {
+        "function": "potentiometer_value",
+        "encoding": "integer",
+        "min": 0,
+        "max": 255,
+        "VR1": "D8030",
+        "VR2": "D8031"
+      }
+    },
+    {
+      "id": "fx3s_potentiometers",
+      "devices": [
+        "D8030",
+        "D8031"
+      ],
+      "models": [
+        "FX3S"
+      ],
+      "status": "source_verified",
+      "description": "VR1 value is D8030; VR2 value is D8031. Values are integers 0..255.",
+      "access": "unknown",
+      "conditions": [
+        {
+          "field": "hardware_variant",
+          "operator": "not_suffix",
+          "value": "-2AD",
+          "note": "FX3S-30M□/E□-2AD has no built-in analog potentiometers."
+        }
+      ],
+      "notes": [
+        "Value definition reviewed; user write permission is not established by this source excerpt."
+      ],
+      "search_terms": [
+        "potentiometer",
+        "电位器"
+      ],
+      "sources": [
+        {
+          "manual_id": "fxcpu_device_common_l",
+          "manual_number": "JY997D26001",
+          "revision": "L",
+          "pdf_pages": [
+            232
+          ],
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d26001/jy997d26001l.pdf"
+        }
+      ],
+      "value_type": "word",
+      "semantic_facts": {
+        "function": "potentiometer_value",
+        "encoding": "integer",
+        "min": 0,
+        "max": 255,
+        "VR1": "D8030",
+        "VR2": "D8031"
+      }
+    },
+    {
+      "id": "q_ethernet_status",
+      "devices": [
+        "SD1282",
+        "SD1286"
+      ],
+      "models": [
+        "Q03UDE",
+        "Q04UDEH",
+        "Q06UDEH",
+        "Q10UDEH",
+        "Q13UDEH",
+        "Q20UDEH",
+        "Q26UDEH",
+        "Q50UDEH",
+        "Q100UDEH",
+        "Q03UDV",
+        "Q04UDV",
+        "Q06UDV",
+        "Q13UDV",
+        "Q26UDV",
+        "Q04UDPV",
+        "Q06UDPV",
+        "Q13UDPV",
+        "Q26UDPV"
+      ],
+      "status": "source_verified",
+      "description": "SD1282: built-in Ethernet open-complete bits. SD1286: received-data presence bits. Bit 0 is connection 1; connection parameters must be configured. Neither flag issues a receive operation.",
+      "access": "system",
+      "conditions": [],
+      "notes": [
+        "Connection status is not proof that the application consumed the received data."
+      ],
+      "search_terms": [
+        "built-in Ethernet",
+        "内置以太网",
+        "open complete",
+        "打开完成",
+        "接收状态"
+      ],
+      "sources": [
+        {
+          "manual_id": "sh080811engy",
+          "manual_number": "SH080811ENG",
+          "revision": "Y",
+          "pdf_pages": [
+            11,
+            21,
+            96,
+            100,
+            122
+          ],
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080811eng/sh080811engy.pdf"
+        }
+      ],
+      "value_type": "word",
+      "word_bit_view": true,
+      "semantic_facts": {
+        "function": "builtin_ethernet_status",
+        "signals": {
+          "SD1282": "connection_open_complete",
+          "SD1286": "receive_buffer_nonempty"
+        },
+        "bit_zero_connection": 1,
+        "requires_connection_configuration": true,
+        "initiates_receive": false
+      }
+    },
+    {
+      "id": "l_ethernet_status",
+      "devices": [
+        "SD1282",
+        "SD1286"
+      ],
+      "models": [
+        "L02",
+        "L02-P",
+        "L06",
+        "L06-P",
+        "L26",
+        "L26-P",
+        "L26-BT",
+        "L26-PBT"
+      ],
+      "status": "source_verified",
+      "description": "SD1282: built-in Ethernet open-complete bits. SD1286: received-data presence bits. Bit 0 is connection 1; connection parameters must be configured. Neither flag issues a receive operation.",
+      "access": "system",
+      "conditions": [],
+      "notes": [
+        "Connection status is not proof that the application consumed the received data."
+      ],
+      "search_terms": [
+        "built-in Ethernet",
+        "内置以太网",
+        "open complete",
+        "打开完成",
+        "接收状态"
+      ],
+      "sources": [
+        {
+          "manual_id": "sh080891engs",
+          "manual_number": "SH080891ENG",
+          "revision": "S",
+          "pdf_pages": [
+            17,
+            73,
+            78,
+            102
+          ],
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080891eng/sh080891engs.pdf"
+        }
+      ],
+      "value_type": "word",
+      "word_bit_view": true,
+      "semantic_facts": {
+        "function": "builtin_ethernet_status",
+        "signals": {
+          "SD1282": "connection_open_complete",
+          "SD1286": "receive_buffer_nonempty"
+        },
+        "bit_zero_connection": 1,
+        "requires_connection_configuration": true,
+        "initiates_receive": false
+      }
+    },
+    {
+      "id": "q_ud_no_builtin_ethernet",
+      "devices": [
+        "SD1282",
+        "SD1286"
+      ],
+      "models": [
+        "Q03UD",
+        "Q04UDH",
+        "Q06UDH",
+        "Q10UDH",
+        "Q13UDH",
+        "Q20UDH",
+        "Q26UDH"
+      ],
+      "status": "not_applicable",
+      "description": "These CPUs have the RS-232 interface; the built-in Ethernet status definition does not apply. External Ethernet modules use separate contracts.",
+      "access": "unknown",
+      "conditions": [],
+      "notes": [],
+      "search_terms": [
+        "built-in Ethernet",
+        "内置以太网"
+      ],
+      "sources": [
+        {
+          "manual_id": "sh080811engy",
+          "manual_number": "SH080811ENG",
+          "revision": "Y",
+          "pdf_pages": [
+            11,
+            21,
+            96,
+            100,
+            122
+          ],
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080811eng/sh080811engy.pdf"
+        },
+        {
+          "manual_id": "sh080483engbc",
+          "manual_number": "SH080483ENG",
+          "revision": "BC",
+          "pdf_pages": [
+            167,
+            171
+          ],
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080483eng/sh080483engbc.pdf"
+        }
+      ],
+      "value_type": "word",
+      "semantic_facts": {
+        "definition_applicability": false,
+        "builtin_port": "RS232",
+        "external_module_contract": "separate"
+      }
+    },
+    {
+      "id": "l02s_no_builtin_ethernet",
+      "devices": [
+        "SD1282",
+        "SD1286"
+      ],
+      "models": [
+        "L02S",
+        "L02S-P"
+      ],
+      "status": "not_applicable",
+      "description": "L02SCPU/L02SCPU-P have built-in RS-232, not built-in Ethernet. These built-in Ethernet definitions do not apply.",
+      "access": "unknown",
+      "conditions": [],
+      "notes": [],
+      "search_terms": [
+        "built-in Ethernet",
+        "内置以太网"
+      ],
+      "sources": [
+        {
+          "manual_id": "sh080891engs",
+          "manual_number": "SH080891ENG",
+          "revision": "S",
+          "pdf_pages": [
+            17,
+            73,
+            78,
+            102
+          ],
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080891eng/sh080891engs.pdf"
+        },
+        {
+          "manual_id": "sh080890engaj",
+          "manual_number": "SH080890ENG",
+          "revision": "AJ",
+          "pdf_pages": [
+            71,
+            72
+          ],
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080890eng/sh080890engaj.pdf"
+        }
+      ],
+      "value_type": "word",
+      "semantic_facts": {
+        "definition_applicability": false,
+        "builtin_port": "RS232"
+      }
+    },
+    {
+      "id": "q_ordinary_card_prohibit",
+      "devices": [
+        "SM605"
+      ],
+      "models": [
+        "Q03UDE",
+        "Q04UDEH",
+        "Q06UDEH",
+        "Q10UDEH",
+        "Q13UDEH",
+        "Q20UDEH",
+        "Q26UDEH",
+        "Q50UDEH",
+        "Q100UDEH",
+        "Q03UD",
+        "Q04UDH",
+        "Q06UDH",
+        "Q10UDH",
+        "Q13UDH",
+        "Q20UDH",
+        "Q26UDH"
+      ],
+      "status": "source_verified",
+      "description": "User controls memory-card insertion/removal prohibition. This is the ordinary memory-card sequence.",
+      "access": "user",
+      "conditions": [
+        {
+          "field": "serial_first5",
+          "operator": "at_least",
+          "value": 10102,
+          "note": "QnU footnote: serial number first five digits 10102 or later; compatible card required."
+        }
+      ],
+      "notes": [],
+      "search_terms": [
+        "memory card",
+        "存储卡",
+        "插拔",
+        "插入",
+        "拔出"
+      ],
+      "sources": [
+        {
+          "manual_id": "sh080483engbc",
+          "manual_number": "SH080483ENG",
+          "revision": "BC",
+          "pdf_pages": [
+            10,
+            493,
+            494,
+            496
+          ],
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080483eng/sh080483engbc.pdf"
+        }
+      ],
+      "value_type": "bit",
+      "semantic_facts": {
+        "function": "memory_card_insertion_removal_prohibition",
+        "sequence": "ordinary_memory_card",
+        "control": "user"
+      }
+    },
+    {
+      "id": "q_sd_card_prohibit",
+      "devices": [
+        "SM605"
+      ],
+      "models": [
+        "Q03UDV",
+        "Q04UDV",
+        "Q06UDV",
+        "Q13UDV",
+        "Q26UDV",
+        "Q04UDPV",
+        "Q06UDPV",
+        "Q13UDPV",
+        "Q26UDPV"
+      ],
+      "status": "source_verified",
+      "description": "User sets SM605; the system sets SM607 and then clears SM605. A continuously asserted coil can issue another request.",
+      "access": "user_system",
+      "conditions": [],
+      "notes": [],
+      "search_terms": [
+        "memory card",
+        "存储卡",
+        "插拔",
+        "插入",
+        "拔出"
+      ],
+      "sources": [
+        {
+          "manual_id": "sh080483engbc",
+          "manual_number": "SH080483ENG",
+          "revision": "BC",
+          "pdf_pages": [
+            10,
+            493,
+            494,
+            496
+          ],
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080483eng/sh080483engbc.pdf"
+        }
+      ],
+      "value_type": "bit",
+      "semantic_facts": {
+        "function": "sd_card_insertion_removal_prohibition",
+        "request": "SM605",
+        "completion": "SM607",
+        "system_clears_request": true,
+        "continuous_request_may_retrigger": true
+      }
+    },
+    {
+      "id": "l_card_prohibit_status",
+      "devices": [
+        "SM605"
+      ],
+      "models": [
+        "L02S",
+        "L02S-P",
+        "L02",
+        "L02-P",
+        "L06",
+        "L06-P",
+        "L26",
+        "L26-P",
+        "L26-BT",
+        "L26-PBT"
+      ],
+      "status": "source_verified",
+      "description": "System-owned insertion/removal prohibit status. ON with a compatible SD card inserted and enabled by the card lock switch; not ON during ICM.OPE.ERROR.",
+      "access": "system",
+      "conditions": [],
+      "notes": [],
+      "search_terms": [
+        "memory card",
+        "存储卡",
+        "插拔",
+        "插入",
+        "拔出"
+      ],
+      "sources": [
+        {
+          "manual_id": "sh080890engaj",
+          "manual_number": "SH080890ENG",
+          "revision": "AJ",
+          "pdf_pages": [
+            319,
+            320,
+            322
+          ],
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080890eng/sh080890engaj.pdf"
+        },
+        {
+          "manual_id": "sh080483engbc",
+          "manual_number": "SH080483ENG",
+          "revision": "BC",
+          "pdf_pages": [
+            10,
+            493,
+            494,
+            496
+          ],
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080483eng/sh080483engbc.pdf"
+        }
+      ],
+      "value_type": "bit",
+      "semantic_facts": {
+        "function": "card_insertion_removal_prohibit_status",
+        "owner": "system",
+        "on_conditions": {
+          "card_inserted": true,
+          "card_lock_enabled": true,
+          "ICM.OPE.ERROR": false
+        }
+      }
+    },
+    {
+      "id": "q_sd_disable_request",
+      "devices": [
+        "SM606"
+      ],
+      "models": [
+        "Q03UDV",
+        "Q04UDV",
+        "Q06UDV",
+        "Q13UDV",
+        "Q26UDV",
+        "Q04UDPV",
+        "Q06UDPV",
+        "Q13UDPV",
+        "Q26UDPV"
+      ],
+      "status": "source_verified",
+      "description": "ON requests forced SD-card disable; OFF cancels the request. Existing SD accesses finish before disabling completes.",
+      "access": "user",
+      "conditions": [],
+      "notes": [],
+      "search_terms": [
+        "forced disable",
+        "强制禁用",
+        "SD 卡",
+        "SD卡"
+      ],
+      "sources": [
+        {
+          "manual_id": "sh080483engbc",
+          "manual_number": "SH080483ENG",
+          "revision": "BC",
+          "pdf_pages": [
+            10,
+            493,
+            494,
+            496
+          ],
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080483eng/sh080483engbc.pdf"
+        }
+      ],
+      "value_type": "bit",
+      "semantic_facts": {
+        "function": "sd_forced_disable_request",
+        "on": "request_disable",
+        "off": "cancel_request",
+        "wait_for_active_access": true
+      }
+    },
+    {
+      "id": "q_sd_disable_status",
+      "devices": [
+        "SM607"
+      ],
+      "models": [
+        "Q03UDV",
+        "Q04UDV",
+        "Q06UDV",
+        "Q13UDV",
+        "Q26UDV",
+        "Q04UDPV",
+        "Q06UDPV",
+        "Q13UDPV",
+        "Q26UDPV"
+      ],
+      "status": "source_verified",
+      "description": "System status of SD-card forced disable, not the user request.",
+      "access": "system",
+      "conditions": [],
+      "notes": [],
+      "search_terms": [
+        "forced disable",
+        "强制禁用",
+        "SD 卡",
+        "SD卡"
+      ],
+      "sources": [
+        {
+          "manual_id": "sh080483engbc",
+          "manual_number": "SH080483ENG",
+          "revision": "BC",
+          "pdf_pages": [
+            10,
+            493,
+            494,
+            496
+          ],
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080483eng/sh080483engbc.pdf"
+        }
+      ],
+      "value_type": "bit",
+      "semantic_facts": {
+        "function": "sd_forced_disable_status",
+        "owner": "system",
+        "user_request": false
+      }
+    },
+    {
+      "id": "q_sram_cassette_status",
+      "devices": [
+        "SM626"
+      ],
+      "models": [
+        "Q03UDV",
+        "Q04UDV",
+        "Q06UDV",
+        "Q13UDV",
+        "Q26UDV",
+        "Q04UDPV",
+        "Q06UDPV",
+        "Q13UDPV",
+        "Q26UDPV"
+      ],
+      "status": "source_verified",
+      "description": "System indication that an SRAM cassette is inserted.",
+      "access": "system",
+      "conditions": [],
+      "notes": [],
+      "search_terms": [
+        "SRAM",
+        "cassette"
+      ],
+      "sources": [
+        {
+          "manual_id": "sh080483engbc",
+          "manual_number": "SH080483ENG",
+          "revision": "BC",
+          "pdf_pages": [
+            10,
+            493,
+            494,
+            496
+          ],
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080483eng/sh080483engbc.pdf"
+        }
+      ],
+      "value_type": "bit",
+      "semantic_facts": {
+        "function": "sram_cassette_presence",
+        "owner": "system"
+      }
+    },
+    {
+      "id": "q_ude_not_sd_control",
+      "devices": [
+        "SM606",
+        "SM607",
+        "SM626"
+      ],
+      "models": [
+        "Q03UDE",
+        "Q04UDEH",
+        "Q06UDEH",
+        "Q10UDEH",
+        "Q13UDEH",
+        "Q20UDEH",
+        "Q26UDEH",
+        "Q50UDEH",
+        "Q100UDEH"
+      ],
+      "status": "not_applicable",
+      "description": "These SD-card forced-disable / SRAM-cassette definitions are listed for QnUDV/QnUDPV, not this CPU group. Ordinary memory cards have their own sequence.",
+      "access": "unknown",
+      "conditions": [],
+      "notes": [],
+      "search_terms": [
+        "forced disable",
+        "强制禁用",
+        "SRAM"
+      ],
+      "sources": [
+        {
+          "manual_id": "sh080483engbc",
+          "manual_number": "SH080483ENG",
+          "revision": "BC",
+          "pdf_pages": [
+            10,
+            493,
+            494,
+            496
+          ],
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080483eng/sh080483engbc.pdf"
+        }
+      ],
+      "value_type": "bit",
+      "semantic_facts": {
+        "definition_applicability": false,
+        "ordinary_memory_card_contract": "separate"
+      }
+    },
+    {
+      "id": "q_process_hold",
+      "devices": [
+        "SM1500",
+        "SM1501"
+      ],
+      "models": [
+        "Q02PH",
+        "Q06PH",
+        "Q12PH",
+        "Q25PH",
+        "Q12PRH",
+        "Q25PRH",
+        "Q04UDPV",
+        "Q06UDPV",
+        "Q13UDPV",
+        "Q26UDPV"
+      ],
+      "status": "source_verified",
+      "description": "SM1500 selects output hold on S.IN range-check error; SM1501 selects output hold on S.OUT range-check error. ON=hold, OFF=no hold.",
+      "access": "user",
+      "conditions": [],
+      "notes": [],
+      "search_terms": [
+        "range error",
+        "range check",
+        "范围越界",
+        "保持模式",
+        "S.IN",
+        "S.OUT"
+      ],
+      "sources": [
+        {
+          "manual_id": "sh080483engbc",
+          "manual_number": "SH080483ENG",
+          "revision": "BC",
+          "pdf_pages": [
+            10,
+            511
+          ],
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080483eng/sh080483engbc.pdf"
+        }
+      ],
+      "value_type": "bit",
+      "semantic_facts": {
+        "function": "output_hold_on_range_error",
+        "signals": {
+          "SM1500": "S.IN",
+          "SM1501": "S.OUT"
+        },
+        "on": "hold",
+        "off": "no_hold"
+      }
+    },
+    {
+      "id": "q_process_hold_excluded",
+      "devices": [
+        "SM1500",
+        "SM1501"
+      ],
+      "models": [
+        "Q00",
+        "Q00J",
+        "Q00U",
+        "Q00UJ",
+        "Q01",
+        "Q01U",
+        "Q02",
+        "Q02H",
+        "Q02U",
+        "Q03UD",
+        "Q03UDE",
+        "Q03UDV",
+        "Q04UDEH",
+        "Q04UDH",
+        "Q04UDV",
+        "Q06H",
+        "Q06UDEH",
+        "Q06UDH",
+        "Q06UDV",
+        "Q100UDEH",
+        "Q10UDEH",
+        "Q10UDH",
+        "Q12H",
+        "Q13UDEH",
+        "Q13UDH",
+        "Q13UDV",
+        "Q20UDEH",
+        "Q20UDH",
+        "Q25H",
+        "Q26UDEH",
+        "Q26UDH",
+        "Q26UDV",
+        "Q50UDEH"
+      ],
+      "status": "not_applicable",
+      "description": "The process-control hold definitions are limited to QnPH, QnPRH and QnUDPV.",
+      "access": "unknown",
+      "conditions": [],
+      "notes": [],
+      "search_terms": [
+        "范围越界",
+        "保持模式",
+        "S.IN",
+        "S.OUT"
+      ],
+      "sources": [
+        {
+          "manual_id": "sh080483engbc",
+          "manual_number": "SH080483ENG",
+          "revision": "BC",
+          "pdf_pages": [
+            10,
+            511
+          ],
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080483eng/sh080483engbc.pdf"
+        }
+      ],
+      "value_type": "bit",
+      "semantic_facts": {
+        "definition_applicability": false
+      }
+    },
+    {
+      "id": "q_redundant_status",
+      "devices": [
+        "SM1515",
+        "SM1516",
+        "SM1518"
+      ],
+      "models": [
+        "Q12PRH",
+        "Q25PRH"
+      ],
+      "status": "source_verified",
+      "description": "SM1515: control system; SM1516: standby system. SM1518: one scan on standby-to-control changeover, only in scan-execution programs. Redundant-only statuses are OFF in stand-alone operation.",
+      "access": "system",
+      "conditions": [],
+      "notes": [],
+      "search_terms": [
+        "redundant",
+        "冗余",
+        "备用",
+        "控制系统",
+        "切换"
+      ],
+      "sources": [
+        {
+          "manual_id": "sh080483engbc",
+          "manual_number": "SH080483ENG",
+          "revision": "BC",
+          "pdf_pages": [
+            10,
+            511
+          ],
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080483eng/sh080483engbc.pdf"
+        }
+      ],
+      "value_type": "bit",
+      "semantic_facts": {
+        "function": "redundancy_status",
+        "signals": {
+          "SM1515": "control_system",
+          "SM1516": "standby_system",
+          "SM1518": "standby_to_control_one_scan"
+        },
+        "SM1518_program_type": "scan",
+        "standalone_status": false
+      }
+    },
+    {
+      "id": "q_redundant_status_excluded",
+      "devices": [
+        "SM1515",
+        "SM1516",
+        "SM1518"
+      ],
+      "models": [
+        "Q00",
+        "Q00J",
+        "Q00U",
+        "Q00UJ",
+        "Q01",
+        "Q01U",
+        "Q02",
+        "Q02H",
+        "Q02PH",
+        "Q02U",
+        "Q03UD",
+        "Q03UDE",
+        "Q03UDV",
+        "Q04UDEH",
+        "Q04UDH",
+        "Q04UDPV",
+        "Q04UDV",
+        "Q06H",
+        "Q06PH",
+        "Q06UDEH",
+        "Q06UDH",
+        "Q06UDPV",
+        "Q06UDV",
+        "Q100UDEH",
+        "Q10UDEH",
+        "Q10UDH",
+        "Q12H",
+        "Q12PH",
+        "Q13UDEH",
+        "Q13UDH",
+        "Q13UDPV",
+        "Q13UDV",
+        "Q20UDEH",
+        "Q20UDH",
+        "Q25H",
+        "Q25PH",
+        "Q26UDEH",
+        "Q26UDH",
+        "Q26UDPV",
+        "Q26UDV",
+        "Q50UDEH"
+      ],
+      "status": "not_applicable",
+      "description": "These redundant-system status definitions are for QnPRH CPUs.",
+      "access": "unknown",
+      "conditions": [],
+      "notes": [],
+      "search_terms": [
+        "redundant",
+        "冗余",
+        "备用",
+        "控制系统"
+      ],
+      "sources": [
+        {
+          "manual_id": "sh080483engbc",
+          "manual_number": "SH080483ENG",
+          "revision": "BC",
+          "pdf_pages": [
+            10,
+            511
+          ],
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080483eng/sh080483engbc.pdf"
+        }
+      ],
+      "value_type": "bit",
+      "semantic_facts": {
+        "definition_applicability": false
+      }
+    },
+    {
+      "id": "l_builtin_cc_link_restart_status",
+      "devices": [
+        "SB0041"
+      ],
+      "models": [
+        "L26-BT",
+        "L26-PBT"
+      ],
+      "status": "source_verified",
+      "description": "Data-link restart complete status. OFF=not complete, ON=startup complete. This status is available for master/local stations, not standby-master mode.",
+      "access": "system",
+      "conditions": [
+        {
+          "field": "cc_link_source",
+          "operator": "equals",
+          "value": "built_in",
+          "note": "This fact binds the L26CPU-BT/PBT built-in CC-Link."
+        },
+        {
+          "field": "sb_refresh_start",
+          "operator": "equals",
+          "value": "SB0",
+          "note": "SB names refer to buffer status mapped by the configured automatic refresh; this address assumes SB0000 start."
+        },
+        {
+          "field": "station_role",
+          "operator": "one_of",
+          "value": [
+            "master",
+            "local"
+          ],
+          "note": "Restart status is available to master/local stations, not standby-master mode."
+        }
+      ],
+      "notes": [
+        "The automatic refresh configuration is part of the binding; SB0041 is not an unconditional CPU-owned status bit."
+      ],
+      "search_terms": [
+        "CC-Link",
+        "重新启动完成",
+        "restart complete"
+      ],
+      "sources": [
+        {
+          "manual_id": "sh080895engg",
+          "manual_number": "SH080895ENG",
+          "revision": "G",
+          "pdf_pages": [
+            19,
+            412,
+            413,
+            414
+          ],
+          "official_url": "https://www.mitsubishielectric.com/dl/fa/document/manual/plc/sh080895eng/sh080895engg.pdf"
+        }
+      ],
+      "value_type": "bit",
+      "semantic_facts": {
+        "function": "cc_link_restart_status",
+        "off": "incomplete",
+        "on": "startup_complete",
+        "station_modes": [
+          "master",
+          "local"
+        ],
+        "excluded_modes": [
+          "standby_master"
+        ]
+      }
+    },
+    {
+      "id": "legacy_fx_plc_type_system_version",
+      "devices": [
+        "D8001"
+      ],
+      "models": [
+        "FX0S",
+        "FX0",
+        "FX0N",
+        "FXU",
+        "FX2C"
+      ],
+      "status": "source_verified",
+      "description": "PLC type and system version encoded in a system-owned word. The upper digit identifies the PLC type (2 for these CPUs); the remaining digits contain the BCD system version. Reading the raw word preserves this encoding.",
+      "access": "system",
+      "conditions": [],
+      "notes": [
+        "The original table encloses system-owned registers in square brackets. This definition is shared by the listed legacy CPUs; it is not exclusive to FX2C."
+      ],
+      "search_terms": [
+        "PLC type",
+        "system version",
+        "PLC 类型",
+        "系统版本"
+      ],
+      "sources": [
+        {
+          "manual_id": "fxcpu_device_common_l",
+          "manual_number": "JY997D26001",
+          "revision": "L",
+          "pdf_pages": [
+            211
+          ],
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d26001/jy997d26001l.pdf"
+        }
+      ],
+      "value_type": "word",
+      "semantic_facts": {
+        "function": "plc_type_and_system_version",
+        "owner": "system",
+        "upper_type_digit": 2,
+        "remaining_digits_encoding": "BCD",
+        "preserve_raw_word": true
+      }
+    },
+    {
+      "id": "fx3u_run_monitor",
+      "devices": [
+        "M8000",
+        "M8001"
+      ],
+      "models": [
+        "FX3U",
+        "FX3UC"
+      ],
+      "status": "source_verified",
+      "description": "RUN monitor: M8000 is the NO contact (ON while the PLC is in RUN), M8001 the NC contact (OFF while in RUN); both are CPU-owned and read-only.",
+      "access": "system",
+      "conditions": [],
+      "notes": [
+        "Driving M8000/M8001 from the user program is not permitted."
+      ],
+      "search_terms": [
+        "RUN monitor",
+        "run monitor",
+        "always ON",
+        "always ON contact",
+        "运行监视",
+        "常时ON",
+        "常开触点",
+        "PLC 运行状态"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual_number": "JY997D16601",
+          "revision": "R",
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d16601/jy997d16601r.pdf",
+          "pdf_pages": [
+            827,
+            867
+          ]
+        }
+      ],
+      "value_type": "bit",
+      "semantic_facts": {
+        "function": "plc_run_state_monitor",
+        "on_state": "run",
+        "read_only": true
+      }
+    },
+    {
+      "id": "fx3u_initial_pulse",
+      "devices": [
+        "M8002",
+        "M8003"
+      ],
+      "models": [
+        "FX3U",
+        "FX3UC"
+      ],
+      "status": "source_verified",
+      "description": "Initial pulse: M8002 is ON and M8003 is OFF during the first scan after the PLC enters RUN; both are CPU-owned and read-only.",
+      "access": "system",
+      "conditions": [],
+      "notes": [
+        "Usable for one-shot initialisation; the pulse lasts one scan only."
+      ],
+      "search_terms": [
+        "initial pulse",
+        "first scan",
+        "1 scan",
+        "初始脉冲",
+        "初期脉冲",
+        "首个扫描周期",
+        "初始化脉冲"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual_number": "JY997D16601",
+          "revision": "R",
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d16601/jy997d16601r.pdf",
+          "pdf_pages": [
+            827,
+            867
+          ]
+        }
+      ],
+      "value_type": "bit",
+      "semantic_facts": {
+        "function": "initial_pulse",
+        "duration": "one_scan",
+        "read_only": true
+      }
+    },
+    {
+      "id": "fx3u_watchdog_timer_time",
+      "devices": [
+        "D8000"
+      ],
+      "models": [
+        "FX3U",
+        "FX3UC"
+      ],
+      "status": "source_verified",
+      "description": "Watchdog timer time in 1 ms units; the CPU detects a watchdog error when the scan time exceeds the setting.",
+      "access": "user_system",
+      "conditions": [],
+      "notes": [
+        "Both the parameter setting and D8000 affect the watchdog time; the effective source is configuration-dependent."
+      ],
+      "search_terms": [
+        "watchdog",
+        "watchdog timer",
+        "WDT",
+        "看门狗",
+        "看门狗定时器",
+        "监视定时器"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual_number": "JY997D16601",
+          "revision": "R",
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d16601/jy997d16601r.pdf",
+          "pdf_pages": [
+            845,
+            846
+          ]
+        }
+      ],
+      "value_type": "word",
+      "semantic_facts": {
+        "function": "watchdog_timer_time",
+        "unit_ms": 1,
+        "constraint": "scan_time_must_not_exceed_setting"
+      }
+    },
+    {
+      "id": "fx3u_high_speed_counter_current_value",
+      "devices": [
+        "C235"
+      ],
+      "models": [
+        "FX3U",
+        "FX3UC"
+      ],
+      "status": "source_verified",
+      "description": "C235 is a 32-bit high-speed counter current value in the FX3U/FX3UC high-speed counter range; input assignment and counting direction are separate documented facts.",
+      "access": "user_system",
+      "conditions": [],
+      "notes": [
+        "M8235 selects the counting direction of C235; usable counter count depends on the CPU and input assignment."
+      ],
+      "search_terms": [
+        "high speed counter",
+        "high-speed counter",
+        "HSC",
+        "高速计数器",
+        "C235"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual_number": "JY997D16601",
+          "revision": "R",
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d16601/jy997d16601r.pdf",
+          "pdf_pages": [
+            110,
+            111,
+            838
+          ]
+        }
+      ],
+      "value_type": "word",
+      "semantic_facts": {
+        "function": "high_speed_counter_current_value",
+        "device_class": "high_speed_counter",
+        "bit_length": 32
+      }
+    }
+  ]
+}
