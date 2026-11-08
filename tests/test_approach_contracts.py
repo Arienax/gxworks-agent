@@ -3,6 +3,149 @@ import copy
 import pytest
 
 
+def _mined_synthetic(index=0, *, rows=None, assumptions=None):
+    from scripts.control_mining_cases import synthetic_cases, ordered_controller
+    from plc.control_mining import mine_snapshot_state_machine
+    from plc.ordered_source import build_instruction_ir
+    case = synthetic_cases()[index]
+    program = build_instruction_ir([{'raw_instructions': rows if rows is not None else ordered_controller(case)}],
+                                   plc_model='FX3U')
+    return mine_snapshot_state_machine(program, execution_context={
+        'program_type': 'scan', 'initial_execution_program': False}, assumptions=(assumptions if assumptions is not None else {
+            'single_cyclic_program': True, 'stable_input_image': True, 'exclusive_controller_ownership': True}))
+
+
+@pytest.mark.parametrize('index', range(4))
+def test_ordered_state_mining_binds_existing_core_without_confirming_import(index):
+    from scripts.control_mining_cases import synthetic_cases, synthetic_confirmed_spec
+    from plc.control_mining import bind_snapshot_construction
+    from application.generation_agent import prepare_model_candidate
+    from plc.construction import compile_constructions
+    mined = _mined_synthetic(index)
+    assert mined['status'] == 'recognized', mined['reasons']
+    assert all(r['status'] == 'candidate' and r['provenance']['source'] == 'imported_unverified'
+               for r in mined['behavior_constraints'])
+    spec = synthetic_confirmed_spec(synthetic_cases()[index])
+    spec['selected_approach']['construction_plan']['occupied_devices'] = ['M200']
+    original = copy.deepcopy(spec)
+    bound = bind_snapshot_construction(mined, spec, internal_ranges=[{'start': 'M200', 'end': 'M239'}],
+                                       occupied_devices=['M201'])
+    assert bound['status'] == 'bound', bound['reasons']
+    assert spec == original
+    assert all(a['device'] not in {'M200', 'M201'} for a in bound['construction']['allocations'])
+    prepared = prepare_model_candidate(bound['compact'], bound['confirmed_spec'], 'FX3U')
+    assert not prepared['construction_binding']['gaps']
+    assert not prepared['construction_binding']['reference_violations']
+    unconfirmed = copy.deepcopy(bound['confirmed_spec'])
+    unconfirmed['behavior_constraints'] = mined['behavior_constraints']
+    assert all(gap['reason'] == 'relation_not_confirmed' for gap in compile_constructions(unconfirmed)['gaps'])
+
+
+@pytest.mark.parametrize('fault,expected', [
+    ('no_snapshot', 'unique_state_snapshot_missing'),
+    ('live_state_guard', 'transition_reads_live_state'),
+    ('shadow_write', 'extra_or_snapshot_write'),
+    ('early_output', 'output_observes_intermediate_state'),
+    ('boot_overwrite', 'normal_transition_can_overwrite_boot'),
+    ('edge_contact', 'instruction_outside_snapshot_subset'),
+    ('mutable_input', 'guard_reads_mutable_or_unknown_device'),
+    ('opaque', 'opaque_label_or_unknown_source_record'),
+    ('missing_end', 'terminal_end_missing'),
+    ('special_state', 'CPU-owned special devices'),
+])
+def test_ordered_state_mining_preserves_unknown_for_scan_and_source_gaps(fault, expected):
+    from scripts.control_mining_cases import synthetic_cases, ordered_controller
+    case = synthetic_cases()[0]
+    rows = ordered_controller(case, snapshot=fault != 'no_snapshot')
+    if fault == 'live_state_guard':
+        next(r for r in rows if r['op'] == 'LD=')['args'][0] = 'D0'
+    elif fault == 'shadow_write':
+        rows[-5:-5] = [{'op': 'LD', 'args': ['X0']}, {'op': 'MOV', 'args': ['K2', 'D1']}]
+    elif fault == 'early_output':
+        output = rows[-5:-3]
+        del rows[-5:-3]
+        rows[4:4] = output
+    elif fault == 'boot_overwrite':
+        rows.remove(next(r for r in rows if r['op'] == 'ANI'))
+    elif fault == 'edge_contact':
+        next(r for r in rows if r['op'] == 'AND')['op'] = 'ANDP'
+    elif fault == 'mutable_input':
+        next(r for r in rows if r['op'] == 'AND')['args'] = ['M0']
+    elif fault == 'opaque':
+        from gxw.token_encoder import encode_instruction
+        rows.insert(4, {'kind': 'opaque', 'op': '', 'args': [], 'raw_hex': '03fe03', 'reason': 'unknown'})
+        offset = 0
+        for index, row in enumerate(rows):
+            row['record_index'] = index
+            row['source_offset'] = offset
+            if row.get('kind') != 'opaque':
+                row['raw_hex'] = encode_instruction(row['op'], row['args'], profile='fx3u',
+                                                    text_encoding='cp936', plc_model='FX3U').hex()
+            offset += len(bytes.fromhex(row['raw_hex']))
+    elif fault == 'missing_end':
+        rows.pop()
+    elif fault == 'special_state':
+        for row in rows:
+            row['args'] = ['D8000' if a == 'D0' else a for a in row['args']]
+    mined = _mined_synthetic(rows=rows)
+    assert mined['status'] == 'unknown'
+    assert any(expected in reason for reason in mined['reasons']), mined['reasons']
+
+
+def test_ordered_state_mining_requires_scope_and_explicit_cpu_member():
+    from scripts.control_mining_cases import synthetic_cases, ordered_controller
+    from plc.ordered_source import build_instruction_ir
+    from plc.control_mining import mine_snapshot_state_machine
+    assert _mined_synthetic(assumptions={})['status'] == 'unknown'
+    case = synthetic_cases()[0]
+    program = build_instruction_ir([{'raw_instructions': ordered_controller(case)}], plc_model='FX3U/FX3UC')
+    kwargs = {'execution_context': {'program_type': 'scan', 'initial_execution_program': False},
+              'assumptions': {'single_cyclic_program': True, 'stable_input_image': True, 'exclusive_controller_ownership': True}}
+    assert mine_snapshot_state_machine(program, **kwargs)['status'] == 'unknown'
+    mined = mine_snapshot_state_machine(program, target_model='FX3U', **kwargs)
+    assert mined['status'] == 'recognized'
+    assert mined['source_cpu'] == 'FX3U/FX3UC' and mined['target_model'] == 'FX3U'
+    assert mine_snapshot_state_machine(program, target_model='FX5U', **kwargs)['status'] == 'unknown'
+
+
+def test_mined_parameters_transfer_to_new_addresses_and_state_codes():
+    from scripts.control_mining_cases import synthetic_cases, synthetic_confirmed_spec
+    from plc.control_mining import rebind_snapshot_algorithm, bind_snapshot_construction
+    mined = _mined_synthetic()
+    rebound = rebind_snapshot_algorithm(mined, devices={
+        'D0': 'D20', 'D1': 'D21', 'X0': 'X10', 'X1': 'X11', 'X2': 'X12', 'X3': 'X13', 'Y0': 'Y10', 'Y1': 'Y11'},
+        states={0: 10, 1: 20, 2: 30})
+    bound = bind_snapshot_construction(rebound, synthetic_confirmed_spec(synthetic_cases()[1]),
+                                       internal_ranges=[{'start': 'M200', 'end': 'M239'}])
+    assert bound['status'] == 'bound', bound['reasons']
+    assert mined['algorithm']['state_device'] == 'D0'
+    assert all(r['status'] == 'candidate' for r in rebound['behavior_constraints'])
+    for arguments in ({'devices': {'D0': 'D1'}}, {'states': {0: 1}}, {'devices': {'D0': 'D8000'}},
+                      {'devices': {'D0': 'Y0'}}, {'states': {0: -1}}):
+        with pytest.raises(ValueError):
+            rebind_snapshot_algorithm(mined, **arguments)
+
+
+@pytest.mark.parametrize('fault', ['priority', 'output', 'extra', 'unconfirmed', 'resources'])
+def test_mined_algorithm_never_overrides_a_different_or_unconfirmed_requirement(fault):
+    from scripts.control_mining_cases import synthetic_cases, synthetic_confirmed_spec
+    from plc.control_mining import bind_snapshot_construction
+    spec = synthetic_confirmed_spec(synthetic_cases()[3])
+    if fault == 'priority':
+        spec['behavior_constraints'][1]['transitions'].reverse()
+    elif fault == 'output':
+        spec['behavior_constraints'][2]['predicate']['args'][1]['args'][1]['value'] = 2
+    elif fault == 'extra':
+        extra = copy.deepcopy(spec['behavior_constraints'][-1])
+        extra['id'] = 'extra_requirement'
+        spec['behavior_constraints'].append(extra)
+    elif fault == 'unconfirmed':
+        spec['behavior_constraints'][0]['status'] = 'candidate'
+    bound = bind_snapshot_construction(_mined_synthetic(3), spec,
+        internal_ranges=[{'start': 'M200', 'end': 'M200' if fault == 'resources' else 'M239'}])
+    assert bound['status'] == 'unknown' and bound['reasons']
+
+
 def test_composition_references_existing_confirmation_and_never_allocates_addresses():
     from plc.composition import derive_composition
     spec = {'plc_model': 'FX3U', 'behavior_constraints': [
