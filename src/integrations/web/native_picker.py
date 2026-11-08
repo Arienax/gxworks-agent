@@ -51,6 +51,72 @@ class _GUID(ctypes.Structure):
         return value
 
 
+VK_MENU = 0x12
+KEYEVENTF_KEYUP = 0x0002
+WS_POPUP = 0x80000000
+_WNDPROC = ctypes.WINFUNCTYPE(ctypes.c_ssize_t, wintypes.HWND, ctypes.c_uint,
+                              wintypes.WPARAM, wintypes.LPARAM)
+
+
+class _WNDCLASSW(ctypes.Structure):
+    _fields_ = (("style", ctypes.c_uint), ("lpfnWndProc", _WNDPROC),
+                ("cbClsExtra", ctypes.c_int), ("cbWndExtra", ctypes.c_int),
+                ("hInstance", wintypes.HINSTANCE), ("hIcon", wintypes.HICON),
+                ("hCursor", wintypes.HANDLE), ("hbrBackground", wintypes.HBRUSH),
+                ("lpszMenuName", wintypes.LPCWSTR), ("lpszClassName", wintypes.LPCWSTR))
+
+
+_owner_class_registered = False
+
+
+def _pump_alt() -> None:
+    """Synthesize one Alt press so Windows accepts our foreground request.
+
+    A process started in the background is not allowed to take the foreground, but
+    a synthetic key event makes the shell treat the next raise as user-initiated.
+    """
+    user32 = ctypes.windll.user32
+    user32.keybd_event(VK_MENU, 0, 0, 0)
+    user32.keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0)
+
+
+def _create_owner() -> int:
+    """Create a hidden window that owns the dialog, so it has something to raise."""
+    global _owner_class_registered
+    user32, kernel32 = ctypes.windll.user32, ctypes.windll.kernel32
+    instance = kernel32.GetModuleHandleW(None)
+    if not _owner_class_registered:
+        procedure = _WNDPROC(("DefWindowProcW", user32))
+        definition = _WNDCLASSW(0, procedure, 0, 0, instance, None, None, None, None,
+                                "GXWorksAgentPickerHost")
+        user32.RegisterClassW(ctypes.byref(definition))
+        # Keep the callback alive for the lifetime of the process.
+        _create_owner.procedure = procedure
+        _owner_class_registered = True
+    return user32.CreateWindowExW(0, "GXWorksAgentPickerHost", "GXWorks Agent",
+                                  WS_POPUP, 0, 0, 0, 0, None, None, instance, None) or 0
+
+
+def _raise_window(hwnd: int) -> None:
+    """Bring a window to the foreground from a process the user did not just click."""
+    if not hwnd:
+        return
+    user32, kernel32 = ctypes.windll.user32, ctypes.windll.kernel32
+    foreground = user32.GetForegroundWindow()
+    foreground_thread = user32.GetWindowThreadProcessId(foreground, None) if foreground else 0
+    own_thread = kernel32.GetCurrentThreadId()
+    attached = False
+    if foreground_thread and foreground_thread != own_thread:
+        # Foreground ownership is shared only between input-attached threads.
+        attached = bool(user32.AttachThreadInput(foreground_thread, own_thread, True))
+    try:
+        user32.BringWindowToTop(hwnd)
+        user32.SetForegroundWindow(hwnd)
+    finally:
+        if attached:
+            user32.AttachThreadInput(foreground_thread, own_thread, False)
+
+
 def _vtable(pointer: int, slot: int):
     table = ctypes.cast(pointer, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents
     return table[slot]
@@ -101,9 +167,19 @@ def choose_folder(title: str = "选择工作区文件夹", *, probe: bool = Fals
         set_title(dialog, title)
         if probe:
             return None
-        show = ctypes.WINFUNCTYPE(HRESULT, ctypes.c_void_p, ctypes.c_void_p)(
-            _vtable(dialog.value, _SLOT_SHOW))
-        shown = show(dialog, None) & 0xFFFFFFFF
+        # The dialog is modal inside Show, so it has to reach the foreground before
+        # that call: raise the owner window, then hand it to the dialog.
+        owner = 0
+        try:
+            owner = _create_owner()
+            _pump_alt()
+            _raise_window(owner)
+            show = ctypes.WINFUNCTYPE(HRESULT, ctypes.c_void_p, ctypes.c_void_p)(
+                _vtable(dialog.value, _SLOT_SHOW))
+            shown = show(dialog, ctypes.c_void_p(owner) if owner else None) & 0xFFFFFFFF
+        finally:
+            if owner:
+                ctypes.windll.user32.DestroyWindow(owner)
         if shown == ERROR_CANCELLED_HRESULT:
             return None
         if shown != 0:
