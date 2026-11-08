@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, CirclePause, Download, Moon, Play, Radio, Sun } from "lucide-react";
+import { CirclePause, Download, Moon, Play, Radio, Sun } from "lucide-react";
 import { Badge, Button } from "../components/ui";
 import { formatSignal, mergeTrace, sampleAt, signalPath } from "./simulatorTimelineData";
 import type { Signal, TraceState } from "./simulatorTimelineData";
@@ -79,7 +79,7 @@ export function SimulatorTimeline({ state, disconnected, standalone }: Props) {
     link.href = url; link.download = "simulator-trace.json"; link.click(); URL.revokeObjectURL(url);
   }
   return <section className={`simulator-timeline ${compact ? "compact" : ""} ${standalone ? "standalone" : ""}`} aria-label="仿真信号总览">
-    <header className="timeline-header"><div className="timeline-brand"><Activity size={20} /><span>GXWorks Agent<small>仿真总览</small></span></div>
+    <header className="timeline-header"><div className="timeline-brand"><img className="brand-mark" src="./icon.svg" alt="" aria-hidden="true" /><span>GXWorks Agent<small>仿真总览</small></span></div>
       <div className="timeline-actions"><Badge tone={disconnected || state.error || failed || invalid ? "bad" : state.status === "recording" ? "good" : "neutral"}>{disconnected ? "连接中断" : invalid ? `${invalid} 项读数缺失或无效` : statusText[state.status] || state.status}</Badge>
         <Button variant="ghost" onClick={download}><Download size={14} />导出记录</Button>{standalone && <Button variant="ghost" onClick={theme} aria-label="切换主题">{light ? <Moon size={16} /> : <Sun size={16} />}</Button>}</div></header>
     <div className="timeline-intro"><div><h2>{state.config.title}</h2><p>{state.config.plc_model} · {state.source.route || state.source.backend_kind || "测试执行记录"} · {state.source.kind.startsWith("recorded_") ? "记录中的采样" : `请求间隔 ${state.config.sample_ms} ms`}{state.binding.version_id ? ` · 版本 ${state.binding.version_id}` : ""}</p>

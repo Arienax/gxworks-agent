@@ -9,7 +9,6 @@ import {
   Bug,
   ChevronDown,
   ChevronRight,
-  CircuitBoard,
   ClipboardCheck,
   FlaskConical,
   FolderOpen,
@@ -115,7 +114,7 @@ export function ProjectSidebar(props: Props) {
     <aside className="project-sidebar" aria-label={t("工程")}>
       <div className="sidebar-inner">
       <div className="sidebar-brand">
-        <CircuitBoard size={19} />
+        <img className="brand-mark" src="./icon.svg" alt="" aria-hidden="true" />
         <strong>GXWorks <span>Agent</span></strong>
         <button className="icon-button sidebar-collapse" aria-label={t("隐藏侧栏")} title={t("隐藏侧栏")}
           onClick={() => setLeftOpen(false)}>

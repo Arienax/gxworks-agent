@@ -95,6 +95,14 @@
   min-height: 56px;
   padding: 0 16px;
 }
+/* The product mark matches the assistant-plugin icon: a square badge, not a glyph. */
+.brand-mark {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border-radius: 4px;
+  display: block;
+}
 .sidebar-brand > svg {
   color: var(--accent);
   flex-shrink: 0;

@@ -3,6 +3,7 @@
 .timeline-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 20px; background: var(--chrome); border-bottom: 1px solid var(--border); }
 .timeline-brand { display: flex; gap: 10px; align-items: center; color: var(--accent); font-weight: 600; }
 .timeline-brand small { display: block; font-weight: 400; color: var(--muted); font-size: 11px; }
+.timeline-brand .brand-mark { width: 20px; height: 20px; flex: none; border-radius: 4px; display: block; }
 .timeline-actions { display: flex; align-items: center; gap: 8px; }
 .timeline-intro { display: flex; justify-content: space-between; gap: 16px; padding: 18px 20px; align-items: center; }
 .timeline-intro h2 { margin: 0 0 5px; font-size: 17px; }

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="title">
+  <title id="title">GXWorks Agent</title>
+  <rect width="256" height="256" fill="#000000"/>
+  <g fill="#ffffff" transform="translate(28.16 28.16) scale(0.78)">
+    <path d="M13 89H65V52.5L96.5 21H111V191H80.5L65 175.5V127H13Z"/>
+    <path d="M243 167H191V203.5L159.5 235H145V65H175.5L191 80.5V129H243Z"/>
+  </g>
+</svg>
