@@ -103,77 +103,85 @@
   border-radius: 4px;
   display: block;
 }
-/* Workspace chip: the current folder, and the entry to the system folder chooser. */
-.sidebar-workspace {
-  padding: 0 10px 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.workspace-pick {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  width: 100%;
-  min-height: 28px;
-  padding: 4px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  background: transparent;
-  color: var(--text);
-  font-size: 11px;
-  text-align: left;
-  cursor: pointer;
-}
-.workspace-pick:hover:not(:disabled) {
-  background: var(--hover);
-  border-color: var(--accent-border);
-}
-.workspace-pick:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-.workspace-pick.empty {
-  color: var(--muted);
-  border-style: dashed;
-}
-.workspace-pick-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* Workspace rows: a folder line that switches or folds, and its projects below. */
 .workspace-pick-error {
   margin: 0;
   color: var(--danger, var(--text));
   font-size: 10px;
 }
-/* Additional workspaces listed above the active one's projects. */
 .workspace-group {
-  margin-bottom: 2px;
+  margin-bottom: 1px;
 }
-.workspace-group-head {
+.workspace-group.active > .workspace-row-wrap > .workspace-row {
+  background: var(--hover);
+  color: var(--text);
+  font-weight: 500;
+}
+.workspace-row-wrap {
   display: flex;
   align-items: center;
   gap: 2px;
 }
-.workspace-group-caret {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 24px;
-  padding: 0;
+.workspace-row {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 4px 8px;
   border: 0;
+  border-radius: var(--radius-control);
   background: transparent;
-  color: var(--muted);
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
   cursor: pointer;
 }
-.workspace-group-caret:hover {
-  color: var(--text);
+.workspace-row:hover:not(:disabled) {
+  background: var(--hover);
 }
-/* A project row that belongs to another workspace: one click switches and opens. */
+.workspace-row:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.workspace-caret {
+  display: grid;
+  place-items: center;
+  width: 13px;
+  flex: none;
+  color: var(--muted);
+}
+.workspace-row-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-row-count {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+/* The remove action stays out of the way until the row is hovered. */
+.workspace-group-forget {
+  flex: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.workspace-row-wrap:hover .workspace-group-forget,
+.workspace-group-forget:focus-visible {
+  opacity: 0.7;
+}
+.workspace-group-forget:hover {
+  opacity: 1;
+}
+/* Projects of the active workspace hang under its row, like a session list. */
+.workspace-group.active .project-node,
+.project-node.remote {
+  margin-left: 14px;
+}
 .project-item-remote,
 .project-item-flat {
   color: var(--text);
@@ -197,53 +205,6 @@
 }
 .sidebar-search > input::placeholder {
   color: var(--muted);
-}
-.workspace-group-toggle {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 26px;
-  padding: 4px 7px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-control);
-  background: transparent;
-  color: var(--muted);
-  font-size: 11px;
-  text-align: left;
-  cursor: pointer;
-}
-.workspace-group-toggle:hover:not(:disabled) {
-  background: var(--hover);
-  color: var(--text);
-}
-.workspace-group-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.workspace-group-toggle > small {
-  margin-left: auto;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-.workspace-group-forget {
-  flex: none;
-  opacity: 0.55;
-}
-.workspace-group-forget:hover {
-  opacity: 1;
-}
-.sidebar-heading-workspace {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 400;
 }
 .sidebar-brand > svg {
   color: var(--accent);

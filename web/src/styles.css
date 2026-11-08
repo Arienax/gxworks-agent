@@ -531,12 +531,12 @@ pre {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   background: transparent;
-  padding: 10px 8px;
-  border-radius: 5px;
+  padding: 6px 8px;
+  border-radius: var(--radius-control);
   text-align: left;
-  margin: 2px 0;
+  margin: 1px 0;
   color: var(--muted);
 }
 .project-item > svg {
@@ -547,13 +547,18 @@ pre {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 14px;
+  /* One line like a session row: the name, then its tags pushed to the right. */
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
 }
 .project-item small {
-  display: block;
-  font-size: 11px;
+  margin-left: auto;
+  flex: none;
+  font-size: 10px;
   color: var(--muted);
-  margin-top: 3px;
+  white-space: nowrap;
 }
 .project-item.selected {
   background: var(--panel);
