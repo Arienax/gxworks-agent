@@ -1,4 +1,4 @@
-<h1 align="center">GXWorks Agent</h1>
+![GXWorks Agent：面向三菱 PLC 工程的 MCP 工具服务与 AI 工作台](resources/assets/banner.png)
 
 <p align="center"><strong>原作者：<a href="https://github.com/Arienax">Arienax</a></strong> · <a href="https://github.com/Arienax/gxworks-agent">github.com/Arienax/gxworks-agent</a></p>
 
@@ -23,9 +23,11 @@
 
 GXWorks Agent 将三菱 PLC 的工程上下文、按 CPU 组织的指令事实、确定性静态校验与 GX Works2 原生操作封装为统一的工程工具链，支持 **Ladder（梯形图）**、**ST（结构化文本）**、**FBD（功能块图）** 以及 **SFC** 工程的受控编辑与诊断；无窗口新建按所选 CPU 的原生工程配置执行。
 
-你可以通过 **MCP** 将工程工具直接接入 Codex、Claude Desktop、Cursor 等客户端，复用客户端自身的模型完成规划、生成、原生会话编辑与验证，并保存带版本的工程产物；也可以启动可选的 **Web 工作台**，在浏览器中生成程序、审阅图形差异、运行仿真测试并按授权交付到 GX Works2。
+你可以通过 **MCP** 将工程工具直接接入 Codex、Claude Desktop、DeepSeek Harness 等客户端，复用客户端自身的模型完成规划、生成、原生会话编辑与验证，并保存带版本的工程产物；也可以启动可选的 **Web 工作台**，在浏览器中生成程序、审阅图形差异、运行仿真测试并按授权交付到 GX Works2。
 
 GX Works2 **1.635.0.1** 下，57 个可编程 CPU 菜单（Q 42、L 5、FX 10，合计 69 个具体成员）的 **226 个默认合法语言组合**已逐项完成无基底后台新建、复杂内容写入、已有源码编辑、原生编译、完整公开检查、保存与冷重开。Ladder/SFC 默认简单工程，ST/FBD 默认结构化工程；FX1 的原生结构化菜单不提供 ST/FBD，该限制不阻断已有工程读取。四语言优先交付 GXW，发现安装后自动编译；复杂 FBD 使用实际 ST 功能块组装。此结果限定于上述软件版本和工程操作，不代表所有物理成员已实机运行，也不代替具体指令与构造的能力检查。
+
+![系统架构：MCP 客户端与 Web 工作台接入 Python Core，由原生适配器驱动 GX Works2、GX Simulator2、PLC 只读监测与文件交付](resources/assets/feature-architecture.png)
 
 <a name="offline-gxw"></a>
 
@@ -41,6 +43,8 @@ GX Works2 **1.635.0.1** 下，57 个可编程 CPU 菜单（Q 42、L 5、FX 10，
 
 四种语言共用离线事务：Ladder 支持来源绑定的指令、浮点数、字符串和 P/I 标签编辑与移动，并保留 `MPS/MRD/MPP` 顺序及未改记录原字节；ST 联合编辑已有 Program、FB、FUNCTION 正文与声明，支持调整既有接口、参数顺序和返回类型并检查调用者；FBD 编辑对象、连接、网络、变量与已有 FB 定义的实例；SFC 编辑既有流程中的步骤、转换、动作、分支、汇合、跳转和子程序，并维护内部注册。声明项可增删、重排，实际 QCD 注释保留完整文本。
 
+![Ladder、ST、FBD、SFC 四种语言的编辑能力与各自支持的操作](resources/assets/feature-languages.png)
+
 导入后可切换「编辑的程序」继续处理同一工程的其他对象。MCP 的 `read_gxw_source` 返回所选源码的编辑模型；`edit_gxw_project` 按当前 `version_id` 联合提交多个源码、声明和注释修改，并逐程序预览差异。新入口默认 `save_policy="draft"`，可在校验文件结构与存储引用后保存带源码诊断的中间稿；设为 `checked` 时会拦截新增的已识别错误。
 
 全部 FX/Q/L 型号目录参与文件能力判断，按 CPU、格式、对象和操作返回支持范围。局部未知记录保持原字节，其他已解析对象可照常编辑；存在未决依赖的修改会返回具体对象和原因。该入口专注于既有源码对象、声明项与注释的离线修改。
@@ -53,11 +57,7 @@ GX Works2 **1.635.0.1** 下，57 个可编程 CPU 菜单（Q 42、L 5、FX 10，
 
 ## Ladder：从工程上下文到可交付产物
 
-![Ladder 上下文检索、指令依据、候选构造与产物保存](resources/assets/ladder-rag-core-demo.gif)
-
 以 FX3U 输送线控制片段为例：先按工程型号检索 `WSFL`、`INC` 与 `T200` 的指令事实和手册依据，构造梯形图候选并通过 MCP 提交保存。Python Core 对候选执行结构与操作数检查、共享条件归并及可维护性审阅；保存后自动生成 Ladder JSON、PLC IR、SVG 梯形图、由 IR 派生的可追溯 ST，以及用于 GX Works2 导入的 MAIN 与软元件注释 CSV。针对已有版本的小范围修改，可通过 `read_network` 与 `patch_program` 按网络提交局部补丁。
-
-动图展示外部客户端根据 MCP 返回的上下文构造候选程序、提交校验并保存产物的完整过程。
 
 <a name="st"></a>
 
@@ -74,11 +74,9 @@ ST 工作流兼顾独立文本生成与 GXW 原生工程维护：
 
 ## FBD：工程新建与复杂 GXW 工程编辑
 
-![MCP 为已有 FBD 工程第一轴加入故障锁存、复位和延时使能](resources/assets/fbd-control-logic-demo.gif)
+例如，在三菱电机 [MotionControl JEC 示例](https://eu-assets.contentstack.com/v3/assets/blt5412ff9af9aef77f/blt9206f69c182f67c3/634ea5238602a36d8e991e63/MotionControl_JEC_a.zip)的第一轴中增补故障锁存、复位和 500 ms 延时使能：保留原有 FB 实现及 Axis 的 `IN_OUT` 连线，接入 SR/TON 逻辑，并将运动许可信号连入既有功率控制块。
 
-上图在三菱电机 [MotionControl JEC 示例](https://eu-assets.contentstack.com/v3/assets/blt5412ff9af9aef77f/blt9206f69c182f67c3/634ea5238602a36d8e991e63/MotionControl_JEC_a.zip)的第一轴中增补故障锁存、复位和 500 ms 延时使能：保留原有 FB 实现及 Axis 的 `IN_OUT` 连线，接入 SR/TON 逻辑，并将运动许可信号连入既有功率控制块。
-
-除演示中的连线改接外，FBD 模块覆盖完整的工程构建与维护链路：
+除上述连线改接外，FBD 模块覆盖完整的工程构建与维护链路：
 
 - **新建或导入工程**：GX Works2 1.635.0.1 配合 v4 工作区适配器，查询所选 CPU 的原生系列和子系列后无基底创建 FBD 工程，遵守对应型号的工程类型与语言条件；内置 57 个 CPU 的 FBD 资源用于目录和兼容输入。也可导入已有 `.gxw`，继续编辑其自身源码。
 - **参数级与图形级双模编辑**：既可依据 `get_fbd_catalog` 返回的参数 schema 直接提交 `calls` 与 `arguments`（由 Core 自动展开端口、`IN_OUT` 配对并生成布线），也可显式增删改节点、端子、正交连线与多网络结构。
@@ -104,7 +102,7 @@ ST 工作流兼顾独立文本生成与 GXW 原生工程维护：
 
 ## Web 工作台：Direct 生成、图形审阅与产物导出
 
-![Web 工作台查看已保存梯形图、网络与软元件地址，以及导出菜单](resources/assets/web-gui-view-deliver.gif)
+![Web 工作台：工程侧栏、对话区，以及显示已保存梯形图网络的程序面板](resources/assets/web-workbench.png)
 
 在工作台中直接配置模型 API，即可使用内置 **Direct 生成流程**完成需求分析、规格确认与程序生成，并在浏览器内查看梯形图网络、FBD/SFC 图形、软元件占用、版本差异及可导出产物。Direct 与 MCP 共用同一套工程上下文与 RAG 管线，可减少外部 Agent 编排开销；工作台内的工程问答仍可按需调用只读工具。
 
@@ -118,9 +116,13 @@ ST 工作流兼顾独立文本生成与 GXW 原生工程维护：
 
 无法创建 GXW 时明确降级：Ladder 返回程序与注释 CSV，ST 返回源码，FBD/SFC 返回结构化候选及可用预览，并说明实际格式与原因。已成功生成的离线 GXW 在未安装 GX Works2 时仍可交付，原生编译状态标为未执行。安装发现支持 `GXWORKS2_EXE`、运行实例、Windows 注册信息及各本地盘符常见目录，包含非 C 盘安装。
 
+![工程流程：离线编辑到原生交付，以及示例工具调用输出](resources/assets/feature-workflow.png)
+
 <a name="rag"></a>
 
 ## CPU 作用域工程 RAG：架构与紧凑事实实现
+
+![CPU 作用域工程 RAG：查询、实体 / BM25 / 向量多路检索、域内局部 RRF、技术投影、Core 校验与版本化产物](resources/assets/feature-rag.png)
 
 通用文档切片 RAG 面向自由文本问答，难以满足工业控制对无外部服务依赖、跨型号规格隔离与代码级编译验证的需求。GXWorks Agent 针对经审查的技术事实条目（Reviewed Technical Facts）与原创工程范例实现了紧凑型 RAG 体系（发布包不包含厂商手册 PDF 原文及原始索引）：
 
@@ -130,6 +132,8 @@ ST 工作流兼顾独立文本生成与 GXW 原生工程维护：
 - **技术投影与确定性 Core 校验**：系统不将检索命中的知识直接视为可调用依据。面向模型端时，由 [`model_context`](src/shared/model_context.py) 提取引脚规格与时序约束等紧凑技术投影以控制 Prompt 预算；生成的程序逻辑必须经由 [`instruction_constraints`](src/plc/instruction_constraints.py) 与 Core 规则引擎执行 CPU 型号白名单、操作数位宽及互斥检查，形成闭环验证。
 
 ## 工具链与架构分工
+
+![功能一览：主要功能模块及其对应的 MCP 工具](resources/assets/feature-functions.png)
 
 - **工程上下文与现场快照发现**：既可按 CPU 和程序类型创建、选择版本化工程，也可在不建工程的前提下调用 `list_gxworks2_sessions` 与 `read_gxworks2_snapshot`，直接读取本机已打开 GX Works2 窗口的只读程序快照并按网络分析。未打开 GX Works2 时，`inspect_gxworks2_csv_files` 可凭一份程序 CSV、一份软元件注释 CSV 和显式 CPU 取得同类的只读 `source_ref`。
 - **CPU 作用域工程 RAG**：检索管线融合实体匹配、全文检索与 dense/LSA 向量检索（详见[架构与紧凑事实实现](#rag)）。已知指令由结构化事实库提供精确操作数、步长与修饰规则，剩余检索补充来源依据与原创工程范例，并自动剔除重复上下文。
@@ -159,10 +163,10 @@ ST 工作流兼顾独立文本生成与 GXW 原生工程维护：
 
 | 发布包 | 适用场景 | 启动入口 |
 | --- | --- | --- |
-| `GXWorks-Agent-MCP-windows-x64.zip` | 接入 Codex、Claude Desktop、Cursor 等 MCP 客户端，直接使用客户端模型 | `gxworks-agent-mcp.exe --local` |
+| `GXWorks-Agent-MCP-windows-x64.zip` | 接入 Codex、Claude Desktop、DeepSeek Harness 等 MCP 客户端，直接使用客户端模型 | `gxworks-agent-mcp.exe --local` |
 | `GXWorks-Agent-Full-windows-x64.zip` | 同时包含 Web 工作台与 MCP，共用一套运行资源 | `start-web.cmd` / `gxworks-agent-mcp.exe --local` |
 
-`MCP` 精简包不含 Web 服务端、模型 SDK、离线 PDF 解析依赖与演示动图，体积更精简，完整保留工程工具、RAG 检索、工程模板、原生辅助程序与仿真时间轴查看器。`Full` 包内置两个入口：其中的 MCP 既可用 `--local` 独立运行，也可用 `--service` 连接已启动的 Web 工作台，共用工程与审阅流程。
+`MCP` 精简包不含 Web 服务端、模型 SDK、离线 PDF 解析依赖，体积更精简，完整保留工程工具、RAG 检索、工程模板、原生辅助程序与仿真时间轴查看器。`Full` 包内置两个入口：其中的 MCP 既可用 `--local` 独立运行，也可用 `--service` 连接已启动的 Web 工作台，共用工程与审阅流程。
 
 <a name="mcp"></a>
 
@@ -175,6 +179,8 @@ ST 工作流兼顾独立文本生成与 GXW 原生工程维护：
 > “新建一个 FX3U Ladder 工程，先读取生成上下文和相关指令依据。实现 X0 每次按下计数一次，计满 3 次点亮 Y0，X1 复位。保存候选版本，列出生成的产物和剩余诊断。”
 
 外部客户端使用自己的模型，无需启动 Web。GX 导入与原生操作遵循已配置的执行许可；需要图形化审阅或共用工程时，可随时搭配 Web 工作台使用。
+
+**DeepSeek Harness 插件**：[`dsh-gxworks`](https://github.com/Arienax/dsh-gxworks) 把本服务封装为 DeepSeek Harness 插件：一条命令安装即得到内置 MCP 后端与 `gxworks-mcp-router` 技能，无需另行注册和配置 MCP 客户端。
 
 **随包提供的 MCP 路由 Skill**：源码仓库与两个发布包均在 [`skills/gxworks-mcp-router/`](skills/gxworks-mcp-router) 下附带一套 Agent Skill（`SKILL.md` 与 `references/`），整理了常见 PLC 工程任务的 MCP 工具选型、参数要点与调用顺序，涵盖只读快照与版本编辑、离线 `.gxw` 修改与持续前台会话、本地产物生成与后台原生编译检查，以及 `local` / `service` / `context` 三种接入模式的回执处理。连接 MCP 后，将整个 `gxworks-mcp-router/` 目录复制到客户端的技能目录即可启用。
 
