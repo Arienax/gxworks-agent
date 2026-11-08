@@ -412,10 +412,10 @@ def feature_languages(lang):
         c.text(ix + 54, iy + 40 + index * 22, str(index + 1), 11, SOFT, 400, 'end', True)
         c.code(ix + 66, iy + 40 + index * 22, ((line, BLUE if line.startswith('(*') else INK),), 12)
     # FBD: captured graph from a real FX3U FBD project
-    ix, iy, iw, ih = pane(c, 30, 430, 560, 330, 'POU_01 [FBD]', kinds[2], lang)
-    place_capture(c, ix, iy, iw, ih, 'language-fbd-panel', (0, 470, 1278, 620))
+    ix, iy, iw, ih = pane(c, 30, 430, 560, 330, 'ExFB [FBD]', kinds[2], lang)
+    place_capture(c, ix, iy, iw, ih, 'language-fbd-fb-panel', (110, 505, 1100, 640))
     # SFC: captured chart from a real SFC project
-    ix, iy, iw, ih = pane(c, 610, 430, 560, 330, 'S0 [SFC]', kinds[3], lang)
+    ix, iy, iw, ih = pane(c, 610, 430, 560, 330, 'Block [SFC]', kinds[3], lang)
     place_capture(c, ix, iy, iw, ih, 'language-sfc2-panel', (30, 235, 1224, 720))
     return c
 
