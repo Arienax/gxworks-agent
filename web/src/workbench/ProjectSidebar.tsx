@@ -74,7 +74,13 @@ export const projectSidebarFields = [
   "theme",
   "toggleTheme",
 ] as const;
-type Props = Pick<WorkbenchModel, typeof projectSidebarFields[number]>;
+type Props = Pick<WorkbenchModel, typeof projectSidebarFields[number]> & {
+  /** The engineering workspace the service serves, and how to switch it. */
+  workspace?: { name: string | null; path: string | null } | null;
+  workspaceError?: string;
+  onPickWorkspace?: () => void;
+  pickingWorkspace?: boolean;
+};
 export function ProjectSidebar(props: Props) {
   const {
     busy,
@@ -97,6 +103,10 @@ export function ProjectSidebar(props: Props) {
     t,
     theme,
     toggleTheme,
+    workspace,
+    workspaceError,
+    onPickWorkspace,
+    pickingWorkspace,
   } = props;
   const [showAll, setShowAll] = useState(false);
   const projectJobs = jobs.filter((job) => job.project_id === pid);
@@ -120,6 +130,22 @@ export function ProjectSidebar(props: Props) {
           onClick={() => setLeftOpen(false)}>
           <PanelLeftClose size={17} />
         </button>
+      </div>
+      <div className="sidebar-workspace">
+        <button
+          type="button"
+          className={`workspace-pick ${workspace?.name ? "" : "empty"}`}
+          title={workspace?.path || t("选择工作区文件夹")}
+          onClick={onPickWorkspace}
+          disabled={!!pickingWorkspace}
+        >
+          <FolderOpen size={14} aria-hidden="true" />
+          <span className="workspace-pick-name">
+            {pickingWorkspace ? t("正在选择…") : workspace?.name || t("选择工作区")}
+          </span>
+          <ChevronDown size={13} aria-hidden="true" />
+        </button>
+        {workspaceError && <p className="workspace-pick-error" role="alert">{workspaceError}</p>}
       </div>
       <a
         className="project-source sidebar-github"

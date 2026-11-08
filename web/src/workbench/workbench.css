@@ -103,6 +103,52 @@
   border-radius: 4px;
   display: block;
 }
+/* Workspace chip: the current folder, and the entry to the system folder chooser. */
+.sidebar-workspace {
+  padding: 0 10px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.workspace-pick {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+.workspace-pick:hover:not(:disabled) {
+  background: var(--hover);
+  border-color: var(--accent-border);
+}
+.workspace-pick:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.workspace-pick.empty {
+  color: var(--muted);
+  border-style: dashed;
+}
+.workspace-pick-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-pick-error {
+  margin: 0;
+  color: var(--danger, var(--text));
+  font-size: 10px;
+}
 .sidebar-brand > svg {
   color: var(--accent);
   flex-shrink: 0;

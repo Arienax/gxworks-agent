@@ -11,23 +11,25 @@ export type WorkspaceState = {
   home: string | null;
 };
 
+type PickResult = WorkspaceState & { cancelled?: boolean };
+
 /**
  * The engineering workspace the service currently serves.
  *
- * The service can start without one, so the workbench asks before it shows any
- * project: `selected` false means the picker owns the screen. Binding another
- * workspace rebuilds the service, so callers reload rather than keep stale ids.
+ * The page opens with whatever the service was started with and switches from the
+ * sidebar through the operating system's own folder chooser. Binding another
+ * workspace rebuilds the service, so a confirmed pick reloads the page instead of
+ * keeping stale project ids.
  */
 export function useWorkspaceBinding(session: unknown) {
   const [state, setState] = useState<WorkspaceState | null>(null);
   const [error, setError] = useState("");
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [picking, setPicking] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
       const value = await api<WorkspaceState>("/workspace", "GET");
       setState(value);
-      setError("");
       return value;
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure));
@@ -39,15 +41,30 @@ export function useWorkspaceBinding(session: unknown) {
     if (session) void refresh();
   }, [session, refresh]);
 
+  const pick = useCallback(async () => {
+    setPicking(true);
+    setError("");
+    try {
+      const value = await api<PickResult>("/workspace/pick", "POST", {});
+      if (value?.cancelled) {
+        setState(value);
+        return;
+      }
+      window.location.reload();
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    } finally {
+      setPicking(false);
+    }
+  }, []);
+
   return {
     state,
     error,
-    /** True until the first read completes: the shell must not flash empty. */
+    picking,
     loading: !!session && state === null && !error,
     needsChoice: !!session && state !== null && !state.selected,
-    pickerOpen,
-    openPicker: () => setPickerOpen(true),
-    closePicker: () => setPickerOpen(false),
     refresh,
+    pick,
   };
 }

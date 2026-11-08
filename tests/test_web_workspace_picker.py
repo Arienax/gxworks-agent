@@ -129,3 +129,22 @@ def test_holder_reports_the_missing_workspace_before_one_is_bound(tmp_path):
     holder.bind(type("Bound", (), {"read_only": False})())
     assert holder.read_only is False
     assert holder.current() is not None
+
+
+def test_the_system_folder_dialog_can_be_built_without_showing_it():
+    """Proves the COM wiring (GUIDs, vtable slots, folder options) without a UI."""
+    from integrations.web.native_picker import choose_folder, native_folder_chooser_available
+
+    if not native_folder_chooser_available():
+        pytest.skip("no Windows folder dialog on this platform")
+    assert choose_folder(probe=True) is None
+
+
+def test_a_platform_without_the_dialog_reports_picker_unavailable(monkeypatch):
+    from integrations.web import workspaces
+
+    monkeypatch.setattr("integrations.web.native_picker.native_folder_chooser_available",
+                        lambda: False)
+    with pytest.raises(workspaces.WorkspacePathError) as error:
+        workspaces.pick_native_directory()
+    assert error.value.code == "picker_unavailable"

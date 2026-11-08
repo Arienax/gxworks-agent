@@ -99,4 +99,9 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
+    # Child-process mode: the folder dialog needs its own single-threaded
+    # apartment, so the service asks a separate process for one path.
+    if "--pick-directory" in sys.argv[1:]:
+        from .native_picker import main as pick_main
+        raise SystemExit(pick_main())
     raise SystemExit(main())

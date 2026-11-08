@@ -147,3 +147,38 @@ def test_the_agent_credential_stays_separate_from_the_page_session(tmp_path):
         assert page.get("/api/agent/health").status_code == 403
         assert page.get("/api/agent/health",
                         headers={"authorization": "Bearer agent-token"}).status_code != 403
+
+
+def test_the_sidebar_chooser_binds_the_folder_the_system_returns(client, tmp_path, monkeypatch):
+    import integrations.web.app as web_app
+    chosen = tmp_path / "from-explorer"
+    monkeypatch.setattr(web_app, "pick_native_directory", lambda *a, **k: str(chosen))
+    response = client.post("/api/workspace/pick", json={})
+    assert response.status_code == 200
+    assert Path(response.json()["path"]) == chosen.resolve()
+    assert response.json()["selected"] is True
+    assert client.get("/api/projects").status_code == 200
+
+
+def test_cancelling_the_system_chooser_keeps_the_current_workspace(client, monkeypatch):
+    import integrations.web.app as web_app
+    monkeypatch.setattr(web_app, "pick_native_directory", lambda *a, **k: None)
+    response = client.post("/api/workspace/pick", json={})
+    assert response.status_code == 200
+    assert response.json()["cancelled"] is True
+    assert response.json()["selected"] is False
+
+
+@pytest.mark.parametrize("code", ["picker_unavailable", "directory-unreadable"])
+def test_a_chooser_failure_is_reported_without_binding(client, monkeypatch, code):
+    import integrations.web.app as web_app
+    from integrations.web.workspaces import WorkspacePathError
+
+    def fail(*_args, **_kwargs):
+        raise WorkspacePathError(code, "no desktop session")
+
+    monkeypatch.setattr(web_app, "pick_native_directory", fail)
+    response = client.post("/api/workspace/pick", json={})
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == code
+    assert client.get("/api/workspace").json()["selected"] is False

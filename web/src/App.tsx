@@ -1,7 +1,7 @@
 // Copyright 2026 Arienax
 // Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
 
-import { FolderTree, X } from "lucide-react";
+import { X } from "lucide-react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { RetainedPanel } from "./components/RetainedPanel";
@@ -17,7 +17,6 @@ import { clampCanvasWidth } from "./workbench/usePanelResize";
 import { usePanelTransition } from "./workbench/usePanelTransition";
 import { useWorkbenchController } from "./workbench/useWorkbenchController";
 import { useWorkspaceBinding } from "./workbench/useWorkspaceBinding";
-import { WorkspacePicker } from "./features/WorkspacePicker";
 import { pickView } from "./workbench/viewProps";
 
 const WorkbenchDialogs = lazy(() => import("./workbench/WorkbenchDialogs").then((module) => ({ default: module.WorkbenchDialogs })));
@@ -81,20 +80,6 @@ export default function App() {
       </p>
     );
   }
-  if (workspace.needsChoice) {
-    return (
-      <WorkspacePicker
-        open
-        dismissible={false}
-        onClose={workspace.closePicker}
-        onSelected={() => window.location.reload()}
-        t={view.t}
-      />
-    );
-  }
-  if (workspace.loading) {
-    return <p className="panel-empty" role="status">{view.t("正在读取工作区")}</p>;
-  }
   if (view.modal || view.gxSend) dialogsOpened.current = true;
   const startResize = (event: ReactPointerEvent<HTMLDivElement>) => {
     setResizing(true);
@@ -127,7 +112,9 @@ export default function App() {
       }}
     >
       <div className="sidebar-host" inert={sidebarPhase === "closed" || undefined}>
-        <ProjectSidebar {...pickView(view, projectSidebarFields)} />
+        <ProjectSidebar {...pickView(view, projectSidebarFields)}
+          workspace={workspace.state} workspaceError={workspace.error}
+          onPickWorkspace={workspace.pick} pickingWorkspace={workspace.picking} />
       </div>
       <div className="sidebar-scrim" aria-hidden="true" onClick={() => view.setLeftOpen(false)} />
       <AgentConversation {...pickView(view, agentConversationFields)}
@@ -182,21 +169,6 @@ export default function App() {
           <WorkbenchDialogs {...pickView(view, workbenchDialogsFields)} />
         </Suspense>
       )}
-      <button
-        type="button"
-        className="workspace-switch"
-        title={`${view.t("切换工作区")}：${workspace.state?.path ?? ""}`}
-        onClick={workspace.openPicker}
-      >
-        <FolderTree size={13} aria-hidden="true" />
-        <span>{workspace.state?.name || view.t("工作区")}</span>
-      </button>
-      <WorkspacePicker
-        open={workspace.pickerOpen}
-        onClose={workspace.closePicker}
-        onSelected={() => window.location.reload()}
-        t={view.t}
-      />
     </div>
   );
 }

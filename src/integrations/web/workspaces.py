@@ -11,6 +11,7 @@ fully qualified is rejected instead of being reinterpreted.
 """
 from __future__ import annotations
 
+import json
 import os
 import ntpath
 import posixpath
@@ -162,6 +163,44 @@ def workspace_snapshot(workspace: str | None) -> dict:
     path = Path(workspace)
     return {"selected": True, "path": str(path), "name": path.name,
             "home": str(Path.home().resolve())}
+
+
+def pick_native_directory(timeout: float = 900.0):
+    """Ask the operating system for a folder in a child process.
+
+    The dialog is modal and needs a single-threaded apartment, so it runs in its
+    own process: the service keeps serving while the operator browses, and an
+    abandoned dialog cannot pin a worker thread.
+    """
+    import subprocess
+    import sys as _sys
+
+    from .native_picker import native_folder_chooser_available
+    if not native_folder_chooser_available():
+        raise WorkspacePathError("picker_unavailable", "当前平台没有可用的系统文件夹选择器。")
+    command = ([str(_sys.executable), "--pick-directory"] if getattr(_sys, "frozen", False)
+               else [str(_sys.executable), "-m", "integrations.web.native_picker"])
+    try:
+        completed = subprocess.run(command, capture_output=True, text=True,
+                                   timeout=timeout, check=False)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise WorkspacePathError("picker_unavailable", str(error)) from error
+    for line in reversed((completed.stdout or "").splitlines()):
+        text = line.strip()
+        if not text.startswith("{"):
+            continue
+        try:
+            payload = json.loads(text)
+        except ValueError:
+            continue
+        if payload.get("cancelled"):
+            return None
+        path = payload.get("path")
+        if isinstance(path, str) and path:
+            return path
+    raise WorkspacePathError(
+        "picker_unavailable",
+        ((completed.stderr or completed.stdout) or "系统文件夹选择器未能返回结果。").strip()[:200])
 
 
 class WorkspaceNotSelected(RuntimeError):

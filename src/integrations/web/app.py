@@ -27,7 +27,8 @@ from application.settings import ModelConfigurationRequiredError
 from .security import LocalSecurity
 from .mcp_routes import register_mcp_routes
 from .workspaces import (ServiceHolder, WorkspaceNotSelected, WorkspacePathError,
-                         create_directory, list_directory, workspace_snapshot)
+                         create_directory, list_directory, pick_native_directory,
+                         workspace_snapshot)
 from . import responses as dto
 from .schemas import (Login, ProjectCreate, ProjectUpdate, ActivateVersion, SpecUpdate, SpecIORowEdit, SpecPresentation,
                       JobCreate, GenerationRepair, ProposalDecision, ExecutionProposal, AgentCall,
@@ -167,6 +168,16 @@ def create_app(workspace=None, *, state_dir=None, read_only=False, origin="http:
     @app.post("/api/workspace", response_model=dto.WorkspaceState)
     def select_workspace(command: WorkspaceSelection):
         return bind_workspace(Path(command.path))
+
+    @app.post("/api/workspace/pick", response_model=dto.WorkspaceState)
+    def pick_workspace():
+        """Open the operating system's folder chooser, then bind what was chosen."""
+        chosen = pick_native_directory()
+        if chosen is None:
+            bound = holder.current()
+            state = workspace_snapshot(str(bound.store.base_dir) if bound is not None else None)
+            return {**state, "cancelled": True}
+        return bind_workspace(Path(chosen))
 
     @app.get("/api/workspace/browse", response_model=dto.WorkspaceListing)
     def browse_workspace(path: str | None = Query(default=None, max_length=4096)):
