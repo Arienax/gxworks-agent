@@ -38,6 +38,7 @@ import type { Locale } from "../i18n";
 import { statusText, statusTone } from "../i18n";
 import { jobKindLabel, listedJobStatus } from "./jobLabels";
 import type { WorkbenchModel } from "./useWorkbenchController";
+import { flattenProjects, otherWorkspaces, workspaceExpanded } from "./workspaceRows";
 
 const jobIcons: Record<string, ReactNode> = {
   analysis: <ListChecks size={15} />,
@@ -84,7 +85,7 @@ type Props = Pick<WorkbenchModel, typeof projectSidebarFields[number]> & {
   workspaceError?: string;
   workspacesBusy?: boolean;
   onAddWorkspace?: () => void;
-  onActivateWorkspace?: (identifier: string) => void;
+  onActivateWorkspace?: (identifier: string, projectId?: string) => void;
   onForgetWorkspace?: (identifier: string) => void;
 };
 export function ProjectSidebar(props: Props) {
@@ -117,7 +118,34 @@ export function ProjectSidebar(props: Props) {
     onForgetWorkspace,
   } = props;
   const [showAll, setShowAll] = useState(false);
+  const [viewMode, setViewMode] = useState<"grouped" | "flat">("grouped");
+  // Workspaces other than the active one expand in place, without switching to them.
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [query, setQuery] = useState("");
   const workspaceGroups = workspaces ?? [];
+  const activeGroup = workspaceGroups.find((group) => group.active);
+  const showFlat = viewMode === "flat" || query.trim().length > 0;
+  const flatRows = flattenProjects(workspaceGroups, query, pid).map(({ group, project, key, current }) => (
+    <div key={key} className={`project-node ${current ? "selected" : ""}`}>
+      <button type="button" className="project-item project-item-flat"
+        disabled={!!workspacesBusy} title={`${group.label} · ${group.path}`}
+        onClick={() => {
+          if (current) return;
+          if (!group.active) {
+            onActivateWorkspace?.(group.id, project.id || undefined);
+            return;
+          }
+          setShowAll(false);
+          setPid(project.id || "");
+        }}>
+        <FolderOpen size={15} />
+        <span>{project.name}
+          <small>{group.label} · {project.plc_model} · {String(project.target_mode || "").toUpperCase()}</small>
+        </span>
+        {!group.active && <ArrowUpRight size={12} />}
+      </button>
+    </div>
+  ));
   const projectJobs = jobs.filter((job) => job.project_id === pid);
   const visibleJobs = showAll ? projectJobs : projectJobs.slice(0, VISIBLE_TASKS);
   const closeOnNarrow = () => { if (window.innerWidth <= 1100) setLeftOpen(false); };
@@ -178,37 +206,74 @@ export function ProjectSidebar(props: Props) {
 
       <div className="sidebar-heading">
         <span>{t("工程")}</span>
-        {workspaceGroups.some((group) => group.active) && (
-          <small className="sidebar-heading-workspace" title={workspaceGroups.find((group) => group.active)?.path}>
-            {workspaceGroups.find((group) => group.active)?.label}
+        {activeGroup && (
+          <small className="sidebar-heading-workspace" title={activeGroup.path}>
+            {activeGroup.label}
           </small>
         )}
+        <button className="icon-button"
+          aria-label={viewMode === "grouped" ? t("平铺显示全部工程") : t("按工作区分组")}
+          title={viewMode === "grouped" ? t("平铺显示全部工程") : t("按工作区分组")}
+          onClick={() => setViewMode(viewMode === "grouped" ? "flat" : "grouped")}>
+          {viewMode === "grouped" ? <ListChecks size={15} /> : <GitBranch size={15} />}
+        </button>
         <button className="icon-button" aria-label={t("新建工程")} title={t("新建工程")}
           disabled={!canWrite} onClick={() => setModal("new")}>
           <Plus size={15} />
         </button>
       </div>
+      <div className="sidebar-search">
+        <input type="search" value={query} placeholder={t("搜索工程")}
+          aria-label={t("搜索工程")}
+          onChange={(event) => setQuery(event.target.value)} />
+      </div>
       <nav className="project-tree">
-        {/* Other workspaces stay one click away; each keeps its own projects. */}
-        {workspaceGroups.filter((group) => !group.active).map((group) => (
-          <section key={group.id} className="workspace-group">
-            <div className="workspace-group-head">
-              <button type="button" className="workspace-group-toggle" title={group.path}
-                disabled={!!workspacesBusy} onClick={() => onActivateWorkspace?.(group.id)}>
-                <ChevronRight size={14} />
-                <FolderOpen size={14} />
-                <span className="workspace-group-label">{group.label}</span>
-                <small>{group.projects.length}</small>
-              </button>
-              <button type="button" className="icon-button workspace-group-forget"
-                aria-label={t("从列表移除工作区")} title={t("从列表移除工作区")}
-                disabled={!!workspacesBusy} onClick={() => onForgetWorkspace?.(group.id)}>
-                <X size={12} />
-              </button>
-            </div>
-          </section>
-        ))}
-        {projects.map((p) => {
+        {showFlat ? (
+          flatRows.length ? flatRows : <p className="sidebar-empty">{t("没有匹配的工程。")}</p>
+        ) : (
+          otherWorkspaces(workspaceGroups).map((group) => {
+            const open = workspaceExpanded(group, expandedGroups);
+            return (
+              <section key={group.id} className="workspace-group">
+                <div className="workspace-group-head">
+                  <button type="button" className="workspace-group-caret"
+                    aria-label={t(open ? "收起工作区" : "展开工作区")} aria-expanded={open}
+                    onClick={() => setExpandedGroups((old) => ({ ...old, [group.id]: !old[group.id] }))}>
+                    {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                  </button>
+                  <button type="button" className="workspace-group-toggle" title={group.path}
+                    disabled={!!workspacesBusy} onClick={() => onActivateWorkspace?.(group.id)}>
+                    <FolderOpen size={14} />
+                    <span className="workspace-group-label">{group.label}</span>
+                    <small>{group.projects.length}</small>
+                  </button>
+                  <button type="button" className="icon-button workspace-group-forget"
+                    aria-label={t("从列表移除工作区")} title={t("从列表移除工作区")}
+                    disabled={!!workspacesBusy} onClick={() => onForgetWorkspace?.(group.id)}>
+                    <X size={12} />
+                  </button>
+                </div>
+                {open && group.projects.map((project) => (
+                  <div key={`${group.id}:${project.id}`} className="project-node">
+                    <button type="button" className="project-item project-item-remote"
+                      disabled={!!workspacesBusy} title={t("切换到该工作区并打开此工程")}
+                      onClick={() => onActivateWorkspace?.(group.id, project.id || undefined)}>
+                      <ArrowUpRight size={13} />
+                      <FolderOpen size={15} />
+                      <span>{project.name}
+                        <small>{project.plc_model} · {String(project.target_mode || "").toUpperCase()}</small>
+                      </span>
+                    </button>
+                  </div>
+                ))}
+                {open && !group.projects.length && (
+                  <p className="sidebar-empty">{t("该工作区还没有工程。")}</p>
+                )}
+              </section>
+            );
+          })
+        )}
+        {!showFlat && projects.map((p) => {
           const selected = pid === p.id;
           return (
             <div key={p.id} className={`project-node ${selected ? "selected" : ""}`}>
@@ -262,7 +327,7 @@ export function ProjectSidebar(props: Props) {
             </div>
           );
         })}
-        {!projects.length && <p className="sidebar-empty">{t("新建工程，或将 GXW 工程拖到对话输入框导入。")}</p>}
+        {!showFlat && !projects.length && <p className="sidebar-empty">{t("新建工程，或将 GXW 工程拖到对话输入框导入。")}</p>}
       </nav>
 
       <div className="sidebar-bottom">

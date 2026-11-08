@@ -66,12 +66,17 @@ export function useWorkspaceBinding(session: unknown) {
     }
   }, []);
 
-  const activate = useCallback(async (identifier: string) => {
+  const activate = useCallback(async (identifier: string, projectId?: string) => {
     setBusy(true);
     setError("");
     try {
       await api<WorkspaceIndex>(`/workspaces/${encodeURIComponent(identifier)}/activate`, "POST", {});
-      window.location.reload();
+      // Reload on the requested project so switching a workspace can open a row
+      // from another workspace in one action.
+      const target = new URL(window.location.href);
+      if (projectId) target.searchParams.set("project", projectId);
+      else target.searchParams.delete("project");
+      window.location.assign(target.toString());
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure));
     } finally {

@@ -158,6 +158,46 @@
   align-items: center;
   gap: 2px;
 }
+.workspace-group-caret {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.workspace-group-caret:hover {
+  color: var(--text);
+}
+/* A project row that belongs to another workspace: one click switches and opens. */
+.project-item-remote,
+.project-item-flat {
+  color: var(--text);
+}
+.project-item-flat > small,
+.project-item-remote > span > small {
+  color: var(--muted);
+}
+.sidebar-search {
+  padding: 0 10px 4px;
+}
+.sidebar-search > input {
+  width: 100%;
+  min-height: 24px;
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+}
+.sidebar-search > input::placeholder {
+  color: var(--muted);
+}
 .workspace-group-toggle {
   flex: 1;
   min-width: 0;

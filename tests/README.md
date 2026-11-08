@@ -528,6 +528,7 @@ Owns HTTP/Web contracts, presentation state, startup, FBD UI, workbench/applicat
 | `web/tests/model-parameters.test.mjs` | browser model-parameter UI behavior |
 | `web/tests/module-resolution.test.mjs` | frontend module resolution, packaging-sensitive imports and production chunk boundaries |
 | `web/tests/device-groups.test.mjs` | device comment grouping by device family for the program explorer panel |
+| `web/tests/workspace-rows.test.mjs` | workspace/project rows: flat listing across workspaces, name search, fold state and current-row marking |
 
 ### Runtime diagnostics, privacy and streaming
 
