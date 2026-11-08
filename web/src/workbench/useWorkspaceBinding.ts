@@ -4,32 +4,43 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/client";
 
-export type WorkspaceState = {
-  selected: boolean;
-  path: string | null;
-  name: string | null;
-  home: string | null;
+export type WorkspaceProjectRef = {
+  id?: string | null;
+  name?: string | null;
+  plc_model?: string | null;
+  target_mode?: string | null;
 };
 
-type PickResult = WorkspaceState & { cancelled?: boolean };
+export type WorkspaceSummary = {
+  id: string;
+  path: string;
+  label: string;
+  active: boolean;
+  projects: WorkspaceProjectRef[];
+};
+
+export type WorkspaceIndex = {
+  active: string | null;
+  workspaces: WorkspaceSummary[];
+  cancelled?: boolean;
+};
 
 /**
- * The engineering workspace the service currently serves.
+ * The workspaces this workbench serves and the projects inside each one.
  *
- * The page opens with whatever the service was started with and switches from the
- * sidebar through the operating system's own folder chooser. Binding another
- * workspace rebuilds the service, so a confirmed pick reloads the page instead of
- * keeping stale project ids.
+ * A workspace is one row in a list, not the process binding: the sidebar shows
+ * every registered folder with its projects, and only the active workspace has a
+ * running service. Activating another one rebuilds it, so the page reloads.
  */
 export function useWorkspaceBinding(session: unknown) {
-  const [state, setState] = useState<WorkspaceState | null>(null);
+  const [index, setIndex] = useState<WorkspaceIndex | null>(null);
   const [error, setError] = useState("");
-  const [picking, setPicking] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
-      const value = await api<WorkspaceState>("/workspace", "GET");
-      setState(value);
+      const value = await api<WorkspaceIndex>("/workspaces", "GET");
+      setIndex(value);
       return value;
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure));
@@ -41,30 +52,56 @@ export function useWorkspaceBinding(session: unknown) {
     if (session) void refresh();
   }, [session, refresh]);
 
-  const pick = useCallback(async () => {
-    setPicking(true);
+  const addViaPicker = useCallback(async () => {
+    setBusy(true);
     setError("");
     try {
-      const value = await api<PickResult>("/workspace/pick", "POST", {});
-      if (value?.cancelled) {
-        setState(value);
-        return;
-      }
+      const value = await api<WorkspaceIndex>("/workspaces/pick", "POST", {});
+      if (value?.cancelled) return;
       window.location.reload();
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure));
     } finally {
-      setPicking(false);
+      setBusy(false);
+    }
+  }, []);
+
+  const activate = useCallback(async (identifier: string) => {
+    setBusy(true);
+    setError("");
+    try {
+      await api<WorkspaceIndex>(`/workspaces/${encodeURIComponent(identifier)}/activate`, "POST", {});
+      window.location.reload();
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  const forget = useCallback(async (identifier: string) => {
+    setBusy(true);
+    setError("");
+    try {
+      const value = await api<WorkspaceIndex>(`/workspaces/${encodeURIComponent(identifier)}`, "DELETE");
+      setIndex(value);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    } finally {
+      setBusy(false);
     }
   }, []);
 
   return {
-    state,
+    index,
     error,
-    picking,
-    loading: !!session && state === null && !error,
-    needsChoice: !!session && state !== null && !state.selected,
+    busy,
+    loading: !!session && index === null && !error,
+    workspaces: index?.workspaces ?? [],
+    activeId: index?.active ?? null,
     refresh,
-    pick,
+    addViaPicker,
+    activate,
+    forget,
   };
 }

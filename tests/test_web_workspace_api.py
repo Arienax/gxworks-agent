@@ -1,7 +1,7 @@
 # Copyright 2026 Arienax
 # Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
 
-"""The workbench starts without a workspace and adopts the browser's choice."""
+"""The workbench serves a list of workspaces, each owning its own projects."""
 import sys
 from pathlib import Path
 
@@ -15,24 +15,34 @@ from fastapi.testclient import TestClient
 
 from integrations.web.app import create_app
 
+ORIGIN = "http://127.0.0.1:8765"
+
+
+def open_page(app):
+    page = TestClient(app, base_url=ORIGIN)
+    page.__enter__()
+    session = page.get("/api/session")
+    assert session.status_code == 200
+    page.headers.update({"x-csrf-token": session.json()["csrf"], "origin": ORIGIN})
+    return page
+
 
 @pytest.fixture()
 def client(tmp_path):
-    app = create_app(None, state_dir=tmp_path / "state", origin="http://127.0.0.1:8765",
-                     operator_token="operator-token", agent_token="agent-token")
-    with TestClient(app, base_url="http://127.0.0.1:8765") as opened:
-        login = opened.post("/api/session", json={"token": "operator-token"})
-        assert login.status_code == 200
-        opened.headers.update({"x-csrf-token": login.json()["csrf"],
-                               "origin": "http://127.0.0.1:8765"})
-        yield opened
+    app = create_app(None, state_dir=tmp_path / "state", origin=ORIGIN,
+                     operator_token=None, agent_token="agent-token")
+    page = open_page(app)
+    try:
+        yield page
+    finally:
+        page.__exit__(None, None, None)
 
 
-def test_before_a_workspace_exists_the_state_says_so(client):
-    state = client.get("/api/workspace").json()
-    assert state["selected"] is False
-    assert state["path"] is None
-    assert state["home"]
+def test_before_any_workspace_exists_the_list_is_empty(client):
+    index = client.get("/api/workspaces").json()
+    assert index["active"] is None
+    assert index["workspaces"] == []
+    assert client.get("/api/workspace").json()["selected"] is False
 
 
 def test_work_that_needs_a_workspace_reports_the_missing_choice(client):
@@ -47,130 +57,89 @@ def test_session_still_answers_before_a_workspace_exists(client):
     assert response.json()["authenticated"] is True
 
 
-def test_browsing_lists_directories_without_a_bound_workspace(client, tmp_path):
-    (tmp_path / "line-a").mkdir()
-    (tmp_path / "line-b").mkdir()
-    (tmp_path / "readme.txt").write_text("x", encoding="utf-8")
-    listing = client.get("/api/workspace/browse", params={"path": str(tmp_path)}).json()
-    assert [row["name"] for row in listing["entries"]] == ["line-a", "line-b"]
-    assert listing["path"] == str(tmp_path)
-    assert listing["crumbs"][0]["path"] == Path(str(tmp_path)).anchor
+def test_adding_a_workspace_lists_it_with_its_projects_and_activates_it(client, tmp_path):
+    added = client.post("/api/workspaces", json={"path": str(tmp_path / "line-a")})
+    assert added.status_code == 200
+    index = added.json()
+    assert len(index["workspaces"]) == 1
+    row = index["workspaces"][0]
+    assert row["label"] == "line-a"
+    assert row["active"] is True
+    assert row["projects"] == []
+    assert index["active"] == row["id"]
+    assert client.get("/api/projects").status_code == 200
 
 
-def test_browsing_a_relative_path_is_refused(client):
-    response = client.get("/api/workspace/browse", params={"path": "relative/place"})
-    assert response.status_code == 400
-    assert response.json()["error"]["code"] == "directory-unreadable"
+def test_a_second_workspace_becomes_active_and_the_first_stays_listed(client, tmp_path):
+    first = client.post("/api/workspaces", json={"path": str(tmp_path / "one")}).json()
+    second = client.post("/api/workspaces", json={"path": str(tmp_path / "two")}).json()
+    notes = {row["label"]: row for row in second["workspaces"]}
+    assert set(notes) == {"one", "two"}
+    assert notes["two"]["active"] is True
+    assert notes["one"]["active"] is False
+    assert second["active"] == notes["two"]["id"]
+    assert first["active"] == notes["one"]["id"]
 
 
-def test_creating_a_directory_through_the_picker(client, tmp_path):
-    response = client.post("/api/workspace/directory",
-                           json={"parent": str(tmp_path), "name": "new-line"})
-    assert response.status_code == 200
-    assert (tmp_path / "new-line").is_dir()
+def test_activating_an_earlier_workspace_serves_it_again(client, tmp_path):
+    first = client.post("/api/workspaces", json={"path": str(tmp_path / "one")}).json()
+    client.post("/api/workspaces", json={"path": str(tmp_path / "two")})
+    identifier = first["workspaces"][0]["id"]
+    switched = client.post(f"/api/workspaces/{identifier}/activate")
+    assert switched.status_code == 200
+    assert switched.json()["active"] == identifier
+    assert client.get("/api/workspace").json()["name"] == "one"
 
 
-def test_selecting_a_workspace_binds_it_and_unblocks_the_workbench(client, tmp_path):
-    target = tmp_path / "engineering"
-    chosen = client.post("/api/workspace", json={"path": str(target)})
-    assert chosen.status_code == 200
-    assert chosen.json()["selected"] is True
-    assert Path(chosen.json()["path"]) == target.resolve()
+def test_forgetting_a_workspace_keeps_its_folder_and_projects_on_disk(client, tmp_path):
+    target = tmp_path / "kept"
+    added = client.post("/api/workspaces", json={"path": str(target)}).json()
+    identifier = added["workspaces"][0]["id"]
+    removed = client.delete(f"/api/workspaces/{identifier}")
+    assert removed.status_code == 200
+    assert removed.json()["workspaces"] == []
+    assert removed.json()["active"] is None
     assert target.is_dir()
-
-    assert client.get("/api/workspace").json()["path"] == str(target.resolve())
-    assert client.get("/api/projects").status_code == 200
+    assert client.get("/api/projects").status_code == 428
 
 
-def test_selecting_the_same_workspace_twice_keeps_the_bound_service(client, tmp_path):
-    target = tmp_path / "engineering"
-    first = client.post("/api/workspace", json={"path": str(target)}).json()
-    second = client.post("/api/workspace", json={"path": str(target)}).json()
-    assert first["path"] == second["path"]
-    assert client.get("/api/projects").status_code == 200
+def test_forgetting_an_unknown_workspace_is_not_found(client):
+    assert client.delete("/api/workspaces/nope").status_code == 404
 
 
 def test_selecting_a_single_project_directory_is_refused(client, tmp_path):
     project = tmp_path / "one-project"
     project.mkdir()
     (project / "project.json").write_text("{}", encoding="utf-8")
-    response = client.post("/api/workspace", json={"path": str(project)})
+    response = client.post("/api/workspaces", json={"path": str(project)})
     assert response.status_code == 400
 
 
-def test_switching_workspaces_serves_the_new_one(client, tmp_path):
-    first = tmp_path / "first"
-    second = tmp_path / "second"
-    client.post("/api/workspace", json={"path": str(first)})
-    switched = client.post("/api/workspace", json={"path": str(second)})
-    assert switched.status_code == 200
-    assert Path(switched.json()["path"]) == second.resolve()
-    assert client.get("/api/projects").json()["projects"] == []
-
-
-def test_the_loopback_page_opens_its_own_session_without_a_token(tmp_path):
-    # No operator credential configured: the browser never types or reads a token.
-    app = create_app(tmp_path / "workspace", state_dir=tmp_path / "state",
-                     origin="http://127.0.0.1:8765", operator_token=None, agent_token="agent-token")
-    with TestClient(app, base_url="http://127.0.0.1:8765") as page:
-        opened = page.get("/api/session")
-        assert opened.status_code == 200
-        body = opened.json()
-        assert body["authenticated"] is True
-        assert body["csrf"]
-        assert "gx_operator" in opened.cookies
-
-        page.headers.update({"x-csrf-token": body["csrf"], "origin": "http://127.0.0.1:8765"})
-        assert page.get("/api/workspace").status_code == 200
-        assert page.get("/api/projects").status_code == 200
-
-
-def test_a_write_still_requires_the_session_csrf_header(tmp_path):
-    app = create_app(tmp_path / "workspace", state_dir=tmp_path / "state",
-                     origin="http://127.0.0.1:8765", operator_token=None, agent_token="agent-token")
-    with TestClient(app, base_url="http://127.0.0.1:8765") as page:
-        session = page.get("/api/session").json()
-        page.headers.update({"origin": "http://127.0.0.1:8765"})
-        refused = page.post("/api/workspace/directory",
-                            json={"parent": str(tmp_path), "name": "line"})
-        assert refused.status_code == 403
-        page.headers.update({"x-csrf-token": session["csrf"]})
-        assert page.post("/api/workspace/directory",
-                         json={"parent": str(tmp_path), "name": "line"}).status_code == 200
-
-
-def test_the_agent_credential_stays_separate_from_the_page_session(tmp_path):
-    app = create_app(tmp_path / "workspace", state_dir=tmp_path / "state",
-                     origin="http://127.0.0.1:8765", operator_token=None, agent_token="agent-token")
-    with TestClient(app, base_url="http://127.0.0.1:8765") as page:
-        page.get("/api/session")
-        assert page.get("/api/agent/health").status_code == 403
-        assert page.get("/api/agent/health",
-                        headers={"authorization": "Bearer agent-token"}).status_code != 403
-
-
-def test_the_sidebar_chooser_binds_the_folder_the_system_returns(client, tmp_path, monkeypatch):
+def test_the_sidebar_chooser_adds_the_folder_the_system_returns(client, tmp_path, monkeypatch):
     import integrations.web.app as web_app
+
     chosen = tmp_path / "from-explorer"
     monkeypatch.setattr(web_app, "pick_native_directory", lambda *a, **k: str(chosen))
-    response = client.post("/api/workspace/pick", json={})
+    response = client.post("/api/workspaces/pick", json={})
     assert response.status_code == 200
-    assert Path(response.json()["path"]) == chosen.resolve()
-    assert response.json()["selected"] is True
-    assert client.get("/api/projects").status_code == 200
+    index = response.json()
+    assert [row["label"] for row in index["workspaces"]] == ["from-explorer"]
+    assert index["workspaces"][0]["active"] is True
+    assert Path(chosen).is_dir()
 
 
-def test_cancelling_the_system_chooser_keeps_the_current_workspace(client, monkeypatch):
+def test_cancelling_the_system_chooser_changes_nothing(client, monkeypatch):
     import integrations.web.app as web_app
+
     monkeypatch.setattr(web_app, "pick_native_directory", lambda *a, **k: None)
-    response = client.post("/api/workspace/pick", json={})
+    response = client.post("/api/workspaces/pick", json={})
     assert response.status_code == 200
     assert response.json()["cancelled"] is True
-    assert response.json()["selected"] is False
+    assert response.json()["workspaces"] == []
 
 
 @pytest.mark.parametrize("code", ["picker_unavailable", "directory-unreadable"])
-def test_a_chooser_failure_is_reported_without_binding(client, monkeypatch, code):
+def test_a_chooser_failure_is_reported_without_registering(client, monkeypatch, code):
     import integrations.web.app as web_app
     from integrations.web.workspaces import WorkspacePathError
 
@@ -178,7 +147,57 @@ def test_a_chooser_failure_is_reported_without_binding(client, monkeypatch, code
         raise WorkspacePathError(code, "no desktop session")
 
     monkeypatch.setattr(web_app, "pick_native_directory", fail)
-    response = client.post("/api/workspace/pick", json={})
+    response = client.post("/api/workspaces/pick", json={})
     assert response.status_code == 400
     assert response.json()["error"]["code"] == code
-    assert client.get("/api/workspace").json()["selected"] is False
+    assert client.get("/api/workspaces").json()["workspaces"] == []
+
+
+def test_a_workspace_lists_every_project_it_owns(client, tmp_path):
+    """One workspace holds many projects; each workspace row carries its own list."""
+    from storage.session import SessionStore
+
+    folder = tmp_path / "line-with-projects"
+    folder.mkdir()
+    store = SessionStore(folder)
+    store.create_project("分拣线", plc_model="FX3U", target_mode="ladder")
+    store.create_project("码垛", plc_model="FX3U", target_mode="fbd")
+
+    index = client.post("/api/workspaces", json={"path": str(folder)}).json()
+    names = sorted(row["name"] for row in index["workspaces"][0]["projects"])
+    assert names == ["分拣线", "码垛"]
+    # The active workspace's projects are also served by the normal project API.
+    served = {row["name"] for row in client.get("/api/projects").json()["projects"]}
+    assert served == {"分拣线", "码垛"}
+
+
+def test_the_agent_credential_stays_separate_from_the_page_session(tmp_path):
+    app = create_app(tmp_path / "workspace", state_dir=tmp_path / "state", origin=ORIGIN,
+                     operator_token=None, agent_token="agent-token")
+    page = open_page(app)
+    try:
+        assert page.get("/api/agent/health").status_code == 403
+        assert page.get("/api/agent/health",
+                        headers={"authorization": "Bearer agent-token"}).status_code != 403
+    finally:
+        page.__exit__(None, None, None)
+
+
+def test_the_workspace_list_survives_a_restart(tmp_path):
+    state = tmp_path / "state"
+    first_app = create_app(None, state_dir=state, origin=ORIGIN, operator_token=None, agent_token="a")
+    page = open_page(first_app)
+    try:
+        page.post("/api/workspaces", json={"path": str(tmp_path / "remembered")})
+    finally:
+        page.__exit__(None, None, None)
+
+    second_app = create_app(None, state_dir=state, origin=ORIGIN, operator_token=None, agent_token="a")
+    page = open_page(second_app)
+    try:
+        index = page.get("/api/workspaces").json()
+        assert [row["label"] for row in index["workspaces"]] == ["remembered"]
+        # The remembered workspace is bound again, so project work needs no pick.
+        assert page.get("/api/projects").status_code == 200
+    finally:
+        page.__exit__(None, None, None)

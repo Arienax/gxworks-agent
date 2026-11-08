@@ -149,6 +149,62 @@
   color: var(--danger, var(--text));
   font-size: 10px;
 }
+/* Additional workspaces listed above the active one's projects. */
+.workspace-group {
+  margin-bottom: 2px;
+}
+.workspace-group-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.workspace-group-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 4px 7px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+.workspace-group-toggle:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+.workspace-group-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-group-toggle > small {
+  margin-left: auto;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.workspace-group-forget {
+  flex: none;
+  opacity: 0.55;
+}
+.workspace-group-forget:hover {
+  opacity: 1;
+}
+.sidebar-heading-workspace {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 400;
+}
 .sidebar-brand > svg {
   color: var(--accent);
   flex-shrink: 0;

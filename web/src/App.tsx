@@ -113,8 +113,11 @@ export default function App() {
     >
       <div className="sidebar-host" inert={sidebarPhase === "closed" || undefined}>
         <ProjectSidebar {...pickView(view, projectSidebarFields)}
-          workspace={workspace.state} workspaceError={workspace.error}
-          onPickWorkspace={workspace.pick} pickingWorkspace={workspace.picking} />
+          workspaces={workspace.workspaces} activeWorkspaceId={workspace.activeId}
+          workspaceError={workspace.error} workspacesBusy={workspace.busy}
+          onAddWorkspace={workspace.addViaPicker}
+          onActivateWorkspace={workspace.activate}
+          onForgetWorkspace={workspace.forget} />
       </div>
       <div className="sidebar-scrim" aria-hidden="true" onClick={() => view.setLeftOpen(false)} />
       <AgentConversation {...pickView(view, agentConversationFields)}

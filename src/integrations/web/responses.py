@@ -924,6 +924,30 @@ class WorkspaceDirectory(ExtensibleResource):
     path: str
 
 
+class WorkspaceProject(ExtensibleResource):
+    """One project owned by a workspace, listed without binding that workspace."""
+
+    id: str | None = None
+    name: str | None = None
+    plc_model: str | None = None
+    target_mode: str | None = None
+
+
+class WorkspaceSummary(ExtensibleResource):
+    """One workspace row: its folder, label and the projects inside it."""
+
+    id: str
+    path: str
+    label: str
+    active: bool = False
+    projects: list[WorkspaceProject] = Field(default_factory=list)
+
+
+class WorkspaceIndex(ExtensibleResource):
+    active: str | None = None
+    workspaces: list[WorkspaceSummary] = Field(default_factory=list)
+
+
 def validate_public_read_document(tool, document):
     """Validate unpooled result types before the transport's object table exists."""
     from agent_runtime.tool_errors import ToolPreconditionError

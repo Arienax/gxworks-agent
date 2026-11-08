@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
 import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -27,7 +28,8 @@ from application.settings import ModelConfigurationRequiredError
 from .security import LocalSecurity
 from .mcp_routes import register_mcp_routes
 from .workspaces import (ServiceHolder, WorkspaceNotSelected, WorkspacePathError,
-                         create_directory, list_directory, pick_native_directory,
+                         WorkspaceRegistry, create_directory, list_directory,
+                         pick_native_directory, summarize_workspace, workspace_id,
                          workspace_snapshot)
 from . import responses as dto
 from .schemas import (Login, ProjectCreate, ProjectUpdate, ActivateVersion, SpecUpdate, SpecIORowEdit, SpecPresentation,
@@ -38,6 +40,12 @@ from .schemas import (Login, ProjectCreate, ProjectUpdate, ActivateVersion, Spec
                       WorkspaceSelection, WorkspaceDirectoryCreate)
 
 
+def _default_registry_root() -> Path:
+    """Where the workspace list lives when no state directory was configured."""
+    base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+    return Path(base) / "GXWorks Agent"
+
+
 def create_app(workspace=None, *, state_dir=None, read_only=False, origin="http://127.0.0.1:8765",
                operator_token=None, agent_token=None, service=None, static_dir=None):
     # No operator credential means the loopback page opens its own session; the
@@ -46,14 +54,26 @@ def create_app(workspace=None, *, state_dir=None, read_only=False, origin="http:
     # The workspace can be chosen or replaced from the browser, so every route
     # keeps one indirection instead of closing over a single bound service.
     holder = ServiceHolder(read_only=read_only)
-    if service is not None:
-        holder.bind(service)
-    elif workspace is not None:
-        holder.bind(WorkbenchService(workspace, state_dir or default_state_dir(workspace), read_only=read_only))
+    registry_root = Path(state_dir) if state_dir is not None else _default_registry_root()
+    workspaces = WorkspaceRegistry(registry_root / "workspaces.json")
+    provided_service = service
+    if provided_service is not None:
+        holder.bind(provided_service)
     service = holder
 
+    def _workspace_state(resolved: Path) -> Path:
+        # Application state belongs to one workspace; a shared state root gets one
+        # child per workspace instead of being claimed by two of them.
+        return (default_state_dir(resolved) if state_dir is None else
+                Path(state_dir) / workspace_id(resolved))
+
+    def _attach_public_read_validator(bound) -> None:
+        registry = getattr(bound.projects.runtime, 'registry', None)
+        if registry is not None:
+            registry.public_read_validator = dto.validate_public_read_document
+
     def bind_workspace(target: Path) -> dict:
-        """Bind or replace the workspace, releasing the previous writer lock first."""
+        """Bind or replace the active workspace, releasing the previous lock first."""
         resolved = Path(target).expanduser().resolve()
         previous = holder.current()
         if previous is not None:
@@ -67,21 +87,44 @@ def create_app(workspace=None, *, state_dir=None, read_only=False, origin="http:
         resolved.mkdir(parents=True, exist_ok=True)
         if previous is not None:
             previous.close()
-        # Application state is bound to one workspace, so a shared state root gets
-        # one child per workspace instead of being claimed by two of them.
-        workspace_state = (default_state_dir(resolved) if state_dir is None else
-                           Path(state_dir) / hashlib.sha256(
-                               str(resolved).casefold().encode("utf-8")).hexdigest()[:16])
-        bound = WorkbenchService(resolved, workspace_state, read_only=read_only)
+        bound = WorkbenchService(resolved, _workspace_state(resolved), read_only=read_only)
         holder.bind(bound)
         bound.start()
         _attach_public_read_validator(bound)
         return workspace_snapshot(str(resolved))
 
-    def _attach_public_read_validator(bound) -> None:
-        registry = getattr(bound.projects.runtime, 'registry', None)
-        if registry is not None:
-            registry.public_read_validator = dto.validate_public_read_document
+    def workspace_index() -> dict:
+        active = holder.current()
+        active_path = str(active.store.base_dir) if active is not None else None
+        rows = [summarize_workspace(row, active=bool(active_path) and
+                                    Path(row["path"]).resolve() == Path(active_path).resolve())
+                for row in workspaces.entries()]
+        return {"active": workspaces.active(), "workspaces": rows}
+
+    def activate_registered(identifier: str) -> dict:
+        row = workspaces.find(identifier)
+        if row is None:
+            raise KeyError(identifier)
+        bind_workspace(Path(row["path"]))
+        workspaces.set_active(identifier)
+        return workspace_index()
+
+    def register_and_activate(path: str | Path) -> dict:
+        row = workspaces.add(path)
+        bind_workspace(Path(row["path"]))
+        workspaces.set_active(row["id"])
+        return workspace_index()
+
+    # Restore the workspace this workbench last served, so the page opens on it.
+    if provided_service is None:
+        if workspace is not None:
+            register_and_activate(workspace)
+        else:
+            remembered = workspaces.active()
+            if remembered is not None:
+                row = workspaces.find(remembered)
+                if row is not None and Path(row["path"]).is_dir():
+                    bind_workspace(Path(row["path"]))
 
     if holder.current() is not None:
         _attach_public_read_validator(holder.current())
@@ -165,19 +208,42 @@ def create_app(workspace=None, *, state_dir=None, read_only=False, origin="http:
         bound = holder.current()
         return workspace_snapshot(str(bound.store.base_dir) if bound is not None else None)
 
-    @app.post("/api/workspace", response_model=dto.WorkspaceState)
-    def select_workspace(command: WorkspaceSelection):
-        return bind_workspace(Path(command.path))
+    @app.get("/api/workspaces", response_model=dto.WorkspaceIndex)
+    def list_workspaces():
+        """Every workspace this workbench serves, each with the projects it owns."""
+        return workspace_index()
 
-    @app.post("/api/workspace/pick", response_model=dto.WorkspaceState)
+    @app.post("/api/workspaces", response_model=dto.WorkspaceIndex)
+    def add_workspace(command: WorkspaceSelection):
+        return register_and_activate(command.path)
+
+    @app.post("/api/workspaces/pick", response_model=dto.WorkspaceIndex)
     def pick_workspace():
-        """Open the operating system's folder chooser, then bind what was chosen."""
+        """Open the system folder chooser, then add and activate that workspace."""
         chosen = pick_native_directory()
         if chosen is None:
-            bound = holder.current()
-            state = workspace_snapshot(str(bound.store.base_dir) if bound is not None else None)
-            return {**state, "cancelled": True}
-        return bind_workspace(Path(chosen))
+            return {**workspace_index(), "cancelled": True}
+        return register_and_activate(chosen)
+
+    @app.post("/api/workspaces/{workspace_id_value}/activate", response_model=dto.WorkspaceIndex)
+    def activate_workspace(workspace_id_value: str):
+        return activate_registered(workspace_id_value)
+
+    @app.delete("/api/workspaces/{workspace_id_value}", response_model=dto.WorkspaceIndex)
+    def forget_workspace(workspace_id_value: str):
+        """Remove one workspace from the list; its folder and projects stay on disk."""
+        if workspaces.find(workspace_id_value) is None:
+            raise KeyError(workspace_id_value)
+        was_active = workspaces.active() == workspace_id_value
+        workspaces.remove(workspace_id_value)
+        if was_active:
+            remaining = workspaces.entries()
+            if remaining:
+                activate_registered(remaining[0]["id"])
+            else:
+                holder.release()
+                workspaces.set_active(None)
+        return workspace_index()
 
     @app.get("/api/workspace/browse", response_model=dto.WorkspaceListing)
     def browse_workspace(path: str | None = Query(default=None, max_length=4096)):

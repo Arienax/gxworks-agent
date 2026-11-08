@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronRight,
   ClipboardCheck,
+  X,
   FlaskConical,
   FolderOpen,
   GitBranch,
@@ -75,11 +76,16 @@ export const projectSidebarFields = [
   "toggleTheme",
 ] as const;
 type Props = Pick<WorkbenchModel, typeof projectSidebarFields[number]> & {
-  /** The engineering workspace the service serves, and how to switch it. */
-  workspace?: { name: string | null; path: string | null } | null;
+  /** Every registered workspace with its projects, plus how to manage the list. */
+  workspaces?: { id: string; path: string; label: string; active: boolean;
+    projects: { id?: string | null; name?: string | null; plc_model?: string | null;
+      target_mode?: string | null }[] }[];
+  activeWorkspaceId?: string | null;
   workspaceError?: string;
-  onPickWorkspace?: () => void;
-  pickingWorkspace?: boolean;
+  workspacesBusy?: boolean;
+  onAddWorkspace?: () => void;
+  onActivateWorkspace?: (identifier: string) => void;
+  onForgetWorkspace?: (identifier: string) => void;
 };
 export function ProjectSidebar(props: Props) {
   const {
@@ -103,12 +109,15 @@ export function ProjectSidebar(props: Props) {
     t,
     theme,
     toggleTheme,
-    workspace,
+    workspaces,
     workspaceError,
-    onPickWorkspace,
-    pickingWorkspace,
+    workspacesBusy,
+    onAddWorkspace,
+    onActivateWorkspace,
+    onForgetWorkspace,
   } = props;
   const [showAll, setShowAll] = useState(false);
+  const workspaceGroups = workspaces ?? [];
   const projectJobs = jobs.filter((job) => job.project_id === pid);
   const visibleJobs = showAll ? projectJobs : projectJobs.slice(0, VISIBLE_TASKS);
   const closeOnNarrow = () => { if (window.innerWidth <= 1100) setLeftOpen(false); };
@@ -134,16 +143,16 @@ export function ProjectSidebar(props: Props) {
       <div className="sidebar-workspace">
         <button
           type="button"
-          className={`workspace-pick ${workspace?.name ? "" : "empty"}`}
-          title={workspace?.path || t("选择工作区文件夹")}
-          onClick={onPickWorkspace}
-          disabled={!!pickingWorkspace}
+          className={`workspace-pick ${workspaceGroups.some((group) => group.active) ? "" : "empty"}`}
+          title={t("添加一个工作区文件夹")}
+          onClick={onAddWorkspace}
+          disabled={!!workspacesBusy}
         >
           <FolderOpen size={14} aria-hidden="true" />
           <span className="workspace-pick-name">
-            {pickingWorkspace ? t("正在选择…") : workspace?.name || t("选择工作区")}
+            {workspacesBusy ? t("正在选择…") : t("添加工作区")}
           </span>
-          <ChevronDown size={13} aria-hidden="true" />
+          <Plus size={13} aria-hidden="true" />
         </button>
         {workspaceError && <p className="workspace-pick-error" role="alert">{workspaceError}</p>}
       </div>
@@ -169,12 +178,36 @@ export function ProjectSidebar(props: Props) {
 
       <div className="sidebar-heading">
         <span>{t("工程")}</span>
+        {workspaceGroups.some((group) => group.active) && (
+          <small className="sidebar-heading-workspace" title={workspaceGroups.find((group) => group.active)?.path}>
+            {workspaceGroups.find((group) => group.active)?.label}
+          </small>
+        )}
         <button className="icon-button" aria-label={t("新建工程")} title={t("新建工程")}
           disabled={!canWrite} onClick={() => setModal("new")}>
           <Plus size={15} />
         </button>
       </div>
       <nav className="project-tree">
+        {/* Other workspaces stay one click away; each keeps its own projects. */}
+        {workspaceGroups.filter((group) => !group.active).map((group) => (
+          <section key={group.id} className="workspace-group">
+            <div className="workspace-group-head">
+              <button type="button" className="workspace-group-toggle" title={group.path}
+                disabled={!!workspacesBusy} onClick={() => onActivateWorkspace?.(group.id)}>
+                <ChevronRight size={14} />
+                <FolderOpen size={14} />
+                <span className="workspace-group-label">{group.label}</span>
+                <small>{group.projects.length}</small>
+              </button>
+              <button type="button" className="icon-button workspace-group-forget"
+                aria-label={t("从列表移除工作区")} title={t("从列表移除工作区")}
+                disabled={!!workspacesBusy} onClick={() => onForgetWorkspace?.(group.id)}>
+                <X size={12} />
+              </button>
+            </div>
+          </section>
+        ))}
         {projects.map((p) => {
           const selected = pid === p.id;
           return (
