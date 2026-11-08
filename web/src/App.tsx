@@ -16,6 +16,8 @@ import { workbenchDialogsFields } from "./workbench/dialogFields";
 import { clampCanvasWidth } from "./workbench/usePanelResize";
 import { usePanelTransition } from "./workbench/usePanelTransition";
 import { useWorkbenchController } from "./workbench/useWorkbenchController";
+import type { Job } from "./api/client";
+import { useConversations } from "./workbench/useConversations";
 import { useWorkspaceBinding } from "./workbench/useWorkspaceBinding";
 import { pickView } from "./workbench/viewProps";
 
@@ -29,6 +31,25 @@ export default function App() {
   const view = useWorkbenchController();
   // The service may start without a workspace; the picker then owns the screen.
   const workspace = useWorkspaceBinding(view.session);
+  // The sidebar lists conversations of the served workspace, newest first.
+  const conversations = useConversations(view.session, workspace.activeId);
+  const pendingJob = useRef<Job | null>(null);
+  const openConversation = (job: Job) => {
+    if (job.project_id && job.project_id !== view.pid) {
+      // Switching projects wipes the selection, so hand it over once pid settles.
+      pendingJob.current = job;
+      view.setPid(job.project_id);
+      return;
+    }
+    view.setJobId(job.id);
+  };
+  useEffect(() => {
+    const pending = pendingJob.current;
+    if (pending && pending.project_id === view.pid) {
+      pendingJob.current = null;
+      view.setJobId(pending.id);
+    }
+  }, [view.pid, view.setJobId]);
   const dialogsOpened = useRef(false);
   const root = useRef<HTMLDivElement>(null);
   const [resizing, setResizing] = useState(false);
@@ -113,7 +134,8 @@ export default function App() {
     >
       <div className="sidebar-host" inert={sidebarPhase === "closed" || undefined}>
         <ProjectSidebar {...pickView(view, projectSidebarFields)}
-          workspaces={workspace.workspaces} activeWorkspaceId={workspace.activeId}
+          conversations={conversations} onOpenConversation={openConversation}
+          workspaces={workspace.workspaces}
           workspaceError={workspace.error} workspacesBusy={workspace.busy}
           onAddWorkspace={workspace.addViaPicker}
           onActivateWorkspace={workspace.activate}

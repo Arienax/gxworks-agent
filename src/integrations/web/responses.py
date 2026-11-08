@@ -234,6 +234,7 @@ class Job(PublicResource):
     id: str
     kind: str
     status: str
+    title: str | None = None
     last_sequence: int = Field(ge=0)
     project_id: str | None = None
     version_id: str | None = None

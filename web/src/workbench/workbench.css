@@ -182,6 +182,56 @@
 .project-node.remote {
   margin-left: 14px;
 }
+/* A conversation row: the request text, when it ran, and how it ended. */
+.conversation-node {
+  margin-left: 20px;
+}
+.conversation-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 28px;
+  padding: 4px 8px;
+  margin: 1px 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.conversation-item:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.conversation-item.selected {
+  background: var(--panel);
+  color: var(--text);
+}
+.conversation-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.conversation-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conversation-item > small {
+  flex: none;
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.conversation-item > .status-dot {
+  flex: none;
+}
 .project-item-remote,
 .project-item-flat {
   color: var(--text);

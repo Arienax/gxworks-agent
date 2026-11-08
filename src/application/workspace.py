@@ -150,6 +150,8 @@ _PUBLIC_FIELDS = frozenset({
     # Explicit model activity/preview fields; no provider configuration or
     # tool-call arguments are included in these presentation events.
     "phase", "received_characters", "request_number", "provisional", "truncated", "content",
+    # One-line conversation label derived from the request the operator typed.
+    "title",
 })
 
 

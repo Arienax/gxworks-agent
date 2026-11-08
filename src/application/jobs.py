@@ -37,6 +37,15 @@ _JOB_FIELDS = ("id", "kind", "status", "created_at", "updated_at", "cancel_reque
                "last_sequence", "result", "error_code", "error_details")
 
 
+def job_title(snapshot):
+    """One line for a conversation row, taken from what the operator typed."""
+    for key in ("raw_requirement", "text"):
+        value = snapshot.get(key)
+        if isinstance(value, str) and value.strip():
+            return " ".join(value.split())[:60]
+    return ""
+
+
 def _check_snapshot(value):
     if isinstance(value, dict):
         if any(credential_field(key) for key in value):
@@ -126,11 +135,13 @@ class JobManager:
         record["revision"] = revision
 
     @staticmethod
+    @staticmethod
     def _public(record):
         snapshot = record.get("snapshot", {})
         result = public_payload({**{key: record.get(key) for key in _JOB_FIELDS},
                                "model_usage": record.get("model_usage", snapshot.get("model", {})),
                                "project_id": snapshot.get("project_id"),
+                               "title": job_title(snapshot),
                                "version_id": snapshot.get("version_id") or snapshot.get("base_version_id")},
                               native_live=record.get('kind') == 'execution')
         if type(record.get('revision')) is int:
