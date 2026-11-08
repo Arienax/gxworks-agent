@@ -10,6 +10,7 @@ from pydantic import Field
 from application.native_validation import NativeValidationService
 from .schemas import AttachmentUpload, Command
 from .responses import NativeValidationToolResult, FBDEditorView, FBDDraftPreview, NativeEvidence, NativeRecord
+from .workspaces import companion
 
 
 class FBDPreview(Command):
@@ -44,7 +45,7 @@ class NativeValidationCheck(Command):
 
 
 def register(app, service):
-    native = NativeValidationService(service)
+    native = companion(service, NativeValidationService)
 
     @app.post("/api/fbd/editor", response_model=FBDEditorView, response_model_exclude_unset=True)
     def edit_draft(command: FBDDraftEdit):
@@ -56,7 +57,7 @@ def register(app, service):
 
     @app.get("/api/projects/{project_id}/versions/{version_id}/native-validation", response_model=NativeEvidence, response_model_exclude_unset=True)
     def records(project_id: str, version_id: str):
-        return native.list(project_id, version_id)
+        return native().list(project_id, version_id)
 
     @app.post("/api/projects/{project_id}/versions/{version_id}/native-validation/check",
               response_model=NativeValidationToolResult, response_model_exclude_unset=True)
@@ -70,10 +71,10 @@ def register(app, service):
 
     @app.post("/api/projects/{project_id}/versions/{version_id}/native-validation", status_code=201, response_model=NativeRecord, response_model_exclude_unset=True)
     def record(project_id: str, version_id: str, command: NativeValidationRecord):
-        return native.record(project_id, version_id, command.model_dump(exclude_none=True))
+        return native().record(project_id, version_id, command.model_dump(exclude_none=True))
 
     @app.get("/api/projects/{project_id}/versions/{version_id}/native-validation/{evidence_id}/gxw")
     def artifact(project_id: str, version_id: str, evidence_id: str):
-        path = native.artifact(project_id, version_id, evidence_id)
+        path = native().artifact(project_id, version_id, evidence_id)
         return FileResponse(path, media_type="application/octet-stream", filename="native-evidence.gxw",
                             headers={"X-Content-Type-Options": "nosniff"})

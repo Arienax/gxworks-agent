@@ -62,6 +62,73 @@ export function STVerification({ report, t }: { report: Json | undefined; t: (ke
 
 export type GenerationResultState = ReturnType<typeof useGenerationResult>;
 
+// Vendor check codes are grouped by the backend into one entry per offending
+// device. The workbench names the category instead of the raw report code, and
+// keeps the code reachable for support.
+const NATIVE_CATEGORIES: Record<string, string> = {
+  duplicate_output: '重复输出（双线圈）',
+  unconnected_sink_element: '输出元件未连接',
+  unconnected_graphic_pin: '图形输入引脚未连接',
+  floating_wire_segment: '悬空线段',
+  network_label_syntax: '网络标签语法',
+  unsupported_declaration_type: '声明数据类型不受支持',
+  declaration_iec_mismatch: '声明设备与 IEC 地址不一致',
+  declaration_iec_format: '声明 IEC 地址格式无效',
+  system_variable_pool_overlap: '地址与系统变量分配范围重叠',
+  compiler_summary_failure: '编译器汇总失败',
+  unclassified_report: '未收录的原生报告',
+};
+
+type NativeFinding = {
+  code?: Json; category?: Json; severity?: Json; device?: Json;
+  occurrences?: Json; steps?: Json; rung_ids?: Json; message?: Json;
+};
+
+function nativeFindings(value: Json | undefined): NativeFinding[] {
+  return Array.isArray(value) ? (value as NativeFinding[]).filter(
+    (row) => row && typeof row === 'object' && !Array.isArray(row)) : [];
+}
+
+export function NativeCompileReport({ validation, busy, onRepair, t }: {
+  validation: Output;
+  busy: boolean;
+  onRepair: () => void;
+  t: (key: string) => string;
+}) {
+  const status = validation.gx_compile;
+  const findings = nativeFindings(validation.native_compile_findings);
+  const message = typeof validation.native_compile_message === 'string' ? validation.native_compile_message : '';
+  const passed = status === 'passed';
+  return <>
+    <p role={status === 'failed' ? 'alert' : 'status'}>
+      {t('原生编译')}：{t(passed ? '通过' : status === 'failed' ? '失败' : '未执行')}
+      {message ? ` · ${message}` : ''}
+    </p>
+    {!passed && status === 'failed' && findings.length > 0 && <ul aria-label={t('原生检查结果')}>
+      {findings.map((row, index) => {
+        const category = typeof row.category === 'string' ? row.category : '';
+        const device = typeof row.device === 'string' ? row.device : '';
+        const occurrences = typeof row.occurrences === 'number' ? row.occurrences : 0;
+        const rungs = Array.isArray(row.rung_ids) ? row.rung_ids.filter((v): v is number => typeof v === 'number') : [];
+        const code = typeof row.code === 'string' ? row.code : '';
+        return <li key={`${code}-${device}-${index}`}>
+          {device ? <strong>{device}</strong> : null}
+          {device ? ' — ' : ''}{t(NATIVE_CATEGORIES[category] || '未收录的原生报告')}
+          {occurrences > 1 ? ` · ${t('写入位置')} ${occurrences}` : ''}
+          {rungs.length ? ` · ${t('梯级')} ${rungs.slice(0, 8).join(', ')}${rungs.length > 8 ? '…' : ''}` : ''}
+          {code ? <small> ({code})</small> : null}
+        </li>;
+      })}
+    </ul>}
+    {status === 'failed' && (
+      <>
+        <p>{t('可以按上面的元件与梯级做局部修复，GXW 候选和原始诊断已保留。')}</p>
+        <Button disabled={busy} onClick={onRepair}>{t('局部修复')}</Button>
+      </>
+    )}
+  </>;
+}
+
 export function GenerationResult({ result, busy, onOpen, onRetry, onRepair, onSpec, clarification, t }: {
   result: GenerationResultState;
   busy: boolean;
@@ -144,7 +211,7 @@ export function GenerationResult({ result, busy, onOpen, onRetry, onRepair, onSp
       </details> : null;
     })}
     {delivery?.degraded === true && <p role="status">{t('已降级交付')}：{String(delivery.reason || '')}</p>}
-    {validation && <p role="status">{t('原生编译')}：{t(validation.gx_compile === 'passed' ? '通过' : validation.gx_compile === 'failed' ? '失败' : '未执行')}{validation.native_compile_message ? ` · ${String(validation.native_compile_message)}` : ''}</p>}
+    {validation && <NativeCompileReport validation={validation} busy={busy} onRepair={onRepair} t={t} />}
     <STVerification report={result.metadata?.semantic_validation} t={t} />
     <CapabilityReview metadata={result.metadata} t={t} />
     <Button disabled={busy} onClick={onRetry}>{t("重新读取结果")}</Button>

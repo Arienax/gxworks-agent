@@ -1,7 +1,7 @@
 // Copyright 2026 Arienax
 // Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
 
-import { X } from "lucide-react";
+import { FolderTree, X } from "lucide-react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { RetainedPanel } from "./components/RetainedPanel";
@@ -9,7 +9,6 @@ import { AgentConversation, agentConversationFields } from "./workbench/AgentCon
 import { CanvasPanels, canvasPanelFields } from "./workbench/CanvasPanels";
 import { ComposerPanel, composerPanelFields } from "./workbench/ComposerPanel";
 import { ConversationHistory, conversationHistoryFields } from "./workbench/ConversationHistory";
-import { LoginScreen, loginScreenFields } from "./workbench/LoginScreen";
 import { ProgramWorkspace, programWorkspaceFields } from "./workbench/ProgramWorkspace";
 import { ProjectSidebar, projectSidebarFields } from "./workbench/ProjectSidebar";
 import { ProposalList, proposalListFields } from "./workbench/ProposalList";
@@ -17,6 +16,8 @@ import { workbenchDialogsFields } from "./workbench/dialogFields";
 import { clampCanvasWidth } from "./workbench/usePanelResize";
 import { usePanelTransition } from "./workbench/usePanelTransition";
 import { useWorkbenchController } from "./workbench/useWorkbenchController";
+import { useWorkspaceBinding } from "./workbench/useWorkspaceBinding";
+import { WorkspacePicker } from "./features/WorkspacePicker";
 import { pickView } from "./workbench/viewProps";
 
 const WorkbenchDialogs = lazy(() => import("./workbench/WorkbenchDialogs").then((module) => ({ default: module.WorkbenchDialogs })));
@@ -27,6 +28,8 @@ const MIN_CONVERSATION = 360;
 
 export default function App() {
   const view = useWorkbenchController();
+  // The service may start without a workspace; the picker then owns the screen.
+  const workspace = useWorkspaceBinding(view.session);
   const dialogsOpened = useRef(false);
   const root = useRef<HTMLDivElement>(null);
   const [resizing, setResizing] = useState(false);
@@ -69,7 +72,29 @@ export default function App() {
     return () => cancelAnimationFrame(frame);
   }, [view.leftOpen]);
 
-  if (!view.session) return <LoginScreen {...pickView(view, loginScreenFields)} />;
+  if (!view.session) {
+    // The page authenticates itself on loopback, so this only means the service
+    // is not answering yet (or any more).
+    return (
+      <p className="panel-empty" role={view.connecting ? "status" : "alert"}>
+        {view.t(view.connecting ? "正在连接本地服务" : "无法连接本地服务，请确认工作台仍在运行。")}
+      </p>
+    );
+  }
+  if (workspace.needsChoice) {
+    return (
+      <WorkspacePicker
+        open
+        dismissible={false}
+        onClose={workspace.closePicker}
+        onSelected={() => window.location.reload()}
+        t={view.t}
+      />
+    );
+  }
+  if (workspace.loading) {
+    return <p className="panel-empty" role="status">{view.t("正在读取工作区")}</p>;
+  }
   if (view.modal || view.gxSend) dialogsOpened.current = true;
   const startResize = (event: ReactPointerEvent<HTMLDivElement>) => {
     setResizing(true);
@@ -157,6 +182,21 @@ export default function App() {
           <WorkbenchDialogs {...pickView(view, workbenchDialogsFields)} />
         </Suspense>
       )}
+      <button
+        type="button"
+        className="workspace-switch"
+        title={`${view.t("切换工作区")}：${workspace.state?.path ?? ""}`}
+        onClick={workspace.openPicker}
+      >
+        <FolderTree size={13} aria-hidden="true" />
+        <span>{workspace.state?.name || view.t("工作区")}</span>
+      </button>
+      <WorkspacePicker
+        open={workspace.pickerOpen}
+        onClose={workspace.closePicker}
+        onSelected={() => window.location.reload()}
+        t={view.t}
+      />
     </div>
   );
 }

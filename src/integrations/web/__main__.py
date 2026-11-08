@@ -8,7 +8,6 @@ import secrets
 import sys
 import threading
 from pathlib import Path
-from urllib.parse import quote
 
 
 def _open_when_started(server, login_url, stopped):
@@ -27,9 +26,10 @@ def _open_when_started(server, login_url, stopped):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="GXWorks Agent local web workbench")
-    default_workspace = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData/Local") / "GXWorks Agent/web-workspace"
-    parser.add_argument("--workspace", type=Path, default=default_workspace,
-                        help="Engineering workspace; defaults to the current user's LocalAppData.")
+    # The workspace is normally chosen in the browser; passing one keeps scripted
+    # and unattended runs working without an interactive step.
+    parser.add_argument("--workspace", type=Path, default=None,
+                        help="Engineering workspace. Omit to choose it in the browser.")
     parser.add_argument("--state-dir", type=Path)
     parser.add_argument("--static-dir", type=Path, help="Serve a separately built frontend directory.")
     parser.add_argument("--port", type=int, default=8765)
@@ -49,13 +49,13 @@ def main(argv=None):
         import json
         print("PLC knowledge unavailable in this Web runtime: " + json.dumps(knowledge, ensure_ascii=True), file=sys.stderr)
         print("Manual-backed RAG requires a local index built from authorized source materials. Runtime: " + sys.executable, file=sys.stderr)
-    token = os.environ.get("PLC_WEB_OPERATOR_TOKEN") or secrets.token_urlsafe(32)
+    # The loopback page opens its own operator session: no operator token is read,
+    # printed or pasted. The Agent credential stays separate for MCP clients.
     agent_token = os.environ.get("PLC_WEB_AGENT_TOKEN") or secrets.token_urlsafe(32)
     origin = "http://127.0.0.1:" + str(args.port)
     app = create_app(args.workspace, state_dir=args.state_dir, read_only=args.read_only,
-        origin=origin, operator_token=token, agent_token=agent_token, static_dir=args.static_dir)
-    login_url = origin + "/#token=" + quote(token, safe="")
-    print("Workbench link (keep private): " + login_url, file=sys.stderr)
+        origin=origin, operator_token=None, agent_token=agent_token, static_dir=args.static_dir)
+    print("Workbench link: " + origin, file=sys.stderr)
 
     credential_published = False
     if not args.no_service_discovery:
@@ -63,7 +63,12 @@ def main(argv=None):
             from integrations.mcp.service_credentials import load_service_binding, save_service_binding
             previous = load_service_binding() or {}
             previous_project = previous.get("project_id")
-            known_projects = {str(item.get("id") or "") for item in app.state.service.projects.list_projects()}
+            try:
+                bound = app.state.service
+                known_projects = {str(item.get("id") or "") for item in bound.projects.list_projects()}
+            except Exception:
+                # The workspace is chosen in the browser; publish the endpoint now.
+                known_projects = set()
             project_binding = previous_project if previous_project in known_projects else None
             credential_published = save_service_binding(origin, agent_token, project_binding)
         except Exception:
@@ -81,7 +86,7 @@ def main(argv=None):
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=args.port, workers=1, access_log=False))
     stopped = threading.Event()
     if args.open_browser:
-        threading.Thread(target=_open_when_started, args=(server, login_url, stopped), daemon=True, name="web-login-launcher").start()
+        threading.Thread(target=_open_when_started, args=(server, origin, stopped), daemon=True, name="web-login-launcher").start()
     try:
         server.run()
     finally:

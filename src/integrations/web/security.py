@@ -20,15 +20,19 @@ class OperatorSession:
 
 
 class LocalSecurity:
-    def __init__(self, origin: str, operator_token: str, agent_token: str | None = None):
+    def __init__(self, origin: str, operator_token: str | None = None, agent_token: str | None = None):
         parsed = urlsplit(origin)
         if parsed.scheme != "http" or parsed.hostname not in ("127.0.0.1", "localhost", "::1") or parsed.path not in ("", "/"):
             raise ValueError("The web workbench only supports an explicit loopback HTTP origin")
-        if not operator_token or (agent_token and secrets.compare_digest(agent_token, operator_token)):
+        if operator_token and (agent_token and secrets.compare_digest(agent_token, operator_token)):
             raise ValueError("Operator and Agent credentials must be separate")
         self.origin = origin.rstrip("/")
         self.host = parsed.netloc
         self.operator_token = operator_token
+        # With no operator credential the loopback listener opens its own session:
+        # the operator never types or pastes a token, and the Agent credential
+        # stays separate for MCP clients.
+        self.auto_session = not operator_token
         self.agent_token = agent_token
         self.sessions: dict[str, OperatorSession] = {}
 
@@ -40,15 +44,21 @@ class LocalSecurity:
             session = None
         return session
 
-    def login(self, token: str):
-        if not secrets.compare_digest(token, self.operator_token):
-            raise PermissionError("Invalid operator credential")
+    def open_session(self):
+        """Issue one operator session; used by login and by auto-session mode."""
         self.sessions = {key: value for key, value in self.sessions.items() if value.expires > time.monotonic()}
         if len(self.sessions) >= 32:
             raise ValueError("Too many operator sessions")
         key, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
         self.sessions[key] = OperatorSession(csrf, time.monotonic() + 12 * 3600)
         return key, csrf
+
+    def login(self, token: str):
+        if self.auto_session:
+            return self.open_session()
+        if not secrets.compare_digest(token, self.operator_token or ""):
+            raise PermissionError("Invalid operator credential")
+        return self.open_session()
 
     async def middleware(self, request: Request, call_next):
         def denied(code, message):

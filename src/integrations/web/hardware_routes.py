@@ -32,8 +32,14 @@ class HardwareRead(Command):
 
 
 def register(app, service):
-    hardware = getattr(service, "hardware", None) or HardwareService(service)
-    service.hardware = hardware
+    def hardware():
+        # The workbench owns this companion so it is closed with the workspace.
+        bound = service.current() if hasattr(service, "current") else service
+        value = getattr(bound, "hardware", None)
+        if value is None:
+            value = HardwareService(bound)
+            bound.hardware = value
+        return value
 
     def owner(request):
         if getattr(request.state, "role", None) != "operator" or not app.state.security.session(request):
@@ -48,20 +54,20 @@ def register(app, service):
 
     @app.get(base, response_model=HardwareState, response_model_exclude_unset=True)
     def status(project_id: str, version_id: str, request: Request):
-        return hardware.list(project_id, version_id, owner(request))
+        return hardware().list(project_id, version_id, owner(request))
 
     @app.post(base + "/sessions", status_code=201, response_model=HardwareSession, response_model_exclude_unset=True)
     def propose(project_id: str, version_id: str, command: HardwareProposal, request: Request):
-        return hardware.propose(project_id, version_id, owner(request), command.model_dump())
+        return hardware().propose(project_id, version_id, owner(request), command.model_dump())
 
     @app.post(base + "/sessions/{session_id}/approve", response_model=HardwareSession, response_model_exclude_unset=True)
     def approve(project_id: str, version_id: str, session_id: str, command: HardwareApproval, request: Request):
-        return hardware.approve(project_id, version_id, session_id, owner(request), command.model_dump())
+        return hardware().approve(project_id, version_id, session_id, owner(request), command.model_dump())
 
     @app.post(base + "/sessions/{session_id}/read", response_model=HardwareObservation, response_model_exclude_unset=True)
     def read(project_id: str, version_id: str, session_id: str, command: HardwareRead, request: Request):
-        return hardware.read(project_id, version_id, session_id, owner(request), command.model_dump())
+        return hardware().read(project_id, version_id, session_id, owner(request), command.model_dump())
 
     @app.post(base + "/sessions/{session_id}/revoke", response_model=HardwareSession, response_model_exclude_unset=True)
     def revoke(project_id: str, version_id: str, session_id: str, request: Request):
-        return hardware.revoke(project_id, version_id, session_id, owner(request))
+        return hardware().revoke(project_id, version_id, session_id, owner(request))

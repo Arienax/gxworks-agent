@@ -406,3 +406,14 @@ class SFCInput(Command):
 
 class MCPIntegrationCommand(Command):
     project_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+class WorkspaceSelection(Command):
+    """A fully qualified workspace directory chosen in the browser."""
+
+    path: str = Field(min_length=1, max_length=4096)
+
+
+class WorkspaceDirectoryCreate(Command):
+    parent: str = Field(min_length=1, max_length=4096)
+    name: str = Field(min_length=1, max_length=255)

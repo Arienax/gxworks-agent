@@ -6,6 +6,7 @@ import { Search } from "lucide-react";
 import { useResource } from "../lifecycle/useResource";
 import { Button } from "../components/ui";
 import { ChangeSummary } from "./ChangeSummary";
+import { groupDeviceComments } from "./deviceGroups";
 import "./explorer.css";
 
 import type { ApiSchema } from "../api/client";
@@ -58,6 +59,8 @@ export const ProgramExplorer = memo(function ProgramExplorer({
     [address, setAddress] = useState(""),
     [zoom, setZoom] = useState(1);
   const [selected, setSelected] = useState(selectedNetwork || "");
+  // One expanded device family at a time; a search reveals its own matches.
+  const [openFamilies, setOpenFamilies] = useState<Record<string, boolean>>({});
   const targets = useRef<Record<string, HTMLButtonElement | null>>({});
   useEffect(() => {
     if (data) {
@@ -100,6 +103,8 @@ export const ProgramExplorer = memo(function ProgramExplorer({
     ([a, d]) =>
       !query || `${a} ${d.comment || ""}`.toLowerCase().includes(query.trim().toLowerCase()),
   );
+  const families = groupDeviceComments(matches);
+  const searching = query.trim().length > 0;
   return (
     <div className="program-explorer">
       {error && <p role="alert">{error}</p>}
@@ -169,17 +174,42 @@ export const ProgramExplorer = memo(function ProgramExplorer({
           <details className="explorer-card" open>
             <summary><h3>{t("软元件注释")}</h3></summary>
             <div className="explorer-card-body">
-              <div className="address-results">
-                {matches.map(([a, d]) => (
-                  <button
-                    key={a}
-                    className={address === a ? "selected" : ""}
-                    onClick={() => setAddress(a)}
-                  >
-                    <strong>{a}</strong> {d.comment || t("未填写注释")}
-                  </button>
-                ))}
-                {!matches.length && <p>{t("没有匹配地址")}</p>}
+              <div className="address-groups">
+                {families.map((family) => {
+                  const expanded = searching
+                    ? openFamilies[family.family] ?? true
+                    : !!openFamilies[family.family];
+                  return (
+                    <details
+                      key={family.family}
+                      className="address-group"
+                      open={expanded}
+                      onToggle={(event) => {
+                        const open = (event.currentTarget as HTMLDetailsElement).open;
+                        setOpenFamilies((old) =>
+                          old[family.family] === open ? old : { ...old, [family.family]: open });
+                      }}
+                    >
+                      <summary>
+                        <strong>{family.family || "—"}</strong>
+                        <span className="address-group-label">{t(family.label)}</span>
+                        <span className="address-group-count">{family.count}</span>
+                      </summary>
+                      <div className="address-results">
+                        {family.entries.map(([a, d]) => (
+                          <button
+                            key={a}
+                            className={address === a ? "selected" : ""}
+                            onClick={() => setAddress(a)}
+                          >
+                            <strong>{a}</strong> {d.comment || t("未填写注释")}
+                          </button>
+                        ))}
+                      </div>
+                    </details>
+                  );
+                })}
+                {!families.length && <p>{t("没有匹配地址")}</p>}
               </div>
               {device && (
                 <div>

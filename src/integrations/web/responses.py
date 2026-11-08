@@ -890,6 +890,40 @@ def document_sse_events(schema):
     return schema
 
 
+class WorkspaceState(ExtensibleResource):
+    """The workspace the workbench currently serves, or that none is bound yet."""
+
+    selected: bool
+    path: str | None = None
+    name: str | None = None
+    home: str | None = None
+
+
+class WorkspaceBreadcrumb(ExtensibleResource):
+    name: str
+    path: str
+
+
+class WorkspaceEntry(ExtensibleResource):
+    name: str
+    path: str
+    hidden: bool = False
+
+
+class WorkspaceListing(ExtensibleResource):
+    """One directory level an operator can navigate and pick from."""
+
+    path: str
+    home: str
+    crumbs: list[WorkspaceBreadcrumb] = Field(default_factory=list)
+    entries: list[WorkspaceEntry] = Field(default_factory=list)
+    truncated: bool = False
+
+
+class WorkspaceDirectory(ExtensibleResource):
+    path: str
+
+
 def validate_public_read_document(tool, document):
     """Validate unpooled result types before the transport's object table exists."""
     from agent_runtime.tool_errors import ToolPreconditionError

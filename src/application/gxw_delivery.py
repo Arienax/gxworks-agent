@@ -32,6 +32,39 @@ class DeliveryUnavailable(RuntimeError):
     """No supported engineering environment; source artifacts remain deliverable."""
 
 
+_CATEGORY_LABELS = {
+    'duplicate_output': '重复输出（双线圈）',
+    'unconnected_sink_element': '输出元件未连接',
+    'unconnected_graphic_pin': '图形输入引脚未连接',
+    'floating_wire_segment': '悬空线段',
+    'network_label_syntax': '网络标签语法',
+    'unsupported_declaration_type': '声明数据类型不受支持',
+    'declaration_iec_mismatch': '全局声明设备与 IEC 地址不一致',
+    'declaration_iec_format': '声明 IEC 地址格式无效',
+    'system_variable_pool_overlap': '地址与系统变量自动分配范围重叠',
+    'compiler_summary_failure': '编译器汇总失败',
+}
+
+
+def _native_failure_summary(findings):
+    """One actionable sentence for the operator, or None when nothing is classified.
+
+    The raw adapter message carries internal stage tokens and bare hex codes; it is
+    kept in native_compile_detail for support, never shown as the operator result.
+    """
+    errors = [row for row in findings or () if row.get('severity') == 'error']
+    if not errors:
+        return None
+    first = errors[0]
+    label = _CATEGORY_LABELS.get(str(first.get('category')), str(first.get('code')))
+    devices = [str(row['device']) for row in errors if row.get('device')]
+    if devices:
+        named = '、'.join(dict.fromkeys(devices[:4]))
+        more = ' 等' if len(set(devices)) > 4 else ''
+        return f'原生检查未通过：{label}，涉及 {named}{more}（{len(errors)} 项）。'
+    return f'原生检查未通过：{label}（{len(errors)} 项）。'
+
+
 def validate_source_artifacts(files, mode):
     if mode == 'ladder':
         from plc.ir import validate_plc_ir, ir_to_ladder
@@ -437,14 +470,33 @@ def finalize_saved(output, metadata):
             error.preserve_delivery = True
             raise  # An uncertain operation must retain the coordinator's recovery boundary.
         phase = getattr(error, 'phase', 'compile_save')
-        validation.update(gx_compile='failed', native_compile_message=str(error), native_phase=phase)
+        # A rejected native build must reach the operator as the offending device
+        # and its writing rungs, not as one opaque sentence: the vendor repeats a
+        # single code per conflicting position, which reads as noise otherwise.
+        from gxw.diagnostic_scope import native_check_findings
+        ladder = None
+        if artifacts.get('json'):
+            try:
+                ladder = json.loads((output / artifacts['json']).read_text(encoding='utf-8'))
+            except (OSError, ValueError):
+                ladder = None
+        findings = native_check_findings(getattr(error, 'validation', None), ladder)
+        summary = _native_failure_summary(findings)
+        validation.update(gx_compile='failed', native_compile_message=summary,
+                          native_compile_detail=str(error), native_compile_findings=findings,
+                          native_phase=phase)
         from application.fbd import json_bytes
+        if ladder is not None:
+            # Staging does not survive every delivery path, so the rejected ladder
+            # is kept beside the version as the repair baseline for the operator.
+            (output / 'repair_candidate.json').write_bytes(json_bytes(ladder))
+            artifacts['repair_candidate'] = 'repair_candidate.json'
         diagnostic = {'phase': phase, 'message': str(error), 'observation': getattr(error, 'observation', {}),
-                      'validation': getattr(error, 'validation', None)}
+                      'validation': getattr(error, 'validation', None), 'findings': findings}
         (output / 'native_diagnostics.json').write_bytes(json_bytes(diagnostic))
         artifacts['native_diagnostics'] = 'native_diagnostics.json'
         metadata.update(activation_blocked=True, lifecycle_status='diagnostic')
-        notify('native_compile_failed', '原生编译未通过，GXW 候选和诊断已保留')
+        notify('native_compile_failed', summary or '原生编译未通过，GXW 候选和诊断已保留')
         return
     from application.gxw_files import prepare_candidate
     payload = prepare_candidate(output, raw=result.data, program=metadata.get('program_name'),

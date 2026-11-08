@@ -82,11 +82,12 @@ def test_cli_exit_code_and_loopback_defaults(monkeypatch, tmp_path, started, exp
     assert not workspace.exists()
 
 
-def test_explicit_browser_login_encodes_token_fragment(monkeypatch, tmp_path):
+def test_browser_opens_the_workbench_without_any_credential(monkeypatch, tmp_path):
     import integrations.web.app as web_app
 
     opened = threading.Event()
     urls = []
+    # A leftover operator token must not reach the URL: the page opens its own session.
     monkeypatch.setenv("PLC_WEB_OPERATOR_TOKEN", "test+/& token")
     monkeypatch.setattr(web_app, "create_app", lambda *args, **kwargs: object())
 
@@ -106,7 +107,7 @@ def test_explicit_browser_login_encodes_token_fragment(monkeypatch, tmp_path):
     monkeypatch.setattr("webbrowser.open", open_browser)
     monkeypatch.setitem(sys.modules, "uvicorn", SimpleNamespace(Config=lambda *args, **kwargs: None, Server=Server))
     assert launcher.main(["--workspace", str(tmp_path), "--open-browser"]) == 0
-    assert urls == ["http://127.0.0.1:8765/#token=test%2B%2F%26%20token"]
+    assert urls == ["http://127.0.0.1:8765"]
 
 
 @pytest.fixture

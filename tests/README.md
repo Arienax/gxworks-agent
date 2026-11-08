@@ -426,6 +426,7 @@ Owns GXW container/object/ABI/declaration/network parsing, preservation and roun
 | `tests/test_gxw_offline_project.py` | whole-project offline instruction/comment transactions, ordered warehouse source and refusal boundaries |
 | `tests/test_gxw_offline_application.py` | offline GXW import, inspection and version/proposal parity across Web services and MCP |
 | `tests/test_gxw_delivery.py` | shared GXW-first delivery, automatic native compilation, source fallback and installation discovery |
+| `tests/test_native_check_findings.py` | rejected native check projection: per-device findings, operator summary, retained repair baseline and the repair entry |
 | `web/tests/gxw-import.test.mjs` | GXW composer upload/drop, source selection, import request identity and project/version adoption |
 | `tests/test_gxw_semantic_model.py` | focused coverage for gxw semantic model |
 | `tests/test_gxw_structured_reader.py` | Structured GXW parsing, unknown records and read-only POU CLI selection |
@@ -516,6 +517,8 @@ Owns HTTP/Web contracts, presentation state, startup, FBD UI, workbench/applicat
 | `tests/test_web_live_acceptance.py` | focused coverage for web live acceptance |
 | `tests/test_web_source_entrypoints.py` | source launch/build entrypoints and inert documentation packaging, including link preservation and source-tree limits |
 | `tests/test_web_startup.py` | focused coverage for web startup |
+| `tests/test_web_workspace_picker.py` | in-app workspace picker primitives: fully qualified paths, single-level listing, ancestor crumbs, truncation and folder creation |
+| `tests/test_web_workspace_api.py` | workspace selection over HTTP: loopback self-session, workspace-required gating, browsing, binding and switching |
 | `tests/test_workbench_service.py` | focused coverage for workbench service |
 | `web/tests/requests.test.mjs` | read cancellation, serial polling, invalidation, visibility and structural sharing |
 | `web/tests/conversation.test.mjs` | task purpose, creation/review stages, explicit modification/regeneration and clarification presentation |
@@ -524,6 +527,8 @@ Owns HTTP/Web contracts, presentation state, startup, FBD UI, workbench/applicat
 | `web/tests/gx-send.test.mjs` | browser-side GX send interaction and presentation wiring |
 | `web/tests/model-parameters.test.mjs` | browser model-parameter UI behavior |
 | `web/tests/module-resolution.test.mjs` | frontend module resolution, packaging-sensitive imports and production chunk boundaries |
+| `web/tests/device-groups.test.mjs` | device comment grouping by device family for the program explorer panel |
+| `web/tests/workspace-browse.test.mjs` | workspace picker presentation state: hidden filtering, prefix filter, open target and path jump normalization |
 
 ### Runtime diagnostics, privacy and streaming
 

@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import secrets
 from contextlib import asynccontextmanager
@@ -25,30 +26,76 @@ from application.workspace import ConflictError, WorkspaceBusyError, default_sta
 from application.settings import ModelConfigurationRequiredError
 from .security import LocalSecurity
 from .mcp_routes import register_mcp_routes
+from .workspaces import (ServiceHolder, WorkspaceNotSelected, WorkspacePathError,
+                         create_directory, list_directory, workspace_snapshot)
 from . import responses as dto
 from .schemas import (Login, ProjectCreate, ProjectUpdate, ActivateVersion, SpecUpdate, SpecIORowEdit, SpecPresentation,
                       JobCreate, GenerationRepair, ProposalDecision, ExecutionProposal, AgentCall,
                       SettingsUpdate, ApprovalSettingsUpdate, ModelProfileCreate, ModelKeyUpdate, ModelConnectionTest, ModelDiscoveryRequest, ModelVerificationRequest,
                       AttachmentUpload, GXWInspectionCommand, GXWImportCommand, GXWEditCommand,
-                      SFCInput, SFCProposal, SFCPreview, FBDProposal, ModelRequestPreview)
+                      SFCInput, SFCProposal, SFCPreview, FBDProposal, ModelRequestPreview,
+                      WorkspaceSelection, WorkspaceDirectoryCreate)
 
 
-def create_app(workspace, *, state_dir=None, read_only=False, origin="http://127.0.0.1:8765",
+def create_app(workspace=None, *, state_dir=None, read_only=False, origin="http://127.0.0.1:8765",
                operator_token=None, agent_token=None, service=None, static_dir=None):
-    security = LocalSecurity(origin, operator_token or secrets.token_urlsafe(32), agent_token)
-    service = service or WorkbenchService(workspace, state_dir or default_state_dir(workspace), read_only=read_only)
+    # No operator credential means the loopback page opens its own session; the
+    # Agent credential stays separate for MCP clients.
+    security = LocalSecurity(origin, operator_token, agent_token)
+    # The workspace can be chosen or replaced from the browser, so every route
+    # keeps one indirection instead of closing over a single bound service.
+    holder = ServiceHolder(read_only=read_only)
+    if service is not None:
+        holder.bind(service)
+    elif workspace is not None:
+        holder.bind(WorkbenchService(workspace, state_dir or default_state_dir(workspace), read_only=read_only))
+    service = holder
 
-    registry = getattr(service.projects.runtime, 'registry', None)
-    if registry is not None:
-        registry.public_read_validator = dto.validate_public_read_document
+    def bind_workspace(target: Path) -> dict:
+        """Bind or replace the workspace, releasing the previous writer lock first."""
+        resolved = Path(target).expanduser().resolve()
+        previous = holder.current()
+        if previous is not None:
+            current = str(previous.store.base_dir)
+            if Path(current).resolve() == resolved:
+                return workspace_snapshot(current)
+        if resolved.exists() and not resolved.is_dir():
+            raise ValueError("工作区必须是文件夹。")
+        if (resolved / "project.json").is_file():
+            raise ValueError("选中的是单个工程目录；请选择包含 index.json 和 projects 的工作区外层目录。")
+        resolved.mkdir(parents=True, exist_ok=True)
+        if previous is not None:
+            previous.close()
+        # Application state is bound to one workspace, so a shared state root gets
+        # one child per workspace instead of being claimed by two of them.
+        workspace_state = (default_state_dir(resolved) if state_dir is None else
+                           Path(state_dir) / hashlib.sha256(
+                               str(resolved).casefold().encode("utf-8")).hexdigest()[:16])
+        bound = WorkbenchService(resolved, workspace_state, read_only=read_only)
+        holder.bind(bound)
+        bound.start()
+        _attach_public_read_validator(bound)
+        return workspace_snapshot(str(resolved))
+
+    def _attach_public_read_validator(bound) -> None:
+        registry = getattr(bound.projects.runtime, 'registry', None)
+        if registry is not None:
+            registry.public_read_validator = dto.validate_public_read_document
+
+    if holder.current() is not None:
+        _attach_public_read_validator(holder.current())
 
     @asynccontextmanager
     async def lifespan(_app):
-        service.start()
+        bound = holder.current()
+        if bound is not None:
+            bound.start()
         try:
             yield
         finally:
-            await asyncio.to_thread(service.close)
+            bound = holder.current()
+            if bound is not None:
+                await asyncio.to_thread(bound.close)
 
     app = FastAPI(title="GXWorks Agent Local Workbench", version="1.0.0", lifespan=lifespan,
                   docs_url=None, redoc_url=None, openapi_url=None)
@@ -100,9 +147,34 @@ def create_app(workspace, *, state_dir=None, read_only=False, origin="http://127
     async def forbidden(_request, _error):
         return JSONResponse({"error": {"code": "forbidden", "message": "此操作需要有效的操作员权限及可写工作区。"}}, status_code=403)
 
+    @app.exception_handler(WorkspaceNotSelected)
+    async def workspace_required(_request, error):
+        return JSONResponse(error.payload(), status_code=428)
+
+    @app.exception_handler(WorkspacePathError)
+    async def workspace_path_invalid(_request, error):
+        return JSONResponse(error.payload(), status_code=400)
+
     @app.get("/api/health", response_model=dto.Health)
     def health():
         return {"status": "ok", "application": "gxworks-agent"}
+
+    @app.get("/api/workspace", response_model=dto.WorkspaceState)
+    def workspace_state():
+        bound = holder.current()
+        return workspace_snapshot(str(bound.store.base_dir) if bound is not None else None)
+
+    @app.post("/api/workspace", response_model=dto.WorkspaceState)
+    def select_workspace(command: WorkspaceSelection):
+        return bind_workspace(Path(command.path))
+
+    @app.get("/api/workspace/browse", response_model=dto.WorkspaceListing)
+    def browse_workspace(path: str | None = Query(default=None, max_length=4096)):
+        return list_directory(path)
+
+    @app.post("/api/workspace/directory", response_model=dto.WorkspaceDirectory)
+    def create_workspace_directory(command: WorkspaceDirectoryCreate):
+        return {"path": create_directory(command.parent, command.name)}
 
     @app.post("/api/session", response_model=dto.Session)
     def login(command: Login):
@@ -114,6 +186,13 @@ def create_app(workspace, *, state_dir=None, read_only=False, origin="http://127
     @app.get("/api/session", response_model=dto.Session)
     def session(request: Request):
         active = security.session(request)
+        if not active and security.auto_session:
+            # No operator credential is configured: this loopback page opens its
+            # own session instead of asking the operator for a token.
+            key, csrf = security.open_session()
+            response = JSONResponse({"authenticated": True, "csrf": csrf, "read_only": service.read_only})
+            response.set_cookie("gx_operator", key, httponly=True, samesite="strict", max_age=12 * 3600, path="/")
+            return response
         if not active:
             return JSONResponse({"authenticated": False}, status_code=401)
         return {"authenticated": True, "csrf": active.csrf, "read_only": service.read_only}

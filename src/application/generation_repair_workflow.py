@@ -70,9 +70,15 @@ def repair_scope(snapshot, candidate_text, violations):
         local_repair = repair_base is not None
         allowed_rung_ids = set()
         allowed_addresses = set()
+        # A native check names the device and the rungs that write it. That is an
+        # exact range, not an instruction-semantics guess, so the field patch
+        # planner (which refuses to infer operand repairs) is not consulted.
+        native_scope = bool(violations) and all(
+            isinstance(item, dict) and not isinstance(item.get("path"), str) and item.get("rung_ids")
+            for item in violations)
         repair_plan = plan_field_patch(
             repair_base, violations, snapshot.get("project", {}).get("plc_model", "FX3U")
-        ) if local_repair else None
+        ) if local_repair and not native_scope else None
     if local_repair and isinstance(repair_plan, dict):
         target = repair_plan.get("target") or {}
         if target.get("strategy") == "blocked":
@@ -86,7 +92,14 @@ def repair_scope(snapshot, candidate_text, violations):
         saw_comment_path = False
         unresolved_rung_path = False
         for item in violations or []:
-            path = item.get("path") if isinstance(item, dict) else None
+            if not isinstance(item, dict):
+                continue
+            # A native check report names the written device and the rungs that
+            # write it; that identity is exact, so it scopes the repair directly.
+            for rung_id in item.get("rung_ids") or ():
+                if isinstance(rung_id, int) and not isinstance(rung_id, bool):
+                    allowed_rung_ids.add(rung_id)
+            path = item.get("path")
             if not isinstance(path, str):
                 continue
             saw_comment_path |= "device_comments" in path
@@ -124,6 +137,20 @@ def repair_scope(snapshot, candidate_text, violations):
     return repair_base, local_repair, allowed_rung_ids, allowed_addresses, repair_plan, inherited_local_repair
 
 
+def _saved_repair_candidate(service, project_id, version_id):
+    """Read the rejected ladder kept beside a diagnostic version.
+
+    A native rejection happens after the candidate was saved, so the version holds
+    the exact program the report describes. A version without that artifact stays
+    unavailable rather than repairing a different program.
+    """
+    try:
+        path = service.projects.artifact(project_id, version_id, 'repair_candidate')
+    except (KeyError, ValueError, OSError) as error:
+        raise ConflictError("The rejected candidate is no longer available for repair") from error
+    return path.read_text(encoding="utf-8")
+
+
 def repair_generation(service: RepairServices, job_id, request_id):
     """Submit one operator-confirmed repair without re-running normal generation."""
     service.writable()
@@ -141,7 +168,7 @@ def repair_generation(service: RepairServices, job_id, request_id):
             record.get("kind") in {"generation", "direct_generation"}
             and record.get("status") == "completed"
             and isinstance(record.get("result"), dict)
-            and record["result"].get("status") == "saved_invalid"
+            and record["result"].get("status") in {"saved_invalid", "saved_native_diagnostic"}
             and isinstance(record["result"].get("version_id"), str)
         )
         if not (failed_validation or saved_invalid):
@@ -149,7 +176,7 @@ def repair_generation(service: RepairServices, job_id, request_id):
         snapshot = copy.deepcopy(record.get("snapshot") or {})
         project_id = snapshot["project_id"]
         if saved_invalid:
-            # Preserving an invalid candidate intentionally activates a
+            # Preserving a rejected candidate intentionally activates a
             # diagnostic version. Accept that one known state transition,
             # but reject unrelated project/spec changes before repairing.
             current = service.projects.raw_project(project_id)
@@ -165,9 +192,12 @@ def repair_generation(service: RepairServices, job_id, request_id):
         version_id = snapshot.get("version_id")
         root = contained(service.state_dir / "staging" / record_id(job_id), service.state_dir / "staging")
         candidate_path = contained(root / "repair_candidate.json", root)
-        if not candidate_path.is_file():
-            raise ConflictError("The rejected candidate is no longer available for repair")
-        candidate_text = candidate_path.read_text(encoding="utf-8")
+        if candidate_path.is_file():
+            candidate_text = candidate_path.read_text(encoding="utf-8")
+        else:
+            # A candidate rejected by the native check keeps its ladder beside the
+            # diagnostic version, not in staging; repair that saved program.
+            candidate_text = _saved_repair_candidate(service, project_id, record["result"]["version_id"])
         if not candidate_text.strip() or len(candidate_text) > 512000:
             raise ConflictError("The rejected candidate is too large or empty")
         handoff_path = contained(root / "generation_handoff.json", root)
@@ -183,13 +213,28 @@ def repair_generation(service: RepairServices, job_id, request_id):
             except (KeyError, ValueError, OSError):
                 details = {}
         violations = details.get("violations") if isinstance(details, dict) else []
+        native_findings = details.get("native_compile_findings") if isinstance(details, dict) else None
+        if not violations and isinstance(native_findings, list):
+            # A rejected native check names the device and its writing rungs; the
+            # repair targets those rungs instead of the whole program.
+            violations = [{'device': row.get('device'), 'rung_ids': row.get('rung_ids') or [],
+                           'reason': row.get('message') or row.get('code')}
+                          for row in native_findings if isinstance(row, dict)]
         locations = []
         for item in violations or []:
-            if isinstance(item, dict):
-                path = item.get("path")
-                reason = item.get("reason")
-                if isinstance(path, str):
-                    locations.append(path + (f" ({reason})" if isinstance(reason, str) else ""))
+            if not isinstance(item, dict):
+                continue
+            path = item.get("path")
+            reason = item.get("reason")
+            if isinstance(path, str):
+                locations.append(path + (f" ({reason})" if isinstance(reason, str) else ""))
+                continue
+            device = item.get("device")
+            if isinstance(device, str) and device:
+                rungs = item.get("rung_ids")
+                where = (' 梯级 ' + ', '.join(str(row) for row in rungs[:12])
+                         if isinstance(rungs, list) and rungs else "")
+                locations.append(device + where + (f" ({reason})" if isinstance(reason, str) else ""))
         language = snapshot.get("response_language") if snapshot.get("response_language") in ("zh-CN", "en", "ja") else "zh-CN"
 
         repair_base, local_repair, allowed_rung_ids, allowed_addresses, repair_plan, inherited_local_repair = repair_scope(snapshot, candidate_text, violations)
