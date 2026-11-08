@@ -18,6 +18,7 @@ Outputs go to ``resources/assets``. Simplified Chinese uses the bare file name
 """
 import argparse
 import base64
+import json
 import os
 import re
 import shutil
@@ -167,59 +168,45 @@ def lines(c, x, y, items, size=12.5, gap=20, fill=MUTED, maxw=None, mono_index=(
         c.text(x, y + i * gap, item, size, BLUE if i in mono_index else fill, 400, mono=i in mono_index, maxw=maxw)
 
 
-# --------------------------------------------------------------- ladder art
-def contact(c, cx, ry, label, nc=False):
-    c.line(cx, ry - 8, cx, ry + 8, INK, 1.6)
-    c.line(cx + 12, ry - 8, cx + 12, ry + 8, INK, 1.6)
-    if nc:
-        c.line(cx - 2, ry + 8, cx + 14, ry - 8, INK, 1.4)
-    c.text(cx + 6, ry - 13, label, 11, INK, 400, 'middle', True)
+# ------------------------------------------------------------- real ladder art
+LADDER_PALETTE = {'background': '#ffffff', 'stroke': '#1f2328', 'text': '#1f2328', 'annotation': '#59636e'}
+LADDER_RUNGS = (
+    {'rung_id': 1, 'ordered_instructions': [
+        {'op': 'LD', 'args': ['X0']}, {'op': 'OR', 'args': ['Y0']},
+        {'op': 'ANI', 'args': ['X1']}, {'op': 'OUT', 'args': ['Y0']}]},
+    {'rung_id': 2, 'ordered_instructions': [
+        {'op': 'LD', 'args': ['Y0']}, {'op': 'OUT', 'args': ['T0', 'K50']}]},
+    {'rung_id': 3, 'ordered_instructions': [
+        {'op': 'LD', 'args': ['T0']}, {'op': 'MOV', 'args': ['K10', 'D0']}]},
+)
+LADDER_COMMENTS = (
+    {'X0': '启动', 'X1': '停止', 'Y0': '运行', 'T0': '延时'},
+    {'X0': 'Start', 'X1': 'Stop', 'Y0': 'Run', 'T0': 'Delay'},
+    {'X0': '起動', 'X1': '停止', 'Y0': '運転', 'T0': '遅延'},
+)
 
 
-def coil(c, cx, ry, label):
-    c.path(f'M{cx} {ry - 9} Q{cx - 7} {ry} {cx} {ry + 9}', INK, 1.5)
-    c.path(f'M{cx + 20} {ry - 9} Q{cx + 27} {ry} {cx + 20} {ry + 9}', INK, 1.5)
-    c.text(cx + 10, ry - 13, label, 11, INK, 400, 'middle', True)
+def ladder_markup(lang, width, height):
+    """Lay the sample out with the product's own GX Works2-style renderer."""
+    if str(ROOT / 'src') not in sys.path:
+        sys.path.insert(0, str(ROOT / 'src'))
+    from rendering.ladder_svg import AdvancedSVGLadder
+
+    program = {'device_comments': pick(LADDER_COMMENTS, lang), 'rungs': list(LADDER_RUNGS)}
+    markup = AdvancedSVGLadder(width=width, height=height,
+                               palette=LADDER_PALETTE).generate_ladder(json.dumps(program, ensure_ascii=False))
+    found = re.search(r'<svg[^>]*?width="([\d.]+)"[^>]*?height="([\d.]+)"', markup)
+    natural = (float(found.group(1)), float(found.group(2))) if found else (width, height)
+    return markup[markup.index('>', markup.index('<svg')) + 1:markup.rindex('</svg>')], natural
 
 
-def ladder(c, x, y, w, h):
-    """GX Works2-like ladder: step column, rails, three rungs and END."""
-    c.rect(x, y, 34, h, '#f0f2f4', None)
-    c.line(x + 34, y, x + 34, y + h, LIGHT, 1)
-    left, right = x + 46, x + w - 10
-    c.line(left, y + 10, left, y + h - 10, INK, 1.6)
-    c.line(right, y + 10, right, y + h - 10, INK, 1.6)
-    r0, r1, r2 = y + 34, y + h * 0.62, y + h - 24
-    for step, ry in (('0', r0), ('4', r1), ('10', r2)):
-        c.text(x + 28, ry + 4, step, 11, SOFT, 400, 'end', True)
-    # rung 0: self-holding output
-    c.line(left, r0, left + 20, r0)
-    contact(c, left + 20, r0, 'X0')
-    c.line(left + 32, r0, left + 84, r0)
-    contact(c, left + 84, r0, 'X1', True)
-    c.rect(left + 76, r0 - 26, 28, 38, 'none', BLUE, 1.2)
-    c.line(left + 96, r0, right - 44, r0)
-    coil(c, right - 44, r0, 'Y0')
-    c.line(right - 24, r0, right, r0)
-    br = r0 + 30
-    c.line(left + 8, r0, left + 8, br)
-    c.line(left + 8, br, left + 20, br)
-    contact(c, left + 20, br, 'Y0')
-    c.line(left + 32, br, left + 58, br)
-    c.line(left + 58, br, left + 58, r0)
-    # rung 4: MOV instruction
-    c.line(left, r1, left + 20, r1)
-    contact(c, left + 20, r1, 'M0')
-    box_w = min(150, w * 0.42)
-    c.line(left + 32, r1, right - box_w - 6, r1)
-    c.rect(right - box_w - 6, r1 - 10, box_w, 20, '#ffffff', INK, 1.3)
-    c.text(right - box_w / 2 - 6, r1 + 4, 'MOV   K10   D0', 11.5, INK, 400, 'middle', True)
-    c.line(right - 6, r1, right, r1)
-    # END
-    c.line(left, r2, right - 66, r2)
-    c.rect(right - 66, r2 - 10, 60, 20, '#ffffff', INK, 1.3)
-    c.text(right - 36, r2 + 4, 'END', 11.5, INK, 600, 'middle', True)
-    c.line(right - 6, r2, right, r2)
+def place_ladder(c, x, y, w, h, lang):
+    """Place the real ladder inside a slot, keeping the renderer's own aspect ratio."""
+    inner, (natural_w, natural_h) = ladder_markup(lang, 1100, 360)
+    scale = min(w / natural_w, h / natural_h)
+    left = x + (w - natural_w * scale) / 2
+    c.add(f'<svg x="{left:.1f}" y="{y}" width="{natural_w * scale:.1f}" '
+          f'height="{natural_h * scale:.1f}" viewBox="0 0 {natural_w:.0f} {natural_h:.0f}">{inner}</svg>')
 
 
 # -------------------------------------------------------------------- banner
@@ -364,126 +351,72 @@ def feature_architecture(lang):
 
 
 # ------------------------------------------------------------ four languages
-def editor_st(c, x, y, w, h, lang):
-    c.rect(x, y, 30, h, '#f0f2f4', None)
-    comment = pick(('(* 输送线启停 *)', '(* Conveyor start/stop *)', '(* コンベア起動/停止 *)'), lang)
-    code = (((comment, GREEN),),
-            (('IF ', BLUE), ('bStart ', INK), ('AND NOT ', BLUE), ('bStop ', INK), ('THEN', BLUE)),
-            (('    bRun := ', INK), ('TRUE', BLUE), (';', INK)),
-            (('ELSIF ', BLUE), ('bStop ', INK), ('THEN', BLUE)),
-            (('    bRun := ', INK), ('FALSE', BLUE), (';', INK)),
-            (('END_IF', BLUE), (';', INK)),
-            (('tonDelay(IN := bRun, PT := ', INK), ('T#500MS', ORANGE), (');', INK)))
-    for i, segments in enumerate(code):
-        ly = y + 24 + i * 23
-        c.text(x + 22, ly, str(i + 1), 11, SOFT, 400, 'end', True)
-        c.code(x + 40, ly, segments, 12)
+ST_SAMPLE = (
+    '(*lcd control*)',
+    'useLcd := 1;',
+    'backLight := 1;',
+    '(*live bit monitor*)',
+    'IF I_liveBit = 1 THEN;',
+    'END_IF;',
+    '(*Reset flag*)',
+    'IF Q_resetNewFlag = 1THEN;',
+    '    Q_resetNewFlag := 0;',
+    'END_IF;',
+    '(*Authorisation statements*)',
+)
 
 
-def editor_fbd(c, x, y, w, h, lang):
-    def var(vx, vy, label, out=False):
-        c.rect(vx, vy - 10, 70, 20, '#ffffff', INK, 1.2)
-        c.text(vx + 35, vy + 4, label, 11, INK, 400, 'middle', True)
-
-    var(x + 14, y + 66, 'bRun')
-    var(x + 14, y + 106, 'T#500MS')
-    bx, by = x + 128, y + 40
-    c.text(bx + 40, by - 8, 'tonDelay', 11, INK, 400, 'middle', True)
-    c.rect(bx, by, 80, 92, '#ffffff', INK, 1.4)
-    c.rect(bx, by, 80, 20, '#eef1f4', INK, 1.4)
-    c.text(bx + 40, by + 14.5, 'TON', 12, INK, 700, 'middle', True)
-    for label, py, side in (('IN', 66, 'l'), ('PT', 106, 'l'), ('Q', 66, 'r'), ('ET', 106, 'r')):
-        if side == 'l':
-            c.text(bx + 6, y + py + 4, label, 11, INK, 400, mono=True)
-        else:
-            c.text(bx + 74, y + py + 4, label, 11, INK, 400, 'end', True)
-    c.line(x + 84, y + 66, bx, y + 66, INK, 1.2)
-    c.line(x + 84, y + 106, bx, y + 106, INK, 1.2)
-    c.line(bx + 80, y + 66, bx + 116, y + 66, INK, 1.2)
-    var(bx + 116, y + 66, 'bEnable')
-    c.line(bx + 80, y + 106, bx + 100, y + 106, INK, 1.2)
-    c.rect(bx + 112, y + 54, 74, 24, 'none', BLUE, 1.2)
-    c.text(x + 14, y + h - 14, pick(('网络 1 / 3', 'Network 1 / 3', 'ネットワーク 1 / 3'), lang), 11, SOFT)
+def place_capture(c, x, y, w, h, name, crop):
+    """Place a captured program view, cropped to the region that matches the pane."""
+    path = ASSETS / (name + '.png')
+    if not path.is_file():
+        raise SystemExit(f'Missing {path.name}; run tools/capture_readme_ui_shots.py --panel first.')
+    width, height = png_size(path)
+    data = base64.b64encode(path.read_bytes()).decode('ascii')
+    left, top, crop_w, crop_h = crop
+    c.add(f'<svg x="{x}" y="{y}" width="{w}" height="{h}" viewBox="{left} {top} {crop_w} {crop_h}" '
+          f'preserveAspectRatio="xMidYMin slice">'
+          f'<image x="0" y="0" width="{width}" height="{height}" '
+          f'href="data:image/png;base64,{data}"/></svg>')
 
 
-def editor_sfc(c, x, y, w, h, lang):
-    cx = x + 90
-
-    def step(sy, label, action, initial=False):
-        c.rect(cx - 24, sy - 12, 48, 24, '#ffffff', INK, 1.4)
-        if initial:
-            c.rect(cx - 20, sy - 8, 40, 16, 'none', INK, 1)
-        c.text(cx, sy + 4, label, 11.5, INK, 600, 'middle', True)
-        c.line(cx + 24, sy, cx + 44, sy, INK, 1.2)
-        c.rect(cx + 44, sy - 11, 96, 22, '#ffffff', INK, 1.2)
-        c.text(cx + 92, sy + 4, action, 11, INK, 400, 'middle', True)
-
-    def transition(ty, label):
-        c.line(cx - 10, ty, cx + 10, ty, INK, 2.4)
-        c.text(cx - 16, ty + 4, label, 11, MUTED, 400, 'end', True)
-
-    s0, s1, s2 = y + 30, y + 96, y + 162
-    c.line(cx, s0 + 12, cx, s1 - 12, INK, 1.2)
-    c.line(cx, s1 + 12, cx, s2 - 12, INK, 1.2)
-    step(s0, '0', 'Init', True)
-    transition((s0 + s1) / 2, 'TR0')
-    step(s1, '10', 'Feed')
-    c.rect(cx + 34, s1 - 21, 116, 42, 'none', BLUE, 1.2)
-    transition((s1 + s2) / 2, 'TR1')
-    step(s2, '20', 'Stop')
-    c.line(cx, s2 + 12, cx, s2 + 24, INK, 1.2)
-    c.path(f'M{cx - 5} {s2 + 20} L{cx} {s2 + 28} L{cx + 5} {s2 + 20}', INK, 1.2)
-    c.text(cx + 10, s2 + 30, '0', 11, INK, 400, mono=True)
-
-
-def editor_ladder(c, x, y, w, h, lang):
-    ladder(c, x, y, w, h)
+def pane(c, x, y, w, h, tab, kind, lang):
+    """One language pane: a workbench-like tab header over the language view."""
+    c.rect(x, y, w, h, '#ffffff', LINE)
+    c.rect(x, y, w, 26, HEAD, LINE)
+    tab_w = est_width(tab, 11.5, True) + 22
+    c.rect(x + 6, y + 4, tab_w, 22, '#ffffff', LIGHT)
+    c.text(x + 17, y + 19, tab, 11.5, INK, 600, mono=True)
+    c.text(x + w - 10, y + 18, kind, 12, MUTED, 600, 'end', maxw=w - tab_w - 30)
+    c.rect(x + 1, y + 27, w - 2, h - 28, '#ffffff', None)
+    return (x + 1, y + 27, w - 2, h - 28)
 
 
 def feature_languages(lang):
-    c = Canvas(lang, 1200, 590, 'languages')
-    frame(c, *pick((('Ladder · ST · FBD · SFC 编辑能力', '四种语言共用离线事务：读取 → 编辑 → 预览差异 → 保存版本；可在发现 GX Works2 后自动原生编译'),
-                    ('Ladder · ST · FBD · SFC editing', 'One offline transaction for all four languages: read → edit → preview diff → save; native compile when GX Works2 is found'),
-                    ('Ladder · ST · FBD · SFC の編集機能', '4 言語共通のオフライン処理: 読み取り → 編集 → 差分確認 → 版保存。GX Works2 があれば自動コンパイル')), lang))
-    panes = (
-        ('MAIN [PRG]', pick(('梯形图', 'Ladder Diagram', 'ラダー図'), lang), editor_ladder,
-         pick((('指令事实与手册依据', '结构与操作数检查', '按网络局部补丁', 'SVG · MAIN / 注释 CSV'),
-               ('Instruction facts & sources', 'Structure & operand checks', 'Per-network patches', 'SVG · MAIN / comment CSV'),
-               ('命令の事実と根拠', '構造・オペランド検査', 'ネットワーク単位の修正', 'SVG · MAIN / コメント CSV')), lang)),
-        ('Conveyor [PRG]', pick(('结构化文本', 'Structured Text', '構造化テキスト'), lang), editor_st,
-         pick((('Program · FB · FUNCTION', '正文与声明联合编辑', '接口与返回类型调整', '本地语法与语义检查'),
-               ('Program · FB · FUNCTION', 'Body & declaration edits', 'Interfaces & return types', 'Local syntax checks'),
-               ('Program · FB · FUNCTION', '本文と宣言の同時編集', 'インタフェース・戻り値型', 'ローカル構文・意味検査')), lang)),
-        ('Axis1 [FB]', pick(('功能块图', 'Function Block Diagram', 'ファンクションブロック図'), lang), editor_fbd,
-         pick((('参数级 calls / arguments', '节点、端子与正交连线', 'ST 功能块模块化组装', '库导入与任务注册'),
-               ('Parameter-level calls', 'Nodes, pins & wiring', 'Modular ST function blocks', 'Library import & tasks'),
-               ('パラメータ単位の calls', 'ノード・端子・配線', 'ST FB によるモジュール化', 'ライブラリ取込・タスク登録')), lang)),
-        ('Sequence [SFC]', pick(('顺序功能图', 'Sequential Function Chart', 'シーケンシャルファンクションチャート'), lang), editor_sfc,
-         pick((('步骤、转换与动作', '分支、汇合与跳转', '子程序与内部注册', '声明与注释联合编辑'),
-               ('Steps, transitions, actions', 'Branches, joins & jumps', 'Subroutines & registration', 'Declarations & comments'),
-               ('ステップ・遷移・アクション', '分岐・合流・ジャンプ', 'サブルーチンと内部登録', '宣言とコメントの編集')), lang)),
-    )
-    heading = pick(('支持的操作', 'Supported operations', '対応する操作'), lang)
-    for i, (tab, kind, draw, items) in enumerate(panes):
-        x = 30 + (i % 2) * 580
-        y = 88 + (i // 2) * 248
-        w, h = 560, 232
-        c.rect(x, y, w, h, '#ffffff', LINE)
-        c.rect(x, y, w, 26, HEAD, LINE)
-        tab_w = est_width(tab, 11.5, True) + 22
-        c.rect(x + 6, y + 4, tab_w, 22, '#ffffff', LIGHT)
-        c.line(x + 7, y + 26, x + 5 + tab_w, y + 26, '#ffffff', 1.5)
-        c.text(x + 17, y + 19, tab, 11.5, INK, 600, mono=True)
-        c.text(x + w - 10, y + 18, kind, 12, MUTED, 600, 'end', maxw=w - tab_w - 30)
-        ew = 320
-        draw(c, x + 1, y + 27, ew, h - 28, lang)
-        c.rect(x + ew + 1, y + 27, w - ew - 2, h - 28, PANEL, None)
-        c.line(x + ew + 1, y + 27, x + ew + 1, y + h, LIGHT)
-        c.text(x + ew + 18, y + 54, heading, 12, MUTED, 600, maxw=200)
-        for j, item in enumerate(items):
-            iy = y + 88 + j * 32
-            c.check(x + ew + 18, iy - 3)
-            c.text(x + ew + 36, iy, item, 13, INK, maxw=w - ew - 46)
+    c = Canvas(lang, 1200, 800, 'languages')
+    frame(c, *pick((('Ladder · ST · FBD · SFC 编辑能力',
+                     '四种语言共用离线事务：读取 → 编辑 → 预览差异 → 保存版本；画面取自真实工程'),
+                    ('Ladder · ST · FBD · SFC editing',
+                     'One offline transaction for all four languages: read → edit → preview diff → save; views captured from real projects'),
+                    ('Ladder · ST · FBD · SFC の編集機能',
+                     '4 言語共通のオフライン処理: 読み取り → 編集 → 差分確認 → 版保存。画面は実在のプロジェクトから取得')), lang))
+    kinds = pick((('梯形图', '结构化文本', '功能块图', '顺序功能图'),
+                  ('Ladder Diagram', 'Structured Text', 'Function Block Diagram', 'Sequential Function Chart'),
+                  ('ラダー図', '構造化テキスト', 'ファンクションブロック図', 'シーケンシャルファンクションチャート')), lang)
+    # Ladder: the product's own rendering of a real program
+    ix, iy, iw, ih = pane(c, 30, 88, 560, 330, 'MAIN [PRG]', kinds[0], lang)
+    place_ladder(c, ix + 8, iy + 8, iw - 16, ih - 16, lang)
+    # ST: real source text from an English sample project
+    ix, iy, iw, ih = pane(c, 610, 88, 560, 330, 'BoxID [PRG]', kinds[1], lang)
+    for index, line in enumerate(ST_SAMPLE):
+        c.text(ix + 54, iy + 40 + index * 22, str(index + 1), 11, SOFT, 400, 'end', True)
+        c.code(ix + 66, iy + 40 + index * 22, ((line, BLUE if line.startswith('(*') else INK),), 12)
+    # FBD: captured graph from a real FX3U FBD project
+    ix, iy, iw, ih = pane(c, 30, 430, 560, 330, 'POU_01 [FBD]', kinds[2], lang)
+    place_capture(c, ix, iy, iw, ih, 'language-fbd-panel', (0, 470, 1278, 620))
+    # SFC: captured chart from a real SFC project
+    ix, iy, iw, ih = pane(c, 610, 430, 560, 330, 'S0 [SFC]', kinds[3], lang)
+    place_capture(c, ix, iy, iw, ih, 'language-sfc-panel', (20, 285, 1240, 600))
     return c
 
 

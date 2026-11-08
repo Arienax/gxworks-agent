@@ -88,6 +88,34 @@ class Workbench:
         self.socket.close()
 
 
+def shot_panel(page, path):
+    """Capture the program content (drawing or code) without the panel's own toolbar."""
+    box = page.evaluate(
+        "() => { const content = document.querySelector("
+        "'.editor-content, .code-view, .canvas-shell, .program-explorer, .fbd-panel');"
+        " if (!content) return null; const r = content.getBoundingClientRect();"
+        " return {x: r.x, y: r.y, width: r.width, height: r.height}; }")
+    if not box or box['width'] < 200:
+        raise SystemExit('The program content did not appear; adjust the content lookup.')
+    page.screenshot(path=str(path), clip=box)
+    try:
+        from PIL import Image
+    except ImportError:
+        return
+    with Image.open(path) as image:
+        rgb = image.convert('RGB')
+        width, height = rgb.size
+        pixels = rgb.load()
+        bottom = height - 1
+        while bottom > 0:
+            row = [pixels[x, bottom] for x in range(0, width, 8)]
+            if max(sum(pixel) for pixel in row) - min(sum(pixel) for pixel in row) > 12:
+                break
+            bottom -= 1
+        if bottom < height - 1:
+            rgb.crop((0, 0, width, bottom + 12)).save(path, optimize=True)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--lang', nargs='*', choices=LANGS, default=list(LANGS))
@@ -95,6 +123,13 @@ def main(argv=None):
                         help='project imported before the capture (default: the bundled FX3U template)')
     parser.add_argument('--web-dist', type=Path, default=ROOT / 'web' / 'dist')
     parser.add_argument('--channel', default='msedge', help='Playwright Chromium channel (default: msedge)')
+    parser.add_argument('--program', help='program to select when the file holds several sources')
+    parser.add_argument('--name', default='web-workbench',
+                        help='output stem under resources/assets (default: web-workbench)')
+    parser.add_argument('--panel', action='store_true',
+                        help='also write "<name>-panel<suffix>.png": the program panel alone, trimmed')
+    parser.add_argument('--scroll', type=int, default=0,
+                        help='scroll the code/drawing area by this many CSS pixels before capturing')
     args = parser.parse_args(argv)
 
     try:
@@ -109,7 +144,7 @@ def main(argv=None):
         with Workbench(Path(directory), args.web_dist) as workbench:
             imported = workbench.service.gxw_files.import_project(
                 data_base64=base64.b64encode(args.gxw.read_bytes()).decode('ascii'),
-                filename=args.gxw.name, request_id='readme-ui-capture')
+                filename=args.gxw.name, program=args.program, request_id='readme-ui-capture')
             project_id = imported['project_id']
             print(f'imported {args.gxw.name} as project {project_id}')
             with sync_playwright() as playwright:
@@ -122,20 +157,31 @@ def main(argv=None):
                             "localStorage.setItem('gx.theme','light');")
                         page = context.new_page()
                         page.goto(f'{workbench.origin}/?project={project_id}#token={workbench.token}')
-                        page.wait_for_selector('.fbd-panel, .canvas-shell, .program-explorer',
-                                               timeout=60000)
+                        page.wait_for_selector('.canvas-title-row', timeout=60000)
                         page.wait_for_function(
-                            "() => { const image = document.querySelector("
-                            "'.canvas-shell img, .program-explorer img, img.ladder-svg, .fbd-panel img');"
+                            "() => { const box = document.querySelector("
+                            "'.editor-content, .code-view, .canvas-shell, .fbd-panel, .program-explorer');"
+                            " if (!box || (box.textContent || '').includes('正在读取')) return false;"
+                            " const image = box.querySelector('img');"
                             " if (image) return image.complete && image.naturalWidth > 0;"
-                            " return Boolean(document.querySelector("
-                            "'.canvas-shell svg, .program-explorer svg, .fbd-panel svg')); }",
+                            " return Boolean(box.querySelector('svg')) || box.textContent.trim().length > 0; }",
                             timeout=60000)
+                        page.wait_for_timeout(3000)
                         page.wait_for_timeout(1500)
+                        if args.scroll:
+                            page.evaluate(
+                                "(offset) => { const box = document.querySelector"
+                                "('.code-view, .editor-content'); if (box) box.scrollTop = offset; }",
+                                args.scroll)
+                            page.wait_for_timeout(600)
                         suffix = SUFFIX[lang]
-                        whole = ASSETS / f'web-workbench{suffix}.png'
+                        whole = ASSETS / f'{args.name}{suffix}.png'
                         page.screenshot(path=str(whole))
                         print('wrote', whole.relative_to(ROOT), whole.stat().st_size)
+                        if args.panel:
+                            panel_path = ASSETS / f'{args.name}-panel{suffix}.png'
+                            shot_panel(page, panel_path)
+                            print('wrote', panel_path.relative_to(ROOT), panel_path.stat().st_size)
                         context.close()
                 finally:
                     browser.close()
