@@ -14,11 +14,11 @@ import {
   ListChecks,
   LoaderCircle,
   MessageSquare,
+  MessageSquarePlus,
   Moon,
   PanelLeftClose,
   Search,
   Settings2,
-  SquarePen,
   Sun,
   X,
 } from "lucide-react";
@@ -37,7 +37,6 @@ const VISIBLE = 12;
 
 export const projectSidebarFields = [
   "busy",
-  "canWrite",
   "displayedJobStatus",
   "environment",
   "jobId",
@@ -85,7 +84,6 @@ type Props = Pick<WorkbenchModel, typeof projectSidebarFields[number]> & {
 export function ProjectSidebar(props: Props) {
   const {
     busy,
-    canWrite,
     displayedJobStatus,
     environment,
     jobId,
@@ -116,16 +114,23 @@ export function ProjectSidebar(props: Props) {
   const [showAll, setShowAll] = useState(false);
   const workspaceGroups = workspaces ?? [];
 
-  // Ctrl+O opens the system folder chooser for another workspace, like the plugin.
+  // Ctrl+O adds a workspace, Ctrl+N starts a conversation, like the harness.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "o") return;
-      event.preventDefault();
-      onAddWorkspace?.();
+      if (!(event.ctrlKey || event.metaKey)) return;
+      const key = event.key.toLowerCase();
+      if (key === "o") {
+        event.preventDefault();
+        onAddWorkspace?.();
+      } else if (key === "n") {
+        event.preventDefault();
+        if (pid) newTask();
+        else setModal("new");
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onAddWorkspace]);
+  }, [onAddWorkspace, newTask, pid, setModal]);
 
   const closeOnNarrow = () => { if (window.innerWidth <= 1100) setLeftOpen(false); };
   const titleOf = (job: Job) => conversationTitle(job, (kind) => t(jobKindLabel(kind)));
@@ -153,11 +158,6 @@ export function ProjectSidebar(props: Props) {
           <PanelLeftClose size={17} />
         </button>
       </div>
-      <button className="new-task-button" disabled={!canWrite && !!pid}
-        onClick={() => (pid ? newTask() : setModal("new"))}>
-        <SquarePen size={16} />
-        <span>{t(pid ? "新任务" : "新建工程")}</span>
-      </button>
       {session?.read_only && <div className="sidebar-notice"><Badge tone="warn">{t("只读恢复")}</Badge></div>}
 
       <div className="sidebar-heading">
@@ -209,6 +209,13 @@ export function ProjectSidebar(props: Props) {
                     <small className="workspace-row-count">{ordered.length}</small>
                   )}
                 </button>
+                {group.active && (
+                  <button type="button" className="icon-button workspace-new-chat"
+                    aria-label={t("新建对话")} title={`${t("新建对话")} · Ctrl+N`}
+                    onClick={() => (pid ? newTask() : setModal("new"))}>
+                    <MessageSquarePlus size={13} />
+                  </button>
+                )}
                 <button type="button" className="icon-button workspace-group-forget"
                   aria-label={t("从列表移除工作区")} title={t("从列表移除工作区")}
                   disabled={!!workspacesBusy} onClick={() => onForgetWorkspace?.(group.id)}>
@@ -218,6 +225,15 @@ export function ProjectSidebar(props: Props) {
 
               {/* The active workspace lists its conversations; others list their
                   projects, so a folder is still one click away without switching. */}
+              {group.active && open && !jobId && !!pid && (
+                <div className="conversation-node">
+                  <button type="button" className="conversation-item selected"
+                    aria-current="true" title={t("新建对话")}>
+                    <span className="conversation-icon"><MessageSquarePlus size={13} /></span>
+                    <span className="conversation-title">{t("新建对话")}</span>
+                  </button>
+                </div>
+              )}
               {group.active && open && visible.map((job) => {
                 const state = listedJobStatus(job, jobId, displayedJobStatus);
                 return (

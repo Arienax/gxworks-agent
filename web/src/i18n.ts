@@ -780,6 +780,7 @@ const words: Record<string, string> = {
   "平铺显示全部工程": "List every project in one flat list",
   "按工作区分组": "Group projects by workspace",
   "搜索工程": "Search projects",
+  "新建对话": "New conversation",
   "搜索对话": "Search conversations",
   "按工程排序": "Group conversations by project",
   "按时间排序": "Order conversations by time",

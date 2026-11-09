@@ -165,16 +165,20 @@
   font-variant-numeric: tabular-nums;
 }
 /* The remove action stays out of the way until the row is hovered. */
-.workspace-group-forget {
+.workspace-group-forget,
+.workspace-new-chat {
   flex: none;
   opacity: 0;
   transition: opacity 120ms ease;
 }
 .workspace-row-wrap:hover .workspace-group-forget,
-.workspace-group-forget:focus-visible {
+.workspace-row-wrap:hover .workspace-new-chat,
+.workspace-group-forget:focus-visible,
+.workspace-new-chat:focus-visible {
   opacity: 0.7;
 }
-.workspace-group-forget:hover {
+.workspace-group-forget:hover,
+.workspace-new-chat:hover {
   opacity: 1;
 }
 /* Projects of the active workspace hang under its row, like a session list. */
