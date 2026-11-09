@@ -1,6 +1,3 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Model-free facade over the existing deterministic PLC implementation."""
 
 from __future__ import annotations
@@ -185,8 +182,25 @@ class PLCCore:
     ) -> Mapping[str, Any]:
         from plc.validation import ValidationProfileUnavailableError
 
+        context_diagnostics = None
         try:
-            validate_plc_ir(program, confirmed_spec=confirmed_spec)
+            ordered = (program.get('source') or {}).get('format') in {
+                'instruction_sequence_v1', 'instruction_sequence_v2'}
+            rejected_context = any(isinstance(f, Mapping) and f.get('code') in {'BREAK_PROGRAM_CONTEXT', 'CHK_PROGRAM_CONTEXT', 'CJ_PROGRAM_CONTEXT'} and f.get('severity') == 'error'
+                                   for f in (program.get('analysis') or {}).get('findings', []))
+            validate_plc_ir(program, confirmed_spec=confirmed_spec,
+                            require_catalogued_instructions=not ordered, validate_ladder=not rejected_context)
+            if rejected_context:
+                # The existing IR pass has now proved this analysis fresh.
+                # Keep its per-record findings if full validation rejects it;
+                # do not rebuild the same analysis again in the error path.
+                analysis = program.get('analysis') or {}
+                context_diagnostics = {'counts': copy.deepcopy(analysis.get('counts') or {}),
+                    'findings': copy.deepcopy(analysis.get('findings') or []),
+                    'rules_checked': list(analysis.get('rules_checked') or [])}
+                from plc.validation import validate_ladder_full
+                validate_ladder_full(ir_to_ladder(program), plc_model=program['plc']['cpu'],
+                    confirmed_spec=confirmed_spec, require_catalogued_instructions=not ordered)
         except ValidationProfileUnavailableError as error:
             from plc.device_definitions import ladder_device_findings
             known = ladder_device_findings(ir_to_ladder(program), (program.get('plc') or {}).get('cpu'),
@@ -197,20 +211,37 @@ class PLCCore:
                     "counts": {"error": 0, "unverified": len(known)}, "findings": known,
                     "native": "unverified", "runtime": "unverified"}
         except (TypeError, ValueError) as error:
+            if context_diagnostics is not None:
+                return {'valid': False, 'error': str(error), **context_diagnostics}
             return {"valid": False, "error": str(error), "counts": {"error": 1}}
         diagnostics = self.get_diagnostics(program)
+        from plc.instruction_constraints import inspect_ladder_constraints
+        from plc.validation import _confirmed_instruction_versions
+        context = {**(confirmed_spec or {}),
+                   'project': (confirmed_spec or {}).get('project_context', {}),
+                   'hardware': (confirmed_spec or {}).get('hardware_profile', {})}
+        for key in ('cpu_version', 'software_version'):
+            context.pop(key, None)
+        context.update(_confirmed_instruction_versions(confirmed_spec))
+        for report in inspect_ladder_constraints(ir_to_ladder(program), plc_model=program['plc']['cpu'],
+                context=context, root_dimensions={'constraints.documented_requirements'}):
+            for finding in report['findings']:
+                diagnostics['findings'].append({**finding, 'path': report['path']})
+                severity = finding['severity']
+                diagnostics['counts'][severity] = diagnostics['counts'].get(severity, 0) + 1
         from plc.device_definitions import ladder_device_findings
         known = ladder_device_findings(ir_to_ladder(program), (program.get('plc') or {}).get('cpu'),
             context=(confirmed_spec or {}).get('hardware_profile'))
         if known:
             diagnostics = {**diagnostics,
-                'counts': {**diagnostics.get('counts', {}), 'unverified': len(known)},
+                'counts': {**diagnostics.get('counts', {}),
+                           'unverified': diagnostics.get('counts', {}).get('unverified', 0) + len(known)},
                 'findings': [*diagnostics.get('findings', []), *known]}
-            return {'valid': False, 'status': 'unverified', **diagnostics}
         return {
             "valid": int((diagnostics.get("counts") or {}).get("error", 0)) == 0
                      and not (diagnostics.get('counts') or {}).get('unverified'),
-            **({'status': 'unverified'} if (diagnostics.get('counts') or {}).get('unverified') else {}),
+            **({'status': 'failed'} if (diagnostics.get('counts') or {}).get('error') else
+               {'status': 'unverified'} if (diagnostics.get('counts') or {}).get('unverified') else {}),
             **diagnostics,
         }
 
@@ -358,7 +389,9 @@ def accept_candidate_patch(store: Any, action: Mapping[str, Any]) -> Mapping[str
             candidate, output_dir, validation_profile=validation_profile
         )
         metadata = store._ir_metadata(candidate)
-        st_path = output_dir / compiled["artifacts"]["st_from_ir"]
+        st_artifact = compiled["artifacts"].get("st_from_ir")
+        st_metadata = ({"st_from_ir_sha256": hashlib.sha256((output_dir / st_artifact).read_bytes()).hexdigest()}
+                       if st_artifact else {"st_translation": "disabled"})
         from plc.st_renderer import ST_RENDERER_SCHEMA_VERSION
 
         metadata.update(
@@ -366,7 +399,7 @@ def accept_candidate_patch(store: Any, action: Mapping[str, Any]) -> Mapping[str
                 "target_mode": "ladder",
                 "plc_model": str((candidate.get("plc") or {}).get("cpu") or "FX3U"),
                 "summary": "AI 候选补丁（用户确认）",
-                "st_from_ir_sha256": hashlib.sha256(st_path.read_bytes()).hexdigest(),
+                **st_metadata,
                 "st_renderer_schema_version": ST_RENDERER_SCHEMA_VERSION,
                 "artifacts": dict(compiled["artifacts"]),
                 "validation_profile": validation_profile,

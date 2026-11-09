@@ -1,6 +1,3 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Registered CPU target identity: menu identities, their members and their series.
 
 Only identity lives here: which spellings name a saved CPU menu option, which concrete
@@ -44,7 +41,8 @@ CPU_GROUPS = ((SERIES_Q, Q_CPUS), (SERIES_L, L_CPUS), (SERIES_FX, FX_CPUS))
 PARAMETER_ONLY = frozenset({"QJ72LP25/QJ72BR15(RemoteI/O)", "LJ72GF15-T2", "LJ72MS15"})
 
 #: Identities the project knows without a GX Works2 creation option.
-CORE_ONLY_TARGETS = {"FX5U": SERIES_FX + "5U"}
+# Keep Core identities queryable without borrowing native FX step rules.
+CORE_ONLY_TARGETS = {cpu: SERIES_FX + "5U" for cpu in ("FX5S", "FX5UJ", "FX5U", "FX5UC")}
 
 REMOTE_IO_SUFFIX = "(REMOTEI/O)"
 

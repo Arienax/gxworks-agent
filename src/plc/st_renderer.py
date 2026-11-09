@@ -1,6 +1,3 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Deterministic GX Works2 Structured Text rendering from canonical PLC IR.
 
 The renderer follows the FXCPU Structured Programming Manual convention that
@@ -38,6 +35,10 @@ _ST_OPERAND_RE = re.compile(
 
 class STTranslationError(PLCIRValidationError):
     """Raised when the IR contains a construct with no safe ST lowering."""
+
+
+class STTranslationUnavailable(STTranslationError):
+    """The Ladder form has no corresponding ST call spelling."""
 
 
 def _escape_comment(value: Any) -> str:
@@ -179,7 +180,7 @@ def _function_statement(
     if form and form.spec.supports_cpu(plc_model) and form.spec.st_call:
         op = form.spec.st_call["name"]
     if not _ST_IDENTIFIER_RE.fullmatch(op):
-        raise STTranslationError(f"{path}.opcode: unsupported opcode {opcode!r}")
+        raise STTranslationUnavailable(f"{path}.opcode: unsupported ST call spelling {opcode!r}")
     if op == "END":
         raise STTranslationError(f"{path}.opcode: END is implicit in a structured POU")
     args = [_st_operand(value, f"{path}.operands[{index}]", plc_model) for index, value in enumerate(operands or [])]
@@ -303,6 +304,18 @@ def render_plc_ir_to_st(program: Mapping[str, Any]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def render_optional_plc_ir_to_st(program: Mapping[str, Any]) -> str | None:
+    """Keep an unsupported derivative separate from primary Ladder artifacts.
+
+    Invalid IR, operands and traceability remain errors. This does not invent
+    an ST function call for a native operator or change execution admission.
+    """
+    try:
+        return render_plc_ir_to_st(program)
+    except STTranslationUnavailable:
+        return None
+
+
 def network_markers(st_text: str) -> Set[str]:
     return set(re.findall(r"\(\*\s+NETWORK\s+(N[A-Za-z0-9_-]+)", str(st_text)))
 
@@ -324,8 +337,10 @@ def validate_st_traceability(program: Mapping[str, Any], st_text: str) -> bool:
 __all__ = [
     "ST_RENDERER_SCHEMA_VERSION",
     "STTranslationError",
+    "STTranslationUnavailable",
     "network_markers",
     "render_network_st",
     "render_plc_ir_to_st",
+    "render_optional_plc_ir_to_st",
     "validate_st_traceability",
 ]

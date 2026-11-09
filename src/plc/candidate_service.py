@@ -1,6 +1,3 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Single deterministic candidate preparation/compilation service.
 
 Web generation and PLCCore/MCP enter here. Persistence, approval, provider calls,
@@ -31,14 +28,19 @@ class CandidateService:
         result["maintainability_review"] = review_maintainability(result["program_ir"])
         return result
 
-    def compile(self, program, output_dir, *, validation_profile="generation_structural"):
+    def compile(self, program, output_dir, *, validation_profile="generation_structural",
+                include_st_translation=True):
         target = Path(output_dir)
         if validation_profile == "generation_structural":
             from plc.generation import render_generation_artifacts
-            rendered = render_generation_artifacts(program, target)
+            rendered = render_generation_artifacts(
+                program, target, include_st_translation=include_st_translation)
         else:
             from plc.artifacts import render_candidate_artifacts
-            rendered = {"artifacts": render_candidate_artifacts(program, target)}
+            rendered = {"artifacts": render_candidate_artifacts(
+                program, target, include_st_translation=include_st_translation)}
+        if not rendered['artifacts'].get('st_from_ir'):
+            rendered.setdefault('st_translation', 'unavailable' if include_st_translation else 'disabled')
         return {**rendered, "hashes": {
             name: hashlib.sha256((target / filename).read_bytes()).hexdigest()
             for name, filename in rendered["artifacts"].items()

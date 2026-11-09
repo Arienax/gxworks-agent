@@ -213,7 +213,13 @@ def _residual_fact_text(query, targets, covered_kinds):
             value = (target.get('opcode') or target.get('base_opcode')) if isinstance(target, Mapping) else target
             if value and not alias_occurs(residual, str(value)):
                 missing.append(str(value))
-    return ' '.join([residual, *missing]).strip()
+    text = ' '.join([residual, *missing]).strip()
+    if hasattr(query, 'metadata'):
+        from knowledge.evidence import KnowledgeQuery
+        return KnowledgeQuery(text, metadata=query.metadata,
+                              precompiled=getattr(query, 'precompiled', False),
+                              truncated=getattr(query, 'truncated', False))
+    return text
 
 
 def retrieve_knowledge(
@@ -395,8 +401,11 @@ def retrieve_fact_aware_knowledge(
     if normalized_model is None:
         return []
     plc_model = normalized_model
-    targets = targets if targets is not None else structured_fact_targets(query, plc_model=plc_model, language=language)
     query_meta = getattr(query, 'metadata', {})
+    # Functional expansion terms describe a source purpose. They are not
+    # user-selected instruction identities (for example the word in word shift).
+    targets = (targets if targets is not None else {} if query_meta.get('semantic_function')
+               else structured_fact_targets(query, plc_model=plc_model, language=language))
     direct = [
         *resolve_positioning_records(targets.get("positioning"), plc_model=plc_model, task_type=task),
         *resolve_language_records(targets.get('language_features') or (), plc_model=plc_model, task_type=task),
@@ -527,6 +536,9 @@ def build_knowledge_context(
             if not marker or marker in seen:
                 continue
             seen.add(marker)
+            # Bind against the complete reviewed row before source projection.
+            from knowledge.function_relations import annotate_source_records
+            relations = annotate_source_records([result])[0].get('function_relations')
             result = context_reference(result)
             from knowledge.evidence import share_fact_source_units
             result = share_fact_source_units(result, delivered_fact_sources)
@@ -541,6 +553,8 @@ def build_knowledge_context(
                 manifest.setdefault("duplicate_source_ids", []).append(marker)
                 continue
             record = evidence_record(result)
+            if relations:
+                record['function_relations'] = relations
             delivered_typed[marker] = result
             block = format_knowledge_reference(result)
             record['model_text'] = block
@@ -594,7 +608,7 @@ def build_knowledge_context(
         # these rules for the ST callee as well.
         exact_targets['language_features'] = list(dict.fromkeys([
             *exact_targets.get('language_features', ()), 'ST.DATATYPES', 'ST.OPERATORS',
-            'ST.CALL.ENENO', 'ST.CALL.ARGUMENTS', 'ST.FB.OUTPUT_ARGUMENT']))
+            'ST.CALL.ENENO', 'ST.CALL.ARGUMENTS', 'ST.FB.OUTPUT_ARGUMENT', 'ST.PROJECT', 'ST.CONTROL_FLOW']))
     instruction_targets = list(exact_targets.get("instructions") or ())
     device_targets = list(exact_targets.get("devices") or ())
     family_targets = list(exact_targets.get("device_families") or ())
@@ -717,7 +731,7 @@ def discover_capabilities(requirement, *, plc_model="FX3U", target_mode="ladder"
     from knowledge.capability_discovery import discover
     return discover(requirement, plc_model=plc_model, target_mode=target_mode,
                     explicit_targets=explicit_targets, catalog=catalog,
-                    retrieve=retrieve_knowledge, relation_records=relation_records, relation_limit=relation_limit)
+                    retrieve=retrieve_fact_aware_knowledge, relation_records=relation_records, relation_limit=relation_limit)
 
 
 

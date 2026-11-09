@@ -51,6 +51,9 @@ def _model_tool_value(name, value):
         # the object table and invalidate the measured final envelope.
         return copy.deepcopy(value)
     public = _public_value(value)
+    if name in {"get_project_spec", "update_project_spec", "confirm_project_spec"}:
+        # Specification fields are engineering content, including user parameter names.
+        return public
     # Selection belongs to the registered tool owner, never to a payload flag.
     document = {"get_current_program_info": "program", "read_network": "program",
                 "get_diagnostics": "diagnostics", "read_sfc_project": "source_snapshot",

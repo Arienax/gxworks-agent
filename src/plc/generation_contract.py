@@ -1,6 +1,3 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Model-free ladder_v1 generation contract and safe specification projection.
 
 This describes the generation subset of the historical ladder interchange
@@ -14,11 +11,12 @@ import copy
 import re
 from typing import Any, Mapping
 
-from plc.instructions import GENERATION_TYPED_OUTPUT_OPCODES, generation_app_instr_mnemonics
+from plc.instructions import (GENERATION_TYPED_OUTPUT_OPCODES, generation_app_instr_mnemonics,
+                              LITERAL_ARITHMETIC_MNEMONIC_PATTERN)
 
 
 MAX_LABEL_LEN = 64
-APP_INSTR_OPCODE_PATTERN = r"^[A-Z0-9_.$@+\-]+$"
+APP_INSTR_OPCODE_PATTERN = rf"^(?:[A-Z0-9_.$@+\-]+|{LITERAL_ARITHMETIC_MNEMONIC_PATTERN}|D?BKCMP(?:<>|<=|>=|=|<|>)P?)$"
 
 
 # Shared execution semantics; wire representations add only their own syntax.
@@ -313,7 +311,11 @@ ENGINEERING_CONTEXT_FIELDS = {
 }
 
 
+from plc.specification.implementation import ROW_FIELDS
+
 _SPEC_FIELDS = {
+    **{section: [fields] for section, fields in ROW_FIELDS.items()},
+    "target_mode": None,
     "intent_context": INTENT_CONTEXT_FIELDS,
     **_HARDWARE_FIELDS,  # Legacy specs sometimes store the hardware profile inline.
     **dict.fromkeys(("schema_version", "summary", "user_notes", "scan_budget_ms", "scan_warning_ms")),
@@ -325,7 +327,7 @@ _SPEC_FIELDS = {
         "implementation_preferences": _CONTRACT_FIELDS,
     },
     "parameters": [dict.fromkeys(("id", "name", "value", "note", "source", "semantic_key", "value_kind", "unit"))],
-    "io_table": [dict.fromkeys(("address", "kind", "label", "description", "source"))],
+    "io_table": [dict.fromkeys(("id", "address", "kind", "label", "description", "source"))],
     "io_bindings": [dict.fromkeys(("binding_id", "role", "kind", "address", "source_parameter_id",
                                   "name", "active_level", "inactive_level", "label"))],
     "hardware_profile": _HARDWARE_FIELDS,

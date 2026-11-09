@@ -8,7 +8,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 from agent_runtime.tool_context import (
     ToolContext,
     _decision_receipt_id,
-    _confirmed_spec,
+    _generation_spec,
 )
 from agent_runtime.native_tools import (
     _get_fbd_catalog,
@@ -17,12 +17,7 @@ from agent_runtime.native_tools import (
 )
 
 
-def _source_knowledge(context, arguments, source, language, confirmed_spec, *, task_type='edit'):
-    """Retrieved knowledge for one source, plus the generation handoff when generating.
-
-    A direct generation needs the reviewed capability discovery and its handoff
-    snapshot, not only the flat knowledge units, so the caller states its task.
-    """
+def _source_knowledge(context, arguments, source, language, confirmed_spec):
     from application.generation_context import _build_knowledge_context
     from application.generation_support import _build_knowledge_query
     from knowledge.evidence import KnowledgeQuery
@@ -30,25 +25,50 @@ def _source_knowledge(context, arguments, source, language, confirmed_spec, *, t
     query = _build_knowledge_query(arguments.get('user_requirement'), source)
     knowledge = _build_knowledge_context(KnowledgeQuery(query, precompiled=True,
         metadata={'target_mode': language, 'capability_requirement': str(query)}),
-        plc_model=context.plc_model, task_type=task_type, confirmed_context=confirmed_spec)
-    extra = {}
-    if task_type == 'generate':
-        from application.capability_context import augment_generation_knowledge
-        from knowledge.evidence import context_manifest
-        from plc.specification.provenance import handoff_snapshot
-        knowledge = augment_generation_knowledge(str(query), knowledge, plc_model=context.plc_model,
-            target_mode=language, confirmed_spec=confirmed_spec)
-        manifest = context_manifest(knowledge, stage='generate')
-        handoff = handoff_snapshot(confirmed_spec, evidence=manifest)
-        handoff['capability_discovery'] = copy.deepcopy(manifest['capability_discovery'])
-        extra['generation_handoff'] = handoff
+        plc_model=context.plc_model, task_type='edit', confirmed_context=confirmed_spec)
     return {'knowledge': technical_context_units(knowledge),
-            'knowledge_coverage': technical_knowledge_coverage(knowledge), **extra}
+            'knowledge_coverage': technical_knowledge_coverage(knowledge)}
 
 
 def _get_generation_context(
     context: ToolContext, arguments: Mapping[str, Any]
 ) -> Dict[str, Any]:
+    from plc.specification.implementation import planning_instructions
+    if arguments.get("program"):
+        from application.gxw_files import source_context
+        if context.native_snapshot is None:
+            raise ValueError("选择程序需要已有 GXW。")
+        context = source_context(context, arguments["program"])
+    mode = (context.version or {}).get("target_mode") or context.project.get("target_mode", "ladder")
+    doc = context.project.get("_spec_document")
+    if mode == "sfc" and context.native_snapshot is None and context.sfc_graph is None:
+        return {"project_id": context.project_id, "target_mode": mode, "plc_model": context.plc_model,
+                "workflow_mode": "source_required", "generation_instructions": planning_instructions(mode),
+                "output_contract": {"tool": "import_gxw_project", "requires": "existing_sfc_project"}}
+    workflow = arguments.get("workflow")
+    review = bool(doc and (workflow == "plan_review" or not doc["confirmed_spec"] and workflow != "direct_generation"))
+    params = {**arguments, "workflow": "detailed"} if review and mode == "ladder" else arguments
+    result = _engineering_generation_context(context, params)
+    if doc and result.get("execution_mode") != "live":
+        result["specification_status"] = {
+            "base_revision": doc["base_revision"], "draft_revision": doc["draft_revision"],
+            "pending_changes": bool(doc["differences"]), "source_version_id": context.version_id or None,
+            "basis": "current_confirmed_project_spec",
+        }
+        if review:
+            result["workflow_mode"] = "plan_review"
+            result["generation_instructions"] = planning_instructions(mode)
+            result["working_spec"] = doc["draft"]
+            result["pending_differences"] = doc["differences"]
+            result["output_contract"] = {"tool": "update_project_spec", "expected_revision": doc["draft_revision"],
+                                         "next": "present_plan_for_user_confirmation"}
+        elif not result.get("generation_input") and _generation_spec(context):
+            from application.confirmed_generation_context import project_confirmed_specification
+            result["confirmed_spec"] = project_confirmed_specification(_generation_spec(context))
+    return result
+
+
+def _engineering_generation_context(context, arguments):
     # A saved version is authoritative after changing a project's language.
     target_mode = str((context.version or {}).get('target_mode')
                       or context.project.get('target_mode') or 'ladder')
@@ -84,7 +104,7 @@ def _get_generation_context(
         _build_knowledge_context, build_generation_instructions, generation_user_input,
         public_generation_ladder, public_generation_specification, public_generation_value,
     )
-    confirmed_spec = _confirmed_spec(context)
+    confirmed_spec = _generation_spec(context)
     from application.confirmed_generation_context import (
         CONFIRMED_GENERATION_REQUEST, project_confirmed_specification,
     )
@@ -344,7 +364,17 @@ def _get_generation_context(
                              if hasattr(instructions, 'wire_packet') else {}),
         "output_contract": {**{key: value for key, value in generation_output_contract(
             allow_partial=is_edit_mode, plc_model=context.plc_model, target_mode=target_mode).items() if key != 'schema'},
-            'schema_ref': '#/generation_input/output_schema'},
+            'schema_ref': '#/generation_input/output_schema',
+            **({'tool': 'create_st_candidate', 'operation': 'generate',
+                'candidate_submission': 'create_st_candidate', 'input_shape': 'arguments',
+                'required_arguments': ['operation', 'st_code'],
+                'editable_fields': ['st_code', 'program_name'],
+                'delivery': 'st_source_only',
+                'limitations': ['UTF-8 ST source only; no GXW materialization or native compilation in this path.']}
+               if target_mode == 'st' else {})},
+        **({'current_source': {'st_text': context.st_text, 'program_name': (context.version or {}).get('program_name'),
+                'source_kind': 'generated_st_source'}}
+           if target_mode == 'st' and isinstance(context.st_text, str) else {}),
         "current_version_id": context.version_id or None,
         "generation_instructions": instructions,
         "generation_handoff": public_generation_value(generation_handoff),
@@ -355,13 +385,15 @@ def _get_generation_context(
 def _create_program_candidate(
     context: ToolContext, arguments: Mapping[str, Any], *, generation_handoff=None,
 ) -> Dict[str, Any]:
+    from agent_runtime.tool_context import _require_generation_plan
+    _require_generation_plan(context, arguments, generation_handoff=generation_handoff)
     from plc.core import PLCCore
     from plc.ir import canonical_sha256
 
     if str(context.project.get("target_mode") or "ladder") != "ladder":
         raise ValueError("只有 ladder 目标模式可以创建新程序候选。")
     core = PLCCore()
-    confirmed_spec = copy.deepcopy(_confirmed_spec(context))
+    confirmed_spec = copy.deepcopy(_generation_spec(context))
     candidate_spec = confirmed_spec
     ladder = arguments["ladder"]
     if isinstance(generation_handoff, dict) and generation_handoff.get("mode") == "direct_generation":
@@ -378,6 +410,9 @@ def _create_program_candidate(
         previous_program=context.program_ir,
     )
     compiled = core.compile_project(candidate["candidate_ir"], validation_profile=candidate["validation_profile"])
+    from application.source_plan import attach_source_check
+    validation = {}
+    attach_source_check(validation, confirmed_spec, "ladder", model=candidate["candidate_ir"])
     if not isinstance(generation_handoff, dict):
         from application.confirmed_generation_context import project_confirmed_specification
         from plc.specification.provenance import handoff_snapshot
@@ -427,6 +462,7 @@ def _create_program_candidate(
         "generation_handoff": copy.deepcopy(generation_handoff),
         "maintainability_review": copy.deepcopy(candidate.get("maintainability_review")),
         "verification": {
+            **validation,
             "structural_checks_passed": True,
             "deterministic_checks_passed": True,
             "behavior_verified": False,
@@ -459,7 +495,7 @@ class GenerationToolHandlers:
             "project_id": context.project_id, "version_id": context.version_id,
             "plc_model": context.plc_model,
             "target_mode": str(context.project.get("target_mode") or "ladder"),
-            "confirmed_spec": project_confirmed_specification(_confirmed_spec(context)),
+            "confirmed_spec": project_confirmed_specification(_generation_spec(context)),
             "program": public_generation_ladder(program),
         })
 

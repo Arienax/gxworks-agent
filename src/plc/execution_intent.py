@@ -1,6 +1,3 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Ground Agent-A execution-intent claims before they become PLC requirements.
 
 Free-form language understanding belongs to Agent A.  Python Core does not
@@ -239,12 +236,7 @@ def execution_intent_claim_violations(value, path="$.execution_intent_claims"):
         if rearm is not None and not isinstance(rearm, (str, bool)):
             violations.append(root + ".rearm: expected a string or boolean when present")
         evidence = claim.get("evidence")
-        inferred = claim.get("inferred") is True
-        # An inferred claim carries no user span by definition; requiring one
-        # only pushes the model to invent a quote.
-        if inferred and evidence in (None, []):
-            pass
-        elif (
+        if (
             not isinstance(evidence, list)
             or not evidence
             or any(not isinstance(item, str) or not item.strip() for item in evidence)
@@ -352,11 +344,6 @@ def compile_execution_intent_claims(
     for index, raw in enumerate(value or []):
         claim = copy.deepcopy(dict(raw))
         evidence = [_fold_ws(item) for item in claim.get("evidence") or []]
-        if claim.get("inferred") is True or not evidence:
-            # Receipt only: the request never said this, so it cannot bind.
-            rejected.append({"index": index, "reason": "inferred_claim_not_grounded",
-                             "claim": copy.deepcopy(claim)})
-            continue
         if any(not quote or quote not in source_text for quote in evidence):
             rejected.append({"index": index, "reason": "evidence_not_in_current_request"})
             continue

@@ -1,7 +1,6 @@
 {
   "schema_version": 1,
   "vendor": "mitsubishi",
-  "description": "FX3U opcode identities verified from bundled structured manual records. Operand contracts are intentionally not hardened from partial table extraction.",
   "instructions": [
     {
       "mnemonic": "ABS",
@@ -11,8 +10,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC155; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "ABSD",
@@ -22,8 +20,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC62; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "ACOS",
@@ -33,8 +30,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC134; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "ALT",
@@ -44,8 +40,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC66; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "ANR",
@@ -55,8 +50,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC47; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "ANS",
@@ -66,8 +60,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC46; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "ARWS",
@@ -77,8 +70,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC75; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "ASC",
@@ -88,8 +80,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC76; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "ASCI",
@@ -99,8 +90,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC82; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "ASIN",
@@ -110,8 +100,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC133; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "ATAN",
@@ -121,8 +110,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC135; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "BAND",
@@ -132,8 +120,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC257; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "BINDA",
@@ -143,8 +130,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC261; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "BON",
@@ -154,8 +140,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC44; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "BTOW",
@@ -165,8 +150,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC142; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "CCD",
@@ -176,8 +160,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC84; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "COMRD",
@@ -187,8 +170,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC182; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "COS",
@@ -198,8 +180,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC131; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "CRC",
@@ -209,8 +190,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC188; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "DABIN",
@@ -220,8 +200,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC260; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "DECO",
@@ -231,8 +210,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC41; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "DEG",
@@ -242,8 +220,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC137; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "DSW",
@@ -253,8 +230,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC72; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "DUTY",
@@ -264,8 +240,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC186; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "EBCD",
@@ -275,8 +250,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC118; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "EBIN",
@@ -286,8 +260,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC119; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "ENCO",
@@ -297,8 +270,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC42; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "ENEG",
@@ -308,8 +280,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC128; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "ESQR",
@@ -319,8 +290,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC127; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "ESTR",
@@ -330,8 +300,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC116; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "EVAL",
@@ -341,8 +310,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC117; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "EXP",
@@ -352,8 +320,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC124; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "FDEL",
@@ -363,8 +330,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC210; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "FINS",
@@ -374,8 +340,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC211; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "FLCMD",
@@ -385,8 +350,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC304; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "FLCRT",
@@ -396,8 +360,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC300; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "FLRD",
@@ -407,8 +370,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC303; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "FLSTRD",
@@ -418,8 +380,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC305; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "FLWR",
@@ -429,8 +390,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC302; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "HCMOV",
@@ -440,8 +400,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC189; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "HEX",
@@ -451,8 +410,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC83; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "HKY",
@@ -462,8 +420,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC71; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "HOUR",
@@ -473,8 +430,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC169; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "HTOS",
@@ -484,8 +440,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC164; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "INCD",
@@ -495,8 +450,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC63; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "INITER",
@@ -506,8 +460,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC295; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "INITR",
@@ -517,8 +470,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC292; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "INSTR",
@@ -528,8 +480,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC208; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "IST",
@@ -539,8 +490,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC60; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "IVBWR",
@@ -550,8 +500,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC274; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "IVCK",
@@ -561,8 +510,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC270; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "IVDR",
@@ -572,8 +520,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC271; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "IVMC",
@@ -583,8 +530,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC275; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "IVRD",
@@ -594,8 +540,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC272; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "IVWR",
@@ -605,8 +550,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC273; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "LEFT",
@@ -617,7 +561,63 @@
         "FX3U"
       ],
       "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC205; operand semantics remain retrieval-only."
+      "modifier_rule": {
+        "pulse": true,
+        "cpu_support_by_form": {
+          "LEFTP": [
+            "L02",
+            "L02-P",
+            "L02S",
+            "L02S-P",
+            "L06",
+            "L06-P",
+            "L26",
+            "L26-BT",
+            "L26-P",
+            "L26-PBT",
+            "Q00U",
+            "Q00UJ",
+            "Q01U",
+            "Q02",
+            "Q02H",
+            "Q02PH",
+            "Q02U",
+            "Q03UD",
+            "Q03UDE",
+            "Q03UDV",
+            "Q04UDEH",
+            "Q04UDH",
+            "Q04UDPV",
+            "Q04UDV",
+            "Q06H",
+            "Q06PH",
+            "Q06UDEH",
+            "Q06UDH",
+            "Q06UDPV",
+            "Q06UDV",
+            "Q100UDEH",
+            "Q10UDEH",
+            "Q10UDH",
+            "Q12H",
+            "Q12PH",
+            "Q12PRH",
+            "Q13UDEH",
+            "Q13UDH",
+            "Q13UDPV",
+            "Q13UDV",
+            "Q20UDEH",
+            "Q20UDH",
+            "Q25H",
+            "Q25PH",
+            "Q25PRH",
+            "Q26UDEH",
+            "Q26UDH",
+            "Q26UDPV",
+            "Q26UDV",
+            "Q50UDEH"
+          ]
+        }
+      }
     },
     {
       "mnemonic": "LEN",
@@ -627,8 +627,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC203; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "LIMIT",
@@ -638,8 +637,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC256; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "LOADR",
@@ -649,8 +647,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC290; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "LOG10",
@@ -660,8 +657,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC126; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "LOGE",
@@ -671,8 +667,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC125; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "LOGR",
@@ -682,8 +677,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC293; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "MIDR",
@@ -693,8 +687,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC206; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "MIDW",
@@ -704,8 +697,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC207; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "MODBUS",
@@ -715,8 +707,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC276; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "MTR",
@@ -726,8 +717,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC52; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "POP",
@@ -737,8 +727,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC212; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "PR",
@@ -748,8 +737,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC77; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "PRUN",
@@ -759,8 +747,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC81; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "RAD",
@@ -770,8 +757,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC136; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "RBFM",
@@ -781,8 +767,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC278; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "REF",
@@ -792,8 +777,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC50; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "REFF",
@@ -803,8 +787,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC51; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "RIGHT",
@@ -815,7 +798,63 @@
         "FX3U"
       ],
       "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC204; operand semantics remain retrieval-only."
+      "modifier_rule": {
+        "pulse": true,
+        "cpu_support_by_form": {
+          "RIGHTP": [
+            "L02",
+            "L02-P",
+            "L02S",
+            "L02S-P",
+            "L06",
+            "L06-P",
+            "L26",
+            "L26-BT",
+            "L26-P",
+            "L26-PBT",
+            "Q00U",
+            "Q00UJ",
+            "Q01U",
+            "Q02",
+            "Q02H",
+            "Q02PH",
+            "Q02U",
+            "Q03UD",
+            "Q03UDE",
+            "Q03UDV",
+            "Q04UDEH",
+            "Q04UDH",
+            "Q04UDPV",
+            "Q04UDV",
+            "Q06H",
+            "Q06PH",
+            "Q06UDEH",
+            "Q06UDH",
+            "Q06UDPV",
+            "Q06UDV",
+            "Q100UDEH",
+            "Q10UDEH",
+            "Q10UDH",
+            "Q12H",
+            "Q12PH",
+            "Q12PRH",
+            "Q13UDEH",
+            "Q13UDH",
+            "Q13UDPV",
+            "Q13UDV",
+            "Q20UDEH",
+            "Q20UDH",
+            "Q25H",
+            "Q25PH",
+            "Q25PRH",
+            "Q26UDEH",
+            "Q26UDH",
+            "Q26UDPV",
+            "Q26UDV",
+            "Q50UDEH"
+          ]
+        }
+      }
     },
     {
       "mnemonic": "RND",
@@ -825,8 +864,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC184; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "RWER",
@@ -836,8 +874,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC294; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "SAVER",
@@ -847,8 +884,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC291; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "SCL",
@@ -858,8 +894,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC259; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "SCL2",
@@ -869,8 +904,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC269; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "SEGD",
@@ -880,8 +914,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC73; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "SEGL",
@@ -891,8 +924,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC74; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "SER",
@@ -902,8 +934,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC61; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "SFL",
@@ -913,8 +944,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC214; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "SFR",
@@ -924,8 +954,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC213; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "SFRD",
@@ -935,8 +964,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC39; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "SFWR",
@@ -946,8 +974,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC38; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "SIN",
@@ -957,8 +984,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC130; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "SMOV",
@@ -968,8 +994,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC13; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "SORT2",
@@ -979,8 +1004,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC149; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "SQR",
@@ -990,8 +1014,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC48; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "STMR",
@@ -1001,8 +1024,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC65; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "STOH",
@@ -1012,8 +1034,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC165; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "STR",
@@ -1023,8 +1044,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC200; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "TADD",
@@ -1034,8 +1054,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC162; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "TAN",
@@ -1045,8 +1064,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC132; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "TBL",
@@ -1056,8 +1074,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC152; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "TCMP",
@@ -1067,8 +1084,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC160; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "TKY",
@@ -1078,8 +1094,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC70; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "TRD",
@@ -1089,8 +1104,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC166; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "TSUB",
@@ -1100,8 +1114,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC163; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "TTMR",
@@ -1111,8 +1124,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC64; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "TWR",
@@ -1122,8 +1134,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC167; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "TZCP",
@@ -1133,8 +1144,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC161; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "VAL",
@@ -1144,8 +1154,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC201; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "VRRD",
@@ -1155,8 +1164,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC85; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "VRSC",
@@ -1166,8 +1174,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC86; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "WBFM",
@@ -1177,8 +1184,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC279; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "WSUM",
@@ -1188,8 +1194,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC140; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "WTOB",
@@ -1199,8 +1204,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC141; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "ZONE",
@@ -1210,8 +1214,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC258; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "ZPOP",
@@ -1221,8 +1224,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC103; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     },
     {
       "mnemonic": "ZPUSH",
@@ -1232,8 +1234,7 @@
       "cpu_support": [
         "FX3U"
       ],
-      "contract_level": "opcode_only",
-      "notes": "Opcode identity verified from fx3_programming_r FNC102; operand semantics remain retrieval-only."
+      "contract_level": "opcode_only"
     }
   ]
 }

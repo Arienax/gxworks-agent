@@ -98,7 +98,7 @@ def program_definitions(generation):
     )
     yield ToolDefinition(
         "search_plc_manual",
-        "检索当前 PLC 型号的指令、FBD 语言及软元件事实。精确地址规则区分编号范围、默认分配和参数条件，不表示当前已分配或原生访问许可；来源记录仅供显式 debug 查询。",
+        "检索当前 PLC 型号的指令、语言及软元件事实。指令按已登记的族关系组装参数表、行为和适用条件，保留实际请求的助记符；共享修饰知识只返回一次。精确地址规则区分编号范围、默认分配和参数条件，不表示当前已分配或原生访问许可；来源记录仅供显式 debug 查询。",
         {
             "type": "object",
             "properties": {
@@ -110,13 +110,13 @@ def program_definitions(generation):
                 },
                 "top_k": {
                     "type": "integer",
-                    "description": "补充相关资料条数，1 到 8；明确指令、地址、错误码及依赖不受此上限限制。",
+                    "description": "补充相关资料条数，1 到 8；明确指令、地址、错误码及依赖额外完整返回。",
                     "minimum": 1,
                     "maximum": 8,
                 },
                 "debug": {
                     "type": "boolean", "default": False,
-                    "description": "仅显式调试时设为 true，返回来源、证据和核验记录。普通生成与分析保持 false。",
+                    "description": "仅显式调试时设为 true，通过 fact_packet 返回完整结构化事实、来源和核验记录。普通生成与分析保持 false。",
                 },
                 "language": {'type': 'string', 'enum': ['ladder', 'st', 'fbd'],
                     'description': '目标语言；省略时从问题识别，不以语言替代行为/时序问题。'},
@@ -124,7 +124,7 @@ def program_definitions(generation):
                     'arity', 'order', 'roles', 'purpose', 'unit', 'encoding', 'devices', 'types',
                     'effects', 'execution', 'constraints', 'st_call', 'fbd_call', 'operand_range', 'operand_condition',
                     'timing_state', 'same_scan', 'first_execution', 'disabled', 'jump']},
-                    'description': '明确要回答的知识维度；省略时自动识别。'},
+                    'description': '明确要回答的知识维度；省略时返回指令使用说明、参数表与适用条件，并保留缺失和未核实状态。'},
             },
             "required": ["query"],
             "additionalProperties": False,
@@ -176,8 +176,9 @@ def generation_definitions(generation):
                     "type": "string", "maxLength": 64000,
                     "description": "本次生成或修改需求；省略时仍返回当前工程上下文。",
                 },
-                "workflow": {"type": "string", "enum": ["direct_generation", "detailed"],
-                             "description": "新 Ladder 有原始需求时默认 Direct；已确认规格可显式选 Direct，编辑仍沿用原入口。"},
+                "workflow": {"type": "string", "enum": ["direct_generation", "detailed", "plan_review"],
+                             "description": "新工程默认先规划；变更工艺、参数或实现分工先用 plan_review 更新规格，再确认和生成。明确直接生成可选择 direct_generation。"},
+                "program": {"type": "string", "minLength": 1, "description": "已有 GXW 中要规划或修改的完整逻辑程序名。"},
                 "execution_mode": {"type": "string", "enum": ["background", "live"],
                     "description": "选择保存版本的后台上下文或持续原生会话当前确认的源码。省略时优先使用已启动的原生会话。"},
                 "catalog_scope": {"type": "string", "enum": ["task", "full"], "default": "task",
@@ -203,6 +204,8 @@ def generation_definitions(generation):
                     "type": "object",
                     "description": "Full or partial ladder JSON from get_generation_context; the shared API parser validates and normalizes compatible encodings.",
                 },
+                "workflow": {"type": "string", "enum": ["direct_generation", "detailed"],
+                    "description": "新工程默认先确认规格；仅用户明确要求直接生成时选择 direct_generation。已有保存版本的维护入口保持兼容。"},
                 "generation_context_id": {
                     "type": "string", "maxLength": 128,
                     "description": "Copy the ID returned by get_generation_context to preserve source lineage. Optional; absence or expiry is recorded as a trace gap, not a validation failure.",
@@ -338,7 +341,8 @@ def native_definitions(generation):
      'additionalProperties': False}, _read_st_project)
     yield ToolDefinition('create_st_candidate',
     (
-        '普通 ST Program 工程候选。from_candidate 接受 candidate v2（schema_version=2、language=st、p'
+        '普通 ST Program 工程候选。generate 接受完整 st_code，可为没有 GXW 的新工程或源码版本保存静态检查后的 UTF-8 ST；此路径不生成 GXW 或执行原生操作。'
+        'from_candidate 接受 candidate v2（schema_version=2、language=st、p'
         'rogram、declaration_edits.upserts、task_binding），绑定当前 GXW 的实际任务、声明及 CPU，检查后冻结原生创建/'
         '编辑、编译、保存与冷重开方案。也兼容 create_st_program 和 import；edit_st_program/edit_st_fb/edit_st_function 或通用 edit_st_source 联合离线写入既有正文和声明表，保留对象身份及 FUNCTION 返回类型。declarations 是完整列表，省略保留。新建对象继续使用隔离原生路径及 Core '
         '回读。语法、语义、原生编译和行为状态分别记录；方案获准后沿共享原生事务交付，失败不激活版本。'
@@ -413,6 +417,7 @@ def native_definitions(generation):
 
 
 def default_tool_definitions(generation):
-    definitions = chain(project_definitions(generation), program_definitions(generation),
+    from agent_runtime.specification_tools import specification_definitions
+    definitions = chain(project_definitions(generation), specification_definitions(), program_definitions(generation),
                         generation_definitions(generation), native_definitions(generation))
     return sorted(definitions, key=lambda tool: SAFE_TOOL_NAMES.index(tool.name))

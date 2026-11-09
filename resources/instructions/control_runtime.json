@@ -100,7 +100,9 @@
       "facts": {
         "scope": "Reviewed Boolean control and direct-word transfers only; no startup, timer, counter, hardware I/O or native runtime certification.",
         "control": {"forms": ["LD", "LDI", "AND", "ANI", "OR", "ORI", "ORB", "ANB", "MPS", "MRD", "MPP", "OUT", "SET", "RST", "MOV", "DMOV"], "immediate_memory_writes": true, "disabled_coil": false, "disabled_set_reset": "retain", "shared_condition": "saved_accumulator", "sources": [{"manual_number": "JY997D34701", "revision": "M", "pdf_pages": [55, 57, 65, 66, 75, 76, 85, 86, 141, 142, 143]}]},
-        "transfers": {"MOV": 16, "DMOV": 32}
+        "transfers": {"MOV": 16, "DMOV": 32},
+        "transfers_source": {"manual_number": "JY997D34701", "revision": "M", "pdf_pages": [141, 142, 143],
+          "section": "8.3 MOV / Move", "condition": "16-bit MOV and 32-bit DMOV in the listed FX CPUs"}
       }
     },
     {
@@ -108,13 +110,18 @@
       "facts": {
         "scope": "Reviewed Boolean control and direct-word transfers only; no startup, timer, counter, hardware I/O or native runtime certification.",
         "control": {"forms": ["LD", "LDI", "AND", "ANI", "OR", "ORI", "ORB", "ANB", "MPS", "MRD", "MPP", "OUT", "SET", "RST", "MOV", "DMOV"], "immediate_memory_writes": true, "disabled_coil": false, "disabled_set_reset": "retain", "shared_condition": "saved_accumulator", "sources": [{"manual_number": "SH080809ENG", "revision": "X", "pdf_pages": [4, 134, 135, 138, 144, 145, 152, 162, 164, 301, 302]}]},
-        "transfers": {"MOV": 16, "DMOV": 32}
+        "transfers": {"MOV": 16, "DMOV": 32},
+        "transfers_source": {"manual_number": "SH080809ENG", "revision": "X", "pdf_pages": [301, 302],
+          "section": "6.4 Data Transfer Instructions MOV(P), DMOV(P)", "condition": "16-bit MOV and 32-bit DMOV in the listed Q/L CPUs"}
       }
     }
   ],
   "FX3U": {
     "first_scan": {"devices": ["M8002"], "execution_type": "scan", "conditions": {"program_type": "scan"}, "source": {"manual_number": "JY997D16601", "revision": "R", "pdf_page": 867}},
     "always_on": ["M8000"],
+    "always_on_source": {"manual_number": "JY997D16601", "revision": "R", "pdf_page": 867,
+      "section": "37.2.1 RUN monitor and initial pulse [M8000 to M8003]",
+      "condition": "always ON while the PLC is in RUN mode"},
     "control": {"forms": ["LD", "LDI", "AND", "ANI", "OR", "ORI", "ORB", "ANB", "MPS", "MRD", "MPP", "OUT", "SET", "RST", "MOV", "ZRST"], "immediate_memory_writes": true, "disabled_coil": false, "disabled_set_reset": "retain", "shared_condition": "saved_accumulator", "sources": [{"manual_number": "JY997D16601", "revision": "R", "pdf_pages": [172, 184, 192, 204, 205, 216, 218, 251, 318, 319]}]},
     "timers": {"OUT": [{"first": 0, "last": 199, "unit_ms": 100, "reset_on_disable": true}, {"first": 200, "last": 245, "unit_ms": 10, "reset_on_disable": true}, {"first": 256, "last": 511, "unit_ms": 1, "reset_on_disable": true}], "source": {"manual_number": "JY997D16601", "revision": "R", "pdf_page": 100}},
     "counter": {"first": 0, "last": 99, "bits": 16, "trigger": "rising", "holds_on_disable": true, "stops_at_preset": true, "source": {"manual_number": "JY997D16601", "revision": "R", "pdf_pages": [105, 106]}}

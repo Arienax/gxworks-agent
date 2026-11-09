@@ -1,6 +1,3 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Explicit Core stage: typed, confirmed effects -> existing native calls.
 
 Binding performs expression matching, not natural-language interpretation. Model
@@ -20,6 +17,7 @@ from plc.instruction_definition import (
     canonical_expression, select_fact_dependencies,
 )
 from plc.instruction_effects import validate_behavior
+from plc.instructions import LITERAL_ARITHMETIC_MNEMONIC_PATTERN
 
 _IDENTITY = re.compile(r"[A-Za-z][A-Za-z0-9_.-]{0,63}\Z")
 _ADDRESS = re.compile(r"(SM|SD|[MD R])([0-9]+)\Z".replace(" ", ""), re.I)
@@ -58,7 +56,7 @@ def normalize_operation_intents(raw, *, candidate=False, evidence_text=None):
             raise DefinitionError("Operation intent needs a unique ID")
         seen.add(identity)
         opcode = str(item.get("opcode") or "").strip().upper()
-        if opcode and not re.fullmatch(r"[A-Z][A-Z0-9_.$@+<>!=\-]{0,63}", opcode):
+        if opcode and not re.fullmatch(rf"(?:[A-Z][A-Z0-9_.$@+<>!=\-]{{0,63}}|{LITERAL_ARITHMETIC_MNEMONIC_PATTERN})", opcode):
             raise DefinitionError("Invalid intent opcode")
         provenance = item.get("provenance") or {}
         if not isinstance(provenance, Mapping):
@@ -276,11 +274,6 @@ def _bound_point_effects(behavior, bindings):
 
 
 def bind_operation_intent(raw, *, target_model, registry=None, confirmed_spec=None):
-    return _bind_operation_intent(raw, target_model=target_model, registry=registry,
-                                  confirmed_spec=confirmed_spec)
-
-
-def _bind_operation_intent(raw, *, target_model, registry=None, confirmed_spec=None):
     """Resolve one exact call or return a visible gap; never guess ambiguity."""
     if registry is None:
         from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY

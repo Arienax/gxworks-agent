@@ -1,6 +1,3 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Ground Agent-A reports of user-fixed low-level PLC constraints.
 
 Free-form language understanding belongs to Agent A. Core verifies only claim
@@ -150,17 +147,8 @@ def explicit_constraint_claim_details(value, path="$.explicit_constraint_claims"
         if scope not in SCOPES:
             add(root + ".scope", "expected global, scoped, or ambiguous", claim.get("scope"), allowed_types=sorted(SCOPES))
         evidence = claim.get("evidence")
-        inferred = claim.get("inferred") is True
-        # A claim the model only inferred has no user span to quote. Accepting an
-        # empty list or omitted evidence with the explicit flag stops it from
-        # inventing evidence; the claim is still dropped before it can reach the contract.
-        if inferred and evidence in (None, []):
-            pass
-        elif (not isinstance(evidence, list)
-                or not evidence
-                or any(not isinstance(item, str) or not item.strip() for item in evidence)):
-            add(root + ".evidence", "one or more exact user-text spans are required",
-                evidence, schema=_STRINGS)
+        if not isinstance(evidence, list) or not evidence or any(not isinstance(item, str) or not item.strip() for item in evidence):
+            add(root + ".evidence", "one or more exact user-text spans are required", evidence, schema=_STRINGS)
         target = claim.get("target")
         if not isinstance(target, Mapping):
             add(root + ".target", "object is required", target, allowed_types=sorted(TARGET_KINDS), contracts=explicit_target_contracts())
@@ -267,14 +255,6 @@ def compile_explicit_constraint_claims(value, user_text, plc_model="FX3U"):
     for index, raw in enumerate(value or []):
         claim = copy.deepcopy(dict(raw))
         evidence = [_fold_ws(item) for item in claim.get("evidence") or []]
-        if claim.get("inferred") is True or not evidence:
-            # Reported instead of applied: the request never said this.
-            rejected.append({"index": index, "reason": "inferred_claim_not_grounded",
-                "claim": copy.deepcopy(claim),
-                "details": [{"path": f"$.explicit_constraint_claims[{index}]", "code": "inferred_claim_not_grounded",
-                    "message": "an inferred claim is kept in the receipt only; quote the user's span to make it binding",
-                    "actual": copy.deepcopy(claim)}]})
-            continue
         if any(not item or item not in source_text for item in evidence):
             rejected.append({"index": index, "reason": "evidence_not_in_current_request", "details": [{
                 "path": f"$.explicit_constraint_claims[{index}].evidence", "code": "evidence_not_in_current_request",

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 import os
 import re
 import sys
@@ -25,6 +26,11 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Tuple
 
 from plc.instruction_definition import InstructionFactGroup
+
+
+# Literal arithmetic spellings are ordinary vendor instruction names.
+# Registration determines which of these syntactically valid forms exist.
+LITERAL_ARITHMETIC_MNEMONIC_PATTERN = r'[A-Z]*[+*/-]P?'
 
 
 class OperandRole(str, Enum):
@@ -108,6 +114,17 @@ class OperandSpec:
     allowed_devices: Tuple[str, ...] = ()
     word_count: int = 1
     semantic_name: str = ""
+    digit_groups_max: int = 0
+    bit_count: int = 1
+    integer_literal_widths: Tuple[Tuple[str, int], ...] = ()
+    address_forms: Tuple[str, ...] = ()
+    address_form_limits: Tuple[Tuple[str, Tuple[Tuple[str, Any], ...]], ...] = ()
+
+    @property
+    def device_point_count(self) -> int:
+        """Consecutive points for a plain bit or word device operand."""
+        return self.bit_count if self.data_type in {'bit', 'bool'} else max(
+            self.word_count, 2 if self.data_type == 'dword' else 1)
 
     def slot_metadata(self, position: int, symbol: str = "") -> Dict[str, Any]:
         return {"position": position,
@@ -132,6 +149,40 @@ class OperandSpec:
         count = payload.get("word_count", 1)
         if type(count) is not int or not 1 <= count <= 65536:
             raise ValueError("Invalid operand memory extent")
+        bit_count = payload.get('bit_count', 1)
+        data_type = str(payload.get('data_type') or 'any').strip().lower()
+        if (type(bit_count) is not int or not 1 <= bit_count <= 65536
+                or bit_count != 1 and data_type not in {'bit', 'bool'}):
+            raise ValueError('Invalid operand bit extent')
+        literal_widths = payload.get('integer_literal_widths', {})
+        if (not isinstance(literal_widths, Mapping) or set(literal_widths) - {'K', 'H'}
+                or any(type(width) is not int or width not in {16, 32} for width in literal_widths.values())
+                or literal_widths and (data_type not in {'any', 'word', 'dword'} or role != OperandRole.READ)):
+            raise ValueError('Invalid reviewed integer literal formats')
+        digits = payload.get("digit_groups_max", 0)
+        if type(digits) is not int or not 0 <= digits <= 8:
+            raise ValueError("Invalid digit-specified operand width")
+        address_forms = payload.get('address_forms', [])
+        if (not isinstance(address_forms, list)
+                or any(not isinstance(form, str) or form not in {'buffer_memory', 'link_direct'} for form in address_forms)
+                or len(set(address_forms)) != len(address_forms)
+                or address_forms and data_type not in {'any', 'bit', 'bool', 'word', 'dword', 'real', 'lreal', 'string'}):
+            raise ValueError('Invalid reviewed operand address forms')
+        address_form_limits = payload.get('address_form_limits', {})
+        if (not isinstance(address_form_limits, Mapping)
+                or set(address_form_limits) - set(address_forms)):
+            raise ValueError('Operand address limits require an authorized address form')
+        for limits in address_form_limits.values():
+            if (not isinstance(limits, Mapping) or not limits
+                    or set(limits) - {'maximum_base_address', 'allowed_device_prefixes'}):
+                raise ValueError('Invalid reviewed external-device limits')
+            if 'maximum_base_address' in limits and (type(limits['maximum_base_address']) is not int
+                    or not 0 <= limits['maximum_base_address'] <= 32767):
+                raise ValueError('Invalid reviewed buffer-memory base address limit')
+            if 'allowed_device_prefixes' in limits and (not isinstance(limits['allowed_device_prefixes'], list)
+                    or not limits['allowed_device_prefixes'] or any(not isinstance(prefix, str)
+                    or not re.fullmatch('[A-Z]+', prefix) for prefix in limits['allowed_device_prefixes'])):
+                raise ValueError('Invalid reviewed external-device prefixes')
         name = str(payload.get("name") or f"operand_{index}").strip()
         semantic_name = str(payload.get("semantic_name") or name).strip()
         if re.fullmatch(r"operand_\d+|[A-Z]\d*", semantic_name, re.I):
@@ -139,13 +190,20 @@ class OperandSpec:
         return cls(
             name=name,
             role=role,
-            data_type=str(payload.get("data_type") or "any").strip().lower(),
+            data_type=data_type,
             device_prefixes=prefixes,
             optional=bool(payload.get("optional", True)),
             usage_facts=tuple(OperandUsageFact.from_mapping(item) for item in usage),
             allowed_devices=tuple(str(x).upper() for x in payload.get("allowed_devices", ())),
             word_count=count,
             semantic_name=semantic_name,
+            digit_groups_max=digits,
+            bit_count=bit_count,
+            integer_literal_widths=tuple(sorted(literal_widths.items())),
+            address_forms=tuple(address_forms),
+            address_form_limits=tuple(sorted((form, tuple(sorted((key, tuple(value) if isinstance(value, list) else value)
+                                                               for key, value in limits.items())))
+                                            for form, limits in address_form_limits.items())),
         )
 
 
@@ -182,6 +240,25 @@ class DisjointBitRangeBoundary:
     error_code: str = ""
 
 
+@dataclass(frozen=True)
+class NativeOperandSignature:
+    operands: Tuple[OperandSpec, ...]
+    native_order: Tuple[str, ...]
+
+    @classmethod
+    def from_mapping(cls, payload):
+        if not isinstance(payload, Mapping) or set(payload) != {"operands", "native_order"}:
+            raise ValueError("Native overload needs operands and their native order")
+        operands, order = payload["operands"], payload["native_order"]
+        if (not isinstance(operands, list) or not operands
+                or any(not isinstance(p, Mapping) for p in operands)
+                or not isinstance(order, list) or len(order) != len(operands)
+                or any(not isinstance(p, str) or not p for p in order)
+                or len(set(order)) != len(order)):
+            raise ValueError("Invalid native overload signature")
+        return cls(tuple(OperandSpec.from_mapping(p, i) for i, p in enumerate(operands)), tuple(order))
+
+
 
 @dataclass(frozen=True)
 class InstructionSpec:
@@ -203,6 +280,7 @@ class InstructionSpec:
     # Legacy `full` is a compatibility label, not evidence of complete semantics.
     verified_fields: Tuple[str, ...] = ()
     native_operand_order: Tuple[str, ...] = ()
+    native_overloads: Tuple[NativeOperandSignature, ...] = ()
     contract_sources: Tuple[Mapping[str, Any], ...] = ()
     execution_form: Optional[str] = None
     instruction_width: Optional[int] = None
@@ -217,6 +295,7 @@ class InstructionSpec:
     source_materials: Tuple[Mapping[str, Any], ...] = ()
     uninterpreted_content: Tuple[Mapping[str, Any], ...] = ()
     st_call: Optional[Mapping[str, Any]] = None
+    modifier_cpu_support: Tuple[Tuple[str, Tuple[str, ...]], ...] = ()
 
     def contract_coverage(self) -> Dict[str, str]:
         declared = {
@@ -224,7 +303,7 @@ class InstructionSpec:
             "operand_order": bool(self.operands),
             "operand_roles": bool(self.operands),
             "operand_types": bool(self.operands) and all(o.data_type != "any" for o in self.operands),
-            "device_classes": bool(self.operands) and all(o.device_prefixes for o in self.operands),
+            "device_classes": bool(self.operands) and all(o.device_prefixes or o.address_forms for o in self.operands),
             "form_identity": bool(self.mnemonic),
             "cpu_applicability": bool(self.cpu_support),
             "hardware_applicability": self.pulse_output is not None,
@@ -290,6 +369,14 @@ class InstructionSpec:
             for index, item in enumerate(raw_operands)
             if isinstance(item, Mapping)
         )
+        overloads = payload.get("native_overloads", [])
+        if not isinstance(overloads, list):
+            raise ValueError(f"{mnemonic}: native_overloads must be an array")
+        overloads = tuple(NativeOperandSignature.from_mapping(p) for p in overloads)
+        sizes = [len(p.operands) for p in overloads]
+        if overloads and (operands or len(set(sizes)) != len(sizes)
+                or min_operands != min(sizes) or max_operands != max(sizes)):
+            raise ValueError(f"{mnemonic}: native overloads need distinct, exact operand counts")
 
         modifier_rule = payload.get("modifier_rule") or {}
         if not isinstance(modifier_rule, Mapping):
@@ -322,6 +409,20 @@ class InstructionSpec:
         if double_pulse_mnemonic and not double_mnemonic:
             raise ValueError(f"{mnemonic}: double_pulse requires a double form")
 
+        form_models = modifier_rule.get('cpu_support_by_form', {})
+        if not isinstance(form_models, Mapping):
+            raise ValueError(f"{mnemonic}: modifier CPU scopes must be an object")
+        forms = {double_mnemonic, double_pulse_mnemonic, mnemonic + 'P' if supports_pulse else ''} - {''}
+        modifier_cpu_support = []
+        for form, models in form_models.items():
+            if (not isinstance(form, str) or form not in forms or not isinstance(models, list) or not models
+                    or any(not isinstance(model, str) or not model.strip() for model in models)):
+                raise ValueError(f"{mnemonic}: modifier CPU scopes need a registered form and nonempty model list")
+            normalized = tuple(sorted(model.strip().upper() for model in models))
+            if len(set(normalized)) != len(normalized):
+                raise ValueError(f"{mnemonic}: duplicate model in modifier CPU scope")
+            modifier_cpu_support.append((form, normalized))
+
         return cls(
             mnemonic=mnemonic,
             vendor=str(payload.get("vendor") or default_vendor).strip().lower(),
@@ -329,6 +430,7 @@ class InstructionSpec:
             category=category,
             semantic_kind=semantic_kind,
             operands=operands,
+            native_overloads=overloads,
             min_operands=min_operands,
             max_operands=max_operands,
             cpu_support=frozenset(
@@ -340,6 +442,7 @@ class InstructionSpec:
             supports_pulse=supports_pulse,
             double_mnemonic=double_mnemonic,
             double_pulse_mnemonic=double_pulse_mnemonic,
+            modifier_cpu_support=tuple(sorted(modifier_cpu_support)),
             notes=str(payload.get("notes") or "").strip(),
             definition_facts=tuple(InstructionFactGroup.from_mapping(item) for item in payload.get("definition_facts", [])),
             source_materials=tuple(copy.deepcopy(payload.get("source_materials", []))),
@@ -355,14 +458,30 @@ class InstructionSpec:
             return False
         if not cpu or not self.cpu_support:
             return True
-        return str(cpu).strip().upper() in self.cpu_support
+        model = str(cpu).strip().upper()
+        if model in self.cpu_support:
+            return True
+        from plc.target_identity import target_identity_state
+        members, reason = target_identity_state(model)
+        return bool(reason is None and members and len(members) > 1
+                    and all(member in self.cpu_support for member in members))
 
     def accepts_arity(self, count: int) -> bool:
+        if self.native_overloads:
+            return any(len(signature.operands) == count for signature in self.native_overloads)
         if self.min_operands is not None and count < self.min_operands:
             return False
         if self.max_operands is not None and count > self.max_operands:
             return False
         return True
+
+    def for_operand_count(self, count: Optional[int]) -> "InstructionSpec":
+        if count is not None:
+            for signature in self.native_overloads:
+                if len(signature.operands) == count:
+                    return replace(self, operands=signature.operands, native_operand_order=signature.native_order,
+                                   native_overloads=(), min_operands=count, max_operands=count)
+        return self
 
     def replacement_for_cpu(self, cpu: Optional[str]) -> str:
         model = str(cpu or "").strip().upper()
@@ -394,6 +513,199 @@ class InstructionSpec:
             for index, operand in enumerate(self.operands)
             if operand.role in {OperandRole.READ, OperandRole.READ_WRITE}
         )
+
+
+def reviewed_native_fact_groups(spec, opcode, operands, plc_model, *, dimensions=None):
+    """Source-checked native facts whose full dependency closure may apply.
+
+    This supplies storage and access descriptions, not execution admission.
+    Missing runtime/firmware values keep a possible access conditional. Known
+    scope exclusions, malformed conditions and missing evidence are retained as
+    exclusions rather than being made into storage permissions.
+    """
+    if spec is None or not spec.supports_cpu(plc_model) or not spec.accepts_arity(len(operands)):
+        return []
+    from plc.instruction_definition import DefinitionError, UnknownInstructionSemantics, select_fact_dependencies
+    from plc.instruction_constraints import _condition, literal_operand_values
+    values = literal_operand_values(spec, operands, plc_model=plc_model, opcode=opcode)
+    context = {'$PLC_MODEL': plc_model, '$LANGUAGE': 'ladder',
+               'project_mode': 'native_ladder_instruction', 'program_context': 'ladder'}
+    if 'operand_order' in spec.verified_fields and len(spec.native_operand_order) == len(operands):
+        context['$OPERAND_ROLES'] = spec.native_operand_order
+
+    def possible(group):
+        if (group['status'] != 'source_verified' or group['verification'] != 'source_checked'
+                or any(source.get('conditions') or source.get('applicability') for source in group['sources'])):
+            return False
+        for condition in group.get('conditions', []):
+            try:
+                if not _condition(condition, values, context):
+                    return False
+            except UnknownInstructionSemantics:
+                continue
+            except (DefinitionError, TypeError, ValueError, KeyError):
+                return False
+        return not (group['dimension'] == 'constraints.cpu_availability'
+                    and group['value'].get('available') is False)
+
+    selected = []
+    for group in spec.definition_facts:
+        if dimensions is not None and group.dimension not in dimensions:
+            continue
+        if any(group.scope.get(key) and value not in group.scope[key]
+               for key, value in (('forms', opcode), ('models', plc_model), ('languages', 'ladder'))):
+            continue
+        closure = select_fact_dependencies(spec.definition_facts, [group.id], opcode=opcode,
+            model=plc_model, language='ladder', allow_unknown_scope=True)
+        if (any(gap['reason'] != 'scope_context_missing' for gap in closure['gaps'])
+                or not closure['groups'] or not all(possible(item) for item in closure['groups'])):
+            continue
+        selected.append(group)
+    return selected
+
+
+def reviewed_native_operand_parameters(spec, opcode, operands, plc_model):
+    """Return independently qualified native parameter descriptions per slot."""
+    result = [[] for _ in operands]
+    if spec is None or len(spec.native_operand_order) != len(operands):
+        return result
+    order = tuple(name.upper() for name in spec.native_operand_order)
+    for group in reviewed_native_fact_groups(spec, opcode, operands, plc_model,
+                                             dimensions={'parameters.typed_operands'}):
+        parameters = group.value.get('operands')
+        if (not isinstance(parameters, list) or len(parameters) != len(order)
+                or any(not isinstance(item, Mapping) for item in parameters)
+                or tuple(str(item.get('name', '')).upper() for item in parameters) != order):
+            continue
+        native = group.value.get('native_form') or group.value.get('representation') == 'native_ladder_instruction'
+        if not native:
+            continue
+        for index, parameter in enumerate(parameters):
+            if parameter not in result[index]:
+                result[index].append(copy.deepcopy(parameter))
+    return result
+
+
+def reviewed_module_selector_value(spec, index, value, plc_model):
+    """Decode a selector's storage ordinal, independently of its runtime value."""
+    if (spec is None or not 0 <= index < len(spec.operands)
+            or not str(plc_model).upper().startswith(('Q', 'L'))
+            or not spec.supports_cpu(plc_model) or not spec.contract_sources
+            or not {'form_identity', 'cpu_applicability', 'operand_order', 'operand_roles',
+                    'operand_types', 'device_classes'} <= set(spec.verified_fields)):
+        return None
+    operand = spec.operands[index]
+    if (operand.semantic_name != 'intelligent_module_IO_selector_or_value'
+            or operand.data_type != 'word' or operand.word_count != 1
+            or operand.role != OperandRole.READ
+            or re.fullmatch(r'U[0-9A-F]+', str(value).strip().upper()) is None):
+        return None
+    from plc.storage.tables import storage_profile
+    from plc.storage.q_encoder import encode_q_operand
+    from plc.storage.operands_q import encoded_tokens
+    from plc.storage.errors import StorageRuleError
+    try:
+        tokens = encoded_tokens(encode_q_operand(str(value).strip().upper(), op=spec.mnemonic,
+            index=index, profile=storage_profile(plc_model), cpu=plc_model))
+        if len(tokens) != 1 or tokens[0][1] != 0xd8:
+            return None
+        number = int.from_bytes(tokens[0][2:-1], 'little')
+        return number if number < 65536 else None
+    except (StorageRuleError, ValueError):
+        return None
+
+
+def reviewed_direct_access_output_identity(parameter):
+    """Recognize a qualified direct output without assigning an image Y alias."""
+    if not isinstance(parameter, Mapping):
+        return False
+    identity, limits = parameter.get('device_identity'), parameter.get('range')
+    return (parameter.get('type') == 'BOOL'
+        and parameter.get('direction') == 'output'
+        and parameter.get('passing') == 'device_reference'
+        and parameter.get('occupied_bit_count') == 1
+        and isinstance(identity, Mapping)
+        and identity.get('kind') == 'direct_access_output' and identity.get('prefix') == 'DY'
+        and isinstance(limits, Mapping) and limits.get('device_prefixes') == ['DY']
+        and not parameter.get('word_device_layout'))
+
+
+def reviewed_program_pointer_identity(parameter):
+    """Recognize a sourced P-label type, independently of indexed forms.
+
+    The caller must qualify the fact's source, CPU and interface. A POINTER
+    identifies a program label rather than a word-sized memory allocation;
+    an absent index policy does not prove either permission or prohibition.
+    """
+    if not isinstance(parameter, Mapping):
+        return False
+    limits = parameter.get('range')
+    return (parameter.get('type') == 'POINTER'
+        and parameter.get('direction') == 'input'
+        and parameter.get('passing') == 'device_reference'
+        and parameter.get('device_class') == 'P'
+        and parameter.get('role') in {'branch_target', 'program_pointer'}
+        and isinstance(limits, Mapping)
+        and limits.get('device_prefixes') == ['P']
+        and limits.get('literal_prefixes') == []
+        and limits.get('address_forms') == []
+        and ('index_modification' not in limits or type(limits['index_modification']) is bool)
+        and not any(key in parameter for key in ('word_device_layout', 'occupied_bit_count', 'encoding')))
+
+
+def reviewed_comment_device_identity(parameter):
+    """Recognize a comment selector without assigning it a memory width.
+
+    The caller qualifies the source, CPU and Native interface. The device name
+    selects metadata; its stored numeric/bit value is not an input value.
+    """
+    if not isinstance(parameter, Mapping):
+        return False
+    limits = parameter.get('range')
+    return (parameter.get('type') == 'DEVICE_REFERENCE'
+        and parameter.get('direction') == 'input'
+        and parameter.get('passing') == 'device_reference'
+        and parameter.get('role') == 'comment_device_selector'
+        and parameter.get('selector_kind') == 'device_comment_identity'
+        and parameter.get('device_value_read') is False
+        and isinstance(limits, Mapping) and limits.get('literal_prefixes') == []
+        and not any(key in parameter for key in ('word_device_layout', 'occupied_bit_count', 'encoding')))
+
+
+def reviewed_remote_device_identity(parameter):
+    """Recognize a source-qualified device name in another CPU's namespace.
+
+    The selected target CPU and its configured range remain separate context;
+    the operand neither reads nor allocates local device memory.
+    """
+    if not isinstance(parameter, Mapping):
+        return False
+    target = parameter.get('selector_CPU_parameter')
+    forms = parameter.get('accepted_source_forms')
+    return (parameter.get('type') == 'DEVICE_REFERENCE'
+        and parameter.get('direction') == 'input'
+        and parameter.get('passing') == 'device_reference'
+        and parameter.get('role') == 'remote_device_selector'
+        and parameter.get('selector_kind') == 'remote_CPU_device_identity'
+        and isinstance(target, str) and bool(target)
+        and parameter.get('device_value_read') is False
+        and parameter.get('local_memory_access') is False
+        and parameter.get('remote_access') in {'read', 'write'}
+        and isinstance(forms, list) and bool(forms)
+        and set(forms) <= {'device_name', 'quoted_device_name'}
+        and not any(key in parameter for key in ('word_device_layout', 'occupied_bit_count', 'encoding')))
+
+
+def operand_numeric_bound(bound, values):
+    """Resolve a literal range bound, retaining its explicit operand reference."""
+    if type(bound) is int or type(bound) is float and math.isfinite(bound):
+        return bound, None
+    if isinstance(bound, Mapping) and set(bound) in ({'parameter_ref'}, {'parameter'}):
+        name = next(iter(bound.values()))
+        if isinstance(name, str) and name:
+            value = values.get(name.upper())
+            return (value if type(value) is int or type(value) is float and math.isfinite(value) else None), name
+    return None, None
 
 
 @dataclass(frozen=True)
@@ -483,6 +795,8 @@ class InstructionRegistry:
         self._definition_owner_store = None
         self._loaded_definition_contracts = set()
         self._definition_contract_bases = {}
+        self._knowledge_profiles = ()
+        self._family_knowledge = ()
         for spec in specs:
             self.register(spec)
 
@@ -530,6 +844,9 @@ class InstructionRegistry:
                 )
             if effective is None:
                 effective = base
+            models = dict(base.modifier_cpu_support).get(token)
+            if models is not None:
+                effective = replace(effective, cpu_support=frozenset(models))
             variants[key] = InstructionResolution(
                 opcode=token,
                 spec=effective,
@@ -576,24 +893,60 @@ class InstructionRegistry:
         key = (normalized_vendor, token)
         variant = self._ensure_variant_index().get(key)
         if variant is not None:
-            effective = self._cpu_contracts.get((normalized_vendor, token, str(cpu or "").strip().upper()))
+            effective = self._target_contract(normalized_vendor, token, cpu)
             return replace(variant, spec=effective) if effective is not None else variant
         exact = self._specs.get(key)
         if exact is None:
             return None
         return InstructionResolution(
             opcode=token,
-            spec=self._cpu_contracts.get((normalized_vendor, token, str(cpu or "").strip().upper()), exact),
+            spec=self._target_contract(normalized_vendor, token, cpu) or exact,
             base_spec=exact,
         )
 
-    def resolve_form(self, mnemonic: Any, *, vendor: str = "mitsubishi", cpu: Optional[str] = None):
+    def _target_contract(self, vendor, opcode, cpu):
+        model = str(cpu or "").strip().upper()
+        exact = self._cpu_contracts.get((vendor, opcode, model))
+        if exact is not None or not model:
+            return exact
+        from plc.target_identity import target_identity_state
+        members, reason = target_identity_state(model)
+        if reason is not None or not members or len(members) < 2:
+            return None
+        contracts = []
+        for member in members:
+            current = self._cpu_contracts.get((vendor, opcode, member))
+            if current is None:
+                return None
+            # An exact owner's lazily attached facts are not a group contract.
+            contracts.append(replace(current, definition_facts=(), source_materials=(), uninterpreted_content=()))
+        def signature(spec):
+            return replace(spec, cpu_support=frozenset(), contract_sources=(), notes="")
+        if any(signature(spec) != signature(contracts[0]) for spec in contracts[1:]):
+            return None
+        sources = []
+        notes = []
+        for spec in contracts:
+            sources.extend(s for s in spec.contract_sources if s not in sources)
+            if spec.notes and spec.notes not in notes:
+                notes.append(spec.notes)
+        return replace(contracts[0], cpu_support=frozenset(members), contract_sources=tuple(sources),
+                       notes="\n\n".join(notes))
+
+    def resolve_form(self, mnemonic: Any, *, vendor: str = "mitsubishi", cpu: Optional[str] = None,
+                     operand_count: Optional[int] = None):
         """Resolve a call and materialize only its exact definition contract."""
         form = self.resolve_catalog_form(mnemonic, vendor=vendor, cpu=cpu)
         if form is None:
             return None
+        if cpu:
+            owner = self.definition_header(form.opcode, cpu=cpu, vendor=vendor)
+            interfaces = (owner or {}).get('call_admission_details', {}).get('interfaces')
+            if interfaces is not None and 'ladder' not in interfaces and 'native_ladder_instruction' not in interfaces:
+                return None
         spec = self._with_definition_facts(form.spec, form.opcode, cpu,
                                            str(vendor or "mitsubishi").strip().lower())
+        spec = spec.for_operand_count(operand_count)
         return replace(form, spec=spec) if spec is not form.spec else form
 
     @property
@@ -640,8 +993,9 @@ class InstructionRegistry:
         *,
         vendor: str = "mitsubishi",
         cpu: Optional[str] = None,
+        operand_count: Optional[int] = None,
     ) -> Optional[InstructionSpec]:
-        resolved = self.resolve_form(mnemonic, vendor=vendor, cpu=cpu)
+        resolved = self.resolve_form(mnemonic, vendor=vendor, cpu=cpu, operand_count=operand_count)
         return resolved.spec if resolved is not None else None
 
     def resolve_source_form(self, mnemonic, operand_count, *, cpu):
@@ -667,7 +1021,30 @@ class InstructionRegistry:
             raise ValueError("Target contracts must be an array")
         pending, additions = {}, {}
         dimensions = set(InstructionSpec("_").contract_coverage()) | {"st_call"}
+        expanded = []
         for row in entries:
+            if isinstance(row, Mapping) and "cpus" in row:
+                models = row["cpus"]
+                if ("cpu" in row or not isinstance(models, list) or not models
+                        or any(not isinstance(m, str) for m in models) or len(set(models)) != len(models)
+                        or set(row.get("instruction", {}).get("cpu_support", [])) != set(models)):
+                    raise ValueError("Grouped target contract needs its exact CPU scope")
+                sources = row.get("sources", [])
+                if (not sources or any(not isinstance(s, Mapping) or "target_model" in s
+                        or not isinstance(s.get("models"), list) or set(s["models"]) != set(models) for s in sources)):
+                    raise ValueError("Grouped target contract sources need the same CPU scope")
+                for model in models:
+                    item = copy.deepcopy(dict(row))
+                    item.pop("cpus")
+                    item["cpu"] = model
+                    item["instruction"]["cpu_support"] = [model]
+                    for source in item["sources"]:
+                        source.pop("models")
+                        source["target_model"] = model
+                    expanded.append(item)
+            else:
+                expanded.append(row)
+        for row in expanded:
             if not isinstance(row, Mapping) or row.get("method") != "reviewed-manual-contract-v1":
                 raise ValueError("Unsupported target contract source method")
             model = row.get("cpu")
@@ -688,7 +1065,10 @@ class InstructionRegistry:
                         or type(source.get("pdf_page")) is not int or source["pdf_page"] < 1):
                     raise ValueError("Target contract needs exact source/page/CPU evidence")
             order = row.get("native_order", [])
-            if (not isinstance(order, list) or len(order) != len(spec.operands)
+            if spec.native_overloads:
+                if order:
+                    raise ValueError("Overloaded target contract cannot choose a default native order")
+            elif (not isinstance(order, list) or len(order) != len(spec.operands)
                     or any(not isinstance(x, str) or not x for x in order)
                     or spec.min_operands != len(order) or spec.max_operands != len(order)):
                 raise ValueError("Target contract needs an exact native signature")
@@ -696,7 +1076,9 @@ class InstructionRegistry:
             if execution not in {"continuous", "pulse"}:
                 raise ValueError("Invalid source execution form")
             call = row.get("st_call")
-            if (not isinstance(call, Mapping) or set(call) != {"name", "enable", "returns"}
+            if call is None and "st_call" not in fields:
+                pass  # A reviewed native signature does not imply an ST call.
+            elif (not isinstance(call, Mapping) or set(call) != {"name", "enable", "returns"}
                     or not re.fullmatch(r"[A-Z][A-Z0-9_]*", str(call.get("name", "")))
                     or type(call.get("enable")) is not bool or call.get("returns") not in {"bit", "word", "void"}):
                 raise ValueError("Invalid source ST call form")
@@ -706,7 +1088,7 @@ class InstructionRegistry:
             evidence = tuple({**copy.deepcopy(s), "verified_fields": list(fields)} for s in sources)
             spec = replace(spec, verified_fields=tuple(fields), native_operand_order=tuple(order),
                            execution_form=execution, contract_sources=evidence,
-                           numeric_operand_boundaries=boundaries, st_call=copy.deepcopy(dict(call)))
+                           numeric_operand_boundaries=boundaries, st_call=copy.deepcopy(dict(call)) if call else None)
             pending[key] = spec
             default_key = (spec.vendor, spec.mnemonic)
             if self.resolve_form(spec.mnemonic, vendor=spec.vendor) is None:
@@ -717,6 +1099,8 @@ class InstructionRegistry:
 
     def resolve_st_call(self, name, *, cpu):
         token = str(name or "").strip().upper()
+        if not re.fullmatch(r"[A-Z][A-Z0-9_]*", token):
+            return None
         for opcode in self.known_mnemonics():
             form = self.resolve_form(opcode, cpu=cpu)
             if form and form.spec.supports_cpu(cpu) and form.spec.st_call and form.spec.st_call["name"] == token:
@@ -790,7 +1174,8 @@ class InstructionRegistry:
                                        for f in raw_entry.get("facts", [])]
                     return result
                 header = {k: entry[k] for k in ("vendor", "opcode", "target_model",
-                          "call_available", "registry_member", "support_status") if k in entry}
+                          "call_available", "registry_member", "support_status",
+                          "call_admission_reason", "call_admission_details") if k in entry}
                 inventory.append(_DefinitionOwnerView(header, load_owner))
             else:
                 inventory.append(copy.deepcopy(dict(entry)))
@@ -817,7 +1202,7 @@ class InstructionRegistry:
         from plc.instruction_owner_store import OwnerDefinitionStore
         store = OwnerDefinitionStore(path)
         try:
-            metadata = store.metadata
+            metadata = store.definition_metadata
             inventory, owners = [], {}
             for header in store.iter_owner_headers():
                 vendor, opcode, model = header.get("vendor", "mitsubishi"), header.get("opcode"), header.get("target_model")
@@ -829,7 +1214,9 @@ class InstructionRegistry:
                 view = _DefinitionOwnerView(header, lambda key=key: store.load_owner(key))
                 owners[key] = view
                 inventory.append(view)
-            features = _validated_language_features(metadata.get('language_facts', []))
+            features = {header['target']: _DefinitionOwnerView(header,
+                lambda target=header['target']: store.language_feature(target))
+                for header in store.iter_language_headers()}
             documents = _validated_definition_documents(metadata.get("documents", []))
             if not store.current():
                 raise ValueError("Fact definitions changed while loading")
@@ -883,6 +1270,8 @@ class InstructionRegistry:
         feature = getattr(self, '_language_features', {}).get(str(target).upper())
         if feature is None:
             return None
+        if isinstance(feature, _DefinitionOwnerView):
+            feature = feature.materialize()
         if language is not None:
             languages = ({feature['language']} if 'language' in feature else
                          {item for fact in feature.get('facts', [])
@@ -915,6 +1304,11 @@ class InstructionRegistry:
             return SimpleNamespace(opcode=token, base_mnemonic=token)
         return None
 
+    def instruction_knowledge(self, mnemonic, *, cpu, language=None, facts=None, context=None):
+        """Compose documented family knowledge without changing call admission."""
+        from plc.instruction_knowledge import compose_instruction_knowledge
+        return compose_instruction_knowledge(self, mnemonic, cpu=cpu, language=language, facts=facts, context=context)
+
     def definition_header(self, opcode, *, cpu, vendor="mitsubishi"):
         """Inspect admission metadata without reading technical owner facts."""
         key = (str(vendor).lower(), str(opcode).strip().upper(), str(cpu).strip().upper())
@@ -928,7 +1322,8 @@ class InstructionRegistry:
         if isinstance(entry, _DefinitionOwnerView):
             return copy.deepcopy(entry._header)
         return {k: copy.deepcopy(entry[k]) for k in ("vendor", "opcode", "target_model",
-                "call_available", "registry_member", "support_status") if k in entry}
+                "call_available", "registry_member", "support_status",
+                "call_admission_reason", "call_admission_details") if k in entry}
 
     def definition_entry(self, opcode, *, cpu, vendor='mitsubishi'):
         """Inspect an exact compiled owner without admitting it as a call."""
@@ -936,6 +1331,34 @@ class InstructionRegistry:
         if isinstance(entry, _DefinitionOwnerView):
             return entry.materialize()
         return copy.deepcopy(dict(entry)) if entry is not None else None
+
+    def expression_entry(self, token, *, cpu, vendor='mitsubishi'):
+        """Resolve an exact expression owner, then a unique declared token alias."""
+        token, model, vendor = str(token).strip().upper(), str(cpu).strip().upper(), str(vendor).lower()
+
+        def admitted(header):
+            details = (header or {}).get('call_admission_details') or {}
+            marker = details.get('structured_expression') or {}
+            return (header and header.get('call_available') is True
+                and 'st' in details.get('interfaces', [])
+                and marker.get('available') is True and marker.get('call_kind') == 'expression'
+                and marker.get('operator', header.get('opcode')) == token
+                and marker.get('owner_opcode', header.get('opcode')) == header.get('opcode'))
+
+        direct = self.definition_header(token, cpu=model, vendor=vendor)
+        if admitted(direct):
+            return self.definition_entry(token, cpu=model, vendor=vendor)
+        if self._definition_owner_store is not None:
+            keys = self._definition_owner_store.expression_owner_keys(token, cpu=model, vendor=vendor)
+        else:
+            keys = [key for key, entry in self._definition_owners.items()
+                    if key[0] == vendor and key[2] == model and admitted(entry)]
+        if len(keys) != 1:
+            return None
+        key = keys[0]
+        if not admitted(self.definition_header(key[1], cpu=model, vendor=vendor)):
+            return None
+        return self.definition_entry(key[1], cpu=model, vendor=vendor)
 
     def load_contract_promotions(self, path: Path) -> None:
         """Load build-time corroborated facts; never discover/promote at runtime.
@@ -1323,26 +1746,220 @@ class InstructionRegistry:
                     contract_sources=tuple(deduped_sources),
                 )
 
+    def _describe_reviewed_st_call(self, mnemonic: Any, *, cpu: str) -> Dict[str, Any]:
+        entry = self.definition_entry(mnemonic, cpu=cpu)
+        details = (entry or {}).get('call_admission_details') or {}
+        marker = details.get('structured_call') or {}
+        if (not entry or entry.get('call_available') is not True
+                or 'st' not in details.get('interfaces', [])
+                or not (entry.get('support_status') == 'reviewed_st_signature'
+                        or marker.get('available') is True)):
+            return {}
+        from plc.structured_call_contract import resolve_structured_call_contract
+        resolved = resolve_structured_call_contract(entry.get('facts', []),
+            opcode=entry['opcode'], model=cpu)
+        if not resolved.accepted:
+            return {}
+        contract = resolved.contract
+        if contract.instance_required and marker.get('instance_interface_verified') is not True:
+            return {}
+        parameters = [{**copy.deepcopy(p),
+            'role': {'input': 'read', 'output': 'write', 'in_out': 'read_write'}[p['direction']]}
+            for p in contract.parameters]
+        call = {'name': contract.name, 'returns': contract.returns,
+            'return_type_alternatives': list(contract.return_type_alternatives),
+            'enable': contract.enable, 'instance_required': contract.instance_required,
+            'kind': contract.call_kind}
+        if contract.variadic_parameter_name is not None:
+            call.update(variadic_parameter_name=contract.variadic_parameter_name,
+                minimum_variadic_arguments=contract.minimum_variadic_arguments,
+                maximum_variadic_arguments=contract.maximum_variadic_arguments,
+                argument_binding='positional')
+        if contract.return_binding:
+            call['return_binding'] = copy.deepcopy(dict(contract.return_binding))
+        if contract.instance_required:
+            call.update(instance_type=contract.opcode, argument_binding='named',
+                        return_role='no_return_value',
+                        instance_interface_verified=True,
+                        instance_interface_source=copy.deepcopy(marker.get('instance_interface_source')))
+        if contract.call_kind == 'statement':
+            call['return_role'] = contract.return_role
+            call['execution_outputs'] = copy.deepcopy(list(contract.execution_outputs))
+        result = {'target_model': cpu, 'opcode': contract.opcode,
+            'interfaces': list(details['interfaces']), 'st_contract_verified': True,
+            'st_signature': contract.name + '(' + ', '.join(p['name'] for p in parameters) + ')',
+            'st_parameters': parameters, 'st_call': call,
+            'applicability_cases': copy.deepcopy(list(contract.conditions)),
+            'conditions_evaluated': False, 'source_contract_fact_ids': list(contract.fact_ids),
+            'contract_sources': copy.deepcopy(list(contract.sources))}
+        if contract.instance_required:
+            result['st_signature'] = '<declared_instance>(' + ', '.join(
+                p['name'] + ' := <' + p['name'] + '>' for p in parameters) + ')'
+        constraints = [{key: copy.deepcopy(fact[key]) for key in ('id', 'dimension', 'value', 'conditions')
+                        if key in fact}
+                       for fact in contract.facts if fact['dimension'] in {
+                           'constraints.numeric_ranges', 'constraints.documented_requirements'}]
+        if constraints:
+            result['constraints'] = constraints
+        return result
+
+    def _describe_reviewed_st_expression(self, operator: Any, *, cpu: str) -> Dict[str, Any]:
+        entry = self.definition_entry(operator, cpu=cpu)
+        details = (entry or {}).get('call_admission_details') or {}
+        if (details.get('structured_expression') or {}).get('available') is not True:
+            entry = self.expression_entry(operator, cpu=cpu)
+            details = (entry or {}).get('call_admission_details') or {}
+        marker = details.get('structured_expression') or {}
+        if (not entry or entry.get('call_available') is not True
+                or 'st' not in details.get('interfaces', [])
+                or marker.get('available') is not True
+                or marker.get('call_kind') != 'expression'):
+            return {}
+        from plc.structured_expression_contract import resolve_structured_expression_contract
+        feature = self.language_feature('ST.OPERATORS', language='st', cpu=cpu)
+        if feature is None:
+            return {}
+        resolved = resolve_structured_expression_contract(entry.get('facts', []),
+            operator=marker.get('operator', entry['opcode']), model=cpu,
+            owner_opcode=entry['opcode'],
+            language_feature=feature)
+        if not resolved.accepted:
+            return {}
+        contract = resolved.contract
+        expression = {'operator': contract.operator, 'representation': contract.representation,
+            'owner_opcode': contract.owner_opcode or entry['opcode'],
+            'operator_form': contract.operator_form, 'variadic': contract.variadic,
+            'operands': [{'name': name, 'type': data_type}
+                         for name, data_type in zip(contract.operand_names, contract.operand_types)],
+            'minimum_operands': contract.minimum_operands,
+            'maximum_operands': contract.maximum_operands,
+            'result_type': contract.result_type,
+            'operator_priority': contract.operator_priority,
+            'same_priority_evaluation': contract.same_priority_evaluation,
+            'associativity': contract.associativity,
+            'grammar_fact_id': contract.grammar_fact_id}
+        if contract.comparison_chain_intermediate_result_type is not None:
+            expression.update(comparison_chain_intermediate_result_type=
+                contract.comparison_chain_intermediate_result_type,
+                comparison_operand_type_compatibility=contract.comparison_operand_type_compatibility)
+        result = {'target_model': cpu, 'opcode': contract.owner_opcode or entry['opcode'],
+            'interfaces': ['st'], 'call_kind': 'expression', 'st_expression': expression,
+            'st_expression_verified': True,
+            'applicability_cases': copy.deepcopy(list(contract.conditions)),
+            'conditions_evaluated': False,
+            'source_contract_fact_ids': list(contract.fact_ids),
+            'grammar_fact_id': contract.grammar_fact_id,
+            'contract_sources': copy.deepcopy(list(contract.sources))}
+        return result
+
+    @staticmethod
+    def _include_expression_contract(call, expression):
+        if not expression:
+            return call
+        if not call:
+            return expression
+        return {**call, 'interfaces': list(dict.fromkeys([*call.get('interfaces', []), 'st'])),
+                'expression_contract': expression}
+
+    def _describe_reviewed_fbd_call(self, mnemonic: Any, *, cpu: str) -> Dict[str, Any]:
+        entry = self.definition_entry(mnemonic, cpu=cpu)
+        details = (entry or {}).get('call_admission_details') or {}
+        marker = details.get('fbd_call') or {}
+        if (not entry or entry.get('call_available') is not True
+                or 'fbd' not in details.get('interfaces', [])
+                or marker.get('available') is not True
+                or marker.get('call_kind') != 'instruction_block'
+                or marker.get('graphical_interface_verified') is not True):
+            return {}
+        from plc.fbd_instruction_block_contract import resolve_fbd_instruction_block_contract
+        resolved = resolve_fbd_instruction_block_contract(entry, opcode=entry['opcode'], model=cpu)
+        if not resolved.accepted:
+            return {}
+        contract = resolved.contract
+        fbd = {'call_kind': 'instruction_block', 'representation': 'fbd_instruction_block',
+               'pins': copy.deepcopy(list(contract.pins)),
+               'conditions': copy.deepcopy(list(contract.conditions)),
+               'conditions_evaluated': False,
+               'source_contract_fact_ids': list(contract.fact_ids),
+               'contract_sources': copy.deepcopy(list(contract.sources)),
+               'graphical_interface_verified': True}
+        if contract.operation is not None:
+            fbd['operation'] = copy.deepcopy(dict(contract.operation))
+        if marker.get('graphical_interface_source'):
+            fbd['graphical_interface_source'] = copy.deepcopy(marker['graphical_interface_source'])
+        if contract.conditions:
+            fbd['applicability'] = 'conditional'
+        return {'target_model': cpu, 'opcode': entry['opcode'], 'interfaces': ['fbd'],
+                'call_kind': 'instruction_block', 'fbd_contract_verified': True,
+                'fbd_contract': fbd}
+
+    @staticmethod
+    def _include_fbd_contract(call, fbd):
+        if not fbd:
+            return call
+        if not call:
+            return fbd
+        interfaces = call.get('interfaces')
+        if interfaces is None:
+            interfaces = (['ladder'] if call.get('ladder_signature') else []) + (
+                ['st'] if call.get('st_signature') else [])
+        return {**call, 'interfaces': list(dict.fromkeys([*interfaces, 'fbd'])),
+                'fbd_contract_verified': True, 'fbd_contract': fbd['fbd_contract']}
+
     def describe_call(self, mnemonic: Any, *, cpu: str) -> Dict[str, Any]:
+        return self._include_fbd_contract(self._describe_call_without_fbd(mnemonic, cpu=cpu),
+                                         self._describe_reviewed_fbd_call(mnemonic, cpu=cpu))
+
+    def _describe_call_without_fbd(self, mnemonic: Any, *, cpu: str) -> Dict[str, Any]:
         """Source-bound language signatures; never infer ST arity from IL.
 
         This projection is shared by discovery and fact rendering. Parameter
         names are declarations, not a generated solution for a user request.
         """
+        expression = self._describe_reviewed_st_expression(mnemonic, cpu=cpu)
+        structured = self._describe_reviewed_st_call(mnemonic, cpu=cpu)
         form = self.resolve_form(mnemonic, cpu=cpu)
         if form is None or not form.spec.supports_cpu(cpu):
-            return {}
+            return self._include_expression_contract(structured, expression)
         spec = form.spec
-        if not spec.st_call or not spec.contract_sources:
-            return {}
+        if not spec.contract_sources:
+            return self._include_expression_contract(structured, expression)
+        if not spec.st_call:
+            owner = self.definition_header(form.opcode, cpu=cpu) or {}
+            if (owner.get('call_available') is not True
+                    or owner.get('support_status') != 'reviewed_native_signature'):
+                return self._include_expression_contract(structured, expression)
         parameters = [{"name": name, **operand.slot_metadata(index, name),
                        "role": operand.role.value, "type": operand.data_type,
                        **({"word_count": operand.word_count} if operand.word_count != 1 else {}),
+                       **({"bit_count": operand.bit_count} if operand.bit_count != 1 else {}),
+                       **({"integer_literal_widths": dict(operand.integer_literal_widths)} if operand.integer_literal_widths else {}),
+                       **({"address_forms": list(operand.address_forms)} if operand.address_forms else {}),
+                       **({"address_form_limits": {form: dict(limits) for form, limits in operand.address_form_limits}}
+                          if operand.address_form_limits else {}),
                        **({"allowed_devices": list(operand.allowed_devices)} if operand.allowed_devices else {})}
                       for index, (name, operand) in enumerate(zip(spec.native_operand_order, spec.operands), start=1)]
+        if not spec.st_call:
+            for parameter, operand in zip(parameters, spec.operands):
+                parameter.update(device_prefixes=list(operand.device_prefixes),
+                                 digit_groups_max=operand.digit_groups_max,
+                                 optional=operand.optional)
+            result = {"target_model": cpu, "opcode": form.opcode,
+                "call_kind": "instruction", "representation": "native_ladder_instruction",
+                "interfaces": ["ladder"], "native_contract_verified": True,
+                "ladder_signature": " ".join([form.opcode, *spec.native_operand_order]),
+                "parameters": parameters, "execution_form": spec.execution_form,
+                "instruction_width": spec.instruction_width, "conditions_evaluated": False,
+                "applicability_cases": copy.deepcopy(
+                    owner.get('call_admission_details', {}).get('applicability_cases', [])),
+                "source_notes": spec.notes,
+                "contract_sources": [dict(s) for s in spec.contract_sources]}
+            if structured:
+                result.update(structured)
+            return self._include_expression_contract(result, expression)
         st_parameters = ([{"name": "EN", "role": "read", "type": "bit"}]
                          if spec.st_call["enable"] else []) + copy.deepcopy(parameters)
-        return {"target_model": cpu, "opcode": form.opcode,
+        result = {"target_model": cpu, "opcode": form.opcode,
                 "ladder_signature": " ".join([form.opcode, *spec.native_operand_order]),
                 "st_signature": spec.st_call["name"] + "(" + ", ".join(p["name"] for p in st_parameters) + ")",
                 "parameters": parameters, "st_parameters": st_parameters,
@@ -1352,15 +1969,57 @@ class InstructionRegistry:
                 "literal_rule": "String operands retain their quotes in both languages; an unquoted device token is not a string.",
                 "source_notes": spec.notes,
                 "contract_sources": [dict(s) for s in spec.contract_sources]}
+        if structured:
+            result.update(structured)
+        return self._include_expression_contract(result, expression)
 
     def describe_contract(self, mnemonic: Any, cpu: Optional[str] = None) -> Dict[str, Any]:
+        result = self._describe_contract_without_fbd(mnemonic, cpu=cpu)
+        fbd = self._describe_reviewed_fbd_call(mnemonic, cpu=cpu) if cpu else {}
+        if fbd and result.get('contract_level') == 'unknown':
+            result = {'opcode': fbd['opcode'], 'contract_level': 'signature_verified',
+                      'call_kind': 'instruction_block', 'representation': 'fbd_instruction_block',
+                      'verified_fields': ['fbd_signature', 'cpu_applicability', 'graphical_interface'],
+                      'unverified_fields': ['execution_semantics']}
+        return self._include_fbd_contract(result, fbd)
+
+    def _describe_contract_without_fbd(self, mnemonic: Any, cpu: Optional[str] = None) -> Dict[str, Any]:
         """One compact Core view for analysis, generation, MCP and diagnostics."""
+        expression = {}
+        if cpu is not None:
+            expression = self._describe_reviewed_st_expression(mnemonic, cpu=cpu)
+            if expression and self.describe_call(mnemonic, cpu=cpu).get('call_kind') == 'expression':
+                unverified = ['execution_semantics']
+                if expression['st_expression'].get('comparison_operand_type_compatibility') == 'not_stated_in_reviewed_source':
+                    unverified.append('comparison_operand_type_compatibility')
+                return {'opcode': expression['opcode'], 'contract_level': 'expression_verified',
+                    'call_kind': 'expression', 'representation': 'ST_expression',
+                    'interfaces': ['st'], 'st_expression': expression['st_expression'],
+                    'applicability_cases': expression['applicability_cases'],
+                    'conditions_evaluated': False,
+                    'verified_fields': ['source_expression', 'operator_binding', 'cpu_applicability'],
+                    'unverified_fields': unverified, 'sources': expression['contract_sources']}
         form = self.resolve_form(mnemonic, cpu=cpu)
         if form is None:
+            call = self.describe_call(mnemonic, cpu=cpu) if cpu else {}
+            if call.get('call_kind') == 'expression':
+                return {'opcode': call['opcode'], 'contract_level': 'expression_verified',
+                    'call_kind': 'expression', 'representation': 'ST_expression',
+                    'interfaces': ['st'], 'st_expression': call['st_expression'],
+                    'applicability_cases': call['applicability_cases'],
+                    'conditions_evaluated': False,
+                    'verified_fields': ['source_expression', 'operator_binding', 'cpu_applicability'],
+                    'unverified_fields': ['execution_semantics'], 'sources': call['contract_sources']}
+            if call.get('st_contract_verified') is True and call.get('st_call'):
+                return self._include_expression_contract({'opcode': call['opcode'], 'contract_level': 'signature_verified',
+                    'interfaces': ['st'], 'st_call': call['st_call'], 'st_parameters': call['st_parameters'],
+                    'applicability_cases': call['applicability_cases'], 'conditions_evaluated': False,
+                    'verified_fields': ['st_signature', 'cpu_applicability'],
+                    'unverified_fields': ['execution_semantics'], 'sources': call['contract_sources']}, expression)
             return {"opcode": str(mnemonic).upper(), "contract_level": "unknown"}
         spec = form.spec
         coverage = spec.contract_coverage()
-        return {"opcode": form.opcode, "base_mnemonic": form.base_mnemonic,
+        result = {"opcode": form.opcode, "base_mnemonic": form.base_mnemonic,
                 "contract_level": "signature_verified" if spec.verified_fields else
                     "opcode_only" if spec.contract_level == "opcode_only" else "partial",
                 "min_operands": spec.min_operands, "max_operands": spec.max_operands,
@@ -1411,9 +2070,24 @@ class InstructionRegistry:
                     "data_type": o.data_type, "device_prefixes": list(o.device_prefixes),
                     **({"allowed_devices": list(o.allowed_devices)} if o.allowed_devices else {}),
                     **({"word_count": o.word_count} if o.word_count != 1 else {}),
+                    **({"bit_count": o.bit_count} if o.bit_count != 1 else {}),
+                    **({"integer_literal_widths": dict(o.integer_literal_widths)} if o.integer_literal_widths else {}),
+                    **({"address_forms": list(o.address_forms)} if o.address_forms else {}),
+                    **({"address_form_limits": {form: dict(limits) for form, limits in o.address_form_limits}}
+                       if o.address_form_limits else {}),
                     **({"usage_facts": [fact.as_mapping() for fact in o.usage_facts]} if o.usage_facts else {})}
                     for index, o in enumerate(spec.operands, start=1)],
                 "sources": [{k: v for k, v in source.items() if k not in {"proof_sha256", "source_sha256"}} for source in spec.contract_sources]}
+        if cpu:
+            structured = self._describe_reviewed_st_call(mnemonic, cpu=cpu)
+            if structured:
+                result.update({key: structured[key] for key in (
+                    'interfaces', 'st_call', 'st_parameters', 'st_contract_verified',
+                    'applicability_cases', 'conditions_evaluated', 'source_contract_fact_ids')})
+                result['st_contract_sources'] = structured['contract_sources']
+                if structured.get('constraints'):
+                    result['st_constraints'] = structured['constraints']
+        return self._include_expression_contract(result, expression)
 
     def is_known(self, mnemonic: Any, *, vendor: str = "mitsubishi") -> bool:
         return self.resolve(mnemonic, vendor=vendor) is not None
@@ -1471,6 +2145,8 @@ class InstructionRegistry:
         target_contracts = []
         source_forms = []
         modifier_rules: Dict[Tuple[str, str], Mapping[str, Any]] = {}
+        knowledge_profiles = []
+        family_knowledge = []
         for path in paths:
             payload = json.loads(path.read_text(encoding="utf-8"))
             if not isinstance(payload, Mapping):
@@ -1481,6 +2157,9 @@ class InstructionRegistry:
                     f"{path}: unsupported instruction catalogue schema {schema_version}"
                 )
             vendor = str(payload.get("vendor") or "mitsubishi").strip().lower()
+            from plc.instruction_knowledge import validate_knowledge_profiles, validate_family_knowledge
+            knowledge_profiles.extend(validate_knowledge_profiles(payload.get('knowledge_profiles', []), vendor=vendor))
+            family_knowledge.extend(validate_family_knowledge(payload.get('instruction_families', []), vendor=vendor))
             source_forms.extend(payload.get('source_forms', []))
             contracts = payload.get("cpu_contracts", [])
             if not isinstance(contracts, list):
@@ -1532,6 +2211,8 @@ class InstructionRegistry:
                 f"modifier rule targets unknown instruction {vendor}:{mnemonic}"
             )
         registry = cls(specs)
+        registry._knowledge_profiles = tuple(knowledge_profiles)
+        registry._family_knowledge = tuple(family_knowledge)
         for form in source_forms:
             for family in form.get('families', [form['family']]):
                 operands = form['operands']
@@ -1595,6 +2276,9 @@ def load_default_instruction_registry() -> InstructionRegistry:
             modifier_rules = directory / "modifier_rules.json"
             if modifier_rules.is_file():
                 paths = paths + (modifier_rules,)
+            family_knowledge = directory / 'instruction_families.json'
+            if family_knowledge.is_file():
+                paths = paths + (family_knowledge,)
             registry = InstructionRegistry.from_files(paths)
             promotions = directory / "fx3u_contract_promotions.json"
             if promotions.is_file():
@@ -1644,6 +2328,20 @@ GENERATION_FORBIDDEN_APP_INSTR_CATEGORIES = frozenset(
 def generation_app_instr_mnemonics(cpu=None):
     """Opcodes the model may emit as APP_INSTR for the selected CPU."""
     model = str(cpu or "").strip().upper() or None
+    availability = {}
+    members = []
+    if model:
+        from plc.target_identity import target_identity_state
+        from plc.instruction_constraints import check_fact_constraints
+        members, reason = target_identity_state(model)
+        members = members if members and reason is None else [model]
+        for definition in DEFAULT_INSTRUCTION_REGISTRY._family_knowledge:
+            for fact in definition['facts']:
+                if (fact['dimension'] == 'constraints.cpu_availability'
+                        and set(fact['scope']['models']) & set(members)):
+                    for opcode in fact['scope']['forms']:
+                        availability.setdefault(opcode, {}).setdefault(definition['base_opcode'],
+                            [definition['facts'], []])[1].append(fact['id'])
     result = []
     for mnemonic in DEFAULT_INSTRUCTION_REGISTRY.known_mnemonics():
         form = DEFAULT_INSTRUCTION_REGISTRY.resolve_catalog_form(mnemonic, cpu=model)
@@ -1660,8 +2358,21 @@ def generation_app_instr_mnemonics(cpu=None):
             # A form the compiled build did not admit as a call must not be offered
             # to the generator either; the shared spec cannot answer this, because
             # an empty CPU scope there means "not narrowed", not "admitted".
-            owner = DEFAULT_INSTRUCTION_REGISTRY.definition_header(mnemonic, cpu=model)
-            if isinstance(owner, Mapping) and "call_available" in owner and not owner["call_available"]:
+            owners = [DEFAULT_INSTRUCTION_REGISTRY.definition_header(mnemonic, cpu=member)
+                      for member in members]
+            if not owners:
+                owners = [DEFAULT_INSTRUCTION_REGISTRY.definition_header(mnemonic, cpu=model)]
+            if any(isinstance(owner, Mapping) and "call_available" in owner and not owner["call_available"]
+                   for owner in owners):
+                continue
+            if any(isinstance(owner, Mapping)
+                   and owner.get('call_admission_details', {}).get('interfaces') is not None
+                   and not {'ladder', 'native_ladder_instruction'} & set(owner['call_admission_details']['interfaces'])
+                   for owner in owners):
+                continue
+            if any(check_fact_constraints(groups, {}, target=mnemonic, plc_model=member, language='ladder',
+                    context={'project_mode': 'native_ladder_instruction'}, root_ids=roots)['status'] == 'failed'
+                    for groups, roots in availability.get(mnemonic, {}).values() for member in members):
                 continue
         result.append(mnemonic)
     return tuple(sorted(result))
@@ -1687,6 +2398,7 @@ __all__ = [
     "DEFAULT_INSTRUCTION_REGISTRY",
     "GENERATION_FORBIDDEN_APP_INSTR_CATEGORIES",
     "GENERATION_TYPED_OUTPUT_OPCODES",
+    "LITERAL_ARITHMETIC_MNEMONIC_PATTERN",
     "generation_app_instr_mnemonics",
     "CompletionSemantics",
     "DisjointBitRangeBoundary",
@@ -1706,6 +2418,18 @@ __all__ = [
 ]
 
 
+def source_instruction_arities(opcode, cpu):
+    """Reuse the native storage catalogue when reading Q/L source signatures.
+
+    These facts fill source-reading gaps without promoting unreviewed entries
+    into the generation or execution catalogue.
+    """
+    from plc.target_identity import target_family, is_parameter_only
+    if target_family(cpu) not in {'Q', 'L'} or is_parameter_only(cpu):
+        return frozenset()
+    from plc.storage.q_encoder import source_instruction_arities as stored_arities
+    return stored_arities(opcode, cpu=cpu)
+
 def condition_connector(opcode):
     """Accumulator connector of a stored contact or comparison, not execution support.
 
@@ -1721,386 +2445,3 @@ def condition_connector(opcode):
         name,
     )
     return match[1] if match else None
-
-
-def source_instruction_arities(opcode, cpu):
-    """Reuse the native storage catalogue when reading Q/L source signatures.
-
-    These facts fill source-reading gaps without promoting unreviewed entries
-    into the generation or execution catalogue.
-    """
-    from plc.target_identity import target_family, is_parameter_only
-    if target_family(cpu) not in {'Q', 'L'} or is_parameter_only(cpu):
-        return frozenset()
-    from plc.storage.q_encoder import source_instruction_arities as stored_arities
-    return stored_arities(opcode, cpu=cpu)
-
-
-class SemanticKind(str, Enum):
-    CONTACT = "contact"
-    COIL = "coil"
-    COMPARISON = "comparison"
-    FUNCTION = "function"
-    FUNCTION_BLOCK = "function_block"
-    CONTROL = "control"
-    VENDOR = "vendor"
-
-
-@dataclass(frozen=True)
-class OperandUsageFact:
-    """One independently sourced facet of an operand's meaning."""
-
-    facet: str
-    value: Any
-    status: str = "declared_unverified"
-    sources: Tuple[Mapping[str, Any], ...] = ()
-    conditions: Tuple[str, ...] = ()
-
-    @classmethod
-    def from_mapping(cls, payload: Mapping[str, Any]) -> "OperandUsageFact":
-        facet = str(payload.get("facet") or "").strip()
-        if facet not in {"purpose", "unit", "encoding", "range", "condition"}:
-            raise ValueError("Invalid operand usage facet")
-        value = payload.get("value")
-        if not isinstance(value, (str, Mapping)) or not value or isinstance(value, str) and not value.strip():
-            raise ValueError("Operand usage value is required")
-        status = str(payload.get("status") or "declared_unverified")
-        if status not in {"declared_unverified", "candidate_evidence", "source_verified"}:
-            raise ValueError("Invalid operand usage status")
-        sources = payload.get("sources") or []
-        if not isinstance(sources, (list, tuple)) or any(
-            not isinstance(item, Mapping) or not any(item.get(key) for key in (
-                "id", "manual_id", "reference", "path",
-            )) for item in sources
-        ):
-            raise ValueError("Invalid operand usage sources")
-        if status != "declared_unverified" and not sources:
-            raise ValueError("Sourced operand usage requires its own evidence")
-        conditions = payload.get("conditions") or []
-        if not isinstance(conditions, (list, tuple)) or any(
-            not isinstance(item, str) or not item.strip() for item in conditions
-        ):
-            raise ValueError("Invalid operand usage conditions")
-        return cls(facet, copy.deepcopy(value), status, tuple(copy.deepcopy(dict(item)) for item in sources), tuple(conditions))
-
-    def as_mapping(self) -> Dict[str, Any]:
-        result = {"facet": self.facet, "value": copy.deepcopy(self.value), "status": self.status}
-        if self.sources:
-            result["sources"] = [copy.deepcopy(dict(item)) for item in self.sources]
-        if self.conditions:
-            result["conditions"] = list(self.conditions)
-        return result
-
-
-@dataclass(frozen=True)
-class OperandSpec:
-    name: str
-    role: OperandRole = OperandRole.READ
-    data_type: str = "any"
-    device_prefixes: Tuple[str, ...] = ()
-    optional: bool = True
-    usage_facts: Tuple[OperandUsageFact, ...] = ()
-    allowed_devices: Tuple[str, ...] = ()
-    word_count: int = 1
-    semantic_name: str = ""
-
-    def slot_metadata(self, position: int, symbol: str = "") -> Dict[str, Any]:
-        return {"position": position,
-                **({"symbol": symbol} if symbol else {}),
-                **({"semantic_name": self.semantic_name} if self.semantic_name else {})}
-
-    @classmethod
-    def from_mapping(cls, payload: Mapping[str, Any], index: int) -> "OperandSpec":
-        role_text = str(payload.get("role", "read") or "read").strip().lower()
-        try:
-            role = OperandRole(role_text)
-        except ValueError as exc:
-            raise ValueError(f"invalid operand role {role_text!r}") from exc
-        prefixes = tuple(
-            str(item).strip().upper()
-            for item in (payload.get("device_prefixes") or [])
-            if str(item).strip()
-        )
-        usage = payload.get("usage_facts") or []
-        if not isinstance(usage, list) or any(not isinstance(item, Mapping) for item in usage):
-            raise ValueError("Operand usage facts must be an array of objects")
-        count = payload.get("word_count", 1)
-        if type(count) is not int or not 1 <= count <= 65536:
-            raise ValueError("Invalid operand memory extent")
-        name = str(payload.get("name") or f"operand_{index}").strip()
-        semantic_name = str(payload.get("semantic_name") or name).strip()
-        if re.fullmatch(r"operand_\d+|[A-Z]\d*", semantic_name, re.I):
-            semantic_name = ""
-        return cls(
-            name=name,
-            role=role,
-            data_type=str(payload.get("data_type") or "any").strip().lower(),
-            device_prefixes=prefixes,
-            optional=bool(payload.get("optional", True)),
-            usage_facts=tuple(OperandUsageFact.from_mapping(item) for item in usage),
-            allowed_devices=tuple(str(x).upper() for x in payload.get("allowed_devices", ())),
-            word_count=count,
-            semantic_name=semantic_name,
-        )
-
-
-@dataclass(frozen=True)
-class CompletionSemantics:
-    device: str
-    placement: str = "same_rung_parallel_branch"
-
-
-@dataclass(frozen=True)
-class PulseOutputSemantics:
-    frequency_operand_indexes: Tuple[int, ...] = ()
-    pulse_output_operand_index: int = 0
-    direction_output_operand_index: Optional[int] = None
-
-
-@dataclass(frozen=True)
-class NumericOperandBoundary:
-    operand_index: int
-    minimum: Optional[int] = None
-    maximum: Optional[int] = None
-    absolute: bool = False
-    unit: str = ""
-    label: str = "operand"
-
-
-@dataclass(frozen=True)
-class DisjointBitRangeBoundary:
-    source_operand_index: int
-    destination_operand_index: int
-    destination_length_operand_index: int
-    source_length_operand_index: int
-    same_device_prefix_only: bool = True
-    error_code: str = ""
-
-
-
-@dataclass(frozen=True)
-class InstructionSpec:
-    mnemonic: str
-    vendor: str = "mitsubishi"
-    canonical_op: str = ""
-    category: InstructionCategory = InstructionCategory.ACTION
-    semantic_kind: SemanticKind = SemanticKind.VENDOR
-    operands: Tuple[OperandSpec, ...] = ()
-    min_operands: Optional[int] = None
-    max_operands: Optional[int] = None
-    cpu_support: frozenset[str] = field(default_factory=frozenset)
-    contract_level: str = "full"
-    supports_pulse: bool = False
-    double_mnemonic: str = ""
-    double_pulse_mnemonic: str = ""
-    notes: str = ""
-    # Independently corroborated dimensions, scoped to the resolved CPU/form.
-    # Legacy `full` is a compatibility label, not evidence of complete semantics.
-    verified_fields: Tuple[str, ...] = ()
-    native_operand_order: Tuple[str, ...] = ()
-    contract_sources: Tuple[Mapping[str, Any], ...] = ()
-    execution_form: Optional[str] = None
-    instruction_width: Optional[int] = None
-    completion: Optional[CompletionSemantics] = None
-    pulse_output: Optional[PulseOutputSemantics] = None
-    numeric_operand_boundaries: Tuple[NumericOperandBoundary, ...] = ()
-    disjoint_bit_ranges: Tuple[DisjointBitRangeBoundary, ...] = ()
-    cpu_replacements: Tuple[Tuple[str, str], ...] = ()
-    # Build-produced facts extend this same owner. They never admit an opcode,
-    # certify an unrelated field, or alter native operand order.
-    definition_facts: Tuple[InstructionFactGroup, ...] = ()
-    source_materials: Tuple[Mapping[str, Any], ...] = ()
-    uninterpreted_content: Tuple[Mapping[str, Any], ...] = ()
-    st_call: Optional[Mapping[str, Any]] = None
-
-    def contract_coverage(self) -> Dict[str, str]:
-        declared = {
-            "arity": self.min_operands is not None or self.max_operands is not None,
-            "operand_order": bool(self.operands),
-            "operand_roles": bool(self.operands),
-            "operand_types": bool(self.operands) and all(o.data_type != "any" for o in self.operands),
-            "device_classes": bool(self.operands) and all(o.device_prefixes for o in self.operands),
-            "form_identity": bool(self.mnemonic),
-            "cpu_applicability": bool(self.cpu_support),
-            "hardware_applicability": self.pulse_output is not None,
-            "execution_form": bool(self.execution_form),
-            "instruction_width": self.instruction_width is not None,
-            "execution_conditions": False,
-            "completion_ownership": self.completion is not None,
-            "numeric_and_memory_boundaries": bool(
-                self.numeric_operand_boundaries or self.disjoint_bit_ranges
-            ),
-        }
-        return {key: "source_verified" if key in self.verified_fields else
-                "declared_unverified" if value else "unresolved"
-                for key, value in declared.items()}
-
-    @classmethod
-    def from_mapping(
-        cls,
-        payload: Mapping[str, Any],
-        *,
-        default_vendor: str = "mitsubishi",
-    ) -> "InstructionSpec":
-        mnemonic = str(payload.get("mnemonic") or "").strip().upper()
-        if not mnemonic:
-            raise ValueError("instruction mnemonic is required")
-        category_text = str(payload.get("category") or "action").strip().lower()
-        semantic_text = str(payload.get("semantic_kind") or "vendor").strip().lower()
-        try:
-            category = InstructionCategory(category_text)
-        except ValueError as exc:
-            raise ValueError(
-                f"{mnemonic}: invalid instruction category {category_text!r}"
-            ) from exc
-        try:
-            semantic_kind = SemanticKind(semantic_text)
-        except ValueError as exc:
-            raise ValueError(
-                f"{mnemonic}: invalid semantic kind {semantic_text!r}"
-            ) from exc
-        contract_level = str(payload.get("contract_level") or "full").strip().lower()
-        if contract_level not in {"full", "opcode_only", "signature"}:
-            raise ValueError(f"{mnemonic}: invalid contract_level {contract_level!r}")
-
-        arity = payload.get("arity") or {}
-        if not isinstance(arity, Mapping):
-            raise ValueError(f"{mnemonic}: arity must be an object")
-        minimum = arity.get("min")
-        maximum = arity.get("max")
-        min_operands = int(minimum) if minimum is not None else None
-        max_operands = int(maximum) if maximum is not None else None
-        if (
-            min_operands is not None
-            and max_operands is not None
-            and min_operands > max_operands
-        ):
-            raise ValueError(f"{mnemonic}: arity min exceeds max")
-
-        raw_operands = payload.get("operands") or []
-        if not isinstance(raw_operands, list):
-            raise ValueError(f"{mnemonic}: operands must be an array")
-        operands = tuple(
-            OperandSpec.from_mapping(item, index)
-            for index, item in enumerate(raw_operands)
-            if isinstance(item, Mapping)
-        )
-
-        modifier_rule = payload.get("modifier_rule") or {}
-        if not isinstance(modifier_rule, Mapping):
-            raise ValueError(f"{mnemonic}: modifier_rule must be an object")
-        supports_pulse = bool(modifier_rule.get("pulse", False))
-        double_rule = modifier_rule.get("double", False)
-        if double_rule is True:
-            double_mnemonic = "D" + mnemonic
-        elif double_rule in (False, None, ""):
-            double_mnemonic = ""
-        elif isinstance(double_rule, str):
-            double_mnemonic = double_rule.strip().upper()
-        else:
-            raise ValueError(
-                f"{mnemonic}: modifier_rule.double must be bool or mnemonic"
-            )
-        double_pulse_rule = modifier_rule.get("double_pulse")
-        if double_pulse_rule in (None, ""):
-            double_pulse_mnemonic = (
-                double_mnemonic + "P"
-                if double_mnemonic and supports_pulse
-                else ""
-            )
-        elif isinstance(double_pulse_rule, str):
-            double_pulse_mnemonic = double_pulse_rule.strip().upper()
-        else:
-            raise ValueError(
-                f"{mnemonic}: modifier_rule.double_pulse must be a mnemonic"
-            )
-        if double_pulse_mnemonic and not double_mnemonic:
-            raise ValueError(f"{mnemonic}: double_pulse requires a double form")
-
-        return cls(
-            mnemonic=mnemonic,
-            vendor=str(payload.get("vendor") or default_vendor).strip().lower(),
-            canonical_op=str(payload.get("canonical_op") or mnemonic).strip().upper(),
-            category=category,
-            semantic_kind=semantic_kind,
-            operands=operands,
-            min_operands=min_operands,
-            max_operands=max_operands,
-            cpu_support=frozenset(
-                str(item).strip().upper()
-                for item in (payload.get("cpu_support") or [])
-                if str(item).strip()
-            ),
-            contract_level=contract_level,
-            supports_pulse=supports_pulse,
-            double_mnemonic=double_mnemonic,
-            double_pulse_mnemonic=double_pulse_mnemonic,
-            notes=str(payload.get("notes") or "").strip(),
-            definition_facts=tuple(InstructionFactGroup.from_mapping(item) for item in payload.get("definition_facts", [])),
-            source_materials=tuple(copy.deepcopy(payload.get("source_materials", []))),
-            uninterpreted_content=tuple(copy.deepcopy(payload.get("uninterpreted_content", []))),
-        )
-
-    @property
-    def supports_double(self) -> bool:
-        return bool(self.double_mnemonic)
-
-    def supports_cpu(self, cpu: Optional[str]) -> bool:
-        if cpu and self.replacement_for_cpu(cpu):
-            return False
-        if not cpu or not self.cpu_support:
-            return True
-        return str(cpu).strip().upper() in self.cpu_support
-
-    def accepts_arity(self, count: int) -> bool:
-        if self.min_operands is not None and count < self.min_operands:
-            return False
-        if self.max_operands is not None and count > self.max_operands:
-            return False
-        return True
-
-    def replacement_for_cpu(self, cpu: Optional[str]) -> str:
-        model = str(cpu or "").strip().upper()
-        for target_cpu, replacement in self.cpu_replacements:
-            if target_cpu == model:
-                return replacement
-        return ""
-
-    @property
-    def write_indexes(self) -> Tuple[int, ...]:
-        return tuple(
-            index
-            for index, operand in enumerate(self.operands)
-            if operand.role in {OperandRole.WRITE, OperandRole.READ_WRITE}
-        )
-
-    @property
-    def read_write_indexes(self) -> Tuple[int, ...]:
-        return tuple(
-            index
-            for index, operand in enumerate(self.operands)
-            if operand.role == OperandRole.READ_WRITE
-        )
-
-    @property
-    def read_indexes(self) -> Tuple[int, ...]:
-        return tuple(
-            index
-            for index, operand in enumerate(self.operands)
-            if operand.role in {OperandRole.READ, OperandRole.READ_WRITE}
-        )
-
-
-@dataclass(frozen=True)
-class InstructionResolution:
-    """One opcode resolved to a base applied instruction plus D/P modifiers."""
-
-    opcode: str
-    spec: InstructionSpec
-    base_spec: InstructionSpec
-    double: bool = False
-    pulse: bool = False
-
-    @property
-    def base_mnemonic(self) -> str:
-        return self.base_spec.mnemonic

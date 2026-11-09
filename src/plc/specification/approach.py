@@ -1,6 +1,3 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Deterministic contracts that bind a selected implementation approach.
 
 The requirement-analysis model may propose different implementation methods,
@@ -18,6 +15,8 @@ import json
 import re
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
+
+from plc.instructions import LITERAL_ARITHMETIC_MNEMONIC_PATTERN
 
 
 CONTRACT_SCHEMA_VERSION = 1
@@ -157,7 +156,7 @@ def normalize_instruction_instances(values):
             continue
         opcode = str(item.get("opcode") or "").strip().upper()
         operands = item.get("operands")
-        if not re.fullmatch(r"[$A-Z][A-Z0-9_.$@+<>!=\-]{0,63}", opcode):
+        if not re.fullmatch(rf"(?:[$A-Z][A-Z0-9_.$@+<>!=\-]{{0,63}}|{LITERAL_ARITHMETIC_MNEMONIC_PATTERN})", opcode):
             continue
         if not isinstance(operands, Sequence) or isinstance(operands, (str, bytes)):
             continue

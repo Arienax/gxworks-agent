@@ -1,6 +1,3 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Owner-selected engineering data locations within public documents.
 
 These paths describe data contracts, never claims supplied by a payload. A
@@ -54,9 +51,6 @@ DATA_PATHS["source_snapshot"] += tuple((*prefix, *path)
 DATA_PATHS["catalog"] = (("declaration_tables",),) + tuple(("empty_model", *path) for path in _PROGRAM_MAPS)
 _PARAMETER_MAPS = (("declaration_edits", "*", "renames"), ("networks", "*", "calls", "*", "arguments"),
                    ("networks", "*", "nodes", "*", "arguments"))
-_PARAMETER_MAPS += (("networks", "*", "source_block"),
-                    ("preserved_blocks", "*", "source_block"),
-                    ("preserved_blocks", "*", "source_offset"))
 _PARAMETER_MAPS += tuple(("declaration_edits", "*", "upserts", "*", field) for field in _LABEL_TEXT_FIELDS)
 DATA_PATHS["catalog"] += (("parameter_schema",),) + tuple(
     (model, *path) for model in ("parameter_model", "empty_parameter_model") for path in _PARAMETER_MAPS)
@@ -180,12 +174,8 @@ def restore_document_data(projected, original, *, kind, project_metadata):
                 return {**current, **{key: walk(
                     current[key] if key in current else project_metadata(value), value, (*path, str(key)))
                     for key, value in source.items()}}
-            result = {key: walk(value, source[key], (*path, str(key))) if key in source else value
-                      for key, value in current.items()}
-            for key, value in source.items():
-                if key not in result and _matches((*path, str(key)), paths):
-                    result[key] = copy.deepcopy(value)
-            return result
+            return {key: walk(value, source[key], (*path, str(key))) if key in source else value
+                    for key, value in current.items()}
         if isinstance(current, list) and isinstance(source, (list, tuple)):
             return [walk(value, source[index], (*path, "*")) for index, value in enumerate(current)]
         return current

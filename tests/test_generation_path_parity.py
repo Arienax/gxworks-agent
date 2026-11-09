@@ -371,8 +371,8 @@ def _mcp(candidate, store, project_id, monkeypatch):
     before = {str(p.relative_to(store.base_dir)): p.read_bytes()
               for p in store.base_dir.rglob("*") if p.is_file()}
 
-    def observe_render(program, directory):
-        result = render(program, directory)
+    def observe_render(program, directory, **options):
+        result = render(program, directory, **options)
         rendered.append({"program": copy.deepcopy(program),
                          "artifacts": _files(directory, result["artifacts"])})
         return result

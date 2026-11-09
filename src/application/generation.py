@@ -691,7 +691,8 @@ class GenerationWorkflow:
                     "ir_schema_version": IR_SCHEMA_VERSION,
                     "ir_sha256": canonical_sha256(program_ir),
                     "ladder_sha256": program_ir["source"]["ladder_sha256"],
-                    "st_from_ir_sha256": rendered["st_from_ir_sha256"],
+                    **({"st_from_ir_sha256": rendered["st_from_ir_sha256"]} if "st_from_ir_sha256" in rendered
+                       else {"st_translation": rendered.get("st_translation", "unavailable")}),
                     "st_renderer_schema_version": ST_RENDERER_SCHEMA_VERSION,
                     "semantic_schema_version": SEMANTICS_SCHEMA_VERSION,
                     "semantic_summary": {

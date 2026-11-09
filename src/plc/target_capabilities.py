@@ -1,6 +1,3 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Target-specific instruction applicability and operand constraints.
 
 This lane overlays a selected CPU/model on vendor-level operand semantics. It
@@ -195,6 +192,14 @@ def apply_owner_admission(applicability, opcode, model, *, registry=None):
     if entry is None:
         return applicability
     admitted = bool(entry.get("call_available"))
+    details = entry.get('call_admission_details') or {}
+    interfaces = details.get('interfaces')
+    structured = (admitted and isinstance(interfaces, (list, tuple)) and 'st' in interfaces
+                  and (entry.get('support_status') == 'reviewed_st_signature'
+                       or details.get('structured_call', {}).get('available') is True))
+    if structured:
+        from plc.structured_call_contract import resolve_structured_call_contract
+        structured = resolve_structured_call_contract(entry.get('facts', []), opcode=entry['opcode'], model=model).accepted
     available = bool(applicability.get("available"))
     reasons = [str(gap) for gap in entry.get("gaps") or ()]
     projected = dict(applicability)
@@ -208,6 +213,16 @@ def apply_owner_admission(applicability, opcode, model, *, registry=None):
             "target_model": entry.get("target_model"),
         },
     }
+    if interfaces is not None:
+        record['interfaces'] = list(interfaces)
+        projected['interfaces'] = list(interfaces)
+    if structured:
+        if registry is None:
+            from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+            registry = DEFAULT_INSTRUCTION_REGISTRY
+        projected.update(available=True, support_status='callable', owner_admission=record,
+                         call_contract=registry.describe_call(entry['opcode'], cpu=model))
+        return projected
     if not admitted:
         if available:
             # The generic definition could not express this admission state on its

@@ -1,6 +1,3 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Declarative operation schemas and engineering request bounds."""
 from __future__ import annotations
 import json
@@ -195,30 +192,25 @@ def _engineering_native_schema():
         'controls': controls,
         'commands': {'type': 'array', 'minItems': 0, 'maxItems': 256, 'items': live_command}},
         ['schema_version', 'mode', 'commands'])
-    background = _engineering_object({'schema_version': {'type': 'integer', 'enum': [1]},
-        'mode': {'type': 'string', 'enum': ['background']},
-        'commands': {'type': 'array', 'minItems': 3, 'maxItems': 3,
-            'description': 'Compile, save and reopen the saved GXW in that order, without a visible editor.',
-            'items': _engineering_object({'operation': {'type': 'string', 'enum': ['compile', 'save', 'reopen']}},
-                                         ['operation'])}}, ['schema_version', 'mode', 'commands'])
     discoverable = {
         **command['properties'], **live_command['properties'],
         'operation': {'type': 'string', 'enum': list(dict.fromkeys([*_native_commands(), *_native_commands(live=True)]))},
         'actions': {'oneOf': [_engineering_graph_actions(), _engineering_graph_actions(live=True)]},
     }
     properties = {**batch['properties'], **live['properties'],
-        'mode': {'type': 'string', 'enum': ['background', 'live']},
         'commands': {'type': 'array', 'maxItems': 256, 'items': _engineering_object(discoverable, ['operation'])}}
     return _engineering_object({'plan': _engineering_object(properties, ['schema_version', 'commands'],
-        oneOf=[batch, live, background])}, ['plan'])
+        oneOf=[batch, live])}, ['plan'])
 
 
 def _engineering_st_schema():
     commands = _engineering_authoring_commands(visible=False)
     commands = {key: commands[key] for key in ('create_st_program', 'edit_st_program', 'edit_st_fb',
                                               'edit_st_function', 'edit_st_source')}
-    commands = {'generate': _engineering_object({'st_text': _engineering_text(), 'declarations': _engineering_declarations('any')}, ['st_text']),
-        'from_candidate': _engineering_object({'candidate': {'type': 'object'}}, ['candidate']),
+    commands = {'from_candidate': _engineering_object({'candidate': {'type': 'object'}}, ['candidate']),
+        'generate': _engineering_object({'st_code': _engineering_text(maximum=4 * 1024 * 1024),
+            'program_name': _engineering_text(maximum=512),
+            'workflow': {'type': 'string', 'enum': ['direct_generation', 'detailed']}}, ['st_code']),
         'import': _engineering_object({'data_base64': _engineering_text(),
         'program': _engineering_text(maximum=512)}, ['data_base64', 'program']), **commands}
     variants = [_engineering_object({'operation': {'type': 'string', 'enum': [name]},
@@ -226,7 +218,6 @@ def _engineering_st_schema():
         for name, rule in commands.items()]
     common = {key: value for rule in variants for key, value in rule['properties'].items()}
     common['operation'] = {'type': 'string', 'enum': list(commands)}
-    common['declarations'] = _engineering_declarations('any')
     return _engineering_object(common, ['operation'], oneOf=variants)
 
 
@@ -236,8 +227,11 @@ def _engineering_fbd_schema():
     text = _engineering_text(maximum=255)
     commands.update({name: _engineering_object({'model': {'type': 'object'},
         'native_save': {'type': 'boolean'},
+        **({'workflow': {'type': 'string', 'enum': ['direct_generation', 'detailed'],
+            'description': '新工程先确认规格；仅用户明确要求直接生成时选择 direct_generation。'}}
+            if name == 'generate' else {}),
         **({'device_comments': {'type': 'object', 'additionalProperties': {'oneOf': [{'type': 'string'}, {'type': 'null'}]}},
-            'comment_table': text})}, ['model'])
+            'comment_table': text} if name == 'edit' else {})}, ['model'])
                      for name in ('generate', 'edit')})
     commands.update(import_library=_engineering_object({'data_base64': _engineering_text(), 'library_name': text},
                                                        ['data_base64', 'library_name']),

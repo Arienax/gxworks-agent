@@ -1,6 +1,3 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Project inspection, deterministic validation and patch intents."""
 from __future__ import annotations
 import copy
@@ -11,6 +8,7 @@ from agent_runtime.tool_context import (
     ToolContext,
     _require_program_ir,
     _confirmed_spec,
+    _generation_spec,
 )
 from agent_runtime.native_tools import (
     _read_sfc_project,
@@ -134,8 +132,6 @@ def _get_current_program_info(
     }
     program_ir = context.program_ir
     if isinstance(program_ir, Mapping):
-        from plc.ir import canonical_sha256
-        result['ir_sha256'] = canonical_sha256(program_ir)
         networks = [
             {
                 "id": str(network.get("id") or ""),
@@ -412,8 +408,11 @@ def _patch_program(context: ToolContext, arguments: Mapping[str, Any], *, genera
     patch.setdefault("base_ir_sha256", canonical_sha256(program))
     patch.setdefault("target_revision", int(program.get("revision") or 0) + 1)
     core = PLCCore()
-    confirmed_spec = copy.deepcopy(_confirmed_spec(context))
+    confirmed_spec = copy.deepcopy(_generation_spec(context))
     candidate = dict(core.patch_program(program, patch, confirmed_spec))
+    from application.source_plan import attach_source_check
+    validation = {}
+    attach_source_check(validation, confirmed_spec, "ladder", model=candidate["candidate_ir"])
     compiled = core.compile_project(candidate["candidate_ir"])
     action = {
         "type": "accept_candidate_patch",
@@ -439,6 +438,7 @@ def _patch_program(context: ToolContext, arguments: Mapping[str, Any], *, genera
     return {
         "requires_confirmation": True,
         "message": "候选补丁已通过确定性校验和临时编译，等待用户查看差异。",
+        **validation,
         "maintainability_review": copy.deepcopy(candidate.get("maintainability_review")),
         "generation_handoff": copy.deepcopy(generation_handoff),
         "candidate_id": candidate["candidate_id"],

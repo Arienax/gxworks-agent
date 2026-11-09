@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from knowledge.runtime_fact_projection import SOURCE_SERIALIZATION, VALUE_SERIALIZATION, resolve_fact_sources
 from knowledge.exact_search_storage import create_search_pool, insert_chunk
@@ -27,7 +28,9 @@ _SCHEMA_SQL = '''
           CREATE TABLE facts(id TEXT PRIMARY KEY,kind TEXT NOT NULL,target TEXT NOT NULL,
             plc_model TEXT NOT NULL,chunk_id TEXT NOT NULL,payload_json TEXT NOT NULL);
           CREATE INDEX facts_target ON facts(kind,target,plc_model);
+          CREATE INDEX facts_chunk_id ON facts(chunk_id);
           CREATE TABLE entity_index(entity TEXT NOT NULL,chunk_id TEXT NOT NULL,PRIMARY KEY(entity,chunk_id));
+          CREATE INDEX entity_index_chunk_id ON entity_index(chunk_id);
           CREATE VIRTUAL TABLE chunks_fts USING fts5(text,content='chunks',content_rowid='rowid');
         '''
 
@@ -261,7 +264,7 @@ def hydrate_owner_packet(connection, owner, *, load_counts=None):
     return packet
 
 
-def _write_language_feature(connection, feature):
+def _write_language_feature(connection, feature, *, rowids=None, update_fts=False):
     """Index canonical/alias identities; store each full feature only once."""
     import re
     from knowledge.fact_corpus import PUBLICATION_STATUS
@@ -280,7 +283,11 @@ def _write_language_feature(connection, feature):
         text=' '.join(sorted(set(re.findall(r'[\w.$:+/-]+',_json(technical)))))
         metadata={'runtime_language':feature['target'],'runtime_language_model':model,'content_origin':'authored_fact',
                   'distribution_status':PUBLICATION_STATUS,'fact_kind':'language','fact_target':feature['target'],'source_lane':'fact','plc_models':[model]}
-        insert_chunk(connection,(identity,text,_json(metadata),_json([model]),'','language','authored_fact',PUBLICATION_STATUS))
+        insert_chunk(connection,(identity,text,_json(metadata),_json([model]),'','language','authored_fact',PUBLICATION_STATUS),
+                     rowid=(rowids or {}).get(identity))
+        if update_fts:
+            rowid=connection.execute('SELECT rowid FROM chunks WHERE id=?',(identity,)).fetchone()[0]
+            connection.execute('INSERT INTO chunks_fts(rowid,text) VALUES (?,?)',(rowid,text))
         for alias in aliases:
             name=alias.upper()
             connection.execute('INSERT OR IGNORE INTO entity_index VALUES (?,?)',(name,identity))
@@ -448,7 +455,8 @@ class OwnerStoreWriter:
     caller controls bounded input iteration; this writer retains one owner.
     It performs exact reversible transport, not semantic regrouping.
     """
-    def __init__(self, path, metadata, *, field_pooling=True, search_pooling=False, fact_rows=False):
+    def __init__(self, path, metadata, *, field_pooling=True, search_pooling=False, fact_rows=False,
+                 seed_database=None):
         from knowledge.fact_corpus import CORPUS_KIND
         from knowledge.fact_field_codec import FIELD_SERIALIZATION
         import copy
@@ -472,10 +480,39 @@ class OwnerStoreWriter:
         self._db.execute('PRAGMA cache_size=-4096')
         self._db.execute('PRAGMA temp_store=FILE')
         self._db.execute('PRAGMA temp.cache_size=-2048')
-        self._db.executescript(_SCHEMA_SQL)
         self._closed = False
         self._finalized = False
+        self._seeded = seed_database is not None
+        self._search_pooling = bool(search_pooling)
         self._owners = self._facts = 0
+        if self._seeded:
+            with closing(sqlite3.connect(Path(seed_database).resolve().as_uri()+'?mode=ro&immutable=1', uri=True)) as seed:
+                seed.backup(self._db)
+            existing = dict(self._db.execute('SELECT key,value FROM meta'))
+            serialization = existing.get('runtime_serialization')
+            if serialization not in {'owner-source-pool-v1','owner-field-pool-v2','owner-field-row-v3'}:
+                raise ValueError('Unsupported seeded owner transport')
+            self.field_pooling = serialization != 'owner-source-pool-v1'
+            self.fact_rows = serialization == 'owner-field-row-v3'
+            from knowledge.exact_search_storage import SEARCH_SERIALIZATION
+            search = existing.get('search_serialization')
+            if search is not None and search != SEARCH_SERIALIZATION:
+                raise ValueError('Unsupported seeded search transport')
+            self._search_pooling = search is not None
+            self._owners = self._db.execute('SELECT count(*) FROM runtime_owner_index').fetchone()[0]
+            stored = existing.get('stored_facts')
+            self._facts = (int(stored) if stored is not None else self._db.execute(
+                "SELECT coalesce(sum(json_array_length(payload_json,'$.value.facts')),0) FROM runtime_definitions").fetchone()[0])
+            self._db.executemany('UPDATE meta SET value=? WHERE key=?', [
+                (metadata['fact_bundle_version'],'fact_bundle_version'), (_json(self.metadata),'definition_metadata')])
+            # A selected-owner replacement deletes by chunk_id. Older seeds
+            # only indexed target/entity, causing two full scans per owner.
+            self._db.execute('CREATE INDEX IF NOT EXISTS facts_chunk_id ON facts(chunk_id)')
+            self._db.execute('CREATE INDEX IF NOT EXISTS entity_index_chunk_id ON entity_index(chunk_id)')
+            if self.fact_rows:
+                self._db.execute('CREATE TEMP TABLE seen_fact_ids(id TEXT PRIMARY KEY) WITHOUT ROWID')
+            return
+        self._db.executescript(_SCHEMA_SQL)
         meta = {'corpus_kind':CORPUS_KIND,'runtime_serialization':'owner-field-pool-v2' if self.field_pooling else 'owner-source-pool-v1',
                 'corpus_scope':'provided_instruction_definitions_only','fact_bundle_version':metadata['fact_bundle_version'],
                 'owner_store_serialization':'instruction-owner-store-v1','definition_metadata':_json(self.metadata)}
@@ -516,7 +553,25 @@ class OwnerStoreWriter:
         elif isinstance(value,list):
             for child in value:OwnerStoreWriter._public(child)
 
+    def _remove_chunk(self, identity):
+        previous = self._db.execute('SELECT rowid,text FROM chunks WHERE id=?',(identity,)).fetchone()
+        if previous is None:raise ValueError('Missing indexed owner chunk')
+        self._db.execute("INSERT INTO chunks_fts(chunks_fts,rowid,text) VALUES ('delete',?,?)",previous)
+        self._db.execute('DELETE FROM entity_index WHERE chunk_id=?',(identity,))
+        self._db.execute('DELETE FROM facts WHERE chunk_id=?',(identity,))
+        table = 'runtime_chunk_bindings' if self._search_pooling else 'chunks'
+        self._db.execute('DELETE FROM '+table+' WHERE id=?',(identity,))
+        return previous[0]
+
     def add_entry(self, entry):
+        self._write_entry(entry)
+
+    def replace_entry(self, entry):
+        """Replace one exact owner or add it, retaining all existing pool IDs."""
+        if not self._seeded:raise ValueError('Owner replacement requires a seeded writer')
+        self._write_entry(entry, replace=True)
+
+    def _write_entry(self, entry, *, replace=False):
         from knowledge.fact_corpus import PUBLICATION_STATUS
         from knowledge.fact_field_codec import pack_fact_fields
         from plc.instruction_definition import InstructionFactGroup
@@ -563,24 +618,54 @@ class OwnerStoreWriter:
         identity='definition:'+hashlib.sha256(owner.encode()).hexdigest()
         packet={'kind':'instruction','target':opcode,'scope':{'models':[model]},'content_origin':'authored_fact','value':{**entry,'facts':packed}}
         encoded=_json(packet)
+        old_count=0;rowid=None;replaced=False
+        if replace:
+            previous=self._db.execute('SELECT owner FROM runtime_owner_index WHERE vendor=? AND opcode=? AND target_model=?',
+                (entry['vendor'].lower(),opcode.upper(),model.upper())).fetchone()
+            if previous:
+                if previous[0]!=owner:raise ValueError('Replacement must retain literal owner identity')
+                old_count=self._db.execute("SELECT json_array_length(payload_json,'$.value.facts') FROM runtime_definitions WHERE owner=?",(owner,)).fetchone()[0]
+                rowid=self._remove_chunk(identity)
+                self._db.execute('DELETE FROM runtime_owner_index WHERE owner=?',(owner,))
+                self._db.execute('DELETE FROM runtime_definitions WHERE owner=?',(owner,))
+                replaced=True
         self._db.execute('INSERT INTO runtime_definitions VALUES (?,?)',(owner,encoded))
         self._db.execute('INSERT INTO runtime_owner_index VALUES (?,?,?,?,?)',(entry['vendor'].lower(),opcode.upper(),model.upper(),owner,hashlib.sha256(encoded.encode()).hexdigest()))
         metadata={'runtime_owner':owner,'content_origin':'authored_fact','distribution_status':PUBLICATION_STATUS,'fact_kind':'instruction','fact_target':opcode,'source_lane':'fact','plc_models':[model]}
-        insert_chunk(self._db,(identity,' '.join(sorted(tokens)),_json(metadata),_json([model]),opcode,'instruction','authored_fact',PUBLICATION_STATUS))
+        text=' '.join(sorted(tokens))
+        insert_chunk(self._db,(identity,text,_json(metadata),_json([model]),opcode,'instruction','authored_fact',PUBLICATION_STATUS),rowid=rowid)
+        if self._seeded:
+            indexed_rowid=self._db.execute('SELECT rowid FROM chunks WHERE id=?',(identity,)).fetchone()[0]
+            self._db.execute('INSERT INTO chunks_fts(rowid,text) VALUES (?,?)',(indexed_rowid,text))
         self._db.execute('INSERT INTO entity_index VALUES (?,?)',(opcode,identity))
         self._db.execute('INSERT INTO facts VALUES (?,?,?,?,?,?)',(identity,'instruction',opcode,model,identity,'{}'))
-        self._owners+=1;self._facts+=len(facts)
+        self._owners+=not replaced;self._facts+=len(facts)-old_count
 
-    def add_language_feature(self, feature):
+    def add_language_feature(self, feature, *, replace=False):
         if self._closed or self._finalized:raise ValueError('Writer is closed')
         self._public(feature)
         validate_language_feature(feature, published=True)
-        _write_language_feature(self._db, feature)
+        rowids={}
+        if replace:
+            if not self._seeded:raise ValueError('Language replacement requires a seeded writer')
+            previous=self._db.execute('SELECT payload_json FROM runtime_language_features WHERE target=?',(feature['target'],)).fetchone()
+            if previous:
+                old=json.loads(previous[0])
+                # Rebuild actual indexed rows, including a legacy partial model
+                # index. The complete validated feature recreates missing rows.
+                identities=self._db.execute(
+                    "SELECT DISTINCT chunk_id FROM facts WHERE kind='language' AND target=?",
+                    (old['target'],)).fetchall()
+                for (identity,) in identities:
+                    rowids[identity]=self._remove_chunk(identity)
+                self._db.execute('DELETE FROM runtime_language_features WHERE target=?',(feature['target'],))
+        _write_language_feature(self._db, feature, rowids=rowids, update_fts=self._seeded)
 
     def finalize(self, manifest_path):
         if self._closed or self._finalized:raise ValueError('Writer is closed')
         _check_language_reference_owners(self._db)
-        self._db.execute("INSERT INTO chunks_fts(chunks_fts) VALUES ('rebuild')")
+        if not self._seeded:self._db.execute("INSERT INTO chunks_fts(chunks_fts) VALUES ('rebuild')")
+        self._db.execute('INSERT OR REPLACE INTO meta(key,value) VALUES (?,?)',('stored_facts',str(self._facts)))
         counts={name:self._db.execute('SELECT count(*) FROM '+table).fetchone()[0] for name,table in [('sources','runtime_sources'),('values','runtime_values'),('exact_field_objects','runtime_fact_fields')]}
         self._db.commit();self._finalized=True
         self.close()

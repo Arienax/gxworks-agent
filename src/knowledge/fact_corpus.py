@@ -1,6 +1,3 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Fact-only runtime storage; original evidence is an offline build input.
 
 This module projects existing Core definitions. It does not infer PLC behavior
@@ -46,7 +43,16 @@ def _schema_technical_string(value, path):
     # Human-readable spellings are admitted only at their explicit technical
     # schema slots. Free prose elsewhere must still withhold the whole fact.
     if path == ('target_product',):
-        return value == 'GX Works2'
+        return value in {'GX Works2', 'GX Works3'}
+    comment_tokens = {('comment_syntax','line_prefix'):{'//'},
+        ('comment_syntax','block_delimiters','open'):{'(*','/*'},
+        ('comment_syntax','block_delimiters','close'):{'*)','*/'}}
+    if path in comment_tokens:
+        return value in comment_tokens[path]
+    numeric_prefixes = {('numeric_prefixes','binary'):{'2#'}, ('numeric_prefixes','octal'):{'8#'},
+        ('numeric_prefixes','hexadecimal'):{'16#','H'}, ('numeric_prefixes','time'):{'T#'}}
+    if path in numeric_prefixes:
+        return value in numeric_prefixes[path]
     if path == ('constant_input_formal_classes',):
         return value == 'VAR_INPUT CONSTANT'
     if path == ('block_open',):
@@ -80,7 +86,7 @@ def typed_value(value, *, _path=()):
     if value is None or isinstance(value, (bool, int, float)):
         return value
     if isinstance(value, str):
-        if (not value or _TOKEN.fullmatch(value) or _OPERATOR_FORM.fullmatch(value)
+        if (not value or _TOKEN.fullmatch(value) or _OPERATOR_FORM.fullmatch(value) or value in {':=','=>',';','..'}
                 or _TYPE_LABEL.fullmatch(value) or _MEASUREMENT.fullmatch(value)
                 or _BASED_LITERAL.fullmatch(value) or _TIME_LITERAL.fullmatch(value)
                 or _schema_technical_string(value, _path)

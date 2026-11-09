@@ -1638,6 +1638,322 @@
         "device_class": "high_speed_counter",
         "bit_length": 32
       }
+    },
+    {
+      "id": "fx3u_special_block_access_status",
+      "devices": [
+        "D8166"
+      ],
+      "models": [
+        "FX3U",
+        "FX3UC"
+      ],
+      "status": "source_verified",
+      "description": "Status bitmap for access errors of special blocks, units 0 through 7.",
+      "access": "system",
+      "value_type": "word",
+      "conditions": [
+        {
+          "field": "cpu_version",
+          "operator": "at_least",
+          "value": "3.00",
+          "note": "Available from CPU version 3.00."
+        }
+      ],
+      "notes": [],
+      "search_terms": [
+        "special block error condition",
+        "special block access error",
+        "特殊模块访问错误",
+        "特殊模块错误状态"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual_number": "JY997D16601",
+          "revision": "R",
+          "pdf_pages": [
+            854,
+            895,
+            896,
+            903,
+            919,
+            920
+          ],
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d16601/jy997d16601r.pdf"
+        },
+        {
+          "manual_id": "fxcpu_device_common_l",
+          "manual_number": "JY997D26001",
+          "revision": "L",
+          "pdf_pages": [
+            140,
+            188,
+            246,
+            255
+          ],
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d26001/jy997d26001l.pdf"
+        }
+      ],
+      "gaps": [
+        "status_bit_clear_rule_not_stated"
+      ],
+      "semantic_facts": {
+        "function": "special_block_access_error_bitmap",
+        "representation": "status_bitmap",
+        "width_bits": 16,
+        "bit_layout": [
+          {
+            "offset": 0,
+            "width_bits": 1,
+            "unit_number": 0,
+            "when_one": "unit_access_error"
+          },
+          {
+            "offset": 1,
+            "width_bits": 1,
+            "unit_number": 1,
+            "when_one": "unit_access_error"
+          },
+          {
+            "offset": 2,
+            "width_bits": 1,
+            "unit_number": 2,
+            "when_one": "unit_access_error"
+          },
+          {
+            "offset": 3,
+            "width_bits": 1,
+            "unit_number": 3,
+            "when_one": "unit_access_error"
+          },
+          {
+            "offset": 4,
+            "width_bits": 1,
+            "unit_number": 4,
+            "when_one": "unit_access_error"
+          },
+          {
+            "offset": 5,
+            "width_bits": 1,
+            "unit_number": 5,
+            "when_one": "unit_access_error"
+          },
+          {
+            "offset": 6,
+            "width_bits": 1,
+            "unit_number": 6,
+            "when_one": "unit_access_error"
+          },
+          {
+            "offset": 7,
+            "width_bits": 1,
+            "unit_number": 7,
+            "when_one": "unit_access_error"
+          }
+        ],
+        "unavailable_bits": {
+          "first": 8,
+          "last": 15
+        },
+        "error_detection": {
+          "timing": "always",
+          "event_contexts": [
+            "instruction_operation",
+            "END"
+          ]
+        },
+        "plc_operation_on_error": "continues_current_mode",
+        "error_LED_on_error": false,
+        "recovery": {
+          "checks": [
+            "applied_instruction_operands",
+            "counterpart_buffer_memory_exists",
+            "extension_cable_connection"
+          ]
+        },
+        "clear_rule": "not_stated"
+      }
+    },
+    {
+      "id": "fx3_small_d8166_unavailable",
+      "devices": [
+        "D8166"
+      ],
+      "models": [
+        "FX3S",
+        "FX3G",
+        "FX3GC"
+      ],
+      "status": "not_applicable",
+      "description": "The device table explicitly excludes D8166 on these CPUs.",
+      "access": "unknown",
+      "value_type": "word",
+      "conditions": [],
+      "notes": [],
+      "search_terms": [
+        "special block error condition",
+        "special block access error",
+        "特殊模块访问错误",
+        "特殊模块错误状态"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual_number": "JY997D16601",
+          "revision": "R",
+          "pdf_pages": [
+            854
+          ],
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d16601/jy997d16601r.pdf"
+        },
+        {
+          "manual_id": "fxcpu_device_common_l",
+          "manual_number": "JY997D26001",
+          "revision": "L",
+          "pdf_pages": [
+            188
+          ],
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d26001/jy997d26001l.pdf"
+        }
+      ],
+      "semantic_facts": {
+        "definition_applicability": false
+      },
+      "gaps": []
+    },
+    {
+      "id": "fx3s_selectable_timer",
+      "devices": [
+        "M8028"
+      ],
+      "models": [
+        "FX3S"
+      ],
+      "status": "source_verified",
+      "description": "ON selects 10 ms resolution for T32..T62; OFF selects 100 ms.",
+      "access": "user",
+      "conditions": [],
+      "notes": [],
+      "search_terms": [
+        "selectable timer",
+        "timer resolution",
+        "定时器时基",
+        "10ms 时基",
+        "10ms时基"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual_number": "JY997D16601",
+          "revision": "R",
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d16601/jy997d16601r.pdf",
+          "pdf_pages": [
+            34,
+            86,
+            100,
+            828
+          ]
+        },
+        {
+          "manual_id": "fxcpu_device_common_l",
+          "manual_number": "JY997D26001",
+          "revision": "L",
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d26001/jy997d26001l.pdf",
+          "pdf_pages": [
+            50,
+            141
+          ]
+        }
+      ],
+      "value_type": "bit",
+      "semantic_facts": {
+        "function": "timer_resolution_select",
+        "range": {
+          "prefix": "T",
+          "first": 32,
+          "last": 62
+        },
+        "on_unit_ms": 10,
+        "off_unit_ms": 100
+      },
+      "gaps": [
+        "control_relay_initial_and_mode_change_state_not_stated"
+      ]
+    },
+    {
+      "id": "fx3_from_to_interrupt",
+      "devices": [
+        "M8028"
+      ],
+      "models": [
+        "FX3G",
+        "FX3GC",
+        "FX3U",
+        "FX3UC"
+      ],
+      "status": "source_verified",
+      "description": "Selects deferred or immediate interrupt acceptance during FROM/TO transfers.",
+      "access": "user",
+      "value_type": "bit",
+      "conditions": [],
+      "notes": [],
+      "search_terms": [
+        "FROM/TO",
+        "interrupt permission",
+        "transfer interrupt",
+        "传送中断",
+        "中断许可"
+      ],
+      "sources": [
+        {
+          "manual_id": "fx3_programming_r",
+          "manual_number": "JY997D16601",
+          "revision": "R",
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d16601/jy997d16601r.pdf",
+          "pdf_pages": [
+            451,
+            454,
+            456,
+            807,
+            828
+          ]
+        },
+        {
+          "manual_id": "fxcpu_device_common_l",
+          "manual_number": "JY997D26001",
+          "revision": "L",
+          "official_url": "https://dl.mitsubishielectric.com/dl/fa/document/manual/plc_fx/jy997d26001/jy997d26001l.pdf",
+          "pdf_pages": [
+            141
+          ]
+        }
+      ],
+      "gaps": [
+        "control_relay_initial_and_mode_change_state_not_stated"
+      ],
+      "semantic_facts": {
+        "function": "interrupt_permission_during_transfer",
+        "instructions": [
+          "FROM",
+          "TO"
+        ],
+        "timer_resolution_control": false,
+        "off": {
+          "interrupt_types": [
+            "input",
+            "timer"
+          ],
+          "during_transfer": "defer",
+          "pending_interrupts": "execute_immediately_after_transfer",
+          "FROM_TO_in_interrupt_program": "allowed"
+        },
+        "on": {
+          "during_transfer": "pause_transfer_and_execute_interrupt",
+          "after_interrupt_return": "resume_transfer",
+          "FROM_TO_in_interrupt_program": "not_allowed"
+        }
+      }
     }
   ]
 }

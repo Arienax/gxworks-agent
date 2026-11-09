@@ -1,6 +1,3 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Route PLC facts; analysis mode is an explicit caller choice, never inferred."""
 from __future__ import annotations
 
@@ -9,8 +6,32 @@ import re
 from collections.abc import Mapping
 from typing import Callable
 from plc.device_identity import REFERENCE_DEVICE_TOKEN_RE as DEVICE_TOKEN_RE, reference_device_tokens as device_tokens
+from plc.instructions import LITERAL_ARITHMETIC_MNEMONIC_PATTERN
 
-_TOKEN = re.compile(r"(?<![A-Za-z0-9_.$])[A-Za-z$][A-Za-z0-9_$]*(?:\.[A-Za-z0-9_$]+)*(?![A-Za-z0-9_$])")
+_TOKEN = re.compile(r"(?<![A-Za-z0-9_.$@+*/-])(?:" + LITERAL_ARITHMETIC_MNEMONIC_PATTERN
+    + r")(?![A-Za-z0-9_.$@+*/-])|(?<![A-Za-z0-9_.$])[A-Za-z$][A-Za-z0-9_$]*(?:\.[A-Za-z0-9_$]+)*(?![A-Za-z0-9_$])", re.I)
+
+
+def instruction_reference_tokens(text, *, resolve_opcode):
+    """Keep literal names, while bare arithmetic symbols need a named lookup."""
+    text = str(text or '')
+    listed = set()
+    for clause in re.split(r'[，,。；;\n]', text):
+        clause = re.sub(r'^\s*(?:使用|采用|查询|查阅|解释|查找|use|lookup)\s*', '', clause, flags=re.I)
+        clause = re.sub(r'\s*(?:指令|instructions?)\s*$', '', clause, flags=re.I)
+        parts = [part.strip('`\"\'') for part in re.split(r'[\s、]+', clause.strip()) if part]
+        if parts and all(resolve_opcode(part) is not None for part in parts):
+            listed.update(part.upper() for part in parts)
+    for token in _TOKEN.finditer(text):
+        raw = token.group()
+        if raw in {'+', '-', '*', '/'} and raw not in listed:
+            before, after = text[:token.start()], text[token.end():]
+            quoted = bool(before[-1:] in {'`', '\"', "'"} and after[:1] == before[-1:])
+            named = (re.search(r'(?:使用|采用|查询|查阅|解释|查找|指令|运算符|算子|\b(?:instruction|operator|opcode|lookup))\s*$', before, re.I)
+                     or re.match(r'\s*(?:指令|运算符|算子|instruction\b|operator\b|opcode\b)', after, re.I))
+            if not (quoted or named):
+                continue
+        yield token
 
 _DEVICE = DEVICE_TOKEN_RE
 _NEGATED = re.compile(
@@ -184,7 +205,7 @@ def route_analysis_request(user_request, confirmed_context=None, *, analysis_mod
     text = "\n".join(part for part in (positive, baseline) if part.strip())
     opcodes, bases = [], set()
     if resolve_opcode is not None:
-        for token in _TOKEN.finditer(instruction_reference_text(text)):
+        for token in instruction_reference_tokens(instruction_reference_text(text), resolve_opcode=resolve_opcode):
             raw_token = token.group()
             if raw_token.upper() == "END" and re.match(r"\s*(?:处理|processing)", text[token.end():], re.I):
                 if not re.search(r"(?:查询|解释|是什么|查阅|lookup|explain|what)", current, re.I):
@@ -245,7 +266,7 @@ _GENERATION_FACT_TOPIC = re.compile(
 )
 
 
-def has_generation_fact_target(query):
+def has_generation_fact_target(query, *, plc_model=None):
     """Select retrieval work only, never analysis mode or program acceptance.
 
     A resolved wiring form is not a request for every manual mentioning its
@@ -259,4 +280,5 @@ def has_generation_fact_target(query):
             or _GENERATION_FACT_TOPIC.search(str(query or ""))):
         return True
     from knowledge.structured_facts import structured_fact_targets
-    return bool(structured_fact_targets(query).get('language_features'))
+    targets = structured_fact_targets(query, plc_model=plc_model)
+    return bool(targets.get('instructions') or targets.get('language_features'))

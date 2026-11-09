@@ -1,6 +1,3 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Shared instruction facts, finite-width expressions and dependency views.
 
 The instruction registry owns these definitions. Source compilation belongs to
@@ -158,6 +155,7 @@ class ValueType:
 
 _COMPARISONS = frozenset({"eq", "ne", "gt", "ge", "lt", "le"})
 _ARITHMETIC = frozenset({"add", "sub", "mul", "div", "mod", "bit_and", "bit_or", "bit_xor", "shift_left", "shift_right"})
+_REAL_ARITHMETIC = frozenset({"add", "sub", "mul", "div"})
 _BOOLEAN = frozenset({"and", "or", "xor"})
 _LEAVES = frozenset({"parameter", "device", "constant", "state"})
 _OPERATORS = _COMPARISONS | _ARITHMETIC | _BOOLEAN | _LEAVES | {"not", "bit_not", "select", "vector", "read"}
@@ -213,9 +211,15 @@ class Expression:
             if op not in {"eq", "ne"} and args[0].value_type.kind == "bool":
                 raise DefinitionError("Ordered boolean comparison is unsupported")
         elif op in _ARITHMETIC:
-            if len(args) != 2 or value_type.kind != "int" or args[0].value_type.kind != "int":
+            if len(args) != 2:
                 raise DefinitionError("Invalid typed arithmetic")
-            if op in {"shift_left", "shift_right"}:
+            if value_type.kind == "real":
+                if (op not in _REAL_ARITHMETIC or any(arg.value_type != value_type for arg in args)
+                        or overflow != "unknown"):
+                    raise DefinitionError("REAL arithmetic needs equal types and separate rounding rules")
+            elif value_type.kind != "int" or args[0].value_type.kind != "int":
+                raise DefinitionError("Invalid typed arithmetic")
+            elif op in {"shift_left", "shift_right"}:
                 if args[0].value_type != value_type or args[1].value_type.kind != "int" or args[1].value_type.signed:
                     raise DefinitionError("Shift amount needs an unsigned integer type")
             elif args[1].value_type != args[0].value_type:
@@ -257,6 +261,8 @@ class Expression:
 def evaluate_expression(expression, values, *, state=None, memory_reader=None):
     """Evaluate the formal subset; unknown overflow/protocol behavior stays unknown."""
     expr = expression if isinstance(expression, Expression) else Expression.from_mapping(expression)
+    if expr.value_type.kind == 'real' and expr.op in _REAL_ARITHMETIC:
+        raise UnknownInstructionSemantics('Floating-point arithmetic rounding and exception rules are not executable')
     if expr.op == "constant":
         return expr.value_type.decode_bits(expr.value)
     if expr.op in {"parameter", "device", "state"}:

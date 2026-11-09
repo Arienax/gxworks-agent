@@ -1,6 +1,3 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """One-hop source annotations over candidates from the existing Retriever.
 
 These are advisory composition evidence, not confirmed engineering requirements.
@@ -26,6 +23,34 @@ def _annotations():
     return json.loads(path.read_text(encoding="utf-8"))["annotations"]
 
 
+def _matches_locator(record, locator):
+    if all(record.get(key) == value for key, value in locator.items()):
+        return True
+    from knowledge.fact_corpus import PUBLICATION_STATUS
+    if (record.get("content_origin") != "authored_fact"
+            or record.get("distribution_status") != PUBLICATION_STATUS
+            or record.get("fact_kind") != "instruction"):
+        return False
+    from knowledge.structured_facts import authored_packet
+    packet = authored_packet(record)
+    opcode = locator.get("instruction_opcode")
+    if (not opcode or record.get("instruction_opcode") != opcode
+            or packet.get("kind") != "instruction" or packet.get("target") != opcode):
+        return False
+    value = packet.get("value") or {}
+    sources = [*value.get("source_materials", []),
+               *(source for fact in value.get("facts", []) for source in fact.get("sources", []))]
+    for source in sources:
+        if not isinstance(source, Mapping):
+            continue
+        if all(key == "instruction_opcode"
+               or source.get(key) == expected
+               or (key == "pdf_page" and expected in source.get("pdf_pages", []))
+               for key, expected in locator.items()):
+            return True
+    return False
+
+
 def annotate_source_records(records):
     """Attach only annotations whose manual/revision/page/opcode actually match.
 
@@ -35,7 +60,7 @@ def annotate_source_records(records):
     result = deepcopy(records)
     for record in result:
         for annotation in _annotations():
-            if all(record.get(key) == value for key, value in annotation["source_locator"].items()):
+            if _matches_locator(record, annotation["source_locator"]):
                 record.setdefault("function_relations", []).extend(deepcopy(annotation["relations"]))
     return result
 

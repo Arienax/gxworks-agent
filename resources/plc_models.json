@@ -662,7 +662,32 @@
         "V": 7,
         "Z": 7
       },
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "word_value_regions": {
+        "C": [
+          {
+            "minimum": 200,
+            "maximum": 255,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "minimum_operand_bits": 32,
+            "sources": [
+              {
+                "manual_id": "fx3_programming_r",
+                "manual_number": "JY997D16601",
+                "revision": "R",
+                "pdf_pages": [
+                  105,
+                  108,
+                  109,
+                  110,
+                  119
+                ]
+              }
+            ]
+          }
+        ]
+      }
     }
   },
   "FX5U": {
@@ -1134,6 +1159,28 @@
             8255
           ]
         ]
+      },
+      "word_value_regions": {
+        "C": [
+          {
+            "minimum": 200,
+            "maximum": 255,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d88101e",
+                "manual_number": "JY992D88101",
+                "revision": "E",
+                "pdf_pages": [
+                  91,
+                  93,
+                  95
+                ]
+              }
+            ]
+          }
+        ]
       }
     }
   },
@@ -1603,7 +1650,33 @@
         "SD": 1023,
         "Z": 9
       },
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 299,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080808engm",
+            "revision": "M",
+            "pdf_page": 378,
+            "related_pdf_pages": [
+              379
+            ],
+            "target_model": "Q00J",
+            "covered_models": [
+              "Q00J"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     }
   },
   "Q03UDV": {
@@ -2097,7 +2170,38 @@
         "SD": 2047,
         "Z": 19
       },
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              343,
+              344,
+              346,
+              347,
+              412
+            ],
+            "target_model": "Q03UDV",
+            "covered_models": [
+              "Q03UDV"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     }
   },
   "Q00UJ": {
@@ -2502,7 +2606,35 @@
         "SM": 2047,
         "SD": 2047
       },
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 511,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              342,
+              412
+            ],
+            "target_model": "Q00UJ",
+            "covered_models": [
+              "Q00UJ"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     }
   },
   "Q00U": {
@@ -2953,7 +3085,35 @@
         "SM": 2047,
         "SD": 2047
       },
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 511,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              342,
+              412
+            ],
+            "target_model": "Q00U",
+            "covered_models": [
+              "Q00U"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     }
   },
   "Q06UDV": {
@@ -3421,7 +3581,38 @@
         "SM": 2047,
         "SD": 2047
       },
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              343,
+              344,
+              346,
+              347,
+              412
+            ],
+            "target_model": "Q06UDV",
+            "covered_models": [
+              "Q06UDV"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     }
   },
   "L02": {
@@ -3896,7 +4087,33 @@
         "SD": 2047,
         "Z": 19
       },
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080889engz",
+            "revision": "Z",
+            "pdf_page": 291,
+            "related_pdf_pages": [
+              338
+            ],
+            "target_model": "L02",
+            "covered_models": [
+              "L02"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     }
   },
   "FX3S": {
@@ -4124,6 +4341,31 @@
             8000,
             8511
           ]
+        ]
+      },
+      "word_value_regions": {
+        "C": [
+          {
+            "minimum": 200,
+            "maximum": 255,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "minimum_operand_bits": 32,
+            "sources": [
+              {
+                "manual_id": "fx3_programming_r",
+                "manual_number": "JY997D16601",
+                "revision": "R",
+                "pdf_pages": [
+                  105,
+                  108,
+                  109,
+                  110,
+                  119
+                ]
+              }
+            ]
+          }
         ]
       }
     }
@@ -4358,6 +4600,31 @@
             8511
           ]
         ]
+      },
+      "word_value_regions": {
+        "C": [
+          {
+            "minimum": 200,
+            "maximum": 255,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "minimum_operand_bits": 32,
+            "sources": [
+              {
+                "manual_id": "fx3_programming_r",
+                "manual_number": "JY997D16601",
+                "revision": "R",
+                "pdf_pages": [
+                  105,
+                  108,
+                  109,
+                  110,
+                  119
+                ]
+              }
+            ]
+          }
+        ]
       }
     }
   },
@@ -4590,6 +4857,31 @@
             8000,
             8511
           ]
+        ]
+      },
+      "word_value_regions": {
+        "C": [
+          {
+            "minimum": 200,
+            "maximum": 255,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "minimum_operand_bits": 32,
+            "sources": [
+              {
+                "manual_id": "fx3_programming_r",
+                "manual_number": "JY997D16601",
+                "revision": "R",
+                "pdf_pages": [
+                  105,
+                  108,
+                  109,
+                  110,
+                  119
+                ]
+              }
+            ]
+          }
         ]
       }
     }
@@ -5071,6 +5363,31 @@
             8000,
             8511
           ]
+        ]
+      },
+      "word_value_regions": {
+        "C": [
+          {
+            "minimum": 200,
+            "maximum": 255,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "minimum_operand_bits": 32,
+            "sources": [
+              {
+                "manual_id": "fx3_programming_r",
+                "manual_number": "JY997D16601",
+                "revision": "R",
+                "pdf_pages": [
+                  105,
+                  108,
+                  109,
+                  110,
+                  119
+                ]
+              }
+            ]
+          }
         ]
       }
     }
@@ -5728,7 +6045,33 @@
         "M": 8191,
         "D": 12287
       },
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080889engz",
+            "revision": "Z",
+            "pdf_page": 291,
+            "related_pdf_pages": [
+              338
+            ],
+            "target_model": "L02-P",
+            "covered_models": [
+              "L02-P"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     }
   },
   "L02/L02-P": {
@@ -6547,7 +6890,59 @@
         "M": 8191,
         "D": 12287
       },
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080889engz",
+            "revision": "Z",
+            "pdf_page": 291,
+            "related_pdf_pages": [
+              338
+            ],
+            "target_model": "L06",
+            "covered_models": [
+              "L06"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      },
+      "program_pointer_auto_assignment": {
+        "status": "source_verified",
+        "kind": "automatic_assignment_capacity",
+        "pointer_points": 32768,
+        "literal_domain_extension_established": false,
+        "allocation_verified": false,
+        "conditions": {
+          "serial_first_five_minimum": "16042",
+          "programming_tool": "GX Works2",
+          "PLC_parameter_setting_required": true
+        },
+        "sources": [
+          {
+            "manual_id": "sh080889engz",
+            "revision": "Z",
+            "pdf_page": 338,
+            "related_pdf_pages": [
+              291
+            ],
+            "target_model": "L06",
+            "covered_models": [
+              "L06"
+            ]
+          }
+        ]
+      }
     }
   },
   "L06-P": {
@@ -6955,7 +7350,59 @@
         "M": 8191,
         "D": 12287
       },
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080889engz",
+            "revision": "Z",
+            "pdf_page": 291,
+            "related_pdf_pages": [
+              338
+            ],
+            "target_model": "L06-P",
+            "covered_models": [
+              "L06-P"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      },
+      "program_pointer_auto_assignment": {
+        "status": "source_verified",
+        "kind": "automatic_assignment_capacity",
+        "pointer_points": 32768,
+        "literal_domain_extension_established": false,
+        "allocation_verified": false,
+        "conditions": {
+          "serial_first_five_minimum": "16042",
+          "programming_tool": "GX Works2",
+          "PLC_parameter_setting_required": true
+        },
+        "sources": [
+          {
+            "manual_id": "sh080889engz",
+            "revision": "Z",
+            "pdf_page": 338,
+            "related_pdf_pages": [
+              291
+            ],
+            "target_model": "L06-P",
+            "covered_models": [
+              "L06-P"
+            ]
+          }
+        ]
+      }
     }
   },
   "L06/L06-P": {
@@ -7774,7 +8221,59 @@
         "M": 8191,
         "D": 12287
       },
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080889engz",
+            "revision": "Z",
+            "pdf_page": 291,
+            "related_pdf_pages": [
+              338
+            ],
+            "target_model": "L26",
+            "covered_models": [
+              "L26"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      },
+      "program_pointer_auto_assignment": {
+        "status": "source_verified",
+        "kind": "automatic_assignment_capacity",
+        "pointer_points": 32768,
+        "literal_domain_extension_established": false,
+        "allocation_verified": false,
+        "conditions": {
+          "serial_first_five_minimum": "16042",
+          "programming_tool": "GX Works2",
+          "PLC_parameter_setting_required": true
+        },
+        "sources": [
+          {
+            "manual_id": "sh080889engz",
+            "revision": "Z",
+            "pdf_page": 338,
+            "related_pdf_pages": [
+              291
+            ],
+            "target_model": "L26",
+            "covered_models": [
+              "L26"
+            ]
+          }
+        ]
+      }
     }
   },
   "L26-P": {
@@ -8182,7 +8681,59 @@
         "M": 8191,
         "D": 12287
       },
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080889engz",
+            "revision": "Z",
+            "pdf_page": 291,
+            "related_pdf_pages": [
+              338
+            ],
+            "target_model": "L26-P",
+            "covered_models": [
+              "L26-P"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      },
+      "program_pointer_auto_assignment": {
+        "status": "source_verified",
+        "kind": "automatic_assignment_capacity",
+        "pointer_points": 32768,
+        "literal_domain_extension_established": false,
+        "allocation_verified": false,
+        "conditions": {
+          "serial_first_five_minimum": "16042",
+          "programming_tool": "GX Works2",
+          "PLC_parameter_setting_required": true
+        },
+        "sources": [
+          {
+            "manual_id": "sh080889engz",
+            "revision": "Z",
+            "pdf_page": 338,
+            "related_pdf_pages": [
+              291
+            ],
+            "target_model": "L26-P",
+            "covered_models": [
+              "L26-P"
+            ]
+          }
+        ]
+      }
     }
   },
   "L26/L26-P": {
@@ -9034,7 +9585,38 @@
         "M": 8191,
         "D": 12287
       },
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              343,
+              344,
+              346,
+              347,
+              412
+            ],
+            "target_model": "Q06UDEH",
+            "covered_models": [
+              "Q06UDEH"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     }
   },
   "Q00": {
@@ -9376,7 +9958,33 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 299,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080808engm",
+            "revision": "M",
+            "pdf_page": 378,
+            "related_pdf_pages": [
+              379
+            ],
+            "target_model": "Q00",
+            "covered_models": [
+              "Q00"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -9719,7 +10327,33 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 299,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080808engm",
+            "revision": "M",
+            "pdf_page": 378,
+            "related_pdf_pages": [
+              379
+            ],
+            "target_model": "Q01",
+            "covered_models": [
+              "Q01"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -10152,7 +10786,35 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 511,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              342,
+              412
+            ],
+            "target_model": "Q01U",
+            "covered_models": [
+              "Q01U"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -10883,7 +11545,31 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080808engm",
+            "revision": "M",
+            "pdf_page": 380,
+            "related_pdf_pages": [],
+            "target_model": "Q02",
+            "covered_models": [
+              "Q02"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -11247,7 +11933,31 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080808engm",
+            "revision": "M",
+            "pdf_page": 380,
+            "related_pdf_pages": [],
+            "target_model": "Q02H",
+            "covered_models": [
+              "Q02H"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -11611,7 +12321,31 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080808engm",
+            "revision": "M",
+            "pdf_page": 380,
+            "related_pdf_pages": [],
+            "target_model": "Q02PH",
+            "covered_models": [
+              "Q02PH"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -12045,7 +12779,38 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              343,
+              344,
+              346,
+              347,
+              412
+            ],
+            "target_model": "Q02U",
+            "covered_models": [
+              "Q02U"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -12479,7 +13244,38 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              343,
+              344,
+              346,
+              347,
+              412
+            ],
+            "target_model": "Q03UD",
+            "covered_models": [
+              "Q03UD"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -12913,7 +13709,38 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              343,
+              344,
+              346,
+              347,
+              412
+            ],
+            "target_model": "Q03UDE",
+            "covered_models": [
+              "Q03UDE"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -13347,7 +14174,38 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              343,
+              344,
+              346,
+              347,
+              412
+            ],
+            "target_model": "Q04UDH",
+            "covered_models": [
+              "Q04UDH"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -13781,7 +14639,38 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              343,
+              344,
+              346,
+              347,
+              412
+            ],
+            "target_model": "Q04UDEH",
+            "covered_models": [
+              "Q04UDEH"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -14227,7 +15116,38 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              343,
+              344,
+              346,
+              347,
+              412
+            ],
+            "target_model": "Q04UDV",
+            "covered_models": [
+              "Q04UDV"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -14673,7 +15593,38 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              343,
+              344,
+              346,
+              347,
+              412
+            ],
+            "target_model": "Q04UDPV",
+            "covered_models": [
+              "Q04UDPV"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -15037,7 +15988,31 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080808engm",
+            "revision": "M",
+            "pdf_page": 380,
+            "related_pdf_pages": [],
+            "target_model": "Q06H",
+            "covered_models": [
+              "Q06H"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -15401,7 +16376,31 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080808engm",
+            "revision": "M",
+            "pdf_page": 380,
+            "related_pdf_pages": [],
+            "target_model": "Q06PH",
+            "covered_models": [
+              "Q06PH"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -15835,7 +16834,38 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              343,
+              344,
+              346,
+              347,
+              412
+            ],
+            "target_model": "Q06UDH",
+            "covered_models": [
+              "Q06UDH"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -16281,7 +17311,38 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              343,
+              344,
+              346,
+              347,
+              412
+            ],
+            "target_model": "Q06UDPV",
+            "covered_models": [
+              "Q06UDPV"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -16715,7 +17776,38 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              343,
+              344,
+              346,
+              347,
+              412
+            ],
+            "target_model": "Q10UDH",
+            "covered_models": [
+              "Q10UDH"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -17149,7 +18241,38 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              343,
+              344,
+              346,
+              347,
+              412
+            ],
+            "target_model": "Q10UDEH",
+            "covered_models": [
+              "Q10UDEH"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -17513,7 +18636,31 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080808engm",
+            "revision": "M",
+            "pdf_page": 380,
+            "related_pdf_pages": [],
+            "target_model": "Q12H",
+            "covered_models": [
+              "Q12H"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -17877,7 +19024,31 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080808engm",
+            "revision": "M",
+            "pdf_page": 380,
+            "related_pdf_pages": [],
+            "target_model": "Q12PH",
+            "covered_models": [
+              "Q12PH"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -18241,7 +19412,31 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080808engm",
+            "revision": "M",
+            "pdf_page": 380,
+            "related_pdf_pages": [],
+            "target_model": "Q12PRH",
+            "covered_models": [
+              "Q12PRH"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -18675,7 +19870,38 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              343,
+              344,
+              346,
+              347,
+              412
+            ],
+            "target_model": "Q13UDH",
+            "covered_models": [
+              "Q13UDH"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -19109,7 +20335,38 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              343,
+              344,
+              346,
+              347,
+              412
+            ],
+            "target_model": "Q13UDEH",
+            "covered_models": [
+              "Q13UDEH"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -19561,7 +20818,38 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              343,
+              344,
+              346,
+              347,
+              412
+            ],
+            "target_model": "Q13UDV",
+            "covered_models": [
+              "Q13UDV"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -20013,7 +21301,38 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              343,
+              344,
+              346,
+              347,
+              412
+            ],
+            "target_model": "Q13UDPV",
+            "covered_models": [
+              "Q13UDPV"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -20447,7 +21766,38 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              343,
+              344,
+              346,
+              347,
+              412
+            ],
+            "target_model": "Q20UDH",
+            "covered_models": [
+              "Q20UDH"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -20881,7 +22231,38 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              343,
+              344,
+              346,
+              347,
+              412
+            ],
+            "target_model": "Q20UDEH",
+            "covered_models": [
+              "Q20UDEH"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -21245,7 +22626,31 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080808engm",
+            "revision": "M",
+            "pdf_page": 380,
+            "related_pdf_pages": [],
+            "target_model": "Q25H",
+            "covered_models": [
+              "Q25H"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -21609,7 +23014,31 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080808engm",
+            "revision": "M",
+            "pdf_page": 380,
+            "related_pdf_pages": [],
+            "target_model": "Q25PH",
+            "covered_models": [
+              "Q25PH"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -21973,7 +23402,31 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080808engm",
+            "revision": "M",
+            "pdf_page": 380,
+            "related_pdf_pages": [],
+            "target_model": "Q25PRH",
+            "covered_models": [
+              "Q25PRH"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -22407,7 +23860,38 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              343,
+              344,
+              346,
+              347,
+              412
+            ],
+            "target_model": "Q26UDH",
+            "covered_models": [
+              "Q26UDH"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -22841,7 +24325,38 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              343,
+              344,
+              346,
+              347,
+              412
+            ],
+            "target_model": "Q26UDEH",
+            "covered_models": [
+              "Q26UDEH"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -23293,7 +24808,38 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              343,
+              344,
+              346,
+              347,
+              412
+            ],
+            "target_model": "Q26UDV",
+            "covered_models": [
+              "Q26UDV"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -23745,7 +25291,38 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 340,
+            "related_pdf_pages": [
+              341,
+              343,
+              344,
+              346,
+              347,
+              412
+            ],
+            "target_model": "Q26UDPV",
+            "covered_models": [
+              "Q26UDPV"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -24179,7 +25756,35 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 8191,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 343,
+            "related_pdf_pages": [
+              344,
+              345,
+              412
+            ],
+            "target_model": "Q50UDEH",
+            "covered_models": [
+              "Q50UDEH"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -24613,7 +26218,35 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 8191,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080807engaf",
+            "revision": "AF",
+            "pdf_page": 343,
+            "related_pdf_pages": [
+              344,
+              345,
+              412
+            ],
+            "target_model": "Q100UDEH",
+            "covered_models": [
+              "Q100UDEH"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -25418,7 +27051,33 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080889engz",
+            "revision": "Z",
+            "pdf_page": 291,
+            "related_pdf_pages": [
+              338
+            ],
+            "target_model": "L02S",
+            "covered_models": [
+              "L02S"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -25819,7 +27478,33 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080889engz",
+            "revision": "Z",
+            "pdf_page": 291,
+            "related_pdf_pages": [
+              338
+            ],
+            "target_model": "L02S-P",
+            "covered_models": [
+              "L02S-P"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -26624,7 +28309,59 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080889engz",
+            "revision": "Z",
+            "pdf_page": 291,
+            "related_pdf_pages": [
+              338
+            ],
+            "target_model": "L26-BT",
+            "covered_models": [
+              "L26-BT"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      },
+      "program_pointer_auto_assignment": {
+        "status": "source_verified",
+        "kind": "automatic_assignment_capacity",
+        "pointer_points": 32768,
+        "literal_domain_extension_established": false,
+        "allocation_verified": false,
+        "conditions": {
+          "serial_first_five_minimum": "16042",
+          "programming_tool": "GX Works2",
+          "PLC_parameter_setting_required": true
+        },
+        "sources": [
+          {
+            "manual_id": "sh080889engz",
+            "revision": "Z",
+            "pdf_page": 338,
+            "related_pdf_pages": [
+              291
+            ],
+            "target_model": "L26-BT",
+            "covered_models": [
+              "L26-BT"
+            ]
+          }
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -27025,7 +28762,59 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "program_pointer_domain": {
+        "status": "source_verified",
+        "kind": "program_pointer_identity",
+        "prefix": "P",
+        "radix": 10,
+        "minimum_number": 0,
+        "maximum_number": 4095,
+        "allocation_verified": false,
+        "sources": [
+          {
+            "manual_id": "sh080889engz",
+            "revision": "Z",
+            "pdf_page": 291,
+            "related_pdf_pages": [
+              338
+            ],
+            "target_model": "L26-PBT",
+            "covered_models": [
+              "L26-PBT"
+            ]
+          }
+        ],
+        "project_requirements": [
+          "Local pointer allocation across programs and configured common-pointer start require current project context."
+        ]
+      },
+      "program_pointer_auto_assignment": {
+        "status": "source_verified",
+        "kind": "automatic_assignment_capacity",
+        "pointer_points": 32768,
+        "literal_domain_extension_established": false,
+        "allocation_verified": false,
+        "conditions": {
+          "serial_first_five_minimum": "16042",
+          "programming_tool": "GX Works2",
+          "PLC_parameter_setting_required": true
+        },
+        "sources": [
+          {
+            "manual_id": "sh080889engz",
+            "revision": "Z",
+            "pdf_page": 338,
+            "related_pdf_pages": [
+              291
+            ],
+            "target_model": "L26-PBT",
+            "covered_models": [
+              "L26-PBT"
+            ]
+          }
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -27481,7 +29270,137 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "word_value_regions": {
+        "C": [
+          {
+            "minimum": 235,
+            "maximum": 238,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d48301j",
+                "manual_number": "JY992D48301",
+                "revision": "J",
+                "pdf_pages": [
+                  93,
+                  95,
+                  97
+                ]
+              }
+            ]
+          },
+          {
+            "minimum": 241,
+            "maximum": 242,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d48301j",
+                "manual_number": "JY992D48301",
+                "revision": "J",
+                "pdf_pages": [
+                  93,
+                  95,
+                  97
+                ]
+              }
+            ]
+          },
+          {
+            "minimum": 244,
+            "maximum": 244,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d48301j",
+                "manual_number": "JY992D48301",
+                "revision": "J",
+                "pdf_pages": [
+                  93,
+                  95,
+                  97
+                ]
+              }
+            ]
+          },
+          {
+            "minimum": 246,
+            "maximum": 247,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d48301j",
+                "manual_number": "JY992D48301",
+                "revision": "J",
+                "pdf_pages": [
+                  93,
+                  95,
+                  97
+                ]
+              }
+            ]
+          },
+          {
+            "minimum": 249,
+            "maximum": 249,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d48301j",
+                "manual_number": "JY992D48301",
+                "revision": "J",
+                "pdf_pages": [
+                  93,
+                  95,
+                  97
+                ]
+              }
+            ]
+          },
+          {
+            "minimum": 251,
+            "maximum": 252,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d48301j",
+                "manual_number": "JY992D48301",
+                "revision": "J",
+                "pdf_pages": [
+                  93,
+                  95,
+                  97
+                ]
+              }
+            ]
+          },
+          {
+            "minimum": 254,
+            "maximum": 254,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d48301j",
+                "manual_number": "JY992D48301",
+                "revision": "J",
+                "pdf_pages": [
+                  93,
+                  95,
+                  97
+                ]
+              }
+            ]
+          }
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -27708,7 +29627,137 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "word_value_regions": {
+        "C": [
+          {
+            "minimum": 235,
+            "maximum": 238,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d48301j",
+                "manual_number": "JY992D48301",
+                "revision": "J",
+                "pdf_pages": [
+                  93,
+                  95,
+                  97
+                ]
+              }
+            ]
+          },
+          {
+            "minimum": 241,
+            "maximum": 242,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d48301j",
+                "manual_number": "JY992D48301",
+                "revision": "J",
+                "pdf_pages": [
+                  93,
+                  95,
+                  97
+                ]
+              }
+            ]
+          },
+          {
+            "minimum": 244,
+            "maximum": 244,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d48301j",
+                "manual_number": "JY992D48301",
+                "revision": "J",
+                "pdf_pages": [
+                  93,
+                  95,
+                  97
+                ]
+              }
+            ]
+          },
+          {
+            "minimum": 246,
+            "maximum": 247,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d48301j",
+                "manual_number": "JY992D48301",
+                "revision": "J",
+                "pdf_pages": [
+                  93,
+                  95,
+                  97
+                ]
+              }
+            ]
+          },
+          {
+            "minimum": 249,
+            "maximum": 249,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d48301j",
+                "manual_number": "JY992D48301",
+                "revision": "J",
+                "pdf_pages": [
+                  93,
+                  95,
+                  97
+                ]
+              }
+            ]
+          },
+          {
+            "minimum": 251,
+            "maximum": 252,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d48301j",
+                "manual_number": "JY992D48301",
+                "revision": "J",
+                "pdf_pages": [
+                  93,
+                  95,
+                  97
+                ]
+              }
+            ]
+          },
+          {
+            "minimum": 254,
+            "maximum": 254,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d48301j",
+                "manual_number": "JY992D48301",
+                "revision": "J",
+                "pdf_pages": [
+                  93,
+                  95,
+                  97
+                ]
+              }
+            ]
+          }
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -27949,7 +29998,137 @@
           "printed_point_count": 84,
           "resolution": "Keep the printed address ceiling; do not infer installed input count from it."
         }
-      ]
+      ],
+      "word_value_regions": {
+        "C": [
+          {
+            "minimum": 235,
+            "maximum": 238,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d48301j",
+                "manual_number": "JY992D48301",
+                "revision": "J",
+                "pdf_pages": [
+                  93,
+                  95,
+                  97
+                ]
+              }
+            ]
+          },
+          {
+            "minimum": 241,
+            "maximum": 242,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d48301j",
+                "manual_number": "JY992D48301",
+                "revision": "J",
+                "pdf_pages": [
+                  93,
+                  95,
+                  97
+                ]
+              }
+            ]
+          },
+          {
+            "minimum": 244,
+            "maximum": 244,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d48301j",
+                "manual_number": "JY992D48301",
+                "revision": "J",
+                "pdf_pages": [
+                  93,
+                  95,
+                  97
+                ]
+              }
+            ]
+          },
+          {
+            "minimum": 246,
+            "maximum": 247,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d48301j",
+                "manual_number": "JY992D48301",
+                "revision": "J",
+                "pdf_pages": [
+                  93,
+                  95,
+                  97
+                ]
+              }
+            ]
+          },
+          {
+            "minimum": 249,
+            "maximum": 249,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d48301j",
+                "manual_number": "JY992D48301",
+                "revision": "J",
+                "pdf_pages": [
+                  93,
+                  95,
+                  97
+                ]
+              }
+            ]
+          },
+          {
+            "minimum": 251,
+            "maximum": 252,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d48301j",
+                "manual_number": "JY992D48301",
+                "revision": "J",
+                "pdf_pages": [
+                  93,
+                  95,
+                  97
+                ]
+              }
+            ]
+          },
+          {
+            "minimum": 254,
+            "maximum": 254,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d48301j",
+                "manual_number": "JY992D48301",
+                "revision": "J",
+                "pdf_pages": [
+                  93,
+                  95,
+                  97
+                ]
+              }
+            ]
+          }
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -28136,7 +30315,29 @@
           "manual_section": "8.3",
           "later_FX_versions_use_section": "8.4"
         }
-      ]
+      ],
+      "word_value_regions": {
+        "C": [
+          {
+            "minimum": 200,
+            "maximum": 255,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d48301j",
+                "manual_number": "JY992D48301",
+                "revision": "J",
+                "pdf_pages": [
+                  93,
+                  95,
+                  97
+                ]
+              }
+            ]
+          }
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -28342,7 +30543,29 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "word_value_regions": {
+        "C": [
+          {
+            "minimum": 235,
+            "maximum": 255,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d88101e",
+                "manual_number": "JY992D88101",
+                "revision": "E",
+                "pdf_pages": [
+                  91,
+                  93,
+                  95
+                ]
+              }
+            ]
+          }
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -28726,7 +30949,29 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "word_value_regions": {
+        "C": [
+          {
+            "minimum": 200,
+            "maximum": 255,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d88101e",
+                "manual_number": "JY992D88101",
+                "revision": "E",
+                "pdf_pages": [
+                  91,
+                  93,
+                  95
+                ]
+              }
+            ]
+          }
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -29149,7 +31394,29 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "word_value_regions": {
+        "C": [
+          {
+            "minimum": 200,
+            "maximum": 255,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d48301j",
+                "manual_number": "JY992D48301",
+                "revision": "J",
+                "pdf_pages": [
+                  93,
+                  95,
+                  97
+                ]
+              }
+            ]
+          }
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -29368,7 +31635,29 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "word_value_regions": {
+        "C": [
+          {
+            "minimum": 200,
+            "maximum": 255,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d48301j",
+                "manual_number": "JY992D48301",
+                "revision": "J",
+                "pdf_pages": [
+                  93,
+                  95,
+                  97
+                ]
+              }
+            ]
+          }
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -29752,7 +32041,29 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "word_value_regions": {
+        "C": [
+          {
+            "minimum": 200,
+            "maximum": 255,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d88101e",
+                "manual_number": "JY992D88101",
+                "revision": "E",
+                "pdf_pages": [
+                  91,
+                  93,
+                  95
+                ]
+              }
+            ]
+          }
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   },
@@ -29943,7 +32254,29 @@
       "special_access": {},
       "native_read_prefixes": [],
       "native_device_limits": {},
-      "native_device_regions": {}
+      "native_device_regions": {},
+      "word_value_regions": {
+        "C": [
+          {
+            "minimum": 200,
+            "maximum": 255,
+            "bits": 32,
+            "value_kind": "counter_current_value",
+            "sources": [
+              {
+                "manual_id": "jy992d88101e",
+                "manual_number": "JY992D88101",
+                "revision": "E",
+                "pdf_pages": [
+                  91,
+                  93,
+                  95
+                ]
+              }
+            ]
+          }
+        ]
+      }
     },
     "notes": "Numbering limits are not default allocations. Current PLC parameters, hardware capacity and instruction-specific access conditions must also be satisfied."
   }

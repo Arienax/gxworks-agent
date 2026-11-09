@@ -1,6 +1,3 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Unified local/deep inspection orchestration for ladder versions."""
 
 import json
@@ -191,9 +188,15 @@ def _static_findings(ladder, confirmed_spec, plc_model):
     )
     findings = []
     from plc.instruction_constraints import inspect_ladder_constraints
+    from plc.validation import _confirmed_instruction_versions
+    context = {**(confirmed_spec or {}),
+               'project': (confirmed_spec or {}).get('project_context', {}),
+               'hardware': (confirmed_spec or {}).get('hardware_profile', {})}
+    for key in ('cpu_version', 'software_version'):
+        context.pop(key, None)
+    context.update(_confirmed_instruction_versions(confirmed_spec))
     for report in inspect_ladder_constraints(ladder, plc_model=plc_model,
-            context={**(confirmed_spec or {}), 'project': (confirmed_spec or {}).get('project_context', {}),
-                     'hardware': (confirmed_spec or {}).get('hardware_profile', {})}):
+            context=context):
         for finding in report['findings']:
             findings.append({'source': 'local', 'code': finding['code'],
                 'severity': 'error' if finding['severity'] == 'error' else 'info',

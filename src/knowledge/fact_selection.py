@@ -9,13 +9,14 @@ import copy
 import json
 import re
 from collections.abc import Mapping
-from plc.instruction_definition import DefinitionError, select_fact_dependencies
+from plc.instruction_definition import DEFINITION_DIMENSIONS, DefinitionError, select_fact_dependencies
 
 _ALIASES = {
     'arity': ('parameters.arity', 'parameters.typed_operands'),
     'order': ('parameters.order', 'parameters.source_order', 'parameters.typed_operands'),
-    'roles': ('parameters.roles', 'parameters.typed_operands'),
-    'types': ('parameters.types', 'parameters.value_type', 'parameters.storage_domain', 'parameters.typed_operands'),
+    'roles': ('parameters.roles', 'parameters.operand_roles', 'parameters.typed_operands'),
+    'types': ('parameters.types', 'parameters.value_type', 'parameters.storage_domain',
+              'parameters.width', 'parameters.source_width', 'parameters.typed_operands'),
     'devices': ('parameters.devices', 'constraints.operand_devices'),
     'st_call': ('parameters.st_signature', 'parameters.language_expression'),
     'fbd_call': ('parameters.fbd_signature', 'parameters.fbd_pins', 'parameters.language_expression'),
@@ -38,6 +39,8 @@ def _wanted(fact, aspects, *, include_mandatory=True):
     if include_mandatory and set(aspects).intersection(_FACETS) and dimension in {'parameters.arity', 'parameters.order', 'parameters.source_order', 'parameters.typed_operands'}:
         return True
     for aspect in aspects:
+        if aspect == 'programming_semantics' and dimension.split('.', 1)[0] in DEFINITION_DIMENSIONS:
+            return True
         if dimension == aspect or dimension.startswith(aspect + '.') or dimension in _ALIASES.get(aspect, ()) or any(dimension.startswith(p) for p in _PREFIXES.get(aspect, ())):
             return True
         if aspect in _FACETS and (dimension.endswith('.' + _FACETS[aspect]) or
@@ -99,9 +102,19 @@ def project_packet(packet, *, plc_model, language=None, aspects=None, project_mo
     context = copy.deepcopy(dict(instance_context)) if isinstance(instance_context, Mapping) else {}
     context.pop('memory_reader', None)  # Retrieval never executes a caller-supplied memory reader.
     context['$PLC_MODEL'] = model
+    context['$LANGUAGE'] = language
     if project_mode is not None: context['project_mode'] = project_mode
     aspects = list(dict.fromkeys([aspects] if isinstance(aspects, str) else aspects or ()))
     facts = value['facts']
+    from plc.instruction_constraints import bind_operand_signature
+    context.pop('$OPERAND_ROLES', None)
+    try:
+        signature = bind_operand_signature(facts, target=opcode, plc_model=model, language=language,
+                                           version=version, context=context)
+    except DefinitionError:
+        signature = None  # The dependency selector below reports malformed graphs.
+    if signature is not None:
+        context['$OPERAND_ROLES'] = signature
     by_id = {f.get('id'): f for f in facts}
     gaps, roots, selected = [], [], set()
     if len(by_id) != len(facts):
@@ -150,7 +163,7 @@ def project_packet(packet, *, plc_model, language=None, aspects=None, project_mo
     positions = set()
     if len(signatures) > 1:
         gaps.append({'reason': 'ambiguous_operand_order'})
-    elif signatures and not unsafe_signature:
+    elif signatures and not unsafe_signature and 'programming_semantics' not in aspects:
         for index, symbol in enumerate(next(iter(signatures)), start=1):
             if isinstance(symbol, str) and re.search(r'(?<![A-Za-z0-9_])' + re.escape(symbol) + r'(?![A-Za-z0-9_])', str(query or ''), re.I):
                 positions.add(index)
@@ -162,6 +175,19 @@ def project_packet(packet, *, plc_model, language=None, aspects=None, project_mo
     for aspect in aspects:
         if not any(_wanted(by_id[identity], [aspect], include_mandatory=False) for identity in roots):
             gaps.append({'reason': 'requested_aspect_not_selected', 'aspect': aspect})
+    if signature is not None and any(
+            condition.get('kind') == 'operand_form'
+            for identity in roots for condition in by_id[identity].get('conditions', ())
+            if isinstance(condition, Mapping)):
+        # A narrow effects query still needs the signature used to resolve a
+        # structural operand-form condition. Include its original closure;
+        # do not manufacture a new source dependency or discard the condition.
+        for identity, fact in by_id.items():
+            if (fact.get('dimension') == 'parameters.typed_operands'
+                    and tuple(str(p.get('name', '')).upper() for p in fact.get('value', {}).get('operands', [])) == signature
+                    and fact.get('verification') == 'source_checked' and signature_complete(identity)
+                    and identity not in roots):
+                roots.append(identity)
     if owner_mismatch: gaps.append({'reason': 'owner_model_not_requested'})
     # Complete prerequisites from this retrieval's same-owner pool only.
     # Added prerequisites never become extra task roots.

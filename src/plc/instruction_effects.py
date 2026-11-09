@@ -1,7 +1,4 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
-"""Executable, bounded behavior primitives owned by instruction definitions.
+"""Typed, bounded behavior primitives owned by instruction definitions.
 
 This is a reference for the explicitly described subset, not a PLC simulator.
 External actions produce contract observations; they never perform hardware I/O.
@@ -25,6 +22,7 @@ BEHAVIOR_KINDS = frozenset({
 
 
 def validate_behavior(raw):
+    """Validate the relation structure; execution can still be unimplemented."""
     if not isinstance(raw, Mapping) or raw.get("behavior") not in BEHAVIOR_KINDS:
         raise UnknownInstructionSemantics("Behavior has not been formalized")
     value = copy.deepcopy(dict(raw))

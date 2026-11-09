@@ -130,8 +130,14 @@ class OwnerDefinitionStore:
             raise ValueError('Owner store changed; reload checking context')
 
     @property
+    def definition_metadata(self):
+        """Read catalogue metadata without hydrating unrelated language facts."""
+        self._check()
+        return copy.deepcopy(self._metadata)
+
+    @property
     def metadata(self):
-        result = copy.deepcopy(self._metadata)
+        result = self.definition_metadata
         result['language_facts'] = self.language_features()
         return result
 
@@ -152,7 +158,7 @@ class OwnerDefinitionStore:
         if not isinstance(key, (tuple, list)) or len(key) != 3:
             raise ValueError('Expected vendor/opcode/model owner key')
         key = (str(key[0]).lower(), str(key[1]).upper(), str(key[2]).upper())
-        fields = ('call_available', 'call_admission_reason', 'call_admission_details')
+        fields = ('call_available', 'support_status', 'call_admission_reason', 'call_admission_details')
         selections = ','.join(
             "json_type(d.payload_json,'$.value.%s'),json_extract(d.payload_json,'$.value.%s')" % (field, field)
             for field in fields)
@@ -177,6 +183,59 @@ class OwnerDefinitionStore:
                     value = kind == 'true'
                 result[field] = value
             return result
+
+    def expression_owner_keys(self, token, *, cpu, vendor='mitsubishi'):
+        """Find source-declared token aliases without hydrating owner facts."""
+        with self._lock:
+            self._check()
+            return self._db.execute(
+                "SELECT i.vendor,i.opcode,i.target_model FROM runtime_owner_index i "
+                "JOIN runtime_definitions d ON d.owner=i.owner "
+                "WHERE i.vendor=? AND i.target_model=? "
+                "AND json_type(d.payload_json,'$.value.call_available')='true' "
+                "AND json_type(d.payload_json,'$.value.call_admission_details.structured_expression.available')='true' "
+                "AND json_extract(d.payload_json,'$.value.call_admission_details.structured_expression.call_kind')='expression' "
+                "AND json_extract(d.payload_json,'$.value.call_admission_details.structured_expression.operator')=? "
+                "LIMIT 2", (str(vendor).lower(), str(cpu).upper(), str(token).upper())).fetchall()
+
+    def iter_language_headers(self):
+        """Expose validated lookup identities; validate bodies when selected."""
+        with self._lock:
+            self._check()
+            rows = self._db.execute('SELECT target,payload_json,sha256 FROM runtime_language_features ORDER BY target').fetchall()
+        from knowledge.runtime_fact_publication import validate_language_feature
+        for target, text, digest in rows:
+            if hashlib.sha256(text.encode()).hexdigest() != digest:
+                raise ValueError('Altered language feature')
+            feature = json.loads(text)
+            if feature.get('target') != target:
+                raise ValueError('Wrong language feature identity')
+            header = {key: copy.deepcopy(feature[key]) for key in ('target', 'language', 'models', 'aliases') if key in feature}
+            header.setdefault('aliases', [])
+            validate_language_feature(header, published=False)
+            yield header
+
+    def _language_rebuild_source(self, target):
+        """Offline compiler input; the replacement still needs full publication validation."""
+        with self._lock:
+            self._check()
+            row = self._db.execute('SELECT payload_json,sha256 FROM runtime_language_features WHERE target=?', (target,)).fetchone()
+        if row is None:
+            return None
+        text, digest = row
+        if hashlib.sha256(text.encode()).hexdigest() != digest:
+            raise ValueError('Altered language feature')
+        feature = json.loads(text)
+        if feature.get('target') != target:
+            raise ValueError('Wrong language feature identity')
+        return feature
+
+    def language_feature(self, target):
+        feature = self._language_rebuild_source(target)
+        if feature is not None:
+            from knowledge.runtime_fact_publication import validate_language_feature
+            validate_language_feature(feature, published=True)
+        return feature
 
     def language_features(self):
         with self._lock:

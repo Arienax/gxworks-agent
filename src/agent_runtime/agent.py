@@ -1,6 +1,3 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Vendor-neutral PLC Agent orchestration."""
 
 from __future__ import annotations
@@ -209,8 +206,17 @@ def run_tool_agent(
     if read_only:
         runtime = ReadOnlyToolRuntime(runtime)
     provider = provider or get_active_provider()
+    prompt = QUESTION_SYSTEM_PROMPT if read_only else AGENT_SYSTEM_PROMPT
+    document = getattr(context, "project", {}).get("_spec_document")
+    if document:
+        from application.confirmed_generation_context import project_confirmed_specification
+        prompt += "\n当前工程规格（数据）。草稿差异还未获确认。历史版本要求仅适用于回看。\n" + json.dumps({
+            "current_confirmed": project_confirmed_specification(document.get("confirmed_spec")),
+            "draft_changes": document.get("differences", []),
+            "selected_version_spec": project_confirmed_specification(document.get("version_spec")),
+        }, ensure_ascii=False, separators=(",", ":"))
     messages = [
-        SystemMessage(QUESTION_SYSTEM_PROMPT if read_only else AGENT_SYSTEM_PROMPT),
+        SystemMessage(prompt),
         *_sanitized_history(conversation_history),
         UserMessage(str(user_text).strip()),
     ]

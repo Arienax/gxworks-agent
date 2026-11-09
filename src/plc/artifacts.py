@@ -1,6 +1,3 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Deterministic artifacts shared by PLC Core and debug workflows.
 
 No models, application orchestration, UI, or external execution is loaded here.
@@ -11,7 +8,7 @@ import json
 
 from plc.errors import DebugLoopError
 from plc.ir import validate_plc_ir, ir_to_ladder
-from plc.st_renderer import render_plc_ir_to_st, validate_st_traceability
+from plc.st_renderer import render_optional_plc_ir_to_st, validate_st_traceability
 from rendering.ladder_svg import AdvancedSVGLadder
 from gxworks2.csv_export import generate_gx_works2_csv
 
@@ -20,12 +17,14 @@ def render_candidate_artifacts(
     output_dir: Path,
     *,
     validate_ladder: bool = True,
+    include_st_translation: bool = False,
 ) -> Dict[str, str]:
     """Render user-facing/backend artifacts from a consistent IR.
 
     Direct confirmed-spec generation can pass ``validate_ladder=False`` because
     semantic/style acceptance is deliberately deferred to Review/simulation/GX.
     Debug and patch workflows retain the historical strict default.
+    Derived ST is an internal opt-in and is not part of normal Ladder delivery.
     """
 
     validate_plc_ir(program, validate_ladder=validate_ladder)
@@ -45,9 +44,10 @@ def render_candidate_artifacts(
     if is_ordered_ladder(ladder):
         svg_path.write_text(AdvancedSVGLadder().generate_ladder(ladder_text), encoding='utf-8')
         return {'json': ladder_path.name, 'ir': ir_path.name, 'svg': svg_path.name}
-    st_text = render_plc_ir_to_st(program)
-    validate_st_traceability(program, st_text)
-    st_path.write_text(st_text, encoding="utf-8")
+    st_text = render_optional_plc_ir_to_st(program) if include_st_translation else None
+    if st_text is not None:
+        validate_st_traceability(program, st_text)
+        st_path.write_text(st_text, encoding="utf-8")
     drawer = AdvancedSVGLadder()
     svg_path.write_text(drawer.generate_ladder(ladder_text), encoding="utf-8")
     if not generate_gx_works2_csv(program, str(program_csv), str(comment_csv)):
@@ -58,7 +58,7 @@ def render_candidate_artifacts(
         "json": ladder_path.name,
         "ir": ir_path.name,
         "svg": svg_path.name,
-        "st_from_ir": st_path.name,
+        **({"st_from_ir": st_path.name} if st_text is not None else {}),
         "program_csv": program_csv.name,
         "comment_csv": comment_csv.name,
     }

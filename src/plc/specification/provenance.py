@@ -1,6 +1,3 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Separate current engineering intent from immutable decision/evidence receipts.
 
 ConfirmedSpec v4 is a positive projection, not an archive. Receipt v1 is audit
@@ -26,7 +23,8 @@ CONFIRMED_SPEC_FIELDS = frozenset({
     "io_table", "io_bindings", "user_notes", "hardware_profile", "hardware_context",
     "hardware_requirements", "hardware_intent", "execution_semantics", "timing",
     "scan_budget_ms", "scan_warning_ms", "io_user_overrides",
-    "missing_answers", "intent_context", "operation_intents",
+    "missing_answers", "intent_context", "operation_intents", "target_mode",
+    "requirements", "implementation_items", "open_questions",
 })
 
 
