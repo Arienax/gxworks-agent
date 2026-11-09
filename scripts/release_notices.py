@@ -16,8 +16,9 @@ def stage(package: Path, component: str):
     if component == 'full':
         assets = package / 'resources/assets'
         assets.mkdir(parents=True, exist_ok=True)
-        for source in (ROOT / 'resources/assets').glob('*.gif'):
-            shutil.copyfile(source, assets / source.name)
+        for source in sorted((ROOT / 'resources/assets').iterdir()):
+            if source.suffix.lower() in {'.gif', '.png'}:
+                shutil.copyfile(source, assets / source.name)
         shutil.copyfile(ROOT / 'start-web.cmd', package / 'start-web.cmd')
         (package / 'scripts').mkdir(exist_ok=True)
         shutil.copyfile(ROOT / 'scripts/start_web.ps1', package / 'scripts/start_web.ps1')
