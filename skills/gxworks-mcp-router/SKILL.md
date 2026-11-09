@@ -15,8 +15,6 @@ metadata:
   version: '1.2.0'
 ---
 
-
-默认交付优先返回 GXW。找到 GX Works2 后，共享保存流程自动编译、保存并冷重开；读取 delivery 与 validation 的实际结果，不根据文件存在宣称编译通过。GXW 无法生成时（例如仅参数目标或未安装 GX Works2，可提前查看 output_contract.gxw_delivery），Ladder 降级 CSV、ST 降级为代码 TXT 与全局标签 CSV、FBD/SFC 保留结构化候选及预览，并说明原因。原生编译失败仍保留 GXW 诊断候选，不改交 CSV。新建 ST/SFC 使用 get_generation_context 返回的 operation=generate 合同。GX Works2 1.635.0.1 配合 v4 工作区适配器，按实际 CPU 查询原生系列与子系列，无基底创建对应语言工程。遵守该 CPU 的工程类型和语言条件，读取实际创建及验证结果；不使用 IDE 新建对话框、隐藏窗口控件或预制完整工程。
 # GXWorks MCP 任务路由
 
 根据用户提供的输入形态与目标操作，直接选用对应的 GXWorks Agent MCP 工具链完成工程读取、程序生成、离线修改、原生编译检查或仿真观察。
@@ -29,28 +27,21 @@ metadata:
 2. **目标操作**：只读检查、离线编辑保存、原生编译检查、导入 GX Works2，还是模拟器状态/波形观察。
 3. **接入模式**：独立 `local` 模式、连接 Web 的 `service` 模式，或绑定单工程的 `context` 模式。
 
-用户已给出的 CPU 型号、I/O 分配、文件路径与程序名直接复用；仅在读取工程后仍缺少关键现场工艺条件或存在真实多选歧义时向用户确认。`plc_model` 类参数一律传 CPU 系列名（新建对话框名称，如 `FX3U`、`FX3U/FX3UC`、`Q03UDV`），不带点数或规格后缀；用户给的完整订货型号（如 `FX3U-48MR/ES`）只用于读取其点数与规格，创建工程时归一到系列名。检查外部文件或已打开的 GX Works2 窗口时可直接调用发现与快照工具，编辑并保存版本时再选择或创建 Agent 工程。
-
-## 新建 Ladder 的 Desktop 入口
-
-创建工程时按需求完备度选择 `generation_mode` 并遵循返回的 `next_actions`。宿主提供 `gxworks_generate_ladder` 时，新建 Direct 和已经确认的 Design 都用它生成整份程序；传当前 `project_id`。它通过本轮选用的 Harness 模型生成一次，自动传入当前型号的本地指令资料、读完分页，按 Web 协议提交。首次需求可以省略 `user_requirement` 由宿主从真实消息取得。多轮合并只引用相关的完整用户消息。跨品牌/跨语言代码移植转写（如西门子/CODESYS/欧姆龙转三菱）、完整步序/时序/算法规格已给定、确定性工具 FB/FUNCTION 编写或用户要求直接生成时传 `generation_mode="direct"`；存在方案取舍的开放式工艺/整机控制需求使用 `generation_mode="design"`。Desktop 的 Design 入口自动读取设计资料、展示可选方案，收到用户选择后再实施。
-不要为试格式创建示例版本。如果上下文返回了已有版本，按其编辑入口工作。其他宿主继续使用下表的 MCP 工具。
+用户已给出的 CPU 型号、I/O 分配、文件路径与程序名直接复用；仅在读取工程后仍缺少关键现场工艺条件或存在真实多选歧义时向用户确认。检查外部文件或已打开的 GX Works2 窗口时可直接调用发现与快照工具，编辑并保存版本时再选择或创建 Agent 工程。
 
 ## 按任务选择入口
 
 | 用户意图 / 已有输入 | 入口工具 | 调用要点 |
 | --- | --- | --- |
-| 确认 GX Works2 是否安装、实际路径或原生操作的前提 | `list_gxworks2_sessions` | 按后端的 `gx_works2_installed` 和 `gx_works2_executable` 报告。空 `sessions` 表示未发现可见窗口；各窗口的 `project_open` 表示工程打开状态。不要用默认 C 盘路径推断。旧后端缺少安装字段时，报告安装状态未知。 |
 | 解释、检查上传或本机 GXW | `inspect_gxw_project` | 传入 `path` 或 `data_base64`，用返回的 `source_ref` 做后续只读分析；多程序工程按返回清单指定程序名。 |
 | 修改一个尚未导入的 GXW | `import_gxw_project`（`local` 模式） | 导入为受管理版本后，依次调用 `read_gxw_source` 与 `edit_gxw_project`；其他模式使用当前暴露的导入入口。 |
 | 查看当前打开的 GX Works2 程序 | `list_gxworks2_sessions` | 选中匹配的窗口后调用 `read_gxworks2_snapshot`，凭返回的 `source_ref` 读取网络或执行静态分析。 |
 | 仅有原生导出的 CSV | `inspect_gxworks2_csv_files` | 传入程序 CSV、注释 CSV 和明确的 `plc_model`，直接获取只读 `source_ref`。 |
-| 开放式工艺/整机需求设计并生成新程序 | `create_project(generation_mode="design")` → `get_design_context` → `propose_design_plan` → `confirm_design_plan` | 适用于存在架构或状态表示取舍的开放式需求。用用户原文读取设计上下文与分页，按实际 CPU、语言和工艺提出 1～3 个方案；用户选定确认后用 `get_generation_context(workflow="detailed")` 按已确认规格实施。 |
-| 跨品牌程序转写、已给定完整规格或直接生成 | `create_project(generation_mode="direct")` → `get_generation_context` | 西门子/CODESYS/欧姆龙等跨品牌或跨语言程序移植转写、完整步序/时序/公式规格已给定、确定性工具 FB/FUNCTION 编写或用户要求直接生成时跳过 Design，不虚构多方案（仅在存在真实硬件/地址映射缺口时针对性提问）。若工程处于未确认 Design 会话，Ladder/ST/FBD/SFC 均可传 `workflow="direct_generation"` 配合 `user_requirement` 退出 Design 直接生成。 |
+| 新建 Ladder 程序 | 选择或创建工程 → `get_generation_context` | 新需求默认使用 `workflow=direct_generation`，按返回合同构造 Ladder JSON 后提交 `create_program_candidate`。 |
 | 修改已有 Ladder 的局部网络或指令 | `get_current_program_info` / `read_network` 或 `read_gxw_source` | 按需读取 `get_generation_context`；单程序局部修改用 `patch_program`，多源码或含声明/注释的联合修改用 `edit_gxw_project`。 |
 | FBD 生成或修改 | `get_generation_context(user_requirement=...)` | 使用必需语言规则、当前 CPU 地址规则和源码依赖；按 `output_contract` 选择单图候选或 ST/FBD 联合事务。目录不足时精确补取 `get_fbd_catalog(templates=...)`，详见[流程 6](references/workflows.md#fbd-与项目定义)。 |
 | FBD 定义、标签、库的查看与维护 | `get_fbd_catalog`，配合 `read_fbd_definition` / `read_fbd_libraries` | 按实际定义和能力执行维护操作；目录命中不能代替生成上下文，也不证明库正文可以导入。 |
-| ST Program / FB / FUNCTION | 新工程用 `get_generation_context`；已有工程用 `read_st_project` | 无 GXW 版本时按 `operation=generate` 提交正文与声明，由共享流程绑定新建工程的实际 Program 和任务；已有工程使用读取的对象与任务身份提交修改。 |
+| ST Program / FB / FUNCTION | `read_st_project`（新建时配合 `get_generation_context`） | 用 `create_st_candidate` 或 `edit_gxw_project` 提交；新建普通 ST Program 时绑定工程中实际存在的资源与任务。 |
 | 已有 SFC 工程内部编辑 | `read_sfc_project` | 通过 `create_sfc_candidate(operation="edit")` 或 `edit_gxw_project` 编辑步骤、转换、动作、分支与子程序。 |
 | 本地结构、语法与指令检查 | `validate_project` / `validate_current_program` / `get_diagnostics` | 执行 Core 确定性静态校验，获取结构、操作数、语法及可维护性诊断。 |
 | 无界面原生编译检查 | **`validate_project(native=true)`** | 在后台隔离工作区调用 GX Works2 编译并检查当前已保存的 `.gxw` 版本。 |
@@ -61,15 +52,15 @@ metadata:
 | 读取 Simulator2 状态与软元件 | `list_simulator_targets` → `get_simulator_status` / `read_simulator_devices` | 使用返回的 `target_ref` 读取状态和软元件值；需要建立连接时先调用 `connect_simulator`。 |
 | 信号波形采样或生成仿真方案 | `start_simulator_trace` / `prepare_simulator_scenario` | `start_simulator_trace` 对目标做只读周期采样并生成时间轴视图；`prepare_simulator_scenario` 生成类型化测试方案。 |
 | 查询异步任务或提案状态 | `get_operation_status` | 传入 `proposal_id` 或 `execution_job_id` 查询当前进度与执行回执。 |
-| 检索 CPU 指令或软元件事实 | `search_plc_manual` | 新设计按实际型号查询各相关功能的代表指令和配套调用，读完分页再选型；未选中工程时显式传入 `plc_model`。按返回的操作数、用途和条件回答问题，用 `coverage` 定位各方面资料、调用字段选择 Core 入口；字段说明见[手册检索结果的判读](references/result-handling.md#手册检索结果的判读)。 |
+| 检索 CPU 指令或软元件事实 | `search_plc_manual` | 生成上下文之外仍需核对指令细节时调用；未选中工程时显式传入 `plc_model`。按 `coverage` 判读命中：`status`、`aspects`、`call_admission` 与 `facts[].knowledge_status` 的含义见[手册检索结果的判读](references/result-handling.md#手册检索结果的判读)。 |
 
 ## 完整读取知识与上下文
 
-`search_plc_manual`、`get_generation_context`、`get_fbd_catalog` 返回单份 JSON 正文，`data.context_schema_version=3`。先保存 `document` 和本页 `objects`；只要 `delivery.complete=false`，就原样调用 `delivery.next.tool` 与 `delivery.next.arguments`。合并同一 `document_id` 的全部 `objects` 后解析 `$ref`，再使用下文的 `generation_input`、`output_contract` 或 `results`。新生成任务把完整用户消息逐字传给 user_requirement；自己的算法和内部地址只写入实现选择。按 instruction_research 查询各功能的代表与配套调用，比对普通实现和高级指令实现，再按提交工具的 implementation_review 填写上下文、手册 document_id、选型与比较理由。对象身份只在该次读取中使用。
+`search_plc_manual`、`get_generation_context`、`get_fbd_catalog` 返回单份 JSON 正文，`data.context_schema_version=3`。先保存 `document` 和本页 `objects`；只要 `delivery.complete=false`，就原样调用 `delivery.next.tool` 与 `delivery.next.arguments`。合并同一 `document_id` 的全部 `objects` 后解析 `$ref`，再使用下文的 `generation_input`、`output_contract` 或 `results`。没有读完的页不能当作知识缺失。对象身份只在该次读取中使用。
 
 每次返回最多 6,000 个估算 token 且不超过 32 KiB UTF-8。`STALE_READ_CURSOR` 表示查询、CPU、工程版本、事实库或会话发生变化，去掉游标重读；`READ_OBJECT_TOO_LARGE` 表示完整必需对象过大，缩小明确的读取范围，不能截断源码。独立 MCP 不采用 Web 模型配置推断客户端窗口。
 
-手册查询可显式传 `language=ladder|st|fbd` 和 `aspects`（如 `execution`、`effects`、`st_call`）。`top_k` 只限制补充资料，明确指令/地址/错误码及依赖全部解析。按正文的 `coverage`/`knowledge_coverage` 与 `delivery.complete` 分清库中存在、所问知识完整与已交付；手册行为说明、调用准入、Core 执行语义和原生结果分别判断。手册查询默认继承保存版本或工程语言；跨语言接口可显式指定 language。读完本次查询后，合并说明影响选型的缺项。默认不为缺项重复查库或联网搜索；仅在用户要求外查时检索外部手册。
+手册查询可显式传 `language=ladder|st|fbd` 和 `aspects`（如 `execution`、`effects`、`st_call`）。`top_k` 只限制补充资料，明确指令/地址/错误码及依赖全部解析。按正文的 `coverage`/`knowledge_coverage` 与 `delivery.complete` 分清库中存在、所问知识完整与已交付；手册行为说明、调用准入、Core 执行语义和原生结果分别判断。知识缺失先检查本地来源、提炼和交付，不自动改用网页搜索。
 
 ## 各类标识的用途
 
@@ -82,31 +73,25 @@ metadata:
 
 ## 常见工作流要点
 
-**复杂 FBD 的组织方式。** 主图用于组装职责清晰的 ST 功能块；工序状态、定时计数、报警及互锁在相应实现内封装，独立状态使用独立实例。优先使用具名端口、标签和简短连接，避免把整套状态机展开为大量布尔门，也不把整机塞进一个黑盒块。缺少实现时先通过定义工具创建 ST FB；尚无版本时，首个 `create_st_fb` 按实际 CPU 无基底创建 FBD 工程。随后读取保存版本，补齐定义并用 `edit` 组装主图。不能只画空块或假定接口存在。
-
-**新需求生成（按规格完备度路由 Design / Direct）。** 存在架构或工艺取舍的开放式需求走 `generation_mode="design"` 比较方案并由用户确认后再实施；跨品牌/跨语言程序移植转写、已提供完整逻辑/步序/时序/公式规格、确定性工具 FB/FUNCTION 编写或用户要求直接生成时走 `generation_mode="direct"`（若工程已处于未确认 Design 状态，四语言均可通过 `get_generation_context(workflow="direct_generation", user_requirement=...)` 退出 Design），复用已给出的 CPU 与 I/O 信息按输出合同直接生成并提交。仅在缺少关键现场硬件映射或工艺事实时向用户提问；工程内可读取的事实先通过工具读取。
+**新需求生成。** 复用已给出的 CPU 与 I/O 信息，调用 `get_generation_context` 获取输出合同后直接生成候选并提交。仅在缺少关键现场工艺事实时向用户提问；工程内可读取的事实先通过工具读取。
 
 **已有文件读写。** 只读分析直接走 `inspect_*` 或窗口快照获取 `source_ref`；需要修改并保存新版本时，先将 `.gxw` 导入为工程版本，再通过离线编辑工具在可编辑对象范围内提交修改。
 
 **FBD 规则与联合修改。** 从 `generation_input` 读取 `language_rules`、`device_address_rules`、`source_context` 和 `supported_paths`。FBD 常量使用其自身语言规则；地址编号范围、默认分配、参数限制与本工程实际分配分别处理。已保存工程需要同时修改 ST 正文/接口和 FBD 调用者时，以 `edit_gxw_project` 一次提交全部关联修改。必需规则缺失会阻止生成，不能套用其他 CPU 或 ST 语法补空白。
 
-**FBD 保存。** `create_fbd_candidate` 先准备候选，确认保存时共享交付流程优先写出 GXW，发现 GX Works2 后自动编译、保存及冷重开。`native_save=true` 仍可要求准备阶段原生保存；`false` 不关闭交付阶段的默认编译。历史版本的保存选择不用于授权其他操作。`create_fb`、`create_program` 和 `import_library` 保留各自的原生创建或导入流程。
+**FBD 按次保存。** `create_fbd_candidate` 的 `import`、`edit`、`generate` 仅在本次显式传入布尔 `native_save=true` 时请求原生保存；省略或传 `false` 使用离线路径，不继承历史版本的保存选择。源码和声明没有变化时不重复原生保存。该参数不用于 `create_fb`、`create_program` 或 `import_library`，这些操作保留自身的原生创建或导入流程。
 
 **用户库导入。** 对已保存的目标版本使用 `create_fbd_candidate(operation="import_library")`，传入来源 GXW 的 `data_base64` 和选定的 `library_name`。当前转移已覆盖的 ST 实现、接口和库内类型；FBD 库接口可读不表示可转移其正文。保留目标项目的源码集合、任务绑定、调用者正文与声明，不复制来源工程的调用程序。
 
 **ST 后台编辑。** 先读出对象的准确逻辑身份，以 `source_name` 调用 `create_st_candidate` 的 `edit_st_program`、`edit_st_fb`、`edit_st_function` 或 `edit_st_source`。省略 `declarations` 保留原声明；给出列表则按整份列表替换，需包含所有应保留的声明，不能只提交新增或修改行。这些后台操作不扩大前台 `execute_native_engineering` 的操作集合。
 
-**本地产物与原生编译。** `compile_project` 生成 Core 本地产物；候选保存会自动选择 GXW 并在发现 GX Works2 后原生编译、保存及冷重开。仅重新检查已有版本时使用 `validate_project(native=true)`，重新编译并保存已有版本可使用对应语言的保存操作或原生工程方案。
+**本地产物与原生编译。** `compile_project` 用于生成 Core 本地产物（JSON、SVG、衍生 ST、CSV）；需要调用 GX Works2 编译器做后台无界面检查时使用 `validate_project(native=true)`。若需编译并更新保存的 `.gxw`，使用对应语言支持的保存操作（如 FBD 的 `operation="compile"` 或原生工程方案）。
 
-**持续前台会话。** 当用户要求在 GX Works2 界面中展示编辑过程，或任务需要跨步执行原生工程操作时，使用 `execute_native_engineering` 的 `live` 模式。每个工程首次 `start` 创建一份受管 GXW 工作副本并保留原保存版本；后续调用及 MCP 重启复用同一路径和原 GX Works2 窗口。重复 `start` 只返回已有会话，不执行本次命令列表；先用 `get_native_engineering_session` 读取状态和 `controls.expected_revision`，再 `continue`。MCP 退出仅分离可恢复会话，显式 `end` 才结束会话。恢复时须匹配原进程、窗口、路径和 CPU；目标丢失、身份不符或旧记录不完整时按错误处理，不另建副本或重放中断动作。详细步骤见 [Live 工作流](references/workflows.md#8-在-gx-works2-中连续可见编辑live-会话)。
-
-**后台原生保存。** 已保存的 Ladder、ST、FBD、SFC GXW 需要原生编译并交付新版本时，优先调用 `execute_native_engineering`，传入 `plan.mode="background"`、`schema_version=1`，`commands` 依次为 `compile`、`save`、`reopen`。后台工作区核对源码、编译、保存及重开结果后保存同语言版本；失败不激活新版本，不打开可见编辑会话，也不写入 PLC。仅检查而不保存时仍使用 `validate_project(native=true)`。
+**持续前台会话。** 当用户要求在 GX Works2 界面中展示编辑过程，或任务需要跨步执行原生工程操作时，使用 `execute_native_engineering` 的 `live` 模式。继续下一步前先通过 `get_native_engineering_session` 读取 `controls.expected_revision`，在关键阶段按任务要求显式执行编译、保存或冷重开验证。
 
 ## 回执与错误处理
 
 按工具返回的实际阶段汇报结果（候选生成、版本保存、本地静态校验、原生编译检查、地址/步号映射、模拟器采样）。
-
-`saved_native_diagnostic` 是未激活的 GXW 诊断候选：返回实际版本和文件，保留失败状态；继续读取时显式选择该版本。
 
 不同接入模式的落地方式不同：`local` 模式可直接保存工程版本；`service` 模式通常返回待审批提案（`pending`）；`context` 模式返回待确认候选（`confirmation_required`）。以当前模式说明和返回字段（如 `version_id`、`proposal_id`、`save_result`）为准。
 

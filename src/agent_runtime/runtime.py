@@ -1,6 +1,3 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Shared deterministic tool boundary for desktop and external agents."""
 
 from __future__ import annotations
@@ -46,9 +43,9 @@ _DEBUG_TOOLS = frozenset({
 
 
 def _model_tool_value(name, value):
-    from application.read_delivery import PAGED_READ_TOOLS, PreparedReadEnvelope
-    if (name in PAGED_READ_TOOLS and isinstance(value, PreparedReadEnvelope)
-            and value.get('tool') == name):
+    from application.read_delivery import PAGED_READ_TOOLS, DELIVERY_VERSION
+    if (name in PAGED_READ_TOOLS and isinstance(value, Mapping)
+            and (value.get('data', {}).get('delivery') or {}).get('version') == DELIVERY_VERSION):
         # Produced only by the registry after the ordinary public projection.
         # A second generic projection would corrupt engineering map keys in
         # the object table and invalidate the measured final envelope.
@@ -91,17 +88,8 @@ def _model_tool_value(name, value):
             if is_live_engineering_receipt(original):
                 return live_engineering_summary(original)
         if isinstance(current, Mapping) and isinstance(original, Mapping):
-            restored = {key: live_receipts(original[key], item) if key in original else item
-                        for key, item in current.items()}
-            if (isinstance(original.get('delivery'), Mapping)
-                    and original['delivery'].get('preferred_format') == 'gxw'
-                    and isinstance(original.get('validation'), Mapping)):
-                # File delivery outcomes are operational results, not attached
-                # knowledge-review labels. Keep the bounded compilation result.
-                restored['validation'] = {key: original['validation'][key] for key in (
-                    'gx_compile', 'native_save', 'cold_reopen', 'public_check',
-                    'native_compile_message', 'native_compile_reason', 'native_phase') if key in original['validation']}
-            return restored
+            return {key: live_receipts(original[key], item) if key in original else item
+                    for key, item in current.items()}
         if isinstance(current, list) and isinstance(original, (list, tuple)):
             return [live_receipts(before, after) for before, after in zip(original, current)]
         return current

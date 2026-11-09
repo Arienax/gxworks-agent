@@ -1,11 +1,8 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Version-bound random owner access without reading the full definition JSON.
 
-A tiny manifest binds one sibling SQLite file. Runtime opening checks its identity
-and structure; explicit offline audits also scan its bytes for integrity. Only
-requested owner graphs are hydrated. Storage never implies CPU/call admission.
+A tiny manifest authenticates one sibling SQLite file. Opening scans its bytes
+for integrity, not its fact rows. Only explicitly requested owner graphs are
+hydrated. This is storage evidence, never a CPU/native compilation admission.
 """
 from __future__ import annotations
 import copy
@@ -39,7 +36,7 @@ def _json(value):
 
 
 class OwnerDefinitionStore:
-    def __init__(self, manifest_path, *, verify_integrity=False):
+    def __init__(self, manifest_path):
         original = Path(manifest_path)
         if original.is_symlink() or original.stat().st_size > 65536:
             raise ValueError('Invalid owner manifest path or size')
@@ -66,7 +63,7 @@ class OwnerDefinitionStore:
         if (type(database.get('bytes')) is not int or database['bytes'] != db_before[2]
                 or not isinstance(database.get('sha256'), str)
                 or not re.fullmatch('[0-9a-f]{64}', database['sha256'])
-                or (verify_integrity and _digest(self.database_path) != database['sha256'])):
+                or _digest(self.database_path) != database['sha256']):
             raise ValueError('Owner database integrity mismatch')
         self._manifest_identity, self._database_identity = before, db_before
         self._lock = threading.RLock()

@@ -1,13 +1,9 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Tool registration, argument checks and public result envelopes."""
 from __future__ import annotations
 import copy
 import json
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
-from application.instruction_research import CANDIDATE_TOOLS, REVIEW_SCHEMA, new_candidate, research_plan
 from agent_runtime.tool_schema import validate_schema
 from agent_runtime.tool_errors import ToolPreconditionError, PROJECT_ACTIONS, SOURCE_ACTIONS
 from agent_runtime.tool_policy import (
@@ -35,15 +31,9 @@ class ToolDefinition:
     confirmation_required: bool = False
 
     @property
-    def result_schema(self):
-        from application.read_delivery import READ_RESULT_SCHEMAS
-        return READ_RESULT_SCHEMAS.get(self.name)
-
-    @property
     def context_requirement(self):
         if self.name in DISCOVERY_TOOL_NAMES or self.name in {
                 "list_projects", "create_project", "select_project", "import_gxw_project", "get_project_artifacts", "get_operation_status",
-                "get_design_context", "propose_design_plan", "confirm_design_plan",
                 "get_native_engineering_session", "pause_native_engineering_session"}:
             return "none"
         if self.name == "search_plc_manual":
@@ -75,7 +65,6 @@ class ToolRegistry:
 
     _tools: Dict[str, ToolDefinition] = field(default_factory=dict)
     _read_delivery: Any = field(default=None, init=False, repr=False)
-    public_read_validator: Any = field(default=None, repr=False)
 
     def register(self, definition: ToolDefinition) -> None:
         name = str(definition.name or "")
@@ -94,12 +83,7 @@ class ToolRegistry:
                 'description': '分页游标。使用 delivery.next 的完整参数继续，直到 delivery.complete=true；查询或工程/事实库变化后重新读取。'}
             definition = replace(definition, description=definition.description +
                 ' 返回 context_schema_version=3：document 引用 objects；按 delivery.next 读取全部页并合并 objects。'
-                ' 每页最多 6000 估算 token / 32 KiB；合并完成后使用完整 document。')
-        if name in CANDIDATE_TOOLS:
-            schema.setdefault('properties', {})['implementation_review'] = copy.deepcopy(REVIEW_SCHEMA)
-            for option in schema.get('oneOf', ()):
-                if option.get('properties', {}).get('operation', {}).get('enum') == ['generate']:
-                    option['properties']['implementation_review'] = copy.deepcopy(REVIEW_SCHEMA)
+                ' 单次最多 6000 估算 token / 32 KiB，未完成交付不能当作知识缺失或改用网页搜索。')
         if name in SOURCE_TOOL_NAMES:
             schema.setdefault("properties", {})["source_ref"] = {
                 "type": "string", "minLength": 1, "maxLength": 128,
@@ -107,7 +91,7 @@ class ToolRegistry:
         if name == "search_plc_manual":
             schema.setdefault("properties", {})["plc_model"] = {
                 "type": "string", "minLength": 1, "maxLength": 100,
-                "description": "未选中工程时传入实际 CPU；已选中工程时沿用工程型号。"}
+                "description": "无选中工程时必须明确 CPU；有工程时不得覆盖工程型号。"}
         definition = replace(definition, parameters=schema)
         if schema.get("type") != "object":
             raise ValueError(f"tool {name} parameters must be an object schema")
@@ -151,10 +135,6 @@ class ToolRegistry:
             }
         try:
             decoded = self._decode_arguments(arguments)
-            if definition.name == 'create_st_candidate' and 'st_code' in decoded:
-                if 'st_text' in decoded:
-                    raise ValueError('Provide st_text (do not pass both st_text and st_code)')
-                decoded['st_text'] = decoded.pop('st_code')
             self._validate_arguments(definition.parameters, decoded)
             if definition.name in {'execute_native_engineering', 'create_fbd_candidate', 'create_st_candidate'} | NATIVE_INSPECTION_TOOL_NAMES:
                 _validate_engineering_input(definition.name, definition.parameters, decoded)
@@ -169,7 +149,6 @@ class ToolRegistry:
                 },
             }
         try:
-            project_context = context
             context = resolve_tool_context(definition, context, decoded)
             from application.read_delivery import PAGED_READ_TOOLS, ReadDeliveryStore, read_binding
             if definition.name in PAGED_READ_TOOLS:
@@ -178,19 +157,7 @@ class ToolRegistry:
                 binding = read_binding(context)
                 if decoded.get('cursor'):
                     return self._read_delivery.resume(definition.name, decoded, binding)
-            review = None
-            if new_candidate(name, decoded):
-                review = decoded.pop('implementation_review', None)
-                if self._read_delivery is not None or review is not None:
-                    research = (self._read_delivery or ReadDeliveryStore()).check_review(
-                        read_binding(context), review, decoded.get('generation_context_id'))
-                    if name == 'create_program_candidate' and research and research.get('executable_fragments'):
-                        decoded['_instruction_research'] = research
-                if name == 'create_program_candidate' and review and review.get('assumptions'):
-                    decoded['_implementation_assumptions'] = review['assumptions']
             data = dict(definition.handler(context, decoded) or {})
-            if review is not None:
-                data['implementation_review'] = review
             if context.analysis_source is not None:
                 data["analysis_source"] = {key: copy.deepcopy(value) for key, value in context.analysis_source.items()
                                            if key != "raw_networks"}
@@ -226,32 +193,7 @@ class ToolRegistry:
         if definition.name in PAGED_READ_TOOLS:
             from agent_runtime.runtime import _model_tool_value
             try:
-                try:
-                    validate_schema(definition.result_schema, data, 'result')
-                except ValueError as error:
-                    raise ToolPreconditionError('INVALID_TOOL_RESULT', '工具业务结果结构无效。') from error
-                public = _model_tool_value(definition.name, envelope)
-                if (name == 'get_generation_context' and not context.version_id
-                        and (decoded.get('user_requirement') or data.get('has_confirmed_spec'))
-                        and data.get('output_contract', {}).get('tool') in CANDIDATE_TOOLS):
-                    plan = research_plan(public['data'])
-                    if decoded.get('instruction_details'):
-                        from application.instruction_research import include_manual_facts
-                        manual_context = resolve_tool_context(self._tools['search_plc_manual'], project_context, {})
-                        plan = include_manual_facts(plan, manual_context, data['target_mode'])
-                        if data.get('workflow_mode') == 'direct_generation' and not data.get('has_confirmed_spec'):
-                            from application.instruction_research import direct_choice_input
-                            payload = public['data']
-                            payload['generation_input'] = direct_choice_input(payload['generation_input'], plan)
-                    public['data']['instruction_research'] = _model_tool_value(
-                        definition.name, {'instruction_research': plan}
-                    )['instruction_research']
-                if self.public_read_validator is not None:
-                    self.public_read_validator(definition.name, public['data'])
-                # Manual lookup normalizes CPU aliases; compare against the original project snapshot.
-                review_binding = (read_binding(project_context) if name == 'search_plc_manual'
-                                  and project_context and project_context.plc_model != context.plc_model else binding)
-                return self._read_delivery.prepare(public, decoded, binding, review_binding=review_binding)
+                return self._read_delivery.prepare(_model_tool_value(definition.name, envelope), decoded, binding)
             except ToolPreconditionError as error:
                 return {'ok': False, 'tool': definition.name, 'error': error.payload()}
         if definition.confirmation_required:

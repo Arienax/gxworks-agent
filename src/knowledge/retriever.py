@@ -1,6 +1,3 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Scoped knowledge retrieval over the shared broad RRF engine.
 
 The broad engine lives in :mod:`knowledge.core`. This facade owns task/source
@@ -450,17 +447,6 @@ def retrieve_fact_aware_knowledge(
         broad = _diagnostic_candidate_rows(broad, targets['errors'], targets.get('diagnostic_namespace'))
     from knowledge.structured_facts import project_device_source_records
     broad = project_device_source_records(broad,plc_model=plc_model)
-    from knowledge.structured_facts import query_languages, requested_aspects
-    languages = query_languages(query, language)
-    if languages:
-        # Exact mixed-language features are resolved above. Filter supplementary hits before top_k.
-        broad = [row for row in broad if row.get('fact_kind') != 'language' or
-                 str(row.get('fact_target', '')).partition('.')[0].lower() in languages]
-        if language:
-            from knowledge.fact_selection import project_instruction_records
-            broad = project_instruction_records(broad, plc_model=plc_model, language=language,
-                aspects=requested_aspects(query, language=language, aspects=aspects), project_mode=project_mode,
-                instance_context=instance_context, version=version, query=query)
 
     # Explicit targets and their attached dependency facts are never top-k
     # candidates. Only residual discovery competes for the supplementary slots.

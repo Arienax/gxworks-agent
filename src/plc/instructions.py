@@ -1,6 +1,3 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Data-driven PLC instruction catalogue used across import, IR and validation.
 
 The public ladder JSON format intentionally remains unchanged. APP_INSTR nodes
@@ -24,7 +21,6 @@ import re
 import sys
 from dataclasses import dataclass, field, replace
 from enum import Enum
-from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Tuple
 
@@ -43,34 +39,6 @@ class InstructionCategory(str, Enum):
     ACTION = "action"
     BRANCH_CONTROL = "branch_control"
     PROGRAM_CONTROL = "program_control"
-
-
-def condition_connector(opcode):
-    """Accumulator connector of a stored contact/comparison, not execution support.
-
-    Q/L use the same LD/AND/OR modifiers for word, double-word, floating,
-    string and time comparisons. Catalogue completeness must not change the
-    boundaries of their original circuits.
-    """
-    name = str(opcode or '').strip().upper()
-    if name in {'ANI', 'ORI'}:
-        return 'AND' if name == 'ANI' else 'OR'
-    match = re.fullmatch(r'(LD|AND|OR)(?:I|P|F|PI|FI|PCHK|(?:ED|DT|TM|D|E|\$)?(?:<>|>=|<=|=|>|<))?', name)
-    return match[1] if match else None
-
-
-@lru_cache(maxsize=4096)
-def source_instruction_arities(opcode, cpu):
-    """Reuse the native storage catalogue when reading Q/L source signatures.
-
-    These facts fill source-reading gaps without promoting unreviewed entries
-    into the generation or execution catalogue.
-    """
-    from plc.target_identity import target_family, is_parameter_only
-    if target_family(cpu) not in {'Q', 'L'} or is_parameter_only(cpu):
-        return frozenset()
-    from plc.storage.q_encoder import source_instruction_arities as stored_arities
-    return stored_arities(opcode, cpu=cpu)
 
 
 class SemanticKind(str, Enum):
@@ -505,7 +473,6 @@ class InstructionRegistry:
     def __init__(self, specs: Iterable[InstructionSpec] = ()) -> None:
         self._specs: Dict[Tuple[str, str], InstructionSpec] = {}
         self._cpu_contracts: Dict[Tuple[str, str, str], InstructionSpec] = {}
-        self._source_forms: Dict[Tuple[str, str, int], InstructionSpec] = {}
         self._variant_index: Optional[
             Dict[Tuple[str, str], InstructionResolution]
         ] = None
@@ -626,8 +593,6 @@ class InstructionRegistry:
             return None
         spec = self._with_definition_facts(form.spec, form.opcode, cpu,
                                            str(vendor or "mitsubishi").strip().lower())
-        if form.opcode in {'PWM', 'DPWM'} and str(cpu).upper() in {'FX5U', 'FX5UC', 'FX5UJ', 'FX5S'} and len(spec.operands) == 3:
-            spec = replace(spec, operands=(*spec.operands[:2], replace(spec.operands[2], name='channel', role=OperandRole.READ)))
         return replace(form, spec=spec) if spec is not form.spec else form
 
     @property
@@ -778,12 +743,8 @@ class InstructionRegistry:
             payload = expand_definitions(payload)
         from knowledge.runtime_fact_projection import SOURCE_SERIALIZATION, VALUE_SERIALIZATION, VerifiedCatalog, resolve_fact_sources
         pooled = payload.get("source_serialization")
-        # Legacy source bundles use a list bibliography under the same name;
-        # only a pooled mapping requires the exact pool serialization marker.
-        if ("source_serialization" in payload or isinstance(payload.get("source_catalog"), Mapping)) and pooled != SOURCE_SERIALIZATION:
+        if ("source_serialization" in payload or "source_catalog" in payload) and pooled != SOURCE_SERIALIZATION:
             raise ValueError("Unsupported fact source serialization")
-        if "source_catalog" in payload and not isinstance(payload['source_catalog'], (Mapping, list)):
-            raise ValueError("Invalid fact source catalog")
         if pooled and not isinstance(payload.get("source_catalog"), Mapping):
             raise ValueError("Invalid fact source catalog")
         if ("value_catalog" in payload or "value_serialization" in payload) and (
@@ -900,13 +861,6 @@ class InstructionRegistry:
         return store.database_path
 
     def fact_bundle_current(self):
-        for core in getattr(self, '_core_language_resources', ()):
-            try:
-                state = core[0].stat()
-                if (state.st_mtime_ns, state.st_size) != core[1:]:
-                    return False
-            except OSError:
-                return False
         if self._definition_owner_store is not None:
             return self._definition_owner_store.current()
         bound = getattr(self, '_fact_resource', None)
@@ -1514,7 +1468,6 @@ class InstructionRegistry:
     def from_files(cls, paths: Sequence[Path]) -> "InstructionRegistry":
         entries = []
         target_contracts = []
-        source_forms = []
         modifier_rules: Dict[Tuple[str, str], Mapping[str, Any]] = {}
         for path in paths:
             payload = json.loads(path.read_text(encoding="utf-8"))
@@ -1526,7 +1479,6 @@ class InstructionRegistry:
                     f"{path}: unsupported instruction catalogue schema {schema_version}"
                 )
             vendor = str(payload.get("vendor") or "mitsubishi").strip().lower()
-            source_forms.extend(payload.get('source_forms', []))
             contracts = payload.get("cpu_contracts", [])
             if not isinstance(contracts, list):
                 raise ValueError(f"{path}: cpu_contracts must be an array")
@@ -1577,20 +1529,6 @@ class InstructionRegistry:
                 f"modifier rule targets unknown instruction {vendor}:{mnemonic}"
             )
         registry = cls(specs)
-        for form in source_forms:
-            for family in form.get('families', [form['family']]):
-                operands = form['operands']
-                for token in form['symbols']:
-                    key = (family, token, len(operands))
-                    if key in registry._source_forms:
-                        raise ValueError('duplicate saved-source instruction form: ' + str(key))
-                    spec = InstructionSpec.from_mapping(dict(
-                        mnemonic=token, category=form.get('category', 'action'), semantic_kind='vendor',
-                        arity=dict(min=len(operands), max=len(operands)), operands=operands,
-                        source_materials=[dict(manual_id=form['manual_id'], pdf_page=form['pdf_page'])]))
-                    registry._source_forms[key] = replace(spec, verified_fields=tuple(
-                        ['arity', 'operand_order', 'operand_roles'] +
-                        (['operand_types'] if form.get('operand_types_verified') else [])))
         registry.load_target_contracts(target_contracts)
         return registry
 
@@ -1629,28 +1567,6 @@ def _candidate_catalog_directories() -> Tuple[Path, ...]:
     return tuple(unique)
 
 
-def _load_core_language_rules(registry, directory):
-    current = dict(getattr(registry, '_language_features', {}))
-    resources = []
-    for name in ('fbd_language_rules.json', 'st_language_rules.json'):
-        path = directory / name
-        if not path.is_file():
-            continue
-        payload = json.loads(path.read_text(encoding='utf-8'))
-        if payload.get('schema_version') != 1:
-            raise ValueError('Unsupported core language rules')
-        features = _validated_language_features(payload['language_facts'])
-        for target, feature in features.items():
-            if target not in current:
-                current[target] = feature
-        state = path.stat()
-        resources.append((path.resolve(), state.st_mtime_ns, state.st_size))
-    registry._language_features = current
-    registry.language_facts = tuple(current.values())
-    registry._core_language_resources = tuple(resources)
-    return registry
-
-
 def load_default_instruction_registry() -> InstructionRegistry:
     required = ("common.json", "fx3u.json", "fx5u.json")
     for directory in _candidate_catalog_directories():
@@ -1679,20 +1595,20 @@ def load_default_instruction_registry() -> InstructionRegistry:
                 if not configured_manifest:
                     raise ValueError("GXW2_INSTRUCTION_OWNER_MANIFEST must name a manifest")
                 registry.load_instruction_owner_store(Path(configured_manifest).expanduser())
-                return _load_core_language_rules(registry, directory)
+                return registry
             manifest = directory / "instruction_definitions.manifest.json"
             if not (manifest.exists() or manifest.is_symlink()):
                 from shared.paths import resource_path
                 manifest = resource_path("knowledge/runtime/instruction_definitions.manifest.json")
             if manifest.exists() or manifest.is_symlink():
                 registry.load_instruction_owner_store(manifest)
-                return _load_core_language_rules(registry, directory)
+                return registry
             definitions = directory / "instruction_definitions.json.gz"
             if not definitions.exists():
                 definitions = directory / "instruction_definitions.json"
             if definitions.is_file():
                 registry.load_instruction_definitions(definitions)
-            return _load_core_language_rules(registry, directory)
+            return registry
     searched = "\n - ".join(str(item) for item in _candidate_catalog_directories())
     raise RuntimeError(
         "Mitsubishi instruction catalogue not found. Searched:\n - " + searched
@@ -1771,3 +1687,20 @@ __all__ = [
     "get_instruction_spec",
     "load_default_instruction_registry",
 ]
+
+
+def condition_connector(opcode):
+    """Accumulator connector of a stored contact or comparison, not execution support.
+
+    Q/L use the same LD/AND/OR modifiers for word, double-word, floating, string
+    and time comparisons, so catalogue completeness must not change the boundaries
+    of their original circuits.
+    """
+    name = str(opcode or '').strip().upper()
+    if name in {'ANI', 'ORI'}:
+        return 'AND' if name == 'ANI' else 'OR'
+    match = re.fullmatch(
+        r'(LD|AND|OR)(?:I|P|F|PI|FI|PCHK|(?:ED|DT|TM|D|E|\$)?(?:<>|>=|<=|=|>|<))?',
+        name,
+    )
+    return match[1] if match else None

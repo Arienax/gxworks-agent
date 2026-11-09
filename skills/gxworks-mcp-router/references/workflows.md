@@ -1,7 +1,5 @@
 # 调用流程与示例
 
-默认交付优先返回 GXW。找到 GX Works2 后，共享保存流程自动编译、保存并冷重开；读取 delivery 与 validation 的实际结果，不根据文件存在宣称编译通过。GXW 无法生成时，Ladder 降级 CSV、ST 降级为代码 TXT 与全局标签 CSV、FBD/SFC 保留结构化候选及预览，并说明原因。原生编译失败仍保留 GXW 诊断候选，不改交 CSV。新建 ST/SFC 使用 get_generation_context 返回的 operation=generate 合同。GX Works2 1.635.0.1 配合 v4 工作区适配器，按实际 CPU 查询原生系列与子系列，无基底创建对应语言工程。遵守该 CPU 的工程类型和语言条件，读取实际创建及验证结果；不使用 IDE 新建对话框、隐藏窗口控件或预制完整工程。
-
 以下示例中的 `${...}` 均取自上一步工具的实际返回值；工具名称与参数字段以客户端当前连接的 `tools/list` schema 为准。
 
 ## 1. 只读分析外部 `.gxw` 文件
@@ -40,27 +38,23 @@
 
 取得 `source_ref` 后即可按网络读取指令、查看绘图预览结果并运行静态分析。
 
-## 4. 根据需求新建程序（Design 与 Direct 分流）
+## 4. 根据需求新建 Ladder 程序
 
-1. **选择或创建工程**：若当前已选中匹配的工程则直接复用；在 `local` 模式下新建工程调用 `create_project(name, plc_model, target_mode=..., generation_mode=...)`，切换已有工程用 `list_projects` → `select_project`。按任务规格完备度选择 `generation_mode`：
-   - **`generation_mode="direct"`**：跨品牌/跨语言程序移植与转写（如西门子 SCL/STL/LAD、CODESYS、欧姆龙转三菱）、完整逻辑/步序/时序/算法规格已给出、确定性工具 FB/FUNCTION 编写，或用户明确要求直接生成。
-   - **`generation_mode="design"`**：存在架构、工序组织或状态表示取舍的开放式控制需求。
-2. **获取生成规格或直接上下文**：
-   - **开放式需求（Design）**：调用 `get_design_context(user_requirement=完整用户原文)`，读完 `delivery.next`。由当前模型根据分析指令和资料编写 1～3 个方案，将分析 JSON 与 `analysis_id` 提交给 `propose_design_plan`。需补工艺条件时向用户提问，用含答复的用户原文更新设计；仅在用户明确选定后调用 `confirm_design_plan`，再用 `get_generation_context(workflow="detailed")` 读取已确认规格（适用于四种语言）。
-   - **已明确规格 / 代码转写（Direct）**：直接调用 `get_generation_context`（仅在存在真实硬件或地址映射缺口时针对性提问，不虚构多方案）。若当前工程已处于未确认的 Design 会话，Ladder/ST/FBD/SFC 四种语言均可显式传入 `workflow="direct_generation"` 配合 `user_requirement` 退出 Design 并进入直接生成：
+1. **选择或创建工程**：若当前已选中匹配的工程则直接复用；在 `local` 模式下新建工程可调用 `create_project(name, plc_model, target_mode="ladder")`，切换已有工程用 `list_projects` → `select_project`。
+2. **获取生成上下文**：
 
 ```json
 {
   "tool":"get_generation_context",
   "arguments":{
-    "user_requirement":"${完整原始工程需求或待转写源码要求}",
+    "user_requirement":"${完整原始工程需求}",
     "workflow":"direct_generation"
   }
 }
 ```
 
-3. **按型号查证、比较再提交**。给 `get_generation_context.user_requirement` 传完整用户原文，后续明确答复可按顺序换行追加。模型拟定的内部地址、数据结构和容量单列为实现选择。在实际 CPU 上用 `search_plc_manual` 查询 `instruction_research.families` 每组与任务相关的代表及必要配套指令；读完上下文和各查询的 `delivery.next`。比较常规实现与应用指令实现的行为、扫描顺序、边界、资源及可减少的重复代码，写清采用与排除的理由、未证实条件。按合同提交候选，并在 `implementation_review` 中填写上下文和手册的 `delivery.document_id`、所选方案及比较。用户指定的方案保持约束，相关调用仍按型号核对。
-4. **查看产物**：版本保存后调用 `get_project_artifacts()`，优先取得 `delivery.primary_artifact` 指向的 GXW；同时读取原生编译、保存与冷重开结果。GXW 无法生成时才按原因取得降级 CSV。
+3. **补充检索与提交候选**：优先使用上下文返回的 `generation_instructions`、规格与指令事实；仍需核对特定指令细节时调用 `search_plc_manual`。按合同生成 Ladder JSON（软元件注释遵守当前长度与格式要求），再调用 `create_program_candidate(ladder=..., generation_context_id=...)`。
+4. **查看产物**：版本保存成功后，可调用 `get_project_artifacts()` 获取生成的 JSON、SVG、衍生 ST 与 CSV 路径。
 
 ## 5. 离线修改 `.gxw` 中的单个或多个 POU
 
@@ -73,8 +67,6 @@
 ## 6. FBD / ST / SFC 工程读写
 
 ### FBD 与项目定义
-
-复杂设备的 FBD 主图按功能组装 ST FB。先明确运行、工序、定时计数、报警和输出互锁的职责、状态与接口；已有定义优先复用，缺少时通过 `create_fbd_candidate(operation="create_st_fb", source_name=..., declarations=..., st_text=...)` 建立真实实现。尚无保存版本时，首个定义先按所选 CPU 无基底创建本任务的 FBD 工程；随后定义复用该保存版本，读取新上下文后用 `operation="edit"` 组装主图。重复类型使用不同实例持有独立状态。主图保留少量功能网络、具名信号和短连线；不将完整状态机摊成门电路，不以空 FB 或单个整机黑盒代替模块设计。
 
 1. 选择实际 CPU 的 FBD 工程；外部 GXW 先导入为保存版本。生成或修改前调用 `get_generation_context`，带完整的 `user_requirement`。默认 `catalog_scope="task"` 按需求和源码依赖选择接口。
 2. 使用返回的 `generation_input`，重点读取下表。单独的 `get_fbd_catalog` 默认返回全目录，不能代替这些规则；缺少指定块时，用 `templates` 精确补取，并保留 `missing_templates`。需要将新增接口及依赖纳入生成时，用同一需求和明确 `templates` 重新获取上下文。
@@ -112,14 +104,14 @@
 
 查看图形、项目定义和用户库分别调用 `read_fbd_project`、`read_fbd_definition`、`read_fbd_libraries`。导入用户库时使用 `create_fbd_candidate(operation="import_library")`，绑定已保存的目标版本，传入来源 GXW 的 `data_base64` 与实际 `library_name`。当前只转移已覆盖的 ST 实现、接口和库内类型，FBD 库正文转移不受支持；目标源码、任务、调用者及声明保留。需要原生编译并保存时才对已保存版本调用 `operation="compile"`。
 
-`native_save` 是布尔值，显式 `true` 可要求准备阶段原生保存；候选确认后的交付流程仍会在发现 GX Works2 后默认编译、保存及冷重开，`false` 不关闭该默认行为。`create_fb`、`create_program` 和 `import_library` 保留各自的创建或导入流程。根据实际验证字段判断结果，文件保存本身不能证明编译或运行通过。
+`import`、`edit`、`generate` 的 `native_save` 必须是布尔值，只表示本次调用的选择：显式 `true` 请求原生保存，省略或 `false` 使用离线写入。历史版本曾原生保存不会授权本次保存；源码和声明未变时不会重复原生保存。`create_fb`、`create_program` 和 `import_library` 不接受该选项，继续使用各自的原生创建或导入路径。保存及回读成功仍不表示候选已确认、原生编译通过或运行通过。
 
 ### ST 程序与块定义
 
 1. 调用 `read_st_project` 读取既有 Program、FB、FUNCTION 的正文、返回类型、声明表和任务归属。
 2. 编辑既有对象时，以读取结果中的准确逻辑身份作为 `source_name`，调用 `create_st_candidate` 的 `edit_st_program`、`edit_st_fb`、`edit_st_function` 或通用 `edit_st_source`；多源码联合修改也可使用 `edit_gxw_project`。
 3. 只改正文时省略 `declarations`，保留原声明。需要改声明时传入完整目标列表：给出的列表整体替换原表，未列出的旧声明将删除，列表本身决定名称和顺序；`[]` 表示请求清空，仍须通过现有引用及类型检查。整表替换不与 `remove_declarations`、`renames` 或 `order` 混用。
-4. 新工程尚无 GXW 版本时，按 `get_generation_context` 返回的 `operation=generate` 合同，通过 `create_st_candidate` 提交 `st_text` 与完整 `declarations`。后台工厂按实际 CPU 创建工程，并绑定读回的 Program 和任务；失败时报告具体阶段与原因。向已有工程新增 Program 时，仍使用读取到的资源和任务构造 `task_binding`。
+4. 新建普通 ST Program 时，结合 `get_generation_context` 与工程内实际存在的资源、任务名称构造 `task_binding`，通过 `create_st_candidate` 提交。
 
 例如，只修改已读取对象的正文并保留声明：
 
@@ -143,23 +135,12 @@
 
 如需指定目标 POU 上下文可传入 `program`。从返回结果中查看 `compilation`（编译完成与通过状态）、`public_check`、`current_source_check` 及具体诊断列表。
 
-## 后台原生编译与版本交付
-
-对已保存的 Ladder/ST/FBD/SFC GXW，使用当前选中版本调用：
-
-```json
-{"plan":{"schema_version":1,"mode":"background","commands":[{"operation":"compile"},{"operation":"save"},{"operation":"reopen"}]}}
-```
-
-工具为 `execute_native_engineering`。三个步骤组成后台原生工作区的一次编译保存流程，重开后核对保存代码；请求通过后直接执行，不要求改成 full。成功返回同语言新版本，失败保留原活动版本。源码修改先通过对应候选工具或 `edit_gxw_project` 保存，后台编译不包含可见页面编辑。仅检查时使用 `validate_project(native=true)`。
-
 ## 8. 在 GX Works2 中连续可见编辑（Live 会话）
 
-1. **启动会话**：选中目标工程后，调用 `execute_native_engineering` 并传入 `plan.mode="live"`、`session_action="start"`，记录返回的工程会话 `session_id`。首次为该工程创建一份受管 GXW 工作副本，保留原保存版本；后续调用及 MCP 重启继续复用同一路径和原 GX Works2 窗口。重复 `start` 返回已有会话，不执行本次提交的命令列表。
+1. **启动会话**：选中目标工程后，调用 `execute_native_engineering` 并传入 `plan.mode="live"`、`session_action="start"`，记录返回的工程会话 `session_id`。
 2. **分步推进**：每次继续操作前，先调用 `get_native_engineering_session` 获取当前 `controls.expected_revision` 与待处理状态，再提交 `session_action="continue"`。在持续会话内获取生成上下文时传入 `execution_mode="live"`。
-3. **暂停与恢复**：需要暂停时调用 `pause_native_engineering_session(session_id=...)`。MCP 退出仅分离可恢复会话；新 MCP 进程查询状态会加载持久记录，`rebind` / `continue` 在修改前核对原 PID、进程启动时间、HWND、工作路径与 CPU。目标丢失或身份不符时报告需要协调，不新开窗口、复制工程或重放动作；旧记录字段不完整时明确报错。中断或超时后先 `rebind` 只读观察实际状态；恢复已有待处理队列使用空命令列表及 `controls.resume_pending=true`。
+3. **暂停与恢复**：需要暂停时调用 `pause_native_engineering_session(session_id=...)`；步骤中断或超时后，通过 `rebind` 先核对实际界面状态再继续。
 4. **会话内编译与地址查询**：在当前修订上执行 `compile` 步骤后，可通过 `show_assignments` 查询编译器分配地址；后续继续修改源码会使此前的编译与地址结果变为 `stale`。
-5. **保存与结束**：按任务阶段显式编译、保存或冷重开。保存验收忽略 Live 时间戳内容，仍检查实际正文、声明等实质内容；按工具实际结果区分保存、编译和运行。显式 `session_action="end"` 才结束会话，GX 窗口保持打开。
 
 ## 9. 查询编译器分配地址、代码一致性与步号定位
 

@@ -1,6 +1,3 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Exact PLC fact lookup from structured index tables.
 
 This module is deliberately separate from the broad hybrid retriever. Once a
@@ -46,18 +43,6 @@ from collections.abc import Mapping
 
 _VERSION = "structured-facts-v3-process-needs"
 from knowledge.scope import OFFICIAL_INSTRUCTION_TYPES as _OFFICIAL_INSTRUCTION_TYPES
-
-
-def query_languages(query, preferred=None):
-    languages = {preferred} if preferred in {'ladder', 'st', 'fbd', 'sfc'} else set()
-    for name, pattern in (
-            ('fbd', r'(?<![A-Za-z0-9_])FBD(?![A-Za-z0-9_])|结构化梯形图|功能块图'),
-            ('st', r'(?<![A-Za-z0-9_])ST(?![A-Za-z0-9_])|结构化文本'),
-            ('sfc', r'(?<![A-Za-z0-9_])SFC(?![A-Za-z0-9_])|顺序功能图'),
-            ('ladder', r'(?<![A-Za-z0-9_])LADDER(?![A-Za-z0-9_])|(?<!结构化)梯形图')):
-        if re.search(pattern, str(query), re.I):
-            languages.add(name)
-    return languages
 
 
 def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None, language=None):
@@ -110,9 +95,14 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None, langu
     query_metadata = getattr(query, 'metadata', {})
     target_language = language or (str(query_metadata.get('target_mode', '')).casefold()
                                   if isinstance(query_metadata, Mapping) else '')
-    requested_languages = query_languages(query, target_language)
+    requested_languages = {target_language} if target_language in {'ladder', 'st', 'fbd'} else set()
+    if re.search(r'\bFBD\b|结构化梯形图', str(query), re.I):
+        requested_languages.add('fbd')
+    if re.search(r'\bST\b|结构化文本', str(query), re.I):
+        requested_languages.add('st')
     st_context = 'st' in requested_languages
-    feature_languages, feature_aliases = {}, {}
+    applicable_features = {}
+    feature_languages = {}
     for original in getattr(DEFAULT_INSTRUCTION_REGISTRY, 'language_facts', ()):
         feature = DEFAULT_INSTRUCTION_REGISTRY.language_feature(original['target'], cpu=plc_model)
         if feature is None:
@@ -121,17 +111,12 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None, langu
                      {item for fact in feature.get('facts', []) for item in fact.get('scope', {}).get('languages', [])})
         if len(languages) != 1:
             continue
-        feature_lang = next(iter(languages))
-        feature_languages[feature['target']] = feature_lang
-        if requested_languages and feature_lang not in requested_languages:
+        language = next(iter(languages))
+        applicable_features[feature['target']] = feature
+        feature_languages[feature['target']] = language
+        if requested_languages and language not in requested_languages:
             continue
-        aliases = list(feature.get('aliases', []))
-        if feature_lang in requested_languages:
-            # A declared alias like "FBD EN/ENO" also matches "EN/ENO" in an FBD project.
-            prefix = feature_lang.upper() + ' '
-            aliases += [alias[len(prefix):] for alias in aliases if alias.upper().startswith(prefix)]
-        feature_aliases[feature['target']] = aliases
-        for alias in aliases:
+        for alias in feature.get('aliases', []):
             if alias == '**':
                 matched = '**' in str(query) and (st_context or str(query).strip() == '**'
                     or bool(re.search(r'\bST\b|幂|运算|\d\s*\*\*\s*\d', str(query), re.I)))
@@ -143,16 +128,18 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None, langu
                 break
     language_features.sort(key=lambda target: feature_scores[target], reverse=True)
     remaining_by_language, selected_features = {}, []
+    feature_by_target = applicable_features
     for target in language_features:
-        feature_lang = feature_languages[target]
-        remaining = remaining_by_language.get(feature_lang, str(query))
-        aliases = feature_aliases[target]
+        feature = feature_by_target[target]
+        language = feature_languages[target]
+        remaining = remaining_by_language.get(language, str(query))
+        aliases = feature['aliases']
         if not any(alias in remaining if alias == '**' else alias_occurs(remaining, alias) for alias in aliases):
             continue
         selected_features.append(target)
         for alias in sorted(aliases, key=len, reverse=True):
             remaining = re.sub(re.escape(alias), ' ', remaining, flags=re.I)
-        remaining_by_language[feature_lang] = remaining
+        remaining_by_language[language] = remaining
     language_features = selected_features
     # Cxxxx is also a counter spelling. A compiler diagnostic request carries
     # its own namespace; it must not retrieve a counter or incidental examples.
@@ -285,113 +272,52 @@ def _contradictory_fact_values(left, right):
     return left != right
 
 
-_MERGE_COMPARISON_IGNORED = frozenset({'id', 'sources', 'status', 'verification'})
-
-
-def _merge_comparable_fact(fact):
-    return {key: value for key, value in fact.items()
-            if key not in _MERGE_COMPARISON_IGNORED}
-
-class _FactMergeIndex:
-    """Per-accumulator lookup; store references, not copies of the facts."""
-
-    __slots__ = ('by_id', 'by_family', 'next_suffix', 'transient_ids')
-
-    def __init__(self, facts):
-        # Match the legacy dict's last-value/first-key-order behavior if the
-        # incoming accumulator happens to contain duplicate IDs.
-        self.by_id = {fact['id']: fact for fact in facts if isinstance(fact.get('id'), str) and fact['id']}
-        self.by_family = {}
-        for identity, fact in self.by_id.items():
-            if isinstance(identity, str):
-                family = identity.split(':variant:')[0]
-                self.by_family.setdefault(family, []).append(fact)
-        self.next_suffix = {}
-        self.transient_ids = set()
-
-    def begin_batch(self):
-        # The legacy routine rebuilt by_id from the accumulator and excluded
-        # falsy IDs. Keep such IDs visible within a batch, but not across calls.
-        if not self.transient_ids:
-            return
-        for identity in self.transient_ids:
-            self.by_id.pop(identity, None)
-        if '' in self.transient_ids and '' in self.by_family:
-            self.by_family[''] = [fact for fact in self.by_family['']
-                                  if fact.get('id')]
-        self.transient_ids.clear()
-
-    def add(self, fact):
-        identity = fact.get('id')
-        if not isinstance(identity, str):
-            return
-        self.by_id[identity] = fact
-        if not identity:
-            self.transient_ids.add(identity)
-        if isinstance(identity, str):
-            family = identity.split(':variant:')[0]
-            self.by_family.setdefault(family, []).append(fact)
-
-    def allocate_variant(self, family):
-        # Preserve the smallest available suffix >= 2. Since IDs are only
-        # added, the next search can resume where the previous one stopped.
-        suffix = self.next_suffix.get(family, 2)
-        while family + ':variant:' + str(suffix) in self.by_id:
-            suffix += 1
-        self.next_suffix[family] = suffix + 1
-        return family + ':variant:' + str(suffix)
-
-
-def _merge_fact_rows(left, incoming, *, _index=None):
-    """Merge source variants without repeated owner-wide ID scans or copies.
-
-    The optional index is owned by the accumulator. Callers combining several
-    batches must reuse it until the accumulator's facts list is replaced.
-    """
-    index = _index if _index is not None else _FactMergeIndex(left)
-    index.begin_batch()
+def _merge_fact_rows(left, incoming):
+    """Keep source variants and their dependencies distinct, without duplicate IDs."""
+    by_id = {fact['id']: fact for fact in left if fact.get('id')}
     remap, added = {}, []
     for original in incoming:
-        identity = original.get('id')
-        existing = index.by_id.get(identity) if isinstance(identity, str) else None
+        fact = copy.deepcopy(original)
+        identity = fact.get('id')
+        existing = by_id.get(identity)
         if existing is not None:
             family = identity.split(':variant:')[0]
-            siblings = index.by_family.get(family, ())
-            comparable = _merge_comparable_fact(original)
-            equal = next((row for row in siblings
-                          if _merge_comparable_fact(row) == comparable), None)
+            siblings = [row for key, row in by_id.items()
+                        if key == family or key.startswith(family + ':variant:')]
+            comparison = lambda row: {k: v for k, v in row.items()
+                                      if k not in {'id', 'sources', 'status', 'verification'}}
+            equal = next((row for row in siblings if comparison(row) == comparison(fact)), None)
             if equal is not None:
-                if identity != equal['id']:
-                    remap[identity] = equal['id']
-                sources = equal.setdefault('sources', [])
-                for source in original.get('sources', ()):
+                existing = equal
+                if identity != existing['id']:
+                    remap[identity] = existing['id']
+                sources = existing.setdefault('sources', [])
+                for source in fact.get('sources', ()):
                     if source not in sources:
                         sources.append(copy.deepcopy(source))
-                statuses = {equal.get('status'), original.get('status')}
+                statuses = {existing.get('status'), fact.get('status')}
                 if 'conflict' in statuses:
-                    equal['status'] = 'conflict'
-                    equal['verification'] = 'not_performed'
+                    existing['status'] = 'conflict'
+                    existing['verification'] = 'not_performed'
                 elif 'not_applicable' not in statuses:
-                    # An equal, unreviewed witness does not invalidate an
-                    # independently source-checked claim.
+                    # Another equal, unreviewed witness does not invalidate an
+                    # independently source-checked claim. No different value,
+                    # condition, scope or dependency can enter this branch.
                     strength = ('source_verified', 'candidate_evidence', 'declared_unverified', 'unknown')
-                    chosen = next((status for status in strength if status in statuses), equal.get('status'))
-                    equal['status'] = chosen
-                    equal['verification'] = 'source_checked' if chosen == 'source_verified' else 'not_performed'
+                    chosen = next((status for status in strength if status in statuses), existing.get('status'))
+                    existing['status'] = chosen
+                    existing['verification'] = 'source_checked' if chosen == 'source_verified' else 'not_performed'
                 continue
-
-            # Only new or genuinely distinct variants need an owned deep copy.
-            fact = copy.deepcopy(original)
-            fact['id'] = index.allocate_variant(family)
+            suffix = 2
+            while family + ':variant:' + str(suffix) in by_id:
+                suffix += 1
+            fact['id'] = family + ':variant:' + str(suffix)
             remap[identity] = fact['id']
             for prior in siblings:
-                same_condition = all(prior.get(k) == fact.get(k)
-                                     for k in ('dimension', 'scope', 'conditions'))
+                same_condition = all(prior.get(k) == fact.get(k) for k in ('dimension', 'scope', 'conditions'))
                 if same_condition and _contradictory_fact_values(prior.get('value'), fact.get('value')):
                     prior['status'] = fact['status'] = 'conflict'
-        else:
-            fact = copy.deepcopy(original)
-        index.add(fact)
+        by_id[fact.get('id')] = fact
         added.append(fact)
     for fact in added:
         if fact.get('depends_on'):
@@ -408,7 +334,7 @@ def merge_exact_records(records, *, plc_model):
     """
     from plc.target_identity import target_members
     members = set(target_members(plc_model))
-    merged, groups, fact_indexes = [], {}, {}
+    merged, groups = [], {}
     for original in records:
         packet = authored_packet(original)
         if packet.get('kind') != 'instruction':
@@ -430,13 +356,7 @@ def merge_exact_records(records, *, plc_model):
                 accumulated['value'] = copy.deepcopy(right)
                 accumulated['gaps'] = copy.deepcopy(packet.get('gaps', []))
                 left = accumulated['value']
-                # A directory placeholder was replaced with a new list.
-                fact_indexes.pop(key, None)
-            facts = left.setdefault('facts', [])
-            index = fact_indexes.get(key)
-            if index is None:
-                index = fact_indexes[key] = _FactMergeIndex(facts)
-            _merge_fact_rows(facts, right.get('facts', ()), _index=index)
+            _merge_fact_rows(left.setdefault('facts', []), right.get('facts', ()))
             for field, value in right.items():
                 if field not in left:
                     left[field] = copy.deepcopy(value)
@@ -1008,16 +928,6 @@ def retrieval_coverage(query, records, *, plc_model, targets=None, language=None
             'omitted_evidence_is_not_unsupported': True}
 
 
-def _selected_alias_owner_exists(registry, opcode, plc_model):
-    if registry.selected_owner_database_path() is None:
-        return True
-    from plc.target_identity import target_members
-    models = (target_members(plc_model) if plc_model else
-              {header['target_model'] for header in registry.definition_inventory
-               if header.get('opcode') == opcode})
-    return any(registry.definition_header(opcode, cpu=model) is not None for model in models)
-
-
 def _declared_instruction_alias_targets(query, *, plc_model=None):
     """Resolve declared natural-language names, not inferred implementation intent.
 
@@ -1028,27 +938,17 @@ def _declared_instruction_alias_targets(query, *, plc_model=None):
     from knowledge.analysis_router import instruction_reference_text
     query = instruction_reference_text(query)
     _index, _path, connection, schema, _meta = _runtime('instruction')
-    if connection is not None and not connection.execute("SELECT 1 FROM sqlite_master WHERE name='fact_aliases'").fetchone():
-        from knowledge.index_access import index_path, index_identity
-        installed = index_path()
-        if installed is not None and installed != _path:
-            connection = index_access.connection(installed, index_identity(installed))
-            schema = index_access.schema(connection)
-            _meta = index_access.load_meta(connection, schema)
-    if connection is not None and connection.execute("SELECT 1 FROM sqlite_master WHERE name='fact_aliases'").fetchone():
+    if connection is not None and _meta.get('corpus_kind') == 'authored_plc_facts_v1':
         from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
         targets = []
         for row in connection.execute('SELECT DISTINCT alias,opcode,alias_type,plc_models FROM fact_aliases ORDER BY alias,opcode'):
-            if not alias_occurs(query, row['alias']):
-                continue
             if plc_model and not scope_matches(row['plc_models'], plc_model):
                 continue
             if row['alias_type'] == 'opcode' and DEFAULT_INSTRUCTION_REGISTRY.resolve_fact_form(row['alias']) is not None:
                 continue
-            if not _selected_alias_owner_exists(DEFAULT_INSTRUCTION_REGISTRY, row['opcode'], plc_model):
-                continue
-            targets.append({'opcode': row['opcode'], 'base_opcode': row['opcode'],
-                'target_resolution': 'declared_manual_alias', 'requested_alias': row['alias']})
+            if alias_occurs(query, row['alias']):
+                targets.append({'opcode': row['opcode'], 'base_opcode': row['opcode'],
+                    'target_resolution': 'declared_manual_alias', 'requested_alias': row['alias']})
         return targets
     aliases = schema.get("instruction_aliases") if schema else None
     instructions = schema.get("instructions") if schema else None
@@ -1073,8 +973,6 @@ def _declared_instruction_alias_targets(query, *, plc_model=None):
             if not re.search(r"(?<![A-Za-z0-9_.$])" + re.escape(alias) + r"(?![A-Za-z0-9_.$])", query):
                 continue
         if len(alias) < 2 or not alias_occurs(query, alias):
-            continue
-        if not _selected_alias_owner_exists(DEFAULT_INSTRUCTION_REGISTRY, opcode, plc_model):
             continue
         targets.append({"opcode": opcode, "base_opcode": opcode,
                         "target_resolution": "declared_manual_alias", "requested_alias": alias})

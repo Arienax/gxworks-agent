@@ -1,11 +1,7 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Confirmed generation context and candidate preparation tools."""
 from __future__ import annotations
 from shared.privacy import credential_field, filesystem_field
 import copy
-from pathlib import Path
 import json
 from application.generation_wire import expand_context_document
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
@@ -21,7 +17,7 @@ from agent_runtime.native_tools import (
 )
 
 
-def _source_knowledge(context, arguments, source, language, confirmed_spec, *, task_type='edit'):
+def _source_knowledge(context, arguments, source, language, confirmed_spec):
     from application.generation_context import _build_knowledge_context
     from application.generation_support import _build_knowledge_query
     from knowledge.evidence import KnowledgeQuery
@@ -29,20 +25,9 @@ def _source_knowledge(context, arguments, source, language, confirmed_spec, *, t
     query = _build_knowledge_query(arguments.get('user_requirement'), source)
     knowledge = _build_knowledge_context(KnowledgeQuery(query, precompiled=True,
         metadata={'target_mode': language, 'capability_requirement': str(query)}),
-        plc_model=context.plc_model, task_type=task_type, confirmed_context=confirmed_spec)
-    extra = {}
-    if task_type == 'generate':
-        from application.capability_context import augment_generation_knowledge
-        from knowledge.evidence import context_manifest
-        from plc.specification.provenance import handoff_snapshot
-        knowledge = augment_generation_knowledge(str(query), knowledge, plc_model=context.plc_model,
-            target_mode=language, confirmed_spec=confirmed_spec)
-        manifest = context_manifest(knowledge, stage='generate')
-        handoff = handoff_snapshot(confirmed_spec, evidence=manifest)
-        handoff['capability_discovery'] = copy.deepcopy(manifest['capability_discovery'])
-        extra['generation_handoff'] = handoff
+        plc_model=context.plc_model, task_type='edit', confirmed_context=confirmed_spec)
     return {'knowledge': technical_context_units(knowledge),
-            'knowledge_coverage': technical_knowledge_coverage(knowledge), **extra}
+            'knowledge_coverage': technical_knowledge_coverage(knowledge)}
 
 
 def _get_generation_context(
@@ -88,9 +73,6 @@ def _get_generation_context(
         CONFIRMED_GENERATION_REQUEST, project_confirmed_specification,
     )
     public_spec = public_generation_specification(confirmed_spec)
-    if target_mode in ('st', 'sfc') and context.native_snapshot is None:
-        from application.gxw_delivery import new_generation_context
-        return new_generation_context(context, arguments)
     if target_mode == 'sfc':
         snapshot = _read_sfc_project(context, {})
         return {'project_id': context.project_id, 'plc_model': snapshot['model']['cpu'], 'target_mode': 'sfc',
@@ -129,12 +111,8 @@ def _get_generation_context(
                     'Provide its complete st_text body. Omitted declarations retain the current table; '
                     'if changed, declarations is the complete ordered list. Keep callers and task registration. '
                     'Unsafe interface changes are rejected by the shared source checks.',
-                'output_contract': {
-                    'tool': 'create_st_candidate', 'operation': operation,
-                    'source_name': selected_name, 'editable_fields': ['st_text', 'declarations'],
-                    **({'alternatives': [{'tool': 'create_fbd_candidate', 'operation': operation,
-                                          'source_name': selected_name}]}
-                       if selected[0]['kind'] == 'function_block' else {})}}
+                'output_contract': {'tool': 'create_st_candidate' if selected[0]['kind'] == 'function' else 'create_fbd_candidate', 'operation': operation,
+                    'source_name': selected_name, 'editable_fields': ['st_text', 'declarations']}}
         if (len(selected) != 1 or selected[0]['kind'] != 'program' or selected[0]['language'] != 'st'
                 or selected[0]['source_status'] != 'available' or len(selected[0]['task_bindings']) != 1
                 or not isinstance(context.st_text, str)
@@ -215,23 +193,10 @@ def _get_generation_context(
             catalog_scope=scope, templates=arguments.get('templates'),
             device_comments=comments, comment_tables=tables,
             source_baseline=context.fbd_baseline)
-        is_new_fbd = not (context.version_id and context.fbd_baseline is not None)
-        from application.gxw_delivery import gxw_delivery_capability
         graph_contract = {
             'tool': 'create_fbd_candidate', 'schema_version': 2,
             'input_shape': 'parameters', 'model_schema_ref': '#/generation_input/parameter_schema',
-            'operation': 'generate' if is_new_fbd else 'edit',
-            'required_fields': ['operation', 'model'] + (['implementation_review'] if is_new_fbd else []),
-            **({'gxw_delivery': gxw_delivery_capability(context.plc_model),
-                'review_contract': {'argument': 'implementation_review',
-                                    'required_fields': ['context_document', 'manual_documents']}}
-               if is_new_fbd else {}),
-            'instructions': (
-                'Pass the parameter_schema object ({"schema_version": 2, "networks": [...]}) directly as the '
-                'top-level model argument and summary as the top-level summary argument; do not wrap another '
-                '{summary, model} object inside model.'
-                + (' Include top-level implementation_review referencing this delivery.document_id when operation="generate".'
-                   if is_new_fbd else '')),
+            'operation': 'edit' if previous is not None else 'generate',
         }
         joint = generation['generation_input']['supported_paths']['joint_multi_source_transaction']
         output_contract = graph_contract
@@ -305,52 +270,27 @@ def _get_generation_context(
     current_ladder = public_generation_ladder(source)
     user_requirement = public_generation_value(str(arguments.get("user_requirement") or ""))
     is_edit_mode = target_mode == "ladder" and current_ladder is not None
-    receipt_id = _decision_receipt_id(context)
-    direct = (arguments.get('workflow') != 'detailed' and bool(user_requirement.strip()) and
-              (not confirmed_spec or arguments.get('workflow') == 'direct_generation'))
-    design = bool(confirmed_spec) and (
-        arguments.get('workflow') == 'detailed'
-        or (
-            arguments.get('workflow') is None
-            and bool(receipt_id)
-            and (bool(user_requirement.strip()) or str(context.project.get('generation_mode') or '') == 'design')
-        )
-    )
-    gxw_delivery = None
-    if target_mode == 'ladder' and not is_edit_mode:
-        from application.gxw_delivery import gxw_delivery_capability
-        gxw_delivery = gxw_delivery_capability(context.plc_model)
-    if target_mode == 'ladder' and not is_edit_mode and (direct or design):
-        from application.confirmed_generation_context import build_direct_generation_context, build_confirmed_generation_context
-        from application.generation_agent import _compact_wire_renderer
-        from application.construction_examples import prepare_construction_examples
+    if (target_mode == "ladder" and not is_edit_mode
+            and arguments.get("workflow") != "detailed"
+            and (not confirmed_spec or arguments.get("workflow") == "direct_generation")
+            and str(arguments.get("user_requirement") or "").strip()):
+        from application.confirmed_generation_context import build_direct_generation_context
+        from application.generation_agent import _compact_wire_renderer, direct_response_schema
         from application.compact_protocol import PROTOCOL_VERSION
-        projected = project_confirmed_specification(confirmed_spec)
-        examples = prepare_construction_examples(context.plc_model, None, projected)
-        options = dict(knowledge_builder=_build_knowledge_context, model_profile={},
-                       wire_renderer=_compact_wire_renderer(context.plc_model, direct=direct, example_block=examples))
-        if direct:
-            packet = build_direct_generation_context(str(arguments['user_requirement']), context.plc_model,
-                                                     confirmed_spec=confirmed_spec, **options)
-        else:
-            packet = build_confirmed_generation_context(projected, context.plc_model,
-                         decision_receipt_id=receipt_id, **options)
-        handoff = {**packet.handoff, 'construction_examples': examples.manifest(),
-                   'output_contract': {'protocol': PROTOCOL_VERSION}}
-        generation_input = expand_context_document(json.loads(packet.wire_packet['messages'][1]['content']))
-        return {'project_id': context.project_id, 'plc_model': context.plc_model, 'target_mode': target_mode,
-                'workflow_mode': 'direct_generation' if direct else 'detailed', 'has_confirmed_spec': bool(confirmed_spec),
-                'confirmed_spec_ref': '#/generation_input/confirmed_spec', 'generation_input': generation_input,
-                'current_version_id': None, 'generation_request': packet.generation_request,
-                'generation_instructions': packet.wire_packet['messages'][0]['content'], 'generation_handoff': handoff,
-                'output_contract': {
-                    'tool': 'create_program_candidate', 'protocol': PROTOCOL_VERSION,
-                    'argument': 'ladder', 'schema_ref': '#/generation_input/output_schema',
-                    'required_fields': ['ladder', 'implementation_review'],
-                    'review_contract': {'argument': 'implementation_review',
-                                        'required_fields': ['context_document', 'manual_documents']},
-                    'gxw_delivery': gxw_delivery,
-                }}
+        raw = str(arguments["user_requirement"])
+        direct = build_direct_generation_context(raw, context.plc_model, confirmed_spec=confirmed_spec,
+            knowledge_builder=_build_knowledge_context, model_profile={},
+            wire_renderer=_compact_wire_renderer(context.plc_model, direct=True))
+        generation_input = expand_context_document(json.loads(direct.wire_packet['messages'][1]['content']))
+        return {"project_id": context.project_id, "plc_model": context.plc_model, "target_mode": target_mode,
+                "workflow_mode": "direct_generation", "has_confirmed_spec": bool(confirmed_spec),
+                "confirmed_spec_ref": '#/generation_input/confirmed_spec',
+                "generation_input": generation_input,
+                "current_version_id": None, "generation_request": raw,
+                "generation_instructions": direct.wire_packet["messages"][0]["content"],
+                "generation_handoff": direct.handoff,
+                "output_contract": {"tool": "create_program_candidate", "protocol": PROTOCOL_VERSION,
+                                    "schema_ref": '#/generation_input/output_schema', "needs_input": "向用户提出必要问题，解决前不得创建候选。"}}
     if target_mode == "ladder" and isinstance(confirmed_spec, Mapping) and confirmed_spec:
         public_spec = project_confirmed_specification(confirmed_spec)
         if not is_edit_mode:
@@ -374,6 +314,7 @@ def _get_generation_context(
         on_context=capture_context,
         model_profile={},
     )
+    receipt_id = _decision_receipt_id(context)
     if receipt_id:
         generation_handoff["decision_receipt_id"] = receipt_id
     return {
@@ -387,11 +328,6 @@ def _get_generation_context(
                              if hasattr(instructions, 'wire_packet') else {}),
         "output_contract": {**{key: value for key, value in generation_output_contract(
             allow_partial=is_edit_mode, plc_model=context.plc_model, target_mode=target_mode).items() if key != 'schema'},
-            **({'tool': 'create_program_candidate', 'argument': 'ladder',
-                'review_contract': {'argument': 'implementation_review',
-                                    'required_fields': ['context_document', 'manual_documents']},
-                'gxw_delivery': gxw_delivery}
-               if target_mode == 'ladder' and not is_edit_mode else {}),
             'schema_ref': '#/generation_input/output_schema'},
         "current_version_id": context.version_id or None,
         "generation_instructions": instructions,
@@ -411,59 +347,13 @@ def _create_program_candidate(
     core = PLCCore()
     confirmed_spec = copy.deepcopy(_confirmed_spec(context))
     candidate_spec = confirmed_spec
-    ladder = copy.deepcopy(arguments["ladder"])
-    if isinstance(ladder, Mapping) and not ({'r', 'root', 'rungs', 'result', 'program'} & set(ladder)):
-        if 'ladder' in ladder:
-            raise ValueError(
-                "Pass the ladder program object directly as the 'ladder' argument; "
-                "do not wrap another {'ladder': ...} object inside 'ladder'."
-            )
-        if 'networks' in ladder:
-            raise ValueError(
-                "create_program_candidate expects compact {'r': [...]} (or Direct "
-                "{'result': {'program': {'r': [...]}, 'decisions': [], 'open_items': []}}) "
-                "or ladder_v1 {'rungs': [...]}; 'networks' belongs to patch_program / create_fbd_candidate."
-            )
-        if 'content' in ladder:
-            raise ValueError(
-                "Pass the ladder program object directly as 'ladder' without an outer {'content': ...} wrapper."
-            )
-    from application.compact_alias import _hybrid_to_compact
-    from application.generation_agent import direct_response_parts, prepare_model_candidate
-    is_direct = (generation_handoff or {}).get('mode') == 'direct_generation'
-    notes = None
-    if is_direct:
+    ladder = arguments["ladder"]
+    if isinstance(generation_handoff, dict) and generation_handoff.get("mode") == "direct_generation":
         from application.confirmed_generation_context import project_direct_user_facts
-        candidate_spec = project_direct_user_facts(generation_handoff['raw_requirement'], context.plc_model, confirmed_spec)
-    wrapped = set(ladder) == {'result'} or ('program' in ladder and set(ladder) <= {'program', 'decisions', 'open_items'})
-    if is_direct or wrapped:
-        ladder, notes = direct_response_parts(ladder)
-    if isinstance(ladder, Mapping):
-        raw_comments = ladder.get('device_comments')
-        if ('r' in ladder or 'root' in ladder) and isinstance(raw_comments, Mapping) and all(
-            isinstance(k, str) and isinstance(v, str) for k, v in raw_comments.items()
-        ):
-            ladder['device_comments'] = [{'address': k, 'comment': v} for k, v in raw_comments.items()]
-        elif 'rungs' in ladder and isinstance(raw_comments, list) and all(
-            isinstance(row, Mapping) and set(row) == {'address', 'comment'}
-            and isinstance(row.get('address'), str) and isinstance(row.get('comment'), str)
-            for row in raw_comments
-        ):
-            ladder['device_comments'] = {row['address']: row['comment'] for row in raw_comments}
-    fragment_receipt = None
-    if ('r' in ladder or 'root' in ladder or _hybrid_to_compact(ladder) is not None
-            or (is_direct and set(ladder) <= {'rungs', 'device_comments'})):
-        from application.confirmed_generation_context import project_confirmed_specification
-        from application.instruction_fragments import materialize_instruction_fragments
-        ladder, fragment_receipt = materialize_instruction_fragments(
-            ladder, arguments.get('_instruction_research') or {}, plc_model=context.plc_model,
-            confirmed_spec=candidate_spec)
-        projected = candidate_spec if is_direct else project_confirmed_specification(candidate_spec)
-        prepared = prepare_model_candidate(ladder, projected or {}, context.plc_model)
-        ladder = prepared['ladder']
-        if generation_handoff is not None:
-            generation_handoff = {**generation_handoff, **{key: prepared[key] for key in (
-                'operation_binding', 'construction_binding', 'confirmed_predicate_binding')}}
+        from application.generation_agent import prepare_model_candidate
+        candidate_spec = project_direct_user_facts(generation_handoff["raw_requirement"], context.plc_model, confirmed_spec)
+        if isinstance(ladder, Mapping) and ("r" in ladder or "result" in ladder):
+            ladder = prepare_model_candidate(ladder, candidate_spec, context.plc_model)["ladder"]
     candidate = core.create_program_candidate(
         ladder,
         plc_model=context.plc_model,
@@ -471,59 +361,7 @@ def _create_program_candidate(
         confirmed_spec=candidate_spec,
         previous_program=context.program_ir,
     )
-    from simulator.io_example import check_independent_acceptance, check_io_example
-    from plc.ir import ir_to_ladder
-    from agent_runtime.tool_errors import ToolPreconditionError
-    replay_ladder = ir_to_ladder(candidate['candidate_ir'])
-    behavior_result = check_independent_acceptance(replay_ladder, context.plc_model,
-        project_id=context.project_id, confirmed_spec=confirmed_spec)
-    if behavior_result['status'] == 'mismatch':
-        source_indexes = (fragment_receipt or {}).get('source_network_indexes')
-        witnesses = behavior_result.get('counterexamples') or [behavior_result]
-        output_indexes = {}
-        for witness in witnesses:
-            indexes = witness.get('network_indexes', [])
-            if candidate['normalization'].get('changes'):
-                # Equivalent networks may be merged or split by Core. Locate
-                # each observed output in the model's pre-normalization program.
-                from simulator.io_example import source_networks_for_output
-                address = witness.get('address')
-                if address not in output_indexes:
-                    output_indexes[address] = source_networks_for_output(ladder, context.plc_model, address)
-                indexes = output_indexes[address]
-            if source_indexes is not None:
-                indexes = (sorted({source_indexes[i] for i in indexes})
-                    if len(source_indexes) == len(ladder['rungs']) and
-                    all(0 <= i < len(source_indexes) for i in indexes) else [])
-            witness['network_indexes'] = indexes
-        behavior_result['network_indexes'] = sorted({i for witness in witnesses for i in witness['network_indexes']})
-        if behavior_result.get('counterexamples'):
-            for case in behavior_result.get('cases', []):
-                if case.get('case_id') == behavior_result.get('case_id'):
-                    case['network_indexes'] = behavior_result['network_indexes']
-                    case['counterexamples'] = copy.deepcopy(behavior_result['counterexamples'])
-        raise ToolPreconditionError('CANDIDATE_BEHAVIOR_MISMATCH', '独立用户验收用例发现确定反例。',
-                                    details={'behavior_result': behavior_result})
-    example_result = None
-    if 'io_example' in arguments:
-        example_result = {'source': 'generator_self_check',
-                          **check_io_example(replay_ladder, context.plc_model, arguments['io_example'])}
-    import tempfile
-    from application.fbd import pack_candidate
-    from application.session import ProjectSession
-    with tempfile.TemporaryDirectory(prefix="ladder-candidate-") as directory:
-        compiled = core.compile_project(candidate["candidate_ir"], directory, validation_profile=candidate["validation_profile"])
-        metadata = ProjectSession._ir_metadata(candidate["candidate_ir"])
-        metadata.update(target_mode="ladder", plc_model=context.plc_model,
-                        validation_profile=candidate["validation_profile"], validation=candidate["diagnostics"],
-                        delivery_requested=True, behavior_result=copy.deepcopy(behavior_result),
-                        io_example_result=copy.deepcopy(example_result),
-                        fragment_review=copy.deepcopy((fragment_receipt or {}).get('interference_review')))
-        import hashlib
-        payload = dict(target_mode="ladder", plc_model=context.plc_model, staging_dir=directory, metadata=metadata,
-                       artifacts={key: {"path": value, "sha256": hashlib.sha256((Path(directory) / value).read_bytes()).hexdigest()}
-                                  for key, value in compiled["artifacts"].items()})
-        frozen_candidate = pack_candidate(payload, directory)
+    compiled = core.compile_project(candidate["candidate_ir"], validation_profile=candidate["validation_profile"])
     if not isinstance(generation_handoff, dict):
         from application.confirmed_generation_context import project_confirmed_specification
         from plc.specification.provenance import handoff_snapshot
@@ -534,12 +372,6 @@ def _create_program_candidate(
                       "reason": "external_context_not_correlated"},
         )
     generation_handoff = copy.deepcopy(generation_handoff)
-    if fragment_receipt:
-        generation_handoff['instruction_fragments'] = fragment_receipt
-    if arguments.get('_implementation_assumptions'):
-        generation_handoff['implementation_assumptions'] = copy.deepcopy(arguments['_implementation_assumptions'])
-    if notes is not None:
-        generation_handoff['generator_notes'] = {'source': 'generator', **notes}
     generation_handoff["confirmed_spec_sha256"] = (
         canonical_sha256(confirmed_spec) if confirmed_spec is not None else None)
     generation_handoff["external_model_use"] = "not_observed"
@@ -564,16 +396,12 @@ def _create_program_candidate(
         "_validation_profile": candidate["validation_profile"],
         "normalization": copy.deepcopy(candidate["normalization"]),
         "_generation_handoff": generation_handoff,
-        "_behavior_result": copy.deepcopy(behavior_result),
-        "_fragment_review": copy.deepcopy((fragment_receipt or {}).get('interference_review')),
-        "_io_example_result": copy.deepcopy(example_result),
     }
-    action.update(target_mode="ladder", _prepared_candidate=frozen_candidate)
     if context.program_ir is not None:
         action.update(base_version_id=context.version_id, base_ir_sha256=canonical_sha256(context.program_ir))
     return {
         "requires_confirmation": True,
-        "message": "程序候选已通过结构检查和临时编译，等待工程确认；有限行为回放见独立结果，原生验证尚未执行。",
+        "message": "程序候选已通过结构检查和临时编译，等待工程确认；行为与原生验证尚未执行。",
         "candidate_id": candidate["candidate_id"],
         "revision": candidate["revision"],
         "summary": copy.deepcopy(candidate["summary"]),
@@ -590,9 +418,6 @@ def _create_program_candidate(
             "scope": "API structural acceptance, IR consistency and temporary artifact compilation only. Static findings are diagnostics. "
                      "Input sequences, timing and requirement coverage still need independent verification.",
         },
-        **({'io_example_result': example_result} if example_result is not None else {}),
-        'behavior_result': behavior_result,
-        'fragment_review': copy.deepcopy((fragment_receipt or {}).get('interference_review')),
         "pending_action": action,
     }
 
@@ -617,8 +442,7 @@ class GenerationToolHandlers:
         return canonical_sha256({
             "project_id": context.project_id, "version_id": context.version_id,
             "plc_model": context.plc_model,
-            "target_mode": str((context.version or {}).get("target_mode")
-                               or context.project.get("target_mode") or "ladder"),
+            "target_mode": str(context.project.get("target_mode") or "ladder"),
             "confirmed_spec": project_confirmed_specification(_confirmed_spec(context)),
             "program": public_generation_ladder(program),
         })

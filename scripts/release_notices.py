@@ -1,6 +1,3 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Stage project notices and installed dependency licenses for executable ZIPs."""
 import importlib.metadata as metadata
 from pathlib import Path
@@ -13,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def stage(package: Path, component: str):
-    for name in ('LICENSE', 'NOTICE', 'LICENSE-SCOPE.md', 'THIRD_PARTY_NOTICES.md',
+    for name in ('LICENSE', 'LICENSE-SCOPE.md', 'THIRD_PARTY_NOTICES.md',
                  'README.md', 'README.zh-CN.md', 'README.ja.md', 'CHANGELOG.md'):
         shutil.copyfile(ROOT / name, package / name)
     if component == 'full':

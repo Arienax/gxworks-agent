@@ -1,38 +1,78 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+"""Create a reviewable source-only public snapshot without private Git history.
 
-"""Export source while separating research materials and development output."""
+This export is deliberately narrow. Research evidence, vendor manuals and their
+derived knowledge indexes, internal development documents, and generated build
+artifacts never enter the snapshot. Run it into a new empty directory, inspect the
+result, and only then synchronize it with the public checkout.
+"""
 from __future__ import annotations
 
 import argparse
 import json
 from pathlib import Path
 import shutil
-import sys
 
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
-from publication.source_policy import source_files
+ROOT_FILES = (
+    "LICENSE", "LICENSE-SCOPE.md", "THIRD_PARTY_NOTICES.md",
+    "README.md", "README.zh-CN.md", "README.ja.md", "CHANGELOG.md",
+    "build-web.bat", "start-web.cmd", "gxworks-agent-mcp.cmd", "gxworks-agent-mcp",
+    "requirements/web.txt", "requirements/mcp.txt", "requirements/context.txt",
+    "scripts/build_web_source.ps1", "scripts/start_web.ps1",
+    "scripts/mcp_entry.py", "scripts/web_entry.py",
+    "scripts/build_release.py", "scripts/build_web_package.ps1", "scripts/release_notices.py",
+    "scripts/export_open_source.py",
+    "scripts/release_smoke.py", "scripts/runtime_knowledge_resources.py",
+    "scripts/runtime_st_smoke.py",
+    "packaging/pyinstaller/release.spec", "requirements/release.txt", "requirements/release-mcp.txt",
+    "tools/build_workspace_adapter.ps1", "tools/build_active_document.ps1", "tools/build_hardware_reader.ps1",
+    "tools/build_simulator_gateway.ps1",
+    "tools/gxw_visible_session.py",
+    "resources/app.ico", "resources/config.default.json", "resources/plc_models.json",
+    "resources/pattern_library.json", "resources/instructions/control_runtime.json",
+    "resources/instructions/mitsubishi/fx3u_step_widths.json",
+)
 
+WEB_ROOT = (
+    "index.html", "simulator.html", "package.json", "package-lock.json",
+    "openapi.json", "tsconfig.json", "vite.config.ts", "LICENSE.md",
+)
 
-# Known format names remain importable by existing runtime-format tests.
-# They do not control which files may be exported.
 TEMPLATE_NAMES = {
     "blank-fbd-projects.zip.xz", "blank-ladder-projects.zip.xz",
-    "fx3u.gxw", "nodes.json", "provenance.json",
+        "fx3u.gxw", "nodes.json", "provenance.json",
     "q02-token-grammar.json", "q03udv-token-grammar.json",
-    "fx-token-encoder-forms.json", "q-token-encoder-forms.json",
+    "fx-token-encoder-forms.json",
+    "q-token-encoder-forms.json",
 }
 STRUCTURED_CATALOGS = (
     "common.json", "fx3u.json", "fx5u.json", "fx3u_verified_opcodes.json",
     "modifier_rules.json", "instruction_capabilities.json",
-    "pwm_reviewed_facts.json", "pwm_contract.generated.json",
 )
 
 
 def candidates(root: Path):
-    yield from source_files(root)
+    for name in ROOT_FILES:
+        yield root / name
+    for name in WEB_ROOT:
+        yield root / "web" / name
+    for folder, suffixes in (
+        ("src", {".py"}),
+        ("web/src", {".ts", ".tsx", ".css"}),
+        ("web/tests", {".mjs"}),
+        ("native_adapters", {".cs", ".manifest"}),
+        ("hardware_reader", {".cs", ".md"}),
+        ("simulator_gateway", {".cs", ".md"}),
+        ("resources/model_catalog", {".json"}),
+        ("resources/locales", {".json"}),
+    ):
+        for path in sorted((root / folder).rglob("*")):
+            if path.is_file() and path.suffix in suffixes:
+                yield path
+    for name in sorted(TEMPLATE_NAMES):
+        yield root / "src/gxw/templates" / name
+    for name in STRUCTURED_CATALOGS:
+        yield root / "resources/instructions/mitsubishi" / name
 
 
 def safe_template_json(path: Path) -> bytes:
@@ -68,45 +108,37 @@ def safe_structured_catalog(path: Path) -> bytes:
     return (json.dumps(data, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
 
 
-def export_source(root: Path, destination: Path) -> int:
-    root, destination = root.resolve(), destination.resolve()
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--destination", type=Path, required=True)
+    args = parser.parse_args()
+    root = Path(__file__).resolve().parents[1]
+    destination = args.destination.resolve()
     if destination == root or root in destination.parents:
-        raise ValueError("destination must be outside the development source tree")
+        parser.error("destination must be outside the private source tree")
     if destination.exists() and any(destination.iterdir()):
-        raise ValueError("destination must be empty")
+        parser.error("destination must be empty")
     destination.mkdir(parents=True, exist_ok=True)
-    count = 0
+    names = set()
     for path in candidates(root):
         if not path.is_file() or path.is_symlink():
             raise RuntimeError(f"missing or linked source file: {path}")
         relative = path.relative_to(root)
         name = relative.as_posix()
+        if name in names:
+            raise RuntimeError(f"duplicate export path: {name}")
+        names.add(name)
         target = destination / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         if name.startswith("src/gxw/templates/") and path.suffix == ".json":
             target.write_bytes(safe_template_json(path))
         elif name == "resources/instructions/mitsubishi/fx3u_step_widths.json":
             target.write_bytes(safe_native_encoding(path))
-        elif name.startswith("resources/instructions/mitsubishi/") and path.suffix == ".json":
+        elif name.startswith("resources/instructions/mitsubishi/"):
             target.write_bytes(safe_structured_catalog(path))
         else:
-            data = path.read_bytes()
-            if path.suffix.lower() in {'.py', '.md', '.json', '.yml', '.yaml', '.ts', '.tsx', '.css', '.html', '.ps1', '.toml'}:
-                data = data.replace(b'\r\n', b'\n')
-            target.write_bytes(data)
-        count += 1
-    return count
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--destination", type=Path, required=True)
-    args = parser.parse_args()
-    try:
-        count = export_source(ROOT, args.destination)
-    except ValueError as error:
-        parser.error(str(error))
-    print(f"Exported {count} source paths to {args.destination}; research materials excluded")
+            shutil.copyfile(path, target)
+    print(f"Exported {len(names)} reviewed source paths to {destination}")
     return 0
 
 

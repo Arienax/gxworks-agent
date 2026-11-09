@@ -1,9 +1,5 @@
 <h1 align="center">GXWorks Agent</h1>
 
-<p align="center"><strong>原作者：<a href="https://github.com/Arienax">Arienax</a></strong> · <a href="https://github.com/Arienax/gxworks-agent">github.com/Arienax/gxworks-agent</a></p>
-
-<p align="center">© 2026 Arienax · Apache-2.0</p>
-
 <h3 align="center">面向三菱 PLC 工程的 MCP 工具服务与 AI 工作台</h3>
 
 <p align="center"><strong>读取工程上下文 · 生成与审阅程序 · 驱动 GX Works2 原生工程与诊断</strong></p>
@@ -17,15 +13,13 @@
 
 <p align="center"><strong><a href="https://github.com/Arienax/gxworks-agent/releases/latest">下载发布包</a> · <a href="#mcp">MCP 与 Web</a> · <a href="https://github.com/Arienax/gxworks-agent/issues">问题反馈</a></strong></p>
 
-<p align="center"><a href="#quick-start">快速上手</a> · <a href="#offline-gxw">离线 GXW 编辑</a> · <a href="#ladder">Ladder</a> · <a href="#st">ST</a> · <a href="#fbd">FBD</a> · <a href="#rag">工程 RAG</a> · <a href="#native-session">原生会话</a> · <a href="#web">Web 工作台</a> · <a href="#diagnostics">诊断与验证</a></p>
+<p align="center"><a href="#quick-start">快速上手</a> · <a href="#offline-gxw">离线 GXW 编辑</a> · <a href="#ladder">Ladder</a> · <a href="#st">ST</a> · <a href="#fbd">FBD</a> · <a href="#native-session">原生会话</a> · <a href="#web">Web 工作台</a> · <a href="#diagnostics">诊断与验证</a></p>
 
 <p align="center"><strong>简体中文</strong> · <a href="README.md">English</a> · <a href="README.ja.md">日本語</a></p>
 
-GXWorks Agent 将三菱 PLC 的工程上下文、按 CPU 组织的指令事实、确定性静态校验与 GX Works2 原生操作封装为统一的工程工具链，支持 **Ladder（梯形图）**、**ST（结构化文本）**、**FBD（功能块图）** 以及 **SFC** 工程的受控编辑与诊断；无窗口新建按所选 CPU 的原生工程配置执行。
+GXWorks Agent 将三菱 PLC 的工程上下文、按 CPU 组织的指令事实、确定性静态校验与 GX Works2 原生操作封装为统一的工程工具链，支持 **Ladder（梯形图）**、**ST（结构化文本）**、**FBD（功能块图）** 以及已有 **SFC** 工程的受控编辑与诊断。
 
 你可以通过 **MCP** 将工程工具直接接入 Codex、Claude Desktop、Cursor 等客户端，复用客户端自身的模型完成规划、生成、原生会话编辑与验证，并保存带版本的工程产物；也可以启动可选的 **Web 工作台**，在浏览器中生成程序、审阅图形差异、运行仿真测试并按授权交付到 GX Works2。
-
-GX Works2 **1.635.0.1** 下，57 个可编程 CPU 菜单（Q 42、L 5、FX 10，合计 69 个具体成员）的 **226 个默认合法语言组合**已逐项完成无基底后台新建、复杂内容写入、已有源码编辑、原生编译、完整公开检查、保存与冷重开。Ladder/SFC 默认简单工程，ST/FBD 默认结构化工程；FX1 的原生结构化菜单不提供 ST/FBD，该限制不阻断已有工程读取。四语言优先交付 GXW，发现安装后自动编译；复杂 FBD 使用实际 ST 功能块组装。此结果限定于上述软件版本和工程操作，不代表所有物理成员已实机运行，也不代替具体指令与构造的能力检查。
 
 <a name="offline-gxw"></a>
 
@@ -45,9 +39,7 @@ GX Works2 **1.635.0.1** 下，57 个可编程 CPU 菜单（Q 42、L 5、FX 10，
 
 全部 FX/Q/L 型号目录参与文件能力判断，按 CPU、格式、对象和操作返回支持范围。局部未知记录保持原字节，其他已解析对象可照常编辑；存在未决依赖的修改会返回具体对象和原因。该入口专注于既有源码对象、声明项与注释的离线修改。
 
-源码或声明修改后，之前的编译结果会自动标记为过期。保存候选时，发现 GX Works2 就自动编译、保存和冷重开；也可对已有版本显式运行原生检查。
-
-`validate_project(native=true)` 在隔离副本中编译并检查，`compilation.acceptance=accepted` 表示编译器接受当前副本。它不回写编译产物；`save.completed` 和 `save.exported` 均为 `false`，下载的工程在 GX Works2 中仍可能显示待编译。公开工具 `compile_project` 也仅执行本地 Core 编译。需要保存原生编译产物时，应在 GX Works2 中编译并保存，或使用独立工作区 API `NativeWorkspaceSourceSave.compile_project`，并核对保存与冷重开结果。编译、代码检查、保存及 PLC 运行是各自独立的结果。
+源码或声明修改后，之前的编译结果会自动标记为过期，需要编译器验证时可显式运行原生编译检查。
 
 <a name="ladder"></a>
 
@@ -65,14 +57,14 @@ GX Works2 **1.635.0.1** 下，57 个可编程 CPU 菜单（Q 42、L 5、FX 10，
 
 ST 工作流兼顾独立文本生成与 GXW 原生工程维护：
 
-- **Web 生成与审阅**：在工作台中分析需求、确认规格，结合所选 CPU 的指令上下文与 ST 调用签名生成正文与声明，优先装配并交付 GXW；无法创建工程时才降级为 `program.txt` 与可导入 GX Works2 的全局标签 `global_labels.csv` 并说明原因。CSV 无法表达的初始值或声明属性会随 TXT 给出具体提示，导入后需按提示补齐。支持候选预览和版本间文本差异比对。Ladder 工程也可从 PLC IR 导出可追溯的 ST。
+- **Web 独立生成与审阅**：在工作台中分析需求、确认规格，结合所选 CPU 的指令上下文与 ST 调用签名生成 `program.st`，支持候选预览、版本间文本差异比对与产物保存。Ladder 工程也可从 PLC IR 导出可追溯的 ST。
 - **GXW ST 工程编辑**：`read_st_project` 读取已有 Program、FB、FUNCTION 的正文、声明和归属；`create_st_candidate` 可离线编辑既有正文与声明。新建普通 ST Program 仍沿用显式资源、任务及原生操作流程；持续原生会话可独立完成与 FBD 的协同编辑和编译。
 
 本地 ST 检查器负责快速校验已覆盖的语法与语义并标出待确认构造，后续可配合 GX Works2 原生编译完成完整编译器检查。
 
 <a name="fbd"></a>
 
-## FBD：工程新建与复杂 GXW 工程编辑
+## FBD：从空白模板到复杂 GXW 工程编辑
 
 ![MCP 为已有 FBD 工程第一轴加入故障锁存、复位和延时使能](resources/assets/fbd-control-logic-demo.gif)
 
@@ -80,15 +72,12 @@ ST 工作流兼顾独立文本生成与 GXW 原生工程维护：
 
 除演示中的连线改接外，FBD 模块覆盖完整的工程构建与维护链路：
 
-- **新建或导入工程**：GX Works2 1.635.0.1 配合 v4 工作区适配器，查询所选 CPU 的原生系列和子系列后无基底创建 FBD 工程，遵守对应型号的工程类型与语言条件；内置 57 个 CPU 的 FBD 资源用于目录和兼容输入。也可导入已有 `.gxw`，继续编辑其自身源码。
+- **模板起步或导入现有工程**：内置 57 个按 CPU 区分的空白 FBD 起始工程，可直接按机型创建新工程，也可导入已有 `.gxw` 工程继续编辑。
 - **参数级与图形级双模编辑**：既可依据 `get_fbd_catalog` 返回的参数 schema 直接提交 `calls` 与 `arguments`（由 Core 自动展开端口、`IN_OUT` 配对并生成布线），也可显式增删改节点、端子、正交连线与多网络结构。
-- **模块化组装**：复杂设备以 ST 功能块封装工序、定时计数、报警和互锁，FBD 主图通过具名端口和标签组装、复用实例，保持功能网络清晰。缺少的块先创建真实 ST 实现；无保存版本时，首个 `create_st_fb` 按实际 CPU 在后台新建本任务工程，后续定义和主图编辑复用该保存版本。
 - **定义编写、库导入与任务注册**：支持读取和编写项目结构体、ST/FBD 功能块及全局/局部声明表；支持从来源 `.gxw` 导入用户库定义（`read_fbd_libraries` / `import_library`）而保留当前调用程序；支持在来源工程允许的范围内新建 FB 与普通 Program，并将 Program 注册到既有任务、新任务或新资源，或调整系统软元件分配范围。
-- **产物与验证**：GXW 交付包含 `program.gxw`、`fbd.json`、`fbd.svg` 与写入报告。发现 GX Works2 后，保存自动执行编译、保存和冷重开；无法创建工程时保留结构化候选并说明降级原因。各项验证结果绑定对应版本。
+- **产物与验证解耦**：每次保存生成 `program.gxw`、`fbd.json`、`fbd.svg` 与写入报告。本地回读校验、原生保存、独立编译与代码检查分别执行，结果各自绑定对应工程版本。
 
 <a name="native-session"></a>
-
-对已保存的 Ladder、ST、FBD、SFC GXW 版本，使用 `execute_native_engineering` 的 `plan.mode="background"`，依次提交 `compile`、`save`、`reopen`，即可在隔离后台原生工作区编译、保存、重开核对并交付同语言新版本。该路径不打开可见编辑会话，也不写入 PLC。详见[后台操作流程](skills/gxworks-mcp-router/references/workflows.md#后台原生编译与版本交付)。
 
 ## 持续可见的 GX Works2 原生工程会话
 
@@ -110,29 +99,10 @@ ST 工作流兼顾独立文本生成与 GXW 原生工程维护：
 
 当需求缺少现场工艺事实时，每个待确认问题都会呈现为独立输入框，切换面板或重新加载不会丢失已填内容，填齐必答项后统一提交。生成阶段按模型接口能力启用严格结构化输出，并在进入 Core 校验前自动归一无歧义的格式差异。
 
-发送 Ladder 到 GX 时，如果窗口标题中的路径被截断或只显示文件名，请在发送确认框填写“当前 GXW 完整路径（可选）”；MCP 对应参数为 `import_current_program_to_gxworks2(project_path=...)`。这两种标题下，路径须通过当前 GX Works2 进程的文件占用检查；无法确认时拒绝导入，不会打开或切换工程。完整路径标题可省略该参数。
-
-## 默认工程交付
-
-新建和修改 Ladder、ST、FBD、SFC 候选时优先交付 `program.gxw`。已有工程复用离线写入器；新工程要求实际 CPU 和语言已有经验证的无窗口创建路径，不使用预制完整工程或 IDE 新建对话框。GX Works2 1.635.0.1 配合 v4 工作区适配器，从已安装原生组件查询 CPU 创建参数。ST/FBD 使用带标签的结构化工程，Ladder/SFC 使用简单工程，并遵守所选 CPU 的语言条件。创建、编译、保存与冷重开分别返回实际结果。从源码运行新建功能前，在 PowerShell 执行 `./tools/build_workspace_adapter.ps1` 构建 v4 适配器；成品包提供对应组件。找到 GX Works2 后，保存流程默认执行隔离原生编译、保存及冷重开检查。原生检查失败时保留带诊断的 GXW 候选，不覆盖当前有效版本。
-
-无法创建 GXW 时明确降级：Ladder 返回程序与注释 CSV，ST 返回源码，FBD/SFC 返回结构化候选及可用预览，并说明实际格式与原因。已成功生成的离线 GXW 在未安装 GX Works2 时仍可交付，原生编译状态标为未执行。安装发现支持 `GXWORKS2_EXE`、运行实例、Windows 注册信息及各本地盘符常见目录，包含非 C 盘安装。
-
-<a name="rag"></a>
-
-## CPU 作用域工程 RAG：架构与紧凑事实实现
-
-通用文档切片 RAG 面向自由文本问答，难以满足工业控制对无外部服务依赖、跨型号规格隔离与代码级编译验证的需求。GXWorks Agent 针对经审查的技术事实条目（Reviewed Technical Facts）与原创工程范例实现了紧凑型 RAG 体系（发布包不包含厂商手册 PDF 原文及原始索引）：
-
-- **知识文本池化与 BM25 统计守恒**：面对跨型号技术规则与工程知识条目中的大段结构化描述，[`exact_search_storage`](src/knowledge/exact_search_storage.py) 将长文本收敛到 SHA-256 去重池，并在逻辑绑定层为各型号 chunk 保留独立行与属性，通过视图挂接 SQLite FTS5。该设计在压缩物理存储的同时，保证各型号语料库的词频与 BM25 计算结果与未压缩版本完全一致；配合 SQL 中的 `+rowid` 约束规避 FTS 虚拟表对型号子查询的循环 MATCH 扫描。
-- **图谱级事实池化与按需水合**：底层采用 `owner-field-row-v3` 格式与 [`fact_field_codec`](src/knowledge/fact_field_codec.py)，将适用范围、执行条件、指令依赖与参数规格等高频事实字段池化为正整数引用。运行时通过清单 `instruction_definitions.manifest.json` 挂载只读 SQLite 库（[`OwnerDefinitionStore`](src/plc/instruction_owner_store.py)），应用启动时仅读取轻量身份头进行 CPU 准入与目录过滤，仅在命中后按需水合（`hydrate_owner`）对应事实图谱。
-- **域内局部排名融合（Domain-Local RRF）**：检索统一由 [`knowledge.retriever`](src/knowledge/retriever.py) 承载，整合实体路由、BM25 全文检索、Dense/LSA 向量检索与分词覆盖门控。跨数据库检索（如指令事实库与通用软元件/调试范例库）时，采用域内局部 RRF 排名融合（平滑常数 $k=60.0$）与域命名空间，防止跨知识域词频统计失真；顶层依序按照实体精确匹配、域内相对得分、查询词覆盖度与确定性 ID 进行仲裁。
-- **技术投影与确定性 Core 校验**：系统不将检索命中的知识直接视为可调用依据。面向模型端时，由 [`model_context`](src/shared/model_context.py) 提取引脚规格与时序约束等紧凑技术投影以控制 Prompt 预算；生成的程序逻辑必须经由 [`instruction_constraints`](src/plc/instruction_constraints.py) 与 Core 规则引擎执行 CPU 型号白名单、操作数位宽及互斥检查，形成闭环验证。
-
 ## 工具链与架构分工
 
 - **工程上下文与现场快照发现**：既可按 CPU 和程序类型创建、选择版本化工程，也可在不建工程的前提下调用 `list_gxworks2_sessions` 与 `read_gxworks2_snapshot`，直接读取本机已打开 GX Works2 窗口的只读程序快照并按网络分析。未打开 GX Works2 时，`inspect_gxworks2_csv_files` 可凭一份程序 CSV、一份软元件注释 CSV 和显式 CPU 取得同类的只读 `source_ref`。
-- **CPU 作用域工程 RAG**：检索管线融合实体匹配、全文检索与 dense/LSA 向量检索（详见[架构与紧凑事实实现](#rag)）。已知指令由结构化事实库提供精确操作数、步长与修饰规则，剩余检索补充来源依据与原创工程范例，并自动剔除重复上下文。
+- **CPU 作用域工程 RAG**：检索管线融合实体匹配、全文检索与 dense/LSA 向量检索。已知指令由结构化事实库提供精确操作数、步长与修饰规则，剩余检索补充手册依据与原创工程范例，并自动剔除重复上下文。
 - **确定性 Core 校验与版本化产物**：Python Core 持有 PLC 领域语义，统一负责 IR 构建、操作数与时序检查、FBD 拓扑与声明核对以及版本化产物生成，并与原生编译、仿真采样和实机监测各司其职。
 - **受控的 GX Works2 交付**：按操作员配置的审批策略，将当前 Ladder 版本的 MAIN 与注释导入 GX Works2，或执行 FBD/ST 原生保存、编译与会话操作，返回绑定版本的操作回执。
 
@@ -203,8 +173,6 @@ cd gxworks-agent
 
 离线 GXW 文件操作无需安装三菱软件。原生保存、原生编译与代码检查、交付到 GX Works2 及原生仿真依赖本机安装相应的三菱软件；PLC 只读监测依赖 MX Component 及已配置的逻辑站。发布包不包含任何三菱商业软件。
 
-Windows 原生适配器以 x86 进程加载 GX Works2 的原生组件，Python 主进程可以是 64 位。pywinauto 的应用位数警告本身不代表操作失败；排查前台自动化时以具体错误为准。截图不可用时保留原始异常，并单独报告窗口或桌面截图问题。
-
 ## 设备投运前
 
 投运前请对照目标 CPU、实际外部接线、机构运动边界与运行模式逐项审查生成逻辑。导入前先备份目标 GX 工程，发送到 GX Works2 更新工程文件后，在 GX Works2 中完成编译检查并按现场流程下装与调试。
@@ -213,6 +181,6 @@ Windows 原生适配器以 x86 进程加载 GX Works2 的原生组件，Python �
 
 ## 资料与许可
 
-[版本更新记录](CHANGELOG.md) · [贡献指南](CONTRIBUTING.md) · [问题反馈](https://github.com/Arienax/gxworks-agent/issues)
+[版本更新记录](CHANGELOG.md) · [问题反馈](https://github.com/Arienax/gxworks-agent/issues)
 
-项目贡献者拥有权利的 Core、Web、MCP 与原生适配器源码采用 [Apache License 2.0](LICENSE) 开源，具体适用范围见[许可范围](LICENSE-SCOPE.md)与[第三方声明](THIRD_PARTY_NOTICES.md)。各贡献者保留其版权；此前已发布的版本仍适用其发布时的许可证。[NOTICE](NOTICE) 记录原项目、作者与原始仓库地址。
+项目贡献者拥有权利的 Core、Web、MCP 与原生适配器源码采用 [Apache License 2.0](LICENSE) 开源，具体适用范围见[许可范围](LICENSE-SCOPE.md)与[第三方声明](THIRD_PARTY_NOTICES.md)。各贡献者保留其版权；此前已发布的版本仍适用其发布时的许可证。

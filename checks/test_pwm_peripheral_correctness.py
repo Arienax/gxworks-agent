@@ -1,20 +1,14 @@
-# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
-
 """Counterexamples for PWM input identity and bounded uncertainty footprints."""
 import copy
 import pathlib
 import sys
 import unittest
 sys.path[:0] = [str(pathlib.Path(__file__).resolve().parents[1] / 'src'), str(pathlib.Path(__file__).resolve().parent)]
-from checks.test_pwm_execution import context, machine, scan
+from test_pwm_execution import context, machine, scan
 import test_pwm_execution as execution_fixtures
 
 
-from checks.test_pwm_contract import ReviewedPWMTestCase
-
-
-class PWMPeripheralCorrectness(ReviewedPWMTestCase):
+class PWMPeripheralCorrectness(unittest.TestCase):
     def test_ladder_language_is_not_caller_controlled(self):
         for language in ('sfc', 'unknown', '', None):
             ctx = context(); ctx['language'] = language
