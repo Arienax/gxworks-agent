@@ -17,7 +17,12 @@ from agent_runtime.native_tools import (
 )
 
 
-def _source_knowledge(context, arguments, source, language, confirmed_spec):
+def _source_knowledge(context, arguments, source, language, confirmed_spec, *, task_type='edit'):
+    """Retrieved knowledge for one source, plus the generation handoff when generating.
+
+    A direct generation needs the reviewed capability discovery and its handoff
+    snapshot, not only the flat knowledge units, so the caller states its task.
+    """
     from application.generation_context import _build_knowledge_context
     from application.generation_support import _build_knowledge_query
     from knowledge.evidence import KnowledgeQuery
@@ -25,9 +30,20 @@ def _source_knowledge(context, arguments, source, language, confirmed_spec):
     query = _build_knowledge_query(arguments.get('user_requirement'), source)
     knowledge = _build_knowledge_context(KnowledgeQuery(query, precompiled=True,
         metadata={'target_mode': language, 'capability_requirement': str(query)}),
-        plc_model=context.plc_model, task_type='edit', confirmed_context=confirmed_spec)
+        plc_model=context.plc_model, task_type=task_type, confirmed_context=confirmed_spec)
+    extra = {}
+    if task_type == 'generate':
+        from application.capability_context import augment_generation_knowledge
+        from knowledge.evidence import context_manifest
+        from plc.specification.provenance import handoff_snapshot
+        knowledge = augment_generation_knowledge(str(query), knowledge, plc_model=context.plc_model,
+            target_mode=language, confirmed_spec=confirmed_spec)
+        manifest = context_manifest(knowledge, stage='generate')
+        handoff = handoff_snapshot(confirmed_spec, evidence=manifest)
+        handoff['capability_discovery'] = copy.deepcopy(manifest['capability_discovery'])
+        extra['generation_handoff'] = handoff
     return {'knowledge': technical_context_units(knowledge),
-            'knowledge_coverage': technical_knowledge_coverage(knowledge)}
+            'knowledge_coverage': technical_knowledge_coverage(knowledge), **extra}
 
 
 def _get_generation_context(

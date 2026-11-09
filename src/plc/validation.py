@@ -382,9 +382,12 @@ def _validate_writable_device(value, path, plc_model="FX3U", *, opcode=None):
 
 
 def _validate_app_instruction_write_targets(
-    opcode, operands, path, plc_model="FX3U"
+    opcode, operands, path, plc_model="FX3U", *, allow_unverified=False, source_spec=None
 ):
-    spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode, cpu=normalize_plc_model(plc_model))
+    # Saved-source readers pass their own spec and may accept catalogue entries
+    # whose roles are recorded but not reviewed; generation paths never do.
+    spec = source_spec or DEFAULT_INSTRUCTION_REGISTRY.resolve(
+        opcode, cpu=normalize_plc_model(plc_model))
     indexes = spec.write_indexes if spec is not None else ()
     for operand_idx in indexes:
         if operand_idx >= len(operands):
