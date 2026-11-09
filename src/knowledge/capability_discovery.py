@@ -158,6 +158,32 @@ def _structured_st_instruction_card(opcode, plc_model, record, registry, *, call
             "functions": []}
 
 
+def _authored_instruction_view(registry, opcode, plc_model, target_mode):
+    """Project compiled family facts with the shared instruction presentation."""
+    entry = next((item for item in getattr(registry, "_family_knowledge", ())
+                  if str(item.get("base_opcode") or "").upper() == opcode.upper()), None)
+    if entry is None:
+        return None
+    from knowledge.instruction_presentation import instruction_card, model_instruction_view
+    from shared.model_context import technical_value
+    packet = {"kind": "instruction", "target": opcode, "status": "source_verified",
+              "value": {"facts": entry.get("facts") or [],
+                        "shared_values": entry.get("shared_values") or {}}}
+    view = model_instruction_view(instruction_card(packet, technical_value))
+    value = view.get("value") if isinstance(view, dict) else None
+    if not isinstance(value, dict):
+        return None
+    language = "st" if target_mode == "st" else "ladder"
+    tables = [table for table in value.get("parameter_tables") or ()
+              if plc_model in ((table.get("scope") or {}).get("models") or [plc_model])
+              and ((table.get("scope") or {}).get("languages") or [language]) == [language]]
+    native = [table for table in tables
+              if table.get("representation") == "native_ladder_instruction"] or tables
+    if native:
+        value["parameter_tables"] = native[:1]
+    return value
+
+
 def _instruction_card(opcode, plc_model, record, *, target_mode=None):
     from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
     registry = DEFAULT_INSTRUCTION_REGISTRY
@@ -184,7 +210,7 @@ def _instruction_card(opcode, plc_model, record, *, target_mode=None):
     materials = spec.source_materials
     # A source document ID locates evidence; its page suffix is not a purpose.
     title = record.get('section') or opcode
-    return {"id": "instruction:" + opcode, "kind": "instruction", "name": opcode,
+    card = {"id": "instruction:" + opcode, "kind": "instruction", "name": opcode,
             "family": form.base_mnemonic, "purpose": title,
             "interface": [{"name": o.name, "role": o.role, "type": o.data_type,
                            **({"allowed_devices": list(o.allowed_devices)} if o.allowed_devices else {}),
@@ -200,6 +226,13 @@ def _instruction_card(opcode, plc_model, record, *, target_mode=None):
                 for m in materials[:1]] or [
                 {k: s[k] for k in ("manual_id", "revision", "pdf_page", "target_model") if k in s}
                 for s in spec.contract_sources[:1]], "functions": []}
+    if record.get("id"):
+        # Compiler facts are attached only where a retrieved record cites this
+        # instruction; the projection itself is the shared presentation layer.
+        authored = _authored_instruction_view(registry, opcode, plc_model, target_mode)
+        if authored:
+            card["authored"] = authored
+    return card
 
 
 def discover(requirement, *, plc_model, target_mode, explicit_targets=(), catalog=(), retrieve,
