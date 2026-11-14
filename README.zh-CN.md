@@ -29,8 +29,6 @@ GX Works2 **1.635.0.1** 下，57 个可编程 CPU 菜单（Q 42、L 5、FX 10，
 
 ![系统架构：MCP 客户端与 Web 工作台接入 Python Core，由原生适配器驱动 GX Works2、GX Simulator2、PLC 只读监测与文件交付](resources/assets/feature-architecture.png)
 
-GX Works2 **1.635.0.1** 下，57 个可编程 CPU 菜单（Q 42、L 5、FX 10，合计 69 个具体成员）的 **226 个默认合法语言组合**已逐项完成无基底后台新建、复杂内容写入、已有源码编辑、原生编译、完整公开检查、保存与冷重开。Ladder/SFC 默认简单工程，ST/FBD 默认结构化工程；FX1 的原生结构化菜单不提供 ST/FBD，该限制不阻断已有工程读取。四语言优先交付 GXW，发现安装后自动编译；复杂 FBD 使用实际 ST 功能块组装。此结果限定于上述软件版本和工程操作，不代表所有物理成员已实机运行，也不代替具体指令与构造的能力检查。
-
 <a name="offline-gxw"></a>
 
 ## 已有 GXW 工程的离线读取与编辑

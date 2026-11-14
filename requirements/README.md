@@ -34,4 +34,4 @@ platform environment, and run the affected checks. The pinned set was checked
 against the local Windows development environment; CI supplies Linux validation.
 Unexecuted domains remain unverified when dependencies change.
 
-Use [getting started](../docs/guides/getting-started.md) for source startup, [MCP](../docs/integrations/mcp.md) for standalone setup and [packaging](../docs/guides/packaging.md) for Windows builds. Optional native integrations require their own installed vendor software.
+Use [Quick Start](../README.md#quick-start) for packaged and overview guidance, [MCP](../README.md#mcp) for standalone setup and [Run from Source](../README.md#run-from-source) for building and running from source. Optional native integrations require their own installed vendor software.
