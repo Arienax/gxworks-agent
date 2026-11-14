@@ -18,15 +18,25 @@ import { lazy } from "react";
 import type { Job, JobKind, Json, Project, Proposal, PreviewDocument, ProgramDocument } from "../api/client";
 import { activeJob, api, artifactUrl, isFBDModel, isSFCModel, isFBDEditorView } from "../api/client";
 import { Badge, Button } from "../components/ui";
-import { CapabilityReview } from "../features/CapabilityReview";
-import { DeliverySummary } from "../features/DeliverySummary";
 import { FirstProjectGuide } from "../features/FirstProjectGuide";
 import { useGenerationResult } from "../features/GenerationResult";
 import type { IssueContext } from "../features/ProgramExplorer";
-import { IssueCards, ProgramExplorer } from "../features/ProgramExplorer";
 import type { CreationWorkflow, TaskPurpose } from "../features/conversationRouting";
 import type { CreationCapabilities } from "./useCapabilities";
 import { DataView } from "./ResultViews";
+
+const CapabilityReview = lazy(() =>
+  import("../features/CapabilityReview").then((module) => ({ default: module.CapabilityReview })),
+);
+const DeliverySummary = lazy(() =>
+  import("../features/DeliverySummary").then((module) => ({ default: module.DeliverySummary })),
+);
+const IssueCards = lazy(() =>
+  import("../features/ProgramExplorer").then((module) => ({ default: module.IssueCards })),
+);
+const ProgramExplorer = lazy(() =>
+  import("../features/ProgramExplorer").then((module) => ({ default: module.ProgramExplorer })),
+);
 
 const SimulationWorkbench = lazy(() =>
   import("../features/SimulationWorkbench").then((module) => ({

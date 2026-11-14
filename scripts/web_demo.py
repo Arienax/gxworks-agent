@@ -238,7 +238,7 @@ def create_demo_fixture(root, settings):
 
     run = SimulatorRegressionService(store, backend=InMemoryTestBackend(on_write=faulty_memory_logic)).run_version_suite(
         project["id"], version_id, plan["suite"])
-    service = WorkbenchService(store.base_dir, root / "state", settings=settings)
+    service = WorkbenchService(store.base_dir, root / "state", settings=settings, generation_runtime="legacy")
     service.hardware = HardwareService(service, reader=DemoHardwareReader())
     return service, {"project_id": project["id"], "version_id": version_id, "report_id": report["report_id"],
                      "plan_id": plan["binding"]["plan_id"], "run_id": run["record"]["run_id"]}

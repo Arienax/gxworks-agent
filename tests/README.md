@@ -303,6 +303,8 @@ Owns Agent A analysis mode, candidate/choice handling, confirmation/re-confirmat
 | `tests/test_application_planning.py` | focused coverage for application planning |
 | `tests/test_confirmed_input_protocol.py` | confirmed physical input levels across legacy projection, generation and validation |
 | `tests/test_confirmed_reconfirmation.py` | focused coverage for confirmed reconfirmation |
+| `tests/test_decision_basis.py` | citation-backed decision basis validation, immutable text repair and confirmed spec projection |
+| `tests/test_design_output_logic.py` | offline Design output-logic decisions, repair targets and handoff without provider or native calls |
 | `tests/test_hardware_intent_boundary.py` | focused coverage for hardware intent boundary |
 | `tests/test_optional_hardware_parameters.py` | optional hardware questions plus Pydantic parameter identity/review-to-generation views |
 | `tests/test_program_exploration.py` | focused coverage for program exploration |
@@ -328,6 +330,14 @@ Owns prompt assembly, token/context budgeting, RAG query construction, retrieval
 | `tests/test_prompt_slim_generation.py` | focused coverage for prompt slim generation |
 | `tests/test_rag_instruction_recall.py` | focused coverage for rag instruction recall |
 | `tests/test_rag_natural_language_recall.py` | focused coverage for rag natural language recall |
+| `tests/test_acceptance_context.py` | lossless behavior acceptance examples and stable wire continuation changes |
+| `tests/test_conversation_model.py` | model turn wire history, structured context expansion and response contract projection |
+| `tests/test_cpu_version_projection.py` | opt-in CPU version filtering on delivered model knowledge while retaining source facts |
+| `tests/test_example_context.py` | model-facing example retention of code and behavior without preview reports |
+| `tests/test_functional_fact_delivery.py` | natural requirements and confirmed plans reaching generation with source-scoped instruction semantics |
+| `tests/test_hybrid_resource_delivery.py` | hybrid dense/sparse resource loader binding and text-id preservation |
+| `tests/test_rag_integration_compatibility.py` | compatibility between public runtime resolution and compiled RAG owner facts |
+| `tests/test_retrieval_reuse.py` | retrieval batching, per-term limits, CPU scope preservation and owner replacement |
 | `tests/test_shared_generation_context.py` | focused coverage for shared generation context |
 | `tests/test_structured_fact_lookup.py` | exact instruction/device/error resolution outside broad RAG, residual-query separation and agent manual-search boundary |
 | `tests/test_structured_knowledge_quality.py` | focused coverage for structured knowledge quality |
@@ -367,6 +377,8 @@ Owns confirmed-spec to Agent B generation, selected-approach contracts, candidat
 | `tests/test_repair_responsibility_simplification.py` | focused coverage for repair responsibility simplification |
 | `tests/test_review_noise_regressions.py` | focused coverage for review noise regressions |
 | `tests/test_semantic_contract_architecture.py` | provenance, structured repair scope, legacy migration separation, and instruction capability ownership |
+| `tests/test_compact_repair_context.py` | repair context preservation without reinterpreting staged compact programs |
+| `tests/test_ladder_tool_generation.py` | tool-driven ladder generation session decisions, lookup, patch and submit loop |
 | `tests/test_user_confirmed_generation_repair.py` | focused coverage for user confirmed generation repair |
 
 ### Deterministic PLC Core and instruction semantics
@@ -392,6 +404,10 @@ Owns deterministic PLC IR, semantic checks, instruction/device registry, timing 
 | `tests/test_plc_semantics.py` | PLC semantic interpretation and saved SFC document projection without GUI |
 | `tests/test_plc_static_analysis.py` | focused coverage for plc static analysis |
 | `tests/test_plc_timing.py` | focused coverage for plc timing |
+| `tests/test_compiled_instruction_catalog.py` | compiled instruction catalog build, validation and reload lifecycle |
+| `tests/test_cpu_version_check_policy.py` | opt-in CPU version applicability checks alongside ordinary operand constraints |
+| `tests/test_cpu_version_domain.py` | CPU first-release version domain bindings and manual metadata |
+| `tests/test_documented_operand_constraints.py` | source-shaped operand relations and native execution binding checks |
 | `tests/test_timer_semantics_regressions.py` | focused coverage for timer semantics regressions |
 
 ### GXW reverse engineering and round-trip
@@ -462,6 +478,8 @@ Owns simulator/workbench execution, verification, reporting and GX Works2 simula
 | `tests/test_simulator.py` | focused coverage for simulator |
 | `tests/test_simulator_reporting.py` | Version-bound simulation report data and evidence, not dialog layout |
 | `tests/test_simulator_verification.py` | focused coverage for simulator verification |
+| `tests/test_simulator_cpu_catalog.py` | native simulator CPU catalog mappings and run-status device policies |
+| `tests/test_simulator_model_routing.py` | CPU model identity routing through native program inspection and simulator entries |
 | `tests/test_simulator_workflow.py` | focused coverage for simulator workflow |
 
 ### Model runtime and provider compatibility
@@ -481,6 +499,8 @@ Owns model catalog/profile/capabilities, provider requests, detection/verificati
 | `tests/test_model_provider.py` | focused coverage for model provider |
 | `tests/test_model_runtime_profile.py` | persisted-profile → RuntimeModelProfile materialization, legacy capability promotion and direct resolver input |
 | `tests/test_model_stream_cancellation.py` | focused coverage for model stream cancellation |
+| `tests/test_dsh_transport.py` | DSH runtime binary discovery, JSON-RPC transport and protocol error handling |
+| `tests/test_dsh_usage.py` | token usage accumulation across DSH tool turns |
 | `tests/test_model_verification.py` | focused coverage for model verification |
 
 ### MCP integration
@@ -528,7 +548,9 @@ Owns HTTP/Web contracts, presentation state, startup, FBD UI, workbench/applicat
 | `web/tests/model-parameters.test.mjs` | browser model-parameter UI behavior |
 | `web/tests/module-resolution.test.mjs` | frontend module resolution, packaging-sensitive imports and production chunk boundaries |
 | `web/tests/device-groups.test.mjs` | device comment grouping by device family for the program explorer panel |
+| `tests/test_dsh_web_jobs.py` | Web workbench jobs routed through DSH tool bridge with offline model substitute |
 | `web/tests/conversation-rows.test.mjs` | conversation rows: request-text titles, action fallback, cross-project search and project grouping |
+| `web/tests/spec-document.test.mjs` | confirmed specification document delta calculation and panel rendering |
 
 ### Runtime diagnostics, privacy and streaming
 
@@ -543,6 +565,7 @@ Owns diagnostics capture/export, error privacy, response-language/presentation t
 | `tests/test_response_language.py` | focused coverage for response language |
 | `tests/test_runtime_diagnostics.py` | bounded diagnostics observation/privacy without changing runtime behavior |
 | `tests/test_runtime_diagnostics_web.py` | focused coverage for runtime diagnostics web |
+| `tests/test_dsh_progress.py` | DSH web stream progress projection without per-token job-file reads |
 | `tests/test_streaming_workflows.py` | Headless generation/planning streams and original model payload preservation |
 
 ### Architecture, repository and platform boundaries
@@ -566,6 +589,7 @@ Owns cross-cutting orchestration that does not fit a narrower stable owner. New 
 | --- | --- |
 | `tests/test_execution_coordinator.py` | focused coverage for execution coordinator |
 | `tests/test_execution_read.py` | focused coverage for execution read |
+| `tests/test_read_continuation.py` | saved-program repair and readable document continuation paging contract |
 | `tests/test_hardware_read_only.py` | focused coverage for hardware read only |
 <!-- TEST-BOUNDARY-REGISTRY-END -->
 

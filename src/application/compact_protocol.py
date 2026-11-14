@@ -320,6 +320,10 @@ def validate_compact_structure(value):
 
 
 def _raise_schema_error(error, prefix=()):
+    if error.validator == "anyOf" and isinstance(error.instance, str):
+        child = next((item for item in error.context if item.validator in {"minLength", "maxLength", "pattern", "enum"}), None)
+        if child is not None:
+            error = child
     parts = list(prefix) + list(error.absolute_path)
     if error.validator == "required" and isinstance(error.instance, dict):
         # Report the missing schema-owned field, not model-controlled error text.

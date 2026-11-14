@@ -527,6 +527,24 @@ def technical_knowledge_text(record):
                 ('position', 'facet', 'reason') if key in conflict}
                 for conflict in record['operand_candidate_conflicts']]
         return render(packet)
+    if record.get('manual_id') == 'structured_instruction_registry' and record.get('fact_kind') == 'instruction':
+        opcode = str(record.get('fact_target') or record.get('instruction_opcode') or '').upper()
+        model = str(record.get('plc_model') or '').upper()
+        slots = [slot for slot in (record.get('operand_slots') or ())
+                 if isinstance(slot, Mapping) and slot.get('symbol') and slot.get('symbol_status') == 'source_verified']
+        tables = ([{'parameters': [{'name': str(slot['symbol']), 'position': int(slot.get('position') or idx)}
+                                   for idx, slot in enumerate(slots, 1)],
+                    'representation': 'native_ladder_instruction', 'language': 'ladder'}] if slots else [])
+        runtime = record.get('runtime_semantics') if isinstance(record.get('runtime_semantics'), Mapping) else {}
+        runtime_claims = {key: value for key, value in runtime.items()
+                          if key not in {'target_model', 'opcode', 'available', 'status', 'verified_fields', 'sources'}
+                          and value not in (None, {}, [])}
+        additional = ([{'forms': [opcode], 'semantics': {'execution.runtime_semantics': runtime_claims}}]
+                      if runtime_claims else [])
+        return render({'kind': 'instruction', 'target': opcode,
+                       'scope': {'models': [model] if model else []},
+                       'value': {'family': opcode, 'forms': [{'opcode': opcode}],
+                                 'parameter_tables': tables, 'additional_knowledge': additional}})
     # Historical parsers/debug fixtures may provide technical prose. Remove
     # their known citation wrappers without interpreting or truncating prose.
     text = re.sub(r'(?m)^\[/?(?:KNOWLEDGE|INSTRUCTION FACTS|UNINTERPRETED SOURCE|SHARED SOURCE REFERENCES)[^\n]*\]\s*$', '', text)

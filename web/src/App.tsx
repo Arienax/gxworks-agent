@@ -6,13 +6,15 @@ import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { RetainedPanel } from "./components/RetainedPanel";
 import { AgentConversation, agentConversationFields } from "./workbench/AgentConversation";
-import { CanvasPanels, canvasPanelFields } from "./workbench/CanvasPanels";
 import { ComposerPanel, composerPanelFields } from "./workbench/ComposerPanel";
 import { ConversationHistory, conversationHistoryFields } from "./workbench/ConversationHistory";
-import { ProgramWorkspace, programWorkspaceFields } from "./workbench/ProgramWorkspace";
 import { ProjectSidebar, projectSidebarFields } from "./workbench/ProjectSidebar";
-import { ProposalList, proposalListFields } from "./workbench/ProposalList";
-import { workbenchDialogsFields } from "./workbench/dialogFields";
+import {
+  canvasPanelFields,
+  programWorkspaceFields,
+  proposalListFields,
+  workbenchDialogsFields,
+} from "./workbench/dialogFields";
 import { clampCanvasWidth } from "./workbench/usePanelResize";
 import { usePanelTransition } from "./workbench/usePanelTransition";
 import { useWorkbenchController } from "./workbench/useWorkbenchController";
@@ -20,6 +22,9 @@ import type { Job } from "./api/client";
 import { useConversations } from "./workbench/useConversations";
 import { pickView } from "./workbench/viewProps";
 
+const ProgramWorkspace = lazy(() => import("./workbench/ProgramWorkspace").then((module) => ({ default: module.ProgramWorkspace })));
+const CanvasPanels = lazy(() => import("./workbench/CanvasPanels").then((module) => ({ default: module.CanvasPanels })));
+const ProposalList = lazy(() => import("./workbench/ProposalList").then((module) => ({ default: module.ProposalList })));
 const WorkbenchDialogs = lazy(() => import("./workbench/WorkbenchDialogs").then((module) => ({ default: module.WorkbenchDialogs })));
 
 /** The sidebar column is a layout constant shared with the canvas clamp. */
@@ -171,9 +176,13 @@ export default function App() {
       />
       <div className="canvas-host" inert={canvasPhase === "closed" || undefined}>
         <RetainedPanel active={canvasVisible || canvasPhase !== "closed"}>
-          {() => <ProgramWorkspace {...pickView(view, programWorkspaceFields)}
-            contextView={<CanvasPanels {...pickView(view, canvasPanelFields)}
-              proposalsView={<ProposalList {...pickView(view, proposalListFields)} />} />} />}
+          {() => (
+            <Suspense fallback={null}>
+              <ProgramWorkspace {...pickView(view, programWorkspaceFields)}
+                contextView={<CanvasPanels {...pickView(view, canvasPanelFields)}
+                  proposalsView={<ProposalList {...pickView(view, proposalListFields)} />} />} />
+            </Suspense>
+          )}
         </RetainedPanel>
       </div>
       {(view.error || view.notice) && (

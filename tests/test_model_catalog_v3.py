@@ -113,9 +113,11 @@ def test_saved_preset_reasoning_is_encoded_as_responses(endpoint, model, choices
         'scope': resolved['contract']['scope'],
         'parameters': {key: {'mode': 'value', 'value': value} for key, value in choices.items()},
     }
+    from model_runtime.responses_wire import encode_options
     provider = OpenAICompatibleProvider(p, 'key', client=object())
     request = ModelRequest((UserMessage('fixture'),), stream=False)
-    options = provider._request_params(request)
+    options = (provider._request_params(request) if endpoint == 'https://api.openai.com/v1'
+               else encode_options(resolve_request(p, api_key='key').options))
     assert {key: options[key] for key in wire} == wire
     assert not {'reasoning_effort', 'enable_thinking', 'thinking'}.intersection(options)
 

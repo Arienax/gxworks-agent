@@ -117,7 +117,14 @@ def test_generation_contract_uses_only_stdlib_and_authoritative_core_contracts()
     # registry. Keep that single source of truth instead of copying an allowlist.
     allowed = {"__future__", "copy", "re", "typing", "dataclasses", "json", "hashlib"}
     assert {name.split(".", 1)[0] for name in _imports(SOURCE_ROOT / "agent_runtime/messages.py")} <= allowed
-    allowed_prefixes = allowed | {"plc.instructions", "plc.instruction_binding", "plc.specification.behavior"}
+    allowed_prefixes = allowed | {
+        "plc.instructions",
+        "plc.instruction_binding",
+        "plc.specification.behavior",
+        "plc.specification.decision_basis",
+        "plc.specification.implementation",
+        "plc.specification.output_logic",
+    }
     assert all(any(name == prefix or name.startswith(prefix + ".") for prefix in allowed_prefixes)
                for name in _imports(SOURCE_ROOT / "plc/generation_contract.py"))
 
