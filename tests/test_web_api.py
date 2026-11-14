@@ -24,7 +24,6 @@ from application.session import ProjectSession as SessionStore
 
 
 ORIGIN = "http://127.0.0.1:8765"
-OPERATOR = "operator-test"
 AGENT = "agent-test"
 
 
@@ -70,12 +69,35 @@ def _legacy_workspace(root):
     return store, project["id"], version, report["report_id"]
 
 
-def _login(client):
-    response = client.post("/api/session", json={"token": OPERATOR}, headers={"Origin": ORIGIN})
-    assert response.status_code == 200, response.text
-    assert "HttpOnly" in response.headers["set-cookie"]
-    assert "SameSite=strict" in response.headers["set-cookie"]
-    return {"Origin": ORIGIN, "X-CSRF-Token": response.json()["csrf"]}
+def test_saved_version_compare_and_activate_do_not_create_jobs(tmp_path):
+    workspace = tmp_path / "workspace"
+    store, project_id, root, _ = _legacy_workspace(workspace)
+    children = []
+    for address in ("X1", "X2"):
+        version_id, directory = store.prepare_version(project_id)
+        ladder = _ladder()
+        ladder["rungs"][0]["branches"][0]["inputs"][0]["address"] = address
+        (directory / "ladder.json").write_text(json.dumps(ladder), encoding="utf-8")
+        store.complete_version(project_id, version_id, {
+            "target_mode": "ladder", "plc_model": "FX3U", "parent_version_id": root,
+            "artifacts": {"json": "ladder.json"},
+        })
+        children.append(version_id)
+
+    with TestClient(_app(workspace, tmp_path / "state"), base_url=ORIGIN) as client:
+        route = f"/api/projects/{project_id}"
+        diff = client.get(f"{route}/versions/{children[1]}/diff", params={"base_version_id": children[0]})
+        assert diff.status_code == 200, diff.text
+        assert diff.json()["has_changes"] and diff.json()["base_version_id"] == children[0]
+        assert "X1" in json.dumps(diff.json()["changes"]) and "X2" in json.dumps(diff.json()["changes"])
+        activated = client.post(f"{route}/active-version", headers={"Origin": ORIGIN}, json={
+            "version_id": root, "expected_active_version_id": children[1],
+        })
+        assert activated.status_code == 200, activated.text
+        project = activated.json()
+        assert project["active_version_id"] == root
+        assert [row["parent_version_id"] for row in project["versions"] if row["id"] in children] == [root, root]
+        assert client.get("/api/jobs", params={"project_id": project_id}).json()["jobs"] == []
 
 
 @pytest.mark.parametrize('mode', ['ladder', 'st', 'fbd', 'sfc'])
@@ -87,9 +109,9 @@ def test_gxw_file_http_inspection_import_download_and_idempotency_without_native
     service = WorkbenchService(tmp_path / 'workspace', tmp_path / 'state',
                                model_factory=lambda: (None, {'model': 'offline-http'}))
     app = create_app(tmp_path / 'workspace', state_dir=tmp_path / 'state', service=service,
-                     origin=ORIGIN, operator_token=OPERATOR)
+                     origin=ORIGIN)
     with TestClient(app, base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         def forbidden(*args, **kwargs):
             raise AssertionError('offline GXW HTTP routes must not invoke a process or native library')
         monkeypatch.setattr(subprocess, 'Popen', forbidden)
@@ -146,8 +168,7 @@ def test_gxw_file_http_inspection_import_download_and_idempotency_without_native
 
 
 def _app(workspace, state, **kwargs):
-    return create_app(workspace, state_dir=state, origin=ORIGIN,
-                      operator_token=OPERATOR, agent_token=AGENT, **kwargs)
+    return create_app(workspace, state_dir=state, origin=ORIGIN, agent_token=AGENT, **kwargs)
 
 
 def test_gxw_project_http_joint_draft_previews_all_sources_and_saves_a_repair(tmp_path, monkeypatch):
@@ -160,7 +181,7 @@ def test_gxw_project_http_joint_draft_previews_all_sources_and_saves_a_repair(tm
     service = WorkbenchService(tmp_path / 'workspace', tmp_path / 'state', model_factory=lambda: (None, {}))
     app = _app(tmp_path / 'workspace', tmp_path / 'state', service=service)
     with TestClient(app, base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         def forbidden(*args, **kwargs):
             raise AssertionError('joint offline HTTP edit attempted a native operation')
         for module, name in ((subprocess, 'Popen'), (subprocess, 'run'), (ctypes, 'CDLL'), (ctypes, 'WinDLL')):
@@ -275,7 +296,7 @@ def test_direct_http_once_saves_program_and_generator_notes(tmp_path, monkeypatc
     workspace, state = tmp_path / "workspace", tmp_path / "state"
     service = WorkbenchService(workspace, state, model_factory=lambda: (provider, {"model": provider.profile["model"]}))
     with TestClient(_app(workspace, state, service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         pid = client.post("/api/projects", json={"name": "Direct", "plc_model": "FX3U"}, headers=headers).json()["id"]
         command = {"kind": "direct_generation", "project_id": pid, "request_id": "direct-start",
                    "text": "X0：按钮，高电平有效。Y0：输出。按住按钮时输出，释放关闭，内部实现自行选择。"}
@@ -303,7 +324,7 @@ def test_new_direct_question_response_fails_without_resubmission(tmp_path, monke
     workspace, state = tmp_path / "workspace", tmp_path / "state"
     service = WorkbenchService(workspace, state, model_factory=lambda: (provider, {"model": provider.profile["model"]}))
     with TestClient(_app(workspace, state, service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         pid = client.post("/api/projects", json={"name": "Failure", "plc_model": "FX3U"}, headers=headers).json()["id"]
         command = {"kind": "direct_generation", "project_id": pid, "request_id": "direct-failure", "text": "X0控制Y0"}
         job_id = client.post("/api/jobs", json=command, headers=headers).json()["id"]
@@ -318,12 +339,12 @@ def test_new_direct_question_response_fails_without_resubmission(tmp_path, monke
 
 def test_historical_direct_turns_retain_revised_level_and_generate_once(tmp_path, monkeypatch, offline):
     import application.generation_agent as generator
+    from application.generation_wire import expand_context_document
     monkeypatch.setattr(generator, "_build_knowledge_context", lambda *a, **k: "")
     class Provider(_Provider):
         def stream(self, request):
             self.requests.append(request)
-            facts = json.loads(request.messages[0].content.split(
-                "# User facts (no generated confirmation specification)\n", 1)[1].split("\n#", 1)[0])
+            facts = expand_context_document(json.loads(request.messages[-1].content))["confirmed_spec"]
             assert {b["address"]: b.get("active_level") for b in facts["io_bindings"] if b["kind"] == "X"} == {"X0": 0, "X1": 1}
             yield TextDelta(json.dumps({"result": {"program": {"r": [
                 {"b": [{"i": ["NC X0"], "o": ["COIL Y0"]}]}]}}}))
@@ -331,7 +352,7 @@ def test_historical_direct_turns_retain_revised_level_and_generate_once(tmp_path
     workspace, state = tmp_path / "workspace", tmp_path / "state"
     service = WorkbenchService(workspace, state, model_factory=lambda: (provider, {"model": provider.profile["model"]}))
     with TestClient(_app(workspace, state, service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         pid = client.post("/api/projects", json={"name": "Historical", "plc_model": "FX3U"}, headers=headers).json()["id"]
         raw = "X0：按钮，高电平有效；X1：备用输入，高电平有效；Y0：指示输出。按钮有效时输出，释放关闭。"
         first = _historical_direct_job(service, pid, raw, [{"id": "level", "question": "X0的有效电平？"}])
@@ -343,13 +364,15 @@ def test_historical_direct_turns_retain_revised_level_and_generate_once(tmp_path
             "kind": "direct_generation", "project_id": pid, "request_id": "historical-resume", "text": "",
             "clarification_job_id": second, "clarification_answers": {"note": "内部实现自行选择"}}))
         assert output["version_id"] and len(provider.requests) == 1
-        assert prior_raw in provider.requests[0].messages[-1].content
-        assert '"answer": "内部实现自行选择"' in provider.requests[0].messages[-1].content
+        sent = expand_context_document(json.loads(provider.requests[0].messages[-1].content))["request"]
+        assert prior_raw in sent
+        assert '"answer": "内部实现自行选择"' in sent
         assert client.get(f"/api/projects/{pid}").json()["confirmed_spec"] is None
 
 
 def test_direct_clarification_device_comments_survive_save_and_exports(tmp_path, monkeypatch, offline):
     import application.generation_agent as generator
+    from application.generation_wire import expand_context_document
     monkeypatch.setattr(generator, "_build_knowledge_context", lambda *a, **k: "")
     questions = [
         {"id": "start_input_device", "question": "启动按钮接在哪个输入点？"},
@@ -363,8 +386,6 @@ def test_direct_clarification_device_comments_survive_save_and_exports(tmp_path,
     class Provider(_Provider):
         def stream(self, request):
             self.requests.append(request)
-            assert "已确认名称由本地优先补齐" in request.messages[0].content
-            assert '"answer": "X0"' in request.messages[-1].content
             payload = {"r": [{"c": ["NO X1"], "b": [
                     {"i": [{"or": [["NO X0"], ["NO Y0"]]}], "o": ["COIL Y0"]}]}],
                     "device_comments": [{"address": address, "comment": comment}
@@ -375,7 +396,7 @@ def test_direct_clarification_device_comments_survive_save_and_exports(tmp_path,
     workspace, state = tmp_path / "workspace", tmp_path / "state"
     service = WorkbenchService(workspace, state, model_factory=lambda: (provider, {"model": provider.profile["model"]}))
     with TestClient(_app(workspace, state, service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         pid = client.post("/api/projects", json={"name": "起保停", "plc_model": "FX3U"}, headers=headers).json()["id"]
         parent = _historical_direct_job(service, pid, "起保停", questions)
         job, output = _complete(client, service, client.post("/api/jobs", headers=headers, json={
@@ -384,6 +405,8 @@ def test_direct_clarification_device_comments_survive_save_and_exports(tmp_path,
                 "start_input_device": "X0", "start_input_wiring": "常开NO", "stop_input_device": "X1",
                 "stop_input_wiring": "常闭NC", "run_output_device": "Y0"}}))
         version = output["version_id"]
+        sent = expand_context_document(json.loads(provider.requests[0].messages[-1].content))
+        assert '"answer": "X0"' in sent["request"]
         ladder = json.loads(service.projects.artifact(pid, version, "json").read_text(encoding="utf-8"))
         assert ladder["device_comments"] == expected
         comments = service.projects.artifact(pid, version, "comment_csv").read_text(encoding="utf-16")
@@ -398,26 +421,36 @@ def test_direct_clarification_device_comments_survive_save_and_exports(tmp_path,
 
 def test_direct_question_answers_are_complete_bound_and_kept_across_continuations(tmp_path, monkeypatch, offline):
     import application.generation_agent as generator
+    from application.generation_wire import expand_context_document
     monkeypatch.setattr(generator, "_build_knowledge_context", lambda *a, **k: "")
     questions = [
         {"id": "delay", "question": "延时几秒？X7：仅为模型示例。", "required": True, "default": "5秒"},
         {"id": "stop", "question": "停止后如何处理？", "required": True, "options": ["模型建议清空"]},
         {"id": "note", "question": "补充说明？", "required": False},
     ]
+    settled = {"variant": "延时处理", "premise": "答复给定 0.5 秒", "status": "known",
+               "conclusion": "applicable", "references": [{"source": "answer", "ref": "delay", "quote": "0.5秒"}]}
+    unsupported = {"variant": "使用原有输入", "premise": "X7 是已确认输入", "status": "known",
+                   "conclusion": "excluded", "references": [
+                       {"source": "request", "ref": "", "quote": "X7：仅为模型示例。"}]}
     class Provider(_Provider):
         def stream(self, request):
             self.requests.append(request)
-            payload = {"result": {"program": {"r": [{"b": [{"i": ["NO X0"], "o": ["COIL Y0"]}]}]}}}
+            selection = {"candidates": [{"method": "触点控制", "tradeoff": "沿用现场输入",
+                                         "instruction_choices": [], "decision_basis": [settled, unsupported]}],
+                         "selected": 0, "rationale": "沿用已确认输入"}
+            payload = {"result": {"decisions": selection, "open_items": [],
+                                  "program": {"r": [{"b": [{"i": ["NO X0"], "o": ["COIL Y0"]}]}]}}}
             yield TextDelta(json.dumps(payload, ensure_ascii=False))
     provider = Provider()
     workspace, state = tmp_path / "workspace", tmp_path / "state"
     service = WorkbenchService(workspace, state, model_factory=lambda: (provider, {"model": provider.profile["model"]}))
     with TestClient(_app(workspace, state, service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         pid = client.post("/api/projects", json={"name": "Questions", "plc_model": "FX3U"}, headers=headers).json()["id"]
         command = {"kind": "direct_generation", "project_id": pid, "request_id": "batch-start",
                    "text": "X0：启动按钮，按下为1。Y0：输出。"}
-        parent = _historical_direct_job(service, pid, command["text"], questions)
+        parent = _historical_direct_job(service, pid, command["text"], questions, start_conversation=True)
         assert len(client.get(f"/api/jobs/{parent}/output").json()["missing_info"]) == 3
         answer = {**command, "text": "补充的人类说明", "clarification_job_id": parent, "request_id": "batch-answer",
                   "clarification_answers": {"delay": " 0.5秒 ", "stop": "保留跟踪，重启继续", "note": ""}}
@@ -432,10 +465,17 @@ def test_direct_question_answers_are_complete_bound_and_kept_across_continuation
         assert client.post("/api/jobs", json={**answer, "project_id": other}, headers=headers).status_code == 409
         answered, output = _complete(client, service, client.post("/api/jobs", json=answer, headers=headers))
         assert output["version_id"] and len(provider.requests) == 1
+        notes = output["generation"]["generator_notes"]
+        reviewed = notes["selection"]["candidates"][0]["decision_basis"]
+        assert reviewed == [settled, {**unsupported, "status": "unknown", "conclusion": "conditional", "references": []}]
+        assert any("适用条件待核对" in message for message in notes["decisions"])
+        turn = json.loads((state / "staging" / answered / ".model-turn.json").read_text(encoding="utf-8"))
+        retained = json.loads(turn["messages"][-1]["content"])["result"]["decisions"]
+        assert retained["candidates"][0]["decision_basis"] == reviewed
         assert client.post("/api/jobs", json=answer, headers=headers).json()["id"] == answered
         snapshot = service.jobs._load(answered)["snapshot"]
         assert snapshot["clarification_answers"] == {"delay": "0.5秒", "stop": "保留跟踪，重启继续"}
-        raw = provider.requests[0].messages[-1].content
+        raw = expand_context_document(json.loads(provider.requests[0].messages[-1].content))["request"]
         assert '"id": "delay"' in raw and '"answer": "0.5秒"' in raw
         assert '"id": "stop"' in raw and '"answer": "保留跟踪，重启继续"' in raw
         assert "X7" in raw and "模型建议清空" not in raw
@@ -461,7 +501,7 @@ def test_st_http_saved_version_keeps_shared_discovery_and_local_review(tmp_path,
     service = WorkbenchService(workspace, state,
         model_factory=lambda: (provider, {"model": provider.profile["model"]}))
     with TestClient(_app(workspace, state, service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         pid = client.post("/api/projects", json={"name": "ST", "plc_model": "FX3U", "target_mode": "st"},
                           headers=headers).json()["id"]
         from application.confirmed_generation_context import project_direct_user_facts
@@ -498,7 +538,7 @@ def test_direct_cancel_state_conflict_and_frozen_provider(tmp_path, monkeypatch,
     workspace, state = tmp_path / "workspace", tmp_path / "state"
     service = WorkbenchService(workspace, state, model_factory=lambda: (selected[0], {"model": selected[0].profile["model"]}))
     with TestClient(_app(workspace, state, service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         pid = client.post("/api/projects", json={"name": "Direct state", "plc_model": "FX3U"}, headers=headers).json()["id"]
         response = client.post("/api/jobs", json={"kind": "direct_generation", "project_id": pid,
             "text": "X0: Start; Y0: Output. Follow X0.", "request_id": "direct-state"}, headers=headers)
@@ -546,7 +586,7 @@ def test_web_questions_never_create_candidates_or_dispatch_actions(tmp_path, off
     workspace, state = tmp_path / "workspace", tmp_path / "state"
     service = WorkbenchService(workspace, state, model_factory=lambda: (provider, offline_runtime_profile()))
     with TestClient(_app(workspace, state, service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         if approval_mode != "ask":
             service.update_approval_settings(mode=approval_mode, expected_revision=0,
                                             confirm_full_access=approval_mode == "full")
@@ -585,7 +625,7 @@ def test_explicit_generation_action_rejects_invalid_inputs_before_model_calls(tm
             "text": "" if case == "empty_edit" else "Change X0 to X1"}
         if case == "regenerate_scope":
             command["change_scope"] = {"network_ids": ["N0001"]}
-        response = client.post("/api/jobs", json=command, headers=_login(client))
+        response = client.post("/api/jobs", json=command, headers={"Origin": ORIGIN})
         assert response.status_code == 400, response.text
         assert service.jobs.list(pid) == []
 
@@ -606,7 +646,7 @@ def test_explicit_edit_uses_selected_program_even_when_fresh_generation_header_i
         job_id, output = _complete(client, service, client.post("/api/jobs", json={
             "kind": "generation", "project_id": pid, "version_id": version_id, "request_id": "explicit-edit",
             "generation_action": "edit", "text": "Replace the X0 contact with X1; preserve Y0.",
-        }, headers={**_login(client), "X-GX-Fresh-Confirmed-Generation": "1"}))
+        }, headers={"Origin": ORIGIN, "X-GX-Fresh-Confirmed-Generation": "1"}))
         snapshot = service.jobs._load(job_id)["snapshot"]
         assert snapshot["fresh_confirmed_generation"] is False
         assert snapshot["version_id"] == version_id
@@ -630,7 +670,6 @@ def test_legacy_workspace_http_reads_never_migrate_or_initialize_execution(tmp_p
     monkeypatch.setattr(simulator.runtime, "get_simulator_gateway_runtime",
                         lambda *a, **k: pytest.fail("Gateway initialized while browsing"))
     with TestClient(_app(workspace, tmp_path / "state", service=service), base_url=ORIGIN) as client:
-        _login(client)
         paths = ["/api/projects", "/api/projects/" + project,
                  f"/api/projects/{project}/versions/{version}",
                  f"/api/projects/{project}/versions/{version}/program",
@@ -658,7 +697,6 @@ def test_svg_artifact_theme_changes_real_colors_without_writing_legacy_files(tmp
     service = WorkbenchService(workspace, tmp_path / "state", read_only=True,
         model_factory=lambda: pytest.fail("Theme changes must not initialize a model"))
     with TestClient(_app(workspace, tmp_path / "state", service=service), base_url=ORIGIN) as client:
-        _login(client)
         artifact = f"/api/projects/{project_id}/versions/{version_id}/artifacts/svg"
         program = f"/api/projects/{project_id}/versions/{version_id}/program"
         ir = client.get(program).json()
@@ -687,7 +725,7 @@ def test_candidate_and_execution_preview_theme_preserves_ir_diff_and_proposal_ha
     service = WorkbenchService(workspace, tmp_path / "state",
         model_factory=lambda: pytest.fail("Preview theme changes must not initialize a model"))
     with TestClient(_app(workspace, tmp_path / "state", service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         candidate = service.agent_call({"project_id": project_id, "version_id": version_id,
             "name": "create_program_candidate", "arguments": {"ladder": _ladder()}, "call_id": "theme-candidate"})
         execution = client.post("/api/proposals", headers=headers, json={"action": "gx_import",
@@ -714,29 +752,32 @@ def test_candidate_and_execution_preview_theme_preserves_ir_diff_and_proposal_ha
 def test_http_read_surface_imports_without_qt_model_or_automation(tmp_path):
     workspace = tmp_path / "workspace"
     _, project, version, _ = _legacy_workspace(workspace)
-    script = '\nimport importlib.abc, sys\nclass BlockDesktop(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if fullname == "main" or fullname == "qt_compat" or fullname.startswith(("PyQt", "PySide", "pywinauto")):\n            raise AssertionError("Desktop import: " + fullname)\nsys.meta_path.insert(0, BlockDesktop())\nfrom fastapi.testclient import TestClient\nfrom integrations.web.app import create_app\nfrom application.workbench import WorkbenchService\ndef forbidden():\n    raise AssertionError("Model factory invoked")\nservice = WorkbenchService(sys.argv[1], sys.argv[2], read_only=True, model_factory=forbidden)\napp = create_app(sys.argv[1], state_dir=sys.argv[2], origin="http://127.0.0.1:8765", operator_token="operator-test", service=service)\nwith TestClient(app, base_url="http://127.0.0.1:8765") as client:\n    assert client.post("/api/session", json={"token":"operator-test"}).status_code == 200\n    assert client.get("/api/projects").status_code == 200\n    assert client.get("/api/projects/" + sys.argv[3] + "/versions/" + sys.argv[4] + "/program").status_code == 200\nassert \'ui.desktop.qt\' not in sys.modules and \'ui.desktop.main_window\' not in sys.modules\nassert \'application.model_api\' not in sys.modules\nassert "simulator.runtime" not in sys.modules\n'
+    script = '\nimport importlib.abc, sys\nclass BlockDesktop(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if fullname == "main" or fullname == "qt_compat" or fullname.startswith(("PyQt", "PySide", "pywinauto")):\n            raise AssertionError("Desktop import: " + fullname)\nsys.meta_path.insert(0, BlockDesktop())\nfrom fastapi.testclient import TestClient\nfrom integrations.web.app import create_app\nfrom application.workbench import WorkbenchService\ndef forbidden():\n    raise AssertionError("Model factory invoked")\nservice = WorkbenchService(sys.argv[1], sys.argv[2], read_only=True, model_factory=forbidden)\napp = create_app(sys.argv[1], state_dir=sys.argv[2], origin="http://127.0.0.1:8765", service=service)\nwith TestClient(app, base_url="http://127.0.0.1:8765") as client:\n    assert client.get("/api/projects").status_code == 200\n    assert client.get("/api/projects/" + sys.argv[3] + "/versions/" + sys.argv[4] + "/program").status_code == 200\nassert \'ui.desktop.qt\' not in sys.modules and \'ui.desktop.main_window\' not in sys.modules\nassert \'application.model_api\' not in sys.modules\nassert "simulator.runtime" not in sys.modules\n'
     env = dict(os.environ, PYTHONPATH=str(Path("src").resolve()))
     result = subprocess.run([sys.executable, "-c", script, str(workspace), str(tmp_path / "state"), project, version],
                             env=env, capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_auth_host_origin_csrf_and_agent_approval_boundaries(tmp_path):
+def test_local_project_creation_and_agent_api_boundaries(tmp_path):
     app = _app(tmp_path / "workspace", tmp_path / "state")
     with TestClient(app, base_url=ORIGIN) as client:
-        assert client.get("/api/projects").status_code == 401
+        assert client.get("/api/projects").status_code == 200
+        workspace = client.get("/api/workspace")
+        assert workspace.json()["read_only"] is False
+        assert "set-cookie" not in workspace.headers
+        assert "/api/session" not in app.openapi()["paths"]
+        command = {"name": "Local project", "plc_model": "FX3U", "target_mode": "ladder"}
+        created = client.post("/api/projects", json=command)
+        assert created.status_code == 201, created.text
+        assert created.json()["name"] == command["name"]
         assert client.get("/api/health", headers={"Host": "evil.example"}).status_code == 403
         assert client.get("/api/health", headers={"Origin": "https://evil.example"}).status_code == 403
         assert client.options("/api/projects", headers={"Origin": ORIGIN}).status_code == 403
-        assert client.post("/api/session", json={"token": AGENT}, headers={"Origin": ORIGIN}).status_code == 403
-        assert client.post("/api/proposals/imaginary/decision", json={"decision": "accept"},
-                           headers={"Origin": ORIGIN, "Authorization": "Bearer " + AGENT}).status_code == 401
-        headers = _login(client)
-        assert client.post("/api/projects", json={"name": "No CSRF"}).status_code == 403
-        assert client.post("/api/projects", json={"name": "No origin"},
-                           headers={"X-CSRF-Token": headers["X-CSRF-Token"]}).status_code == 403
-        assert client.post("/api/projects", json={"name": "Wrong origin"},
-                           headers={**headers, "Origin": "https://evil.example"}).status_code == 403
+        assert client.post("/api/projects", json=command,
+                           headers={"Origin": "https://evil.example"}).status_code == 403
+        assert client.post("/api/projects", json=command,
+                           headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
         assert client.get("/api/agent/tools").status_code == 403
         authorized = client.get("/api/agent/tools", headers={"Authorization": "Bearer " + AGENT})
         assert authorized.status_code == 200
@@ -749,7 +790,7 @@ def test_schema_failures_never_echo_secret_inputs(tmp_path):
     secret = "SECRET_DO_NOT_ECHO_624879"
     with TestClient(_app(tmp_path / "workspace", tmp_path / "state"), base_url=ORIGIN,
                     raise_server_exceptions=False) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         cases = [("put", "/api/settings", {"api_key": {"value": secret}}),
                  ("post", "/api/projects", {"name": "test", "api_key": secret}),
                  ("post", "/api/jobs", {"kind": secret, "request_id": "invalid", "project_id": "p1"})]
@@ -765,7 +806,7 @@ def test_analysis_confirm_generate_preview_accept_and_replay_events(offline, tmp
     workspace = tmp_path / "workspace"
     service = WorkbenchService(workspace, tmp_path / "state", model_factory=lambda: (provider, offline_runtime_profile()))
     with TestClient(_app(workspace, tmp_path / "state", service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         created = client.post("/api/projects", json={"name": "Generated project"}, headers=headers)
         assert created.status_code == 201, created.text
         project = created.json()["id"]
@@ -823,6 +864,164 @@ def test_analysis_confirm_generate_preview_accept_and_replay_events(offline, tmp
         assert [r.response_language for r in provider.requests] == ["en", "en"]
 
 
+def test_open_question_text_survives_new_and_preexisting_analysis_documents(offline, tmp_path):
+    from application.workspace import atomic_json
+
+    old_question = {"id": "Q1", "question": "What delay is needed?", "required": True,
+                    "related_missing_info": "delay"}
+    question = {"id": "Q1", "text": old_question["question"], "required": True,
+                "related_missing_info": "delay"}
+
+    class QuestionProvider(_Provider):
+        def stream(self, request):
+            self.requests.append(request)
+            yield TextDelta(json.dumps({"summary": "Delay start", "approaches": [],
+                                       "open_questions": [old_question]}))
+
+    workspace, state = tmp_path / "workspace", tmp_path / "state"
+    provider = QuestionProvider()
+    service = WorkbenchService(workspace, state, model_factory=lambda: (provider, offline_runtime_profile()))
+    headers = {"Origin": ORIGIN}
+    with TestClient(_app(workspace, state, service=service), base_url=ORIGIN) as client:
+        project = client.post("/api/projects", json={"name": "Delay start"}, headers=headers).json()["id"]
+        job_id, output = _complete(client, service, client.post("/api/jobs", json={
+            "project_id": project, "kind": "analysis", "analysis_mode": "design",
+            "request_id": "planning-question", "text": "X0 controls Y0", "response_language": "en",
+        }, headers=headers))
+        assert len(provider.requests) == 1
+        assert output["analysis"]["open_questions"] == output["spec_draft"]["open_questions"] == [question]
+
+        job_path = service.state_dir / "outputs" / f"{job_id}.json"
+        draft_path = service.store.project_dir(project) / "plc-spec.json"
+        raw_output, raw_draft = (json.loads(path.read_bytes()) for path in (job_path, draft_path))
+        for spec in (raw_output["analysis"], raw_output["spec_draft"], raw_draft):
+            assert spec["open_questions"] == [question]
+            spec["open_questions"] = [old_question]
+        atomic_json(job_path, raw_output)
+        atomic_json(draft_path, raw_draft)
+
+        output = client.get(f"/api/jobs/{job_id}/output")
+        document = client.get(f"/api/projects/{project}/spec-document")
+        assert output.status_code == document.status_code == 200
+        assert output.json()["analysis"]["open_questions"] == [question]
+        assert output.json()["spec_draft"]["open_questions"] == [question]
+        assert document.json()["draft"]["open_questions"] == [question]
+        assert [row["path"] for row in document.json()["issues"]["errors"]] == ["$.open_questions[0]"]
+        assert json.loads(draft_path.read_bytes())["open_questions"] == [old_question]
+
+
+def test_linked_open_question_uses_the_parameter_answer_for_confirmation(tmp_path):
+    from application.workspace import atomic_json
+
+    workspace, state = tmp_path / "workspace", tmp_path / "state"
+    headers = {"Origin": ORIGIN}
+    with TestClient(_app(workspace, state), base_url=ORIGIN) as client:
+        pid = client.post("/api/projects", json={"name": "Delay start"}, headers=headers).json()["id"]
+        url = f"/api/projects/{pid}/spec-document"
+        document = client.get(url).json()
+        parameter = {"id": "delay", "name": "Choose a delay", "required": True, "options": ["1 s", "2 s"], "value": ""}
+        duplicate = {"id": "q1", "question": "What delay is needed?", "required": True, "related_missing_info": "delay"}
+        independent = {"id": "q2", "text": "Anything else?", "required": False, "related_missing_info": "other"}
+        atomic_json(Path(document["path"]), {
+            **document["draft"], "summary": "Delayed start",
+            "requirements": [{"id": "r1", "text": "Start after the selected delay", "source": "user"}],
+            "implementation_items": [{"id": "i1", "requirement_ids": ["r1"], "language": "ladder",
+                                      "method": "Delay", "location": "MAIN", "state_owner": "Timer"}],
+            "parameters": [parameter], "open_questions": [duplicate, independent],
+        })
+        document = client.get(url).json()
+        assert document["draft"]["open_questions"] == [independent]
+        assert [issue["path"] for issue in document["issues"]["errors"]] == ["$.parameters[0].value"]
+        answered = {**parameter, "value": "2 s", "source": "user"}
+        saved = client.patch(url, json={"expected_revision": document["draft_revision"], "changes": [
+            {"section": "parameters", "id": "delay", "value": answered},
+        ]}, headers=headers)
+        assert saved.status_code == 200, saved.text
+        confirmed = client.post(url + "/confirm", json={"expected_revision": saved.json()["draft_revision"]}, headers=headers)
+        assert confirmed.status_code == 200, confirmed.text
+        assert confirmed.json()["confirmed_spec"]["parameters"][0]["value"] == "2 s"
+        assert confirmed.json()["confirmed_spec"]["open_questions"] == [independent]
+
+
+def test_design_confirmation_and_edits_extend_the_conversation_after_restart(offline, tmp_path):
+    basis = [{"variant": "Input contact", "premise": "X0 controls Y0", "status": "known",
+              "conclusion": "applicable", "references": [{"source": "request", "ref": "", "quote": "X0 controls Y0"}]}]
+    class DesignProvider(_Provider):
+        def stream(self, request):
+            if request.response_contract.name != "analysis":
+                yield from super().stream(request)
+                return
+            self.requests.append(request)
+            yield TextDelta(json.dumps({
+                "summary": "The input controls the output.",
+                "approaches": [{"approach_id": "contact", "name": "Input contact",
+                                "implementation_semantics": [],
+                                "decision_basis": basis,
+                                "generation_guide": "Drive the output from the input contact."}],
+                "missing_info": [],
+                "suggested_io": {"X": {"X0": "Input"}, "Y": {"Y0": "Output"}},
+                "assumptions": [],
+            }))
+
+    provider = DesignProvider()
+    workspace, state = tmp_path / "workspace", tmp_path / "state"
+    model_factory = lambda: (provider, offline_runtime_profile())
+    headers = {"Origin": ORIGIN}
+    service = WorkbenchService(workspace, state, model_factory=model_factory)
+    with TestClient(_app(workspace, state, service=service), base_url=ORIGIN) as client:
+        project = client.post("/api/projects", json={"name": "Conversation project"}, headers=headers).json()["id"]
+        command = {"project_id": project, "response_language": "en"}
+        analysis_id, analysis = _complete(client, service, client.post("/api/jobs", json={
+            **command, "kind": "analysis", "request_id": "design", "analysis_mode": "design",
+            "start_conversation": True, "text": "FX3U X0 controls Y0",
+        }, headers=headers))
+        assert analysis["analysis_mode"] == "design"
+        document_path = f"/api/projects/{project}/spec-document"
+        document = client.get(document_path).json()
+        spec = client.post(document_path + "/confirm", json={
+            "expected_revision": document["draft_revision"], "version_id": None,
+        }, headers=headers)
+        assert spec.status_code == 200, spec.text
+        assert spec.json()["confirmed_spec"]["selected_approach"]["approach_id"] == "contact"
+        assert spec.json()["confirmed_spec"]["selected_approach"]["decision_basis"] == basis
+        command["conversation_id"] = analysis_id
+        generation_id, generated = _complete(client, service, client.post("/api/jobs", json={
+            **command, "kind": "generation", "request_id": "confirmed", "text": "Generate the confirmed program.",
+        }, headers=headers))
+        generation_packet = json.loads(provider.requests[-1].messages[-1].content)
+        assert generation_packet["analysis_base"]["/confirmed_spec/selected_approach"] == "/approaches/0"
+        assert "/confirmed_spec" not in generation_packet["context_changes"]["set"]
+        assert not any("decision_basis" in key for key in generation_packet["context_changes"]["set"])
+
+    service = WorkbenchService(workspace, state, model_factory=model_factory)
+    with TestClient(_app(workspace, state, service=service), base_url=ORIGIN) as client:
+        version = generated["version_id"]
+        job_ids = [analysis_id, generation_id]
+        for number, text in enumerate(("Keep X0 as the input.", "Keep Y0 as the output."), 1):
+            edit_id, edited = _complete(client, service, client.post("/api/jobs", json={
+                **command, "kind": "generation", "generation_action": "edit",
+                "request_id": f"edit-{number}", "version_id": version, "text": text,
+            }, headers=headers))
+            assert service.jobs.get(edit_id)["conversation_id"] == analysis_id
+            assert service.proposals.get(edited["proposal_id"])["base_version_id"] == version
+            assert text in provider.requests[-1].messages[-1].content
+            edit_packet = json.loads(provider.requests[-1].messages[-2].content)
+            assert "context_changes" in edit_packet and "confirmed_spec" not in edit_packet
+            assert not any(key.startswith("/confirmed_spec") for key in edit_packet["context_changes"].get("set", {}))
+            job_ids.append(edit_id)
+            version = edited["version_id"]
+
+        assert len(provider.requests) == 4
+        for previous, current in zip(provider.requests, provider.requests[1:]):
+            assert current.messages[:len(previous.messages)] == previous.messages
+            assert type(current.messages[len(previous.messages)]).__name__ == "AssistantMessage"
+        assert provider.requests[1].response_contract.name == "compact_ladder"
+        saved_turns = [state / "staging" / job_id / ".model-turn.json" for job_id in job_ids]
+        assert all(path.is_file() for path in saved_turns)
+        assert client.delete(f"/api/projects/{project}", headers=headers).is_success
+        assert not any(path.exists() for path in saved_turns)
+
+
 def test_agent_candidate_is_persisted_by_service_and_only_operator_accepts(tmp_path):
     workspace = tmp_path / "workspace"
     store = SessionStore(base_dir=workspace, legacy_dir=tmp_path)
@@ -842,10 +1041,9 @@ def test_agent_candidate_is_persisted_by_service_and_only_operator_accepts(tmp_p
         repeated = client.post("/api/agent/tools/call", json=command, headers={"Authorization": "Bearer " + AGENT})
         assert repeated.json()["proposal_id"] == proposal
         denied = client.post(f"/api/proposals/{proposal}/decision", json={"decision": "accept"},
-                             headers={"Authorization": "Bearer " + AGENT, "Origin": ORIGIN})
-        assert denied.status_code == 401
-        headers = _login(client)
-        accepted = client.post(f"/api/proposals/{proposal}/decision", json={"decision": "accept"}, headers=headers)
+                             headers={"Origin": "https://evil.example"})
+        assert denied.status_code == 403
+        accepted = client.post(f"/api/proposals/{proposal}/decision", json={"decision": "accept"})
         assert accepted.status_code == 200, accepted.text
         assert accepted.json()["proposal"]["status"] == "accepted"
         assert store.get_project(project)["active_version_id"]
@@ -861,7 +1059,6 @@ def test_artifact_paths_cannot_escape_the_selected_version(tmp_path):
     record["versions"][0]["artifacts"]["leak"] = str(secret)
     store.save_project(record)
     with TestClient(_app(workspace, tmp_path / "state", read_only=True), base_url=ORIGIN) as client:
-        _login(client)
         for path in [f"/api/projects/{project}/versions/{version}/artifacts/leak",
                      "/api/projects/%2e%2e%5coutside-secret.txt"]:
             result = client.get(path)
@@ -882,7 +1079,7 @@ def test_two_tabs_cannot_accept_a_candidate_after_another_base_is_active(tmp_pat
             }, headers={"Authorization": "Bearer " + AGENT})
             assert response.status_code == 200, response.text
             proposals.append(response.json()["proposal_id"])
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         first = client.post(f"/api/proposals/{proposals[1]}/decision", json={"decision": "accept"}, headers=headers)
         assert first.status_code == 200, first.text
         active = store.get_project(project)["active_version_id"]
@@ -907,7 +1104,7 @@ def test_refresh_during_generation_reads_same_running_job_without_restart(offlin
     project = store.create_project("Refresh during generation")["id"]
     service = WorkbenchService(workspace, tmp_path / "state", model_factory=lambda: (provider, offline_runtime_profile()))
     with TestClient(_app(workspace, tmp_path / "state", service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         response = client.post("/api/jobs", json={
             "kind": "generation", "project_id": project, "request_id": "refresh-generation",
             "text": "FX3U X0 controls Y0", "response_language": "en",
@@ -921,7 +1118,7 @@ def test_refresh_during_generation_reads_same_running_job_without_restart(offlin
             assert current.json()["status"] == "running"
             listed = client.get("/api/jobs", params={"project_id": project}).json()["jobs"]
             assert [item["id"] for item in listed] == [job]
-            assert client.get("/api/session").json()["authenticated"] is True
+            assert client.get("/api/workspace").json()["selected"] is True
             assert client.get(f"/api/jobs/{job}/output").status_code == 404
         finally:
             release.set()
@@ -943,7 +1140,7 @@ def test_live_activity_is_persisted_before_final_content_or_candidate_exists(off
     service = WorkbenchService(tmp_path / "workspace", tmp_path / "state",
                               model_factory=lambda: (PausedProvider(), offline_runtime_profile()))
     with TestClient(_app(tmp_path / "workspace", tmp_path / "state", service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         project = service.create_project(name="Live analysis")["id"]
         response = client.post("/api/jobs", headers=headers, json={"kind": "analysis", "project_id": project,
             "request_id": "live-analysis", "text": "起保停", "response_language": "zh-CN"})
@@ -972,7 +1169,7 @@ def test_language_preference_does_not_block_a_valid_program_autosave(offline, tm
     before = _files(workspace)
     service = WorkbenchService(workspace, tmp_path / "state", model_factory=lambda: (provider, offline_runtime_profile()))
     with TestClient(_app(workspace, tmp_path / "state", service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         response = client.post("/api/jobs", json={
             "kind": "generation", "project_id": project, "request_id": "rejected-generation",
             "text": "FX3U X0 controls Y0", "response_language": "en",
@@ -1003,7 +1200,7 @@ def test_retry_uses_original_command_after_project_messages_change(offline, tmp_
         return provider, offline_runtime_profile()
     service = WorkbenchService(workspace, tmp_path / "state", model_factory=snapshot)
     with TestClient(_app(workspace, tmp_path / "state", service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         command = {"kind": "analysis", "project_id": project, "request_id": "stable-analysis-command",
                    "text": "FX3U X0 controls Y0", "response_language": "en"}
         original = client.post("/api/jobs", json=command, headers=headers)
@@ -1033,7 +1230,7 @@ def test_cancel_approved_job_waiting_for_engineering_lock_never_calls_executor(t
     attempts, release, held = threading.Event(), threading.Event(), threading.Event()
     executor_calls, holders = [], []
     with TestClient(_app(workspace, tmp_path / "state", service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         created = client.post("/api/proposals", json={"action": "gx_import", "project_id": project,
                               "version_id": version, "request_id": "cancel-approved-import"}, headers=headers)
         assert created.status_code == 201, created.text
@@ -1114,7 +1311,7 @@ def test_web_generation_developer_header_is_explicit_job_input(tmp_path):
         }
 
     with TestClient(_app(workspace, state, service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         service.submit = capture
         command = {
             "kind": "generation",
@@ -1179,7 +1376,7 @@ def test_fresh_confirmed_ab_rerun_ignores_existing_version_and_reenters_compact_
     }
 
     with TestClient(_app(workspace, state, service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         project = client.post(
             "/api/projects", json={"name": "A/B rerun", "plc_model": "FX3U"}, headers=headers
         ).json()["id"]
@@ -1241,7 +1438,7 @@ def test_spec_draft_projection_uses_workbench_services_without_persistence(tmp_p
         return {"address": address, "kind": "from-service"}
     monkeypatch.setattr(app.state.service, "edit_spec_io_row", row)
     with TestClient(app, base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         before = _files(tmp_path)
         response = client.post("/api/spec/io-row", json={"address": "X0"}, headers=headers)
         assert response.status_code == 200 and response.json()["kind"] == "from-service"

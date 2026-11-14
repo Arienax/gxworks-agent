@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Lazy local dense retrieval for the bundled FX3U knowledge index.
 
@@ -63,6 +63,7 @@ _SEMANTIC_ALIASES = (
 )
 _lock = threading.Lock()
 _loaded = None
+_models = {}
 
 
 def _normalize(value):
@@ -86,6 +87,11 @@ def dense_features(value):
     for match in _WORD_RE.finditer(text):
         word = match.group(0)
         add("w:" + word, 1.5)
+        # Authored facts use names such as clock_pulse and period_ms. Retain
+        # the compound and its words so ordinary prose can reach those facts.
+        for part in set(re.split(r"[_+./-]+", word)) - {word}:
+            if len(part) >= 2 and part.isalpha():
+                add("w:" + part, 1.5)
         if len(word) >= 4:
             for size in (3, 4, 5):
                 for index in range(max(0, len(word) - size + 1)):
@@ -98,7 +104,10 @@ def dense_features(value):
     return counts
 
 
-def _model_path():
+def _model_path(path=None):
+    if path is not None:
+        path = Path(path)
+        return path if path.is_file() else None
     try:
         path = Path(resource_path(_MODEL_RESOURCE))
     except (OSError, TypeError, ValueError):
@@ -106,20 +115,22 @@ def _model_path():
     return path if path.is_file() else None
 
 
-def _load_model():
+def _load_model(model_path=None):
     global _loaded
-    path = _model_path()
+    path = _model_path(model_path) if model_path is not None else _model_path()
     if path is None:
         return None
     try:
         identity = (str(path.resolve()), path.stat().st_mtime_ns, path.stat().st_size)
     except OSError:
         return None
-    if _loaded is not None and _loaded["identity"] == identity:
-        return _loaded
+    loaded = _models.get(str(path.resolve()))
+    if loaded is not None and loaded["identity"] == identity:
+        return loaded
     with _lock:
-        if _loaded is not None and _loaded["identity"] == identity:
-            return _loaded
+        loaded = _models.get(str(path.resolve()))
+        if loaded is not None and loaded["identity"] == identity:
+            return loaded
         try:
             import numpy as np
 
@@ -127,7 +138,9 @@ def _load_model():
             feature_names = json.loads(str(archive["feature_names_json"].item()))
             metadata = json.loads(str(archive["metadata_json"].item()))
             feature_index = {value: index for index, value in enumerate(feature_names)}
-            chunk_ids = archive["chunk_ids"].astype(np.int64, copy=False)
+            # Owner stores use stable text identities; the installed domain
+            # corpus and older sidecars use numeric IDs.
+            chunk_ids = archive["chunk_ids"].copy()
             vectors = archive["chunk_vectors"].astype(np.float32, copy=False)
             idf = archive["idf"].astype(np.float32, copy=False)
             components = archive["components"].astype(np.float32, copy=False)
@@ -140,7 +153,7 @@ def _load_model():
                 or vectors.shape[1] != components.shape[0]
             ):
                 return None
-            _loaded = {
+            loaded = {
                 "identity": identity,
                 "path": path,
                 "np": np,
@@ -151,7 +164,10 @@ def _load_model():
                 "components": components,
                 "metadata": metadata,
             }
-            return _loaded
+            _models[str(path.resolve())] = loaded
+            if model_path is None:
+                _loaded = loaded
+            return loaded
         except (ImportError, OSError, ValueError, KeyError, json.JSONDecodeError):
             return None
 
@@ -160,15 +176,15 @@ def dense_available():
     return _load_model() is not None
 
 
-def dense_model_info():
-    model = _load_model()
+def dense_model_info(*, model_path=None):
+    model = _load_model(model_path) if model_path is not None else _load_model()
     return dict(model["metadata"]) if model else {}
 
 
-def dense_search(query, *, top_k=80, minimum_score=0.06, allowed_ids=None):
+def dense_search(query, *, top_k=80, minimum_score=0.06, allowed_ids=None, model_path=None):
     """Return ``(chunk_id, cosine, rank)`` without touching SQLite."""
 
-    model = _load_model()
+    model = _load_model(model_path) if model_path is not None else _load_model()
     if model is None:
         return []
     features = dense_features(query)
@@ -206,7 +222,8 @@ def dense_search(query, *, top_k=80, minimum_score=0.06, allowed_ids=None):
         score = float(scores[index])
         if not math.isfinite(score) or score < float(minimum_score):
             continue
-        results.append((int(model["chunk_ids"][index]), score, len(results)))
+        identity = model["chunk_ids"][index].item()
+        results.append((identity, score, len(results)))
     return results
 
 
@@ -214,6 +231,7 @@ def clear_dense_cache():
     global _loaded
     with _lock:
         _loaded = None
+        _models.clear()
 
 
 __all__ = [

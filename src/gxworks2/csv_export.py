@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Canonical GX Works2 CSV export, native step widths, and export-only lowering."""
 import csv
@@ -66,6 +66,15 @@ class LadderProgram:
     def unresolved(self):
         return tuple(entry for entry in self.instructions if entry.steps is None)
 
+    def size_summary(self):
+        instructions = self.instructions
+        missing = [entry for entry in instructions if entry.steps is None]
+        return {"basis": "export_instruction_widths", "instruction_count": len(instructions),
+                "steps": None if missing else sum(entry.steps for entry in instructions),
+                "unknown_width_count": len(missing),
+                "unknown_width_locations": [{"opcode": entry.mnemonic, "rung": entry.rung}
+                                            for entry in missing[:16]]}
+
 
 def _step_width_model(payload, override):
     """Keep an explicit CPU through IR-to-ladder projection; default legacy FX."""
@@ -81,7 +90,7 @@ def _step_width_model(payload, override):
 
 
 def lower_ladder_program(json_data, *, plc_model=None, infer_device_comments=True,
-                         step_diagnostics=None):
+                         step_diagnostics=None, storage_context=None):
     """Lower ladder JSON or PLC IR into instructions, statements and device comments.
 
     This is the one lowering: the CSV export serializes its result, and a project
@@ -181,7 +190,7 @@ def lower_ladder_program(json_data, *, plc_model=None, infer_device_comments=Tru
         return [elem.get("address", "")]
 
     def add_instruction(inst, operands, comment=""):
-        width = instruction_step_width(inst, operands, plc_model=plc_model)
+        width = instruction_step_width(inst, operands, plc_model=plc_model, context=storage_context)
         if not width.known:
             width_findings.append({"opcode": inst, "operands": list(operands),
                                    "step": cursor.step, "reason": width.reason,
@@ -255,7 +264,7 @@ def lower_ladder_program(json_data, *, plc_model=None, infer_device_comments=Tru
             elif t == "APP_INSTR": add_instruction(out.get("opcode", ""), out.get("operands", []), label)
             elif t == "BLOCK_OUTPUT":
                 parts = out.get("expression", "").strip().split()
-                if len(parts) >= 2: add_instruction(parts[0], parts[1:], label)
+                if parts: add_instruction(parts[0], parts[1:], label)
 
     for index, rung in enumerate(rungs):
         rung_index[0] = index
@@ -332,12 +341,14 @@ def _write_program_csv(
     infer_device_comments=True,
     plc_model=None,
     step_diagnostics=None,
+    storage_context=None,
+    program_size=None,
 ):
     import csv
 
     program = lower_ladder_program(json_data, plc_model=plc_model,
                                    infer_device_comments=infer_device_comments,
-                                   step_diagnostics=step_diagnostics)
+                                   step_diagnostics=step_diagnostics, storage_context=storage_context)
 
     # 2. 生成注释
     comment_rows = [["COMMENT - 副本"], ["软元件名", "注释"]]
@@ -371,6 +382,8 @@ def _write_program_csv(
         with open(output_program_csv, mode="w", newline="", encoding="utf-16") as f_prog:
             writer = csv.writer(f_prog, delimiter="\t", quoting=csv.QUOTE_ALL, lineterminator="\r\n")
             writer.writerows(rows)
+        if program_size is not None:
+            program_size.update(program.size_summary())
         return True
     except Exception as e:
         print(f"主程序CSV生成失败: {e}")
@@ -397,6 +410,8 @@ def _generate_native_wrapped_csv(
     infer_device_comments=True,
     plc_model=None,
     step_diagnostics=None,
+    storage_context=None,
+    program_size=None,
 ):
     """Compatibility wrapper; steps are assigned once from the Core catalogue."""
     return _write_program_csv(
@@ -406,6 +421,8 @@ def _generate_native_wrapped_csv(
         infer_device_comments=infer_device_comments,
         plc_model=plc_model,
         step_diagnostics=step_diagnostics,
+        storage_context=storage_context,
+        program_size=program_size,
     )
 
 
@@ -417,6 +434,10 @@ def generate_gx_works2_csv(
     infer_device_comments=True,
     plc_model=None,
     step_diagnostics=None,
+    storage_context=None,
+    raise_lowering_error=False,
+    execution_context=None,
+    program_size=None,
 ):
     """Generate GX Works2 CSV with native step widths and <=24-row OR blocks.
 
@@ -425,6 +446,8 @@ def generate_gx_works2_csv(
     leave later step labels blank and produce diagnostics, never a model retry
     or a new rejection of the user's program. Native import of such an unresolved
     listing still needs verification; a successful export is not a compile claim.
+    A supplied storage_context is the saved Q/L device allocation, as used by
+    the source-bound project writer; no allocation is guessed when it is absent.
     """
     from plc.ir import ir_to_ladder, is_plc_ir
     from plc.device_identity import canonical_ladder_devices
@@ -434,8 +457,11 @@ def generate_gx_works2_csv(
     if isinstance(json_data, dict):
         json_data = canonical_ladder_devices(json_data)
     try:
-        export_ladder = lower_large_parallel_blocks_for_gxworks2(json_data)
+        export_ladder = lower_large_parallel_blocks_for_gxworks2(
+            json_data, plc_model=plc_model, execution_context=execution_context)
     except GXNativeLoweringError as exc:
+        if raise_lowering_error:
+            raise
         print(f"GX Works2并联网络导出失败: {exc}")
         return False
 
@@ -447,7 +473,11 @@ def generate_gx_works2_csv(
             infer_device_comments=infer_device_comments,
             plc_model=plc_model,
             step_diagnostics=step_diagnostics,
+            storage_context=storage_context,
+            program_size=program_size,
         )
     except GXNativeLoweringError as exc:
+        if raise_lowering_error:
+            raise
         print(f"GX Works2无输入条件导出失败: {exc}")
         return False

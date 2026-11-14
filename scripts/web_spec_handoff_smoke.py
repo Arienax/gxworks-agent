@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Browser regression for the built Web UI, with a mocked HTTP API.
 
@@ -65,9 +65,8 @@ class MockAPI:
         path, method = url.path.removeprefix("/api"), request.method
         body = request.post_data_json if request.post_data else None
         status, data = 200, {}
-        if path == "/session":
-            data = {"authenticated": True, "read_only": self.read_only,
-                    "role": "operator", "csrf": "mock-csrf"}
+        if path == "/workspace":
+            data = {"selected": True, "read_only": self.read_only}
         elif path == "/settings/approval":
             data = {"mode": "ask", "revision": 0, "local_autosave": True, "read_only": self.read_only}
         elif path == "/settings":

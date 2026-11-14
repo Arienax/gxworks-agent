@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Small callback/language boundary for synchronous application workflows."""
 import copy
@@ -73,13 +73,15 @@ def model_call(function, *args, **kwargs):
     """Guard model invocations while deterministic repair stays model-free."""
     from model_runtime.provider import ResponseRejectedError, public_model_error
     from application.compact_protocol import CompactProtocolError
+    from application.jobs import JobCancelled
+    from plc.candidate_repair import GenerationValidationError
     from plc.validation import PLCJsonValidationError
     try:
         local = _repair_short_circuit(function, args, kwargs)
         if local is not None:
             return local
         return function(*args, **kwargs)
-    except (ResponseRejectedError, CompactProtocolError, PLCJsonValidationError):
+    except (ResponseRejectedError, CompactProtocolError, PLCJsonValidationError, GenerationValidationError, JobCancelled):
         raise
     except Exception as error:
         safe_error = public_model_error(error)

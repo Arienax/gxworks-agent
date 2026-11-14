@@ -25,9 +25,17 @@ datas = [
     (str(root / 'resources/plc_models.json'), '.'),
     (str(root / 'resources/instructions/control_runtime.json'), 'resources/instructions'),
     (str(root / 'skills'), 'skills'),
+    (str(root / 'src/integrations/dsh_runtime/bridge.mjs'), 'integrations/dsh_runtime'),
+    (str(root / 'src/integrations/dsh_runtime/windows_sdk.mjs'), 'integrations/dsh_runtime'),
+    (str(root / 'src/integrations/dsh_runtime/vendor/LICENSE'), 'integrations/dsh_runtime/vendor'),
 ]
-datas += unique_runtime_data(runtime_knowledge_data(resources) + runtime_instruction_data(resources))
+datas += unique_runtime_data(runtime_knowledge_data(resources) +
+                             runtime_instruction_data(resources, include_compiled_catalog=True))
 datas += ([(str(root / 'web/dist'), 'web/dist')] if component == 'full' else runtime_viewer_data(root))
+if component == 'full':
+    if not (resources / 'dsh-runtime').is_dir():
+        raise FileNotFoundError('Full builds require the staged DSH SDK runtime')
+    datas.append((str(resources / 'dsh-runtime'), 'dsh-runtime'))
 datas += copy_metadata('haystack-ai')
 datas += copy_metadata('tree-sitter') + copy_metadata('tree-sitter-iec61131-3-st')
 for directory, executable in (

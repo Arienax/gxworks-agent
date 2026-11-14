@@ -1,58 +1,28 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
-"""Loopback-only operator sessions and a separate, unprivileged Agent token."""
+"""Loopback HTTP boundary and credentials for the Agent API."""
 from __future__ import annotations
 
 import secrets
-import time
-from dataclasses import dataclass
 from urllib.parse import urlsplit
 
 from fastapi import Request
 from starlette.responses import JSONResponse
 
 
-@dataclass
-class OperatorSession:
-    csrf: str
-    expires: float
-
-
 class LocalSecurity:
-    def __init__(self, origin: str, operator_token: str, agent_token: str | None = None):
+    def __init__(self, origin: str, agent_token: str | None = None):
         parsed = urlsplit(origin)
         if parsed.scheme != "http" or parsed.hostname not in ("127.0.0.1", "localhost", "::1") or parsed.path not in ("", "/"):
             raise ValueError("The web workbench only supports an explicit loopback HTTP origin")
-        if not operator_token or (agent_token and secrets.compare_digest(agent_token, operator_token)):
-            raise ValueError("Operator and Agent credentials must be separate")
         self.origin = origin.rstrip("/")
         self.host = parsed.netloc
-        self.operator_token = operator_token
         self.agent_token = agent_token
-        self.sessions: dict[str, OperatorSession] = {}
-
-    def session(self, request: Request):
-        key = request.cookies.get("gx_operator", "")
-        session = self.sessions.get(key)
-        if session and session.expires <= time.monotonic():
-            self.sessions.pop(key, None)
-            session = None
-        return session
-
-    def login(self, token: str):
-        if not secrets.compare_digest(token, self.operator_token):
-            raise PermissionError("Invalid operator credential")
-        self.sessions = {key: value for key, value in self.sessions.items() if value.expires > time.monotonic()}
-        if len(self.sessions) >= 32:
-            raise ValueError("Too many operator sessions")
-        key, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
-        self.sessions[key] = OperatorSession(csrf, time.monotonic() + 12 * 3600)
-        return key, csrf
 
     async def middleware(self, request: Request, call_next):
         def denied(code, message):
-            return JSONResponse({"error": {"code": code, "message": message}}, status_code=403 if code != "authentication_required" else 401)
+            return JSONResponse({"error": {"code": code, "message": message}}, status_code=403)
         if request.headers.get("host") != self.host:
             return denied("invalid_host", "Untrusted host")
         origin = request.headers.get("origin")
@@ -67,15 +37,6 @@ class LocalSecurity:
             supplied = request.headers.get("authorization", "")
             if not self.agent_token or not secrets.compare_digest(supplied, "Bearer " + self.agent_token):
                 return denied("agent_authentication_required", "Agent credential required")
-            request.state.role = "agent"
-        elif path.startswith("/api/") and path not in ("/api/health", "/api/session"):
-            session = self.session(request)
-            if not session:
-                return denied("authentication_required", "Operator session required")
-            if request.method not in ("GET", "HEAD"):
-                if origin != self.origin or not secrets.compare_digest(request.headers.get("x-csrf-token", ""), session.csrf):
-                    return denied("csrf_required", "Operator write protection failed")
-            request.state.role = "operator"
         if request.method in ("POST", "PUT", "PATCH"):
             try:
                 length = int(request.headers.get("content-length", "0"))

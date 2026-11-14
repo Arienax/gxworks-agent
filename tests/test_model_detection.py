@@ -167,19 +167,18 @@ def test_missing_key_does_not_block_offline_editable_contract(settings_env,monke
     assert not settings_env.path.exists() and not settings_env.writes
 
 
-def test_http_resolve_and_verify_consent_keep_operator_csrf_boundary(settings_env,tmp_path,monkeypatch):
+def test_http_resolve_and_verify_require_local_origin_and_verification_consent(settings_env,tmp_path,monkeypatch):
     from fastapi.testclient import TestClient
     from application.workbench import WorkbenchService
     from integrations.web.app import create_app
     monkeypatch.setattr('model_runtime.provider.create_provider',lambda *a,**k:pytest.fail('No model client allowed'))
     origin='http://127.0.0.1:8765'
     service=WorkbenchService(tmp_path/'workspace',tmp_path/'state',settings=settings_env.service)
-    app=create_app(service.store.base_dir,service=service,origin=origin,operator_token='operator')
+    app=create_app(service.store.base_dir,service=service,origin=origin)
     draft={'name':'Draft','base_url':'https://unknown.invalid/v1','model':'unknown'}
     with TestClient(app,base_url=origin) as client:
-        login=client.post('/api/session',json={'token':'operator'},headers={'Origin':origin}).json()
-        headers={'Origin':origin,'X-CSRF-Token':login['csrf']}
-        assert client.post('/api/settings/resolve',json={'profile':draft},headers={'Origin':origin}).status_code==403
+        headers={'Origin':origin}
+        assert client.post('/api/settings/resolve',json={'profile':draft},headers={'Origin':'https://other.example'}).status_code==403
         resolved=client.post('/api/settings/resolve',json={'profile':draft},headers=headers)
         assert resolved.status_code==200 and resolved.json()['status']=='resolved'
         assert resolved.json()['discovery']['generation_requests']==0

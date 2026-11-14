@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Versioned, model-neutral capability data. No SDK, network or PLC dependencies.
 
@@ -24,10 +24,12 @@ CAPABILITY_STATUSES = frozenset({"supported", "unsupported", "unknown", "conditi
 SOURCES = frozenset({"metadata", "probe", "manual", "legacy", "catalog", "generic", "observation"})
 TYPES = frozenset({"enum", "number", "integer", "boolean", "string"})
 # Protocol and credential ownership is NOT delegated to provider metadata.
+RESPONSE_CONTROLS = frozenset({"input", "instructions", "previous_response_id", "conversation", "background"})
 RESERVED = frozenset({"model", "messages", "tools", "tool_choice", "functions", "function_call",
     "stream", "response_format", "api_key", "base_url", "api_base", "timeout", "max_retries",
-    "headers", "extra_headers", "extra_query", "http_client", "client", "__proto__", "prototype", "constructor"})
+    "headers", "extra_headers", "extra_query", "http_client", "client", "__proto__", "prototype", "constructor"}) | RESPONSE_CONTROLS
 MISSING = object()
+REASONING_PARAMETERS = frozenset({"reasoning_effort", "thinking_mode", "enable_thinking"})
 
 
 def identifier(value):
@@ -198,6 +200,15 @@ class ParameterDescriptor:
                 raise ValueError("Integer bounds and steps must be integral")
         if kind == "enum" and status in {"supported", "fixed", "conditional"} and values is None:
             raise ValueError("Enum controls require declared values")
+        if "reasoning_levels" in hints:
+            levels = hints["reasoning_levels"]
+            if (name != "reasoning_effort" or kind != "enum" or status not in {"supported", "conditional"}
+                    or not isinstance(levels, dict) or not (set(levels) - {"off"})
+                    or set(levels) - {"off", "minimal", "low", "medium", "high", "xhigh", "max"}):
+                raise ValueError("Invalid reasoning levels")
+            if any(not (isinstance(wire, str) and wire.strip() and member(wire, values or ())
+                        or level == "off" and wire is None) for level, wire in levels.items()):
+                raise ValueError("Reasoning levels must map to declared API values")
         if status == "fixed" and (values is None or len(values) != 1):
             raise ValueError("Fixed controls require one value")
         label = value.get("label", "")
@@ -404,34 +415,71 @@ def scoped_contract(profile, model=None, api_key=None):
     return contract if all(current[k] == contract.scope[k] for k in keys) else None
 
 
+def _request_parameters(value, contract):
+    parameters = bounded_map(value)
+    if set(parameters) & RESERVED:
+        raise ValueError("Custom request parameters cannot replace protocol fields")
+    if set(parameters) & REASONING_PARAMETERS:
+        raise ValueError("Choose reasoning levels in the model picker")
+    if len(json.dumps(parameters, allow_nan=False)) > 64000:
+        raise ValueError("Custom request parameters must be smaller than 64 KiB")
+    for name, descriptor in contract.parameters.items():
+        selected = path_get(parameters, descriptor.wire_path, parameters.get(name, MISSING))
+        if name in REASONING_PARAMETERS:
+            if selected is not MISSING or any(
+                parent is not MISSING and not isinstance(parent, Mapping)
+                for parent in (path_get(parameters, descriptor.wire_path[:length])
+                               for length in range(1, len(descriptor.wire_path)))
+            ):
+                raise ValueError("Choose reasoning levels in the model picker")
+        elif selected is not MISSING and selected is not None:
+            if descriptor.status in {"fixed", "unsupported"}:
+                raise ValueError(f"{name}: parameter is not adjustable")
+            try:
+                descriptor.validate(selected)
+            except ValueError as error:
+                raise ValueError(f"{name}: {error}") from error
+    return copy.deepcopy(parameters)
+
+
 @dataclass(frozen=True)
 class UserModelSettings:
     scope: Mapping[str, str]
     parameters: Mapping[str, Mapping[str, Any]]
+    request_parameters: Mapping[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, value, contract):
-        value = checked_object(value, {"scope", "parameters"}, "user model settings")
+        value = checked_object(value, {"scope", "parameters", "request_parameters"}, "user model settings")
         if value.get("scope") != contract.scope:
             raise ValueError("User selections do not belong to the current contract")
         parameters = {}
         for name, selection in bounded_map(value.get("parameters", {})).items():
             if name not in contract.parameters:
                 raise ValueError("User selected an undeclared parameter")
-            checked_object(selection, {"mode", "value"}, "parameter selection")
+            checked_object(selection, {"mode", "value", "level"}, "parameter selection")
             mode = selection.get("mode")
             if mode not in {"value", "omit", "inherit"} or (mode == "value") != ("value" in selection):
                 raise ValueError("Invalid parameter selection mode")
+            desc = contract.parameters[name]
+            if "level" in selection:
+                level = selection["level"]
+                levels = desc.ui_hint.get("reasoning_levels", {})
+                if (not isinstance(level, str) or level not in levels or mode == "inherit"
+                        or levels[level] != selection.get("value")):
+                    raise ValueError("Selection does not match the declared reasoning level")
             if mode == "value":
-                desc = contract.parameters[name]
                 if desc.status in {"fixed", "unsupported"}:
                     raise ValueError("Parameter is not adjustable")
                 desc.validate(selection["value"])
             parameters[name] = copy.deepcopy(dict(selection))
-        return cls(dict(contract.scope), parameters)
+        return cls(dict(contract.scope), parameters, _request_parameters(value.get("request_parameters", {}), contract))
 
     def to_dict(self):
-        return {"scope": dict(self.scope), "parameters": copy.deepcopy(dict(self.parameters))}
+        result = {"scope": dict(self.scope), "parameters": copy.deepcopy(dict(self.parameters))}
+        if self.request_parameters:
+            result["request_parameters"] = copy.deepcopy(dict(self.request_parameters))
+        return result
 
 
 

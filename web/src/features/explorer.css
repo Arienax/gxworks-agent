@@ -218,6 +218,59 @@
   font-family: "Cascadia Code", Consolas, monospace;
   font-size: 11px;
 }
+.address-groups {
+  max-height: 240px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.address-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+}
+.address-group > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 5px 7px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--muted);
+  font-size: 11px;
+}
+.address-group > summary::-webkit-details-marker {
+  display: none;
+}
+.address-group > summary::before {
+  content: "▸";
+  flex: none;
+  color: var(--muted);
+}
+.address-group[open] > summary::before {
+  content: "▾";
+}
+.address-group > summary > strong {
+  color: var(--text);
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 11px;
+}
+.address-group-label {
+  color: var(--muted);
+}
+.address-group-count {
+  margin-left: auto;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--hover);
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.address-group > .address-results {
+  padding: 2px;
+}
 .address-results {
   max-height: 168px;
   overflow: auto;

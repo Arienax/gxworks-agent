@@ -42,6 +42,7 @@ class OwnerStoreTests(unittest.TestCase):
         for marker in ('absent', None, False, True):
             raw=fixture()
             if marker != 'absent':raw['entries'][0]['call_available']=marker
+            raw['entries'][0]['support_status']='reviewed_native_signature'
             raw['entries'][0]['call_admission_details']={'declared_scope':'explicit'}
             with tempfile.TemporaryDirectory() as tmp:
                 pooled=intern_runtime_sources(raw,intern_values=True)
@@ -52,11 +53,36 @@ class OwnerStoreTests(unittest.TestCase):
                     header=store.get_owner_header(('mitsubishi','PWM','FX5U'))
                     if marker == 'absent':self.assertNotIn('call_available',header)
                     else:self.assertIs(header['call_available'],marker)
+                    self.assertEqual(header['support_status'],'reviewed_native_signature')
                     self.assertEqual(header['call_admission_details'],{'declared_scope':'explicit'})
                     header['call_admission_details']['declared_scope']='changed'
                     self.assertEqual(store.get_owner_header(('mitsubishi','PWM','FX5U'))['call_admission_details']['declared_scope'],'explicit')
                     self.assertEqual(store.stats()['hydrated_owner_count'],0)
                 finally:store.close()
+
+    def test_expression_alias_lookup_reads_only_admitted_exact_model_headers(self):
+        raw=fixture()
+        for entry in raw['entries']:
+            entry['call_available']=True
+            entry['call_admission_details']={'interfaces':['st'], 'structured_expression':{
+                'available':True, 'call_kind':'expression', 'operator':'**', 'owner_opcode':'PWM'}}
+        extra=copy.deepcopy(raw['entries'][0]);extra['opcode']='PWR_ALIAS'
+        extra['call_admission_details']['structured_expression']['owner_opcode']='PWR_ALIAS'
+        for fact in extra['facts']:fact['scope']['forms']=['PWR_ALIAS']
+        raw['entries'].append(extra)
+        raw['entries'][1]['call_available']=False
+        with tempfile.TemporaryDirectory() as tmp:
+            pooled=intern_runtime_sources(raw,intern_values=True)
+            db=Path(tmp)/'facts.sqlite';manifest=Path(tmp)/'instruction_definitions.manifest.json'
+            write_runtime_sqlite(pooled,db,field_pooling=True);write_owner_manifest(pooled,db,manifest)
+            store=OwnerDefinitionStore(manifest)
+            try:
+                keys=store.expression_owner_keys('**',cpu='FX5U')
+                self.assertEqual(set(keys),{('mitsubishi','PWM','FX5U'),('mitsubishi','PWR_ALIAS','FX5U')})
+                self.assertEqual(store.expression_owner_keys('**',cpu='FX5UC'),[])
+                self.assertEqual(store.expression_owner_keys('MOD',cpu='FX5U'),[])
+                self.assertEqual(store.stats()['hydrated_owner_count'],0)
+            finally:store.close()
 
     def test_no_owner_hydration_until_requested_and_no_aliases(self):
         with tempfile.TemporaryDirectory() as tmp:

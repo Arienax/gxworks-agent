@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Place a lowered Ladder program into a captured blank Ladder project.
 
@@ -120,6 +120,24 @@ def _record_identity(record):
     return ("opaque", b"".join(token.raw for token in record.tokens).hex())
 
 
+def _stored_row_identity(row, *, profile, text_encoding, plc_model, storage_context):
+    """Compare new source with the existing codec's stored representation.
+
+    Native real input is rounded before storage and has a rounded display.
+    Use that same source codec, including its literal precision and notation
+    restrictions, instead of treating the user's decimal spelling as bytes.
+    """
+    if "op" not in row:
+        return _row_identity(row), None
+    from .token_encoder import encode_instruction, _decode_one
+    encoded = encode_instruction(row['op'], row['args'], profile=profile,
+        text_encoding=text_encoding, plc_model=plc_model, storage_context=storage_context)
+    decoded = _decode_one(encoded, profile, text_encoding)
+    if decoded.mnemonic.upper() != row['op'].upper() or len(decoded.operands) != len(row['args']):
+        raise GXWFormatError('the stored instruction changes the requested mnemonic or operand count')
+    return _record_identity(decoded), encoded
+
+
 def _empty_baseline_program(baseline, program=None):
     """Return the baseline program name and listing, requiring an empty body."""
     project = read_offline_project(baseline)
@@ -157,16 +175,29 @@ def build_ladder_project(program, *, plc_model, program_name=None, device_commen
     saved = edit_ladder_project(baseline, selected["name"], edits,
                                 device_comments=comments or None)
     after = read_ordered_program(read_offline_project(saved.data), selected["name"])
-    written = [_record_identity(record) for record in after["listing"].records
-               if getattr(record, "mnemonic", None) != "END"]
-    expected = [_row_identity(row) for row in rows]
-    if written != expected:
+    written_records = [record for record in after["listing"].records
+                       if getattr(record, "mnemonic", None) != "END"]
+    written = [_record_identity(record) for record in written_records]
+    storage_context = project.token_storage_context()
+    stored_rows = [_stored_row_identity(row, profile=listing.profile,
+        text_encoding=project.context['text_encoding'], plc_model=cpu,
+        storage_context=storage_context) for row in rows]
+    expected = [identity for identity, _ in stored_rows]
+    if written != expected or any(raw is not None and raw != b''.join(t.raw for t in record.tokens)
+                                  for record, (_, raw) in zip(written_records, stored_rows)):
         raise GXWFormatError("the delivered project does not read back as the requested program")
+    normalizations = [{'record_ordinal': number, 'opcode': row['op'], 'operand': index,
+                       'requested': str(requested), 'stored': stored}
+        for number, (row, identity) in enumerate(zip(rows, expected), 1) if 'op' in row
+        for index, (requested, stored) in enumerate(zip(row['args'], identity[2]), 1)
+        if _device(requested) != stored]
     report = dict(saved.report)
     report.update({"plc_model": cpu, "program": selected["name"],
                    "instructions": len(delivered), "statements": len(statements),
                    "baseline": "captured blank Ladder project",
                    "device_comments": len(comments or {})})
+    if normalizations:
+        report['native_literal_normalizations'] = normalizations
     return LadderDelivery(data=saved.data, plc_model=cpu, program=selected["name"],
                           instructions=tuple((row["op"], tuple(row["args"])) for row in delivered),
                           statements=tuple(statements),

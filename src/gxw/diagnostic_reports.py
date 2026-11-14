@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Project original public diagnostic reports without promoting completion."""
 from __future__ import annotations
@@ -12,6 +12,151 @@ from gxw.diagnostic_scope import (
     _id,
     PUBLIC_CHECK_REPORT_CONVERSION_CPUS,
 )
+
+
+# Read the selected installation's resources, not a bundled translation table.
+# The 32-bit system host can use GX Works2's existing Jet/ADODB provider even
+# when the application Python is 64-bit. All variable data arrives on stdin.
+_INSTALLED_MESSAGE_QUERY = r'''
+$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+$request = [Console]::In.ReadToEnd() | ConvertFrom-Json
+$root = [IO.Path]::GetFullPath($request.installation)
+$database = Join-Path $root 'Easysocket\ProductDataBase2\DataBaseE\Error.mdb'
+$connection = $null
+try {
+    $builder = New-Object System.Data.Common.DbConnectionStringBuilder
+    $builder['Provider'] = 'Microsoft.Jet.OLEDB.4.0'
+    $builder['Data Source'] = [string]$database
+    $builder['Mode'] = 'Read'
+    $connection = New-Object -ComObject ADODB.Connection
+    $connection.Open($builder.ConnectionString)
+    $rows = @()
+    foreach ($code in $request.codes) {
+        $number = [int64]$code
+        if ($number -lt 0 -or $number -gt 4294967295) { throw 'Invalid diagnostic code' }
+        $stored = if ($number -gt 2147483647) { $number - 4294967296 } else { $number }
+        $record = $connection.Execute('SELECT ID,Code,ServerID,Class,Define,Message,Recover FROM D_ServerError WHERE Code=' + $stored)
+        try {
+            while (-not $record.EOF) {
+                $row = @{}
+                foreach ($field in $record.Fields) {
+                    $row[$field.Name] = if ($field.Value -is [DBNull]) { $null } else { $field.Value }
+                }
+                $rows += $row
+                $record.MoveNext()
+            }
+        } finally { $record.Close() }
+    }
+    $servers = @()
+    $record = $connection.Execute('SELECT ID,Name FROM M_ServerType')
+    try {
+        while (-not $record.EOF) {
+            $servers += @{id=$record.Fields.Item('ID').Value; name=$record.Fields.Item('Name').Value}
+            $record.MoveNext()
+        }
+    } finally { $record.Close() }
+    $versions = @{}
+    foreach ($relative in @('GPPW2\GD2.exe', 'Easysocket\Compiler\ECCompiler_IEC.dll')) {
+        $path = Join-Path $root $relative
+        if (Test-Path -LiteralPath $path -PathType Leaf) {
+            $versions[$relative] = [Diagnostics.FileVersionInfo]::GetVersionInfo($path).FileVersion
+        } else {
+            throw 'Selected installation version is unavailable'
+        }
+    }
+    @{status='queried'; database=$database; installation=$root; language='en';
+      versions=$versions; servers=$servers; rows=$rows} | ConvertTo-Json -Depth 6 -Compress
+} catch {
+    @{status='unavailable'; reason=$_.Exception.Message} | ConvertTo-Json -Compress
+} finally {
+    if ($null -ne $connection -and $connection.State -ne 0) { $connection.Close() }
+}
+'''
+
+
+def _installed_diagnostic_messages(installation, codes):
+    import base64
+    import json
+    import os
+    from pathlib import Path
+    import subprocess
+
+    if os.name != 'nt':
+        return {'status': 'unavailable', 'reason': 'Windows diagnostic resources are unavailable'}
+    host = Path(os.environ.get('SystemRoot', r'C:\Windows')) / 'SysWOW64/WindowsPowerShell/v1.0/powershell.exe'
+    command = base64.b64encode(_INSTALLED_MESSAGE_QUERY.encode('utf-16le')).decode('ascii')
+    try:
+        completed = subprocess.run(
+            [str(host), '-NoProfile', '-NonInteractive', '-EncodedCommand', command],
+            input=json.dumps({'installation': str(installation), 'codes': sorted(codes)}).encode('utf-8'),
+            capture_output=True, timeout=30,
+            creationflags=subprocess.CREATE_NO_WINDOW)
+        if completed.returncode:
+            return {'status': 'unavailable', 'reason': 'Installed diagnostic resource reader failed'}
+        result = json.loads(completed.stdout.decode('utf-8-sig'))
+        if not isinstance(result, dict):
+            raise ValueError('Invalid diagnostic resource response')
+        return result
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return {'status': 'unavailable', 'reason': 'Installed diagnostic resource reader unavailable'}
+
+
+def bind_installed_diagnostic_messages(result, installation):
+    """Add literal local messages without interpreting arguments or outcomes.
+
+    Original reports remain untouched. Resource identity belongs to the existing
+    report provenance; readable message/recovery fields accompany the projection.
+    """
+    diagnostics, seen = [], set()
+
+    def visit(value):
+        if isinstance(value, dict):
+            if id(value) in seen:
+                return
+            seen.add(id(value))
+            original = value.get('original')
+            if (isinstance(value.get('report_origin'), dict) and isinstance(original, dict)
+                    and type(original.get('code')) is int):
+                diagnostics.append(value)
+            for child in value.values():
+                visit(child)
+        elif isinstance(value, (list, tuple)):
+            for child in value:
+                visit(child)
+
+    visit(result)
+    codes = {row['original']['code'] & 0xffffffff for row in diagnostics}
+    if not codes:
+        return
+    lookup = _installed_diagnostic_messages(installation, codes)
+    if lookup.get('status') != 'queried':
+        # Supplemental lookup failure must never mask the native result.
+        result.setdefault('adapter', {})['diagnostic_message_lookup'] = lookup
+        return
+    by_code = {}
+    for row in lookup.get('rows', []):
+        if isinstance(row, dict) and type(row.get('Code')) is int:
+            by_code.setdefault(row['Code'] & 0xffffffff, []).append(row)
+    servers = {row['id']: row['name'] for row in lookup.get('servers', [])}
+    for diagnostic in diagnostics:
+        matches = by_code.get(diagnostic['original']['code'] & 0xffffffff, [])
+        if len(matches) != 1:
+            continue
+        row, = matches
+        if not isinstance(row.get('Message'), str) or not row['Message']:
+            continue
+        diagnostic['message'] = row['Message']
+        if isinstance(row.get('Recover'), str) and row['Recover']:
+            diagnostic['recovery'] = row['Recover']
+        diagnostic['report_origin']['message_resource'] = {
+            'installation': lookup['installation'], 'database': lookup['database'],
+            'language': lookup['language'], 'versions': lookup['versions'],
+            'table': 'D_ServerError', 'row_id': row['ID'], 'code': row['Code'],
+            'server_id': row['ServerID'], 'server': servers.get(row['ServerID']),
+            'class': row['Class'], 'define': row['Define'],
+        }
 
 
 def _public_report_text(value):

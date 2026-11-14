@@ -1558,5 +1558,7 @@
   "候选程序已保留；部分已确认语义无法由当前本地检查完整覆盖": "The candidate program was retained; current local checks cannot fully cover some confirmed semantic requirements.",
   "模型分配的未声明内部软元件已移除；内部地址由生成阶段决定。": "Undeclared internal devices allocated by the model were removed; internal addresses are assigned during generation.",
   "独立生成 Agent 未返回梯形图候选": "The independent generation agent did not return a ladder candidate.",
+  "部分选型依据未通过来源或状态检查。": "Some design premises could not be verified against their sources or stated status.",
+  "适用条件待核对（{variant}）：{premise}": "Condition to verify ({variant}): {premise}",
   "候选结构与当前可机检的已确认语义已通过；其余工程检查保留给 Review": "The candidate structure and currently machine-checkable confirmed semantics passed; remaining engineering checks belong to Review."
 }

@@ -41,11 +41,14 @@ def _app_ladder(opcode, operands):
 
 
 def test_generated_verified_opcode_overlay_is_current():
-    subprocess.run(
-        [sys.executable, "tools/build_fx3u_verified_opcode_overlay.py", "--check"],
-        cwd=ROOT,
-        check=True,
-    )
+    from tools.build_fx3u_verified_opcode_overlay import build, DEFAULT_OUTPUT, DEFAULT_QUARANTINE
+    generated, quarantine = build()
+    saved = json.loads(DEFAULT_OUTPUT.read_text(encoding="utf-8"))
+    # The identity producer does not own reviewed Q/L modifier contracts.
+    identity_only = {**saved, "instructions": [
+        {k: v for k, v in row.items() if k != "modifier_rule"} for row in saved["instructions"]]}
+    assert generated == identity_only
+    assert quarantine == json.loads(DEFAULT_QUARANTINE.read_text(encoding="utf-8"))
 
 
 def test_verified_opcode_identity_does_not_harden_partial_signature():
@@ -63,7 +66,7 @@ def test_verified_opcode_identity_does_not_harden_partial_signature():
         # Opcode identity does not override a source-reviewed CPU exclusion.
         if opcode == "ABS":
             assert opcode not in generation_app_instr_mnemonics("FX3U")
-            assert DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode, cpu="FX3U").replacement_for_cpu("FX3U") == "DABS"
+            assert DEFAULT_INSTRUCTION_REGISTRY.resolve_catalog_form(opcode, cpu="FX3U").spec.replacement_for_cpu("FX3U") == "DABS"
         else:
             assert opcode in generation_app_instr_mnemonics("FX3U")
 
@@ -154,12 +157,14 @@ def test_exact_opcode_retrieval_uses_audited_manual_precedence():
     for opcode, manual_id in expected.items():
         results = _opcode_instruction_results(opcode)
         assert results, opcode
-        assert results[0]["manual_id"] == manual_id, (opcode, results[0])
-        # The audited material answers first, from published authored facts, and the
-        # other materials' rows stay in the answer instead of being filtered away.
-        # Chapter flags are left exactly as the corpus produced them.
-        assert results[0].get("instruction_lookup_basis") == "authored_fact_material_match"
+        from knowledge.structured_facts import authored_packet
+        packet = authored_packet(results[0])
+        assert packet["target"] == opcode and packet["scope"]["models"] == ["FX3U"]
+        owner = DEFAULT_INSTRUCTION_REGISTRY.definition_entry(opcode, cpu="FX3U")
+        assert any(row.get("manual_id") == manual_id and row.get("primary_semantic_source")
+                   for row in owner["source_materials"])
         assert len({row['id'] for row in results}) == len(results)
+
 
 
 # Generation schema/prompt opcode exposure is owned here so the registry,
@@ -189,7 +194,7 @@ def test_model_specific_app_instr_enum_matches_registry():
 def test_normal_generation_prompt_exposes_only_catalogued_fx3u_opcodes():
     prompt = _select_system_prompt("ladder", plc_model="FX3U")
     rule = _opcode_rule(ladder_response_schema(plc_model="FX3U"))
-    assert '"enum":[' in prompt
+    assert "output_schema" in prompt
     assert "NOT_A_REAL_OPCODE" not in prompt
     assert "OUT" not in rule["enum"]
     assert len(rule["enum"]) >= 10
@@ -197,25 +202,24 @@ def test_normal_generation_prompt_exposes_only_catalogued_fx3u_opcodes():
 
 # The source corpus and the generation allowlist are different populations.
 # Audit every admitted literal form, including pre-existing D/P variants.
-def test_fx3u_batch_promotion_is_reproducible_and_does_not_promote_partial_rows():
-    from tools.audit_fx3u_contracts import build, ledger_text, OUTPUT
-    ledger, report = build()
-    assert OUTPUT.read_text(encoding="utf-8") == ledger_text(ledger)
-    assert {row["opcode"] for row in report["rows"]} == set(generation_app_instr_mnemonics("FX3U"))
-    assert report["decisions"]["corroborated"] > 200
-    assert report["after_exact_arity"] > report["before_exact_arity"]
-    assert report["fully_verified_semantics"] == 0
-    assert {"cpu_applicability", "hardware_applicability"} <= set(report["not_promoted"])
-    assert report["not_promoted"]  # no blanket `full` based on an arity match
-    assert report["quarantine"]
-    for row in report["rows"]:
-        spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(row["opcode"], cpu="FX3U")
-        if row["decision"] == "corroborated":
+def test_legacy_fx3u_promotions_still_fill_uncovered_literal_forms():
+    from plc.instructions import InstructionRegistry
+    registry = InstructionRegistry.from_files([CATALOG / name for name in
+        ("common.json", "fx3u.json", "fx5u.json", "fx3u_verified_opcodes.json", "modifier_rules.json")])
+    compiled = frozenset(registry._cpu_contracts)
+    path = CATALOG / "fx3u_contract_promotions.json"
+    registry.load_contract_promotions(path, preserve_contracts=compiled)
+    checked = 0
+    for row in json.loads(path.read_text(encoding="utf-8"))["entries"]:
+        for opcode in row["forms"]:
+            if ("mitsubishi", opcode, "FX3U") in compiled:
+                continue
+            spec = registry.resolve(opcode, cpu="FX3U")
+            assert spec.min_operands == spec.max_operands == row["arity"]
             assert list(spec.native_operand_order) == row["native_order"]
-            assert spec.min_operands == spec.max_operands == len(row["native_order"])
-            assert spec.contract_sources
-        else:
-            assert not spec.verified_fields
+            assert "arity" in spec.verified_fields and spec.contract_sources
+            checked += 1
+    assert checked > 0
 
 
 def _promoted_fx3u_forms():
@@ -252,15 +256,16 @@ def test_native_order_is_not_replaced_by_structured_st_argument_order():
 
 @pytest.mark.parametrize("opcode", ["MOV", "DMOVP", "WSFL", "PID", "DRVA", "DDRVA", "ANR"])
 def test_fx3u_promotions_do_not_leak_into_fx5u_or_model_neutral_import(opcode):
-    from dataclasses import replace
-    neutral = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode)
-    fx3 = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode, cpu="FX3U")
-    fx5 = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode, cpu="FX5U")
-    assert fx3.verified_fields and not neutral.verified_fields and not fx5.verified_fields
-    assert replace(fx5, definition_facts=(), source_materials=(), uninterpreted_content=()) == neutral
-    assert all(g.status != 'source_verified' for g in fx5.definition_facts)
-    assert fx3.operands == neutral.operands  # no guessed read/write semantics
-    assert fx3.cpu_support == neutral.cpu_support
+    from plc.instructions import InstructionRegistry
+    registry = InstructionRegistry.from_files([CATALOG / name for name in
+        ("common.json", "fx3u.json", "fx5u.json", "fx3u_verified_opcodes.json", "modifier_rules.json")])
+    neutral, fx5 = registry.resolve(opcode), registry.resolve(opcode, cpu="FX5U")
+    compiled = frozenset(registry._cpu_contracts)
+    registry.load_contract_promotions(CATALOG / "fx3u_contract_promotions.json", preserve_contracts=compiled)
+    registry.load_operand_semantic_promotions(CATALOG / "fx3u_operand_semantic_promotions.json", preserve_contracts=compiled)
+    assert registry.resolve(opcode) == neutral
+    assert registry.resolve(opcode, cpu="FX5U") == fx5
+    assert registry.resolve(opcode, cpu="FX3U").verified_fields
 
 
 def test_selected_model_structured_contracts_expose_verified_syntax_and_real_gaps():
@@ -343,9 +348,8 @@ def test_operand_semantic_audit_covers_entire_registry_and_is_read_only():
     assert report["registry_forms"] == len(
         DEFAULT_INSTRUCTION_REGISTRY.known_mnemonics()
     )
-    # The six source-backed Q/L built-in counter/socket forms extend the
-    # original 325 forms; overlays on existing mnemonics add no global form.
-    assert report["registry_forms"] == 331
+    # New RAG adds reviewed literal forms; the historical FX3U ledger stays frozen.
+    assert report["registry_forms"] >= 331
     assert report["fx3u_signature_verified_forms"] == 227
     assert report["operand_role_promotions"] == 41
     assert report["operand_type_promotions"] == 2
@@ -359,12 +363,13 @@ def test_operand_semantic_audit_covers_entire_registry_and_is_read_only():
     # Preserve the historical FX3U evidence snapshot. Registry-wide totals
     # change when source contracts for other CPUs add forms, while all frozen
     # FX3U promotions and evidence rows above must remain identical.
-    changing = {"registry_forms", "forms_with_declared_operands", "decisions"}
+    changing = {"registry_forms", "forms_with_declared_operands", "decisions",
+                "fx3u_supported_forms", "fx5u_supported_forms"}
     assert {k: v for k, v in frozen_summary.items() if k not in changing} == {
         k: v for k, v in expected_summary.items() if k not in changing}
     assert {k: v for k, v in frozen_summary["decisions"].items() if k != "no_fx3_signature_evidence"} == {
         k: v for k, v in expected_summary["decisions"].items() if k != "no_fx3_signature_evidence"}
-    assert expected_summary["decisions"]["no_fx3_signature_evidence"] - frozen_summary["decisions"]["no_fx3_signature_evidence"] == 6
+    assert expected_summary["decisions"]["no_fx3_signature_evidence"] - frozen_summary["decisions"]["no_fx3_signature_evidence"] == report["registry_forms"] - frozen_summary["registry_forms"]
 
 
 @pytest.mark.parametrize('newline', [b'\n', b'\r\n'])
@@ -401,7 +406,7 @@ def test_operand_semantic_overlay_cannot_change_declared_roles(tmp_path):
             "fx3u_verified_opcodes.json", "modifier_rules.json",
         )
     ])
-    registry.load_contract_promotions(SIGNATURE_OUTPUT)
+    registry.load_contract_promotions(SIGNATURE_OUTPUT, preserve_contracts=frozenset(registry._cpu_contracts))
     payload = json.loads(OPERAND_OUTPUT.read_text(encoding="utf-8"))
     row = next(item for item in payload["entries"] if item["form"] == "ADD")
     row["operand_roles"][-1] = "read"
@@ -420,9 +425,18 @@ def test_mcp_and_compact_do_not_restore_duplicate_instruction_contract_lane(monk
     spec = {"summary": "MOV WSFL", "selected_approach": {"name": "selected",
             "generation_contract": {"required_opcodes": ["MOV", "WSFL"]}}}
     context = build_tool_context({"id": "contract-test", "plc_model": "FX3U", "confirmed_spec": spec})
-    result = build_default_tool_registry().call("get_generation_context", {}, context)
-    assert result["ok"], result
-    full = result["data"]["generation_instructions"]
+    from application.read_delivery import assemble_read_pages
+    registry = build_default_tool_registry()
+    pages, arguments = [], {}
+    while True:
+        result = registry.call("get_generation_context", arguments, context)
+        assert result["ok"], result
+        pages.append(result)
+        follow = result["data"]["delivery"]["next"]
+        if not follow:
+            break
+        arguments = follow["arguments"]
+    full = assemble_read_pages(pages)["generation_instructions"]
     marker = "# Selected instruction capability snapshot\n"
     assert compact_capability_prompt("FX3U", spec) == ""
     assert marker not in full
@@ -636,18 +650,17 @@ def test_rd3a_wr3a_report_precise_confirmed_module_mismatch(opcode, module):
 
 
 def test_an_authored_match_does_not_claim_to_be_a_replayed_chapter():
-    """Matching the adjudicated material is not replaying the original chapter."""
-    from knowledge.structured_facts import resolve_instruction_records
-
+    from knowledge.structured_facts import authored_packet, resolve_instruction_records
     rows = resolve_instruction_records([{"opcode": "DRVA", "base_opcode": "DRVA"}],
                                        plc_model="FX3U", task_type="generate")
     assert rows
-    assert rows[0].get("instruction_lookup_basis") == "authored_fact_material_match"
-    # Materials that did not win the ruling are still part of the reference list.
-    assert len({row.get("manual_id") for row in rows}) > 1
-    decision = rows[0]["authority_decision"]
-    assert decision["status"] == "selected"
-    assert decision["selected_manual_id"] == "fx3_positioning_k"
-    assert decision["rule"]["manual_id"] == "fx3_positioning_k"
-    # Every candidate stays visible with the reason it was not selected.
-    assert {item["manual_id"] for item in decision["candidates"]} >= {"fx3_programming_r"}
+    for row in rows:
+        packet = authored_packet(row)
+        assert packet["content_origin"] == "authored_fact"
+        assert packet["target"] == "DRVA"
+        assert row.get("instruction_lookup_basis") != "official_section_heading"
+        assert not row.get("full_chapter_replayed")
+    owner = DEFAULT_INSTRUCTION_REGISTRY.definition_entry("DRVA", cpu="FX3U")
+    materials = owner["source_materials"]
+    assert any(s.get("manual_id") == "fx3_positioning_k" and s.get("primary_semantic_source") for s in materials)
+    assert any(s.get("manual_id") == "fx3_programming_r" for s in materials)

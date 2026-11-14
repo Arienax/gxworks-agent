@@ -550,7 +550,7 @@ def test_real_http_confirmation_and_generation_have_one_call(tmp_path, monkeypat
     from fastapi.testclient import TestClient
     from application.workbench import WorkbenchService
     from integrations.web.app import create_app
-    from test_web_api import ORIGIN, OPERATOR, _login
+    from test_web_api import ORIGIN
     from plc.candidate_service import CandidateService
     prepare_calls = []
     original_prepare = CandidateService.prepare
@@ -563,9 +563,9 @@ def test_real_http_confirmation_and_generation_have_one_call(tmp_path, monkeypat
     provider = OneResponse(compact(wrapped=True))
     service = WorkbenchService(tmp_path/"workspace", tmp_path/"state",
                                model_factory=lambda: (provider, {"model": provider.profile["model"]}))
-    app = create_app(service.store.base_dir, service=service, origin=ORIGIN, operator_token=OPERATOR)
+    app = create_app(service.store.base_dir, service=service, origin=ORIGIN)
     with TestClient(app, base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         pid = client.post("/api/projects", headers=headers, json={"name": "input regression"}).json()["id"]
         confirmed = client.put(f"/api/projects/{pid}/spec", headers=headers,
             json={"spec": old_confirmed_spec(), "expected_hash": None})

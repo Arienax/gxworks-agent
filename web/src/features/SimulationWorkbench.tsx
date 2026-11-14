@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import { ArrowDown, ArrowUp, Play, Plus, Save, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";

@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Synchronous headless generation orchestration shared by application clients.
 
@@ -62,8 +62,12 @@ class GenerationRequest:
     direct_generation: bool = False
     user_fact_text: Optional[str] = None
     direct_user_facts: object = None
+    direct_requirements: object = None
     st_project_context: object = None
     st_native_baseline: object = None
+    direct_answers: Optional[dict] = None
+    project_id: Optional[str] = None
+    acceptance_cases: object = None
 
     def __post_init__(self):
         object.__setattr__(self, "effort", None)
@@ -94,6 +98,7 @@ class GenerationDependencies:
     check_cancelled: Optional[Callable] = None
     preserve_rejected_candidate: bool = False
     candidate_service: Optional[CandidateService] = None
+    native_delivery: bool = False
 
 
 
@@ -250,6 +255,19 @@ class GenerationWorkflow:
                 and self.dependencies.stream_response is None
                 and self.dependencies.generate_json is None
             )
+            candidate_flow = None
+            if not repair_call and self.target_mode == "ladder" and (
+                self.direct_generation or confirmed_generation_call or
+                is_edit_mode and self.task_type == "edit" and self.dependencies.stream_response is None
+            ):
+                from application.ladder_candidate_flow import LadderCandidateFlow
+                candidate_flow = LadderCandidateFlow(
+                    candidates=self.candidates, output_dir=self.output_dir, plc_model=self.plc_model,
+                    program_name=self.program_name, revision=self.revision, previous_ladder=self.previous_json,
+                    project_id=self.project_id, native_delivery=self.dependencies.native_delivery,
+                    acceptance_cases=self.acceptance_cases,
+                    on_stage=lambda stage, message: self._emit("progress", {"stage": stage, "message": message}),
+                )
             from plc.specification.provenance import handoff_snapshot
             generation_handoff = handoff_snapshot(self.confirmed_context or {}, stage=(
                 "format_repair" if self.format_repair else "contract_repair" if self.repair_mode else self.task_type or "generate"),
@@ -261,6 +279,8 @@ class GenerationWorkflow:
                     "text": public_generation_value(self.requirement_text or self.user_input),
                 }
             if isinstance(self.source_handoff, dict):
+                from application.confirmed_generation_context import direct_history_fields
+                generation_handoff.update(direct_history_fields(self.source_handoff))
                 generation_handoff["baseline_handoff"] = {
                     "receipt_sha256": canonical_sha256(self.source_handoff),
                     "projection_sha256": self.source_handoff.get("projection_sha256"),
@@ -375,17 +395,23 @@ class GenerationWorkflow:
                 elif self.direct_generation:
                     from application.generation_agent import generate_direct_ladder
                     result = generate_direct_ladder(
-                        self.user_input, self.plc_model, confirmed_spec=(self.direct_user_facts
-                            if self.direct_user_facts is not None else self.confirmed_context),
-                        user_fact_text=self.user_fact_text,
+                        self.user_input, self.plc_model, confirmed_spec=self.confirmed_context,
+                        user_fact_text=self.user_fact_text, user_facts=self.direct_user_facts,
+                        answers=self.direct_answers,
                         model_name=self.model_name, construction_examples=self.construction_examples,
                         image_attachments=self.image_attachments,
                         on_context=lambda value: generation_handoff.update(copy.deepcopy(value)),
                         on_candidate=capture_direct_candidate,
                         on_stage=lambda stage, message: self._emit("progress", {"stage": stage, "message": message}),
+                        candidate_flow=candidate_flow,
                     )
                     generation_handoff = copy.deepcopy(result.get("generation_handoff") or {})
-                    generation_agent_metadata = {"mode": "direct_generation", "model_calls": 1}
+                    generation_handoff['direct_user_facts'] = copy.deepcopy(result['user_facts'])
+                    if self.direct_requirements is not None:
+                        generation_handoff['direct_requirements'] = copy.deepcopy(self.direct_requirements)
+                    if self.direct_answers:
+                        generation_handoff['direct_answers'] = copy.deepcopy(self.direct_answers)
+                    generation_agent_metadata = {"mode": "direct_generation", "model_calls": int(result.get("model_calls", 1))}
                     for key in ("operation_binding", "construction_binding", "confirmed_predicate_binding"):
                         if key in result:
                             generation_agent_metadata[key] = copy.deepcopy(result[key])
@@ -417,6 +443,7 @@ class GenerationWorkflow:
                         ),
                         construction_examples=self.construction_examples,
                         project_occupied_devices=construction_occupancy,
+                        candidate_flow=candidate_flow,
                     )
                     direct_candidate = result.get("ladder")
                     if not isinstance(direct_candidate, dict):
@@ -435,7 +462,7 @@ class GenerationWorkflow:
                     if (self.confirmed_context.get('selected_approach') or {}).get('construction_plan'):
                         generation_agent_metadata['construction_binding'] = copy.deepcopy(result['construction_binding'])
                     validation_messages.append(
-                        tr('已由独立生成 Agent 根据确认规格一次生成完整 ladder_v1')
+                        tr('已由独立生成 Agent 根据确认规格生成完整 ladder_v1')
                     )
                     on_content(full_content)
                 else:
@@ -448,6 +475,10 @@ class GenerationWorkflow:
                             "message": tr('流式调用失败，切换普通模式：{v0}', v0=_error),
                         })
                     }
+                    if candidate_flow is not None:
+                        transport_hooks["candidate_flow"] = candidate_flow
+                    elif self.acceptance_cases and self.acceptance_cases[0] and self.dependencies.stream_response is None:
+                        transport_hooks["acceptance_cases"] = self.acceptance_cases[0]
                     _reasoning, full_content = model_call(
                         stream_model_response,
                         model_user_input,
@@ -466,12 +497,20 @@ class GenerationWorkflow:
                         image_attachments=self.image_attachments,
                         **transport_hooks,
                     )
+                    if candidate_flow is not None:
+                        direct_candidate = candidate_flow.ladder
+                        full_content = json.dumps(direct_candidate, ensure_ascii=False, separators=(",", ":"))
                 emit_parsing_progress(tr('正在解析模型输出：清理流式文本'))
                 streaming_succeeded = True
             except Exception as stream_err:
                 from model_runtime.provider import ResponseRejectedError
 
                 if isinstance(stream_err, JobCancelled):
+                    raise
+                if isinstance(stream_err, GenerationValidationError) and hasattr(stream_err, "rejected_candidate"):
+                    json_str = stream_err.rejected_candidate
+                    generation_handoff.update(getattr(stream_err, "generation_handoff", {}))
+                    persist_repair_candidate()
                     raise
                 rejected_candidate = (
                     rejected_json_candidate(stream_err)
@@ -531,6 +570,10 @@ class GenerationWorkflow:
 
             def parse_candidate(candidate):
                 nonlocal prepared_candidate
+                if candidate_flow is not None and candidate_flow.prepared is not None:
+                    prepared_candidate = candidate_flow.prepared
+                    validation_messages.extend(prepared_candidate["validation_messages"])
+                    return prepared_candidate["ladder"]
                 emit_parsing_progress(tr('正在解析模型输出：读取 JSON 结构'))
                 parsed = (
                     copy.deepcopy(direct_candidate)
@@ -542,7 +585,7 @@ class GenerationWorkflow:
                 if self.target_mode == "ladder":
                     if parsed.get('mode') == 'partial' and 'r' in parsed and not repair_call:
                         from application.compact_protocol import expand_compact_partial
-                        parsed = expand_compact_partial(parsed)
+                        parsed = expand_compact_partial(parsed, self.confirmed_context, plc_model=self.plc_model)
                     if self.repair_mode and isinstance(self.repair_plan, dict) and self.repair_plan.get("mode") == "field_patch":
                         from application.field_repair import apply as apply_field_patch
                         parsed = apply_field_patch(self.previous_json, parsed, self.repair_plan)
@@ -667,8 +710,19 @@ class GenerationWorkflow:
                     "stage": "parsed",
                     "message": tr('模型输出已解析为候选程序'),
                 })
-                rendered = self.candidates.compile(program_ir, self.output_dir)
-                artifacts = rendered["artifacts"]
+                rendered = (candidate_flow.rendered if candidate_flow is not None and candidate_flow.rendered is not None
+                            else self.candidates.compile(program_ir, self.output_dir))
+                delivery = candidate_flow.delivery if candidate_flow is not None else {}
+                artifacts = delivery.get("artifacts", rendered["artifacts"])
+                program_size = delivery.get("program_size") or rendered.get("program_size")
+                candidate_receipt = generation_handoff.get("candidate_flow", {})
+                repair_attempts += int(candidate_receipt.get("repair_attempts") or 0)
+                behavior = candidate_flow.behavior if candidate_flow is not None else None
+                if behavior is None and self.acceptance_cases is not None:
+                    from simulator.io_example import check_independent_acceptance
+                    behavior = check_independent_acceptance(prepared_candidate["ladder"], self.plc_model,
+                        project_id=self.project_id, confirmed_spec=self.confirmed_context,
+                        loaded_cases=self.acceptance_cases, confirmed_check=prepared_candidate.get("behavior_check"))
                 from plc.st_renderer import ST_RENDERER_SCHEMA_VERSION
 
                 from plc.semantics import SEMANTICS_SCHEMA_VERSION
@@ -677,7 +731,16 @@ class GenerationWorkflow:
                 return {
                     "target_mode": "ladder",
                     "repair_attempts": repair_attempts,
-                    "first_pass_pipeline": generation_agent_metadata or {"mode": "direct"},
+                    **({"program_size": program_size} if program_size else {}),
+                    **{key: copy.deepcopy(delivery[key]) for key in ("delivery", "generation_metadata") if key in delivery},
+                    **({"behavior_result": behavior} if behavior is not None else {}),
+                    **({"activation_blocked": True, "lifecycle_status": "diagnostic"}
+                       if candidate_receipt.get("diagnostics") or delivery.get("activation_blocked")
+                       or (behavior or {}).get("status") == "mismatch" else {}),
+                    "first_pass_pipeline": generation_agent_metadata or {
+                        "mode": "edit" if is_edit_mode else "direct",
+                        **({"model_calls": candidate_receipt["model_calls"]} if "model_calls" in candidate_receipt else {}),
+                    },
                     **({"generator_notes": copy.deepcopy(generation_handoff["generator_notes"])}
                        if "generator_notes" in generation_handoff else {}),
                     "generation_handoff": {**generation_handoff,
@@ -691,7 +754,8 @@ class GenerationWorkflow:
                     "ir_schema_version": IR_SCHEMA_VERSION,
                     "ir_sha256": canonical_sha256(program_ir),
                     "ladder_sha256": program_ir["source"]["ladder_sha256"],
-                    "st_from_ir_sha256": rendered["st_from_ir_sha256"],
+                    **({"st_from_ir_sha256": rendered["st_from_ir_sha256"]} if "st_from_ir_sha256" in rendered
+                       else {"st_translation": rendered.get("st_translation", "unavailable")}),
                     "st_renderer_schema_version": ST_RENDERER_SCHEMA_VERSION,
                     "semantic_schema_version": SEMANTICS_SCHEMA_VERSION,
                     "semantic_summary": {
@@ -727,12 +791,13 @@ class GenerationWorkflow:
                     "artifacts": artifacts,
                     "contract_mismatch": None,
                     "validation": {
+                        **delivery.get("validation", {}),
                         "status": "candidate_ready",
                         "profile": "generation_structural",
-                        "messages": validation_messages or [
+                        "messages": [*delivery.get("validation", {}).get("messages", []), *(validation_messages or [
                             tr('候选结构与可机检的用户声明已通过；工艺行为仍需核对') if self.direct_generation
                             else tr('候选结构与当前可机检的已确认语义已通过；其余工程检查保留给 Review')
-                        ],
+                        ])],
                     },
                 }
 

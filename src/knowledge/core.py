@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Low-latency broad retrieval for the bundled PLC knowledge index.
 
@@ -108,6 +108,7 @@ from knowledge.scope import OFFICIAL_INSTRUCTION_TYPES as _OFFICIAL_INSTRUCTION_
 
 
 def _entity_references(connection, schema, terms, plc_model, task_type, source_lanes=None, exclude_chunk_types=(), exclude_structured_kinds=()):
+    terms = list(terms)
     table = schema.get("entity_index")
     if not table or not terms:
         return []
@@ -151,6 +152,7 @@ def _entity_references(connection, schema, terms, plc_model, task_type, source_l
         _MAX_ENTITY_ROWS_PER_TERM,
     )
     scope_values = []
+    scope_cte = ""
     if chunks_table:
         from knowledge.scope import source_subquery
         subquery, scope_values = source_subquery(
@@ -159,19 +161,28 @@ def _entity_references(connection, schema, terms, plc_model, task_type, source_l
             exclude_structured_kinds=exclude_structured_kinds,
             plc_model=plc_model, task_type=task_type,
         )
-        scope_clause = f" AND e.{_quote_identifier(chunk_column)} IN ({subquery})"
+        scope_cte = f"WITH eligible AS MATERIALIZED ({subquery}) "
+        scope_clause = f" AND e.{_quote_identifier(chunk_column)} IN (SELECT * FROM eligible)"
         sql = sql.replace(" WHERE (" + term_clause + ")", " WHERE (" + term_clause + ")" + scope_clause)
+
+    # Keep each variant's ordering and limit, but evaluate the shared source/
+    # CPU scope once per batch rather than scanning it again for every term.
+    variants = list(dict.fromkeys(variant for term in terms for variant in _entity_term_variants(term)))
+    variant_rows = {}
+    for offset in range(0, len(variants), 128):
+        batch = variants[offset:offset + 128]
+        selects = [f"SELECT {index} AS _query_variant, hits.* FROM ({sql}) AS hits"
+                   for index in range(len(batch))]
+        parameters = tuple(scope_values) + tuple(term for term in batch for _ in term_columns)
+        for row in connection.execute(scope_cte + " UNION ALL ".join(selects), parameters):
+            variant_rows.setdefault(batch[row['_query_variant']], []).append(row)
 
     grouped = {}
     for matched_order, requested_term in enumerate(terms):
         rows = []
         seen_chunk_ids = set()
         for query_term in _entity_term_variants(requested_term):
-            variant_rows = connection.execute(
-                sql,
-                tuple(query_term for _column in term_columns) + tuple(scope_values),
-            ).fetchall()
-            for row in variant_rows:
+            for row in variant_rows.get(query_term, ()):
                 chunk_id = row[chunk_column]
                 if chunk_id is None or str(chunk_id) in seen_chunk_ids:
                     continue
@@ -452,8 +463,13 @@ def _dense_index_ready(connection, schema):
     try:
         from knowledge.dense import dense_model_info
 
-        model_info = dense_model_info()
         meta = _load_meta(connection, schema)
+        database = next((Path(row[2]) for row in connection.execute('PRAGMA database_list')
+                         if row[1] == 'main' and row[2]), None)
+        artifact = meta.get('vector_artifact')
+        model_path = (database.parent / artifact if database and artifact
+                      and meta.get('corpus_kind') == 'authored_plc_facts_v1' else None)
+        model_info = dense_model_info(**({'model_path': model_path} if model_path else {}))
         model_name = str(meta.get("vector_model") or "")
         corpus_sha256 = str(meta.get("vector_corpus_sha256") or "")
         if (
@@ -466,18 +482,27 @@ def _dense_index_ready(connection, schema):
         else:
             vector_name = _quote_identifier(vector_table["name"])
             chunks_name = _quote_identifier(chunks_table["name"])
+            if 'text_sha256' in chunks_table['columns']:
+                digest, joins = 'c.text_sha256', ''
+            else:
+                # The owner-store chunks view shares its search documents.
+                digest = 'd.sha256'
+                joins = (' JOIN runtime_chunk_bindings b ON b.id=c.id'
+                         ' JOIN runtime_search_documents d ON d.id=b.document_id')
             row = connection.execute(
                 "SELECT COUNT(*) AS total, "
-                "SUM(CASE WHEN v.content_sha256=c.text_sha256 THEN 1 ELSE 0 END) AS valid "
-                f"FROM {vector_name} AS v JOIN {chunks_name} AS c ON c.id=v.chunk_id "
+                f"SUM(CASE WHEN v.content_sha256={digest} THEN 1 ELSE 0 END) AS valid "
+                f"FROM {vector_name} AS v JOIN {chunks_name} AS c ON c.id=v.chunk_id {joins} "
                 "WHERE v.model=?",
                 (model_name,),
             ).fetchone()
             expected = int(model_info.get("chunks") or 0)
             total = int(row["total"] or 0)
             valid = int(row["valid"] or 0)
-            if expected and total == expected and valid == expected:
-                result = {"ready": True, "model": model_name, "reason": ""}
+            current_count = connection.execute(f'SELECT COUNT(*) FROM {chunks_name}').fetchone()[0]
+            if expected and total == expected == current_count and valid == expected:
+                result = {"ready": True, "model": model_name, "reason": "",
+                          **({'model_path': str(model_path)} if model_path else {})}
             else:
                 result["reason"] = "stale_chunk_vectors"
     except (ImportError, OSError, sqlite3.Error, TypeError, ValueError, KeyError):
@@ -496,6 +521,8 @@ def _dense_references(connection, schema, query, candidate_limit, structured_ref
         from knowledge.dense import dense_search
 
         options = {}
+        if state.get('model_path'):
+            options['model_path'] = state['model_path']
         if source_lanes is not None or exclude_chunk_types or exclude_structured_kinds or plc_model is not None:
             from knowledge.scope import source_subquery
             sql, values = source_subquery(
@@ -906,8 +933,9 @@ def retrieve_broad_knowledge(
     """Return ranked knowledge blocks without ever opening the index eagerly.
 
     Each result contains at least ``id``, ``source``, ``page`` and ``text``.
-    Exact opcode/device matches precede FTS5/BM25 matches. Complete records are
-    selected by relevance; the legacy ``char_budget`` argument is ignored.
+    Entity, FTS5/BM25 and vector ranks select complete records by relevance;
+    the legacy ``char_budget`` argument is ignored. Exact structured questions
+    are resolved separately by the scoped facade.
     Missing or incompatible indexes quietly return an empty list.
     """
 
@@ -935,6 +963,8 @@ def retrieve_broad_knowledge(
     }))
     if _query_is_out_of_scope(normalized_query, normalized_model):
         return []
+    from knowledge.query_vocabulary import expand_query
+    normalized_query = expand_query(normalized_query)
     path = index_access.index_path()
     identity = _index_identity(path)
     from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
@@ -954,6 +984,10 @@ def retrieve_broad_knowledge(
                 (owner_identity, set(normalized_structured_excluded) | other_kinds, 'selected_owner'),
                 (identity, set(normalized_structured_excluded) | {'instruction', 'language'}, 'installed_other'),
             ):
+                # This lane owns only instruction/language records. A resource
+                # query excluding both cannot produce an eligible owner hit.
+                if domain == 'selected_owner' and {'instruction', 'language'} <= exclusions:
+                    continue
                 encoded = _retrieve_cached(lane_identity, normalized_query, normalized_model,
                     normalized_task, normalized_top_k, None,
                     **({"source_lanes": tuple(sorted(source_lanes))} if source_lanes is not None else {}),
@@ -965,8 +999,8 @@ def retrieve_broad_knowledge(
                     result['retrieval_domain'] = domain
                 lanes.append(lane)
             ordered = sorted([item for lane in lanes for item in lane],
-                key=lambda item: (0 if 'entity' in item.get('retrieval_signals', ()) else 1,
-                    -float(item.get('score', 0)), -float(item.get('query_coverage', 0)), str(item.get('id',''))))
+                key=lambda item: (-float(item.get('score', 0)),
+                    -float(item.get('query_coverage', 0)), str(item.get('id',''))))
             return _hydrate_selected(_select_ranked(ordered, normalized_top_k))
         except (OSError, sqlite3.Error, TypeError, ValueError, KeyError, IndexError):
             _close_thread_connection()

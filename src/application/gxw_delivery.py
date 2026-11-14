@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Shared GXW-first delivery at the application save boundary."""
 from __future__ import annotations
@@ -30,6 +30,39 @@ def notify(stage, message):
 
 class DeliveryUnavailable(RuntimeError):
     """No supported engineering environment; source artifacts remain deliverable."""
+
+
+_CATEGORY_LABELS = {
+    'duplicate_output': '重复输出（双线圈）',
+    'unconnected_sink_element': '输出元件未连接',
+    'unconnected_graphic_pin': '图形输入引脚未连接',
+    'floating_wire_segment': '悬空线段',
+    'network_label_syntax': '网络标签语法',
+    'unsupported_declaration_type': '声明数据类型不受支持',
+    'declaration_iec_mismatch': '全局声明设备与 IEC 地址不一致',
+    'declaration_iec_format': '声明 IEC 地址格式无效',
+    'system_variable_pool_overlap': '地址与系统变量自动分配范围重叠',
+    'compiler_summary_failure': '编译器汇总失败',
+}
+
+
+def _native_failure_summary(findings):
+    """One actionable sentence for the operator, or None when nothing is classified.
+
+    The raw adapter message carries internal stage tokens and bare hex codes; it is
+    kept in native_compile_detail for support, never shown as the operator result.
+    """
+    errors = [row for row in findings or () if row.get('severity') == 'error']
+    if not errors:
+        return None
+    first = errors[0]
+    label = _CATEGORY_LABELS.get(str(first.get('category')), str(first.get('code')))
+    devices = [str(row['device']) for row in errors if row.get('device')]
+    if devices:
+        named = '、'.join(dict.fromkeys(devices[:4]))
+        more = ' 等' if len(set(devices)) > 4 else ''
+        return f'原生检查未通过：{label}，涉及 {named}{more}（{len(errors)} 项）。'
+    return f'原生检查未通过：{label}（{len(errors)} 项）。'
 
 
 def validate_source_artifacts(files, mode):
@@ -83,10 +116,19 @@ def create_blank(output, language, cpu, *, block=None):
     from gxworks2.workspace_adapter import NativeWorkspaceSourceSave, WorkspaceSaveError
     from application.execution import DesktopResourceLock
     notify('gxw_create', '正在无窗口创建 GXW 工程')
+    adapter = NativeWorkspaceSourceSave()
     try:
         with DesktopResourceLock():
-            return NativeWorkspaceSourceSave().create_project(cpu, language, block=block)
+            return adapter.create_project(cpu, language, block=block)
     except WorkspaceSaveError as error:
+        from application.fbd import json_bytes
+        diagnostic = {'phase': 'create_project', 'message': str(error), 'cpu': cpu,
+                      'language': language, 'adapter': str(adapter.executable),
+                      'installation': str(adapter.installation) if adapter.installation else None,
+                      'observation': error.observation}
+        output = Path(output)
+        output.mkdir(parents=True, exist_ok=True)
+        (output / 'native_diagnostics.json').write_bytes(json_bytes(diagnostic))
         if getattr(error, 'preserve_delivery', False):
             raise
         raise DeliveryUnavailable('Headless project creation: ' + str(error)) from error
@@ -123,6 +165,10 @@ def fallback(output, mode, cpu, candidate, reason):
         payload['metadata']['delivery_requested'] = True
     if mode == 'st' and export_issues:
         payload['metadata']['label_export_diagnostics'] = export_issues
+    if mode == 'st':
+        payload['metadata']['program_name'] = 'MAIN'
+        payload['metadata']['validation']['source_binding'] = {
+            'kind': 'generated_st_source', 'language': 'st', 'program': 'MAIN'}
     return payload
 
 
@@ -215,6 +261,9 @@ def prepare_generated(output, mode, cpu, candidate, *, baseline=None, block=None
                 edits[local_table] = edits.pop(foreign_locals[0])
         payload = prepare_candidate(output, model=model, baseline=raw, plc_model=cpu,
             device_comments=options.get('device_comments'), comment_table=options.get('comment_table'))
+        requested_program = options.get('model', candidate).get('program')
+        if baseline is None and requested_program and requested_program != name:
+            payload['metadata']['source_program_bindings'] = {requested_program: name}
     elif mode == 'sfc':
         from application.sfc import prepare_candidate
         payload = prepare_candidate(output, baseline=raw, program_name=name,
@@ -240,9 +289,9 @@ def source_candidate_action(context, arguments, mode):
     from application.fbd import pack_candidate
     if mode == 'st':
         from plc.st_candidate import prepare_source_candidate
-        from agent_runtime.tool_context import _confirmed_spec
+        from agent_runtime.tool_context import _generation_spec
         candidate, checked = prepare_source_candidate(arguments['st_text'], arguments.get('declarations'),
-            plc_model=context.plc_model, confirmed_spec=_confirmed_spec(context))
+            plc_model=context.plc_model, confirmed_spec=_generation_spec(context))
     elif mode == 'fbd':
         if not isinstance(arguments.get('model'), dict):
             raise ValueError("FBD generate requires a JSON object in 'model' (matching parameter_schema)")
@@ -280,17 +329,17 @@ def source_candidate_action(context, arguments, mode):
                 semantic=checked['semantic'], native='unverified', messages=[f['message'] for f in checked['findings']])
             payload['metadata']['maintainability_review'] = review_maintainability({'st_code': candidate['st_text']}, target_mode='st')
         frozen = pack_candidate(payload, directory)
-    from agent_runtime.tool_context import _confirmed_spec
+    from agent_runtime.tool_context import _generation_spec
     return {'requires_confirmation': True, 'verification': payload['metadata']['validation'],
             'pending_action': {'type': 'accept_' + mode + '_candidate', 'project_id': context.project_id,
                 'base_version_id': context.version_id or None, 'target_mode': mode, 'summary': payload['metadata']['summary'],
-                'validation': payload['metadata']['validation'], '_confirmed_spec': copy.deepcopy(_confirmed_spec(context)),
+                'validation': payload['metadata']['validation'], '_confirmed_spec': copy.deepcopy(_generation_spec(context)),
                 '_' + mode + '_candidate': frozen}}
 
 
 def new_generation_context(context, arguments):
     from agent_runtime.plc_tools import build_default_tool_registry
-    from agent_runtime.tool_context import _confirmed_spec
+    from agent_runtime.tool_context import _generation_spec
     mode = (context.version or {}).get('target_mode') or context.project['target_mode']
     name = 'create_' + mode + '_candidate'
     schema = copy.deepcopy(build_default_tool_registry()._tools[name].parameters)
@@ -298,9 +347,11 @@ def new_generation_context(context, arguments):
     if mode == 'st':
         schema = next(rule for rule in schema['oneOf'] if rule['properties']['operation'].get('enum') == ['generate'])
     from agent_runtime.generation_tools import _source_knowledge
-    confirmed = _confirmed_spec(context)
+    confirmed = _generation_spec(context)
     knowledge = _source_knowledge(context, arguments, '', mode, confirmed, task_type='generate')
     knowledge['generation_handoff']['decision_receipt_id'] = context.project.get('confirmed_decision_receipt_id')
+    from application.generation_support import _build_model_context
+    profile = _build_model_context(context.plc_model, confirmed, compact=bool(knowledge.get('knowledge')))
     return {**knowledge, 'project_id': context.project_id, 'plc_model': context.plc_model, 'target_mode': mode,
             'has_confirmed_spec': isinstance(confirmed, dict),
             'current_version_id': context.version_id or None, 'generation_request': arguments.get('user_requirement', ''),
@@ -317,7 +368,8 @@ def new_generation_context(context, arguments):
                 'rather than expanding the process into many Boolean gates or one opaque whole-machine FB. '
                 'For new SFC, create zoom bodies with instructions and action registrations with qualifier/zoom; actions do not contain instructions. '
                 'The initial action and transition use logical names action_0/transition_0 and number=0; their actual native identities are resolved on save.',
-            'generation_input': {'plc_model': context.plc_model, 'confirmed_spec': confirmed, 'output_schema': schema},
+            'generation_input': {'plc_model': context.plc_model, 'confirmed_spec': confirmed,
+                                 'target_profile': profile, 'output_schema': schema},
             'output_contract': {
                 'tool': name, 'operation': 'generate', 'parameter_schema': schema,
                 'gxw_delivery': gxw_delivery_capability(context.plc_model),
@@ -371,6 +423,9 @@ def finalize_saved(output, metadata):
     artifacts = metadata.get('artifacts') or {}
     if mode not in {'ladder', 'st', 'fbd', 'sfc'} or not artifacts:
         return
+    finalized = (metadata.get('generation_metadata') or {}).get('delivery_finalized')
+    if mode == 'ladder' and finalized and isinstance(metadata.get('delivery'), dict):
+        return
     # A read/import is not a generation request. Retain its original evidence.
     if (metadata.get('validation') or {}).get('offline_write') == 'source_preserved' and not metadata.get('delivery_requested'):
         return
@@ -411,6 +466,8 @@ def finalize_saved(output, metadata):
                     existing_validation[key] = value
             metadata['artifacts'] = artifacts
             reason = (metadata.get('delivery') or {}).get('reason')
+    if reason and (output / 'native_diagnostics.json').is_file():
+        artifacts['native_diagnostics'] = 'native_diagnostics.json'
     metadata['delivery'] = delivery_result(mode, artifacts, reason)
     metadata.setdefault('generation_metadata', {})['delivery'] = copy.deepcopy(metadata['delivery'])
     if any(metadata.get('validation', {}).get(key) == 'failed' for key in ('status', 'static', 'syntax', 'semantic')):
@@ -418,7 +475,7 @@ def finalize_saved(output, metadata):
     if 'gxw' not in artifacts:
         return
     validation = metadata.setdefault('validation', {})
-    if (metadata.get('generation_metadata') or {}).get('delivery_finalized'):
+    if finalized:
         return
     if validation.get('gx_compile') == 'passed' and validation.get('cold_reopen') == 'passed':
         return
@@ -437,14 +494,45 @@ def finalize_saved(output, metadata):
             error.preserve_delivery = True
             raise  # An uncertain operation must retain the coordinator's recovery boundary.
         phase = getattr(error, 'phase', 'compile_save')
-        validation.update(gx_compile='failed', native_compile_message=str(error), native_phase=phase)
+        # A reported native rejection must reach the operator as the offending device
+        # and its writing rungs, not as one opaque sentence: the vendor repeats a
+        # single code per conflicting position, which reads as noise otherwise.
+        from gxw.diagnostic_scope import check_rejection_is_advisory, native_check_findings
+        ladder = None
+        if artifacts.get('json'):
+            try:
+                ladder = json.loads((output / artifacts['json']).read_text(encoding='utf-8'))
+            except (OSError, ValueError):
+                ladder = None
+        native_validation = getattr(error, 'validation', None)
+        findings = native_check_findings(native_validation, ladder)
+        validation.update(native_compile_detail=str(error), native_compile_findings=findings, native_phase=phase)
         from application.fbd import json_bytes
         diagnostic = {'phase': phase, 'message': str(error), 'observation': getattr(error, 'observation', {}),
-                      'validation': getattr(error, 'validation', None)}
+                      'validation': native_validation, 'findings': findings}
         (output / 'native_diagnostics.json').write_bytes(json_bytes(diagnostic))
         artifacts['native_diagnostics'] = 'native_diagnostics.json'
+        if phase == 'compile_save' and check_rejection_is_advisory(
+                native_validation, ladder, plc_model=metadata['plc_model'], program_name=metadata.get('program_name')):
+            for finding in findings:
+                if finding['severity'] == 'error':
+                    finding.update(category='repeated_latch_write', severity='warning', fixable=False,
+                                   message='Program Check reported repeated SET/RST writes to a bit device.')
+            summary = '编译已接受，程序检查仅作提示。已交付离线写入的 GXW，原生保存和重开未执行。'
+            validation.update(gx_compile='passed', native_compile='passed', public_check='completed-rejected',
+                              native_save='not_run', cold_reopen='not_run', native_check_advisory=True,
+                              native_compile_message=summary)
+            notify('native_check_advisory', summary)
+            return
+        summary = _native_failure_summary(findings)
+        validation.update(gx_compile='failed', native_compile_message=summary)
+        if ladder is not None:
+            # Staging does not survive every delivery path, so the rejected ladder
+            # is kept beside the version as the repair baseline for the operator.
+            (output / 'repair_candidate.json').write_bytes(json_bytes(ladder))
+            artifacts['repair_candidate'] = 'repair_candidate.json'
         metadata.update(activation_blocked=True, lifecycle_status='diagnostic')
-        notify('native_compile_failed', '原生编译未通过，GXW 候选和诊断已保留')
+        notify('native_compile_failed', summary or '原生编译未通过，GXW 候选和诊断已保留')
         return
     from application.gxw_files import prepare_candidate
     payload = prepare_candidate(output, raw=result.data, program=metadata.get('program_name'),

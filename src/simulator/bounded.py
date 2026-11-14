@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Bounded instruction-order scan checks; neither native simulation nor hardware I/O.
 
@@ -86,7 +86,9 @@ def _leaf(value, memory, bits=16, signed=True, plc_model='FX3U'):
 
 class ScanMachine:
     """An explicit state for one finite trace; no default-zero memory."""
-    def __init__(self, ladder, *, plc_model, initial, execution_context, previous_inputs=None, previous_enables=None, groups=(), instructions=None, applications=None, timer_started_at_ms=None, execution_budget=None):
+    def __init__(self, ladder, *, plc_model, initial, execution_context, previous_inputs=None,
+                 previous_enables=None, groups=(), instructions=None, applications=None,
+                 timer_started_at_ms=None, execution_budget=None, static_cache=None):
         self.ladder, self.model = ladder, plc_model
         self.execution_context = copy.deepcopy(execution_context or {})
         self.memory = {canonical_reference_device(k): copy.deepcopy(v) for k, v in initial.items()}
@@ -103,11 +105,19 @@ class ScanMachine:
         self.instructions = instructions if instructions is not None else [
             [(instruction, analyze_instruction_access(instruction['op'], instruction['args'], plc_model=plc_model))
              for instruction in lower_rung_instructions(rung)] for rung in ladder.get('rungs', [])]
-        from plc.ordered_source import ordered_circuit_rows
-        self._ordered_starts = {(rows[0]['_rung_index'], rows[0]['_instruction_index'])
-                                for _, rows, _ in ordered_circuit_rows(ladder.get('rungs', [])) if rows}
-        from plc.instruction_constraints import instruction_program_accesses
-        self.execution_context.setdefault('program_accesses', instruction_program_accesses(ladder, plc_model=plc_model))
+        static_cache = static_cache if static_cache is not None else {}
+        if 'ordered_starts' not in static_cache:
+            from plc.ordered_source import ordered_circuit_rows
+            static_cache['ordered_starts'] = {(rows[0]['_rung_index'], rows[0]['_instruction_index'])
+                for _, rows, _ in ordered_circuit_rows(ladder.get('rungs', [])) if rows}
+        self._ordered_starts = static_cache['ordered_starts']
+        if 'program_accesses' not in self.execution_context:
+            if 'program_accesses' not in static_cache:
+                from plc.instruction_constraints import instruction_program_accesses
+                static_cache['program_accesses'] = instruction_program_accesses(ladder, plc_model=plc_model)
+            self.execution_context['program_accesses'] = static_cache['program_accesses']
+        self._forms = static_cache.setdefault('forms', {})
+        self._signatures = static_cache.setdefault('signatures', {})
         self.applications = applications if applications is not None else {}
         self.timer_starts = copy.deepcopy(timer_started_at_ms or {})
         self.timestamp_ms = None
@@ -148,9 +158,17 @@ class ScanMachine:
         if row not in self.gaps:
             self.gaps.append(row)
 
+    def _instruction_metadata(self, op):
+        if op not in self._forms:
+            from plc.instruction_constraints import numeric_operand_type
+            form = DEFAULT_INSTRUCTION_REGISTRY.resolve_form(op, cpu=self.model)
+            types = tuple(numeric_operand_type(form.spec, i) for i in range(len(form.spec.native_operand_order))) if form else ()
+            self._forms[op] = form, types
+        return self._forms[op]
+
     def _check_constraints(self, op, args, *, parameter_values=None, phase='input'):
-        from plc.instruction_constraints import check_instruction_constraints, require_constraints, numeric_operand_type
-        form = DEFAULT_INSTRUCTION_REGISTRY.resolve_form(op, cpu=self.model)
+        from plc.instruction_constraints import check_instruction_constraints, require_constraints
+        form, operand_types = self._instruction_metadata(op)
         values = {**dict(parameter_values or {}), '$OPERANDS': list(args)}
         if form:
             for index, name in enumerate(form.spec.native_operand_order):
@@ -158,7 +176,7 @@ class ScanMachine:
                         or index >= len(args)):
                     continue
                 try:
-                    value_type = numeric_operand_type(form.spec, index)
+                    value_type = operand_types[index]
                     if name in values and not (phase == 'result' and index in form.spec.write_indexes):
                         number = values[name]
                     elif value_type and value_type.kind == 'int':
@@ -177,8 +195,9 @@ class ScanMachine:
         values.setdefault('EN', True)
         require_constraints(check_instruction_constraints(op, values, plc_model=self.model,
             language='st' if parameter_values is not None else 'ladder', phase=phase,
+            signature_cache=self._signatures,
             version=self.execution_context.get('software_version'), context={**self.execution_context,
-                'project_mode': 'st' if parameter_values is not None else 'native_ladder',
+                'project_mode': 'st' if parameter_values is not None else 'native_ladder_instruction',
                 'program_context': 'st' if parameter_values is not None else 'ladder',
                 'hardware': self.execution_context.get('hardware') or self.execution_context.get('hardware_profile', {}),
                 'consume_step': self.execution_budget.charge,
@@ -203,7 +222,7 @@ class ScanMachine:
                 return
         if op in self.applications and isinstance(self.applications[op], str):
             raise UnknownInstructionSemantics(self.applications[op])
-        form = DEFAULT_INSTRUCTION_REGISTRY.resolve_form(op, cpu=self.model)
+        form, _ = self._instruction_metadata(op)
         if not form or not form.spec.supports_cpu(self.model):
             self.applications[op] = 'unsupported_instruction:'+op
             raise UnknownInstructionSemantics('unsupported_instruction:'+op)
@@ -276,7 +295,6 @@ class ScanMachine:
         if self.first.get('available'):
             for device in self.first['devices']:
                 self.memory[device] = bool(first_scan)
-        before = copy.deepcopy(self.memory)
         timers_seen = set()
         timer_drives = {}
         edge_samples = {}
@@ -286,6 +304,11 @@ class ScanMachine:
             if type(timestamp) not in {int,float} or timestamp < 0 or self.timestamp_ms is not None and timestamp < self.timestamp_ms:
                 raise ValueError('explicit_clock_not_monotonic')
             self.timestamp_ms = timestamp
+            clocks = self.facts.get('clock_relays', {})
+            for address, phase in self.execution_context.get('clock_phases_ms', {}).items():
+                if fact := clocks.get(address):
+                    self.memory[address] = (timestamp + phase) % (fact['off_ms'] + fact['on_ms']) >= fact['off_ms']
+        before = copy.deepcopy(self.memory)
         accumulator, logic_stack, saved = True, [], []
         for rung_index, rung in enumerate(self.ladder.get('rungs', [])):
             if 'ordered_instructions' not in rung:
@@ -374,6 +397,10 @@ class ScanMachine:
                     if match:
                         connector, suffix = match[1], match[2] or ''
                         if suffix in {'=', '==', '<>', '>=', '<=', '>', '<'}:
+                            # A pure comparison cannot affect an already determined
+                            # conjunction/disjunction; edge contacts still sample below.
+                            if (connector == 'AND' and accumulator is False) or (connector == 'OR' and accumulator is True):
+                                continue
                             left, right = (_leaf(a, self.memory, plc_model=self.model) for a in args)
                             value = {'=': left == right, '==': left == right, '<>': left != right,
                                      '>=': left >= right, '<=': left <= right, '>': left > right, '<': left < right}[suffix]
@@ -643,7 +670,8 @@ def check_bounded_traces(program, spec, traces, *, version_binding=None, max_tra
     declared_model = str(spec.get('plc_model') or '').strip().upper()
     # Positive specification projection deliberately omits runtime identity.
     # The validated IR owns that identity; never replace it with an FX default.
-    model = program_model or declared_model
+    from plc.target_identity import execution_target_member
+    model = execution_target_member(program_model, declared_model) or declared_model
     st_instructions, st_reason = None, None
     if isinstance(program.get('st_code'), str):
         from plc.st_validation import bounded_st_instructions
@@ -653,7 +681,7 @@ def check_bounded_traces(program, spec, traces, *, version_binding=None, max_tra
         except (ValueError, RecursionError) as error:
             st_reason = str(error)
         ladder = {'rungs':[{'rung_id':1,'branches':[]}]}
-    model_reason = ('program_cpu_conflicts_with_specification' if program_model and declared_model and program_model != declared_model
+    model_reason = ('program_cpu_conflicts_with_specification' if program_model and declared_model and model != declared_model
                     else 'missing_cpu_control_facts' if not (control_runtime_facts(model).get('control') or control_runtime_facts(model).get('transfers')) else st_reason)
     binding = {'revision': program.get('revision'), 'ir_sha256': canonical_sha256(program)} if ir_program else {
         'st_sha256' if 'st_code' in program else 'ladder_sha256': canonical_sha256(program)}
@@ -681,7 +709,7 @@ def check_bounded_traces(program, spec, traces, *, version_binding=None, max_tra
                      for instruction in lower_rung_instructions(rung)] for rung in ladder.get('rungs', [])]
     if st_instructions is not None:
         instructions = [st_instructions]
-    applications, unsupported_index = {}, {}
+    applications, static_cache, unsupported_index = {}, {}, {}
     constraint_violations = []
     peripheral_traces = []
     frames_without_clock = 0
@@ -703,7 +731,8 @@ def check_bounded_traces(program, spec, traces, *, version_binding=None, max_tra
                                   execution_context=trace.get('execution_context', context),
                                   previous_inputs=trace.get('previous_inputs'), previous_enables=trace.get('previous_enables'),
                                   groups=[r for r in rows if r['kind'] in {'event', 'transition_group'}], instructions=instructions,
-                                  applications=applications,timer_started_at_ms=trace.get('timer_started_at_ms'), execution_budget=execution_budget)
+                                  applications=applications, static_cache=static_cache,
+                                  timer_started_at_ms=trace.get('timer_started_at_ms'), execution_budget=execution_budget)
             explicit = trace.get('expectations', [])
             try:
                 if not isinstance(explicit, list) or len(explicit) > 128:

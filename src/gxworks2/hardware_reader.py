@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """One-shot, read-only physical PLC boundary, separate from Simulator2.
 
@@ -18,7 +18,7 @@ from pathlib import Path
 
 
 from plc.device_policy import HardwareError, native_read_plan, normalize_read_addresses
-from shared.paths import bundled_executable
+from shared.paths import bundled_executable, cached_executable
 
 HARDWARE_READER_PROTOCOL_VERSION = 2
 
@@ -26,9 +26,9 @@ HARDWARE_READER_PROTOCOL_VERSION = 2
 class HardwareReader:
     """Only a fixed executable and fixed JSON read schema cross this boundary."""
     def __init__(self, executable=None):
-        default = Path(os.environ.get("LOCALAPPDATA", "")) / "PLC AI Studio" / "hardware-reader" / "PlcAi.HardwareReader.exe"
         configured = (executable or os.environ.get("GX_HARDWARE_READER_EXE")
-                      or bundled_executable("hardware-reader", "PlcAi.HardwareReader.exe") or default)
+                      or bundled_executable("hardware-reader", "PlcAi.HardwareReader.exe")
+                      or cached_executable("hardware-reader", "PlcAi.HardwareReader.exe"))
         self.executable = Path(configured).expanduser().resolve()
 
     def availability(self):

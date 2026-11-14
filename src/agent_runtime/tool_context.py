@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Immutable engineering snapshots and explicit context preconditions."""
 from __future__ import annotations
@@ -31,6 +31,8 @@ class ToolContext:
     operation_status: Any = None
     native_session_status: Any = None
     native_session_pause: Any = None
+    direct_input: Optional[Mapping[str, Any]] = None
+    defer_read: bool = False
 
     @property
     def project_id(self) -> str:
@@ -186,6 +188,8 @@ def _require_program_ir(context: ToolContext) -> Mapping[str, Any]:
 
 
 def _decision_receipt_id(context: ToolContext):
+    if context.project.get("confirmed_spec"):
+        return context.project.get("confirmed_decision_receipt_id")
     # The same binding as _confirmed_spec: a historical version must never
     # acquire the current project's newer decision merely because it lacks one.
     if (context.version or {}).get("confirmed_spec_snapshot"):
@@ -195,6 +199,49 @@ def _decision_receipt_id(context: ToolContext):
 
 
 def _confirmed_spec(context: ToolContext):
-    return (context.version or {}).get("confirmed_spec_snapshot") or context.project.get(
-        "confirmed_spec"
-    )
+    if context.version and ("confirmed_spec_snapshot" in context.version or "_spec_document" in context.project):
+        return context.version.get("confirmed_spec_snapshot")
+    return context.project.get("confirmed_spec")
+
+
+def _generation_spec(context: ToolContext):
+    """Edits use current requirements; inspection still describes the selected version."""
+    if "confirmed_spec" in context.project or "_spec_document" in context.project:
+        return context.project.get("confirmed_spec")
+    return _confirmed_spec(context)
+
+
+def _ladder_user_facts(context: ToolContext):
+    """Facts bound by the host, or recorded with the source being edited."""
+    if isinstance(facts := (context.direct_input or {}).get('facts'), Mapping):
+        return facts
+    spec = _generation_spec(context)
+    if spec is not None:
+        return spec
+    handoff = (context.version or {}).get('generation_handoff') or {}
+    facts = handoff.get('direct_user_facts')
+    return facts if isinstance(facts, Mapping) else None
+
+
+def _require_generation_plan(context: ToolContext, arguments, *, generation_handoff=None):
+    """Keep managed first-generation drafts out of candidate implementation.
+
+    Existing saved sources retain their maintenance path. Embedders without a
+    specification document keep their original read-only candidate contract.
+    """
+    document = context.project.get('_spec_document')
+    if not isinstance(document, Mapping) or context.version_id or _generation_spec(context):
+        return
+    if (not document.get('differences') and arguments.get('workflow') is None
+            and (generation_handoff or {}).get('mode') != 'plan_review'):
+        return  # A new empty document retains the public direct-generation path.
+    if arguments.get('workflow') == 'direct_generation' or (
+            arguments.get('workflow') is None and isinstance(generation_handoff, Mapping)
+            and generation_handoff.get('mode') == 'direct_generation'):
+        return
+    raise ToolPreconditionError('SPEC_CONFIRMATION_REQUIRED',
+        '新工程方案尚未确认，请先读取并局部更新规格，展示方案后由用户明确确认。'
+        '只有用户明确要求直接生成时才选择 workflow=direct_generation。',
+        next_actions=({'tool': 'get_project_spec'}, {'tool': 'update_project_spec',
+            'required_arguments': ['changes', 'expected_revision']}, {'tool': 'confirm_project_spec',
+            'required_arguments': ['expected_revision', 'user_confirmed']}))

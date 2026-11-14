@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Recorded native diagnostic scopes and identity normalization."""
 from __future__ import annotations
@@ -136,6 +136,15 @@ NATIVE_DIAGNOSTIC_CODE_HINTS: dict[int, dict[str, str]] = {
         'category': 'unconnected_sink_element',
         'summary': 'Unconnected or isolated output/coil element (IN port has no incoming wire)',
     },
+    0x050C9300: {
+        'category': 'duplicate_output',
+        'summary': (
+            'The same device is written as an output in more than one place (double coil); the '
+            'vendor Program Check reports every conflicting write position for that device. '
+            'Give the device one writing rung, or move the repeated writes into one rung '
+            'whose branches only differ in their own conditions'
+        ),
+    },
     0x500C5027: {
         'category': 'unsupported_declaration_type',
         'summary': 'Unsupported data type in declaration for the selected CPU',
@@ -166,3 +175,162 @@ def explain_native_diagnostic_codes(codes) -> dict[str, str]:
         for code in seen
         if code in NATIVE_DIAGNOSTIC_CODE_HINTS
     }
+
+
+# Instructions whose first operand is a writing position. The vendor double-coil
+# check counts these; contacts and other read-class forms never conflict.
+WRITING_OPS = frozenset((
+    'OUT', 'OUTP', 'SET', 'SETP', 'RST', 'RSTP', 'PLS', 'PLF', 'ALT', 'ALT P',
+    'COIL', 'TIMER', 'COUNTER', 'MPSOUT',
+))
+
+
+def device_write_rungs(ladder):
+    """Map every written device to the rungs that write it, in source order.
+
+    Only the submitted ladder establishes this; a report that names a device the
+    program does not write keeps no rung list rather than inheriting a guess.
+    """
+    rungs = ladder.get('rungs') if isinstance(ladder, dict) else None
+    result = {}
+    for rung in rungs or ():
+        rung_id = rung.get('rung_id') if isinstance(rung, dict) else None
+        if type(rung_id) is not int:
+            continue
+        for instruction in rung.get('ordered_instructions') or ():
+            if not isinstance(instruction, dict):
+                continue
+            opcode = str(instruction.get('op') or instruction.get('type') or '').strip().upper()
+            args = instruction.get('args') or ()
+            if opcode not in WRITING_OPS or not args:
+                continue
+            device = str(args[0]).strip().upper()
+            if device:
+                positions = result.setdefault(device, [])
+                if rung_id not in positions:
+                    positions.append(rung_id)
+    return result
+
+
+def summarize_check_reports(reports, *, writes=None, limit=32):
+    """Group vendor check reports into one finding per offending device.
+
+    A rejected check repeats one code for every conflicting write position, so the
+    raw list hides the cause in repetition. Each group keeps the literal code, the
+    affected operand, the occurrence count and the writing rungs the submitted
+    ladder establishes. Unrecognised codes stay listed under their own code; no
+    report is dropped, reclassified or silently assumed harmless.
+    """
+    groups = {}
+    for report in reports or ():
+        if not isinstance(report, dict):
+            continue
+        kind, code = report.get('kind'), report.get('code')
+        if type(code) is not int or kind not in (2, 3):
+            continue
+        arguments = [row.get('text') for row in report.get('arguments') or ()
+                     if isinstance(row, dict) and isinstance(row.get('text'), str)]
+        device = arguments[0].strip().upper() if arguments else ''
+        entry = groups.setdefault((code & 0xFFFFFFFF, device), {
+            'code': code & 0xFFFFFFFF, 'device': device,
+            'severity': 'error' if kind == 2 else 'warning',
+            'occurrences': 0, 'steps': []})
+        entry['occurrences'] += 1
+        step = report.get('step')
+        if type(step) is int and step >= 0 and len(entry['steps']) < 16 and step not in entry['steps']:
+            entry['steps'].append(step)
+    findings = []
+    for entry in sorted(groups.values(), key=lambda row: (not row['device'], row['device'], row['code'])):
+        hint = NATIVE_DIAGNOSTIC_CODE_HINTS.get(entry['code'])
+        finding = {
+            'code': f'0x{entry["code"]:08x}',
+            'category': hint['category'] if hint else 'unclassified_report',
+            'severity': entry['severity'],
+            'occurrences': entry['occurrences'],
+            'steps': entry['steps'],
+            'fixable': entry['severity'] == 'error',
+        }
+        if entry['device']:
+            finding['device'] = entry['device']
+            rungs = (writes or {}).get(entry['device']) or []
+            if rungs:
+                finding['rung_ids'] = list(rungs)[:16]
+            finding['message'] = (entry['device'] + ': ' + hint['summary'] if hint else
+                                  entry['device'] + ': unclassified native report ' + finding['code'])
+        else:
+            finding['message'] = hint['summary'] if hint else (
+                'unclassified native report ' + finding['code'])
+        findings.append(finding)
+        if len(findings) >= limit:
+            break
+    return findings
+
+
+def native_check_findings(validation, ladder=None, *, limit=32):
+    """Project a native check result into actionable findings for a caller.
+
+    Reads the Program Check reports the adapter retained, never the raw event log:
+    a code without a retained report list is reported as an unexplained rejection
+    instead of an empty success.
+    """
+    projection = (validation or {}).get('diagnostic_projection') or {}
+    reports = projection.get('public_diagnostics') or ()
+    writes = device_write_rungs(ladder) if ladder else {}
+    return summarize_check_reports(reports, writes=writes, limit=limit)
+
+
+def check_rejection_is_advisory(validation, ladder, *, plc_model, program_name):
+    """Delivery policy for a completed check after an accepted compilation.
+
+    The vendor reports stay intact. Classify the full report lists rather than
+    the grouped UI findings, which may omit positions or diagnostic codes.
+    """
+    validation = validation or {}
+    compilation = validation.get('compilation') or {}
+    check = validation.get('public_check') or {}
+    if (compilation.get('acceptance') != 'accepted' or compilation.get('completed') is not True
+            or check.get('status') != 'rejected' or check.get('completed') is not True):
+        return False
+    projection = validation.get('diagnostic_projection') or {}
+    public = projection.get('public_diagnostics') or ()
+    backend = projection.get('backend_diagnostics') or ()
+    if not isinstance(public, (list, tuple)) or not public or not isinstance(backend, (list, tuple)):
+        return False
+    reports = [*public, *backend]
+    if any(not isinstance(row, dict) or row.get('kind') not in (2, 3)
+           or type(row.get('code')) is not int for row in reports):
+        return False
+    errors = [row for row in reports if row['kind'] == 2]
+    if not errors:
+        return True
+
+    # GXW metadata stores the logical stream name; the checker names its POU.
+    program_name = (program_name or '').removesuffix('.Program.pou')
+    selection = validation.get('selection') or {}
+    if (not isinstance(ladder, dict) or not program_name
+            or selection.get('status') != 'verified' or selection.get('source_bytes_current') is not True
+            or selection.get('selected_sources') != [program_name]):
+        return False
+    from plc.device_identity import canonical_reference_device
+    from plc.validation import is_bit_device
+
+    steps = {}
+    for rung in ladder.get('rungs', ()):
+        for row in rung.get('ordered_instructions', ()):
+            if row.get('kind') == 'instruction' and type(row.get('step')) is int:
+                steps.setdefault(row['step'], []).append(row)
+    for report in errors:
+        name = report.get('name')
+        arguments = report.get('arguments')
+        step = report.get('step')
+        if (report['code'] != 0x050C9300 or not isinstance(name, dict) or name.get('text') != program_name
+                or not isinstance(arguments, list) or len(arguments) != 1 or not isinstance(arguments[0], dict)
+                or type(step) is not int or len(steps.get(step, ())) != 1):
+            return False
+        instruction = steps[step][0]
+        device = canonical_reference_device(arguments[0].get('text'))
+        if (instruction.get('op') not in {'SET', 'SETP', 'RST', 'RSTP'} or not device
+                or [canonical_reference_device(arg) for arg in instruction.get('args', ())] != [device]
+                or not is_bit_device(device, plc_model)):
+            return False
+    return True

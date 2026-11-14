@@ -1,11 +1,12 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
-"""Saved ST Program, FB and FUNCTION artifacts in the shared candidate transaction.
+"""ST source fallback and saved Program/FB/FUNCTION candidate transactions.
 
 GXW is the source of declarations, bodies and task ownership. Model intentions
 are bound to that context and the existing native transaction; saved-source
 projection v1 remains separate from the intention protocol v2.
+Fresh source-only candidates share Web/MCP static validation and make no GXW claim.
 """
 from __future__ import annotations
 
@@ -201,6 +202,9 @@ def _source_binding(source):
 
 def validate_candidate(artifacts, *, plc_model=None, program_name=None, metadata=None):
     """Re-read the exact GXW and reject a foreign body, task or metadata view."""
+    if isinstance(artifacts, dict) and 'gxw' not in artifacts:
+        return validate_generated_candidate(artifacts, plc_model=plc_model,
+            program_name=program_name, metadata=metadata)
     if not isinstance(artifacts, dict) or not {'gxw', 'st', 'write_report'} <= artifacts.keys():
         raise ValueError('ST native candidate is missing required saved-source artifacts')
     report = json.loads(artifacts['write_report'])
@@ -226,6 +230,61 @@ def validate_candidate(artifacts, *, plc_model=None, program_name=None, metadata
                 or metadata['validation'].get('source_binding') != _source_binding(source)):
             raise ValueError('ST native candidate metadata differs from its saved source binding')
     return source
+
+
+def validate_generated_candidate(artifacts, *, plc_model, program_name=None, metadata=None):
+    """Validate the source-only fallback without claiming a native project."""
+    if not isinstance(metadata, dict) or metadata.get('target_mode') != 'st' or metadata.get('plc_model') != plc_model:
+        raise ValueError('Generated ST candidate requires its source metadata and CPU')
+    selected = program_name or metadata.get('program_name')
+    if not isinstance(selected, str) or not selected or metadata.get('program_name') != selected:
+        raise ValueError('Generated ST candidate program binding differs from its metadata')
+    expected = {'kind': 'generated_st_source', 'language': 'st', 'program': selected}
+    if (metadata.get('validation') or {}).get('source_binding') != expected:
+        raise ValueError('Generated ST candidate is missing its source-only binding')
+    if not isinstance(artifacts.get('st'), bytes):
+        raise ValueError('Generated ST candidate requires UTF-8 ST source')
+    text = artifacts['st'].decode('utf-8')
+    if not text.strip():
+        raise ValueError('Generated ST source cannot be empty')
+    from plc.st_validation import inspect_st_program
+    inspection = inspect_st_program(text, plc_model=plc_model)
+    if inspection['status'] == 'failed':
+        raise ValueError('Generated ST source failed local syntax or semantic checks')
+    return {'st_text': text, 'inspection': inspection, 'source_binding': expected}
+
+
+def prepare_generated_candidate(output, *, st_code, plc_model, program_name='MAIN',
+                                summary='ST 源码候选', confirmed_spec=None):
+    """Shared Web/MCP source fallback; no GXW or native execution is synthesized."""
+    if not isinstance(st_code, str) or not st_code.strip():
+        raise ValueError('ST source cannot be empty')
+    from plc.st_validation import inspect_st_program
+    from plc.maintainability import review_maintainability
+    text = st_code.strip()
+    inspection = inspect_st_program(text, plc_model=plc_model,
+        hardware_context=(confirmed_spec or {}).get('hardware_profile'), confirmed_spec=confirmed_spec)
+    if inspection['status'] == 'failed':
+        raise ValueError('ST candidate failed local checks: ' + '; '.join(
+            row['message'] for row in inspection['findings'] if row['severity'] == 'error'))
+    output = Path(output)
+    output.mkdir(parents=True, exist_ok=True)
+    data = text.encode('utf-8')
+    (output / 'program.st').write_bytes(data)
+    metadata = {'target_mode': 'st', 'plc_model': plc_model, 'program_name': program_name,
+        'summary': summary, 'validation_profile': 'generation_structural', 'width': 0, 'height': 0,
+        'semantic_validation': inspection, 'behavior_check': inspection.get('behavior_check'),
+        'maintainability_review': review_maintainability({'st_code': text}, target_mode='st'),
+        'validation': {'status': 'candidate_ready', 'profile': 'generation_structural',
+            'source_binding': {'kind': 'generated_st_source', 'language': 'st', 'program': program_name},
+            'static': inspection['status'],
+            **{key: inspection[key] for key in ('syntax', 'semantic', 'native_compile', 'behavior', 'requirements')},
+            'native': 'unverified', 'gx_compile': 'not_run',
+            'messages': ['ST 源码已完成本地检查，未覆盖项保留为未验证；未形成 GXW，原生编译和运行尚未验证。']}}
+    payload = {'target_mode': 'st', 'plc_model': plc_model, 'staging_dir': str(output),
+        'metadata': metadata, 'artifacts': {'st': {'path': 'program.st', 'sha256': hashlib.sha256(data).hexdigest()}}}
+    validate_generated_candidate({'st': data}, plc_model=plc_model, program_name=program_name, metadata=metadata)
+    return payload
 
 
 def bind_verification(metadata, source, *, confirmed_spec=None, compile_status='unverified', native_receipt=None):

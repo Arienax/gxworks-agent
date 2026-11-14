@@ -1,11 +1,11 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Scoped knowledge retrieval over the shared broad RRF engine.
 
 The broad engine lives in :mod:`knowledge.core`. This facade owns task/source
-scope, exact structured-fact handoff, and bounded candidate expansion for
-qualified GX Works2 skill concepts. It does not apply a second scoring layer.
+scope, exact structured-fact handoff, and bounded functional expansion. Alias
+recall supplements the hybrid results; resource facts retain discovery slots.
 """
 
 from __future__ import annotations
@@ -216,7 +216,13 @@ def _residual_fact_text(query, targets, covered_kinds):
             value = (target.get('opcode') or target.get('base_opcode')) if isinstance(target, Mapping) else target
             if value and not alias_occurs(residual, str(value)):
                 missing.append(str(value))
-    return ' '.join([residual, *missing]).strip()
+    text = ' '.join([residual, *missing]).strip()
+    if hasattr(query, 'metadata'):
+        from knowledge.evidence import KnowledgeQuery
+        return KnowledgeQuery(text, metadata=query.metadata,
+                              precompiled=getattr(query, 'precompiled', False),
+                              truncated=getattr(query, 'truncated', False))
+    return text
 
 
 def retrieve_knowledge(
@@ -275,11 +281,10 @@ def retrieve_knowledge(
             direct = []
         direct = filter_records(direct, source_lanes)
     semantic_function = getattr(query, 'metadata', {}).get('semantic_function')
+    functional = []
     if semantic_function:
         from knowledge.fact_corpus import resolve
-        scoped = resolve('function', [semantic_function], plc_model=plc_model, task_type=task)
-        if scoped is not None:
-            return filter_records(scoped, source_lanes)[:normalized_top_k]
+        functional = resolve('function', [semantic_function], plc_model=plc_model, task_type=task) or []
     expand = (
         task in {"st", "generate", "edit", "analysis"}
         and _query_has_gxw2_skill_concept(query, task)
@@ -297,6 +302,39 @@ def retrieve_knowledge(
         exclude_chunk_types=exclude_chunk_types,
         exclude_structured_kinds=exclude_structured_kinds,
     )
+    # Give functional aliases a recall lane alongside the hybrid ranking.
+    # Neither lane can consume all slots before the other is considered.
+    resources = []
+    if semantic_function:
+        # A large instruction catalogue must not crowd out the devices needed
+        # to use it. Rank resource facts with the same query and same engine.
+        from knowledge.query_vocabulary import resource_queries
+        resource_ranks = {}
+        for resource_query in [query, *resource_queries(semantic_function)]:
+            lane = core.retrieve_broad_knowledge(resource_query, plc_model=plc_model, task_type=task,
+                top_k=min(normalized_top_k, 12), source_lanes=source_lanes,
+                exclude_chunk_types=exclude_chunk_types,
+                exclude_structured_kinds=tuple(set(exclude_structured_kinds) | {'instruction', 'language', 'example', 'error'}))
+            for rank, row in enumerate(lane):
+                if row.get('technical_status') == 'candidate_evidence':
+                    continue
+                identity = str(row['id'])
+                resource_ranks.setdefault(identity, [row, 0.0])[1] += 1.0 / (61 + rank)
+        resources = [row for row, score in sorted(resource_ranks.values(), key=lambda pair: -pair[1])]
+    if functional or resources:
+        fused = {}
+        for lane in (results, filter_records(functional, source_lanes)):
+            for rank, row in enumerate(lane):
+                identity = str(row['id'])
+                if identity not in fused:
+                    fused[identity] = [row, 0.0]
+                fused[identity][1] += 1.0 / (61 + rank)
+        results = [row for row, score in sorted(fused.values(), key=lambda pair: -pair[1])]
+        # Preserve coverage of both callable and resource search. Otherwise a
+        # large alias catalogue can expel a resource even after its own hybrid
+        # query selected it. Ordering within each lane remains relevance-based.
+        results = [row for rank in range(max(len(results), len(resources)))
+                   for lane in (results, resources) for row in lane[rank:rank + 1]]
     results = filter_records([*direct, *results], source_lanes)
     if not results:
         return []
@@ -398,8 +436,11 @@ def retrieve_fact_aware_knowledge(
     if normalized_model is None:
         return []
     plc_model = normalized_model
-    targets = targets if targets is not None else structured_fact_targets(query, plc_model=plc_model, language=language)
     query_meta = getattr(query, 'metadata', {})
+    # Functional expansion terms describe a source purpose. They are not
+    # user-selected instruction identities (for example the word in word shift).
+    targets = (targets if targets is not None else {} if query_meta.get('semantic_function')
+               else structured_fact_targets(query, plc_model=plc_model, language=language))
     direct = [
         *resolve_positioning_records(targets.get("positioning"), plc_model=plc_model, task_type=task),
         *resolve_language_records(targets.get('language_features') or (), plc_model=plc_model, task_type=task),
@@ -423,6 +464,8 @@ def retrieve_fact_aware_knowledge(
             task_type=task,
         ),
     ]
+    from knowledge.fact_dependencies import related_device_facts
+    direct.extend(related_device_facts(direct, plc_model=plc_model, task_type=task))
     direct = [
         compact_structured_fact_record(row)
         for row in filter_records(direct, lanes)
@@ -541,8 +584,12 @@ def build_knowledge_context(
             if not marker or marker in seen:
                 continue
             seen.add(marker)
+            # Bind against the complete reviewed row before source projection.
+            from knowledge.function_relations import annotate_source_records
+            from knowledge.evidence import citation_origin, share_fact_source_units
+            relations = annotate_source_records([result])[0].get('function_relations')
+            origin = citation_origin(result)
             result = context_reference(result)
-            from knowledge.evidence import share_fact_source_units
             result = share_fact_source_units(result, delivered_fact_sources)
             source_key = tuple(str(result.get(key) or "") for key in (
                 "source_section_id", "manual_id", "revision", "pdf_page", "plc_models", "text",
@@ -555,6 +602,10 @@ def build_knowledge_context(
                 manifest.setdefault("duplicate_source_ids", []).append(marker)
                 continue
             record = evidence_record(result)
+            if origin:
+                record['citation_origin'] = origin
+            if relations:
+                record['function_relations'] = relations
             delivered_typed[marker] = result
             block = format_knowledge_reference(result)
             record['model_text'] = block
@@ -608,7 +659,7 @@ def build_knowledge_context(
         # these rules for the ST callee as well.
         exact_targets['language_features'] = list(dict.fromkeys([
             *exact_targets.get('language_features', ()), 'ST.DATATYPES', 'ST.OPERATORS',
-            'ST.CALL.ENENO', 'ST.CALL.ARGUMENTS', 'ST.FB.OUTPUT_ARGUMENT']))
+            'ST.CALL.ENENO', 'ST.CALL.ARGUMENTS', 'ST.FB.OUTPUT_ARGUMENT', 'ST.PROJECT', 'ST.CONTROL_FLOW']))
     instruction_targets = list(exact_targets.get("instructions") or ())
     device_targets = list(exact_targets.get("devices") or ())
     family_targets = list(exact_targets.get("device_families") or ())
@@ -726,12 +777,54 @@ def build_knowledge_context(
 
 
 def discover_capabilities(requirement, *, plc_model="FX3U", target_mode="ladder",
-                          explicit_targets=(), catalog=(), relation_records=(), relation_limit=0):
-    """Functional discovery uses this same scoped retrieval backend."""
-    from knowledge.capability_discovery import discover
+                          explicit_targets=(), catalog=(), relation_records=(), relation_limit=0,
+                          retrieved_records=()):
+    """Reuse hybrid hits and indexed functions, with shared resource recall."""
+    from knowledge.capability_discovery import discover, functional_queries
+    from knowledge.fact_corpus import resolve
+
+    def lookup(opcodes):
+        return resolve('instruction', opcodes, plc_model=plc_model, task_type='generate') or ()
+
+    # Reuse the main hybrid search's instruction identities. Functional
+    # discovery adds indexed aliases, then applies the existing purpose filter.
+    opcodes = list(dict.fromkeys(row['instruction_opcode'] for row in retrieved_records
+                                if row.get('instruction_opcode')))
+    seeds = lookup(opcodes) if opcodes else ()
+    # Standalone callers share one supplemental recall for missing aliases.
+    # Companion resources also share one query instead of one per purpose.
+    from knowledge.query_vocabulary import resource_queries
+    queries = functional_queries(requirement)
+    terms = list(dict.fromkeys(term for query in queries
+                              for term in (query['query'], *resource_queries(query['function']))))
+    supplemental = (retrieve_fact_aware_knowledge(
+        " ".join(terms), plc_model=plc_model, task_type="generate", top_k=64,
+        source_lanes=("fact", "example")) if terms and not seeds else ())
+    resource_terms = list(dict.fromkeys(term for query in queries
+                                       for term in resource_queries(query['function'])))
+    resources = (core.retrieve_broad_knowledge(
+        " ".join(resource_terms), plc_model=plc_model, task_type="generate", top_k=12,
+        source_lanes=("fact",), exclude_structured_kinds=("instruction", "language", "example", "error"))
+        if resource_terms else ())
+
+    def recall(query, **options):
+        from knowledge.scope import filter_records
+        function = getattr(query, 'metadata', {}).get('semantic_function')
+        if not function:
+            # Exact relation lookups keep their original retrieval semantics.
+            return retrieve_fact_aware_knowledge(query, **options)
+        scoped = resolve('function', [function], plc_model=plc_model, task_type='generate')
+        if scoped is None:
+            return retrieve_fact_aware_knowledge(query, **options)
+        records = {}
+        for row in (*seeds, *scoped, *resources, *supplemental):
+            records.setdefault(str(row['id']), row)
+        return filter_records(list(records.values()), options.get('source_lanes'))[:options['top_k']]
+
     return discover(requirement, plc_model=plc_model, target_mode=target_mode,
                     explicit_targets=explicit_targets, catalog=catalog,
-                    retrieve=retrieve_knowledge, relation_records=relation_records, relation_limit=relation_limit)
+                    retrieve=recall, lookup=lookup,
+                    relation_records=relation_records, relation_limit=relation_limit)
 
 
 

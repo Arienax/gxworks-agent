@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 from abc import ABC, abstractmethod
 import ctypes
@@ -129,6 +129,7 @@ class PywinautoGXWorks2UIAutomation(GXWorks2UIAutomation):
     PROGRAM_WRITE_KEY = "k"
     COMMENT_READ_KEY = "f"
     COMMENT_WRITE_KEY = "o"
+    PROJECT_NAVIGATION_TREE_ID = 12051
     # GD2_RC_936 menu/accelerator resources, GX Works2 1.635.0.1.
     NEW_PROJECT_COMMAND = 0x3FF
     SAVE_PROJECT_COMMAND = 0x402
@@ -438,7 +439,7 @@ class PywinautoGXWorks2UIAutomation(GXWorks2UIAutomation):
         if len(implementations) != 1:
             return state
         trees = [tree for tree in self._main_window(session).descendants(class_name="SysTreeView32")
-                 if tree.control_id() == 12051]
+                 if tree.control_id() == self.PROJECT_NAVIGATION_TREE_ID]
         if len(trees) != 1:
             return state
         path = native_tree_path(("程序部件", "程序", self.read_program_name, "程序本体"), language)
@@ -505,10 +506,8 @@ class PywinautoGXWorks2UIAutomation(GXWorks2UIAutomation):
         if editor_pattern.search(window.window_text()):
             return window
 
-        # The native navigation tree (control 12051 in the observed simple
-        # project) exposes TVM_GETITEM/TVM_SELECTITEM. Use exact project paths
-        # rather than scanning every UIA TabItem/TreeItem, which can block in
-        # GX's disabled legacy providers for tens of seconds.
+        # The native project tree stays addressable when another dock page is
+        # selected. Use exact paths and target that control even when hidden.
         if editor_pattern is self.COMMENT_EDITOR:
             paths = (("全局软元件注释",), ("Global Device Comment",))
         elif editor_pattern is self.LOCAL_COMMENT_EDITOR:
@@ -517,7 +516,7 @@ class PywinautoGXWorks2UIAutomation(GXWorks2UIAutomation):
             paths = (("程序部件", "程序", "MAIN"), ("Program", "MAIN"))
         target = None
         for tree in window.descendants(class_name="SysTreeView32"):
-            if not tree.is_visible() or not tree.is_enabled():
+            if not tree.is_enabled() or (not tree.is_visible() and tree.control_id() != self.PROJECT_NAVIGATION_TREE_ID):
                 continue
             for path in paths:
                 try:
@@ -646,7 +645,7 @@ class PywinautoGXWorks2UIAutomation(GXWorks2UIAutomation):
         # only parameters. Never import into that stale program document.
         for tree in self._main_window(session).descendants(class_name="SysTreeView32"):
             control_id = getattr(tree, "control_id", None)
-            if not callable(control_id) or control_id() != 12051:
+            if not callable(control_id) or control_id() != self.PROJECT_NAVIGATION_TREE_ID:
                 continue
             for path in (("程序部件", "程序", self.read_program_name), ("Program", self.read_program_name)):
                 try:

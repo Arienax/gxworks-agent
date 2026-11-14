@@ -107,7 +107,6 @@ def test_generation_does_not_drop_semantic_extra_data(tmp_path):
 
 @pytest.mark.parametrize("preserve", [False, True])
 def test_direct_header_type_failure_preserves_exact_candidate_before_expansion(monkeypatch, tmp_path, preserve):
-    from application.compact_protocol import CompactProtocolError
     from model_runtime.provider import TextDelta
     from model_profile_fixtures import offline_runtime_profile
     import application.generation_agent as agent
@@ -129,10 +128,10 @@ def test_direct_header_type_failure_preserves_exact_candidate_before_expansion(m
         GenerationRequest("M0 控制输出。", direct_generation=True, model_name="offline"), tmp_path,
         dependencies=GenerationDependencies(provider=provider, preserve_rejected_candidate=preserve),
     )
-    with pytest.raises(CompactProtocolError) as caught:
+    with pytest.raises(GenerationValidationError) as caught:
         workflow.run()
-    assert caught.value.path == "content.r.0.h"
-    assert provider.calls == 1
+    assert caught.value.diagnostics["violations"][0]["path"] == "content.r.0.h"
+    assert provider.calls == 2
     if preserve:
         assert (tmp_path / "repair_candidate.json").read_text(encoding="utf-8") == raw
         assert json.loads((tmp_path / "generation_handoff.json").read_text(encoding="utf-8"))["raw_requirement"] == "M0 控制输出。"

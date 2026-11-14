@@ -1,8 +1,11 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 from pathlib import Path
 
+from shared.paths import APP_DIR, LEGACY_LOCAL_APP_DIR
+
+from .baseline_store import ImportBaselineStore
 from .csv_manager import CSVManager
 from .finder import GXWorks2Finder
 from .import_service import ImportService
@@ -20,7 +23,7 @@ _current_csv_path = None
 
 
 def _default_backup_root():
-    return Path.home() / "Documents" / "PLC AI Studio" / "GX Works2 Backups"
+    return Path.home() / "Documents" / APP_DIR / "GX Works2 Backups"
 
 
 def configure(*, current_csv_path=None, service=None):
@@ -41,11 +44,14 @@ def _get_service():
             if PywinautoGXWorks2UIAutomation.available()
             else UnavailableGXWorks2UIAutomation()
         )
+        backup_root = _default_backup_root()
         _service = ImportService(
             finder=GXWorks2Finder(),
             automation=automation,
             csv_manager=CSVManager(),
-            backup_root=_default_backup_root(),
+            backup_root=backup_root,
+            baseline_store=ImportBaselineStore(backup_root, legacy_backup_root=
+                backup_root.parent.with_name(LEGACY_LOCAL_APP_DIR) / backup_root.name),
         )
     return _service
 

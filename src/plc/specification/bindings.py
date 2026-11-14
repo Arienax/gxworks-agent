@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Pure I/O answer binding. Identity, not fuzzy prose, owns an address.
 
@@ -470,11 +470,11 @@ def binding_hint(parameter, related=()):
 
 
 def single_address(value, kind=None):
-    """Extract one address only, allowing legacy option labels such as X0（建议）."""
-    matches = list(_DEVICE.finditer(str(value)))
-    if len(matches) != 1:
+    """Extract one distinct address, even if the answer repeats it."""
+    addresses = {canonical_device(match.group()) for match in _DEVICE.finditer(str(value))}
+    if len(addresses) != 1:
         return None
-    address = canonical_device(matches[0].group())
+    address = next(iter(addresses))
     prefix = re.match(r"[A-Z]+", address).group()
     return address if kind is None or prefix == kind else None
 
@@ -936,7 +936,7 @@ def bind_answers(rows, parameters, bindings=(), *, protected_ids=()):
             remaining.append(copy.deepcopy(parameter))
             continue
         item, hint, address = entry["item"], entry["hint"], entry["address"]
-        item["value"] = _DEVICE.sub(lambda _m: address, str(item["value"]), count=1)
+        item["value"] = _DEVICE.sub(lambda _m: address, str(item["value"]))
         pending.setdefault(hint["binding_id"], []).append((hint, item, address))
         applied[str(item["name"])] = str(item.get("value") or "")
         if _is_io_attribute_answer(item.get("value")) or isinstance(item.get("required_when"), dict):
@@ -1071,7 +1071,7 @@ def restore_bound_choices(questions, rows, bindings):
         if _question_is_address(name) and not _is_io_attribute_answer(name):
             question["value"] = address
         elif single_address(value):
-            question["value"] = _DEVICE.sub(lambda _m: address, value, count=1)
+            question["value"] = _DEVICE.sub(lambda _m: address, value)
         elif _is_io_attribute_answer(value):
             question["value"] = value
         else:

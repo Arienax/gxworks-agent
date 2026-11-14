@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "instruction_sources": [
+    {
+      "opcodes": [
+        "DRVA",
+        "DRVI",
+        "DVIT",
+        "PLSV",
+        "ZRN"
+      ],
+      "plc_models": [
+        "FX3S",
+        "FX3G",
+        "FX3GC",
+        "FX3U",
+        "FX3UC"
+      ],
+      "manual_id": "fx3_positioning_k",
+      "authority": "primary_instruction_semantics",
+      "reason": "Positioning-control behavior is owned by the FX3 positioning-control edition when duplicate instruction records exist."
+    },
+    {
+      "opcodes": [
+        "TBL"
+      ],
+      "plc_models": [
+        "FX3S",
+        "FX3G",
+        "FX3GC",
+        "FX3U",
+        "FX3UC"
+      ],
+      "manual_id": "fx3_programming_r",
+      "authority": "primary_instruction_semantics",
+      "reason": "TBL semantics use the FX3 programming manual as the audited primary source."
+    }
+  ]
+}

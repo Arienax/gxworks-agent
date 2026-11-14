@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Headless engineering sessions using the shared application transactions.
 
@@ -39,7 +39,7 @@ SESSION_TOOL_NAMES = (
 
 def default_mcp_workspace() -> Path:
     override = os.environ.get("GXWORKS_MCP_WORKSPACE_DIR", "").strip()
-    return Path(override).expanduser().resolve() if override else default_workspace_dir().parent / "mcp-workspace"
+    return Path(override).expanduser().resolve() if override else default_workspace_dir("mcp-workspace")
 
 
 class _ExternalClientSettings:
@@ -65,9 +65,9 @@ class EngineeringSession:
         state_dir = Path(state_dir or default_state_dir(self.workspace)).expanduser().resolve()
         if state_dir.is_relative_to(self.workspace):
             raise ValueError("Application state must be outside the engineering workspace")
-        self.service = WorkbenchService(self.workspace, state_dir,
+        self.service = WorkbenchService(self.workspace, state_dir, exclusive_workspace=True,
                                         settings=_ExternalClientSettings())
-        self.design = DesignSession(self.service)
+        self.design = DesignSession(self.service, separate_tasks=True)
         self.project_id = record_id(project_id, "project") if project_id else None
         self.version_id = record_id(version_id, "version") if version_id else None
         if self.version_id and not self.project_id:
@@ -80,13 +80,42 @@ class EngineeringSession:
         self._call_lock = threading.RLock()
         self._closed = False
         self.registry = self._session_registry()
+        self._manual_reads = {}
         self.inspection = self.service.projects.inspection
+
+    @classmethod
+    def attach(cls, service, *, project_id, version_id=None, change_scope=None, program=None, before_write=None,
+               design_job_id=None, direct_input=None):
+        """Bind host-owned tools to the Web service without creating another workspace."""
+        session = cls.__new__(cls)
+        session.service = service
+        session.workspace = service.projects.workspace
+        session.project_id = record_id(project_id, 'project')
+        session.version_id = record_id(version_id, 'version') if version_id else None
+        session.design = DesignSession(service, job_id=design_job_id)
+        session.approval_mode = None
+        session.confirm_full_access = False
+        session._consent_initialized = True
+        session._call_lock = threading.RLock()
+        session._closed = False
+        session._host_owned = True
+        session.change_scope = change_scope
+        session.program = program
+        session.before_write = before_write
+        session.direct_input = direct_input
+        session.registry = session._session_registry()
+        session._manual_reads = {}
+        session.inspection = service.projects.inspection
+        return session
 
     def _session_registry(self):
         registry = ToolRegistry()
+        if self.service.receipt_store is not None:
+            from application.read_delivery import ReadDeliveryStore
+            registry._read_delivery = ReadDeliveryStore(receipt_store=self.service.receipt_store)
         definitions = (
             ("list_projects", "List saved PLC projects and this MCP session's explicit selection.", {}, (), self._list_projects),
-            ("create_project", "Create and select a PLC project using the shared project service; specify the actual CPU and source type.",
+            ("create_project", "Create and select a PLC project using the shared project service; specify the actual CPU. target_mode defaults to ladder unless the user requests another language.",
              {"name": {"type": "string", "minLength": 1, "maxLength": 200},
               "plc_model": {"type": "string", "minLength": 1, "maxLength": 100},
               "target_mode": {"type": "string", "enum": ["ladder", "st", "fbd", "sfc"]},
@@ -94,9 +123,10 @@ class EngineeringSession:
                                   "description": "Select by specification completeness: use direct for cross-vendor/cross-language program porting or translation, complete logic/step/timing/algorithm specifications, deterministic FB/FUNCTION authoring, or explicit direct requests; use design for open-ended process/machine requirements that benefit from comparing 1-3 approaches before human approval."},
               "native_project_type": {"type": "string", "minLength": 1, "maxLength": 32},
               "use_labels": {"type": "boolean"}},
-             ("name", "plc_model", "target_mode"), self._create_project),
-            ("get_design_context", "Start Web Design analysis for an open-ended new program requirement. Pass the complete human requirement and use the returned instructions to compare 1-3 approaches before writing any program. Skip Design (use direct) when porting existing PLC code or implementing an already complete specification.",
-             {"user_requirement": {"type": "string", "minLength": 1}, "instruction_details": {"type": "boolean"}}, (), self._design_context),
+             ("name", "plc_model"), self._create_project),
+            ("get_design_context", "Start Design with the complete human requirement. To recover a pending task, omit user_requirement; the host selects a unique task or accepts analysis_id or repair_id. Use the context to compare 1-3 approaches before generation. Use Direct for porting or an already complete specification.",
+             {"user_requirement": {"type": "string", "minLength": 1}, "instruction_details": {"type": "boolean"},
+              "analysis_id": {"type": "string", "minLength": 1}, "repair_id": {"type": "string", "minLength": 1}}, (), self._design_context),
             ("propose_design_plan", "Submit the external model's Web Design analysis JSON, including 1-3 approaches. If repair_required, submit only the listed path/value repairs for that repair_id. Empty arguments recall the draft or repair targets. Resolve required facts with the user before confirmation.",
              {"analysis_id": {"type": "string"}, "analysis": {"type": "object"}, "repair_id": {"type": "string"},
               "repairs": {"type": "array", "items": {"type": "object", "required": ["path", "value"],
@@ -104,7 +134,7 @@ class EngineeringSession:
             ("confirm_design_plan", "Persist the user-approved approach and the user's parameter answers for this exact draft. Follow next_actions to generate from the confirmed specification.",
              {"draft_id": {"type": "string"}, "approach_id": {"type": "string"},
               "parameter_answers": {"type": "object", "additionalProperties": {"type": "string", "minLength": 1},
-                                    "description": "Map parameter IDs from the current review to answers supplied by the user."}},
+                                    "description": "Map parameter or open-question IDs from the current review to answers supplied by the user."}},
              ("draft_id", "approach_id"), self._design_confirmation),
             ("select_project", "Select an existing project for this MCP session. Optional version_id pins a saved baseline; it does not activate a version.",
              {"project_id": {"type": "string", "minLength": 1, "maxLength": 128},
@@ -151,7 +181,7 @@ class EngineeringSession:
     def _create_project(self, _context, arguments):
         options = dict(arguments)
         mode = options.pop('generation_mode', os.environ.get('GXWORKS_MCP_NEW_PROJECT_MODE', 'direct'))
-        project = self.service.create_project(**options)
+        project = self.service.create_project(**{"target_mode": "ladder", **options})
         self.project_id, self.version_id = project["id"], None
         result = {"status": "created", "project": project, "selected_project_id": self.project_id}
         if mode == 'design':
@@ -164,26 +194,72 @@ class EngineeringSession:
     def _new_design_project(self):
         project_id = self._require_project()
         context = self.service.projects.tool_context(project_id, self.version_id, requirement='model')
-        if context.version_id:
+        if context.version_id and not getattr(self, '_host_owned', False):
             raise ValueError('Design 新建程序需要尚无程序版本的工程。已有版本请使用当前版本的编辑流程。')
         return project_id
 
     def _design_context(self, _context, arguments):
+        project_id = self._new_design_project()
         if not arguments.get('user_requirement'):
-            raise ValueError('首次读取请传入完整 user_requirement；续页请直接使用 delivery.next。')
-        return self.design.context(self._new_design_project(), arguments['user_requirement'],
-                                   manual_context=_context if arguments.get('instruction_details') else None)
+            return self.design.resume_context(project_id, analysis_id=arguments.get('analysis_id'),
+                                              repair_id=arguments.get('repair_id'))
+        if arguments.get('analysis_id') or arguments.get('repair_id'):
+            raise ValueError('新任务传入用户原文，恢复已有任务只需任务引用。')
+        return self.design.context(project_id, arguments['user_requirement'],
+                                   manual_context=_context if arguments.get('instruction_details') else None,
+                                   defer_read=_context.defer_read)
+
+    def finish_host_read(self, tool, document_id, accepted):
+        with self._call_lock, self.service.lock.thread_lock:
+            project_id = self._require_project()
+            registry = self.registry if tool == 'get_design_context' else self.service.projects.runtime.registry
+            store = registry._read_delivery
+            if store is None:
+                return False
+            completed = store.finish_host_read(tool, document_id, project_id, accepted=accepted)
+            if completed is None:
+                return False
+            if accepted and tool == 'get_design_context':
+                analysis_id = completed['receipt']
+                self.design.mark_read_complete(project_id, analysis_id, citations=store.design_citations(analysis_id))
+            if accepted and tool == 'search_plc_manual':
+                self._manual_reads.setdefault(project_id, set()).add(document_id)
+            return True
 
     def _design_proposal(self, _context, arguments):
         project_id = self._new_design_project()
+        citations = {}
         if 'analysis' in arguments or 'repairs' in arguments:
-            if not self.design.is_read_complete(project_id, arguments.get('analysis_id')):
+            state, _, _ = self.design._pending(project_id, analysis_id=arguments.get('analysis_id'),
+                                               repair_id=arguments.get('repair_id'))
+            expected = state['analysis_id']
+            if not state.get('read_complete'):
                 if self.registry._read_delivery is None:
                     raise ToolPreconditionError('DESIGN_CONTEXT_REQUIRED', '请先读取当前工程的 Design 上下文。',
                                                 next_actions=[{'tool': 'get_design_context'}])
-                self.registry._read_delivery.check_design_read(arguments.get('analysis_id'))
-                self.design.mark_read_complete(project_id, arguments.get('analysis_id'))
-        return self.design.propose(project_id, arguments)
+                self.registry._read_delivery.check_design_read(expected)
+            arguments = dict(arguments)
+            arguments.setdefault('analysis_id', expected)
+            if 'repairs' in arguments and state.get('repair_id'):
+                arguments.setdefault('repair_id', state['repair_id'])
+            if not state.get('read_complete'):
+                self.design.mark_read_complete(project_id, expected)
+            if self.registry._read_delivery is not None:
+                citations.update(self.registry._read_delivery.design_citations(expected))
+            store = self.service.projects.runtime.registry._read_delivery
+            manual_documents = self._manual_reads.get(project_id)
+            if store is not None:
+                from application.read_delivery import manual_binding
+                from plc.specification.fact_citations import referenced_fact_ids
+                context = self.service.projects.tool_context(project_id, self.version_id, requirement='model')
+                scope = manual_binding(context)
+                if manual_documents:
+                    citations.update(store.design_citations(manual_scope=scope, manual_documents=manual_documents))
+                references = referenced_fact_ids(arguments.get('analysis') or arguments.get('repairs'))
+                if 'repairs' in arguments:
+                    references.update(referenced_fact_ids((state.get('repair') or {}).get('base')))
+                citations.update(store.referenced_citations(project_id, scope, references - citations.keys()))
+        return self.design.propose(project_id, arguments, citations=citations)
 
     def _design_confirmation(self, _context, arguments):
         return self.design.confirm(self._new_design_project(), **arguments)
@@ -239,7 +315,8 @@ class EngineeringSession:
                 if 'st_text' in arguments:
                     raise ValueError('Provide st_text (do not pass both st_text and st_code)')
                 arguments['st_text'] = arguments.pop('st_code')
-            digest = canonical_hash({"name": call.name, "arguments": arguments})
+            digest = canonical_hash({"name": call.name, "arguments": arguments,
+                                     **({'defer_read': True} if call.defer_read else {})})
         except ValueError as error:
             return self._error(call, "INVALID_ARGUMENTS", str(error))
         try:
@@ -265,7 +342,8 @@ class EngineeringSession:
             with self._call_lock:
                 if self._closed:
                     return self._error(call, 'SESSION_CLOSED', 'The engineering session is closed')
-                if self.project_id and (call.name == 'get_generation_context' or new_candidate(call.name, arguments)):
+                if (self.project_id and not getattr(self, 'host_direct', False)
+                        and (call.name == 'get_generation_context' or new_candidate(call.name, arguments))):
                     self.design.guard_generation(self.project_id, arguments, tool_name=call.name)
                 # Inspection never initializes a writer, migrates projects, or
                 # inherits an execution approval merely to read a source.
@@ -275,6 +353,9 @@ class EngineeringSession:
                                    or bool(arguments.get("source_ref")))
                     context = (build_tool_context({}) if independent or not self.project_id else
                                self.service.projects.invocation_context(self.project_id, self.version_id, call.name))
+                    if not independent and getattr(self, 'program', None) and context.native_snapshot is not None:
+                        from application.gxw_files import source_context
+                        context = source_context(context, self.program)
                     context = replace(context, inspection=self.inspection,
                                       read_revision=self.service.projects.read_revision,
                                       operation_status=self.service.operation_status,
@@ -288,7 +369,8 @@ class EngineeringSession:
                     except ValueError as error:
                         return self._error(call, "INVALID_ARGUMENTS", str(error))
                     self._require_project()
-                self.service.start()
+                if not getattr(self, '_host_owned', False):
+                    self.service.start()
                 if not self._consent_initialized:
                     if self.approval_mode is not None:
                         self.service.update_approval_settings(mode=self.approval_mode,
@@ -304,15 +386,25 @@ class EngineeringSession:
                     envelope = saved["response"]
                 elif call.name in SESSION_TOOL_NAMES:
                     with self.service.lock.thread_lock:
+                        if getattr(self, 'before_write', None):
+                            self.before_write()
                         selected = (self.service.projects.tool_context(self._require_project(), self.version_id, requirement='model')
                                     if call.name == 'get_design_context' else None)
-                        envelope = self.registry.call(call.name, arguments, selected)
+                        if call.defer_read and selected is not None:
+                            from dataclasses import replace
+                            selected = replace(selected, defer_read=True)
+                        envelope = self.registry.call(call.name, arguments, selected, defer_read=call.defer_read)
                         if not is_cursor_read:
                             atomic_json(path, {"input_hash": digest, "response": envelope})
                 else:
                     response = self.service.agent_call({"project_id": self._require_project(),
                         "version_id": self.version_id, "name": call.name,
-                        "arguments": arguments, "call_id": call.id}, direct_request=True, observe_client=False)
+                        "arguments": arguments, "call_id": call.id,
+                        **({'defer_read': True} if call.defer_read else {}),
+                        **({'change_scope': self.change_scope} if getattr(self, 'change_scope', None) else {}),
+                        **({'program': self.program} if getattr(self, 'program', None) else {})},
+                        direct_request=True, observe_client=False, before_write=getattr(self, 'before_write', None),
+                        **({'direct_input': self.direct_input} if getattr(self, 'direct_input', None) is not None else {}))
                     # Wait only for this operation's real job; retain its worker
                     # and apartment-bound native sessions for the next call.
                     if response.get('execution_job_id'):
@@ -320,6 +412,19 @@ class EngineeringSession:
                     envelope = self._completed_response(response)
                     if not is_cursor_read:
                         atomic_json(path, {"input_hash": digest, "response": envelope})
+                if not call.defer_read and call.name == 'get_design_context' and envelope.get('ok') and self.design.separate_tasks:
+                    delivery = (envelope.get('data') or {}).get('delivery') or {}
+                    store = self.registry._read_delivery
+                    if store is not None and delivery.get('complete'):
+                        analysis_id = store.completed_design(delivery['document_id'])
+                        if analysis_id:
+                            with self.service.lock.thread_lock:
+                                self.design.mark_read_complete(self.project_id, analysis_id,
+                                    citations=store.design_citations(analysis_id))
+                if not call.defer_read and call.name == 'search_plc_manual' and envelope.get('ok'):
+                    delivery = (envelope.get('data') or {}).get('delivery') or {}
+                    if delivery.get('complete') and delivery.get('document_id'):
+                        self._manual_reads.setdefault(self.project_id, set()).add(delivery['document_id'])
             if call.name == 'get_design_context' and envelope.get('ok'):
                 from application.read_delivery import PreparedReadEnvelope
                 envelope = PreparedReadEnvelope(envelope)
@@ -343,7 +448,8 @@ class EngineeringSession:
         with self._call_lock:
             if not self._closed:
                 self._closed = True
-                self.service.close()
+                if not getattr(self, '_host_owned', False):
+                    self.service.close()
 
     shutdown = close
 
@@ -368,16 +474,39 @@ class EngineeringSession:
         result = proposal.get("result") or {}
         if result.get('version_id') is not None:
             envelope['version_id'] = result['version_id']
+        if proposal['action'] in {'spec_update', 'spec_confirm'}:
+            envelope['status'] = 'saved' if proposal['status'] == 'accepted' else proposal['status']
+            if proposal['status'] == 'accepted':
+                data.clear()
+                data.update(self.service.project_commands.get_spec_document(self._require_project(), self.version_id))
+                data.update(proposal_id=proposal_id, proposal_status='accepted', requires_confirmation=False)
+            elif proposal['status'] == 'pending':
+                data['message'] = 'Specification change awaits approval in the workbench.'
+            else:
+                envelope['ok'] = False
+            return envelope
         if proposal["action"] == "accept_local" and proposal["status"] == "accepted":
-            diagnostic = result.get('status') == 'saved_native_diagnostic'
-            envelope["status"] = 'saved_native_diagnostic' if diagnostic else 'saved'
+            status = result.get('status')
+            envelope["status"] = status if status in {'saved_native_diagnostic', 'saved_behavior_draft'} else 'saved'
             data.update(requires_confirmation=False, version_id=result["version_id"], save_result=result)
             saved = self.service.projects.raw_version(self.project_id, result['version_id'])
             data.update(delivery=saved.get('delivery'), validation=saved.get('validation'))
+            for key in ('program_size', 'behavior_result', 'behavior_check'):
+                if key in saved:
+                    data[key] = copy.deepcopy(saved[key])
+            data['activation_blocked'] = bool(saved.get('activation_blocked'))
             data['artifacts'] = self._version_artifacts(self.project_id, result['version_id'])['artifacts']
-            data["message"] = (
-                "GXW candidate and diagnostics saved; native validation failed and this version was not activated."
-                if diagnostic else "Validated local version saved by the shared application transaction.")
+            data["message"] = {
+                'saved_native_diagnostic': "Candidate saved with native compilation diagnostics. Activation is blocked.",
+                'saved_behavior_draft': "Candidate saved with validation findings. Activation is blocked.",
+            }.get(status, "Local version saved. See validation and behavior results for the checks performed.")
+            if saved.get('target_mode') == 'ladder':
+                data['continuation'] = {
+                    'version_id': result['version_id'],
+                    'tool': 'get_generation_context', 'arguments': {},
+                    'instructions': 'For a correction, read the saved version edit context with only the change request. '
+                                    'Reuse previously read manuals; do not resubmit the original generation receipt. '
+                                    'Canonical ladder edits retain compact syntax and accept partial rungs.'}
             data.pop("pending_action", None)
         elif proposal["status"] == "pending":
             envelope["status"] = "execution_consent_required"

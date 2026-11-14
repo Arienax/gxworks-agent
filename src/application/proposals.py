@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Durable, explicitly approved engineering actions with private frozen inputs."""
 
@@ -15,7 +15,7 @@ from .workspace import (ConflictError, artifact_relative_path, atomic_json, bind
                         private_state_dir, public_payload, read_json, record_id)
 
 
-_ACTIONS = frozenset({"accept_local", "gx_import", "simulation", "debug", "native_engineering"})
+_ACTIONS = frozenset({"accept_local", "gx_import", "simulation", "debug", "native_engineering", "spec_update", "spec_confirm"})
 _PUBLIC = ("id", "action", "project_id", "base_version_id", "status", "created_at",
            "updated_at", "summary", "result", "error_code")
 
@@ -23,9 +23,9 @@ _PUBLIC = ("id", "action", "project_id", "base_version_id", "status", "created_a
 class ProposalService:
     def __init__(self, store, state_dir, writer_lock):
         self.store, self.lock = store, writer_lock
-        self.lock.require_acquired()
+        self.lock.require_open()
         if Path(store.base_dir).resolve() != self.lock.workspace:
-            raise ValueError("Proposal store must match the locked workspace")
+            raise ValueError("Proposal store must match its workspace")
         self.state_dir = bind_workspace_state(state_dir, self.lock.workspace)
         self.directory = contained(self.state_dir / "proposals", self.state_dir)
         self.directory.mkdir(exist_ok=True)
@@ -46,7 +46,7 @@ class ProposalService:
         return record
 
     def _save(self, record):
-        self.lock.require_acquired()
+        self.lock.require_open()
         record["updated_at"] = utc_now()
         revision = int(record.get("revision") or 0) + 1
         atomic_json(contained(self.directory / (record_id(record["id"]) + ".json"), self.directory),
@@ -172,7 +172,7 @@ class ProposalService:
         elif payload.get("target_mode") == "sfc" and 'gxw' in manifest:
             from .sfc import validate_candidate
             validate_candidate({name: data for name, _relative, data in prepared})
-        elif payload.get("target_mode") == "st" and 'gxw' in manifest:
+        elif payload.get("target_mode") == "st":
             from .native_st import validate_candidate
             if not isinstance(payload.get('metadata'), dict) or not isinstance(payload.get('plc_model'), str):
                 raise ValueError('Native ST candidate requires explicit source metadata and PLC model')
@@ -204,7 +204,7 @@ class ProposalService:
         selected = base_version_id or payload.get("base_version_id") or payload.get("version_id") or None
         digest = canonical_hash({"action": action, "project_id": project_id, "base_version_id": selected, "payload": payload})
         with self.lock.thread_lock:
-            self.lock.require_acquired()
+            self.lock.require_open()
             if request_id is not None:
                 for path in self.directory.glob("*.json"):
                     prior = self._load(path.stem)
@@ -317,7 +317,7 @@ class ProposalService:
 
     def accept(self, proposal_id, executor=None, *, approved_by="user", approval_mode=None):
         with self.lock.thread_lock:
-            self.lock.require_acquired()
+            self.lock.require_open()
             record = self._load(proposal_id)
             if record["status"] in {"accepted", "failed"}:
                 return self._public(record)
@@ -373,7 +373,11 @@ class ProposalService:
         project_id, base_id = record["project_id"], record["base_version_id"]
         if "_candidate_ir" in payload and base_id:
             version = accept_candidate_patch(self.store, payload)
-            return {"version_id": version["id"], "status": 'saved_behavior_draft' if version.get('activation_blocked') else "accepted", "target_mode": "ladder"}
+            status = 'accepted'
+            if version.get('activation_blocked'):
+                status = ('saved_native_diagnostic' if version.get('validation', {}).get('gx_compile') == 'failed'
+                          else 'saved_behavior_draft')
+            return {"version_id": version["id"], "status": status, "target_mode": "ladder"}
         version_id = None
         try:
             version_id, output = self.store.prepare_version(project_id)
@@ -387,6 +391,8 @@ class ProposalService:
                 metadata.update(target_mode="ladder", artifacts=compiled["artifacts"],
                                 plc_model=(candidate.get("plc") or {}).get("cpu", "FX3U"),
                                 validation_profile=validation_profile)
+                if 'program_size' in compiled:
+                    metadata['program_size'] = compiled['program_size']
                 metadata["normalization"] = copy.deepcopy(payload.get("normalization"))
                 metadata["generation_handoff"] = copy.deepcopy(payload.get("_generation_handoff"))
                 metadata["maintainability_review"] = copy.deepcopy(payload.get("maintainability_review"))
@@ -400,6 +406,8 @@ class ProposalService:
                     from plc.st_renderer import ST_RENDERER_SCHEMA_VERSION
                     metadata["st_from_ir_sha256"] = hashlib.sha256((output / compiled["artifacts"]["st_from_ir"]).read_bytes()).hexdigest()
                     metadata["st_renderer_schema_version"] = ST_RENDERER_SCHEMA_VERSION
+                elif compiled.get("st_translation"):
+                    metadata["st_translation"] = compiled["st_translation"]
             else:
                 root = contained(Path(payload["staging_dir"]), self.directory)
                 artifacts = {}
@@ -412,7 +420,8 @@ class ProposalService:
                     destination.write_bytes(data)
                     artifacts[name] = entry["path"]
                 allowed = {"summary", "validation", "plc_model", "program_name", "generation_metadata", "delivery", "delivery_requested", "validation_profile", "normalization",
-                           "generation_handoff", "maintainability_review", "semantic_validation", "behavior_result", "io_example_result", "fragment_review"}
+                           "generation_handoff", "maintainability_review", "semantic_validation", "behavior_result", "io_example_result", "fragment_review", "behavior_check",
+                           "activation_blocked", "program_size"}
                 metadata = {key: copy.deepcopy(value) for key, value in (payload.get("metadata") or {}).items() if key in allowed}
                 metadata.update(target_mode=payload["target_mode"], artifacts=artifacts, plc_model=payload.get("plc_model", "FX3U"))
                 if payload['target_mode'] == 'ladder':
@@ -423,9 +432,12 @@ class ProposalService:
                     else:
                         current = json.loads((output / artifacts['ir']).read_bytes())
                     metadata.update(self.store._ir_metadata(current))
+            if (metadata.get("behavior_result") or {}).get("status") == "mismatch":
+                metadata["activation_blocked"] = True
             metadata.update(summary=metadata.get("summary") or record.get("summary", {}).get("summary") or "已校验的程序",
                             parent_version_id=base_id, source_candidate_id=payload.get("candidate_id", record["id"]),
-                            lifecycle_status="accepted", confirmed_spec_snapshot=copy.deepcopy(payload.get("_confirmed_spec")))
+                            lifecycle_status="diagnostic" if metadata.get("activation_blocked") else "accepted",
+                            confirmed_spec_snapshot=copy.deepcopy(payload.get("_confirmed_spec")))
             from plc.ir import canonical_sha256
             metadata["confirmed_spec_hash"] = canonical_sha256(payload["_confirmed_spec"]) if payload.get("_confirmed_spec") is not None else None
             if record['action'] == 'native_engineering':
@@ -453,7 +465,7 @@ class ProposalService:
         frozen staging and version transaction as ordinary local candidates.
         """
         with self.lock.thread_lock:
-            self.lock.require_acquired()
+            self.lock.require_open()
             record = self._load(proposal_id)
             if record['action'] != 'native_engineering' or record['status'] != 'executing':
                 raise ConflictError('A native result requires its executing approved proposal')

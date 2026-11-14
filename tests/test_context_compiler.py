@@ -23,6 +23,8 @@ def wire_context(messages):
         content = message.get('content') if isinstance(message, dict) else message.content
         if role != 'user':
             continue
+        if isinstance(content, list):
+            content = ''.join(part.get('text', '') for part in content if part.get('type') == 'input_text')
         try:
             document = json.loads(content)
         except (ValueError, TypeError):
@@ -46,11 +48,15 @@ def test_discovery_deduplicates_atomic_units_without_budget_omissions(monkeypatc
     source = KnowledgeContext(block + "\n\n" + block)
     context = augment_generation_knowledge("循环", source, token_budget=700)
     discovery = context.manifest["capability_discovery"]
-    assert estimate_tokens(context) > 700
+    # Ignoring the legacy budget means identical complete units, not a
+    # minimum prompt size that forces duplicated metadata to remain present.
+    tiny_budget = augment_generation_knowledge("循环", source, token_budget=1)
+    assert context == tiny_budget
     assert discovery["deduplicated_units"] == 1
     assert str(context).count('Complete fact') == 1
     assert '"id":"existing"' not in context
-    assert not discovery["omitted_candidates"]
+    assert discovery["omitted_candidates"] == tiny_budget.manifest["capability_discovery"]["omitted_candidates"]
+    assert set(discovery["included_candidates"] + discovery["omitted_candidates"]) == {c['id'] for c in cards}
     assert discovery["included_candidates"]
     receipt = reconcile_discovery(discovery, block)
     assert not receipt["included_candidates"]

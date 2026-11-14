@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Offline initialize -> tools/list -> tools/call against the actual stdio CLI.
 
@@ -23,20 +23,23 @@ from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
 from agent_runtime.plc_tools import FORBIDDEN_TOOL_NAMES, SAFE_TOOL_NAMES
+from application.context_units import RESTORE_TOOL
 from plc.core import PLCCore
 from plc.ir import build_plc_ir, ir_to_ladder
 from application.session import ProjectSession
+from storage.session import SessionStore
 
 
 async def read_context(client, arguments):
-    from application.read_delivery import assemble_read_pages, serialized_size
+    from application.read_delivery import assemble_read_pages, read_limits, serialized_size
     pages = []
     while True:
         result = await client.call_tool('get_generation_context', arguments)
         page = json.loads(result.content[0].text)
         assert not result.is_error, page
         size = serialized_size(result.model_dump(by_alias=True, exclude_none=True))
-        assert size['estimated_tokens'] <= 6000 and size['utf8_bytes'] <= 32768
+        max_tokens, max_bytes = read_limits(page)
+        assert size['estimated_tokens'] <= max_tokens and size['utf8_bytes'] <= max_bytes
         pages.append(page)
         next_read = page['data']['delivery']['next']
         if next_read is None:
@@ -79,7 +82,7 @@ async def smoke() -> dict:
                     initialized = await client.initialize()
                     tools = (await client.list_tools()).tools
                     names = {tool.name for tool in tools}
-                    assert names == set(SAFE_TOOL_NAMES)
+                    assert names == set(SAFE_TOOL_NAMES) | {RESTORE_TOOL}
                     assert not names & FORBIDDEN_TOOL_NAMES
                     result = await client.call_tool("read_network", {"network_id": "N0001"})
                     assert not result.is_error
@@ -112,7 +115,7 @@ async def smoke() -> dict:
             async with stdio_client(parameters) as streams:
                 async with ClientSession(*streams, read_timeout_seconds=10) as client:
                     await client.initialize()
-                    assert {tool.name for tool in (await client.list_tools()).tools} == set(SAFE_TOOL_NAMES)
+                    assert {tool.name for tool in (await client.list_tools()).tools} == set(SAFE_TOOL_NAMES) | {RESTORE_TOOL}
                     context = await read_context(client, {})
                     assert context["project_id"] == new_project["id"]
                     assert context["output_contract"]["format"] == "ladder_v1"
@@ -164,7 +167,7 @@ async def local_smoke(launcher=None) -> dict:
                 async with ClientSession(*streams) as client:
                     initialized = await client.initialize()
                     names = {tool.name for tool in (await client.list_tools()).tools}
-                    assert names == set(SAFE_TOOL_NAMES) | set(SESSION_TOOL_NAMES)
+                    assert names == set(SAFE_TOOL_NAMES) | {RESTORE_TOOL} | set(SESSION_TOOL_NAMES)
                     created = await client.call_tool("create_project", {
                         "name": "Independent smoke", "plc_model": "FX3U", "target_mode": "ladder"})
                     assert not created.is_error, created.structured_content

@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { cva } from "class-variance-authority";
@@ -28,6 +28,10 @@ export function Button({
   variant?: "primary" | "secondary" | "ghost" | "danger";
 }) {
   return <button className={cn(button({ variant }), className)} {...props} />;
+}
+export function DownloadButton({ href, disabled, children }: { href: string; disabled?: boolean; children: ReactNode }) {
+  return disabled ? <Button disabled>{children}</Button>
+    : <a className={button({ variant: "secondary" })} href={href} download>{children}</a>;
 }
 export function Modal({
   open,

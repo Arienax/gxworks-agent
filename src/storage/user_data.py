@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Stable settings paths and recoverable, copy-once legacy migration.
 
@@ -22,7 +22,9 @@ import sys
 import tempfile
 import time
 
-APP_DIR = "PLC-AI-Studio"
+from shared.paths import APP_DIR
+
+LEGACY_APP_DIR = "PLC-AI-Studio"
 OBSERVATIONS = "model-observations.sqlite"
 PENDING = ".settings-pending"
 RECEIPT = ".settings-migration.json"
@@ -55,6 +57,12 @@ def user_data_dir():
         value = os.environ.get("XDG_CONFIG_HOME", "").strip()
         root = Path(value) if value and Path(value).is_absolute() else Path.home() / ".config"
     return root / APP_DIR
+
+
+def legacy_user_data_dir():
+    if not os.environ.get("PLC_AI_DATA_DIR", "").strip():
+        return user_data_dir().with_name(LEGACY_APP_DIR)
+    return None
 
 
 def config_path():

@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import {
   ArrowUp,
@@ -17,7 +17,7 @@ import { SelectMenu } from "../components/SelectMenu";
 import { Button } from "../components/ui";
 import { approvalLabels } from "../features/ApprovalSettings";
 import { ConversationControls } from "../features/ConversationControls";
-import { ModelSwitcher } from "../features/ModelUsage";
+import { ComposerTokenUsage, ModelSwitcher } from "../features/ModelUsage";
 import type { WorkbenchModel } from "./useWorkbenchController";
 
 
@@ -29,6 +29,7 @@ export const composerPanelFields = [
   "canSubmit",
   "canWrite",
   "composerRoute",
+  "conversationId",
   "editAction",
   "guarded",
   "gxwImport",
@@ -58,7 +59,7 @@ export const composerPanelFields = [
   "setText",
   "setWorkflow",
   "settings",
-  "submitJob",
+  "submitMessage",
   "t",
   "task",
   "text",
@@ -79,6 +80,7 @@ export function ComposerPanel(props: Props) {
     canSubmit,
     canWrite,
     composerRoute,
+    conversationId,
     editAction,
     guarded,
     gxwImport,
@@ -108,7 +110,7 @@ export function ComposerPanel(props: Props) {
     setText,
     setWorkflow,
     settings,
-    submitJob,
+    submitMessage,
     t,
     task,
     text,
@@ -122,7 +124,7 @@ export function ComposerPanel(props: Props) {
   const dragDepth = useRef(0);
   const [dragging, setDragging] = useState(false);
   const [scopeOpen, setScopeOpen] = useState(scopeEnabled);
-  const scoped = version?.target_mode === "ladder" && task === "edit" && editAction === "edit";
+  const scoped = !answeringDirect && version?.target_mode === "ladder" && task === "edit" && editAction === "edit";
   useEffect(() => {
     const area = textArea.current;
     if (!area) return;
@@ -162,11 +164,11 @@ export function ComposerPanel(props: Props) {
         onKeyDown={(event) => {
           if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && canSubmit) {
             event.preventDefault();
-            void guarded(() => submitJob());
+            void guarded(submitMessage);
           }
         }}
       >
-        {(gxwSource.available || scoped) && (
+        {!answeringDirect && (gxwSource.available || scoped) && (
           <div className="composer-context">
             {gxwSource.available && (
               <span className="gxw-source">
@@ -242,7 +244,7 @@ export function ComposerPanel(props: Props) {
             </div>
           </div>
         )}
-        {task !== "question" && attachments.length > 0 && (
+        {(answeringDirect || task !== "question") && attachments.length > 0 && (
           <div className="attachment-chips">
             {attachments.map((a) => (
               <button
@@ -297,7 +299,7 @@ export function ComposerPanel(props: Props) {
               <Button
                 variant="ghost"
                 aria-label={t("添加图片")}
-                disabled={!canWrite || !pid || task === "question" || !composerRoute.requiresText}
+                disabled={!canWrite || !pid || (!answeringDirect && task === "question") || !composerRoute.requiresText}
                 onClick={() => uploadRef.current?.click()}
               >
                 <ImagePlus size={15} />{t("添加图片")}
@@ -323,7 +325,7 @@ export function ComposerPanel(props: Props) {
                 setWorkflow("review");
                 setReviewRequested(true);
               }}
-              disabled={!canWrite || jobs.some(activeJob)}
+              disabled={answeringDirect || !canWrite || jobs.some(activeJob)}
               locale={locale}
               t={t}
             />
@@ -359,7 +361,7 @@ export function ComposerPanel(props: Props) {
               title={`${t(composerRoute.submitLabel)} · Ctrl ↵`}
               aria-label={t(composerRoute.submitLabel)}
               disabled={!canSubmit}
-              onClick={() => void guarded(() => submitJob())}
+              onClick={() => void guarded(submitMessage)}
             >
               <ArrowUp size={15} />
               <span>{t(composerRoute.submitLabel)}</span>
@@ -367,10 +369,13 @@ export function ComposerPanel(props: Props) {
           </div>
         </div>
       </div>
-      <p className="gxw-drop-hint">
-        {t(dragging ? "松开以检查 GXW 工程" : "可将 GXW 工程拖到这里，或选择文件导入。")}
-        <span className="muted"> · Ctrl ↵</span>
-      </p>
+      <div className="composer-footer">
+        <p className="gxw-drop-hint">
+          {t(dragging ? "松开以检查 GXW 工程" : "可将 GXW 工程拖到这里，或选择文件导入。")}
+          <span className="muted"> · Ctrl ↵</span>
+        </p>
+        <ComposerTokenUsage jobs={jobs} projectId={pid} conversationId={conversationId} locale={locale} t={t} />
+      </div>
     </>
   );
 }

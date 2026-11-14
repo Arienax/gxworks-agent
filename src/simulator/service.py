@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Version-bound high-level simulator service."""
 
@@ -10,6 +10,7 @@ from typing import Any, Callable, Mapping, Optional
 from .api import run_regression_suite
 from .models import normalize_test_suite
 from .verification import execution_binding, require_matching_binding
+from plc.device_policy import device_address, DevicePolicyError
 
 
 class SimulatorRegressionService:
@@ -49,6 +50,9 @@ class SimulatorRegressionService:
 
         preparation = None
         if self.preparer is not None:
+            select_model = getattr(self.preparer, 'select_model', None)
+            if callable(select_model):
+                select_model(plc_model)
             preparation = (
                 self.preparer.prepare(progress=progress)
                 if progress is not None
@@ -104,8 +108,9 @@ class SimulatorRegressionService:
             if not (metadata.get("written_by") or []):
                 continue
             normalized_address = str(address or "").upper()
-            suffix = normalized_address[len(kind) :]
-            if kind in {"M", "D"} and suffix.isdigit() and int(suffix) >= 8000:
+            try:
+                device_address(normalized_address, plc_model, access='reset', native=True, simulator=True)
+            except DevicePolicyError:
                 continue
             reset_devices.append(normalized_address)
         result = run_regression_suite(

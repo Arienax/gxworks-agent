@@ -1,8 +1,9 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import json
 import re
+from collections.abc import Mapping
 from plc.ladder_facts import (TIMER_CYCLIC_INTENT_RE, flatten_inputs as _flatten_input_elements,
     timer_descriptive_text as _timer_descriptive_text, same_scan_toggle_findings, always_on_inputs)
 
@@ -25,16 +26,27 @@ from plc.device_profiles import (
 DEVICE_ADDRESS_RE = re.compile(
     r"^(ZR|ER|SM|SD|SB|SW|ST|TC|TS|TN|CC|CS|CN|X|Y|M|D|T|C|S|L|F|B|W|R|V|Z)([0-9A-F]+)(?:\.([0-9A-F]+))?$", re.IGNORECASE
 )
+from plc.device_identity import (
+    INDEXABLE_DEC_PREFIXES,
+    INDEXABLE_HEX_PREFIXES,
+    INDEXED_BASE_PATTERN,
+)
+from plc.device_profiles import device_address_rules as _device_address_rules
+
 INDEXED_DEVICE_ADDRESS_RE = re.compile(
-    r"^(?P<base>(?:SM|SD|X|Y|M|D|T|C|S)\d+)(?P<index>[VZ]\d*)$",
+    rf"^(?P<base>{INDEXED_BASE_PATTERN})(?P<index>[VZ]\d*)$",
     re.IGNORECASE,
 )
 INDEXED_DEVICE_TOKEN_RE = re.compile(
-    r"(?<![A-Z0-9_])(?:SM|SD|X|Y|M|D|T|C|S)\d+[VZ]\d*(?![A-Z0-9_])",
+    rf"(?<![A-Z0-9_]){INDEXED_BASE_PATTERN}[VZ]\d*(?![A-Z0-9_])",
     re.IGNORECASE,
 )
 DEVICE_TOKEN_RE = re.compile(
-    r"(?<![A-Z0-9_])(?:SM|SD|X|Y|M|D|T|C|S|V|Z)\d+(?![A-Z0-9_])",
+    r"(?<![A-Z0-9_])(?:(?:"
+    + "|".join(INDEXABLE_HEX_PREFIXES)
+    + r")[0-9A-F]+|(?:"
+    + "|".join(INDEXABLE_DEC_PREFIXES + ("Z",))
+    + r")\d+)(?![A-Z0-9_])",
     re.IGNORECASE,
 )
 
@@ -142,6 +154,7 @@ def should_auto_repair_validation_error(error):
 
 def _fail(path, message, *, observed_opcode=None):
     error = PLCJsonValidationError(f"{path}: {message}")
+    error.path = path
     if isinstance(observed_opcode, str) and observed_opcode:
         error.observed_opcode = observed_opcode
     raise error
@@ -238,6 +251,15 @@ def parse_device_reference(value, plc_model="FX3U"):
             'text': text}
 
 
+def _index_register_prefixes(plc_model="FX3U"):
+    """Return allowed index-register prefixes (V+Z on FX, Z on Q/L/FX5)."""
+    rules = _device_address_rules(normalize_plc_model(plc_model)).get("families", {})
+    prefixes = {"Z"}
+    if rules.get("V", {}).get("value_type") == "word":
+        prefixes.add("V")
+    return frozenset(prefixes)
+
+
 def parse_indexed_device_address(value, plc_model="FX3U"):
     """Parse an FX-style indexed operand such as ``D100Z0``.
 
@@ -254,9 +276,16 @@ def parse_indexed_device_address(value, plc_model="FX3U"):
         return None
     base_text = match.group("base").upper()
     index_text = match.group("index").upper()
+    index_prefixes = _index_register_prefixes(model)
     base = parse_device_address(base_text, model)
     index = parse_device_address(index_text, model)
-    if base is None or index is None or index[0] not in {"V", "Z"} or is_bit_device(index_text, model):
+    if (
+        base is None
+        or index is None
+        or base[0] in index_prefixes
+        or index[0] not in index_prefixes
+        or is_bit_device(index_text, model)
+    ):
         return None
     return {
         "base_text": base_text,
@@ -300,11 +329,15 @@ def _validate_indexed_device_address(value, path, plc_model="FX3U"):
     match = INDEXED_DEVICE_ADDRESS_RE.fullmatch(value.strip())
     if not match:
         return None
+    model = normalize_plc_model(plc_model)
     base_text = match.group("base").upper()
     index_text = match.group("index").upper()
-    _validate_device_address(base_text, path, plc_model)
+    index_prefixes = _index_register_prefixes(model)
+    parsed_base = _validate_device_address(base_text, path, plc_model)
+    if parsed_base[0] in index_prefixes:
+        _fail(path, f"{model} index register {base_text} cannot be index-modified")
     _validate_device_address(
-        index_text, path, plc_model, expected_prefixes={"V", "Z"}
+        index_text, path, plc_model, expected_prefixes=index_prefixes
     )
     return {"base_text": base_text, "index_text": index_text}
 
@@ -372,6 +405,7 @@ def _validate_writable_device(value, path, plc_model="FX3U", *, opcode=None, all
     if not isinstance(value, str):
         return
     address = value.strip().upper()
+    model = normalize_plc_model(plc_model)
     # Write roles are known even when the catalogue has no verified operand
     # type table. A literal is never storage; K4M100 remains a valid bit group.
     if re.fullmatch(r'(?:K[+-]?\d+|H[0-9A-F]+)', address):
@@ -387,7 +421,18 @@ def _validate_writable_device(value, path, plc_model="FX3U", *, opcode=None, all
         from plc.device_identity import REFERENCE_DEVICE_TOKEN_RE
         if not (REFERENCE_DEVICE_TOKEN_RE.fullmatch(address) or INDEXED_DEVICE_ADDRESS_RE.fullmatch(address)):
             _fail(path, 'Expected a writable device operand')
-    model = normalize_plc_model(plc_model)
+        if INDEXED_DEVICE_ADDRESS_RE.fullmatch(address):
+            base_match = DEVICE_ADDRESS_RE.fullmatch(_operand_base_device(address))
+            if (
+                base_match
+                and (
+                    model not in SOURCE_DEVICE_PROFILES
+                    or SOURCE_DEVICE_PROFILES[model].get('address_families_complete')
+                    or base_match.group(1).upper() in DEVICE_LIMITS.get(model, {})
+                )
+                and parse_indexed_device_address(address, model) is None
+            ):
+                _fail(path, 'Expected a writable device operand')
     match = DEVICE_ADDRESS_RE.fullmatch(_operand_base_device(address))
     if match and match.group(1) == "X":
         from plc.target_identity import target_family
@@ -418,20 +463,31 @@ def _validate_writable_device(value, path, plc_model="FX3U", *, opcode=None, all
 
 
 def _validate_app_instruction_write_targets(
-    opcode, operands, path, plc_model="FX3U", *, allow_unverified=False, source_spec=None
+    opcode, operands, path, plc_model="FX3U", *, allow_unverified=False, source_spec=None, allow_buffer_references=False
 ):
-    spec = source_spec or DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode, cpu=normalize_plc_model(plc_model))
+    spec = source_spec or DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode, cpu=normalize_plc_model(plc_model),
+                                                operand_count=len(operands))
     indexes = spec.write_indexes if spec is not None else ()
     for operand_idx in indexes:
         if operand_idx >= len(operands):
             continue
-        _validate_writable_device(
-            operands[operand_idx],
-            f"{path}.operands[{operand_idx}]",
-            plc_model,
-            opcode=opcode,
-            allow_unverified=allow_unverified,
-        )
+        from plc.device_identity import digit_specified_operand_devices, digit_specified_operand_reference
+        operand = operands[operand_idx]
+        definition = spec.operands[operand_idx] if operand_idx < len(spec.operands) else None
+        if allow_buffer_references:
+            from plc.ordered_source import buffer_memory_reference
+            if buffer_memory_reference(operand):
+                continue
+        if _validate_reviewed_buffer_operand(spec, definition, operand,
+                                             f"{path}.operands[{operand_idx}]", plc_model):
+            continue
+        reference = (digit_specified_operand_reference(operand, plc_model, maximum_groups=definition.digit_groups_max)
+                     if definition and definition.digit_groups_max else None)
+        grouped = ([reference['base']] if reference and reference['indexed'] else
+                   digit_specified_operand_devices(operand, plc_model, maximum_groups=definition.digit_groups_max)
+                   if definition and definition.digit_groups_max else None)
+        for target in grouped if grouped is not None else [operand]:
+            _validate_writable_device(target, f"{path}.operands[{operand_idx}]", plc_model, opcode=opcode, allow_unverified=allow_unverified)
 
 
 def _validate_device_address(value, path, plc_model, expected_prefixes=None):
@@ -493,7 +549,8 @@ def _validate_instruction_boundaries(spec, operands, path, plc_model="FX3U", *, 
     coverage = spec.contract_coverage()
     if coverage.get("numeric_and_memory_boundaries") != "source_verified":
         from plc.instruction_constraints import check_instruction_constraints, literal_operand_values
-        report = check_instruction_constraints(opcode or spec.mnemonic, literal_operand_values(spec, operands),
+        report = check_instruction_constraints(opcode or spec.mnemonic,
+                                               literal_operand_values(spec, operands, plc_model=plc_model, opcode=opcode),
                                                plc_model=plc_model, language=language,
                                                context={'project_mode': 'native_ladder' if language == 'ladder' else language,
                                                         'program_context': language})
@@ -570,7 +627,8 @@ def _validate_instruction_boundaries(spec, operands, path, plc_model="FX3U", *, 
             f"{spec.mnemonic} {rule.label} constant must be {limit}{unit}",
         )
     from plc.instruction_constraints import check_instruction_constraints, literal_operand_values
-    report = check_instruction_constraints(opcode or spec.mnemonic, literal_operand_values(spec, operands),
+    report = check_instruction_constraints(opcode or spec.mnemonic,
+                                           literal_operand_values(spec, operands, plc_model=plc_model, opcode=opcode),
                                            plc_model=plc_model, language=language,
                                            context={'project_mode': 'native_ladder' if language == 'ladder' else language,
                                                     'program_context': language})
@@ -596,15 +654,476 @@ def _validate_operand_token(value, path):
         _fail(path, f'invalid operand token {value!r}')
 
 
+def _validate_reviewed_buffer_operand(spec, definition, value, path, plc_model):
+    """Check a source-authorized address form, without certifying module setup."""
+    if (spec is None or definition is None or not isinstance(value, str) or '\\' not in value
+            or not definition.address_forms
+            or not {'operand_types', 'device_classes'} <= set(spec.verified_fields)):
+        return False
+    if (definition.data_type not in {'any', 'word', 'dword', 'real', 'lreal', 'string'}
+            and (str(plc_model).upper().startswith('FX') or definition.data_type not in {'bit', 'bool'})):
+        _fail(path, 'Buffer-memory operands require a reviewed word value type')
+    from plc.device_identity import external_operand_reference
+    if not str(plc_model).upper().startswith('FX'):
+        reference = external_operand_reference(value, plc_model)
+        if reference is None:
+            _fail(path, 'External operand is outside the existing Q/L storage grammar')
+        if reference['form'] not in definition.address_forms:
+            _fail(path, 'External address form is not source-authorized for this operand')
+        limits = dict(dict(definition.address_form_limits).get(reference['form'], ()))
+        default_prefixes = ('G',) if reference['form'] == 'buffer_memory' else ()
+        if reference['device_prefix'] not in limits.get('allowed_device_prefixes', default_prefixes):
+            _fail(path, 'External device class is not source-authorized for this operand')
+        groups = reference.get('digit_groups', 0)
+        if definition.data_type in {'bit', 'bool'} and (groups or not reference.get('bit_device')):
+            _fail(path, 'A bit operand requires one external bit device or an explicit word-bit selector')
+        if definition.data_type in {'bit', 'bool'} and any(
+                item['kind'] == 'ZZ' for item in reference.get('index_components', ())):
+            _fail(path, 'External bit ZZ indexing requires its own reviewed CPU/project context')
+        if groups and groups > definition.digit_groups_max:
+            _fail(path, 'External digit specification exceeds the source-verified width')
+        if (not groups and reference.get('bit_device')
+                and definition.data_type in {'word', 'dword', 'real', 'lreal'}):
+            _fail(path, 'A word operand requires an explicit digit specification for external bit devices')
+        if reference['address'] > limits.get('maximum_base_address', reference['address']):
+            _fail(path, 'External head address exceeds the source-verified maximum')
+        for register in reference['index_registers']:
+            _validate_device_address(register, path, plc_model, expected_prefixes={'Z'})
+        # The shared codec proves the stored spelling. Module/network setup
+        # and the effective indexed allocation remain project requirements.
+        return True
+    if 'buffer_memory' not in definition.address_forms:
+        _fail(path, 'This FX operand does not authorize buffer memory')
+    from plc.storage.errors import StorageRuleError
+    from plc.storage.operands_fx import buffer_memory_operand
+    from plc.storage.tables import storage_profile
+    try:
+        if storage_profile(plc_model) not in {'fx', 'fx3u', 'fx1s', 'fx3g'}:
+            raise StorageRuleError('This CPU has no reviewed buffer-memory operand grammar')
+        reference = buffer_memory_operand(value.strip().upper(), point_count=definition.device_point_count)
+    except StorageRuleError as error:
+        _fail(path, str(error))
+    limits = dict(dict(definition.address_form_limits).get('buffer_memory', ()))
+    if 'allowed_device_prefixes' in limits and 'G' not in limits['allowed_device_prefixes']:
+        _fail(path, 'Buffer-memory device class is not source-authorized for this operand')
+    if reference['address'] > limits.get('maximum_base_address', 32767):
+        _fail(path, 'Buffer-memory head address exceeds the source-verified maximum')
+    base = f"U{reference['unit']}\\G{reference['address']}"
+    if definition.allowed_devices and base not in definition.allowed_devices:
+        _fail(path, f'{spec.mnemonic} requires one of {list(definition.allowed_devices)}')
+    if reference['index']:
+        _validate_device_address(reference['index'] + str(reference['index_number']), path,
+                                 plc_model, expected_prefixes={'V', 'Z'})
+    # The lexical range is not a configured buffer allocation or a proof that
+    # the selected module accepts this access; those remain hardware conditions.
+    return True
+
+
+def _validate_program_pointer_number_domain(spec, operands, index, path, plc_model):
+    """Reject a known CPU-domain violation without granting call admission.
+
+    Legacy CALL metadata can lack a reviewed construction signature. Its own
+    sourced Pn slot still supports a numeric preflight, but a value in range
+    does not bypass any of the remaining signature or program checks.
+    """
+    if spec is None or spec.mnemonic not in {'BREAK', 'BREAKP', 'CALL', 'CALLP', 'CJ'}:
+        return False
+    from plc.device_profiles import program_pointer_domain
+    domain = program_pointer_domain(plc_model)
+    if domain is None or index >= len(operands):
+        return False
+    from plc.instructions import reviewed_native_fact_groups
+    qualified = False
+    for group in reviewed_native_fact_groups(spec, spec.mnemonic, operands, plc_model,
+                                            dimensions={'parameters.typed_operands'}):
+        native, pins = group.value.get('native_form'), group.value.get('operands')
+        if not isinstance(native, Mapping) or not isinstance(pins, list) or index >= len(pins):
+            continue
+        minimum, maximum = native.get('minimum_operands'), native.get('maximum_operands')
+        if (type(minimum) is not int or type(maximum) is not int
+                or not minimum <= len(operands) <= maximum or len(pins) != maximum
+                or not all(isinstance(pin, Mapping) for pin in pins)
+                or native.get('operand_order') != [pin.get('name') for pin in pins]):
+            continue
+        pin = pins[index]
+        expected_name = 'P' if spec.mnemonic == 'CJ' else 'Pn'
+        if (pin.get('name') == expected_name and pin.get('type') == 'POINTER' and pin.get('device_class') == 'P'
+                and pin.get('direction') == 'input' and pin.get('passing') == 'device_reference'
+                and pin.get('role') in {'branch_target', 'program_pointer'}
+                and not any(k in pin for k in ('word_device_layout', 'occupied_bit_count', 'encoding'))):
+            qualified = True
+            break
+    value = operands[index]
+    if not qualified or not isinstance(value, str) or re.fullmatch(r'P[0-9]+', value.strip(), re.I) is None:
+        return False
+    number = int(value.strip()[1:])
+    if not domain['minimum_number'] <= number <= domain['maximum_number']:
+        _fail(path, 'Program pointer number is outside the source-verified CPU domain '
+              + str(domain['minimum_number']) + '..' + str(domain['maximum_number'])
+              + '; current project allocation is a separate requirement')
+    return True
+
+
+def _validate_reviewed_direct_access_output(spec, operands, index, path, plc_model, *, parameters=None):
+    """Accept only a reviewed DY slot; this establishes no installed output range."""
+    if spec is None or index >= len(spec.operands):
+        return False
+    from plc.instructions import reviewed_native_operand_parameters, reviewed_direct_access_output_identity
+    if parameters is None:
+        parameters = reviewed_native_operand_parameters(spec, spec.mnemonic, operands, plc_model)
+    qualified = [p for p in parameters[index] if reviewed_direct_access_output_identity(p)]
+    if not qualified:
+        return False
+    definition = spec.operands[index]
+    if (not {'operand_types', 'operand_order', 'operand_roles', 'device_classes'} <= set(spec.verified_fields)
+            or definition.role.value != 'write' or definition.data_type not in {'bit', 'bool'}
+            or definition.device_prefixes != ('DY',) or definition.integer_literal_widths or definition.address_forms):
+        _fail(path, 'Direct access output requires its own reviewed DY contract')
+    from plc.device_identity import direct_access_output_reference
+    reference = direct_access_output_reference(operands[index], plc_model)
+    if reference is None:
+        _fail(path, 'Expected a source-qualified direct access output spelling')
+    if reference['index'] and not any(p.get('range', {}).get('index_modification') is True for p in qualified):
+        _fail(path, 'Indexed direct access output is not source-verified for this operand')
+    return True
+
+
+def _validate_reviewed_program_pointer(spec, operands, index, path, plc_model):
+    """Recognize a reviewed P label identity, without treating it as memory.
+
+    Label existence, CPU pointer limits and the enclosing control flow require
+    program context; lexical acceptance does not establish those conditions.
+    """
+    if spec is None or index >= len(spec.operands) or spec.operands[index].data_type != 'pointer':
+        return False
+    definition = spec.operands[index]
+    from plc.instructions import reviewed_native_operand_parameters, reviewed_program_pointer_identity
+    parameters = reviewed_native_operand_parameters(spec, spec.mnemonic, operands, plc_model)
+    qualified = (
+        {'operand_types', 'operand_order', 'operand_roles', 'device_classes'} <= set(spec.verified_fields)
+        and definition.role.value == 'read' and definition.device_prefixes == ('P',)
+        and not definition.address_forms and not definition.integer_literal_widths
+        and index < len(parameters) and any(
+            reviewed_program_pointer_identity(parameter)
+            for parameter in parameters[index]))
+    if not qualified:
+        _fail(path, 'Program pointer requires its own reviewed P-label contract')
+    if not isinstance(operands[index], str) or re.fullmatch(r'P[0-9]+', operands[index].strip(), re.I) is None:
+        _fail(path, 'Expected a direct decimal P program pointer; indexed-form validation is not established')
+    _validate_program_pointer_number_domain(spec, operands, index, path, plc_model)
+    return True
+
+
+def _validate_reviewed_remote_operand(spec, operands, index, path, plc_model, *, parameters=None):
+    """Check supported remote-name spellings without granting a remote range.
+
+    Bare operands retain the stored host grammar. Own-source file-register and
+    quoted-name exceptions can address another CPU outside the host allocation.
+    The selected CPU's device range and transfer state remain unresolved.
+    """
+    if (spec is None or index >= len(spec.operands) or index >= len(operands)
+            or spec.operands[index].data_type != 'any' or spec.operands[index].role.value != 'read'):
+        return False
+    from plc.instructions import reviewed_native_operand_parameters, reviewed_remote_device_identity
+    if parameters is None:
+        parameters = reviewed_native_operand_parameters(spec, spec.mnemonic, operands, plc_model)
+    identities = [p for p in parameters[index] if reviewed_remote_device_identity(p)
+                  and p['selector_CPU_parameter'].upper() in {name.upper() for name in spec.native_operand_order}]
+    if not identities:
+        return False
+    value = str(operands[index]).strip()
+    quoted = value.startswith(('"', "'"))
+    if quoted:
+        if re.fullmatch(r'"[^"\r\n]+"', value) is None:
+            _fail(path, 'Remote device name requires a supported double-quoted device spelling')
+        name = value[1:-1].upper()
+    else:
+        name = value.upper()
+    grouped = re.fullmatch(r'K([1-8])(.+)', name)
+    head = grouped[2] if grouped else name
+    match = DEVICE_ADDRESS_RE.fullmatch(head)
+    if match is None or match[3] is not None:
+        _fail(path, 'Expected a supported unindexed remote device name')
+    prefix, digits = match[1].upper(), match[2].upper()
+    radix = device_address_radix(prefix, plc_model)
+    if radix is None or any(char not in '0123456789ABCDEF'[:radix] for char in digits):
+        _fail(path, 'Remote device spelling is outside the supported device-name grammar')
+    number = int(digits, radix)
+    bit_prefixes = SOURCE_DEVICE_PROFILES.get(normalize_plc_model(plc_model), {}).get(
+        'bit_prefixes', ['X', 'Y', 'M', 'SM', 'S', 'T', 'C'])
+    for parameter in identities:
+        forms, limits = parameter['accepted_source_forms'], parameter.get('range', {})
+        if ('quoted_device_name' if quoted else 'device_name') not in forms:
+            _fail(path, 'Remote device spelling is not source-authorized for this operand')
+        if grouped:
+            if (int(grouped[1]) not in limits.get('digit_groups_allowed', [])
+                    or prefix not in bit_prefixes or prefix in {'T', 'ST', 'C'}):
+                _fail(path, 'Remote digit specification is not source-authorized for this operand')
+            alignment = limits.get('digit_group_start_bit_multiple')
+            if type(alignment) is int and alignment > 0 and number % alignment:
+                _fail(path, 'Remote digit-specified head is outside the source-required bit alignment')
+        elif (prefix in bit_prefixes and prefix not in {'T', 'ST', 'C'}
+                or isinstance(limits.get('device_prefixes'), list) and prefix not in limits['device_prefixes']):
+            _fail(path, 'Remote device requires a source-authorized word/file or digit-specified bit name')
+        outside_host = (parameter.get('quoted_device_outside_host_range_allowed') is True if quoted else
+                        parameter.get('direct_file_register_outside_host_range_allowed') is True
+                        and prefix in parameter.get('direct_file_register_prefixes', []))
+        if not outside_host:
+            if parse_device_address(head, plc_model) is None:
+                _fail(path, 'Remote direct device exceeds the host-addressable spelling; its remote range is not verified')
+            if grouped:
+                from plc.device_identity import digit_specified_operand_devices
+                try:
+                    digit_specified_operand_devices(name, plc_model, maximum_groups=int(grouped[1]))
+                except ValueError as error:
+                    _fail(path, str(error))
+    return True
+
+
+def _validate_reviewed_integer_literal_width(spec, index, value, path):
+    if (spec is None or 'operand_types' not in spec.verified_fields or index >= len(spec.operands)
+            or not isinstance(value, str)):
+        return
+    token = value.strip().upper()
+    if not re.fullmatch(r'K[+-]?\d+|H[0-9A-F]+', token):
+        return
+    prefix = token[0]
+    widths = dict(spec.operands[index].integer_literal_widths)
+    if widths:
+        if prefix not in widths:
+            _fail(path, "Literal prefix is not in the reviewed operand formats")
+        bits = widths[prefix]
+        bounds = (-(1 << (bits - 1)), (1 << (bits - 1)) - 1)
+    else:
+        from plc.instruction_constraints import numeric_operand_type
+        value_type = numeric_operand_type(spec, index)
+        if value_type is None or value_type.kind != 'int':
+            return
+        bits, bounds = value_type.bits, value_type.bounds
+    minimum, maximum = bounds if prefix == 'K' else (0, (1 << bits) - 1)
+    number = int(token[1:], 10 if prefix == 'K' else 16)
+    if not minimum <= number <= maximum:
+        _fail(path, f"Constant exceeds the reviewed literal width ({bits} bits, {prefix}: {minimum} to {maximum})")
+
+
 def _validate_source_operand_types(spec, operands, path, plc_model, *, allow_indexed_literals=False,
                                    allow_buffer_references=False, allow_unverified_devices=False):
     """Validate only dimensions actually reviewed for this CPU/form."""
-    if spec is None or "operand_types" not in spec.verified_fields:
+    if spec is None:
         return
+    from plc.instructions import (reviewed_native_operand_parameters, operand_numeric_bound,
+                                  reviewed_comment_device_identity, reviewed_module_selector_value)
+    from plc.device_identity import digit_specified_operand_reference
+    from plc.instruction_constraints import literal_operand_values
+    parameters = reviewed_native_operand_parameters(spec, spec.mnemonic, operands, plc_model)
+    values = literal_operand_values(spec, operands, plc_model=plc_model, opcode=spec.mnemonic)
+    for index in range(len(operands)):
+        _validate_program_pointer_number_domain(spec, operands, index, f'{path}.operands[{index}]', plc_model)
+    string_branches = set()
+    metadata_selectors = set()
+    module_selectors = set()
+
+    for index, descriptions in enumerate(parameters):
+        if _validate_reviewed_direct_access_output(spec, operands, index, f'{path}.operands[{index}]',
+                                                   plc_model, parameters=parameters):
+            metadata_selectors.add(index)
+            continue
+        if _validate_reviewed_remote_operand(spec, operands, index, f'{path}.operands[{index}]',
+                                             plc_model, parameters=parameters):
+            metadata_selectors.add(index)
+            continue
+        value = str(operands[index]).strip().upper()
+        literal = re.fullmatch(r'(K[+-]?\d+|H[0-9A-F]+)', value)
+        definition = spec.operands[index] if index < len(spec.operands) else None
+        module_value = reviewed_module_selector_value(spec, index, value, plc_model)
+        if module_value is not None:
+            if any('U' not in p.get('range', {}).get('module_selector_prefixes', ()) for p in descriptions):
+                _fail(f'{path}.operands[{index}]', 'Module selector spelling is not source-authorized for this interface')
+            module_selectors.add(index)
+        for parameter in descriptions:
+            limits = parameter.get('range', {})
+            if not isinstance(limits, Mapping):
+                continue
+            if module_value is not None:
+                # Its descriptor proves the selector spelling, not equivalence
+                # to a K/H value or the selected module's installed I/O range.
+                continue
+            address_forms = limits.get('address_forms')
+            if isinstance(address_forms, list) and '\\' in value:
+                from plc.device_identity import external_operand_reference
+                from plc.ordered_source import buffer_memory_reference
+                external = external_operand_reference(value, plc_model)
+                form = (external['form'] if external else
+                        'buffer_memory' if buffer_memory_reference(value) else None)
+                if form is not None and form not in address_forms:
+                    _fail(f'{path}.operands[{index}]', 'External address form is not source-authorized for this operand')
+            if parameter.get('index_modification_allowed') is False:
+                from plc.ordered_source import indexed_literal_register
+                if parse_indexed_device_address(value, plc_model) or indexed_literal_register(value):
+                    _fail(f'{path}.operands[{index}]', 'Index modification is not source-authorized for this operand')
+            forbidden = parameter.get('forbidden_device_prefixes', [])
+            if any(re.fullmatch(re.escape(prefix) + r'[0-9A-F]+', value) for prefix in forbidden):
+                _fail(f'{path}.operands[{index}]', 'Device class is forbidden by the source for this operand')
+            if reviewed_comment_device_identity(parameter):
+                operand_path = f'{path}.operands[{index}]'
+                indexed = parse_indexed_device_address(value, plc_model)
+                if indexed and limits.get('index_modification') is not True:
+                    _fail(operand_path, 'Indexed comment-device selection is not source-verified')
+                head = indexed['base_text'] if indexed else value
+                parsed = parse_device_address(head, plc_model)
+                if (parsed is None or '.' in head
+                        or limits.get('device_prefixes') is not None
+                        and parsed[0] not in limits['device_prefixes']):
+                    _fail(operand_path, 'Comment selector requires a source-authorized device identity in the supported CPU address grammar')
+                metadata_selectors.add(index)
+            # STRING can name character storage, independently of the type of
+            # its device head. Only the same reviewed native parameter may
+            # authorize a character literal ($ in the source setting table).
+            if (parameter.get('type') == 'STRING' and parameter.get('passing') == 'device_reference'
+                    and definition is not None and definition.data_type in {'word', 'any', 'string'}
+                    and {'operand_types', 'operand_order', 'operand_roles', 'device_classes'} <= set(spec.verified_fields)
+                    and isinstance(limits.get('device_prefixes'), list)
+                    and isinstance(limits.get('literal_prefixes'), list)):
+                operand_path = f'{path}.operands[{index}]'
+                quoted = value.startswith(('"', "'"))
+                if quoted:
+                    if (definition.role not in {'read', 'control'} or parameter.get('direction') != 'input'
+                            or '$' not in limits['literal_prefixes']
+                            or re.fullmatch(r'"[^"\r\n]*"|\'[^\'\r\n]*\'', str(operands[index]).strip()) is None):
+                        _fail(operand_path, 'Character literal is not source-authorized for this operand')
+                    string_branches.add(index)
+                    continue
+                if _validate_reviewed_buffer_operand(spec, definition, value, operand_path, plc_model):
+                    string_branches.add(index)
+                    continue
+                grouped_string = None
+                if definition.digit_groups_max and re.match(r'K\d+[A-Z]', value):
+                    try:
+                        grouped_string = digit_specified_operand_reference(
+                            value, plc_model, maximum_groups=definition.digit_groups_max)
+                    except ValueError as error:
+                        _fail(operand_path, str(error))
+                    if (not grouped_string or grouped_string['device_prefix'] not in
+                            limits.get('digit_group_device_prefixes', ())):
+                        _fail(operand_path, 'Digit-specified character storage is not source-authorized')
+                    if definition.role in {'write', 'read_write'}:
+                        _validate_writable_device(grouped_string['base'], operand_path,
+                                                  plc_model, opcode=spec.mnemonic)
+                else:
+                    indexed_string = parse_indexed_device_address(value, plc_model)
+                    string_head = indexed_string['base_text'] if indexed_string else value
+                    string_device = parse_device_address(string_head, plc_model)
+                    if (not string_device or is_bit_device(string_head, plc_model) and string_device[0] not in {'T', 'ST', 'C'}
+                            or string_device[0] not in limits['device_prefixes']):
+                        _fail(operand_path, 'Expected a source-authorized word-device character storage head')
+                    if definition.role in {'write', 'read_write'}:
+                        _validate_writable_device(value, operand_path, plc_model, opcode=spec.mnemonic)
+                string_branches.add(index)
+            from plc.ordered_source import native_real_literal
+            real_literal = (definition is not None and definition.data_type in {'real', 'lreal'}
+                            and native_real_literal(value))
+            if literal or real_literal:
+                allowed = limits.get('literal_prefixes')
+                if allowed is not None and value[0] not in allowed:
+                    _fail(f'{path}.operands[{index}]', 'Literal format is not source-authorized for this operand')
+                if allowed is None:
+                    allowed = dict(definition.integer_literal_widths) if definition is not None else {}
+                if (parameter.get('passing') == 'device_reference'
+                        and 'device_classes' in spec.verified_fields and value[0] not in allowed):
+                    _fail(f'{path}.operands[{index}]', 'Expected a storage device reference')
+                # The existing constant decoder applies the target's stored
+                # REAL representation before comparing a documented range.
+                number = (int(value[1:], 10 if value[0] == 'K' else 16) if literal
+                          else values.get('$' + str(index)))
+                layout = parameter.get('word_device_layout')
+                source_signed = (parameter.get('signed') is True
+                                 or isinstance(layout, Mapping) and layout.get('signed') is True)
+                stored = values.get('$' + str(index))
+                if literal and value.startswith('H') and source_signed and type(stored) is int:
+                    # An explicitly signed source range applies to the stored
+                    # operand value, not the unsigned spelling of its bits.
+                    number = stored
+                if type(number) not in (int, float):
+                    _fail(f'{path}.operands[{index}]', 'Real literal cannot be represented by the reviewed operand type')
+                minimum, maximum = (operand_numeric_bound(limits.get(key), values)[0]
+                                    for key in ('minimum', 'maximum'))
+                if (minimum is not None and number < minimum
+                        or maximum is not None and number > maximum):
+                    _fail(f'{path}.operands[{index}]', 'Literal is outside the source-verified operand range')
+                dependent = limits.get('maximum_by_operand')
+                if isinstance(dependent, Mapping) and isinstance(dependent.get('parameter'), str):
+                    names = [name.upper() for name in spec.native_operand_order]
+                    selected = dependent['parameter'].upper()
+                    if selected in names:
+                        from plc.device_identity import external_operand_reference
+                        head = str(operands[names.index(selected)]).strip().upper()
+                        indexed_head = parse_indexed_device_address(head, plc_model)
+                        device = parse_device_address(indexed_head['base_text'] if indexed_head else head, plc_model)
+                        external = external_operand_reference(head, plc_model)
+                        for case in dependent.get('cases', ()):
+                            if (not isinstance(case, Mapping) or type(case.get('maximum')) is not int
+                                    or not (device and device[0] in case.get('device_prefixes', ())
+                                            or external and external['form'] in case.get('address_forms', ()))):
+                                continue
+                            if number > case['maximum']:
+                                _fail(f'{path}.operands[{index}]', 'Literal exceeds the source-verified limit for the selected operand form')
+            else:
+                if parameter.get('passing') == 'device_reference' and value.startswith(('"', "'")):
+                    _fail(f'{path}.operands[{index}]', 'Expected a storage device reference')
+                digit = None
+                if definition is not None and definition.digit_groups_max and re.match(r'K\d+[A-Z]', value):
+                    try:
+                        digit = digit_specified_operand_reference(value, plc_model,
+                            maximum_groups=definition.digit_groups_max)
+                    except ValueError as error:
+                        _fail(f'{path}.operands[{index}]', str(error))
+                group_prefixes = limits.get('digit_group_device_prefixes')
+                if digit and isinstance(group_prefixes, list) and digit['device_prefix'] not in group_prefixes:
+                    _fail(f'{path}.operands[{index}]', 'Digit-specified device class is not source-authorized for this operand')
+                allowed_groups = limits.get('digit_groups_allowed')
+                if digit and isinstance(allowed_groups, list) and digit['digit_groups'] not in allowed_groups:
+                    _fail(f'{path}.operands[{index}]', 'Digit specification is not source-authorized for this operand')
+                alignment = limits.get('digit_group_start_bit_multiple')
+                if digit and type(alignment) is int and alignment > 0 and digit['address'] % alignment:
+                    _fail(f'{path}.operands[{index}]', 'Digit-specified head is outside the source-required bit alignment')
+                if not digit and limits.get('device_prefixes') == []:
+                    _fail(f'{path}.operands[{index}]', 'This operand requires a documented literal constant')
+                indexed = digit['indexed_device'] if digit else parse_indexed_device_address(value, plc_model)
+                device = parse_device_address(indexed['base_text'] if indexed else digit['base'] if digit else value, plc_model)
+                if device:
+                    if (parameter.get('type') == 'BOOL'
+                            and parameter.get('word_device_requires_bit_designation') is True
+                            and '.' not in value
+                            and device[0] in limits.get('word_bit_device_prefixes', ())):
+                        _fail(f'{path}.operands[{index}]', 'Source requires a bit designation for a word-device bit operand')
+                    prefixes = group_prefixes if digit else limits.get('device_prefixes')
+                    if isinstance(prefixes, list) and device[0] not in prefixes:
+                        _fail(f'{path}.operands[{index}]', 'Device class is not source-authorized for this operand')
+                    minimum, maximum = limits.get('device_number_minimum'), limits.get('device_number_maximum')
+                    if (type(minimum) is int and device[1] < minimum
+                            or type(maximum) is int and device[1] > maximum):
+                        _fail(f'{path}.operands[{index}]', 'Device number is outside the source-verified operand range')
+                if limits.get('index_modification') is False:
+                    from plc.device_identity import external_operand_reference
+                    external = external_operand_reference(value, plc_model)
+                    if indexed or external and external['indexed']:
+                        _fail(f'{path}.operands[{index}]', 'Index modification is not source-authorized for this operand')
+    # Source-qualified ranges do not require an inferred machine type. Keep
+    # width, storage extent and type checks behind their independent review.
+    if "operand_types" not in spec.verified_fields:
+        return
+    from plc.device_identity import instruction_operand_regions
+    for region in instruction_operand_regions(spec, spec.mnemonic, operands, plc_model, parameters=parameters):
+        if 'storage_region_exceeds_device_range' in region.get('requires', ()):
+            _fail(f"{path}.operands[{region['operand_index']}]", 'Operand memory extent exceeds the verified device allocation')
     for index, (definition, value) in enumerate(zip(spec.operands, operands)):
         operand_path = f"{path}.operands[{index}]"
         if not isinstance(value, str):
             _fail(operand_path, "Instruction operands must be strings")
+        if index in metadata_selectors or index in module_selectors:
+            continue
+        if _validate_reviewed_program_pointer(spec, operands, index, operand_path, plc_model):
+            continue
         if allow_buffer_references:
             from plc.ordered_source import (buffer_memory_reference, source_label_reference,
                                            source_grouped_reference, source_extended_reference)
@@ -617,15 +1136,32 @@ def _validate_source_operand_types(spec, operands, path, plc_model, *, allow_ind
             grouped = source_grouped_reference(value)
             if grouped:
                 _validate_device_address(grouped['base'], operand_path, plc_model)
+                if grouped['index']:
+                    model = normalize_plc_model(plc_model)
+                    base_match = DEVICE_ADDRESS_RE.fullmatch(grouped['base'])
+                    if (
+                        base_match
+                        and (
+                            model not in SOURCE_DEVICE_PROFILES
+                            or SOURCE_DEVICE_PROFILES[model].get('address_families_complete')
+                            or base_match.group(1).upper() in DEVICE_LIMITS.get(model, {})
+                        )
+                    ):
+                        _validate_device_address(
+                            grouped['index'],
+                            operand_path,
+                            plc_model,
+                            expected_prefixes=_index_register_prefixes(plc_model),
+                        )
                 if definition.data_type == 'bit':
                     _fail(operand_path, 'Expected a bit device, not a digit-specified word')
                 if definition.role in {'write', 'read_write'}:
                     _validate_writable_device(grouped['base'], operand_path, plc_model, opcode=spec.mnemonic,
                                               allow_unverified=True)
                 continue
-            indexed = INDEXED_DEVICE_ADDRESS_RE.fullmatch(value)
+            indexed = parse_indexed_device_address(value, plc_model)
             if indexed:
-                value = indexed['base']
+                value = indexed['base_text']
             reference = buffer_memory_reference(value)
             if reference and definition.data_type in {'bit', 'word', 'dword'}:
                 bit_selected = '.' in reference['base']
@@ -636,6 +1172,19 @@ def _validate_source_operand_types(spec, operands, path, plc_model, *, allow_ind
                 # The source keeps its hardware-qualified address and explicit
                 # unverified finding. No ordinary-device access is certified.
                 continue
+        if _validate_reviewed_buffer_operand(spec, definition, value, operand_path, plc_model):
+            continue
+        if definition.digit_groups_max and re.match(r"K\d+[A-Z]", value, re.I):
+            from plc.device_identity import digit_specified_operand_devices
+            try:
+                reference = digit_specified_operand_reference(value, plc_model, maximum_groups=definition.digit_groups_max)
+                grouped = ([reference['base']] if reference and reference['indexed'] else
+                           digit_specified_operand_devices(value, plc_model, maximum_groups=definition.digit_groups_max))
+            except ValueError as exc:
+                _fail(operand_path, str(exc))
+            if grouped is None or len(grouped) > definition.digit_groups_max * 4:
+                _fail(operand_path, "Digit-specified operand exceeds the source-verified width")
+            continue
         if (allow_indexed_literals and definition.role not in {'write', 'read_write'}
                 and definition.data_type in {'word', 'dword'}):
             from plc.ordered_source import indexed_literal_register
@@ -643,10 +1192,14 @@ def _validate_source_operand_types(spec, operands, path, plc_model, *, allow_ind
                 # Preserved ordered source reports this value as unverified;
                 # lexical storage acceptance is not a numeric/type proof.
                 continue
-        parsed = parse_device_address(value, plc_model)
+        indexed = parse_indexed_device_address(value, plc_model)
+        typed_device = indexed["base_text"] if indexed else value
+        parsed = parse_device_address(typed_device, plc_model)
         from plc.device_identity import canonical_reference_device
         if definition.allowed_devices and canonical_reference_device(value.upper()) not in definition.allowed_devices:
             _fail(operand_path, f"{spec.mnemonic} requires one of {list(definition.allowed_devices)}")
+        if index in string_branches or index in metadata_selectors:
+            continue
         if definition.data_type == "string":
             if len(value) < 2 or value[0] not in {'\"', "'"} or value[-1] != value[0]:
                 _fail(operand_path, "Expected a string literal")
@@ -656,24 +1209,39 @@ def _validate_source_operand_types(spec, operands, path, plc_model, *, allow_ind
             # type. A missing namespace is not a proven operand violation.
             continue
         if parsed:
-            bit = is_bit_device(value, plc_model)
+            bit = is_bit_device(typed_device, plc_model)
             if definition.data_type == "bit" and not bit:
                 _fail(operand_path, "Expected a bit device")
-            if definition.data_type in {"word", "dword"} and bit and parsed[0] not in {"T", "C"}:
+            if definition.data_type in {"word", "dword", "real", "lreal"} and bit and parsed[0] not in {"T", "C"}:
                 _fail(operand_path, "Expected a word device")
             if definition.device_prefixes and parsed[0] not in definition.device_prefixes:
                 _fail(operand_path, "Unsupported operand device class")
-            words = max(definition.word_count, 2 if definition.data_type == "dword" else 1)
-            if words > 1:
-                end = parsed[1] + words - 1
+            if definition.data_type in {'word', 'dword', 'real', 'lreal'}:
+                from plc.device_profiles import native_word_value_layout
+                layout = native_word_value_layout(parsed[0], parsed[1], plc_model)
+                if layout and definition.device_point_count * 16 < layout.get('minimum_operand_bits', 0):
+                    _fail(operand_path, "Numeric device requires its source-verified native value width")
+            from plc.device_identity import operand_device_point_count
+            points = operand_device_point_count(definition, parsed, plc_model)
+            # A bit view into a word is not a plain-device sequence. Keep its
+            # existing address checks without assuming cross-word bit layout.
+            if bit and "." in value:
+                points = 1
+            if points > 1:
+                end = parsed[1] + points - 1
                 rendered = format(end, "X") if device_address_radix(parsed[0], plc_model) == 16 else str(end)
                 if "." in value or parse_device_address(parsed[0] + rendered, plc_model) is None:
                     _fail(operand_path, "Operand memory extent exceeds the verified device allocation")
         else:
             if definition.role in {"write", "read_write"}:
                 _fail(operand_path, "Expected a writable device operand")
+            if definition.data_type in {'real', 'lreal'}:
+                from plc.ordered_source import native_real_literal
+                if native_real_literal(value):
+                    continue
             if not re.fullmatch(r"(?:K[+-]?\d+|H[0-9A-F]+)", value, re.I):
                 _fail(operand_path, "Operand syntax/type is not verified for this instruction")
+            _validate_reviewed_integer_literal_width(spec, index, value, operand_path)
 
 
 def _app_instr_arity_error(spec, actual_count):
@@ -746,23 +1314,29 @@ def _validate_element(
             expected = {"C"}
         else:
             expected = {"X", "Y", "M", "SM", "S", "T", "C"}
+        indexed_addr = (
+            _validate_indexed_device_address(address, f"{path}.address", plc_model)
+            if INDEXED_DEVICE_ADDRESS_RE.fullmatch(address.strip())
+            else None
+        )
+        target_address = indexed_addr["base_text"] if indexed_addr else elem.get("address")
         if plc_model in SOURCE_DEVICE_PROFILES and elem_type not in {"TIMER", "COUNTER"}:
-            parsed = _validate_device_address(elem.get("address"), f"{path}.address", plc_model)
-            if not is_bit_device(elem["address"], plc_model) or elem_type in {"COIL", "PLS", "PLF"} and parsed[0] == "X":
+            parsed = _validate_device_address(target_address, f"{path}.address", plc_model)
+            if not is_bit_device(target_address, plc_model) or elem_type in {"COIL", "PLS", "PLF"} and parsed[0] == "X":
                 _fail(f"{path}.address", f"{elem_type} requires a {'writable ' if is_output else ''}bit device")
             if elem_type in {"COIL", "PLS", "PLF"}:
                 if parsed[0] in {'T', 'ST', 'C'}:
                     _fail(f"{path}.address", 'timer/counter outputs require their complete typed instruction')
                 from plc.target_identity import target_family
                 if target_family(plc_model) in {'Q', 'L'}:
-                    expected = (None if '.' in elem['address'] else
+                    expected = (None if '.' in target_address else
                                 set(SOURCE_DEVICE_PROFILES[plc_model].get('bit_prefixes', ())) - {'X', 'T', 'ST', 'C'})
-                elif '.' in elem['address']:
+                elif '.' in target_address:
                     _fail(f"{path}.address", f'{elem_type} word-bit output form is not established for {plc_model}')
             else:
                 expected = None
         _validate_device_address(
-            elem.get("address"), f"{path}.address", plc_model, expected
+            target_address, f"{path}.address", plc_model, expected
         )
         if elem_type in {"COIL", "PLS", "PLF"}:
             _validate_writable_device(
@@ -830,7 +1404,7 @@ def _validate_element(
                 "be encoded as APP_INSTR",
             )
 
-        spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode, cpu=plc_model)
+        spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode, cpu=plc_model, operand_count=len(operands))
         if spec is None:
             if require_catalogued_instructions:
                 fail_opcode(
@@ -858,7 +1432,10 @@ def _validate_element(
                 _fail(f"{path}.operands", _app_instr_arity_error(spec, len(operands)))
 
         for operand_idx, operand in enumerate(operands):
-            _validate_operand_token(operand, f'{path}.operands[{operand_idx}]')
+            operand_path = f'{path}.operands[{operand_idx}]'
+            definition = spec.operands[operand_idx] if spec and operand_idx < len(spec.operands) else None
+            if not _validate_reviewed_buffer_operand(spec, definition, operand, operand_path, plc_model):
+                _validate_operand_token(operand, operand_path)
         if syntax_only:
             return
 
@@ -869,6 +1446,12 @@ def _validate_element(
             if not isinstance(operand, str):
                 continue
             operand_path = f"{path}.operands[{operand_idx}]"
+            if _validate_reviewed_program_pointer(spec, operands, operand_idx, operand_path, plc_model):
+                continue
+            if _validate_reviewed_direct_access_output(spec, operands, operand_idx, operand_path, plc_model):
+                continue
+            if _validate_reviewed_remote_operand(spec, operands, operand_idx, operand_path, plc_model):
+                continue
             if INDEXED_DEVICE_ADDRESS_RE.fullmatch(operand.strip()):
                 _validate_indexed_device_address(operand, operand_path, plc_model)
             elif DEVICE_ADDRESS_RE.fullmatch(operand.strip()):
@@ -994,6 +1577,20 @@ def _validate_rung(
                 require_catalogued_instructions=require_catalogued_instructions,
                 syntax_only=syntax_only,
             )
+            if (not syntax_only and elem.get('type') == 'APP_INSTR'
+                    and (header is not None or shared_inputs or inputs)):
+                from plc.instructions import reviewed_native_fact_groups
+                opcode = str(elem.get('opcode', '')).strip().upper()
+                operands = elem.get('operands', [])
+                spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode, cpu=plc_model,
+                    operand_count=len(operands))
+                for group in reviewed_native_fact_groups(spec, opcode, operands, plc_model,
+                        dimensions={'execution.operation_condition'}):
+                    if (group.value.get('enabled_when') == 'instruction_reached'
+                            and group.value.get('execution_input') == 'none'
+                            and group.value.get('ordinary_contact_execution') is False):
+                        _fail(f'{path}.branches[{b_idx}].outputs[{e_idx}]',
+                            opcode + ' has no execution contact; use an unconditional branch')
 
 
 def _verified_completion_semantics(output, plc_model):
@@ -1647,6 +2244,63 @@ def validate_ladder_partial_structure(
     return data
 
 
+def _confirmed_instruction_versions(confirmed_spec):
+    """Read confirmed versions and serial constraints without filling evidence."""
+    if not isinstance(confirmed_spec, Mapping):
+        return {}
+    from plc.instruction_constraints import documented_version_parts
+    selected = confirmed_spec.get('selected_approach')
+    plan = selected.get('construction_plan') if isinstance(selected, Mapping) else None
+    execution = plan.get('execution_context') if isinstance(plan, Mapping) else None
+    project = confirmed_spec.get('project_context')
+    common = [confirmed_spec, project, execution]
+    hardware = [confirmed_spec.get('hardware_profile'), confirmed_spec.get('hardware_context')]
+    result = {}
+    if any(isinstance(source, Mapping) and (
+            source.get('check_cpu_version') is True
+            or any(source.get(alias) not in (None, '') for alias in ('cpu_version', 'firmware')))
+            for source in [*common, *hardware]):
+        result['check_cpu_version'] = True
+    for key, sources, aliases in (
+            ('cpu_version', [*common, *hardware], ('cpu_version', 'firmware')),
+            ('software_version', common, ('software_version',))):
+        observed, invalid = [], False
+        for source in sources:
+            if not isinstance(source, Mapping):
+                continue
+            for alias in aliases:
+                value = source.get(alias)
+                if value is None or value == '':
+                    continue
+                if not isinstance(value, str) or len(value) > 128:
+                    invalid = True
+                    continue
+                try:
+                    identity = documented_version_parts(value) if key == 'cpu_version' else value
+                except ValueError:
+                    invalid = True
+                    continue
+                observed.append((identity, value))
+        if not invalid and observed and all(item[0] == observed[0][0] for item in observed):
+            result[key] = observed[0][1]
+    serials, invalid = [], False
+    for source in [*common, *hardware]:
+        if not isinstance(source, Mapping):
+            continue
+        value = source.get('cpu_serial_first_five')
+        if value is None or value == '':
+            continue
+        if type(value) is int and 0 <= value <= 99999:
+            serials.append(value)
+        elif isinstance(value, str) and re.fullmatch(r'[0-9]{5}', value.strip()):
+            serials.append(int(value.strip()))
+        else:
+            invalid = True
+    if not invalid and serials and all(value == serials[0] for value in serials):
+        result['cpu_serial_first_five'] = serials[0]
+    return result
+
+
 def validate_ladder_full(
     data,
     plc_model="FX3U",
@@ -1656,6 +2310,24 @@ def validate_ladder_full(
 ):
     _validate_ladder_structure(data, plc_model,
                               require_catalogued_instructions=require_catalogued_instructions)
+    from plc.ordered_source import break_context_findings, chk_context_findings, cj_context_findings
+    context_networks = [{'id': 'N' + str(index + 1).zfill(4), 'rung_id': rung['rung_id'], 'ladder': rung}
+                        for index, rung in enumerate(data['rungs'])]
+    for finding in [*break_context_findings(context_networks, plc_model=plc_model),
+                    *chk_context_findings(context_networks, plc_model=plc_model),
+                    *cj_context_findings(context_networks, plc_model=plc_model)]:
+        if finding['severity'] == 'error':
+            _fail('$.rungs', finding['message'])
+    # The shared traversal covers both branch and ordered source instructions.
+    # Structural acceptance remains compatible when version evidence is absent;
+    # it never promotes an unverified constraint report into source support.
+    instruction_context = _confirmed_instruction_versions(confirmed_spec)
+    if instruction_context:
+        from plc.instruction_constraints import inspect_ladder_constraints
+        for report in inspect_ladder_constraints(data, plc_model=plc_model, context=instruction_context):
+            if report['status'] == 'failed':
+                finding = next(f for f in report['findings'] if f['severity'] == 'error')
+                _fail(report['path'], finding['message'])
     _validate_unique_coils(data["rungs"])
     from plc.device_definitions import ladder_device_findings
     for finding in ladder_device_findings(data, plc_model,

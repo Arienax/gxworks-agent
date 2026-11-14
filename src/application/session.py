@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Engineering session use cases over the domain-free persistence store.
 
@@ -43,16 +43,27 @@ class ProjectSession(SessionStore):
         if project is None:
             raise KeyError(project_id)
         metadata = copy.deepcopy(metadata)
+        if metadata.get('parent_version_id'):
+            parent = self.get_version(project_id, metadata['parent_version_id']) or {}
+            if parent.get('source_program_bindings'):
+                metadata.setdefault('source_program_bindings', copy.deepcopy(parent['source_program_bindings']))
         if metadata.get('source_candidate_id') or metadata.get('delivery_requested'):
             from application.gxw_delivery import finalize_saved
             finalize_saved(self.version_dir(project_id, version_id), metadata)
             if metadata.get('activation_blocked'):
                 activate = False
-        spec = metadata.get('confirmed_spec_snapshot') or project.get('confirmed_spec')
+        spec = metadata.setdefault('confirmed_spec_snapshot', copy.deepcopy(project.get('confirmed_spec')))
+        if spec:
+            from plc.ir import canonical_sha256
+            metadata.setdefault('confirmed_spec_hash', canonical_sha256(spec))
+        if (spec or {}).get('implementation_items'):
+            from application.source_plan import check_version_sources
+            check_version_sources(self, project_id, version_id, metadata, spec)
         if spec and spec.get('behavior_constraints') and (metadata.get('artifacts') or {}).get('ir'):
             from simulator.bounded import check_confirmed_behavior
             program = json.loads((self.version_dir(project_id, version_id) / metadata['artifacts']['ir']).read_text(encoding='utf-8'))
-            report = check_confirmed_behavior(program, spec, version_binding={'project_id': project_id, 'version_id': version_id})
+            report = check_confirmed_behavior(program, {'plc_model': project.get('plc_model'), **spec},
+                                              version_binding={'project_id': project_id, 'version_id': version_id})
             receipt = (metadata.get('generation_metadata') or {}).get('construction_binding') or {}
             from plc.construction import apply_construction_check
             report = apply_construction_check(report, receipt)
@@ -61,7 +72,7 @@ class ProjectSession(SessionStore):
                 activate = False
                 metadata.update(activation_blocked=True, lifecycle_status='diagnostic')
                 metadata.setdefault('generation_metadata', {})['diagnostic_only'] = True
-            elif report['status'] == 'unverified':
+            elif report['status'] == 'unverified' and not metadata.get('activation_blocked'):
                 metadata['lifecycle_status'] = 'draft'
         return super().complete_version(project_id, version_id, metadata, activate=activate)
 
@@ -76,7 +87,7 @@ class ProjectSession(SessionStore):
         if spec and spec.get('behavior_constraints'):
             from simulator.bounded import check_confirmed_behavior
             program = self.load_program_ir(project_id, version_id, persist_legacy=False)
-            if program and check_confirmed_behavior(program, spec)['activation_blocked']:
+            if program and check_confirmed_behavior(program, {'plc_model': project.get('plc_model'), **spec})['activation_blocked']:
                 raise ValueError('当前规格的行为检查发现反例；请修改候选后重新检查。')
         return super().activate_version(project_id, version_id)
 

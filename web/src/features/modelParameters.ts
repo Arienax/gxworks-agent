@@ -1,8 +1,14 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
+import type { Json } from "../api/client";
 
 /** Model-neutral schema and deterministic selection helpers. No model-name tests. */
 export type Scalar = string | number | boolean;
+export const REASONING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+export type ReasoningLevel = typeof REASONING_LEVELS[number];
+export type ReasoningLevels = Partial<Record<ReasoningLevel, string | null>>;
+export const DEFAULT_REASONING_LEVELS: ReasoningLevels = { off: null, low: "low", medium: "medium", high: "high" };
 export type Options = Record<string, unknown>;
 export type Conditions = { requires?: Record<string, (Scalar | null)[]>; conflicts_with?: string[] };
 export type Scope = { endpoint: string; model: string; context: string; binding: string };
@@ -12,7 +18,7 @@ export type Descriptor = Conditions & {
   status: "supported" | "conditional" | "accepted" | "unknown" | "unsupported" | "fixed";
   source: "probe" | "metadata" | "manual" | "legacy" | "catalog" | "generic" | "observation";
   domain?: Domain; evidence?: { accepted_values?: Scalar[]; rejected_values?: Scalar[]; observations?: {outcome: string; value: Scalar; context: string; at: number}[] };
-  ui_hint?: {minimum?: number; maximum?: number; step?: number; suggestions?: Scalar[]; advanced?: boolean};
+  ui_hint?: {minimum?: number; maximum?: number; step?: number; suggestions?: Scalar[]; advanced?: boolean; reasoning_levels?: ReasoningLevels};
   values?: Scalar[];
   minimum?: number; maximum?: number; step?: number;
   wire_location?: "body" | "extra_body"; wire_path?: string[];
@@ -29,8 +35,9 @@ export type CapabilityContract = {
   capabilities?: Record<string, Capability>;
   constraints?: Record<string, Conditions>;
 };
-export type Selection = { mode: "omit" | "inherit" } | { mode: "value"; value: Scalar };
-export type UserModelSettings = { scope?: Scope; parameters?: Record<string, Selection> };
+export type Selection = ({ mode: "omit" | "inherit" } | { mode: "value"; value: Scalar }) & { level?: ReasoningLevel };
+export type UserModelSettings = { scope?: Scope; parameters?: Record<string, Selection>; request_parameters?: Record<string, Json> };
+export type RequestParameterRow = { name: string; value: string };
 
 /**
  * Endpoint presets fill a base URL only; they never carry model names or tuning
@@ -38,14 +45,9 @@ export type UserModelSettings = { scope?: Scope; parameters?: Record<string, Sel
  * bundled capability contract already matches, `dsh` is one whose vendor also
  * appears in the DeepSeek Harness provider catalog.
  *
- * The one admission rule is the protocol this project implements: the endpoint
- * must serve a Chat Completions–compatible API reachable with a stored API key.
- * A vendor's *native* protocol does not disqualify it — Claude and Gemini are
- * listed through their OpenAI compatibility layers, which is exactly what the
- * bundled `anthropic-compat` contract describes. Vendors that authenticate by
- * request signing or OAuth (Bedrock, Vertex), or whose base URL embeds the
- * caller's own resource id (Azure OpenAI, Cloudflare), cannot be a fixed preset
- * and must be typed by the user.
+ * These are address shortcuts. Generation requires a Responses-compatible
+ * endpoint reachable with the saved API key. Endpoints with a caller-specific
+ * resource ID are configured under Custom API.
  */
 export const ENDPOINT_PRESETS = [
   { name: "OpenAI", url: "https://api.openai.com/v1", source: "local" },
@@ -134,11 +136,22 @@ export function validValue(desc: Descriptor, value: unknown): value is Scalar {
 }
 export function selectedValues(contract: CapabilityContract, settings: UserModelSettings): Options {
   const result: Options = {};
-  for (const name of Object.keys(contract.parameters || {})) {
+  for (const [name, descriptor] of Object.entries(contract.parameters || {})) {
     const selection = settings.parameters?.[name];
-    result[name] = selection?.mode === "value" ? selection.value : null;
+    const custom = customParameterValue(settings, name, descriptor);
+    result[name] = custom !== undefined ? custom : selection?.mode === "value" ? selection.value : null;
   }
   return result;
+}
+
+function customParameterValue(settings: UserModelSettings, name: string, desc: Descriptor): Json | undefined {
+  const parameters = settings.request_parameters;
+  let value: Json | undefined = parameters;
+  for (const key of desc.wire_path ?? [name]) {
+    if (value === null) return null;
+    value = value && typeof value === "object" && !Array.isArray(value) && Object.hasOwn(value, key) ? value[key] : undefined;
+  }
+  return value !== undefined ? value : parameters && Object.hasOwn(parameters, name) ? parameters[name] : undefined;
 }
 export function conditionsMatch(condition: Conditions | undefined, values: Options): boolean {
   return Object.entries(condition?.requires || {}).every(([name, allowed]) => allowed.some(v => v === (values[name] ?? null))) &&
@@ -149,8 +162,11 @@ export function parameterEnabled(name: string, contract: CapabilityContract, val
   if (!descriptor) return false;
   // Conditions involving request flags are checked again at runtime. An editor
   // cannot know whether a future workflow is streaming or includes tools.
-  const explicit = (key: string) => key in (contract.parameters || {}) &&
-    (!settings || (settings.parameters?.[key]?.mode || "inherit") !== "inherit");
+  const explicit = (key: string) => {
+    const dependency = contract.parameters?.[key];
+    return !!dependency && (!settings || (settings.parameters?.[key]?.mode || "inherit") !== "inherit" ||
+      customParameterValue(settings, key, dependency) !== undefined);
+  };
   const known = (rule?: Conditions): Conditions => ({
     requires: Object.fromEntries(Object.entries(rule?.requires || {}).filter(([key]) => explicit(key))),
     conflicts_with: (rule?.conflicts_with || []).filter(explicit),
@@ -168,19 +184,19 @@ export function adoptSelections(contract: CapabilityContract, previous: UserMode
     else if (["fixed", "unsupported"].includes(desc.status)) parameters[name] = { mode: "omit" };
     else parameters[name] = { mode: desc.default_mode || "omit" };
   }
-  return reconcileSelections(contract, { scope: contract.scope, parameters });
+  return reconcileSelections(contract, { ...previous, parameters });
 }
 export function reconcileSelections(contract: CapabilityContract, settings: UserModelSettings): UserModelSettings {
   // Keep an explicit invalid value visible. Save/request validation must explain
   // the conflict, not silently remove the user's settings after metadata changes.
-  return { scope: contract.scope, parameters: Object.fromEntries(Object.entries(settings.parameters || {})
+  return { ...settings, scope: contract.scope, parameters: Object.fromEntries(Object.entries(settings.parameters || {})
     .filter(([name]) => !!contract.parameters?.[name])) };
 }
 export function changeSelection(contract: CapabilityContract, settings: UserModelSettings, name: string,
                                 selection: Selection): UserModelSettings {
   const desc = contract.parameters?.[name];
   if (!desc || selection.mode === "value" && !validValue(desc, selection.value)) throw new Error("Invalid parameter selection");
-  return { scope: contract.scope, parameters: { ...settings.parameters, [name]: selection } };
+  return { ...settings, scope: contract.scope, parameters: { ...settings.parameters, [name]: selection } };
 }
 
 // Both normal actions are zero-generation; verification has a separate API.
@@ -195,6 +211,155 @@ export function parameterTitle(name: string, desc: Descriptor): string {
 export function selectionFor(name: string, settings: UserModelSettings): Selection {
   return settings.parameters?.[name] || {mode:"inherit"};
 }
+
+function declaredChoices(desc?: Descriptor): Scalar[] {
+  if (!desc || !["supported", "conditional"].includes(desc.status)) return [];
+  return hardDomain(desc).values ?? (desc.type === "boolean" ? [true, false] : []);
+}
+
+export function isReasoningControl(name: string): boolean {
+  return name === "reasoning_effort" || name === "thinking_mode" || name === "enable_thinking";
+}
+
+export function requestParameterRows(settings: UserModelSettings): RequestParameterRow[] {
+  const values = { ...Object.fromEntries(Object.entries(settings.parameters || {}).flatMap(([name, choice]) =>
+    !isReasoningControl(name) && choice.mode === "value" ? [[name, choice.value]] : [])), ...settings.request_parameters };
+  return Object.entries(values).map(([name, value]) => ({ name, value: JSON.stringify(value) }));
+}
+
+export function parseRequestParameterRows(rows: readonly RequestParameterRow[], contract?: CapabilityContract): {
+  parameters?: Record<string, Json>; error?: string; field?: string;
+} {
+  const entries: [string, Json][] = [];
+  const used = new Set<string>();
+  for (const row of rows) {
+    const name = row.name.trim(), text = row.value.trim();
+    if (!name && !text) continue;
+    if (!/^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(name)) return { error: "请填写有效的参数名。" };
+    if (isReasoningControl(name)) return { error: "请在模型名旁选择推理档位。" };
+    if (used.has(name)) return { error: "请求参数名不能重复。" };
+    if (!text) return { error: "请填写参数值。" };
+    let value: Json = text;
+    try { value = JSON.parse(text) as Json; }
+    catch { if (/^[\[{"]/.test(text)) return { error: "请检查参数值的 JSON 格式。" }; }
+    try {
+      JSON.stringify(value, (_key, item: unknown) => {
+        if (typeof item === "number" && !Number.isFinite(item)) throw new Error("Non-finite JSON number");
+        return item;
+      });
+    } catch { return { error: "请检查参数值的 JSON 格式。" }; }
+    used.add(name);
+    entries.push([name, value]);
+  }
+  const parameters = Object.fromEntries(entries);
+  for (const [name, desc] of Object.entries(contract?.parameters || {})) {
+    const value = customParameterValue({ request_parameters: parameters }, name, desc);
+    if (value === undefined) continue;
+    if (isReasoningControl(name)) return { error: "请在模型名旁选择推理档位。", field: name };
+    if (value !== null && (["fixed", "unsupported"].includes(desc.status) || !validValue(desc, value)))
+      return { error: "参数值不符合当前模型的要求。", field: name };
+  }
+  return { parameters };
+}
+
+export function withRequestParameters(settings: UserModelSettings, requestParameters: Record<string, Json>): UserModelSettings {
+  const parameters = Object.fromEntries(Object.entries(settings.parameters || {}).map(([name, choice]) =>
+    [name, !isReasoningControl(name) && choice.mode === "value" ? { mode: "omit" as const } : choice]));
+  return { ...settings, parameters, request_parameters: requestParameters };
+}
+
+export function editableReasoningLevels(desc?: Descriptor): ReasoningLevels | undefined {
+  if (desc?.ui_hint?.reasoning_levels) return desc.ui_hint.reasoning_levels;
+  const levels: ReasoningLevels = {};
+  for (const wire of declaredChoices(desc)) {
+    const level = wire === "none" ? "off" : REASONING_LEVELS.find(candidate => candidate === wire);
+    if (!level || typeof wire !== "string" || levels[level] !== undefined) return undefined;
+    levels[level] = wire;
+  }
+  return Object.keys(levels).some(level => level !== "off") ? levels : undefined;
+}
+
+function pickerValues(desc: Descriptor | undefined, saved: Selection): Scalar[] {
+  const values = declaredChoices(desc);
+  // A profile configured before the level editor may have one explicit value
+  // without a declared domain. Keep that value and let the user clear it.
+  if (desc && saved.mode === "value" && !["unsupported", "fixed"].includes(desc.status) &&
+      !values.includes(saved.value) && validValue(desc, saved.value)) return [...values, saved.value];
+  return values;
+}
+
+function mappedReasoningSelection(level: ReasoningLevel, wire: string | null): Selection {
+  return wire === null ? { mode: "omit", level } : { mode: "value", value: wire, level };
+}
+
+export function reasoningOverride(previous: Descriptor | undefined, levels?: ReasoningLevels): Descriptor {
+  const shared = { wire_location: previous?.wire_location, wire_path: previous?.wire_path,
+    requires: previous?.requires, conflicts_with: previous?.conflicts_with };
+  if (!levels) return { ...shared, type: "enum", status: "unsupported", source: "manual" };
+  const values = [...new Set(Object.values(levels).filter((value): value is string => typeof value === "string"))];
+  return { ...shared, type: "enum", status: previous?.status === "conditional" ? "conditional" : "supported", source: "manual",
+    domain: { source: "manual", enforcement: "hard", values }, ui_hint: { reasoning_levels: levels },
+  };
+}
+
+export function rebindReasoningSelection(selection: Selection, levels?: ReasoningLevels): Selection {
+  const wire = selection.level && levels?.[selection.level];
+  if (selection.level && wire !== undefined) return mappedReasoningSelection(selection.level, wire);
+  if (!selection.level && levels && (selection.mode !== "value" ||
+      typeof selection.value === "string" && Object.values(levels).includes(selection.value))) return selection;
+  return { mode: "omit" };
+}
+
+export function reasoningChoices(contract: CapabilityContract, settings: UserModelSettings) {
+  const effortName = "reasoning_effort";
+  const descriptor = contract.parameters?.[effortName];
+  const effort = selectionFor(effortName, settings);
+  const named = descriptor?.ui_hint?.reasoning_levels;
+  const levels: string[] = named ? REASONING_LEVELS.filter(level => named[level] !== undefined)
+    : pickerValues(descriptor, effort).filter((value): value is string => typeof value === "string" && !!value);
+  const modeName = contract.parameters?.thinking_mode ? "thinking_mode" : "enable_thinking";
+  const mode = selectionFor(modeName, settings);
+  const modes = pickerValues(contract.parameters?.[modeName], mode);
+  const on = modes.find(value => value === true || value === "enabled" || value === "adaptive");
+  const off = modes.find(value => value === false || value === "disabled");
+  const savedMode = mode.mode === "value" && (mode.value === on || mode.value === off);
+  if (!contract.scope || (!levels.length && !savedMode && (on === undefined || off === undefined))) return null;
+
+  const offLevel = levels.find(value => value === "none" || value === "off");
+  const offChoice = offLevel ?? "none";
+  const choices = ["", ...levels];
+  if (!named && off !== undefined && offLevel === undefined) choices.splice(1, 0, offChoice);
+  if (!levels.length && on !== undefined) choices.push("enabled");
+
+  let current = effort.level && levels.includes(effort.level) ? effort.level : "";
+  if (!current && effort.mode === "value") {
+    current = levels.find(level => (named ? named[level as ReasoningLevel] : level) === effort.value) ?? "";
+  }
+  if (choices.includes(offChoice) && mode.mode === "value" && mode.value === off) current = offChoice;
+  if (!levels.length && mode.mode === "value" && mode.value === on) current = "enabled";
+
+  const options = choices.map(value => {
+    const omit: Selection = { mode: "omit" };
+    let next = settings;
+    if (levels.length) {
+      const level = value as ReasoningLevel;
+      const wire = named?.[level];
+      const selection = wire !== undefined ? mappedReasoningSelection(level, wire)
+        : levels.includes(value) ? { mode: "value" as const, value } : omit;
+      next = changeSelection(contract, next, effortName, selection);
+    }
+    if (on !== undefined || off !== undefined) {
+      const modeValue = value === offChoice ? off : on;
+      next = changeSelection(contract, next, modeName, value && modeValue !== undefined ? { mode: "value", value: modeValue } : omit);
+    }
+    const values = selectedValues(contract, next);
+    const disabled = Object.keys(contract.parameters || {}).some(name =>
+      values[name] != null && !parameterEnabled(name, contract, values, next));
+    return { value, settings: next, disabled };
+  });
+  return { current, options };
+}
+
 export function modifiedParameters(contract: CapabilityContract, settings: UserModelSettings): string[] {
   return Object.entries(contract.parameters || {}).filter(([name, desc]) => {
     if (!settings.parameters?.[name]) return false;

@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Execute frozen generation, planning and inspection jobs."""
 from __future__ import annotations
@@ -27,6 +27,7 @@ class JobExecution:
                  previews,
                  pending_proposal,
                  save_local_proposal,
+                 project_commands=None,
                  ):
         self.projects = projects
         self.state_dir = state_dir
@@ -37,12 +38,15 @@ class JobExecution:
         self.pending_proposal = pending_proposal
         self.save_local_proposal = save_local_proposal
         self.store = projects.store
+        self.project_commands = project_commands
 
     def run(self, ctx, snapshot, context, images, provider):
         kind, project_id, text = snapshot["kind"], snapshot["project_id"], snapshot.get("text", "")
         project, version = snapshot["project"], snapshot.get("version")
         language = snapshot["response_language"]
         output = None
+        from application.conversation_model import current_model_turn
+        history = [] if current_model_turn() is not None else project.get("messages", [])
         from plc.change_scope import scope_instruction
         scoped_text = text + scope_instruction(snapshot.get("change_scope"))
         if kind == "analysis":
@@ -50,17 +54,39 @@ class JobExecution:
             from plc.specification.confirmed import build_review_draft
             ctx.emit("progress", {"message": "正在分析需求"})
             analysis_mode = snapshot.get("analysis_mode", "direct")
+            document = project.get("_spec_document")
+            planning = None
+            if document:
+                from application.spec_document import analysis_inputs
+                if snapshot.get("program"):
+                    from application.gxw_files import source_context
+                    context = source_context(context, snapshot["program"])
+                planning = analysis_inputs(context, text, document)
+            cases, _ = project.get("_acceptance_cases") or (None, None)
             analysis = analyze_requirement_streaming(text, confirmed_spec=project.get("confirmed_spec"),
+                planning_context=planning,
                 analysis_mode=analysis_mode,
                 allow_repair=snapshot.get("allow_analysis_repair", True),
-                conversation_history=project.get("messages", []), image_attachments=images,
+                conversation_history=history, image_attachments=images,
                 on_reasoning_chunk=lambda t: ctx.emit("reasoning", {"text": t}),
                 on_content_chunk=lambda t: ctx.emit("content", {"text": t}), response_language=language,
-                on_format_repair=lambda: ctx.emit("progress", {"message": "正在修正需求分析的回复格式"}))
+                on_stage=lambda stage, message: ctx.emit("progress", {"stage": stage, "message": message}),
+                on_format_repair=lambda: ctx.emit("progress", {"message": "正在修正需求分析的回复格式"}),
+                **({"acceptance_cases": cases} if cases else {}))
             if not isinstance(analysis, dict):
                 raise ValueError("需求分析未完成。")
+            previous = document["draft"] if document else project.get("confirmed_spec")
+            draft = build_review_draft(analysis, previous)
+            if document and self.project_commands:
+                from application.spec_document import merge_analysis
+                draft = merge_analysis(previous, draft, analysis, text)
+                with self.lock.thread_lock:
+                    ctx.checkpoint()
+                    self.validate_snapshot(snapshot)
+                    draft = self.project_commands.save_analysis_draft(project_id, draft, document["draft_revision"])["draft"]
             output = {"analysis_mode": analysis_mode, "analysis": analysis,
-                      "spec_draft": build_review_draft(analysis, project.get("confirmed_spec")),
+                      "base_program": (context.version or {}).get("program_name"), "edit_text": text,
+                      "spec_draft": draft,
                       "spec_base_hash": public_spec_hash(project.get("confirmed_spec")), "base_version_id": snapshot.get("version_id")}
         elif kind in {"generation", "direct_generation"}:
             from application.generation import GenerationRequest, GenerationWorkflow, GenerationDependencies
@@ -68,7 +94,7 @@ class JobExecution:
             out_dir = self.state_dir / "staging" / ctx.job_id
             mode = (version or {}).get('target_mode') or project['target_mode']
             ordered = ((snapshot.get('program_ir') or {}).get('source') or {}).get('format') in {'instruction_sequence_v1', 'instruction_sequence_v2'}
-            existing_offline = context.native_snapshot is not None and (ordered or mode in {'st', 'fbd', 'sfc'})
+            existing_offline = context.native_snapshot is not None and (snapshot.get("program") or ordered or mode in {'st', 'fbd', 'sfc'})
             if existing_offline:
                 from application.gxw_files import generate_candidate
                 source_payload = generate_candidate(out_dir, {**snapshot, 'text': scoped_text}, context, images, ctx)
@@ -98,16 +124,19 @@ class JobExecution:
                 else:
                     previous_json = ir_to_ladder(program) if program else None
                 request = GenerationRequest(
-                    user_input=snapshot.get("raw_requirement", scoped_text), effort=None, target_mode=project["target_mode"],
-                    user_fact_text="" if kind == "direct_generation" and "direct_user_facts" in snapshot else snapshot.get("user_fact_text"),
+                    user_input=snapshot.get("raw_requirement", scoped_text), effort=None, target_mode=mode,
+                    user_fact_text=snapshot.get("user_fact_text"),
                     previous_json=previous_json,
                     previous_ir=None if fresh_confirmed_generation else program,
                     confirmed_context=project.get("confirmed_spec"),
                     direct_user_facts=snapshot.get("direct_user_facts") if kind == "direct_generation" else None,
+                    direct_requirements=snapshot.get("direct_requirements") if kind == "direct_generation" else None,
+                    direct_answers=(snapshot.get("direct_answers", snapshot.get("clarification_answers"))
+                                    if kind == "direct_generation" else None),
                     decision_receipt_id=project.get("confirmed_decision_receipt_id"),
-                    conversation_history=[] if (repair_mode or format_repair) else project.get("messages", []),
+                    conversation_history=[] if (repair_mode or format_repair) else history,
                     task_type=snapshot.get("task_type"),
-                    plc_model=project.get("plc_model", "FX3U"), program_name=(program or {}).get("program_name", "MAIN"),
+                    plc_model=context.plc_model, program_name=(program or {}).get("program_name", "MAIN"),
                     revision=(program or {}).get("revision", 0) + 1,
                     requirement_text=snapshot.get("repair_requirement", text),
                     repair_mode=repair_mode, format_repair=format_repair,
@@ -118,9 +147,11 @@ class JobExecution:
                     image_attachments=images, model_name=snapshot.get("model", {}).get("model"),
                     response_language=language, construction_examples=snapshot.get("construction_examples"),
                     fresh_confirmed_generation=fresh_confirmed_generation,
-                    direct_generation=kind == "direct_generation")
+                    direct_generation=kind == "direct_generation", project_id=project_id,
+                    acceptance_cases=project.get("_acceptance_cases"))
                 metadata = GenerationWorkflow(request, out_dir, ctx.emit, GenerationDependencies(
-                    provider=provider, check_cancelled=ctx.checkpoint, preserve_rejected_candidate=True
+                    provider=provider, check_cancelled=ctx.checkpoint, preserve_rejected_candidate=True,
+                    native_delivery=mode == "ladder",
                 )).run()
             ctx.checkpoint()
             output = {"generation": metadata}
@@ -195,6 +226,22 @@ class JobExecution:
                 candidate = self.previews.with_candidate_diff(snapshot["project_id"], snapshot["version_id"],
                     {"_candidate_ir": result["_candidate_ir"], "_confirmed_spec": result.get("_confirmed_spec"),
                      "target_mode": "ladder", "change_scope": snapshot.get("change_scope")})
+                if files := result.get("_ordered_csv_artifacts"):
+                    from application.gxw_delivery import delivery_result
+                    from plc.ir import validate_plc_ir
+                    validate_plc_ir(candidate.pop("_candidate_ir"), confirmed_spec=candidate["_confirmed_spec"])
+                    staging = self.state_dir / "staging" / ctx.job_id
+                    staging.mkdir(parents=True, exist_ok=True)
+                    artifacts = {}
+                    for key, (name, data) in files.items():
+                        (staging / name).write_bytes(data)
+                        artifacts[key] = {"path": name, "sha256": hashlib.sha256(data).hexdigest()}
+                    metadata = copy.deepcopy(result["candidate_metadata"])
+                    metadata["validation"]["offline_write"] = "source_preserved"
+                    metadata["delivery"] = delivery_result("ladder", {key: name for key, (name, _) in files.items()},
+                        "已保存 GX Works2 导出的原始有序程序和软元件注释。")
+                    candidate.update(staging_dir=str(staging), artifacts=artifacts, metadata=metadata,
+                                     plc_model=metadata["plc_model"])
                 proposal = self.proposals.create("accept_local", snapshot["project_id"],
                     candidate,
                     public_summary={"summary": "从 GX Works2 读取的程序", "diff": self.previews.diff_summary(candidate["_preview_diff"])},
@@ -249,7 +296,13 @@ class JobExecution:
         if version and self.projects.raw_version(project["id"], version["id"]) != version:
             raise ConflictError("任务绑定的基础版本已变化。")
         if snapshot.get("program_ir") is not None:
-            if canonical_hash(self.projects.program(project["id"], version["id"])) != canonical_hash(snapshot["program_ir"]):
+            if snapshot.get('program'):
+                from application.gxw_files import source_context
+                current_program = source_context(self.projects.tool_context(project['id'], version['id']),
+                                                 snapshot['program']).program_ir
+            else:
+                current_program = self.projects.program(project['id'], version['id'])
+            if canonical_hash(current_program) != canonical_hash(snapshot["program_ir"]):
                 raise ConflictError("任务绑定的程序内容已变化。")
         if snapshot.get("fbd_baseline") is not None:
             current = self.projects.artifact(project["id"], version["id"], "gxw").read_bytes()

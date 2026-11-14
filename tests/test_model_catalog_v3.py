@@ -87,6 +87,39 @@ def test_catalog_all_entries_validate_without_network():
                 CapabilityContract.from_dict(result['contract'])
 
 
+@pytest.mark.parametrize('endpoint,model,choices,wire', [
+    ('https://api.openai.com/v1', 'gpt-6-luna', {'reasoning_effort': 'max'},
+     {'reasoning': {'effort': 'max', 'summary': 'auto'}}),
+    ('https://api.deepseek.com', 'deepseek-flash', {'reasoning_effort': 'low', 'thinking_mode': 'enabled'},
+     {'reasoning': {'effort': 'low'}}),
+    ('https://api.deepseek.com', 'deepseek-flash', {'thinking_mode': 'disabled'},
+     {'reasoning': {'effort': 'none'}}),
+    ('https://openrouter.ai/api/v1', 'openai/gpt-5.5', {'reasoning_effort': 'high'},
+     {'reasoning': {'effort': 'high'}}),
+    ('https://dashscope.aliyuncs.com/compatible-mode/v1', 'qwen3.8-max',
+     {'enable_thinking': True, 'reasoning_effort': 'xhigh'},
+     {'reasoning': {'effort': 'xhigh'}}),
+    ('https://api.xiaomimimo.com/v1', 'mimo-v2.5-pro', {'thinking_mode': 'disabled'},
+     {'reasoning': {'effort': 'none'}}),
+])
+def test_saved_preset_reasoning_is_encoded_as_responses(endpoint, model, choices, wire):
+    from model_runtime.provider import ModelRequest, OpenAICompatibleProvider, UserMessage
+
+    p = profile(baseUrl=endpoint, model=model)
+    resolved = resolve_capabilities(p, api_key='key')
+    assert resolved['matched']
+    p['capabilityContract'] = resolved['contract']
+    p['userModelSettings'] = {
+        'scope': resolved['contract']['scope'],
+        'parameters': {key: {'mode': 'value', 'value': value} for key, value in choices.items()},
+    }
+    provider = OpenAICompatibleProvider(p, 'key', client=object())
+    request = ModelRequest((UserMessage('fixture'),), stream=False)
+    options = provider._request_params(request)
+    assert {key: options[key] for key in wire} == wire
+    assert not {'reasoning_effort', 'enable_thinking', 'thinking'}.intersection(options)
+
+
 @pytest.mark.parametrize('endpoint',['https://api.openai.com.evil.invalid/v1','https://proxy.invalid/v1',
     'http://api.openai.com/v1','https://api.openai.com/v2','https://api.openai.com:8443/v1'])
 def test_same_model_name_never_matches_wrong_endpoint(endpoint):

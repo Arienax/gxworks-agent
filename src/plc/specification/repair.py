@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Evidence-bound planning for generation-contract repair.
 
@@ -21,12 +21,22 @@ from plc.semantics import normalize_semantic_requirements
 from plc.specification.approach import inspect_ladder_features, normalize_approach
 
 
+from plc.device_identity import (
+    INDEXABLE_DEC_PREFIXES,
+    INDEXABLE_HEX_PREFIXES,
+    INDEXED_BASE_PATTERN,
+)
+
 _DEVICE_TOKEN_RE = re.compile(
-    r"(?<![A-Za-z0-9_])(?:SM|SD|TS|TC|CS|CC|[XYMSTCDRVZ])\d+(?![A-Za-z0-9_])",
+    r"(?<![A-Za-z0-9_])(?:(?:"
+    + "|".join(INDEXABLE_HEX_PREFIXES)
+    + r")[0-9][0-9A-F]*|(?:"
+    + "|".join(INDEXABLE_DEC_PREFIXES + ("Z",))
+    + r")\d+)(?![A-Za-z0-9_])",
     re.IGNORECASE,
 )
 _INDEXED_DEVICE_TOKEN_RE = re.compile(
-    r"(?<![A-Za-z0-9_])(?P<base>(?:SM|SD|[XYMSTCDR])\d+)(?P<index>[VZ]\d+)(?![A-Za-z0-9_])",
+    rf"(?<![A-Za-z0-9_])(?P<base>{INDEXED_BASE_PATTERN})(?P<index>[VZ]\d*)(?![A-Za-z0-9_])",
     re.IGNORECASE,
 )
 def _selected_approach(confirmed_spec):
@@ -121,6 +131,7 @@ def _rung_devices(rung):
         return devices
     header = rung.get("header_element")
     elements = [header] if isinstance(header, Mapping) else []
+    elements.extend(_walk_elements(rung.get("shared_inputs") or []))
     for branch in rung.get("branches") or []:
         if not isinstance(branch, Mapping):
             continue

@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Public HTTP resources; application owners select the public projection."""
 from __future__ import annotations
@@ -234,9 +234,11 @@ class Job(PublicResource):
     id: str
     kind: str
     status: str
+    title: str | None = None
     last_sequence: int = Field(ge=0)
     project_id: str | None = None
     version_id: str | None = None
+    conversation_id: str | None = None
     created_at: str
     updated_at: str | None = None
     cancel_requested: bool | None = None
@@ -268,6 +270,8 @@ class JobOutput(ExtensibleResource):
     spec_draft: Specification | None = None
     spec_base_hash: str | None = None
     base_version_id: str | None = None
+    base_program: str | None = None
+    edit_text: str | None = None
     generation: JsonObject | None = None
     proposal_id: str | None = None
     proposal_ids: list[str] | None = None
@@ -582,12 +586,6 @@ class ModelSettings(PublicResource):
     profiles: list[ModelProfile] = Field(default_factory=list)
 
 
-class Session(PublicResource):
-    authenticated: bool
-    csrf: str | None = None
-    read_only: bool | None = None
-
-
 class Health(PublicResource):
     status: str
     application: str
@@ -720,7 +718,7 @@ class SourceSnapshotEnvelope(ExtensibleResource):
 
 
 class ReadContinuation(PublicResource):
-    tool: Literal['search_plc_manual', 'get_generation_context', 'get_fbd_catalog']
+    tool: Literal['search_plc_manual', 'get_generation_context', 'get_fbd_catalog', 'get_design_context']
     arguments: JsonObject
 
 
@@ -747,17 +745,36 @@ class PagedReadData(PublicResource):
     delivery: ReadDelivery
 
 
+class ResolvedReadDelivery(PublicResource):
+    version: Literal[1]
+    document_id: str
+    page: int = Field(ge=0)
+    complete: bool
+    scope: Literal['read_sequence']
+    limits: dict[str, int]
+    next: ReadContinuation | None
+    fact_version: str
+    coverage: JsonObject | None = None
+    assembly: str | None = None
+
+
+class ResolvedReadData(PublicResource):
+    context_schema_version: Literal[4]
+    document: EngineeringObject
+    delivery: ResolvedReadDelivery
+
+
 class ManualSearchEnvelope(ExtensibleResource):
     ok: bool
     tool: Literal['search_plc_manual']
-    data: PagedReadData | None = None
+    data: ResolvedReadData | PagedReadData | None = None
     error: NativeToolError | None = None
 
 
 class CatalogEnvelope(ExtensibleResource):
     ok: bool
     tool: Literal["get_fbd_catalog"]
-    data: PagedReadData | FBDCatalog | None = None
+    data: ResolvedReadData | PagedReadData | FBDCatalog | None = None
     error: NativeToolError | None = None
 
 
@@ -828,7 +845,7 @@ class GenerationContextToolData(ExtensibleResource):
 class GenerationContextEnvelope(ExtensibleResource):
     ok: bool
     tool: Literal["get_generation_context"]
-    data: PagedReadData | GenerationContextToolData | None = None
+    data: ResolvedReadData | PagedReadData | GenerationContextToolData | None = None
     error: NativeToolError | None = None
 
 
@@ -888,6 +905,65 @@ def document_sse_events(schema):
         response["content"] = {"text/event-stream": {"schema": {"type": "string"}}}
         response["x-event-schema"] = {"$ref": "#/components/schemas/JobEvent"}
     return schema
+
+
+class WorkspaceState(ExtensibleResource):
+    """The workspace the workbench currently serves, or that none is bound yet."""
+
+    selected: bool
+    read_only: bool
+    path: str | None = None
+    name: str | None = None
+    home: str | None = None
+
+
+class WorkspaceBreadcrumb(ExtensibleResource):
+    name: str
+    path: str
+
+
+class WorkspaceEntry(ExtensibleResource):
+    name: str
+    path: str
+    hidden: bool = False
+
+
+class WorkspaceListing(ExtensibleResource):
+    """One directory level an operator can navigate and pick from."""
+
+    path: str
+    home: str
+    crumbs: list[WorkspaceBreadcrumb] = Field(default_factory=list)
+    entries: list[WorkspaceEntry] = Field(default_factory=list)
+    truncated: bool = False
+
+
+class WorkspaceDirectory(ExtensibleResource):
+    path: str
+
+
+class WorkspaceProject(ExtensibleResource):
+    """One project owned by a workspace, listed without binding that workspace."""
+
+    id: str | None = None
+    name: str | None = None
+    plc_model: str | None = None
+    target_mode: str | None = None
+
+
+class WorkspaceSummary(ExtensibleResource):
+    """One workspace row: its folder, label and the projects inside it."""
+
+    id: str
+    path: str
+    label: str
+    active: bool = False
+    projects: list[WorkspaceProject] = Field(default_factory=list)
+
+
+class WorkspaceIndex(ExtensibleResource):
+    active: str | None = None
+    workspaces: list[WorkspaceSummary] = Field(default_factory=list)
 
 
 def validate_public_read_document(tool, document):

@@ -335,13 +335,13 @@ def test_confirmation_generation_save_and_delivery_preserve_same_receipt(tmp_pat
     from application.delivery import delivery_summary
     from application.workbench import WorkbenchService
     from fastapi.testclient import TestClient
-    from test_web_api import _Provider, ORIGIN, _app, _login, _complete
+    from test_web_api import _Provider, ORIGIN, _app, _complete
     import application.generation_agent as agent
     monkeypatch.setattr(agent, "_build_knowledge_context", lambda *a, **kw: _evidence())
     service = WorkbenchService(tmp_path / "workspace", tmp_path / "state",
                                model_factory=lambda: (_Provider(), {"model": "offline"}))
     with TestClient(_app(service.store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         pid = client.post("/api/projects", json={"name": "Handoff"}, headers=headers).json()["id"]
         draft = build_review_draft(_analysis(CASES[2]))
         service.store.set_confirmed_spec(pid, draft)

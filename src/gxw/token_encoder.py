@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Encode observed Ladder token forms without loading vendor components.
 
@@ -13,12 +13,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 import codecs
-from decimal import Decimal, DecimalException, ROUND_HALF_UP, localcontext
 from functools import lru_cache
 import json
-import math
 import re
-import struct
 
 from plc.instruction_steps import (
     default_step_width_catalog, instruction_step_width, native_token_encodings,
@@ -208,12 +205,25 @@ def _literal_forms(profile: str = 'fx3u') -> dict:
     return result
 
 
-def _fx_literal_codes(op, index, args, *, profile):
+def _fx_literal_codes(op, index, args, *, profile, plc_model=None):
     codes = {int(code, 16) for code in _literal_forms(profile).get(op, {}).get(str(index), ())}
+    if plc_model is not None:
+        from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+        spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(op, cpu=plc_model, operand_count=len(args))
+        if (spec is not None and spec.contract_sources
+                and {'arity', 'operand_order', 'operand_types'} <= set(spec.verified_fields)
+                and index < len(spec.operands)):
+            forms = {('K', 16): 0xe8, ('K', 32): 0xe9, ('H', 16): 0xea, ('H', 32): 0xeb}
+            codes.update(forms[form] for form in spec.operands[index].integer_literal_widths)
     if op == 'OUT' and index == 1 and len(args) == 2:
         counter = re.fullmatch(r'C([0-9]+)', args[0])
         if counter is None or int(counter[1]) < 200:
             codes -= {0xe9, 0xeb}
+    if (op in {'DEADD', 'DEADDP'} and index in {0, 1}
+            and (profile != 'fx3u' or plc_model != 'FX3U')):
+        # Only CPU520 supplies independent H32 observations for these two
+        # REAL-conversion input slots. Existing K32 forms remain unchanged.
+        codes.discard(0xeb)
     return codes
 
 
@@ -283,16 +293,16 @@ def _fx_device(text: str) -> bytes | None:
     if text.startswith(('"', "'")):
         return None
     if '\\' in text:
-        module = re.fullmatch(r'U([0-7])\\G([0-9]+)(?:([ZV])([0-7]))?', text)
-        if module is None:
-            raise GXWFormatError('FX buffer memory requires U0..U7\\Gnumber with an optional buffer V/Z index')
-        unit, number, index, index_number = module.groups()
-        value = int(number)
-        if value > 32767:
-            raise GXWFormatError('FX buffer-memory source address exceeds its observed 15-bit range')
-        return (_integer(0xf8, int(unit), 8)
-                + (_integer(0xf0 if index == 'Z' else 0xf4, int(index_number), 8) if index else b'')
-                + _integer(0xab, value, 16))
+        from plc.storage.errors import StorageRuleError
+        from plc.storage.operands_fx import buffer_memory_operand
+        try:
+            module = buffer_memory_operand(text)
+        except StorageRuleError as error:
+            raise GXWFormatError(str(error)) from None
+        return (_integer(0xf8, module['unit'], 8)
+                + (_integer(0xf0 if module['index'] == 'Z' else 0xf4, module['index_number'], 8)
+                   if module['index'] else b'')
+                + _integer(0xab, module['address'], 16))
     if re.fullmatch(r'(?:K[+-]?[0-9]+|H[0-9A-F]+)[ZV][0-7]', text):
         return None  # It is an indexed literal, not a Kn bit-device group.
     match = _FX_DEVICE.fullmatch(text)
@@ -348,45 +358,19 @@ def _literal(text: str, codes: set[int], *, profile: str,
         signed, value = False, int(text[1:], 16)
     elif text.startswith("E"):
         # Mitsubishi scientific notation uses E1.23+4, not a second E.
-        match = re.fullmatch(r"E([+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+))([+-][0-9]+)?", text)
+        from plc.ordered_source import native_real_literal
+        match = native_real_literal(text)
         if match is None:
             raise GXWFormatError("unsupported floating-point literal spelling")
         code = token_code if token_code in (0xec, 0xed) else 0xed if match[2] else 0xec
         if code not in codes:
             raise GXWFormatError("float notation is outside the observed parameter form")
+        from plc.storage.errors import StorageRuleError
+        from plc.storage.operands_fx import real_literal_operand
         try:
-            value = float(match[1] + ("e" + match[2] if match[2] else ""))
-            if not math.isfinite(value):
-                raise GXWFormatError('non-finite floating-point operand')
-            exact_input = Decimal(match[1]).scaleb(int(match[2] or '0'))
-            if value == 0 and exact_input:
-                raise GXWFormatError('floating-point operand underflows binary32')
-            minimum, maximum = ((1e-10, 999999900000.0) if code == 0xec else
-                                (1.175495e-38, 3.402823e38))
-            if value and not minimum <= abs(value) <= maximum:
-                raise GXWFormatError('float is outside the stored notation range')
-            if value == 0:
-                value = 0.0  # Native input normalizes a signed textual zero.
-            if profile in _PROFILES:
-                # FX2 15.31 RVAs 0x2b3d0/0x2b9f8 and independent Q controls:
-                # strtod ->
-                # sprintf("%+7.6E") -> strtod -> binary32. The intermediate
-                # legacy-CRT rounding is essential; direct strtof differs.
-                with localcontext() as context:
-                    context.prec = 100
-                    exact = Decimal.from_float(value)
-                    rounded = exact.quantize(Decimal(1).scaleb(exact.adjusted() - 6),
-                                             rounding=ROUND_HALF_UP) if value else Decimal(0)
-                value = float(rounded)
-            payload = struct.pack("<f", value)
-        except (OverflowError, ValueError, DecimalException) as exc:
-            raise GXWFormatError("float is outside the observed binary32 range") from exc
-        stored = struct.unpack("<f", payload)[0]
-        if not math.isfinite(stored):
-            raise GXWFormatError("non-finite floating-point operand")
-        if stored == 0 and Decimal(match[1]):
-            raise GXWFormatError("floating-point operand underflows binary32")
-        return _token(code, payload)
+            return real_literal_operand(text, token_code=code)
+        except StorageRuleError as error:
+            raise GXWFormatError(str(error)) from error
     else:
         raise GXWFormatError("unsupported operand spelling: " + text)
     if len(choices) != 1:
@@ -528,6 +512,12 @@ def encode_instruction(op: str, args: Sequence[str | Mapping] = (), *, profile: 
         raise GXWFormatError("instruction operands must be a sequence of strings or structured operands")
     values = tuple(_operand_input(arg) for arg in args)
     op, arguments = _mnemonic(op), tuple(value[0] for value in values)
+    if op in {'DDEG', 'DDEGP'} and (profile != 'fx3u' or plc_model != 'FX3U'):
+        # These headers/operand forms have CPU520 memory-conversion witnesses
+        # only. Do not infer another CPU's constructor ABI from source support.
+        raise GXWFormatError('DDEG operand encoding is only observed for FX3U/fx3u')
+    if op == 'DDVIT' and (profile != 'fx3u' or plc_model != 'FX3U'):
+        raise GXWFormatError('DDVIT operand encoding is only observed for FX3U/fx3u')
     if re.fullmatch(r'[PI][0-9]+', op):
         if arguments:
             raise GXWFormatError('source labels have no instruction operands')
@@ -551,17 +541,30 @@ def encode_instruction(op: str, args: Sequence[str | Mapping] = (), *, profile: 
             code = old.tokens[-1].raw[1]
             compatible = source.mnemonic == op
             if compatible and profile in _FX_PROFILES and op == 'OUT' and index == 1 and code >= 0xe8:
-                compatible = code in _fx_literal_codes(op, index, arguments, profile=profile)
+                compatible = code in _fx_literal_codes(op, index, arguments, profile=profile, plc_model=plc_model)
             if not compatible and profile in _FX_PROFILES and source.mnemonic != op:
-                allowed = _literal_forms(profile).get(op, {}).get(str(index), ())
-                compatible = (code < 0xe8 or f"{code:02x}" in allowed)
+                allowed = _fx_literal_codes(op, index, arguments, profile=profile, plc_model=plc_model)
+                compatible = code < 0xe8 or code in allowed
             if compatible:
                 result.append(_raw_operand(old))
                 continue
         if profile in _FX_PROFILES:
-            raw = _fx_device(arg)
+            raw = None
+            if op in {'CALL', 'CALLP'} and index == 0 and profile == 'fx3u' and plc_model == 'FX3U':
+                from plc.storage.errors import StorageRuleError
+                from plc.storage.operands_fx import call_indexed_pointer_operand
+                try:
+                    pointer = call_indexed_pointer_operand(arg)
+                except StorageRuleError as error:
+                    raise GXWFormatError(str(error)) from None
+                if pointer is not None:
+                    raw = (_integer(0xf0 if pointer['index'] == 'Z' else 0xf4,
+                                    pointer['index_number'], 8)
+                           + _integer(0xd0, pointer['pointer_number'], 16))
             if raw is None:
-                codes = _fx_literal_codes(op, index, arguments, profile=profile)
+                raw = _fx_device(arg)
+            if raw is None:
+                codes = _fx_literal_codes(op, index, arguments, profile=profile, plc_model=plc_model)
                 literal_code = None
                 if form_codes is not None:
                     if len(form_codes) == 1 or len(form_codes) == 2 and form_codes[0] in (0xf0, 0xf4):

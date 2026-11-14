@@ -1,20 +1,24 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Persistent background jobs with frozen inputs and cooperative cancellation."""
 
 from __future__ import annotations
 
 from shared.privacy import credential_field
+from shared.tracing import remove_project_actions
 
 import copy
+import hashlib
 import json
+import shutil
 import uuid
-import threading
 import time
 import shared.diagnostics as diagnostics
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
+from filelock import FileLock, Timeout
 
 from .events import append_event, utc_now
 from .job_errors import acceptance_error_details, generation_error_details, workflow_error_code
@@ -35,6 +39,26 @@ class JobCancelled(BaseException):
 _ACTIVE = frozenset({"queued", "running", "cancelling"})
 _JOB_FIELDS = ("id", "kind", "status", "created_at", "updated_at", "cancel_requested",
                "last_sequence", "result", "error_code", "error_details")
+
+
+def job_title(snapshot):
+    """One line for a conversation row, taken from what the operator typed."""
+    for key in ("raw_requirement", "text"):
+        value = snapshot.get(key)
+        if isinstance(value, str) and value.strip():
+            return " ".join(value.split())[:60]
+    return ""
+
+
+def job_conversation_id(record):
+    snapshot = record.get("snapshot", {})
+    if "conversation_id" in snapshot:
+        return snapshot["conversation_id"]
+    # Older records predate explicit conversation starts. Preserve user
+    # requests while showing unlinked program generation in project jobs.
+    if record.get("kind") in {"analysis", "direct_generation", "agent"}:
+        return snapshot.get("clarification_job_id") or record["id"]
+    return None
 
 
 def _check_snapshot(value):
@@ -93,9 +117,9 @@ class JobContext:
 class JobManager:
     def __init__(self, state_dir, writer_lock, max_workers=2):
         self.lock = writer_lock
-        self._record_lock = threading.RLock()
-        self.lock.require_acquired()
+        self.lock.require_open()
         self.state_dir = bind_workspace_state(state_dir, self.lock.workspace)
+        self._record_lock = FileLock(self.state_dir / "job-records.lock")
         self.directory = contained(self.state_dir / "jobs", self.state_dir)
         self.directory.mkdir(exist_ok=True)
         self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="plc-job")
@@ -105,9 +129,20 @@ class JobManager:
             for path in self.directory.glob("*.json"):
                 record = read_json(contained(path, self.directory))
                 if record.get("status") in _ACTIVE:
-                    record.update(status="interrupted", error_code="process_interrupted", error_details=None)
-                    append_event(record, "interrupted", {"error_code": "process_interrupted"})
-                    self._save(record)
+                    try:
+                        with self._job_lifetime(record["id"]):
+                            record.update(status="interrupted", error_code="process_interrupted", error_details=None)
+                            append_event(record, "interrupted", {"error_code": "process_interrupted"})
+                            self._save(record)
+                    except Timeout:
+                        # Another workbench still owns this queued or running job.
+                        continue
+
+    def _job_lifetime(self, job_id):
+        path = self.directory / ("." + record_id(job_id, "job") + ".running.lock")
+        # The submitting thread acquires this before publishing the job. Its
+        # completion callback may run on a different thread.
+        return FileLock(path, timeout=0, thread_local=False)
 
     def _load(self, job_id):
         path = contained(self.directory / (record_id(job_id, "job") + ".json"), self.directory)
@@ -119,22 +154,28 @@ class JobManager:
         return record
 
     def _save(self, record):
-        self.lock.require_acquired()
+        self.lock.require_open()
         revision = int(record.get("revision") or 0) + 1
         atomic_json(contained(self.directory / (record_id(record["id"]) + ".json"), self.directory),
                     {**record, "revision": revision})
         record["revision"] = revision
 
     @staticmethod
+    @staticmethod
     def _public(record):
         snapshot = record.get("snapshot", {})
+        model_usage = record.get("model_usage", snapshot.get("model", {}))
+        if record.get("token_counts"):
+            model_usage = {**(model_usage or {}), "tokens": record["token_counts"]}
         result = public_payload({**{key: record.get(key) for key in _JOB_FIELDS},
-                               "model_usage": record.get("model_usage", snapshot.get("model", {})),
+                               "model_usage": model_usage,
                                "project_id": snapshot.get("project_id"),
+                               "title": job_title(snapshot),
                                "version_id": snapshot.get("version_id") or snapshot.get("base_version_id")},
                               native_live=record.get('kind') == 'execution')
         if type(record.get('revision')) is int:
             result['revision'] = record['revision']
+        result["conversation_id"] = job_conversation_id(record)
         return result
 
     def record(self, job_id):
@@ -152,10 +193,59 @@ class JobManager:
 
     def list(self, project_id=None):
         with self._record_lock:
-            records = [self._load(path.stem) for path in self.directory.glob("*.json")]
-            if project_id is not None:
-                records = [r for r in records if r["snapshot"].get("project_id") == project_id]
+            records = self._records(project_id)
             return [self._public(r) for r in sorted(records, key=lambda r: r["created_at"], reverse=True)]
+
+    def completed_conversation_jobs(self, project_id, conversation_id):
+        with self._record_lock:
+            records = sorted(self._records(project_id), key=lambda r: r["created_at"], reverse=True)
+            return [r["id"] for r in records if r["status"] == "completed"
+                    and job_conversation_id(r) == conversation_id]
+
+    def _records(self, project_id):
+        records = [self._load(path.stem) for path in self.directory.glob("*.json")]
+        return records if project_id is None else [row for row in records if row["snapshot"].get("project_id") == project_id]
+
+    def _job_path(self, directory, filename):
+        path = self.state_dir / directory / filename
+        if contained(path, self.state_dir) != path:
+            raise ValueError("Unsafe job storage path")
+        return path
+
+    def _deletion_paths(self, record):
+        job_id = record_id(record["id"], "job")
+        files = [self._job_path(directory, job_id + suffix) for directory, suffix in (
+            ("outputs", ".json"), ("diagnostics", ".jsonl"), ("diagnostics", ".transcript.jsonl"),
+        )]
+        request_id = record.get("request_id")
+        if request_id:
+            receipt = self._job_path("job_commands", hashlib.sha256(request_id.encode()).hexdigest() + ".json")
+            if receipt.is_file() and read_json(receipt).get("job_id") == job_id:
+                files.append(receipt)
+        return self._job_path("staging", job_id), files, self._job_path("jobs", job_id + ".json")
+
+    @contextmanager
+    def deleting_project(self, project_id):
+        """Keep project jobs frozen until project deletion and job cleanup finish."""
+        with self._record_lock, ExitStack() as lifetimes:
+            records = self._records(project_id)
+            if any(record["status"] in _ACTIVE for record in records):
+                raise ConflictError("Project still has active jobs")
+            try:
+                for record in records:
+                    lifetimes.enter_context(self._job_lifetime(record["id"]))
+            except Timeout as exc:
+                raise ConflictError("Project jobs are still finishing") from exc
+            paths = [self._deletion_paths(record) for record in records]
+            yield bool(records)
+            remove_project_actions(self.state_dir, project_id, (record["id"] for record in records))
+            for staging, files, job_path in paths:
+                if staging.exists():
+                    shutil.rmtree(staging)
+                for path in files:
+                    path.unlink(missing_ok=True)
+                job_path.unlink()
+                self._futures.pop(job_path.stem, None)
 
     def events(self, job_id, after_sequence=0):
         if not isinstance(after_sequence, int) or after_sequence < 0:
@@ -174,7 +264,7 @@ class JobManager:
         _check_snapshot(frozen)
         digest = canonical_hash({"kind": kind, "snapshot": frozen})
         with self._record_lock:
-            self.lock.require_acquired()
+            self.lock.require_open()
             if self._closed:
                 raise RuntimeError("Job manager is closed")
             if request_id is not None:
@@ -189,14 +279,26 @@ class JobManager:
                       "created_at": now, "updated_at": now, "snapshot": frozen,
                       "input_hash": digest, "request_id": request_id, "cancel_requested": False,
                       "last_sequence": 0, "events": [], "result": None, "error_code": None, "error_details": None}
-            append_event(record, "queued")
-            self._save(record)
-            diagnostics.record_operator_action(
-                self.state_dir, "job_submit", project_id=frozen.get("project_id"),
-                job_id=record["id"], payload={"kind": kind, "request_id": request_id, "snapshot": frozen},
-                result={"status": "queued"},
-            )
-            self._futures[record["id"]] = self._executor.submit(self._run, record["id"], worker)
+            if frozen.get("start_conversation"):
+                frozen["conversation_id"] = record["id"]
+            else:
+                frozen.setdefault("conversation_id", None)
+            lifetime = self._job_lifetime(record["id"])
+            lifetime.acquire()
+            try:
+                append_event(record, "queued")
+                self._save(record)
+                diagnostics.record_operator_action(
+                    self.state_dir, "job_submit", project_id=frozen.get("project_id"),
+                    job_id=record["id"], payload={"kind": kind, "request_id": request_id, "snapshot": frozen},
+                    result={"status": "queued"},
+                )
+                future = self._executor.submit(self._run, record["id"], worker)
+            except BaseException:
+                lifetime.release()
+                raise
+            self._futures[record["id"]] = future
+            future.add_done_callback(lambda _: lifetime.release())
             return self._public(record)
 
     def emit(self, job_id, event_type, data=None):
@@ -207,6 +309,9 @@ class JobManager:
             event = append_event(record, event_type, data)
             if event_type == "model_request":
                 record["model_usage"] = event["payload"]
+            elif event_type == "model_token_usage" and event["payload"]:
+                from model_runtime.usage import add_token_counts
+                record["token_counts"] = add_token_counts(record.get("token_counts"), event["payload"])
             self._save(record)
             return copy.deepcopy(event)
 
@@ -298,7 +403,7 @@ class JobManager:
             from application.session import ProjectSession
 
             with self.lock.thread_lock:
-                self.lock.require_acquired()
+                self.lock.require_open()
                 store = ProjectSession(base_dir=self.lock.workspace, create=False)
                 current = store.get_project(project_id)
                 if not isinstance(current, dict):
@@ -420,7 +525,8 @@ class JobManager:
             if preserved is not None:
                 status, error_code, error_details, result = "completed", None, None, preserved
             else:
-                safe_codes = {"ResponseRejectedError": "response_rejected", "ConflictError": "input_conflict",
+                safe_codes = {"ResponseRejectedError": "response_rejected", "AnalysisProtocolError": "response_rejected",
+                              "ConflictError": "input_conflict",
                               "ContextUnavailableError": "context_unavailable", "ChangeScopeError": "change_scope_violation"}
                 status, error_code, result = "failed", safe_codes.get(type(exc).__name__, "job_failed"), None
                 error_details = acceptance_error_details(exc)

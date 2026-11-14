@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """High-level GX Works2 simulation preparation.
 
@@ -489,6 +489,11 @@ class GXSimulator2PreparationService:
 
             runtime = get_simulator_gateway_runtime()
         self.runtime = runtime
+
+    def select_model(self, plc_model):
+        from plc.device_policy import native_simulator_profile
+        native_simulator_profile(plc_model)
+        self.runtime.plc_model = plc_model
 
     @staticmethod
     def _emit(progress: Optional[Callable[[str, str], None]], stage, message):

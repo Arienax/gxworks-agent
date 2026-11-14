@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Public tool catalog and compatibility imports; implementations have dedicated owners."""
 from __future__ import annotations
@@ -75,14 +75,18 @@ from agent_runtime.native_tools import (
 )
 
 
-def build_default_tool_registry() -> ToolRegistry:
+def build_default_tool_registry(*, receipt_store=None) -> ToolRegistry:
     from agent_runtime.generation_tools import GenerationToolHandlers
     from agent_runtime.tool_catalog import default_tool_definitions
     from agent_runtime.inspection_tools import register_inspection_tools
 
     generation = GenerationToolHandlers(
-        _get_generation_context, _create_program_candidate, _create_fbd_candidate, _patch_program)
+        _get_generation_context, _create_program_candidate, _create_fbd_candidate, _patch_program,
+        receipt_store=receipt_store)
     registry = ToolRegistry()
+    if receipt_store is not None:
+        from application.read_delivery import ReadDeliveryStore
+        registry._read_delivery = ReadDeliveryStore(receipt_store=receipt_store)
     for definition in default_tool_definitions(generation):
         registry.register(definition)
     register_inspection_tools(registry)

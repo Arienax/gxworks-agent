@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Publish bounded live activity while model content is still unaccepted."""
 import time
@@ -46,7 +46,6 @@ class ModelProgressReporter:
         self.ctx = ctx
         self.clock = clock
         self.interval = interval
-        self.last_time = float("-inf")
         self.last_phase = None
         self.request_number = 0
         self.preview_time = float("-inf")
@@ -60,18 +59,19 @@ class ModelProgressReporter:
             checkpoint()
 
     def __call__(self, progress):
-        # Cancellation is transport control, not presentation. Check before the
-        # 400 ms UI throttle so every raw provider event can terminate a stream.
+        # Cancellation is transport control, not presentation. Check every raw
+        # provider event even when its stage is already visible.
         self._checkpoint()
-        now = self.clock()
         if progress.phase == "waiting":
             self.request_number += 1
-        if progress.phase == self.last_phase and now - self.last_time < self.interval:
+        elif progress.phase == self.last_phase:
             return
+        # The UI displays the stage, not the per-chunk character counter.
+        # Repeated stage events rewrite the entire durable job and eventually
+        # slow stream consumption. Live text is independently batched below.
         self.ctx.emit("model_progress", {"phase": progress.phase,
             "received_characters": progress.received_characters, "request_number": self.request_number})
         self.last_phase = progress.phase
-        self.last_time = now
 
     def preview(self, update):
         self._checkpoint()

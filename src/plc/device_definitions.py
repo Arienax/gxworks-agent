@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Source-bound special-device facts, independent of address-range support.
 
@@ -20,15 +20,11 @@ from plc.target_support import normalize_target_cpu
 from shared.paths import resource_path
 
 
-@lru_cache(maxsize=1)
-def _definitions():
-    path = resource_path('instructions/mitsubishi/device_definitions.json')
-    if not path.is_file():
-        return []
-    data = json.loads(path.read_text(encoding='utf-8'))
+def parse_device_definitions(data):
+    """Validate the canonical resource for runtime and offline compilation."""
     if data.get('schema_version') != 1:
         raise ValueError('Unsupported device-definition schema')
-    rows = data['definitions']
+    rows = copy.deepcopy(data['definitions'])
     ids = set()
     for row in rows:
         if (row['id'] in ids or not row['devices'] or not row['models'] or not row['sources']
@@ -43,6 +39,14 @@ def _definitions():
                 raise ValueError('A device definition needs source revision and page evidence')
         row['canonical_devices'] = [canonical_reference_device(d) for d in row['devices']]
     return rows
+
+
+@lru_cache(maxsize=1)
+def _definitions():
+    path = resource_path('instructions/mitsubishi/device_definitions.json')
+    if not path.is_file():
+        return []
+    return parse_device_definitions(json.loads(path.read_text(encoding='utf-8')))
 
 
 def device_definitions():

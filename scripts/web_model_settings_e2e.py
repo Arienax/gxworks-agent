@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Real HTTP/browser acceptance of catalog v3; only a synthetic model transport.
 
@@ -34,10 +34,10 @@ async def run(web_dist, evidence, *, executable=None, component_fixture=False):
     endpoints = []
     def factory(profile, key):
         endpoint = WireEndpoint(ignore=True, metadata=[{'id':'tenant-alias','parameters':{
-            'enable_thinking':{'type':'boolean'},
+            'budget_enabled':{'type':'boolean'},
             'thinking_budget':{'type':'integer','minimum':0,'maximum':32768,'multipleOf':1024,
                 'wire_location':'extra_body','wire_path':['thinking','budget_tokens'],
-                'requires':{'enable_thinking':[True]}},
+                'requires':{'budget_enabled':[True]}},
             'verbosity':{'enum':['quiet','normal','verbose']}},
             'capabilities':{'vision':True,'audio':False},'context_window':262144}])
         endpoints.append(endpoint)
@@ -63,10 +63,10 @@ async def run(web_dist, evidence, *, executable=None, component_fixture=False):
                         import httpx
                         bridge = httpx.AsyncClient(transport=httpx.ASGITransport(app=server.app),base_url=server.origin)
                         async def fixture_fetch(url, options):
-                            if not (url == '/api/session' or url.startswith('/api/settings')):
-                                raise ValueError('Fixture accepts settings/session requests only')
+                            if not (url == '/api/workspace' or url.startswith('/api/settings')):
+                                raise ValueError('Fixture accepts workspace and settings requests only')
                             headers = {'Origin':server.origin, **{k:v for k,v in options.get('headers',{}).items()
-                                if k.lower() in {'content-type','x-csrf-token'}}}
+                                if k.lower() == 'content-type'}}
                             response = await bridge.request(options.get('method','GET'),url,headers=headers,content=options.get('body'))
                             return {'status':response.status_code,'body':response.text}
                         await page.expose_function('__ASGIFixtureFetch',fixture_fetch)
@@ -162,7 +162,7 @@ async def run(web_dist, evidence, *, executable=None, component_fixture=False):
                         await expect(page.locator('.model-debug')).not_to_have_attribute('open','')
                         await open_more()
                         temp_control=page.locator('.model-parameters [data-parameter="temperature"]')
-                        flag_control=page.locator('.model-parameters [data-parameter="enable_thinking"]')
+                        flag_control=page.locator('.model-parameters [data-parameter="budget_enabled"]')
                         await expect(temp_control.get_by_role('slider')).to_have_count(0)
                         await expect(flag_control.get_by_role('switch')).to_have_count(0)
                         await flag_control.get_by_role('combobox').select_option('inherit')
@@ -171,9 +171,9 @@ async def run(web_dist, evidence, *, executable=None, component_fixture=False):
                         await temp_control.get_by_role('combobox').select_option('value')
                         await page.get_by_label('temperature value',exact=True).fill('0.733')
                         await expect(temp_control.get_by_role('slider')).to_have_count(0)
-                        effort_control=page.locator('.model-parameters [data-parameter="reasoning_effort"]')
-                        await effort_control.get_by_role('combobox',name='reasoning_effort mode').select_option('value')
-                        await page.get_by_label('reasoning_effort value',exact=True).fill('high')
+                        await expect(page.locator('.model-parameters [data-parameter="reasoning_effort"]')).to_have_count(0)
+                        await page.get_by_role('switch',name='推理档位',exact=True).check()
+                        await expect(page.get_by_label('high API 参数值',exact=True)).to_have_value('high')
                         await flag_control.get_by_role('combobox').select_option('value')
                         await flag_control.get_by_role('switch').check()
                         await page.get_by_role('combobox',name='thinking_budget mode').select_option('value')
@@ -181,7 +181,7 @@ async def run(web_dist, evidence, *, executable=None, component_fixture=False):
                         await page.get_by_role('combobox',name='verbosity mode').select_option('value')
                         await page.get_by_role('combobox',name='verbosity choice').select_option(label='verbose')
                         await page.locator('.more-settings > summary').click()
-                        await expect(page.locator('.more-settings > summary .badge')).to_have_text('5')
+                        await expect(page.locator('.more-settings > summary .badge')).to_have_text('4')
                         await custom_source.click()
                         await expect(custom_source).to_have_attribute('aria-pressed','true')
                         await expect(service_field).to_have_count(0)
@@ -195,7 +195,7 @@ async def run(web_dist, evidence, *, executable=None, component_fixture=False):
                         await expect(page.get_by_label('API URL',exact=True)).not_to_be_visible()
                         await expect(page.get_by_label('模型',exact=True)).to_have_value('tenant-alias')
                         await expect(page.locator('.settings-form input[type="password"]')).to_have_value('synthetic-only-key')
-                        await expect(page.locator('.more-settings > summary .badge')).to_have_text('5')
+                        await expect(page.locator('.more-settings > summary .badge')).to_have_text('4')
                         assert requests()==0 and not settings.public_settings()['profiles']
                         await open_more()
                         await expect(page.get_by_label('temperature value',exact=True)).to_have_value('0.733')
@@ -211,13 +211,14 @@ async def run(web_dist, evidence, *, executable=None, component_fixture=False):
                         first_id=saved['id']
                         assert settings.public_settings()['active_profile_id']==first_id
                         assert saved['user_settings']['parameters']['temperature']['value']==.733
-                        assert saved['user_settings']['parameters']['reasoning_effort']['value']=='high'
+                        levels = saved['contract']['parameters']['reasoning_effort']['ui_hint']['reasoning_levels']
+                        assert levels == {'off': None, 'low': 'low', 'medium': 'medium', 'high': 'high'}
                         assert 'synthetic-only-key' not in json.dumps(settings.public_settings())
                         model,_=settings.model_snapshot()
                         wire=model._request_params(ModelRequest((UserMessage('synthetic validation'),),stream=False))
-                        assert wire['temperature']==.733 and wire['reasoning_effort']=='high'
-                        assert wire['extra_body']['thinking']['budget_tokens']==8192
-                        assert wire['enable_thinking'] is True and wire['verbosity']=='verbose'
+                        assert wire['temperature']==.733 and 'reasoning' not in wire
+                        assert wire['thinking']['budget_tokens']==8192
+                        assert wire['budget_enabled'] is True and wire['verbosity']=='verbose'
                         await expect(page.locator('.provider-row')).to_contain_text('tenant-alias')
                         await expect(page.locator('.provider-row')).to_contain_text('当前使用')
                         await expect(page.locator('.provider-row')).not_to_contain_text('尚未验证生成')

@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """CPU-selected callable interfaces bound to the existing graph and labels.
 
@@ -9,6 +9,8 @@ not inferred here. Failed or ambiguous bindings remain explicit read issues.
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from collections.abc import Mapping
+from copy import deepcopy
 from functools import lru_cache
 import re
 
@@ -27,6 +29,21 @@ from .semantic import (FunctionBlockCategory, FunctionBlockPortSpec, FunctionBlo
 
 CLASS = {'VAR': 1, 'VAR CONSTANT': 2, 'VAR_INPUT': 3, 'VAR_OUTPUT': 4,
          'VAR_IN_OUT': 5, 'VAR_INPUT CONSTANT': 11, 'VAR_IN_EXT': 12}
+
+
+def pou_status_options(status):
+    """Decode the saved FB property bits without claiming unmapped bits.
+
+    Clearing Use Macrocode changed the saved status from 1 to 0. EN/ENO is the
+    established bit 2. MC/MCR is only mapped for the observed all-properties
+    status 7; other combinations keep it unknown instead of treating the
+    remaining bit as a general flag. Upper bits stay separate.
+    """
+    if status is None:
+        return dict(use_macrocode=None, use_mc_mcr=None, use_en_eno=None)
+    return dict(use_macrocode=bool(status & 1),
+                use_mc_mcr=True if status == 7 else False if status in (0, 1) else None,
+                use_en_eno=bool(status & 4))
 
 
 def read_project_declarations(streams, *, source_groups=None, overrides=None):
@@ -91,6 +108,11 @@ def type_mask(text):
 
 
 def interface(definition, input_count=None, *, resolve_type=None, graphical=False):
+    """Retain declaration initialization separately from input omission rules.
+
+    A stored initializer is not evidence that an unconnected input is optional,
+    nor that its value is assigned again on each omitted call.
+    """
     if definition.get('source_kind') == 'project_labels':
         # The original compiler frontend orders project declarations by their
         # saved number, independently of displayed row order and live IDs.
@@ -104,7 +126,8 @@ def interface(definition, input_count=None, *, resolve_type=None, graphical=Fals
             if len({r.record_id for r in group}) != len(group):
                 raise GXWFormatError('ambiguous saved declaration order in project callable')
         rows = [dict(name=r.name, class_code=r.class_code,
-                     declared_type=r.data_type, source_offset=r.offset)
+                     declared_type=r.data_type, source_offset=r.offset,
+                     **({'declared_initial_value_raw': r.initial_value} if r.initial_value else {}))
                 for r in sorted(declared, key=lambda r: r.record_id)]
         if any(r['class_code'] not in CLASS.values() for r in rows):
             raise GXWFormatError('project declaration class outside observed interfaces')
@@ -117,7 +140,8 @@ def interface(definition, input_count=None, *, resolve_type=None, graphical=Fals
             if r['source_class'] not in CLASS:
                 raise GXWFormatError('source declaration class outside observed interfaces')
             rows.append(dict(name=r['name'], class_code=CLASS[r['source_class']],
-                             declared_type=r['data_type_raw'], source_offset=r['offset']))
+                             declared_type=r['data_type_raw'], source_offset=r['offset'],
+                             **({'declared_initial_value_raw': r['initial_raw']} if r['initial_raw'] else {})))
     document = definition.get('declarations')
     if (graphical and document is not None and document.owner_pou_status is not None
             and document.owner_pou_status & 4):
@@ -321,8 +345,20 @@ class ProjectCallableSources:
 
     def __init__(self, cpu, program_name, declarations, library_sources, *, global_variable_hiding=False,
                  user_library_owners=None, source_groups=None, library_structures=None,
-                 project_structure_names=(), project_structures=None):
+                 project_structure_names=(), project_structures=None,
+                 instruction_registry=None, fbd_condition_context=None, target_model=None):
         self.cpu, self.program_name, self.declarations = cpu, program_name, declarations
+        self.target_model = str(target_model).strip().upper() if target_model is not None else None
+        if self.target_model:
+            from gxworks2.project_profiles import native_project_profile
+            requested_profile = native_project_profile(self.target_model)
+            project_profile = native_project_profile(cpu)
+            if (requested_profile is None or project_profile is None
+                    or requested_profile.cpu != project_profile.cpu):
+                raise GXWFormatError(
+                    f'FBD logical model {target_model!r} does not match project CPU menu {cpu!r}')
+        self.instruction_registry = instruction_registry
+        self.fbd_condition_context = dict(fbd_condition_context or {})
         self.user_library_owners = dict(user_library_owners or {})
         self.source_groups = dict(source_groups) if source_groups is not None else None
         self.library_structures = dict(library_structures or {})
@@ -379,7 +415,8 @@ class ProjectCallableSources:
             self.catalog[owner.casefold()].append((stream, definition))
 
     @classmethod
-    def from_project(cls, raw, program_name, declarations=None):
+    def from_project(cls, raw, program_name, declarations=None, *, instruction_registry=None,
+                     fbd_condition_context=None, target_model=None):
         outer = validate_cfb_streams(raw)
         mapping = project_stream_mapping(outer)
         payloads = read_project_hdb(outer).payloads
@@ -431,7 +468,8 @@ class ProjectCallableSources:
         result = cls(contexts[0]['cpu'], program_name, declarations, libraries, global_variable_hiding=hiding,
                      user_library_owners=user_library_owners, source_groups=source_groups,
                      library_structures=structures, project_structure_names=project_types,
-                     project_structures=project_structures)
+                     project_structures=project_structures, instruction_registry=instruction_registry,
+                     fbd_condition_context=fbd_condition_context, target_model=target_model)
         result.system_variable_ranges = system_ranges
         result.issues[:0] = issues
         result.declaration_gaps = {issue['stream'] for issue in declaration_issues}
@@ -448,6 +486,97 @@ class ProjectCallableSources:
         result.issues = [issue for issue in self.issues if issue['code'] != 'project_callable_owner_gap']
         result._project_definitions(declarations)
         return result
+
+    def _instruction_registry(self):
+        registry = getattr(self, 'instruction_registry', None)
+        if registry is not None:
+            return registry
+        from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+        return DEFAULT_INSTRUCTION_REGISTRY
+
+    def fbd_instruction_block_contract(self, opcode):
+        """Return one exact FBD contract, or None when no owner is present."""
+        name = str(opcode or '').strip().upper()
+        if not name:
+            return None
+        model = self.target_model or self.cpu
+        registry = self._instruction_registry()
+        entry = registry.definition_entry(name, cpu=model, vendor='mitsubishi')
+        if entry is None:
+            return None
+        from plc.fbd_instruction_block_contract import resolve_fbd_instruction_block_contract
+        resolution = resolve_fbd_instruction_block_contract(
+            entry, opcode=name, model=model,
+            condition_context=getattr(self, 'fbd_condition_context', None))
+        if not resolution.accepted:
+            if resolution.refusal_reasons == ('fbd_signature_missing',):
+                return None
+            reason = ','.join(resolution.refusal_reasons) or 'source_contract_rejected'
+            raise GXWFormatError('source FBD instruction block is unavailable: %s (%s)' % (name, reason))
+        return resolution.contract.as_mapping()
+
+    def fbd_instruction_block_shape_source_available(self, opcode):
+        """The bundled MELSEC interface must independently establish its pins."""
+        matches = self.catalog.get(str(opcode or '').strip().casefold(), ())
+        return (len(matches) == 1 and matches[0][0].casefold() == 'melsec.lif'
+                and matches[0][1].get('kind') == 'FUNCTION'
+                and matches[0][1].get('source_kind') != 'project_labels')
+
+    def fbd_instruction_block_graphic_shape_matches(self, opcode, contract):
+        """Check an exact source signature against the visible MELSEC.lif pins."""
+        return self.fbd_instruction_block_graphic_interface(opcode, contract) is not None
+
+    def fbd_instruction_block_graphic_interface(self, opcode, contract):
+        """Return a small witness for the matching visible CPU library pins."""
+        name = str(opcode or '').strip().upper()
+        if not name or not isinstance(contract, dict) or contract.get('opcode') != name:
+            return None
+        contract_model = str(contract.get('model') or '').strip().upper()
+        selected_model = self.target_model or str(self.cpu or '').strip().upper()
+        if not contract_model or contract_model != selected_model:
+            return None
+        from gxworks2.project_profiles import native_project_profile
+        contract_profile = native_project_profile(contract_model)
+        project_profile = native_project_profile(self.cpu)
+        if (contract_profile is None or project_profile is None
+                or contract_profile.cpu != project_profile.cpu):
+            return None
+        if not self.fbd_instruction_block_shape_source_available(name):
+            return None
+        input_pins = [pin for pin in contract.get('pins', ()) if pin.get('direction') == 'input']
+        output_pins = [pin for pin in contract.get('pins', ()) if pin.get('direction') == 'output']
+        try:
+            stream, definition = self.definition(name, 'FUNCTION')
+            interface_inputs, interface_outputs = self._interface(definition, len(input_pins))
+        except (GXWFormatError, TypeError, ValueError):
+            return None
+        library_shape = ([(pin['name'].casefold(), pin['declared_type'].upper())
+                          for pin in interface_inputs],
+                         [(pin['name'].casefold(), pin['declared_type'].upper())
+                          for pin in interface_outputs])
+        def source_pin_shape(pin):
+            declared_type = pin.get('type', '').upper()
+            if declared_type == 'STRING' and 'declared_capacity' in pin:
+                capacity = pin['declared_capacity']
+                # Source contracts retain the manual's capacity separately;
+                # MELSEC.lif encodes that same bound in the type spelling.
+                declared_type = (f'STRING({capacity})'
+                                 if type(capacity) is int and capacity > 0 else None)
+            return pin.get('name', '').casefold(), declared_type
+
+        source_shape = ([source_pin_shape(pin) for pin in input_pins],
+                        [source_pin_shape(pin) for pin in output_pins])
+        if library_shape != source_shape:
+            return None
+        return {
+            'library': stream,
+            'definition': definition.get('name'),
+            'kind': definition.get('kind'),
+            'target_model': contract_model,
+            'binding': 'exact_pin_name_direction_type',
+            'inputs': [{'name': pin['name'], 'type': pin['declared_type']} for pin in interface_inputs],
+            'outputs': [{'name': pin['name'], 'type': pin['declared_type']} for pin in interface_outputs],
+        }
 
     def label(self, symbol):
         for stream in getattr(self, 'declaration_gaps', ()):
@@ -489,6 +618,19 @@ class ProjectCallableSources:
                                        severity='unverified', expression=text, device=address, plc_model=self.cpu)
             _validate_device_address(address, '$.fbd.actual', self.cpu)
         text = str(symbol).strip()
+        local = self.declarations.get(self.local_table)
+        if (local is not None and local.owner_pou_type == 0x01000003
+                and local.owner_return_type not in (None, "@'VOID'")
+                and text.casefold() == local.owner_name.casefold()):
+            # AG PDF58: a FUNCTION's own name is its return variable. It is
+            # bound by the owner header and need not be an extra label row.
+            return dict(text=text, kind='label', source_table=self.local_table,
+                source_offset=None, declaration=local.owner_name,
+                declared_type=local.owner_return_type, class_code=4,
+                constant=False, readable=True, writable=True,
+                storage=dict(device=None, iec_address=None), member_path=[], issues=[],
+                types=[self.value_type_identity(local.owner_return_type)],
+                implicit_function_result=True)
         root = re.match(r'[^\W\d]\w*', text)
         binding = self.label(root[0]) if root else None
         if binding is not None:
@@ -645,10 +787,10 @@ class ProjectCallableSources:
         if raw:
             from .source_header import source_payload_offset
             language = {193: 'st', 208: 'fbd', 1: 'ladder'}.get(raw[source_payload_offset(raw)])
+        status = document.owner_pou_status if document is not None else None
         return dict(source_stream=stream, source_name=logical, language=language, definition=definition,
-                    options=dict(use_en_eno=bool(document.owner_pou_status & 4)
-                                 if document is not None and document.owner_pou_status is not None else None,
-                                 use_macrocode=None, use_mc_mcr=None), raw=raw)
+                    options=pou_status_options(status), pou_status=status,
+                    unverified_pou_status_bits=(status & ~0x7) if status is not None else None, raw=raw)
 
     def inout_output_usage(self, node, formal):
         """Return True/False only when the complete current callee can decide it."""
@@ -907,12 +1049,150 @@ class ProjectCallableSources:
         """The same source formals without graphical port/mask restrictions."""
         stream, definition = self.definition(name, kind)
         inputs, outputs = interface(definition, resolve_type=lambda text: None)
+        source_kind = definition.get('source_kind')
+        if source_kind is None:
+            source_kind = 'library' if stream.casefold().endswith('.lif') else 'project_source'
+        library = definition.get('library')
+        if library is None and stream.casefold().endswith('.lif'):
+            library = stream
         return {'source_stream': stream, 'definition_offset': definition['offset'],
-                'inputs': inputs, 'outputs': outputs, 'return_type': definition.get('return_type_raw')}
+                'inputs': inputs, 'outputs': outputs, 'return_type': definition.get('return_type_raw'),
+                'source_kind': source_kind, 'library': library,
+                'definition': definition.get('name'), 'kind': definition.get('kind')}
 
-    def callable(self, node, *, bind_instance=True):
+    def st_instance_contract_interface(self, name, contract_mapping):
+        """Match a reviewed FB instance contract to one exact IEC library definition.
+
+        Instance declarations bind named arguments, so parameter order is not
+        part of this comparison.  The library definition must nevertheless be
+        unique for this exact name and CPU; project POUs and other libraries
+        cannot establish the interface.
+        """
+        if (not isinstance(name, str) or not name.strip()
+                or not isinstance(contract_mapping, Mapping)):
+            return None
+        name = name.strip()
+        if (str(contract_mapping.get('name', '')).casefold() != name.casefold()
+                or contract_mapping.get('call_kind') != 'function_block'
+                or contract_mapping.get('instance_required') is not True
+                or contract_mapping.get('returns') is not None):
+            return None
+        # Compare actual native menu identities.  Concrete members of one
+        # merged menu (for example FX3U and FX3UC) normalize to the same
+        # profile; a contract from another menu cannot borrow this IEC entry.
+        from gxworks2.project_profiles import native_project_profile
+        contract_profile = native_project_profile(contract_mapping.get('model'))
+        project_profile = native_project_profile(self.cpu)
+        if (contract_profile is None or project_profile is None
+                or contract_profile.cpu != project_profile.cpu):
+            return None
+        parameters = contract_mapping.get('parameters')
+        if not isinstance(parameters, (list, tuple)) or not parameters:
+            return None
+
+        expected = {'inputs': {}, 'outputs': {}}
+        expected_names = set()
+        for parameter in parameters:
+            if not isinstance(parameter, Mapping):
+                return None
+            parameter_name = parameter.get('name')
+            direction = parameter.get('direction')
+            data_type = parameter.get('type')
+            side = {'input': 'inputs', 'output': 'outputs'}.get(direction)
+            if (side is None or not isinstance(parameter_name, str) or not parameter_name.strip()
+                    or not isinstance(data_type, str) or not data_type.strip()):
+                return None
+            key = parameter_name.strip().casefold()
+            if key in expected_names:
+                return None
+            expected_names.add(key)
+            expected[side][key] = data_type.strip().casefold()
+
+        matches = self.catalog.get(name.casefold(), ())
+        if len(matches) != 1:
+            return None
+        stream, definition = matches[0]
+        allowed_iec_streams = {'iec.lif'}
+        if project_profile is not None and project_profile.cpu == 'FXU/FX2C':
+            # The captured merged-menu template names this exact IEC library
+            # IECFunction.lif; native-saved projects normalize it to IEC.lif.
+            allowed_iec_streams.add('iecfunction.lif')
+        if (stream.casefold() not in allowed_iec_streams
+                or definition.get('source_kind') == 'project_labels'
+                or definition.get('kind') != 'FUNCTION_BLOCK'):
+            return None
+        try:
+            source = self.st_interface(name, kind='FUNCTION_BLOCK')
+        except (GXWFormatError, TypeError, ValueError):
+            return None
+        if (source.get('source_stream', '').casefold() not in allowed_iec_streams
+                or source.get('source_kind') != 'library'
+                or source.get('definition', '').casefold() != name.casefold()
+                or source.get('kind') != 'FUNCTION_BLOCK'
+                or source.get('return_type') not in (None, "@'VOID'")):
+            return None
+
+        matched_interface = {'inputs': {}, 'outputs': {}}
+        matched_names = set()
+        for side in ('inputs', 'outputs'):
+            for row in source[side]:
+                row_name, row_type = row.get('name'), row.get('declared_type')
+                if not isinstance(row_name, str) or not isinstance(row_type, str):
+                    return None
+                key = row_name.casefold()
+                if key in matched_names:
+                    return None
+                matched_names.add(key)
+                matched_interface[side][key] = row_type.strip().casefold()
+            if matched_interface[side] != expected[side]:
+                return None
+
+        return {
+            'source_kind': source['source_kind'],
+            'library': source['library'],
+            'source_stream': source['source_stream'],
+            'definition': source['definition'],
+            'definition_offset': source['definition_offset'],
+            'kind': source['kind'],
+            'target_model': self.cpu,
+            'binding': 'exact_parameter_name_direction_type',
+            'inputs': [{'name': row['name'], 'type': row['declared_type']}
+                       for row in source['inputs']],
+            'outputs': [{'name': row['name'], 'type': row['declared_type']}
+                        for row in source['outputs']],
+        }
+
+    def callable(self, node, *, bind_instance=True, fbd_contract=None):
         ins, outs = sorted_ports(node)
         name = node.type_name if node.kind == NodeKind.FUNCTION_BLOCK else node.symbol
+        if (node.kind == NodeKind.FUNCTION
+                and self.fbd_instruction_block_shape_source_available(name)):
+            contract = fbd_contract or self.fbd_instruction_block_contract(name)
+            if contract is not None:
+                input_pins = [pin for pin in contract['pins'] if pin['direction'] == 'input']
+                output_pins = [pin for pin in contract['pins'] if pin['direction'] == 'output']
+                if len(ins) != len(input_pins) or len(outs) != len(output_pins):
+                    raise GXWFormatError('FBD instruction block ports differ from its source signature: ' + name)
+                if not self.fbd_instruction_block_graphic_shape_matches(name, contract):
+                    raise GXWFormatError('MELSEC FBD connector shape conflicts with the exact source instruction block: ' + name)
+                ports = [None] * len(node.ports)
+                for side, indexes, pins, class_code in (
+                        ('in', ins, input_pins, CLASS['VAR_INPUT']),
+                        ('out', outs, output_pins, CLASS['VAR_OUTPUT'])):
+                    for index, pin in zip(indexes, pins):
+                        port = node.ports[index]
+                        ports[index] = {
+                            'name': pin['name'], 'formal_name': pin['name'],
+                            'side': side, 'data_type': pin['type'],
+                            'class_code': class_code, 'occurrence': 1,
+                            'x': port.local_x, 'y': port.local_y,
+                            'source_pin': deepcopy(pin),
+                        }
+                return {
+                    'source_stream': None, 'definition_offset': None,
+                    'binding': 'source_instruction_block',
+                    'source_contract': contract, 'ports': ports,
+                }
         if node.kind == NodeKind.FUNCTION and name.startswith('@'):
             # SC_EDIT's independent operator descriptor table gives three
             # fixed binary forms; the other native operators serialize their
@@ -963,7 +1243,9 @@ class ProjectCallableSources:
                 ports[index] = {'name': endpoint, 'formal_name': formal_name, 'side': side,
                     'data_type': formal['declared_type'], 'class_code': formal['class_code'],
                     'occurrence': occurrences[formal_name], 'x': port.local_x, 'y': port.local_y,
-                    'negated': bool(port.port_kind_code & 8)}
+                    'negated': bool(port.port_kind_code & 8),
+                    **({'declared_initial_value_raw': formal['declared_initial_value_raw']}
+                       if 'declared_initial_value_raw' in formal else {})}
         return {'source_stream': stream, 'definition_offset': definition['offset'], 'ports': ports}
 
     def source_prototype(self, node, *, bind_instance=True):

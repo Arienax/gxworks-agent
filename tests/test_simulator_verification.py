@@ -642,9 +642,9 @@ def test_startup_opposite_level_arms_the_first_new_edge(edge,opposite,active):
     assert check_bounded_traces(ladder,_bounded_spec([row]),[trace])['status']=='no_violation_found_in_tested_scope'
 
 
-@pytest.mark.parametrize('model',['FX3U','FX5U'])
+@pytest.mark.parametrize('model,source_model',[('FX3U','FX3U'),('FX3U','FX3U/FX3UC'),('FX5U','FX5U')])
 @pytest.mark.parametrize('projected_snapshot',[False,True])
-def test_behavior_diagnostic_draft_cannot_activate_and_corrected_version_is_rechecked(tmp_path,model,projected_snapshot):
+def test_behavior_diagnostic_draft_cannot_activate_and_corrected_version_is_rechecked(tmp_path,model,source_model,projected_snapshot):
     from application.confirmed_generation_context import project_confirmed_specification
     from plc.ir import build_plc_ir
     store = SessionStore(base_dir=tmp_path/'workspace',legacy_dir=tmp_path)
@@ -655,10 +655,10 @@ def test_behavior_diagnostic_draft_cannot_activate_and_corrected_version_is_rech
     snapshot_spec = project_confirmed_specification(spec) if projected_snapshot else spec
     def save(inputs):
         ladder = _bounded_ladder((inputs,['COIL Y0']))
-        ir = build_plc_ir(ladder,plc_model=model)
+        ir = build_plc_ir(ladder,plc_model=source_model)
         identity,folder = store.prepare_version(project['id'])
         store._write_json(folder/'program.ir.json',ir)
-        return store.complete_version(project['id'],identity,{'target_mode':'ladder','plc_model':model,
+        return store.complete_version(project['id'],identity,{'target_mode':'ladder','plc_model':source_model,
             'validation_profile':'generation_structural','artifacts':{'ir':'program.ir.json'},'confirmed_spec_snapshot':snapshot_spec})
     wrong = save(['NC X0'])
     assert wrong['activation_blocked'] and wrong['lifecycle_status'] == 'diagnostic'
@@ -1166,3 +1166,18 @@ def test_hexadecimal_constraints_match_signed_instruction_values_in_static_and_d
     machine = ScanMachine({'rungs': []}, plc_model='FX3U', initial={},
         execution_context={'hardware': {'output_type': 'transistor'}})
     machine._check_constraints('PLSV', operands)
+
+
+def test_false_guard_does_not_taint_output_with_unknown_comparison():
+    from simulator.bounded import ScanMachine
+    ladder = {"rungs": [{"rung_id": 1, "shared_inputs": [
+        {"type": "NO", "address": "X0"},
+        {"type": "COMPARE", "expression": "<= D301 D100"}],
+        "branches": [{"branch_id": 1, "inputs": [], "outputs": [{"type": "COIL", "address": "Y0"}]}]}]}
+    machine = ScanMachine(ladder, plc_model="FX3U", initial={"X0": False, "D100": 0},
+                          execution_context={"program_type": "scan"})
+    machine.scan({"timestamp_ms": 0, "inputs": {}}, first_scan=True)
+    assert machine.memory["Y0"] is False
+    assert not machine.gaps
+    machine.scan({"timestamp_ms": 5, "inputs": {"X0": True}})
+    assert any(gap["reason"] == "unknown_memory:D301" for gap in machine.gaps)

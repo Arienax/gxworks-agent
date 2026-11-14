@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Task-directed, source-preserving instruction evidence; no model calls.
 
@@ -232,8 +232,8 @@ def _sha(text):
 def instruction_fact_targets(query, confirmed_spec=None):
     """Resolve selected/query opcodes, retaining exact confirmed operands."""
     from knowledge.analysis_router import route_analysis_request
-    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
-    from plc.specification.approach import normalize_instruction_instances
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY, LITERAL_ARITHMETIC_MNEMONIC_PATTERN
+    from plc.specification.approach import normalize_instruction_instances, selected_implementation_targets
 
     spec = confirmed_spec if isinstance(confirmed_spec, Mapping) else {}
     selected = spec.get("selected_approach") or {}
@@ -277,10 +277,11 @@ def instruction_fact_targets(query, confirmed_spec=None):
         resolve_opcode=DEFAULT_INSTRUCTION_REGISTRY.resolve_fact_form,
     )
     requested = list(required) if isinstance(required, (list, tuple)) else []
+    requested.extend(target["value"] for target in selected_implementation_targets(selected) if target["kind"] == "opcode")
     requested.extend(item.get('opcode') for item in spec.get('operation_intents', [])
                      if isinstance(item, Mapping) and item.get('status') == 'confirmed' and item.get('opcode'))
     routing_text = re.sub(r"\.(?=\s|$)", " ", route.query_text)
-    boundary = r"[A-Za-z0-9_.$@+<>!=\-]"
+    boundary = r"[A-Za-z0-9_.$@+*/<>!=\-]"
     requested.extend(op for op in route.opcodes if re.search(
         r"(?<!" + boundary + ")" + re.escape(op) + r"(?!" + boundary + ")", routing_text, re.I))
     # Preserve punctuation-bearing catalogue names; MOV is not a match for $MOV.
@@ -294,7 +295,7 @@ def instruction_fact_targets(query, confirmed_spec=None):
         if not isinstance(value, str):
             continue
         opcode = value.strip().upper()
-        if not re.fullmatch(r"[$A-Z][A-Z0-9_.$@+<>!=\-]{0,63}", opcode):
+        if not re.fullmatch(r"(?:[$A-Z][A-Z0-9_.$@+<>!=\-]{0,63}|" + LITERAL_ARITHMETIC_MNEMONIC_PATTERN + r")", opcode):
             continue
         if opcode in instance_opcodes or opcode in seen_generic:
             continue

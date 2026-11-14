@@ -12,6 +12,11 @@
     ]
   },
   "parameters": {
+    "reasoning_effort": {
+      "type": "enum",
+      "status": "unsupported",
+      "source": "catalog"
+    },
     "thinking_mode": {
       "type": "enum",
       "status": "supported",

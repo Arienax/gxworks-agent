@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 from application.analysis_response import (
     _analysis_json_payload, _validate_fresh_analysis_content, _parse_analysis_response, request_analysis_response,
@@ -21,12 +21,13 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import replace
 from shared.i18n import language_scoped, tr
-from model_runtime.responses import TEXT_RESPONSE, preserved_annotations as source_annotations
+from model_runtime.responses import ResponseContract, TEXT_RESPONSE, preserved_annotations as source_annotations
 from application.response_contracts import (
     ANALYSIS_RESPONSE, ANALYSIS_REPAIR_RESPONSE, DEBUG_RESPONSE, DIAGNOSIS_RESPONSE, FIELD_PATCH_RESPONSE,
     INSPECTION_RESPONSE, LADDER_RESPONSE, COMPACT_EDIT_RESPONSE, PATCH_RESPONSE, ST_RESPONSE, TEST_SUITE_RESPONSE,
 )
 from plc.specification.approach import normalize_approach
+from plc.specification.decision_basis import DecisionSources
 from rendering.ladder_svg import AdvancedSVGLadder
 from storage.config import get_api_key, get_model_profile, load_full_config
 from model_runtime.provider import (
@@ -150,8 +151,12 @@ def _request_model(
     options=None,
     response_contract=TEXT_RESPONSE,
     preserved_annotations=(),
+    instruction_tool=None,
+    ladder_session=None,
+    exchange=None,
+    resume_request=None,
 ):
-    """Run one canonical request without exposing provider response shapes."""
+    """Run a canonical request and its bounded Ladder continuations."""
 
     # Legacy effort arguments/options are not an application tuning source.
     # Saved model settings are applied by the provider after this boundary.
@@ -176,16 +181,108 @@ def _request_model(
         response_contract=response_contract,
         preserved_annotations=preserved_annotations,
     )
-    audit_request(request.messages)
-    return collect_response(
-        provider,
-        request,
-        on_reasoning_chunk=on_reasoning_chunk,
-        on_content_chunk=on_content_chunk,
-        on_event=on_event,
-        fallback_to_non_stream=fallback_to_non_stream,
-        on_fallback=on_fallback,
-    )
+    from application.conversation_model import current_model_turn
+    if instruction_tool is not None and ladder_session is None:
+        from application.ladder_model_session import LadderModelSession
+        ladder_session = LadderModelSession(phase="analysis", lookup=instruction_tool)
+    turn = current_model_turn()
+    if resume_request is not None:
+        request = replace(resume_request, messages=request.messages, response_contract=response_contract)
+    elif turn is not None:
+        request = turn.prepare(request, instruction_tools=True) if ladder_session else turn.prepare(request)
+        if ladder_session and ladder_session.lookup is not None:
+            ladder_session.lookup.remember_identities(turn.known | set((turn.pending or {}).get("evidence", [])))
+
+    attempts = []
+    accept_final = True
+    # Two initial lookup batches, two repair submissions with one lookup each,
+    # and a separate initial selection submission all fit in this envelope.
+    for _ in range(8 if ladder_session else 1):
+        audit_request(request.messages)
+        if exchange is not None:
+            exchange["request"] = request
+        rejected = None
+        try:
+            response = collect_response(
+                provider, request, on_reasoning_chunk=on_reasoning_chunk, on_content_chunk=on_content_chunk,
+                on_event=on_event, fallback_to_non_stream=fallback_to_non_stream, on_fallback=on_fallback,
+                allow_intermediate_tool_content=bool(ladder_session and request.tools),
+            )
+        except ResponseRejectedError as error:
+            has_candidate = ladder_session is not None and ladder_session.candidate is not None
+            syntax_error = [(row.path, row.reason) for row in error.violations] == [("content", "invalid_json_object")]
+            bad_notes = has_candidate and ladder_session.phase == "direct" and all(
+                row.reason == "invalid_prose_field" and re.match(r"content\$(?:\.result)?\.(?:decisions|open_items)\b", row.path)
+                for row in error.violations)
+            if has_candidate and ladder_session.repairs and not syntax_error and (
+                    ladder_session.candidate.wire is not None or ladder_session.format_raw is not None):
+                ladder_session.repair_error = "repair_response_rejected"
+                attempts.extend(error.raw_attempts)
+                accept_final = False
+                break
+            if not has_candidate or not (syntax_error or bad_notes):
+                error.raw_attempts = (*attempts, *error.raw_attempts)
+                raise
+            from model_runtime.provider import CollectedResponse
+            rejected = error if syntax_error else None
+            response = CollectedResponse(error.raw_response.message, error.raw_response.usage,
+                                         error.raw_attempts, request.response_language)
+        except ModelProviderError as error:
+            if (ladder_session is None or ladder_session.candidate is None
+                    or not ladder_session.repairs
+                    or ladder_session.candidate.wire is None and ladder_session.format_raw is None):
+                raise
+            ladder_session.repair_error = error.code
+            attempts.extend(getattr(error, "raw_attempts", ()))
+            accept_final = False
+            break
+        attempts.extend(response.raw_attempts)
+        assistant = response.message
+        if ladder_session is None:
+            break
+        if assistant.tool_calls:
+            ids = [call.id for call in assistant.tool_calls]
+            if not request.tools or len(ids) > 12 or not all(ids) or len(ids) != len(set(ids)):
+                raise ModelProviderError(tr("模型返回了无效的工具调用。"), code="invalid_ladder_tool_call")
+            replies = ladder_session.handle_tools(assistant.tool_calls)
+            if turn is not None:
+                turn.record_tool_exchange(assistant, replies)
+            if ladder_session.done:
+                break
+            request = replace(request, messages=(*request.messages, assistant, *replies))
+            continue
+        repair = ladder_session.handle_text(assistant, invalid_json=rejected is not None)
+        if repair is None:
+            if rejected is not None and not ladder_session.local_format_recovered:
+                if not ladder_session.repairs:
+                    rejected.raw_attempts = tuple(attempts)
+                    raise rejected
+                accept_final = False
+            break
+        schema = ladder_session.repair_schema(repair)
+        repair_message = UserMessage(json.dumps({
+            "candidate_repair": repair, "output_schema": schema,
+            "instruction": "保留已确认要求，仅提交指定补丁。若提供工具，可通过对应工具提交。",
+        }, ensure_ascii=False, separators=(",", ":")))
+        if turn is not None:
+            turn.record_followup(assistant, (repair_message,))
+        options = request.options
+        if (options.get("response_format") or {}).get("type") == "json_schema":
+            options = {**options, "response_format": {"type": "json_schema", "json_schema": {
+                "name": "ladder_candidate_repair", "strict": True, "schema": schema}}}
+        request = replace(request, messages=(*request.messages, assistant, repair_message),
+                          options=options, response_contract=ResponseContract("ladder_candidate_repair", "json"))
+    else:
+        if ladder_session.candidate is None or ladder_session.candidate.prepared is None:
+            raise ModelProviderError(tr("工具续轮已达上限，模型尚未提交可用程序。"), code="ladder_tool_limit")
+    if ladder_session:
+        response = replace(response, raw_attempts=tuple(attempts))
+    if accept_final and resume_request is None and turn is not None and (ladder_session and ladder_session.candidate is not None or
+                             response_contract.name not in {"analysis", "direct_generation"}):
+        if response.message.tool_calls:
+            return response
+        turn.accept(response.message, request.response_contract.name)
+    return response
 
 
 def current_provider():
@@ -206,7 +303,7 @@ def request_model(
     request_timeout=None, max_retries=None, on_reasoning_chunk=None,
     on_content_chunk=None, on_event=None, fallback_to_non_stream=False,
     on_fallback=None, options=None, response_contract=TEXT_RESPONSE,
-    preserved_annotations=(),
+    preserved_annotations=(), instruction_tool=None, ladder_session=None, exchange=None, resume_request=None,
 ):
     """Public model gateway. Protocol decoding and acceptance stay in the runtime."""
     return _request_model(
@@ -215,7 +312,9 @@ def request_model(
         on_reasoning_chunk=on_reasoning_chunk, on_content_chunk=on_content_chunk,
         on_event=on_event, fallback_to_non_stream=fallback_to_non_stream,
         on_fallback=on_fallback, options=options, response_contract=response_contract,
-        preserved_annotations=preserved_annotations,
+        preserved_annotations=preserved_annotations, instruction_tool=instruction_tool,
+        ladder_session=ladder_session, exchange=exchange,
+        resume_request=resume_request,
     )
 
 
@@ -284,38 +383,80 @@ def analyze_requirement_streaming(
     user_requirement: str, on_reasoning_chunk=None, on_content_chunk=None,
     conversation_history=None, confirmed_context=None, confirmed_spec=None,
     task_type=None, image_attachments=None, on_format_repair=None,
-    analysis_mode="direct", allow_repair=True,
+    analysis_mode="direct", allow_repair=True, planning_context=None, on_stage=None, acceptance_cases=None,
 ):
     """Analyze a requirement with incremental reasoning and content callbacks."""
     return _analyze_requirement(
         user_requirement, conversation_history=conversation_history,
         confirmed_context=confirmed_context, confirmed_spec=confirmed_spec,
         image_attachments=image_attachments, on_format_repair=on_format_repair,
-        analysis_mode=analysis_mode, allow_repair=allow_repair, stream=True,
-        on_reasoning_chunk=on_reasoning_chunk, on_content_chunk=on_content_chunk,
+        analysis_mode=analysis_mode, allow_repair=allow_repair, stream=True, planning_context=planning_context,
+        on_reasoning_chunk=on_reasoning_chunk, on_content_chunk=on_content_chunk, on_stage=on_stage,
+        acceptance_cases=acceptance_cases,
     )
 
 
 def _analyze_requirement(
     user_requirement, *, conversation_history=None, confirmed_context=None,
     confirmed_spec=None, image_attachments=None, on_format_repair=None,
-    analysis_mode="direct", allow_repair=True, stream=False,
-    on_reasoning_chunk=None, on_content_chunk=None,
+    analysis_mode="direct", allow_repair=True, stream=False, planning_context=None,
+    on_reasoning_chunk=None, on_content_chunk=None, on_stage=None, acceptance_cases=None,
 ):
     confirmed_context = confirmed_spec if confirmed_spec is not None else confirmed_context
-    model = _resolve_plc_model(user_requirement, confirmed_context)
+    model = _resolve_plc_model(user_requirement, confirmed_context, (planning_context or {}).get("plc_model"))
+    target_context = planning_context or confirmed_context
+    target_mode = target_context.get("target_mode") if isinstance(target_context, dict) else None
     analysis_prompt = assemble_analysis_prompt(
         user_requirement,
         plc_model=model,
         confirmed_context=confirmed_context,
         analysis_mode=analysis_mode,
+        target_mode=target_mode or "ladder",
         model_loader=_load_plc_models,
         knowledge_builder=_build_knowledge_context,
         resolve_opcode=DEFAULT_INSTRUCTION_REGISTRY.resolve_form,
         audit=audit_section,
     )
     knowledge_ctx = analysis_prompt.knowledge_context
-    sys_prompt = analysis_prompt.system_prompt
+    decision_sources = DecisionSources(user_requirement, analysis_prompt.decision_spec, {
+        "profile": analysis_prompt.model_facts, "knowledge": str(knowledge_ctx),
+    }, citations=dict(analysis_prompt.fact_citations or {}))
+    sys_prompt = analysis_prompt.system_prompt + decision_sources.reference_prompt()
+    tool_options = {}
+    lookup = None
+    bound = _provider_session.get()
+    if (target_mode in (None, "ladder")) and bound and bound[0] is not None:
+        from application.ladder_instruction_tool import INSTRUCTION_LOOKUP_PROMPT, instruction_tool_for
+        from application.ladder_model_session import LadderModelSession, TOOL_PROMPT, ladder_tools
+        from shared.model_context import technical_context_units, technical_block
+
+        tools = ladder_tools()
+        lookup = instruction_tool_for(bound[0], model_name=_workflow_model.get(), plc_model=model,
+                                      options={}, stream=stream, tools=tools, on_stage=on_stage)
+        if lookup is not None:
+            session = LadderModelSession(phase="analysis", lookup=lookup)
+            session.remember(technical_context_units(sys_prompt))
+            sys_prompt += INSTRUCTION_LOOKUP_PROMPT + "\n" + TOOL_PROMPT
+            tool_options.update(ladder_session=session, tools=tools)
+
+            def lookup_evidence():
+                if lookup.knowledge:
+                    decision_sources.model_facts["knowledge"] = "\n".join(
+                        [str(knowledge_ctx), *(technical_block(unit) for unit in lookup.knowledge)])
+                    decision_sources.citations.update(getattr(lookup, "citations", {}))
+            tool_options["on_lookup_evidence"] = lookup_evidence
+    if planning_context:
+        from plc.specification.implementation import planning_instructions
+        sys_prompt += "\n" + planning_instructions(planning_context["target_mode"])
+        sys_prompt += ("\nKeep the standard analysis response, including summary and approaches."
+                       " Add requirements, implementation_items and open_questions as separate top-level JSON lists."
+                       " In those lists, include only new or changed rows and identify existing rows by id. Treat working_draft as"
+                       " proposed changes awaiting review. Ground all project identifiers in the supplied context.\n")
+        sys_prompt += "\n# Project planning context\n" + json.dumps(
+            planning_context, ensure_ascii=False, separators=(",", ":"))
+    if acceptance_cases:
+        from application.confirmed_generation_context import acceptance_cases_prompt
+        sys_prompt += acceptance_cases_prompt(acceptance_cases)
     print(f"阶段1: 需求分析中... (PLC={model})")
 
     messages = _build_clean_messages(conversation_history or [], sys_prompt)
@@ -330,6 +471,9 @@ def _analyze_requirement(
             user_text=user_requirement,
             plc_model=model,
             confirmed_spec=confirmed_context,
+            decision_sources=decision_sources,
+            working_draft=(planning_context or {}).get("working_draft") if analysis_prompt.route.include_design else None,
+            require_output_logic=analysis_prompt.route.include_design,
             effort=None,
             stream=stream,
             allow_repair=allow_repair,
@@ -337,11 +481,13 @@ def _analyze_requirement(
             on_reasoning_chunk=on_reasoning_chunk,
             on_content_chunk=on_content_chunk,
             on_format_repair=on_format_repair,
+            preserve_prefix=target_mode in (None, "ladder"),
+            **tool_options,
         )
         raw = _clean_json_response(response.message.content)
 
         result = _parse_analysis_response(raw, model, user_requirement, confirmed_context,
-                                         contract_stage=analysis_prompt.contract_stage)
+                                         contract_stage=analysis_prompt.contract_stage, decision_sources=decision_sources)
         if getattr(response, "repair_receipt", None):
             result["analysis_repair_receipt"] = copy.deepcopy(response.repair_receipt)
         # Application metadata, not a mode selected by the model response.
@@ -349,6 +495,15 @@ def _analyze_requirement(
         from application.analysis_results import attach_analysis_evidence
         result = attach_analysis_evidence(result, knowledge_ctx, plc_model=model,
                                           knowledge_builder=_build_knowledge_context)
+        if lookup and lookup.receipts:
+            result["instruction_lookup"] = lookup.receipts
+        from application.conversation_model import current_model_turn
+        turn = current_model_turn()
+        if turn is not None:
+            continuation = getattr(response, "continuation_message", None)
+            turn.accept(continuation or response.message, "analysis",
+                        analysis_result=_analysis_json_payload(response.message.content) if continuation else None,
+                        analysis_request=user_requirement)
         print(f"阶段1 分析完成: {result.get('summary', '')[:80]}...")
         return result
 
@@ -391,6 +546,8 @@ def _prepare_api_call(
     on_generation_context=None,
     compact_edit=False,
     include_output_schema=True,
+    use_ladder_tools=False,
+    acceptance_cases=None,
 ):
     """
     共用准备逻辑：复制调用方历史、追加用户消息、选取系统提示词、
@@ -420,6 +577,13 @@ def _prepare_api_call(
         confirmed_context,
         explicit_model=plc_model,
     )
+    from application.confirmed_generation_context import acceptance_cases_prompt
+    additional_rules = ""
+    if use_ladder_tools:
+        from application.ladder_instruction_tool import INSTRUCTION_LOOKUP_PROMPT
+        from application.ladder_model_session import TOOL_PROMPT
+        additional_rules = "\n\n" + INSTRUCTION_LOOKUP_PROMPT.strip() + "\n\n" + TOOL_PROMPT
+
     system_prompt = build_generation_instructions(
         user_requirement,
         plc_model=selected_model,
@@ -439,6 +603,7 @@ def _prepare_api_call(
         wire_history=conversation_history,
         compact_edit=compact_edit,
         include_output_schema=include_output_schema,
+        additional_rules=additional_rules + acceptance_cases_prompt(acceptance_cases),
     )
     compiled_wire = getattr(system_prompt, "wire_packet", None)
     if isinstance(compiled_wire, dict) and isinstance(compiled_wire.get("messages"), list):
@@ -1022,7 +1187,8 @@ def stream_model_response(user_requirement, model_name, effort, target_mode,
                              confirmed_spec=None,
                              current_version_json=None,
                              plc_model=None,
-                             image_attachments=None, on_fallback=None, on_generation_context=None):
+                             image_attachments=None, on_fallback=None, on_generation_context=None,
+                             candidate_flow=None, acceptance_cases=None):
     """
     通过当前 ModelProvider 流式调用模型，实时返回工程推理摘要。
 
@@ -1039,6 +1205,32 @@ def stream_model_response(user_requirement, model_name, effort, target_mode,
     native_options = (_native_ladder_generation_options(
         _resolve_plc_model(user_requirement, confirmed_spec or confirmed_context, explicit_model=plc_model),
         allow_partial=is_edit_mode, compact_edit=compact_edit) if target_mode == 'ladder' else None)
+    session = None
+    streaming = True
+    handoff = {}
+    context_callback = on_generation_context
+    if compact_edit and candidate_flow is not None:
+        from application.compact_protocol import compact_response_schema
+        from application.confirmed_generation_context import project_confirmed_specification
+        from application.ladder_instruction_tool import instruction_tool_for
+        from application.ladder_model_session import LadderModelSession, ladder_tools
+        from model_runtime.response_format import response_plan
+
+        provider = _workflow_provider()
+        selected_model = candidate_flow.plc_model
+        native_options, streaming = response_plan(getattr(provider, "profile", {}), compact_response_schema(partial=True),
+            model=model_name, api_key=getattr(provider, "api_key", None))
+        lookup = instruction_tool_for(provider, model_name=model_name, plc_model=selected_model,
+                                      options=native_options, stream=streaming,
+                                      on_stage=candidate_flow.on_stage, tools=ladder_tools())
+        candidate_flow.bind_specification(project_confirmed_specification(confirmed_spec or confirmed_context),
+                                          user_text=user_requirement)
+        session = LadderModelSession(phase="edit", lookup=lookup, candidate=candidate_flow, on_stage=candidate_flow.on_stage)
+
+        def context_callback(value):
+            handoff.update(value)
+            if on_generation_context:
+                on_generation_context(value)
 
     messages, conversation_history, should_persist = _prepare_api_call(
         user_requirement, model_name, None, target_mode,
@@ -1052,16 +1244,27 @@ def stream_model_response(user_requirement, model_name, effort, target_mode,
         current_version_json=current_version_json,
         plc_model=plc_model,
         image_attachments=image_attachments,
-        on_generation_context=on_generation_context,
+        on_generation_context=context_callback,
         compact_edit=compact_edit,
-        include_output_schema=not bool(native_options),
+        include_output_schema=(native_options or {}).get("response_format", {}).get("type") != "json_schema"
+                              if (native_options or {}).get("response_format") else True,
+        use_ladder_tools=session is not None and session.lookup is not None,
+        acceptance_cases=candidate_flow.cases[0] if session is not None else acceptance_cases,
     )
 
+    tool_options = {}
+    if session is not None:
+        from application.conversation_model import _context_payload, _knowledge_payloads
+        from model_runtime.provider import coerce_message
+        for message in messages[1:]:
+            for section in _knowledge_payloads(_context_payload(coerce_message(message))):
+                session.remember(section["knowledge"])
+        tool_options = {"ladder_session": session, "tools": ladder_tools() if session.lookup else ()}
     response = _request_model(
         messages,
         model_name=model_name,
         effort=None,
-        stream=True,
+        stream=streaming,
         max_retries=0,
         fallback_to_non_stream=True,
         on_fallback=on_fallback,
@@ -1070,7 +1273,15 @@ def stream_model_response(user_requirement, model_name, effort, target_mode,
         preserved_annotations=source_annotations(current_version_json, confirmed_spec, confirmed_context),
         on_reasoning_chunk=on_reasoning_chunk,
         on_content_chunk=on_content_chunk,
+        **tool_options,
     )
+    if session is not None:
+        from application.generation_agent import _session_result
+        if session.lookup and session.lookup.receipts:
+            handoff["instruction_lookup"] = session.lookup.receipts
+        _session_result(session, handoff, response)
+        if on_generation_context:
+            on_generation_context(handoff)
     full_reasoning = response.message.reasoning
     full_content = response.message.content
 

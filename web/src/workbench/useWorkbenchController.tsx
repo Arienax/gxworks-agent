@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
@@ -16,7 +16,7 @@ import { useJobFeed } from "../workbench/useJobFeed";
 import { usePanelResize } from "../workbench/usePanelResize";
 import { usePreferences } from "../workbench/usePreferences";
 import { useProgramDocument } from "../workbench/useProgramDocument";
-import { useSession } from "../workbench/useSession";
+import { useWorkbenchConnection } from "../workbench/useWorkbenchConnection";
 import { useSettings } from "../workbench/useSettings";
 
 import { useCandidateReview } from "./useCandidateReview";
@@ -28,6 +28,9 @@ import { useProjectWorkspace } from "./useProjectWorkspace";
 import { useGXWImport } from "./useGXWImport";
 import { useGXWSource } from "./useGXWSource";
 import { useSpecificationDraft } from "./useSpecificationDraft";
+import { useWorkspaceBinding } from "./useWorkspaceBinding";
+import { api } from "../api/client";
+import type { WorkbenchConnection } from "../api/client";
 
 export function useWorkbenchController() {
   const {
@@ -42,15 +45,30 @@ export function useWorkbenchController() {
     setFreshConfirmedGeneration,
   } = usePreferences();
 
-  const { session, connecting, token, setToken, login } = useSession();
+  const { connection, connecting, setConnection } = useWorkbenchConnection();
 
   const { error, setError, notice, setNotice } = useFeedback();
 
-  const workspace = useProjectWorkspace(session, setError);
+  const workspace = useProjectWorkspace(connection, setError);
+  const workspaceBinding = useWorkspaceBinding(connection, rebindWorkspace);
 
-  const { projects, project, pid, setPid, vid, setVid, version, loading, hasSavedVersions, setProjectListRevision, reloadProjectSilently } = workspace;
+  async function rebindWorkspace(projectId?: string) {
+    const binding = await api<WorkbenchConnection>("/workspace");
+    try {
+      const snapshot = await workspace.readBinding(binding, projectId);
+      workspace.adoptBinding(binding, snapshot);
+    } catch (error) {
+      workspace.adoptBinding(binding);
+      throw error;
+    } finally {
+      setConnection(binding);
+    }
+  }
 
-  const { busy, guarded } = useGuardedAction(workspace, setError);
+  const { projects, project, pid, vid, setVid, version, loading, hasSavedVersions, reloadProjectSilently } = workspace;
+
+  const { busy: actionBusy, guarded } = useGuardedAction(workspace, setError);
+  const busy = actionBusy || workspaceBinding.busy;
 
   const [refresh, setRefresh] = useState(0);
 
@@ -66,13 +84,13 @@ export function useWorkbenchController() {
     if (next !== "agent") setCanvasOpen(true);
   }, [panel]);
 
-  const feed = useJobFeed(pid, session, setError);
+  const feed = useJobFeed(pid, connection, setError, workspaceBinding.busy);
 
-  const { jobs, setJobs, jobId, setJobId, startNewTask, events, proposals, jobsPolling } = feed;
+  const { jobs, setJobs, jobId, setJobId, selectConversation, startNewTask, events, proposals, jobsPolling } = feed;
 
   const { rightWidth, setRightWidth, resizePanel } = usePanelResize(leftOpen);
 
-  const composer = useComposer(pid, vid, t);
+  const composer = useComposer(pid, vid, connection?.path, t);
 
   const {
     scopeEnabled,
@@ -102,7 +120,7 @@ export function useWorkbenchController() {
 
   const [modal, setModal] = useState("");
   const gxwImport = useGXWImport({
-    enabled: !!session && !session.read_only && !busy && !loading,
+    enabled: !!connection && !connection.read_only && !busy && !loading,
     onOpen: () => setModal("gxw-import"),
     onClose: () => setModal(""),
     onImported: (result) => {
@@ -126,14 +144,14 @@ export function useWorkbenchController() {
     settings,
     setSettings,
     environment,
-  } = useSettings(session, modal, setError);
+  } = useSettings(connection, modal, setError);
 
-  const { creation, defaultOperations } = useCapabilities(session, setError);
+  const { creation, defaultOperations } = useCapabilities(connection, setError);
 
   const [outputRetry, setOutputRetry] = useState(0);
 
-  const { program, st: savedST } = useProgramDocument(pid, vid, version, session, setError);
-  const gxwSource = useGXWSource(pid, vid, version, !!session, setError);
+  const { program, st: savedST } = useProgramDocument(pid, vid, version, connection, setError);
+  const gxwSource = useGXWSource(pid, vid, version, connection?.path, setError);
   const st = gxwSource.view?.language === "st" ? String(gxwSource.view.model.st_text || "") : savedST;
 
   const displayedVersionStatus =
@@ -146,33 +164,34 @@ export function useWorkbenchController() {
 
   const generationResult = useGenerationResult(currentJob, outputRetry);
 
-  const specification = useSpecificationDraft({ workspace, currentJob, jobId, jobs, session, outputRetry, setPanel, setError, setNotice, t });
+  const specification = useSpecificationDraft({ regenerationRequested: task === "edit" && editAction === "regenerate", workspace, currentJob, jobId, jobs, connection, outputRetry, setPanel, setError, setNotice, t });
 
-  const { spec, specIssues, specIsDirty, analysisOutput, changeSpec, clearSpecDirty, openAnalysisDraft, persistSpec } = specification;
+  const { specDocument, refreshSpecDocument, saveSpecDraft, recordAnalysisRequest, spec, specIssues, specIsDirty, analysisOutput, changeSpec, clearSpecDirty, openAnalysisDraft, persistSpec } = specification;
 
   const inspection = useInspectionSelection(pid, vid);
 
   const { report, setReport, network, setNetwork, jumpAddress, setJumpAddress, jumpVersion, setJumpVersion, issueContext, setIssueContext } = inspection;
 
-  const continuingDirect =
-    currentJob?.kind === "direct_generation" &&
-    generationResult.needsInput &&
-    currentJob.id !== ignoredClarification;
+  const continuingDirect = generationResult.needsInput && currentJob?.id !== ignoredClarification;
 
-  const composerRoute = conversationRoute({
+  const taskRoute = conversationRoute({
     task,
     workflow,
     editAction,
     targetMode: project?.target_mode || "ladder",
     hasVersions: !!hasSavedVersions,
     hasSpec: !!project?.confirmed_spec,
+    hasImplementationPlan: !!project?.confirmed_spec?.implementation_items?.length,
     reviewRequested,
-    continuingDirect,
+    continuingDirect: false,
   });
+  const composerRoute = continuingDirect ? {
+    ...taskRoute, requiresText: true, submitLabel: "补充并继续", placeholder: "补充上面的问题…",
+  } : taskRoute;
 
   const intent = composerRoute.kind;
 
-  const answeringDirect = intent === "direct_generation" && continuingDirect;
+  const answeringDirect = continuingDirect;
 
   const directReply = clarificationSubmission(
     generationResult.questions,
@@ -193,12 +212,12 @@ export function useWorkbenchController() {
       currentJob.status === "completed" &&
       ["failed", "interrupted", "conflict"].includes(String(currentJob.result?.status || ""))
       ? "failed"
-      : (currentJob?.kind === "generation" || currentJob?.kind === "direct_generation") &&
-        currentJob.status === "completed"
-        ? generationResult.needsInput
-          ? "needs_input"
-          : generationResult.blocked
-            ? "contract_mismatch"
+      : generationResult.needsInput
+        ? "needs_input"
+        : (currentJob?.kind === "generation" || currentJob?.kind === "direct_generation") &&
+          currentJob.status === "completed"
+          ? generationResult.behaviorMismatch || generationResult.blocked
+            ? (generationResult.behaviorMismatch ? "behavior_mismatch" : "contract_mismatch")
             : generationSaved
               ? "saved"
               : generationResult.proposalId
@@ -206,11 +225,11 @@ export function useWorkbenchController() {
                 : generationResult.loading
                   ? "loading_result"
                   : "result_unavailable"
-        : currentJob?.status;
+          : currentJob?.status;
 
   const pendingCount = proposals.filter((p) => p.status === "pending").length;
 
-  const canWrite = !!session && !session.read_only && !busy && !loading && !gxwImport.busy;
+  const canWrite = !!connection?.selected && !connection.read_only && !busy && !loading && !gxwImport.busy;
 
   const canGenerate =
     !!project &&
@@ -224,19 +243,16 @@ export function useWorkbenchController() {
     !!pid &&
     project?.id === pid &&
     !jobs.some(activeJob) &&
-    !gxwSource.loading &&
-    composerRoute.available &&
-    (task !== "edit" || !!version) &&
-    (intent !== "generation" || canGenerate) &&
     (answeringDirect
       ? directReply.complete && (!!Object.keys(directReply.answers).length || !!text.trim())
-      : !composerRoute.requiresText || !!text.trim());
+      : !gxwSource.loading && composerRoute.available && (task !== "edit" || !!version) &&
+        (intent !== "generation" || canGenerate) && (!composerRoute.requiresText || !!text.trim()));
 
   const operations = version?.capabilities?.operations || defaultOperations;
 
   const navigation = { setTab, setPanel, setModal };
 
-  const candidates = useCandidateReview({ workspace, feed, generationResult, currentJob, session, theme, specIsDirty, busy, guarded, setRefresh, setOutputRetry, setError, setNotice, t, ...navigation,
+  const candidates = useCandidateReview({ workspace, feed, generationResult, currentJob, connection, theme, specIsDirty, busy, guarded, setRefresh, setOutputRetry, setError, setNotice, t, ...navigation,
     onShowResult: () => setCanvasOpen(true) });
 
   const {
@@ -256,8 +272,8 @@ export function useWorkbenchController() {
     proposeExecution,
   } = candidates;
 
-  const { submitJob, repairFailedGeneration } = useJobCommands({ workspace, feed, composer, intent, continuingDirect, directReply, currentJob, composerRoute, locale, constructionExamples, freshConfirmedGeneration, clearSpecDirty, setPanel, t,
-    selectedGXWProgram: gxwSource.available ? gxwSource.selected : undefined });
+  const { submitJob, submitMessage, repairFailedGeneration } = useJobCommands({ workspace, feed, composer, intent, continuingDirect, directReply, currentJob, composerRoute, locale, constructionExamples, freshConfirmedGeneration, clearSpecDirty, setPanel, t,
+    recordAnalysisRequest, selectedGXWProgram: gxwSource.available ? gxwSource.selected : undefined });
 
   const { gxSend, setGXSend, requestGXSend, confirmGXSend } = useGXSend({ workspace, feed, canWrite, preview, operations, clearPreview, setPanel, guarded, proposeExecution });
 
@@ -312,7 +328,7 @@ export function useWorkbenchController() {
     if (!result) return;
     setTask(hasSavedVersions ? "edit" : "create"); setWorkflow("review");
     setEditAction(result.regenerateAfterSave ? "regenerate" : "edit"); setReviewRequested(false); setPanel("agent");
-    if (result.generateAfterSave) await submitJob("generation", result.regenerateAfterSave ? { generation_action: "regenerate" } : {});
+    if (result.generateAfterSave) await submitJob("generation", result.continuation);
     else await reloadProjectSilently(pid);
   }
 
@@ -423,6 +439,7 @@ export function useWorkbenchController() {
     proposeExecution,
   };
   return {
+    adoptProject: workspace.adoptProject,
     analysisMode,
     analysisOutput,
     answeringDirect,
@@ -441,7 +458,13 @@ export function useWorkbenchController() {
     continuingDirect,
     creation,
     currentJob,
+    conversationId: feed.conversationId,
+    draftingConversation: feed.draftingConversation,
     decide,
+    deleteProject: async () => {
+      await workspace.deleteProject();
+      void workspaceBinding.refresh();
+    },
     diagnosticJobId,
     directAnswers,
     displayedJobStatus,
@@ -467,7 +490,6 @@ export function useWorkbenchController() {
     leftOpen,
     loading,
     locale,
-    login,
     modal,
     network,
     newTask,
@@ -498,8 +520,10 @@ export function useWorkbenchController() {
     scopeEnabled,
     scopeNetworks,
     selectVersion,
+    selectConversation,
+    selectProject: workspace.selectProject,
     selectedProposal,
-    session,
+    connection,
     setAnalysisMode,
     setApprovalSettings,
     setAttachments,
@@ -523,8 +547,6 @@ export function useWorkbenchController() {
     setNetwork,
     setNotice,
     setPanel,
-    setPid,
-    setProjectListRevision,
     setReviewRequested,
     setRightWidth,
     setScopeAddresses,
@@ -536,7 +558,6 @@ export function useWorkbenchController() {
     setTab,
     setTask,
     setText,
-    setToken,
     setVid,
     setWorkflow,
     settings,
@@ -544,22 +565,26 @@ export function useWorkbenchController() {
     settingsTab,
     showFBDProposal,
     showProposal,
+    specDocument,
+    refreshSpecDocument,
+    saveSpecDraft,
     spec,
     specIsDirty,
     specIssues,
     status,
     submitJob,
+    submitMessage,
     t,
     tab,
     task,
     text,
     theme,
     toggleTheme,
-    token,
     upload,
     version,
     vid,
     workflow,
+    workspaceBinding,
   };
 }
 export type WorkbenchModel = ReturnType<typeof useWorkbenchController>;

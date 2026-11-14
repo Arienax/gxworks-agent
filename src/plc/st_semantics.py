@@ -1,8 +1,9 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """ST semantic binding over the existing GXW and PLC fact owners."""
 from __future__ import annotations
+from collections.abc import Mapping
 from dataclasses import replace
 from copy import copy
 import re
@@ -14,6 +15,9 @@ from plc.st_frontend import STUncovered, Declaration, Unit, parse_body, parse_in
 from plc.instruction_definition import ValueType, DefinitionError
 from gxw.declarations import _type_parts, CLASS_CODES, BASIC_TYPES
 from gxw.models import GXWFormatError
+
+_STRUCTURED_EXPRESSION_OPERATORS = frozenset({'&', '**', '<', '<=', '<>', '=', '>', '>=',
+                                              'MOD', 'XOR', 'NOT'})
 
 
 def scalar_type(data_type):
@@ -309,7 +313,9 @@ class Symbols:
             definition = Unit(target, kind.lower(), declarations=[self.row(dict(name=r['name'],
                 data_type=r['declared_type'], class_code=r['class_code'])) for r in rows.values()],
                 return_type=return_type if return_type not in (None, "@'VOID'") else '')
-            definition.project_source = {'language': 'unknown', 'source_status': 'unavailable'}
+            definition.project_source = {'language': 'unknown', 'source_status': 'unavailable',
+                'library': interface.get('library'), 'source_kind': interface.get('source_kind'),
+                'source_stream': interface.get('source_stream')}
             self.pous[target.upper()] = definition
         return definition, declaration
 
@@ -557,6 +563,8 @@ class Inspector(_DeviceInspector):
         super().__init__(model, context, bound_device_types=bound_device_types)
         self.symbols = symbols or Symbols()
         self._checked, self._checking = set(), set()
+        self.structured_call_result_types = {}
+        self.assignment_targets = {}
         self.constraint_checks = []
         for code, message, severity in self.symbols.errors:
             self.finding(code, message, severity=severity)
@@ -628,6 +636,909 @@ class Inspector(_DeviceInspector):
             version=self.symbols.context.get('software_version'), context=self.constraint_context()), node[-1])
         return signature
 
+    @staticmethod
+    def _reviewed_structured_call_admitted(entry):
+        details = entry.get('call_admission_details')
+        if (entry.get('call_available') is not True
+                or not isinstance(details, dict)
+                or not isinstance(details.get('interfaces'), (list, tuple))
+                or 'st' not in details['interfaces']):
+            return False
+        status = entry.get('support_status')
+        structured = details.get('structured_call')
+        if (status in {'reviewed_st_signature', 'reviewed_native_signature'}
+                and isinstance(structured, dict) and structured.get('available') is True):
+            return True
+        # Compatibility for existing reviewed ST-only owner metadata. New
+        # native+ST owners require the independent structured-call marker.
+        return status == 'reviewed_st_signature' and structured is None
+
+    @staticmethod
+    def _reviewed_structured_expression_admitted(entry):
+        details = entry.get('call_admission_details')
+        marker = details.get('structured_expression') if isinstance(details, dict) else None
+        return (entry.get('call_available') is True
+            and isinstance(details, dict)
+            and isinstance(details.get('interfaces'), (list, tuple))
+            and 'st' in details['interfaces']
+            and entry.get('support_status') in {
+                'reviewed_st_expression', 'reviewed_st_signature', 'reviewed_native_signature'}
+            and isinstance(marker, dict) and marker.get('available') is True
+            and marker.get('call_kind') == 'expression')
+
+    @staticmethod
+    def _operator_expression_arity(node, operator):
+        if node[0] == 'unary' and node[1] == operator:
+            return 1
+        if node[0] == 'binary' and node[1] == operator:
+            return (Inspector._operator_expression_arity(node[2], operator)
+                    + Inspector._operator_expression_arity(node[3], operator))
+        return 1
+
+    @staticmethod
+    def _is_fx_k_expression_contract(contract):
+        return any(source.get('manual_id') == 'fxcpu_application_k'
+                   and source.get('revision') == 'K'
+                   for source in contract.sources)
+
+    def _structured_expression_contract(self, node):
+        operator, offset = node[1], node[-1]
+        expression_entry = getattr(DEFAULT_INSTRUCTION_REGISTRY, 'expression_entry', None)
+        entry = (expression_entry(operator, cpu=self.model)
+                 if callable(expression_entry) else None)
+        if entry is None:
+            # Older focused registries do not expose expression_entry yet.
+            # Keep their exact-owner lookup behavior while the runtime registry
+            # resolves admitted operator tokens through the source marker.
+            entry = DEFAULT_INSTRUCTION_REGISTRY.definition_entry(operator, cpu=self.model)
+        if not entry:
+            self.finding('ST_EXPRESSION_COVERAGE',
+                f'{operator} has no exact source-bound ST expression owner for {self.model}',
+                offset=offset, severity='unverified')
+            return None
+        has_source_expression = any(fact.get('dimension') in {
+                                        'parameters.language_expression',
+                                        'parameters.operator_expression'}
+                                    for fact in entry.get('facts', []))
+        if not self._reviewed_structured_expression_admitted(entry):
+            if has_source_expression:
+                self.finding('ST_EXPRESSION_COVERAGE',
+                    f'{operator} ST expression is not admitted from its reviewed source contract',
+                    offset=offset, severity='unverified')
+            else:
+                self.finding('ST_EXPRESSION_COVERAGE',
+                    f'{operator} has no reviewed ST expression contract for {self.model}',
+                    offset=offset, severity='unverified')
+            return None
+
+        from plc.structured_expression_contract import resolve_structured_expression_contract
+        feature = DEFAULT_INSTRUCTION_REGISTRY.language_feature(
+            'ST.OPERATORS', language='st', cpu=self.model)
+        result = resolve_structured_expression_contract(entry.get('facts', []),
+            operator=operator, model=self.model,
+            owner_opcode=entry.get('opcode'),
+            version=self.symbols.context.get('software_version'),
+            language_feature=feature if feature is not None else {'target': 'ST.OPERATORS', 'facts': []})
+        if not result.accepted:
+            reason = ', '.join(result.refusal_reasons)
+            self.finding('ST_EXPRESSION_CONTRACT',
+                f'{operator} reviewed ST expression contract is no longer valid: {reason}',
+                offset=offset, severity='error')
+            return None
+        contract = result.contract
+        is_prefix = node[0] == 'unary'
+        if (contract.operator_form == 'prefix') != is_prefix:
+            self.finding('ST_EXPRESSION_FORM',
+                f'{operator} source contract requires {contract.operator_form} expression form',
+                offset=offset, severity='error')
+            return None
+        if is_prefix:
+            source = getattr(self.symbols.unit, 'source', None)
+            if isinstance(source, str):
+                cursor = offset + len(operator)
+                while cursor < len(source) and source[cursor].isspace():
+                    cursor += 1
+                if cursor >= len(source) or source[cursor] != '(':
+                    self.finding('ST_EXPRESSION_FORM',
+                        f'{operator} source contract requires a parenthesized prefix operand',
+                        offset=offset, severity='error')
+                    return None
+        owner_opcode = contract.owner_opcode or entry.get('opcode') or operator
+        self._check_structured_call_applicability(
+            contract, owner_opcode, offset, contract_kind='expression')
+        arity = self._operator_expression_arity(node, operator)
+        if not contract.minimum_operands <= arity <= contract.maximum_operands:
+            self.finding('ST_EXPRESSION_ARITY',
+                f'{operator} expression has {arity} operands; source allows '
+                f'{contract.minimum_operands}..{contract.maximum_operands}',
+                offset=offset, severity='error')
+        return contract
+
+    @staticmethod
+    def _expression_type_matches(actual, expected):
+        if actual == 'unknown':
+            return True
+        families = {
+            'ANY_REAL': {'real'}, 'REAL': {'real'}, 'LREAL': {'real'},
+            'ANY_INT': {'word', 'dword'}, 'INT': {'word'}, 'UINT': {'word'},
+            'SINT': {'word'}, 'USINT': {'word'}, 'DINT': {'dword'},
+            'UDINT': {'dword'}, 'LINT': {'dword'}, 'ULINT': {'dword'},
+            'ANY_NUM': {'word', 'dword', 'real'},
+            'ANY_BIT': {'bit', 'word', 'dword'}, 'BOOL': {'bit'}, 'BIT': {'bit'},
+            'WORD': {'word'}, 'DWORD': {'dword'},
+            'ANY_SIMPLE': {'bit', 'word', 'dword', 'real', 'time', 'string'},
+            'TIME': {'time'}, 'STRING': {'string'},
+        }
+        return actual in families.get(str(expected).upper(), set())
+
+    @staticmethod
+    def _expression_result_family(contract, actual_operands):
+        result_type = contract.result_type.upper()
+        if result_type in {'BOOL', 'BIT'}:
+            return 'bit'
+        if result_type in {'REAL', 'LREAL', 'ANY_REAL'}:
+            return 'real'
+        allowed = {'ANY_INT': {'word', 'dword'},
+                   'ANY_BIT': {'bit', 'word', 'dword'},
+                   'ANY_NUM': {'word', 'dword', 'real'}}.get(result_type)
+        if allowed is None:
+            return 'unknown'
+        known = [family for family in actual_operands if family != 'unknown']
+        if known and all(family == known[0] for family in known) and known[0] in allowed:
+            return known[0]
+        return 'unknown'
+
+    def _check_structured_call_applicability(self, contract, opcode, offset, *, contract_kind='call'):
+        """Evaluate every retained contract scope and condition in this project."""
+        from plc.instruction_constraints import _condition, _scope, version_condition_bounds
+        from plc.instruction_definition import (DefinitionError, InstructionFactGroup,
+                                                UnknownInstructionSemantics)
+
+        version = self.symbols.context.get('software_version')
+        context = {**self.constraint_context(), '$PLC_MODEL': self.model, '$LANGUAGE': 'st'}
+        prefix = 'ST_EXPRESSION' if contract_kind == 'expression' else 'ST_CALL'
+        noun = 'expression' if contract_kind == 'expression' else 'call'
+        groups = {fact['id']: InstructionFactGroup.from_mapping(fact) for fact in contract.facts}
+        if contract.conditions_evaluated:
+            self.finding(prefix + '_CONDITION', f'{opcode} {noun} contract was already evaluated outside this project context',
+                         offset=offset, severity='error')
+            return False
+        condition_rows = {}
+        for row in contract.conditions:
+            if isinstance(row, Mapping) and isinstance(row.get('fact_id'), str):
+                scoped_fact = groups.get(row['fact_id'])
+                if scoped_fact is None:
+                    self.finding(prefix + '_CONDITION', f'{opcode} structured ST condition has no bound fact',
+                                 offset=offset, severity='error')
+                    return False
+                condition_rows.setdefault(row['fact_id'], []).extend(row.get('conditions', ()))
+                continue
+            # Contract resolvers preserve source conditions in their original
+            # form. Bind each one back to every fact that actually declares it;
+            # this keeps the source association while allowing the shared
+            # applicability evaluator to check raw condition objects.
+            owners = [identity for identity, group in groups.items() if row in group.conditions]
+            if not owners:
+                self.finding(prefix + '_CONDITION', f'{opcode} structured ST condition has no bound fact',
+                             offset=offset, severity='error')
+                return False
+            for identity in owners:
+                condition_rows.setdefault(identity, []).append(row)
+
+        for identity, group in groups.items():
+            value = group.value
+            states = value.get('model_states')
+            model_state = states.get(self.model) if isinstance(states, dict) else None
+            available = value.get('available')
+            has_cpu_claim = ('available' in value or isinstance(states, dict) and self.model in states)
+            is_cpu_applicability = (group.dimension == 'constraints.cpu_availability'
+                                    or group.dimension == 'identity.applicability' and has_cpu_claim)
+            conditional_cpu = (is_cpu_applicability and model_state == 'conditional'
+                               and 'available' not in value)
+            cpu_supported = ((available is None or available is True)
+                             and (model_state is None or model_state == 'supported'))
+            cpu_claim = is_cpu_applicability and has_cpu_claim and not cpu_supported
+            scope_status = _scope(group, target=opcode, model=self.model, language='st', version=version)
+            if scope_status != 'passed':
+                if cpu_claim and scope_status == 'not_applicable':
+                    continue
+                severity = 'error' if scope_status == 'not_applicable' else 'unverified'
+                self.finding(prefix + '_SCOPE', f'{opcode} structured ST {noun} scope is {scope_status}',
+                             offset=offset, severity=severity)
+                return False
+
+            # Argument-dependent rule guards (for example EN) are evaluated
+            # after binding, by check_fact_constraints with the actual values.
+            if contract_kind == 'call' and group.dimension in {
+                    'constraints.numeric_ranges', 'constraints.documented_requirements'}:
+                continue
+
+            matched_all = True
+            unknown_reason = None
+            conditional_version_guard_matched = False
+            for condition in condition_rows.get(identity, ()):
+                try:
+                    matched = _condition(condition, {}, context)
+                    version_bounds = version_condition_bounds(condition, model=self.model)
+                except (DefinitionError, TypeError, ValueError, KeyError, OverflowError,
+                        UnknownInstructionSemantics) as error:
+                    unknown_reason = str(error)
+                    continue
+                if not matched:
+                    matched_all = False
+                    break
+                if conditional_cpu and version_bounds is not None:
+                    path, minimum, maximum, minimum_exclusive = version_bounds
+                    conditional_version_guard_matched |= (
+                        path == 'cpu_version' and not minimum_exclusive
+                        and ((minimum is not None and maximum is None)
+                             or (minimum is None and maximum is not None)))
+            if not matched_all:
+                if cpu_claim:
+                    if conditional_cpu:
+                        self.finding(prefix + '_CPU',
+                            f'{opcode} CPU version is outside its documented range',
+                            offset=offset, severity='error')
+                        return False
+                    continue
+                self.finding(prefix + '_CONDITION', f'{opcode} structured ST condition does not apply',
+                             offset=offset, severity='error')
+                return False
+            if unknown_reason is not None:
+                self.finding(prefix + '_CONDITION',
+                    f'{opcode} structured ST condition cannot be checked: {unknown_reason}',
+                    offset=offset, severity='unverified')
+                return False
+            if cpu_claim:
+                if available is False or model_state == 'unsupported':
+                    self.finding(prefix + '_CPU', f'{opcode} is unavailable for the current CPU context',
+                                 offset=offset, severity='error')
+                elif conditional_cpu and conditional_version_guard_matched:
+                    continue
+                else:
+                    self.finding(prefix + '_CPU', f'{opcode} CPU applicability is unresolved',
+                                 offset=offset, severity='unverified')
+                return False
+        return True
+
+    def _exact_iec_type(self, node):
+        """Return an exact scalar IEC spelling when existing bindings establish it."""
+        kind = node[0]
+        if kind == 'call':
+            return self.structured_call_result_types.get(node[-1])
+        if kind == 'atom':
+            token = node[1].strip()
+            declaration = self.reference(node)
+            if declaration is not None:
+                try:
+                    base, bounds = self.symbols.parts(declaration.data_type)
+                except ValueError:
+                    return None
+                return base.upper() if not bounds and scalar_type(base) is not None else None
+            if '#' in token:
+                prefix = token.split('#', 1)[0].upper()
+                if prefix not in {'2', '8', '16', 'T', 'TIME'} and scalar_type(prefix) is not None:
+                    return prefix
+            try:
+                literal = literal_value(token)
+            except (ValueError, STUncovered):
+                return None
+            if literal:
+                value_type = literal[1]
+                if value_type.kind == 'bool':
+                    return 'BOOL'
+                if value_type.kind == 'real':
+                    return 'LREAL' if value_type.bits == 64 else 'REAL'
+                if value_type.kind == 'int':
+                    if value_type.unit == 'ms':
+                        return 'TIME'
+                    names = ({8: 'SINT', 16: 'INT', 32: 'DINT', 64: 'LINT'} if value_type.signed
+                             else {8: 'USINT', 16: 'UINT', 32: 'UDINT', 64: 'ULINT'})
+                    return names.get(value_type.bits)
+            return None
+        if kind in {'index', 'member'}:
+            declaration = self.reference(node)
+            if declaration is None:
+                return None
+            try:
+                base, bounds = self.symbols.parts(declaration.data_type)
+            except ValueError:
+                return None
+            return base.upper() if not bounds and scalar_type(base) is not None else None
+        if kind == 'unary':
+            return self._exact_iec_type(node[2])
+        if kind == 'binary':
+            try:
+                exact = expression_numeric_type(node, self.symbols, reference=self.reference)
+            except (ValueError, DefinitionError):
+                return None
+            left_exact, right_exact = self._exact_iec_type(node[2]), self._exact_iec_type(node[3])
+            if left_exact and left_exact == right_exact and node[1] in {'+', '-', '*', '/', 'MOD'}:
+                return left_exact
+            if exact.kind == 'bool':
+                return 'BOOL'
+            if exact.kind == 'real':
+                return 'LREAL' if exact.bits == 64 else 'REAL'
+            if exact.kind == 'int':
+                if exact.unit == 'ms':
+                    return 'TIME'
+                if exact.signed:
+                    return {8: 'SINT', 16: 'INT', 32: 'DINT', 64: 'LINT'}.get(exact.bits)
+        return None
+
+    @staticmethod
+    def _source_verifies_positional_output_order(contract):
+        """Require explicit source evidence before binding an output by position.
+
+        The general ST binder keeps VAR_OUTPUT out of positional arguments.
+        This exception is limited to reviewed owner contracts whose source
+        records either verify a complete documented call or cross-check the
+        exact ST argument order and arity.
+        """
+        parameters = list(contract.parameters)
+        if not parameters or not any(parameter.get('direction') == 'output' for parameter in parameters):
+            return False
+        if contract.variadic_parameter_name is not None:
+            return contract.positional_arguments_verified
+        if contract.call_kind == 'statement':
+            return contract.positional_arguments_verified
+        if contract.call_kind == 'instruction':
+            return contract.positional_arguments_verified
+        facts = [fact for fact in contract.facts
+                 if fact.get('status') == 'source_verified'
+                 and fact.get('verification') == 'source_checked']
+        signatures = [fact for fact in facts if fact.get('dimension') == 'parameters.st_signature']
+        if len(signatures) != 1 or not isinstance(signatures[0].get('value'), dict):
+            return False
+        value = signatures[0]['value']
+        expected = [str(parameter.get('symbol') or parameter['name']).casefold()
+                    for parameter in parameters]
+        if (value.get('arguments_are_named') is False
+                and value.get('call_form_verification') == 'documented_arguments_verified'):
+            order = value.get('argument_order')
+            return (isinstance(order, (list, tuple))
+                    and [str(symbol).casefold() for symbol in order] == expected)
+
+        orders = [fact for fact in facts if fact.get('dimension') == 'parameters.order'
+                  and isinstance(fact.get('value'), dict)
+                  and fact['value'].get('order_source') == 'ST_call_arguments']
+        arities = [fact for fact in facts if fact.get('dimension') == 'parameters.arity'
+                   and isinstance(fact.get('value'), dict)
+                   and fact['value'].get('count_kind') == 'ST_call_arguments']
+        if len(orders) != 1 or len(arities) != 1:
+            return False
+        order = orders[0]['value'].get('symbols')
+        arity = arities[0]['value']
+        return (isinstance(order, (list, tuple))
+                and [str(symbol).casefold() for symbol in order] == expected
+                and type(arity.get('minimum')) is int
+                and type(arity.get('maximum')) is int
+                and arity['minimum'] == arity['maximum'] == len(parameters))
+
+    def _array_element_argument(self, actual, binding, arguments, *, label):
+        reference = binding.get('array_element_reference')
+        if not reference and binding.get('argument_passing') != 'array_element_reference':
+            return True
+        extent = reference.get('extent') if isinstance(reference, Mapping) else None
+        if (not isinstance(extent, Mapping) or extent.get('unit') != 'logical_elements'
+                or reference.get('start') != 'selected_array_element'):
+            self.finding('ST_CALL_CONTRACT', label + ' has an unsupported array reference contract',
+                         severity='unverified')
+            return False
+        if actual is None or actual[0] != 'index':
+            self.finding('ST_ARRAY_REFERENCE', label + ' requires a declared array element reference')
+            return False
+        declaration = self.reference(actual[1])
+        if declaration is None:
+            self.finding('ST_ARRAY_REFERENCE', label + ' has no bound array declaration',
+                         offset=actual[-1], severity='unverified')
+            return False
+        try:
+            base, bounds = self.symbols.parts(declaration.data_type)
+            expected = ValueType.from_mapping(reference['element_type'])
+        except (ValueError, KeyError, DefinitionError) as error:
+            self.finding('ST_ARRAY_REFERENCE', label + ': ' + str(error), offset=actual[-1])
+            return False
+        if scalar_type(base) != expected:
+            self.finding('ST_TYPE', label + ' array element type differs from the source contract',
+                         offset=actual[-1])
+            return False
+        if len(bounds) != 1 or len(actual[2]) != 1:
+            self.finding('ST_ARRAY_REFERENCE', label + ' requires a verified contiguous array layout',
+                         offset=actual[-1], severity='unverified')
+            return False
+        count_node = arguments.get(str(extent.get('parameter') or '').upper())
+        count = self.constant(count_node) if count_node is not None else None
+        if type(count) is not int:
+            self.finding('ST_ARRAY_LENGTH', label + ' extent requires a bound integer constant',
+                         offset=actual[-1], severity='error' if extent.get('constant_only') is True else 'unverified')
+            return False
+        allowed = extent.get('allowed_counts')
+        if count < 1 or (allowed is not None and count not in allowed):
+            self.finding('ST_ARRAY_LENGTH', label + ' extent is outside the source allowed counts',
+                         offset=actual[-1])
+            return False
+        start = self.constant(actual[2][0])
+        if type(start) is not int:
+            self.finding('ST_ARRAY_EXTENT', label + ' array start/extent cannot be established',
+                         offset=actual[-1], severity='unverified')
+            return False
+        low, high = bounds[0]
+        if start < low or start + count - 1 > high:
+            self.finding('ST_ARRAY_EXTENT', label + ' extent exceeds the declared array', offset=actual[-1])
+            return False
+        return True
+
+    def _start_data_reference_argument(self, actual, binding, *, label):
+        """Bind the source table's address input without treating it as a cast."""
+        if actual[0] not in {'atom', 'index', 'member'}:
+            self.finding('ST_REFERENCE_SOURCE_UNRESOLVED',
+                         label + ' needs a source-supported data reference; expressions are not established',
+                         offset=actual[-1], severity='unverified')
+            return False
+        declaration = self.reference(actual)
+        root = actual
+        while root[0] in {'index', 'member'}:
+            root = root[1]
+        root_name = root[1].split('.')[0].upper() if root[0] == 'atom' else ''
+        is_global = (root_name in self.symbols.globals and root_name not in self.symbols.locals)
+        direct_counter = False
+        bounds = ()
+        if declaration is not None:
+            if 'CONSTANT' in declaration.class_name:
+                self.finding('ST_REFERENCE_SOURCE_UNRESOLVED', label + ' constant-address input is not established',
+                             offset=actual[-1], severity='unverified')
+                return False
+            try:
+                base, bounds = self.symbols.parts(declaration.data_type)
+            except ValueError as error:
+                self.finding('ST_TYPE', str(error), offset=actual[-1])
+                return False
+            base = base.upper()
+            is_global |= declaration.class_name.startswith('VAR_GLOBAL')
+        elif actual[0] == 'atom' and DEVICE_ADDRESS_RE.fullmatch(actual[1]):
+            from plc.device_profiles import native_word_value_bits
+            from plc.validation import parse_device_address, is_bit_device
+            parsed = parse_device_address(actual[1], self.model)
+            if parsed is None:
+                self.finding('ST_REFERENCE_SOURCE_UNRESOLVED', label + ' device type is not established',
+                             offset=actual[-1], severity='unverified')
+                return False
+            bits = native_word_value_bits(parsed[0], parsed[1], self.model)
+            direct_counter = parsed[0] == 'C' and bits == 32
+            # C/T can also name contacts. This data-reference position uses
+            # their numeric device value width, not their contact Boolean.
+            base = ('DINT' if direct_counter else
+                    'INT' if parsed[0] in {'C', 'T'} and bits == 16 else
+                    'BOOL' if is_bit_device(actual[1], self.model) else
+                    'INT' if bits == 16 else '')
+        else:
+            self.finding('ST_REFERENCE_SOURCE_UNRESOLVED',
+                         label + ' has no bound data reference; literals are not established',
+                         offset=actual[-1], severity='unverified')
+            return False
+        allowed = binding['array_element_types'] if bounds else binding['scalar_types']
+        if base not in allowed:
+            uncertain = 'BIT_STRING' in binding['source_type_domains'] and (
+                base in {'BOOL', 'WORD', 'DWORD'} or bool(bounds))
+            self.finding('ST_REFERENCE_SOURCE_UNRESOLVED' if uncertain else 'ST_TYPE',
+                         label + ' input type is not established by its own source table',
+                         offset=actual[-1], severity='unverified' if uncertain else 'error')
+            return False
+        requirement = binding.get('label_requirement')
+        if requirement and (bounds or base in {'DINT', 'DWORD', 'REAL', 'TIME'}):
+            if not is_global and not (direct_counter and requirement['direct_32bit_counter']):
+                self.finding('ST_REFERENCE_GLOBAL_LABEL',
+                             label + ' requires a global label for array or 32-bit data, or a direct 32-bit counter',
+                             offset=actual[-1])
+                return False
+        return True
+
+    def _structured_call(self, node, entry, *, statement_context=False, instance=None):
+        from plc.structured_call_contract import resolve_structured_call_contract
+
+        _, name, args, offset = node
+        resolution = resolve_structured_call_contract(entry.get('facts', []), opcode=entry.get('opcode', name),
+            model=self.model, version=self.symbols.context.get('software_version'))
+        if not resolution.accepted:
+            reason = ','.join(resolution.refusal_reasons) or 'source_contract_unavailable'
+            self.finding('ST_CALL_CONTRACT', f'{name} structured ST contract refused: {reason}',
+                         offset=offset, severity='error')
+            return 'unknown'
+        contract = resolution.contract
+        if contract.instance_required:
+            if instance is None or instance.data_type.upper() != contract.opcode.upper():
+                self.finding('ST_FB_INSTANCE', 'FB invocation requires a declared instance of ' + contract.opcode,
+                             offset=offset)
+                return 'unknown'
+            if not statement_context:
+                self.finding('ST_CALL_CONTEXT', 'A function-block instance has no assignable return value',
+                             offset=offset)
+                return 'unknown'
+            sources = self.symbols.callable_sources
+            if (sources is None or not sources.st_instance_contract_interface(
+                    contract.opcode, contract.as_mapping())):
+                self.finding('ST_CALL_CONTRACT', 'The current project FB interface differs from its source contract',
+                             offset=offset)
+                return 'unknown'
+            if any(argument[0] != 'named' for argument in args):
+                self.finding('ST_CALL_ARGUMENT', 'This FB source documents named instance arguments', offset=offset)
+                return 'unknown'
+        if contract.call_kind == 'statement' and not statement_context:
+            self.finding('ST_CALL_CONTEXT',
+                f'{name} is documented as a statement and has no assignable function result',
+                offset=offset, severity='error')
+            return 'unknown'
+        if contract.call_kind == 'instruction' and statement_context:
+            self.finding('ST_CALL_CONTEXT',
+                f'{name} is documented with an assigned BOOL result and cannot be used as a bare statement',
+                offset=offset, severity='error')
+            return 'unknown'
+        if not self._check_structured_call_applicability(contract, contract.opcode, offset):
+            return 'unknown'
+
+        variadic = contract.variadic_parameter_name is not None
+        source_parameters = list(contract.parameters)
+        if variadic:
+            if any(argument[0] == 'named' for argument in args):
+                self.finding('ST_CALL_ARGUMENT',
+                    'Variadic structured ST calls require the documented positional form', offset=offset)
+                return 'unknown'
+            positions = [index for index, parameter in enumerate(source_parameters)
+                         if parameter['name'].casefold() == contract.variadic_parameter_name.casefold()]
+            if not positions:
+                self.finding('ST_CALL_CONTRACT', f'{name} has an invalid variadic source binding', offset=offset)
+                return 'unknown'
+            optional_positions = [index for index, parameter in enumerate(source_parameters)
+                                  if parameter.get('optional') is True]
+            if len(positions) == 1 and optional_positions:
+                start = positions[0]
+                optional_start, optional_end = optional_positions[0], optional_positions[-1] + 1
+                if (optional_positions != list(range(optional_start, optional_end))
+                        or optional_start <= start
+                        or any(parameter.get('direction') != 'input'
+                               for parameter in source_parameters[start:optional_end])
+                        or any(parameter.get('direction') != 'output'
+                               for parameter in source_parameters[optional_end:])):
+                    self.finding('ST_CALL_CONTRACT', f'{name} has an invalid optional trailing source binding',
+                                 offset=offset)
+                    return 'unknown'
+                variable_parameters = source_parameters[start:optional_end]
+                fixed_prefix = source_parameters[:start]
+                fixed_suffix = source_parameters[optional_end:]
+                fixed_count = len(fixed_prefix) + len(fixed_suffix)
+                variadic_count = len(args) - fixed_count
+                if (contract.minimum_variadic_arguments != optional_start - start
+                        or contract.maximum_variadic_arguments != optional_end - start):
+                    self.finding('ST_CALL_CONTRACT', f'{name} optional parameter range differs from its source signature',
+                                 offset=offset)
+                    return 'unknown'
+                if (type(variadic_count) is not int
+                        or not contract.minimum_variadic_arguments <= variadic_count
+                            <= contract.maximum_variadic_arguments):
+                    self.finding('ST_CALL_ARITY',
+                        f'{name} variadic input count must be between '
+                        f'{contract.minimum_variadic_arguments} and {contract.maximum_variadic_arguments}',
+                        offset=offset)
+                    return 'unknown'
+                source_parameters = (fixed_prefix + variable_parameters[:variadic_count]
+                                     + fixed_suffix)
+            else:
+                if (len(positions) < 2
+                        or positions != list(range(positions[0], positions[-1] + 1))
+                        or optional_positions):
+                    self.finding('ST_CALL_CONTRACT', f'{name} has an invalid repeated source binding', offset=offset)
+                    return 'unknown'
+                fixed_count = len(source_parameters) - len(positions)
+                variadic_count = len(args) - fixed_count
+                if (type(contract.minimum_variadic_arguments) is not int
+                        or type(contract.maximum_variadic_arguments) is not int
+                        or not contract.minimum_variadic_arguments <= variadic_count
+                            <= contract.maximum_variadic_arguments):
+                    self.finding('ST_CALL_ARITY',
+                        f'{name} variadic input count must be between '
+                        f'{contract.minimum_variadic_arguments} and {contract.maximum_variadic_arguments}',
+                        offset=offset)
+                    return 'unknown'
+                template = source_parameters[positions[0]]
+                source_parameters = (source_parameters[:positions[0]]
+                                     + [template] * variadic_count
+                                     + source_parameters[positions[-1] + 1:])
+
+        formal_names = []
+        used_formal_names = set()
+        for index, parameter in enumerate(source_parameters):
+            formal_name = parameter['name']
+            suffix = 2
+            while formal_name.upper() in used_formal_names:
+                formal_name = f"{parameter['name']}_{suffix}"
+                suffix += 1
+            used_formal_names.add(formal_name.upper())
+            formal_names.append(formal_name)
+
+        declarations = []
+        for parameter, formal_name in zip(source_parameters, formal_names):
+            class_name = {'input': 'VAR_INPUT', 'output': 'VAR_OUTPUT', 'in_out': 'VAR_IN_OUT'}[
+                parameter['direction']]
+            declarations.append(Declaration(formal_name, parameter['type'], class_name))
+        definition = Unit(name, 'function', declarations=declarations)
+        positional_output_call = (bool(args) and all(argument[0] != 'named' for argument in args)
+                                  and self._source_verifies_positional_output_order(contract))
+        try:
+            if variadic and any(parameter['direction'] == 'output'
+                                for parameter in source_parameters):
+                if (not positional_output_call
+                        or len(args) != len(source_parameters)):
+                    raise ValueError('Structured ST signature requires every declared parameter')
+                formals = {declaration.name.upper(): declaration for declaration in declarations}
+                bindings = {formal_name.upper(): (formals[formal_name.upper()], argument, ':=')
+                            for formal_name, argument in zip(formal_names, args)}
+            elif variadic:
+                bindings = bind_arguments(definition, args)
+            elif positional_output_call:
+                if len(args) != len(contract.parameters):
+                    raise ValueError('Structured ST signature requires every declared parameter')
+                formals = {declaration.name.upper(): declaration for declaration in declarations}
+                bindings = {parameter['name'].upper():
+                            (formals[parameter['name'].upper()], argument, ':=')
+                            for parameter, argument in zip(contract.parameters, args)}
+            else:
+                bindings = bind_arguments(definition, args)
+            if set(bindings) != {formal_name.upper() for formal_name in formal_names}:
+                raise ValueError('Structured ST signature requires every declared parameter')
+            binding_rows = []
+            for parameter, formal_name in zip(source_parameters, formal_names):
+                formal, actual, direction = bindings[formal_name.upper()]
+                binding_rows.append((parameter, formal, actual, direction))
+                if (formal.class_name == 'VAR_OUTPUT' and direction != '=>'
+                        and not contract.instance_required
+                        and not positional_output_call):
+                    raise ValueError('Output parameter requires => association: ' + formal.name)
+                if formal.class_name != 'VAR_OUTPUT' and direction == '=>':
+                    raise ValueError('=> association requires an output parameter: ' + formal.name)
+        except ValueError as error:
+            self.finding('ST_CALL_ARGUMENT', str(error), offset=offset)
+            return 'unknown'
+
+        argument_nodes = {parameter['name'].upper(): actual for parameter, _, actual, _ in binding_rows}
+        for parameter, _, actual, _ in binding_rows:
+            if not self._array_element_argument(actual, parameter, argument_nodes,
+                                                 label=name + '.' + parameter['name']):
+                return 'unknown'
+        if contract.return_binding and not self._array_element_argument(
+                self.assignment_targets.get(offset), contract.return_binding, argument_nodes,
+                label=name + ' result'):
+            return 'unknown'
+
+        generic_families = {
+            'ANY_REAL': {'real'},
+            'ANY_INT': {'word', 'dword'},
+            'ANY16': {'word'},
+            'ANY32': {'dword'},
+            'ANY_NUM': {'word', 'dword', 'real'},
+            'ANY_BIT': {'bit', 'word', 'dword'},
+            'ANY_SIMPLE': {'bit', 'word', 'dword', 'real', 'time', 'string'},
+        }
+        unified_generics = {}
+        for parameter, formal, actual, _ in binding_rows:
+            source_name = contract.variadic_parameter_name if (
+                variadic and parameter['name'].casefold()
+                    == contract.variadic_parameter_name.casefold()) else parameter['name']
+            reference_binding = parameter.get('input_reference')
+            if reference_binding:
+                if not self._start_data_reference_argument(actual, reference_binding,
+                                                          label=name + '.' + source_name):
+                    return 'unknown'
+                self.value_type(actual)
+                continue
+            actual_family = self.value_type(actual)
+            expected = str(parameter['type']).upper()
+            verified_branches = parameter.get('source_verified_type_branches')
+            if verified_branches:
+                exact_branch = self._exact_iec_type(actual)
+                if (exact_branch is None
+                        or exact_branch.upper() not in {item.upper() for item in verified_branches}):
+                    self.finding('ST_TYPE_SOURCE_UNRESOLVED',
+                                 f'{name} parameter {source_name} has source-verified branches '
+                                 + ', '.join(verified_branches)
+                                 + '; this input type remains unresolved',
+                                 offset=actual[-1], severity='unverified')
+                    return 'unknown'
+            if expected in generic_families:
+                if actual_family not in generic_families[expected] and actual_family != 'unknown':
+                    self.finding('ST_TYPE', f'{name} parameter {source_name} requires {expected}',
+                                 offset=actual[-1])
+                    return 'unknown'
+                exact = self._exact_iec_type(actual)
+                if exact is None:
+                    self.finding('ST_TYPE', f'{name} parameter {source_name} needs an exact bound IEC type',
+                                 offset=actual[-1], severity='unverified')
+                    return 'unknown'
+                if actual_family == 'unknown':
+                    return 'unknown'
+                if expected == 'ANY16':
+                    exact_type = scalar_type(exact)
+                    if (exact_type is None or exact_type.kind != 'int'
+                            or exact_type.bits != 16 or exact_type.unit):
+                        self.finding('ST_TYPE', f'{name} parameter {source_name} requires ANY16 (a 16-bit IEC integer type)',
+                                     offset=actual[-1])
+                        return 'unknown'
+                if expected == 'ANY32' and exact.upper() not in {'DINT', 'UDINT', 'DWORD'}:
+                    self.finding('ST_TYPE', f'{name} parameter {source_name} requires ANY32 (a 32-bit integer or bit-string type)',
+                                 offset=actual[-1])
+                    return 'unknown'
+                alternatives = parameter.get('type_alternatives')
+                if (alternatives and exact.upper() not in {str(item).upper() for item in alternatives}):
+                    self.finding('ST_TYPE', f'{name} parameter {source_name} requires one of '
+                                 + ', '.join(str(item) for item in alternatives), offset=actual[-1])
+                    return 'unknown'
+                # In the documented M statement, ANY32 constrains each input
+                # independently; the source does not bind S1 and S2 to one
+                # exact IEC type. Keep ordinary function generic unification.
+                independent_statement_any32 = (expected == 'ANY32'
+                    and contract.call_kind == 'statement' and contract.returns is None)
+                generic_key = (expected + ':' + formal.name.upper()
+                               if independent_statement_any32 else expected)
+                prior = unified_generics.setdefault(generic_key, exact)
+                if prior != exact:
+                    self.finding('ST_TYPE', f'{name} generic {expected} parameters have different exact types',
+                                 offset=actual[-1])
+                    return 'unknown'
+            else:
+                exact = self._exact_iec_type(actual)
+                alternatives = parameter.get('type_alternatives')
+                if alternatives:
+                    if (not isinstance(alternatives, (list, tuple))
+                            or any(not isinstance(item, str) for item in alternatives)):
+                        self.finding('ST_CALL_CONTRACT',
+                                     f'{name} parameter {source_name} has invalid type alternatives',
+                                     offset=actual[-1])
+                        return 'unknown'
+                    allowed_types = {item.upper() for item in alternatives}
+                    if exact is None:
+                        self.finding('ST_TYPE', f'{name} parameter {source_name} needs an exact bound IEC type '
+                                     'to select a documented alternative',
+                                     offset=actual[-1], severity='unverified')
+                        return 'unknown'
+                    if exact.upper() not in allowed_types:
+                        self.finding('ST_TYPE', f'{name} parameter {source_name} requires one of '
+                                     + ', '.join(alternatives), offset=actual[-1])
+                        return 'unknown'
+                else:
+                    expected_family = type_family(scalar_type(expected))
+                    if actual_family != expected_family and actual_family != 'unknown':
+                        self.finding('ST_TYPE', f'{name} parameter type differs: {source_name}', offset=actual[-1])
+                        return 'unknown'
+                    if exact is not None and scalar_type(expected) is not None:
+                        actual_scalar, expected_scalar = scalar_type(exact), scalar_type(expected)
+                        if actual_scalar != expected_scalar:
+                            self.finding('ST_TYPE', f'{name} parameter type differs: {source_name}', offset=actual[-1])
+                            return 'unknown'
+                    elif actual_family == 'unknown':
+                        return 'unknown'
+
+            if formal.class_name in {'VAR_OUTPUT', 'VAR_IN_OUT'}:
+                if contract.instance_required and formal.class_name == 'VAR_OUTPUT':
+                    from plc.instruction_constraints import check_language_constraints
+                    self.constraints(check_language_constraints('ST.FB.OUTPUT_ARGUMENT',
+                        {'OPTION': self.symbols.options.get('allow_fb_output_arguments')},
+                        plc_model=self.model, context={**self.constraint_context(), 'using_output_argument': True}),
+                        offset)
+                if actual[0] not in {'atom', 'index', 'member'}:
+                    self.finding('ST_WRITE_TARGET', f'{name} parameter {source_name} requires a writable reference',
+                                 offset=actual[-1])
+                    return 'unknown'
+                declaration = self.reference(actual, write=True)
+                if declaration is None:
+                    if actual[0] != 'atom' or not DEVICE_ADDRESS_RE.fullmatch(actual[1]):
+                        self.finding('ST_WRITE_TARGET', f'{name} parameter {source_name} is not a bound writable reference',
+                                     offset=actual[-1])
+                        return 'unknown'
+                    self.device_fact(actual[1], write=True)
+                    if self.model in SUPPORTED_PLC_MODELS:
+                        try:
+                            _validate_writable_device(actual[1], '$.st_code', self.model, opcode=contract.opcode)
+                        except PLCJsonValidationError as error:
+                            self.finding('ST_OPERAND', str(error), offset=actual[-1])
+                            return 'unknown'
+                elif 'CONSTANT' in declaration.class_name:
+                    self.finding('ST_WRITE_TARGET', f'{name} parameter {source_name} is constant',
+                                 offset=actual[-1])
+                    return 'unknown'
+
+        constraint_roots = [fact['id'] for fact in contract.facts
+            if fact.get('dimension') in {'constraints.numeric_ranges',
+                                          'constraints.documented_requirements'}]
+        constraint_status = None
+        if constraint_roots:
+            from plc.instruction_constraints import check_fact_constraints
+            values = {}
+            argument_tokens = []
+            for index, (parameter, formal, actual, _) in enumerate(binding_rows):
+                constant = self.constant(actual)
+                values[parameter['name']] = constant
+                values[parameter['name'].upper()] = constant
+                values['$' + str(index)] = constant
+                token = None
+                if actual[0] in {'atom', 'index', 'member'}:
+                    declaration = self.reference(actual)
+                    token = ((getattr(declaration, 'address', '') or actual[1])
+                             if declaration is not None and actual[0] == 'atom'
+                             else actual[1] if actual[0] == 'atom' and DEVICE_ADDRESS_RE.fullmatch(actual[1])
+                             else None)
+                argument_tokens.append(token)
+            values['$OPERANDS'] = argument_tokens
+            values['$OPERAND_TOKENS'] = list(argument_tokens)
+            values['$PARAMETER_NAMES'] = [parameter['name'] for parameter in source_parameters]
+            report = check_fact_constraints(contract.facts, values, target=contract.opcode,
+                plc_model=self.model, language='st',
+                version=self.symbols.context.get('software_version'),
+                context=self.constraint_context(), phase='input', root_ids=constraint_roots)
+            self.constraints(report, offset)
+            constraint_status = report.get('status')
+            if constraint_status == 'failed':
+                return 'unknown'
+
+        call_row = {'name': name, 'opcode': contract.opcode,
+            'kind': ('structured_function_block' if contract.instance_required else
+                     'structured_statement' if contract.call_kind == 'statement' else
+                     'structured_instruction' if contract.call_kind == 'instruction' else
+                     'structured_function'),
+            'source': 'reviewed_st_signature', 'structured_call': True,
+            'parameters': (list(bindings) if not variadic else
+                           [parameter['name'].upper() for parameter, _, _, _ in binding_rows]),
+            'contract_fact_ids': list(contract.fact_ids)}
+        if contract.instance_required:
+            call_row.update(instance_name=instance.name, definition=contract.opcode,
+                            return_role='no_return_value')
+        elif contract.call_kind == 'statement':
+            call_row.update(return_role=contract.return_role,
+                            execution_outputs=[dict(output) for output in contract.execution_outputs],
+                            documented_form=contract.documented_form)
+        else:
+            result_type = contract.returns.upper()
+            if result_type in generic_families:
+                generic_result = result_type
+                result_type = unified_generics.get(generic_result)
+                if result_type is None and generic_result in {'ANY16', 'ANY32', 'ANY_BIT'}:
+                    # Output-only bit-pattern functions have no same-domain
+                    # input to unify. Bind a direct assignment only within the
+                    # return alternatives explicitly retained by its source.
+                    target = self.assignment_targets.get(offset)
+                    expected = self._exact_iec_type(target) if target is not None else None
+                    alternatives = {item.upper() for item in contract.return_type_alternatives}
+                    exact = scalar_type(expected) if expected else None
+                    width_matches = (generic_result in {'ANY16', 'ANY32'}
+                        and exact is not None and exact.kind == 'int'
+                        and exact.bits == (16 if generic_result == 'ANY16' else 32)
+                        and not exact.unit)
+                    bit_type_matches = (generic_result == 'ANY_BIT'
+                        and expected in {'BOOL', 'WORD', 'DWORD'})
+                    if (expected in alternatives and exact is not None
+                            and (width_matches or bit_type_matches)):
+                        result_type = expected
+                        call_row['source_return_type'] = generic_result
+                if result_type is None:
+                    self.finding('ST_TYPE', f'{name} return type has no unified generic binding', offset=offset)
+                    return 'unknown'
+            if (contract.return_type_alternatives
+                    and result_type.upper() not in {item.upper() for item in contract.return_type_alternatives}):
+                self.finding('ST_TYPE', f'{name} return type requires one of '
+                             + ', '.join(contract.return_type_alternatives), offset=offset)
+                return 'unknown'
+            if scalar_type(result_type) is None:
+                self.finding('ST_CALL_CONTRACT', f'{name} return type cannot be represented by the ST binder',
+                             offset=offset, severity='unverified')
+                return 'unknown'
+            self.structured_call_result_types[offset] = result_type
+            call_row['return_type'] = result_type
+            if contract.return_binding and contract.return_binding.get('kind') == 'start_data_reference':
+                call_row['return_binding'] = dict(contract.return_binding)
+        if constraint_status is not None:
+            call_row['applicability_constraints_status'] = constraint_status
+        self.calls.append(call_row)
+        return 'void' if contract.instance_required or contract.call_kind == 'statement' else type_family(scalar_type(result_type))
+
     def reference(self, node, *, write=False):
         try:
             declaration = self.symbols.reference(node)
@@ -689,27 +1600,51 @@ class Inspector(_DeviceInspector):
             return 'unknown'
         if kind == 'unary':
             family = self.value_type(node[2])
+            expression_contract = None
+            if node[1] == 'NOT':
+                expression_entry = getattr(DEFAULT_INSTRUCTION_REGISTRY, 'expression_entry', None)
+                if callable(expression_entry) and expression_entry('NOT', cpu=self.model):
+                    expression_contract = self._structured_expression_contract(node)
+            if expression_contract:
+                expected = expression_contract.operand_types[0]
+                if not self._expression_type_matches(family, expected):
+                    self.finding('ST_TYPE', f'NOT operand 1 requires {expected}', offset=node[-1])
+                return self._expression_result_family(expression_contract, [family])
             if node[1] in {'+', '-'} and family not in {'word', 'dword', 'real', 'time', 'unknown'}:
                 self.finding('ST_TYPE', 'Unary numeric operator requires numeric data', offset=node[-1])
             if node[1] == 'NOT' and family not in {'bit', 'word', 'dword', 'unknown'}:
                 self.finding('ST_TYPE', 'NOT requires Boolean or bit-string data', offset=node[-1])
             return family
+        expression_contract = (self._structured_expression_contract(node)
+            if node[1] in _STRUCTURED_EXPRESSION_OPERATORS else None)
+        if node[1] == 'AND':
+            # An admitted FX operator adds its own operand bounds to the
+            # shared AND grammar; other models retain their language contract.
+            expression_entry = getattr(DEFAULT_INSTRUCTION_REGISTRY, 'expression_entry', None)
+            if callable(expression_entry) and expression_entry('AND', cpu=self.model):
+                expression_contract = self._structured_expression_contract(node)
         left, right = self.value_type(node[2]), self.value_type(node[3])
         numeric = {'word', 'dword', 'real', 'time'}
-        if left != right and 'unknown' not in {left, right} and not {left, right} <= numeric:
+        fx_k_expression = bool(expression_contract and self._is_fx_k_expression_contract(expression_contract))
+        if (not fx_k_expression and left != right and 'unknown' not in {left, right}
+                and not {left, right} <= numeric):
             self.finding('ST_TYPE', f'{node[1]} combines incompatible operand types {left}/{right}', offset=node[-1])
-        if node[1] in {'=', '<>', '<', '>', '<=', '>='}:
-            return 'bit'
         from plc.st_frontend import operator_binding
         rule = next((rule for rule in operator_binding()['types'].values() if node[1] in rule['operators']), None)
         families = {'ANY_REAL': {'real'}, 'ANY_INT': {'word', 'dword'}, 'ANY_NUM': {'word', 'dword', 'real'},
-                    'ANY_BIT': {'bit', 'word', 'dword'}, 'ANY_SIMPLE': {'bit', 'word', 'dword', 'real', 'time', 'string'}}
-        if rule:
+                    'ANY_BIT': {'bit', 'word', 'dword'}, 'ANY_SIMPLE': {'bit', 'word', 'dword', 'real', 'time', 'string'},
+                    'REAL': {'real'}, 'LREAL': {'real'}, 'INT': {'word'}, 'UINT': {'word'},
+                    'SINT': {'word'}, 'USINT': {'word'}, 'DINT': {'dword'}, 'UDINT': {'dword'},
+                    'LINT': {'dword'}, 'ULINT': {'dword'}, 'BOOL': {'bit'}, 'BIT': {'bit'},
+                    'WORD': {'word'}, 'DWORD': {'dword'}, 'TIME': {'time'}, 'STRING': {'string'}}
+        if rule or expression_contract:
+            expected_types = (list(expression_contract.operand_types) if expression_contract
+                              else list(rule['inputs']))
             for index, actual in enumerate((left, right)):
-                expected = rule['inputs'][min(index, len(rule['inputs']) - 1)]
+                expected = expected_types[min(index, len(expected_types) - 1)]
                 if actual != 'unknown' and actual not in families[expected]:
                     self.finding('ST_TYPE', f'{node[1]} operand {index + 1} requires {expected}', offset=node[-1])
-        if node[1] == '**':
+        if node[1] == '**' and not fx_k_expression:
             from plc.instruction_constraints import check_language_constraints
             values = {'LEFT': self.constant(node[2]), 'RIGHT': self.constant(node[3])}
             from plc.instruction_definition import UnknownInstructionSemantics
@@ -731,6 +1666,10 @@ class Inspector(_DeviceInspector):
             self.constraints(check_language_constraints('ST.OPERATOR.POWER', {**values, 'RESULT': result},
                 plc_model=self.model, version=self.symbols.context.get('software_version'),
                 context=context, phase='result'), node[-1])
+        if node[1] in {'=', '<>', '<', '>', '<=', '>='}:
+            return 'bit'
+        if expression_contract:
+            return self._expression_result_family(expression_contract, [left, right])
         return 'unknown' if 'unknown' in {left, right} else 'real' if 'real' in {left, right} else 'dword' if 'dword' in {left, right} else left
 
     def constant(self, node):
@@ -805,7 +1744,14 @@ class Inspector(_DeviceInspector):
             self.finding('ST_WRITE_TARGET', 'Assignment requires a writable reference', offset=target[-1])
             return
         declaration = self.reference(target, write=not initializing)
-        left, right = self.value_type(target), self.value_type(value)
+        left = self.value_type(target)
+        if value[0] == 'call':
+            self.assignment_targets[value[-1]] = target
+        try:
+            right = self.value_type(value)
+        finally:
+            if value[0] == 'call':
+                self.assignment_targets.pop(value[-1], None)
         if declaration and declaration.address and not initializing:
             self.device_fact(declaration.address, write=True)
             self.guard(_validate_writable_device, declaration.address, '$.st_code', self.model)
@@ -817,10 +1763,16 @@ class Inspector(_DeviceInspector):
         if left != right and 'unknown' not in {left, right} and not {left, right} <= numeric:
             if not (left.startswith('array:') and right == 'array' or left.startswith('structure:') and right == 'structure'):
                 self.finding('ST_TYPE', f'Assignment types differ: {left}/{right}', offset=target[-1])
+        if value[0] == 'call':
+            actual_return = self.structured_call_result_types.get(value[-1])
+            destination_type = self._exact_iec_type(target)
+            if (actual_return and destination_type and scalar_type(actual_return) != scalar_type(destination_type)):
+                self.finding('ST_TYPE', f'Assignment type differs: {destination_type}/{actual_return}',
+                             offset=target[-1])
         if declaration:
             self.initializer(declaration.data_type, value)
 
-    def call(self, node):
+    def call(self, node, *, statement_context=False):
         _, name, args, offset = node
         try:
             definition, instance = self.symbols.callable(name)
@@ -831,6 +1783,17 @@ class Inspector(_DeviceInspector):
             if definition.kind == 'function_block' and instance is None:
                 self.finding('ST_FB_INSTANCE', 'FB invocation requires a declared instance', offset=offset)
                 return 'unknown'
+            if (instance is not None and definition.kind == 'function_block'
+                    and getattr(definition, 'project_source', {}).get('library')):
+                entry = DEFAULT_INSTRUCTION_REGISTRY.definition_entry(definition.name, cpu=self.model) or {}
+                if any(fact.get('dimension') == 'identity.form'
+                       and fact.get('value', {}).get('call_basis') == 'instance_call'
+                       for fact in entry.get('facts', ())):
+                    if not self._reviewed_structured_call_admitted(entry):
+                        self.finding('ST_CALL_COVERAGE', 'This source-backed FB instance has no qualified call admission',
+                                     offset=offset, severity='unverified')
+                        return 'unknown'
+                    return self._structured_call(node, entry, statement_context=statement_context, instance=instance)
             if getattr(definition, 'parse_diagnostic', None):
                 self.finding('ST_CALL_SOURCE_COVERAGE', 'Callable source could not be parsed: ' + definition.name + ': ' + definition.parse_diagnostic,
                     offset=offset, severity='unverified')
@@ -885,6 +1848,8 @@ class Inspector(_DeviceInspector):
             self.finding('ST_CALL_COVERAGE', 'Declared callable type has no bound interface: ' + instance.data_type, offset=offset, severity='unverified')
             return 'unknown'
         entry = DEFAULT_INSTRUCTION_REGISTRY.definition_entry(name, cpu=self.model) or {}
+        if self._reviewed_structured_call_admitted(entry):
+            return self._structured_call(node, entry, statement_context=statement_context)
         availability = [f for f in entry.get('facts', []) if f['dimension'] == 'constraints.cpu_availability']
         if availability:
             from plc.instruction_constraints import check_fact_constraints
@@ -892,6 +1857,12 @@ class Inspector(_DeviceInspector):
                 language='st', version=self.symbols.context.get('software_version'),
                 context=self.constraint_context()), offset)
         form = DEFAULT_INSTRUCTION_REGISTRY.resolve_st_call(name, cpu=self.model)
+        if not form and self._reviewed_structured_expression_admitted(entry):
+            self.finding('ST_CALL_FORM', name + ' is an operator expression, not a function call',
+                         offset=offset)
+            for argument in args:
+                self.value_type(argument[3] if argument[0] == 'named' else argument)
+            return 'unknown'
         identified = form or DEFAULT_INSTRUCTION_REGISTRY.resolve_fact_form(name, cpu=self.model)
         signature = self.native_constraints(node, identified) if identified else None
         if signature and not form:
@@ -933,13 +1904,70 @@ class Inspector(_DeviceInspector):
             return form.spec.st_call.get('returns', 'unknown')
         return super().call(node)
 
+    def _source_scalar_type_supported(self, data_type):
+        """Resolve ST declaration support separately from native label codes."""
+        from plc.instruction_constraints import _condition, _scope
+        from plc.instruction_definition import (DefinitionError, InstructionFactGroup,
+            UnknownInstructionSemantics, select_fact_dependencies)
+
+        if scalar_type(data_type) is None:
+            return False
+        feature = DEFAULT_INSTRUCTION_REGISTRY.language_feature(
+            'ST.DATATYPES', language='st', cpu=self.model)
+        if not feature:
+            return False
+        version = self.symbols.context.get('software_version')
+        context = {**self.constraint_context(), '$PLC_MODEL': self.model, '$LANGUAGE': 'st'}
+        supported = False
+        try:
+            for raw in feature.get('facts', []):
+                if (raw.get('dimension') != 'constraints.datatype_availability'
+                        or raw.get('value', {}).get('data_type') != data_type):
+                    continue
+                group = InstructionFactGroup.from_mapping(raw)
+                state = _scope(group, target='ST.DATATYPES', model=self.model,
+                               language='st', version=version)
+                if state == 'not_applicable':
+                    continue
+                if (state != 'passed' or self.model not in group.scope.get('models', [])
+                        or 'ST.DATATYPES' not in group.scope.get('forms', [])
+                        or 'st' not in group.scope.get('languages', [])):
+                    return False
+                closure = select_fact_dependencies(feature['facts'], [group.id],
+                    opcode='ST.DATATYPES', model=self.model, language='st', version=version)
+                if not closure['source_verification_complete']:
+                    return False
+                applicable = True
+                for fact in closure['groups']:
+                    if (fact.get('verification') != 'source_checked' or not any(
+                            source.get('manual_id') and source.get('revision')
+                            and (source.get('pdf_pages') or source.get('pdf_page'))
+                            for source in fact.get('sources', []))):
+                        return False
+                    if not all(_condition(condition, {}, context)
+                               for condition in fact.get('conditions', [])):
+                        applicable = False
+                if not applicable:
+                    continue
+                if group.value.get('available') is not True:
+                    return False
+                supported = True
+        except (DefinitionError, UnknownInstructionSemantics, TypeError, ValueError, KeyError):
+            return False
+        return supported
+
     def declarations(self):
         for declaration in [*self.symbols.globals.values(), *self.symbols.locals.values()]:
             try:
                 if declaration.address:
                     self.guard(_validate_device_address, declaration.address, '$.declarations', self.model)
                 base, _ = self.symbols.parts(declaration.data_type)
-                if base.upper() not in BASIC_TYPES and base.upper() not in self.symbols.types and base.upper() not in self.symbols.pous:
+                if (self.symbols.callable_sources is not None and base.upper() not in BASIC_TYPES
+                        and base.upper() not in self.symbols.types and base.upper() not in self.symbols.pous):
+                    self.symbols.callable(declaration.name)
+                if (base.upper() not in BASIC_TYPES and base.upper() not in self.symbols.types
+                        and base.upper() not in self.symbols.pous
+                        and not self._source_scalar_type_supported(base.upper())):
                     self.finding('ST_TYPE_COVERAGE', 'Declared type has no GX target evidence: ' + base, severity='unverified')
                 if declaration.initial:
                     self.assignment(('atom', declaration.name.upper(), declaration.span.start if declaration.span else 0), declaration.initial, initializing=True)
@@ -997,7 +2025,7 @@ class Inspector(_DeviceInspector):
                 if statement[1] is not None:
                     self.finding('ST_RETURN_DIALECT', 'GX RETURN has no value expression')
             elif kind == 'invoke':
-                self.call(statement[1])
+                self.call(statement[1], statement_context=True)
             elif kind == 'assign':
                 self.assignment(statement[1], statement[2])
             else:

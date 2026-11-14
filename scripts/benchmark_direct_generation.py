@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Frozen teaching journeys through the application, with no model repairs.
 
@@ -265,7 +265,8 @@ def evaluate_program(case, program, *, native_instructions=None):
                     initial[device+".contact"] = False
         initial.update({row["address"]: False for row in case["io"]})
         machine = ScanMachine(ladder, plc_model="FX3U", initial=initial,
-            execution_context={"program_type": "scan"}, previous_inputs=copy.deepcopy(initial),
+            execution_context={"program_type": "scan", **case.get("execution_context", {})},
+            previous_inputs=copy.deepcopy(initial),
             instructions=instructions)
         failures, unknown, observations, tolerance, criteria = [], [], [], 0, {}
         prior_expected = None

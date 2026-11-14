@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """High-level Simulator API; low-level writes are not Agent tools."""
 
@@ -10,6 +10,19 @@ from typing import Any, Mapping, Optional
 
 from .gateway import DEFAULT_GATEWAY_URL, GXSimulatorGatewayClient, detect_simulator_environment
 from .runner import PLCTestRunner
+
+
+def _backend_for_model(backend, plc_model):
+    selected = backend if backend is not None else GXSimulatorGatewayClient(
+        os.environ.get("GX_SIMULATOR_GATEWAY_URL", DEFAULT_GATEWAY_URL),
+        token=os.environ.get("GX_SIMULATOR_GATEWAY_TOKEN", ""), plc_model=plc_model)
+    if isinstance(selected, GXSimulatorGatewayClient):
+        from plc.device_policy import native_simulator_profile
+        target = native_simulator_profile(plc_model)
+        if selected.connected and native_simulator_profile(selected.plc_model)['cpu_menu'] != target['cpu_menu']:
+            raise ValueError('已连接模拟器型号与测试套件型号不一致')
+        selected.plc_model = plc_model
+    return selected
 
 
 def simulator_status():
@@ -40,10 +53,7 @@ def run_test_case(
     progress=None,
     reset_devices=(),
 ):
-    selected = backend or GXSimulatorGatewayClient(
-        os.environ.get("GX_SIMULATOR_GATEWAY_URL", DEFAULT_GATEWAY_URL),
-        token=os.environ.get("GX_SIMULATOR_GATEWAY_TOKEN", ""),
-    )
+    selected = _backend_for_model(backend, plc_model)
     return PLCTestRunner(
         selected,
         progress=progress,
@@ -62,10 +72,7 @@ def run_regression_suite(
     progress=None,
     reset_devices=(),
 ):
-    selected = backend or GXSimulatorGatewayClient(
-        os.environ.get("GX_SIMULATOR_GATEWAY_URL", DEFAULT_GATEWAY_URL),
-        token=os.environ.get("GX_SIMULATOR_GATEWAY_TOKEN", ""),
-    )
+    selected = _backend_for_model(backend, plc_model)
     return PLCTestRunner(
         selected,
         progress=progress,

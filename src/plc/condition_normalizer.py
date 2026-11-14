@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Conservative, model-free cleanup of generation-owned ladder conditions.
 
@@ -10,10 +10,9 @@ Evaluation is never moved across unknown effects or writes to predicate operands
 """
 
 import copy
-import re
 from collections import Counter
 
-from plc.condition_analysis import ConditionAnalysis
+from plc.condition_analysis import ConditionAnalysis, writes_conflict as _writes_conflict
 from plc.generation_contract import MAX_LABEL_LEN
 from plc.ladder_limits import GXWORKS2_MAX_LADDER_BLOCK_ROWS, parallel_ladder_rows
 
@@ -22,10 +21,6 @@ def _merged_annotation(values):
     """Retain complete, distinct annotations within the existing field limit."""
     text = "\n".join(dict.fromkeys(str(value) for value in values if value))
     return text if len(text) <= MAX_LABEL_LEN else None
-
-
-def _writes_conflict(reads, writes):
-    return writes is None or any(device in writes or re.sub(r"\d+$", "*", device) in writes for device in reads)
 
 
 def _predicate(element, analysis):
@@ -289,13 +284,7 @@ def _can_rehome(prefix, effects, analysis):
     writes = set()
     for effect in effects[:-1]:
         writes = None if writes is None or effect is None else writes | effect
-    for element in prefix:
-        predicate = _predicate(element, analysis)
-        if predicate is None:
-            return "shared_evaluation_site"
-        if _writes_conflict(predicate[1], writes):
-            return "stateful_or_unknown_output" if writes is None else "read_after_write"
-    return None
+    return analysis.repeat_condition_reason(prefix, writes)
 
 
 def _merge(rungs, common, analysis):

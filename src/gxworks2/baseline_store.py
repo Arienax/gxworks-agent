@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Persistent last-import baselines for GX Works2 overwrite protection."""
 
@@ -10,6 +10,7 @@ import json
 import os
 import uuid
 from datetime import datetime, timezone
+from itertools import chain
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -48,9 +49,11 @@ def _clean_context(value: Any) -> dict:
 class ImportBaselineStore:
     """Atomically persist the program last imported into each GX project."""
 
-    def __init__(self, backup_root):
+    def __init__(self, backup_root, *, legacy_backup_root=None):
         self.backup_root = Path(backup_root).expanduser().resolve()
         self.state_root = self.backup_root / ".import_state"
+        self.legacy_state_root = (Path(legacy_backup_root) / ".import_state"
+                                  if legacy_backup_root is not None else None)
 
     @staticmethod
     def project_identity(session, project_name="", project_identity="") -> dict:
@@ -89,7 +92,8 @@ class ImportBaselineStore:
         """
         executable = str(getattr(session, "executable", "") or "").strip().casefold()
         paths = set()
-        for record in self.state_root.glob("*.json"):
+        legacy = self.legacy_state_root.glob("*.json") if self.legacy_state_root is not None else ()
+        for record in chain(self.state_root.glob("*.json"), legacy):
             try:
                 payload = json.loads(record.read_text(encoding="utf-8"))
             except (OSError, ValueError):
@@ -105,6 +109,8 @@ class ImportBaselineStore:
 
     def load(self, identity: Mapping[str, Any]):
         path = self.path_for(identity)
+        if not path.exists() and self.legacy_state_root is not None:
+            path = self.legacy_state_root / path.name
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except FileNotFoundError:

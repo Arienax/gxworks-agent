@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Model-free generation acceptance shared by the API and engineering tools.
 
@@ -18,7 +18,9 @@ from plc.comments import normalize_generated_device_comments
 from plc.specification.repair import patch_device_addresses
 from shared.i18n import tr
 from plc.device_identity import canonical_ladder_devices
-from plc.ladder_repair import normalize_app_instr_out_outputs, normalize_legacy_counter_outputs
+from plc.ladder_repair import (
+    normalize_app_instr_out_outputs, normalize_legacy_counter_outputs, normalize_q_arithmetic_outputs,
+)
 from plc.ir import build_plc_ir, ir_to_ladder, validate_plc_ir
 from plc.validation import (
     PLCJsonValidationError, validate_ladder_candidate_structure,
@@ -206,7 +208,7 @@ def prepare_ladder_candidate(
     candidate, *, plc_model="FX3U", program_name="MAIN", revision=1,
     confirmed_spec=None, previous_ladder=None, repair_mode=False,
     allowed_rung_ids=None, allowed_addresses=None, task_type=None,
-    candidate_origin="external", on_progress=None,
+    candidate_origin="external", on_progress=None, behavior_traces=None,
 ):
     """Normalize one response, materialize its edit, and build a consistent IR.
 
@@ -281,6 +283,9 @@ def prepare_ladder_candidate(
     # the immutable baseline spelling outside their authorized scope.
     if previous_ladder is None and not repair_mode:
         parsed = canonical_ladder_devices(parsed)
+        native_forms = normalize_q_arithmetic_outputs(parsed, plc_model=plc_model)
+        if native_forms:
+            messages.append(tr('已规范为 Q 系原生整数算术形式：') + '；'.join(native_forms))
     progress(tr('程序已生成，开始验证。将按已有规格和验收用例检查逻辑与动作时序。'))
     validate_ladder_candidate_structure(parsed, plc_model=plc_model, require_catalogued_instructions=True)
     from plc.condition_normalizer import normalize_shared_conditions
@@ -303,6 +308,10 @@ def prepare_ladder_candidate(
 
     semantic_status = semantic_validation.get("status")
     if semantic_status == "violated":
+        changed_choices = dict.fromkeys(row["expected"] for row in semantic_validation["violations"]
+                                        if row.get("check") == "selected_implementation")
+        if changed_choices:
+            messages.append(tr('候选未沿用已确认方案的指令或软元件 ') + ', '.join(changed_choices))
         messages.append(tr('候选程序已保留；已确认语义检查发现不一致，未触发额外模型调用'))
     elif semantic_status == "unresolved":
         messages.append(tr('候选程序已保留；部分已确认语义无法由当前本地检查完整覆盖'))
@@ -318,7 +327,7 @@ def prepare_ladder_candidate(
                            _canonicalize_devices=previous_ladder is None and not repair_mode)
     validate_plc_ir(program, validate_ladder=False)
     from simulator.bounded import check_confirmed_behavior
-    behavior_check = check_confirmed_behavior(program, confirmed_spec)
+    behavior_check = check_confirmed_behavior(program, confirmed_spec, traces=behavior_traces)
     return {
         "ladder": parsed,
         "program_ir": program,
@@ -331,33 +340,43 @@ def prepare_ladder_candidate(
     }
 
 
-def render_generation_artifacts(program, output_dir):
-    """Render exactly the API's artifact set, without semantic revalidation."""
+def render_generation_artifacts(program, output_dir, *, include_st_translation=False):
+    """Render the normal Ladder artifacts; derived ST requires explicit opt-in."""
     from rendering.ladder_svg import AdvancedSVGLadder
     from gxworks2.csv_export import generate_gx_works2_csv
-    from plc.st_renderer import render_plc_ir_to_st, validate_st_traceability
+    from plc.st_renderer import render_optional_plc_ir_to_st, validate_st_traceability
 
     if (program.get('source') or {}).get('format') in {'instruction_sequence_v1', 'instruction_sequence_v2'}:
         from plc.artifacts import render_candidate_artifacts
-        return {'artifacts': render_candidate_artifacts(program, output_dir, validate_ladder=False),
-                'width': 1100, 'height': 0, 'st_translation': 'unavailable'}
+        return {'artifacts': render_candidate_artifacts(
+                    program, output_dir, validate_ladder=False,
+                    include_st_translation=include_st_translation),
+                'width': 1100, 'height': 0,
+                'st_translation': 'unavailable' if include_st_translation else 'disabled'}
 
     validate_plc_ir(program, validate_ladder=False)
     directory = Path(output_dir)
     directory.mkdir(parents=True, exist_ok=True)
     ladder_text = json.dumps(ir_to_ladder(program), ensure_ascii=False, indent=2)
     (directory / "ladder.json").write_text(ladder_text, encoding="utf-8")
-    st_text = render_plc_ir_to_st(program)
-    validate_st_traceability(program, st_text)
-    (directory / "program_from_ir.st").write_text(st_text, encoding="utf-8")
+    st_text = render_optional_plc_ir_to_st(program) if include_st_translation else None
+    if st_text is not None:
+        validate_st_traceability(program, st_text)
+        (directory / "program_from_ir.st").write_text(st_text, encoding="utf-8")
     (directory / "program.ir.json").write_text(json.dumps(program, ensure_ascii=False, indent=2), encoding="utf-8")
     drawer = AdvancedSVGLadder()
     (directory / "ladder.svg").write_text(drawer.generate_ladder(ladder_text), encoding="utf-8")
-    artifacts = {"json": "ladder.json", "ir": "program.ir.json", "svg": "ladder.svg", "st_from_ir": "program_from_ir.st"}
+    artifacts = {"json": "ladder.json", "ir": "program.ir.json", "svg": "ladder.svg",
+                 **({"st_from_ir": "program_from_ir.st"} if st_text is not None else {})}
     from plc.validation import SUPPORTED_PLC_MODELS
+    program_size = {}
     if str(program.get("plc", {}).get("cpu") or "FX3U").upper() in SUPPORTED_PLC_MODELS:
-        if not generate_gx_works2_csv(program, str(directory / "program.csv"), str(directory / "comments.csv")):
+        if not generate_gx_works2_csv(program, str(directory / "program.csv"), str(directory / "comments.csv"),
+                                     raise_lowering_error=True, execution_context={"program_type": "scan"},
+                                     program_size=program_size):
             raise ValueError("GX Works2 CSV 渲染失败，未生成可交付的程序 CSV。")
         artifacts.update(program_csv="program.csv", comment_csv="comments.csv")
     return {"artifacts": artifacts, "width": int(drawer.width), "height": int(drawer.height),
-            "st_from_ir_sha256": hashlib.sha256(st_text.encode("utf-8")).hexdigest()}
+            **({"program_size": program_size} if program_size else {}),
+            **({"st_from_ir_sha256": hashlib.sha256(st_text.encode("utf-8")).hexdigest()} if st_text is not None else
+               {"st_translation": "unavailable" if include_st_translation else "disabled"})}

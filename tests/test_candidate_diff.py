@@ -273,11 +273,9 @@ def test_execution_preview_http_contract_is_bound_to_proposal_not_selected_versi
         model_factory=lambda: pytest.fail("Preview must not create a model"))
     origin = "http://127.0.0.1:8765"
     app = create_app(store.base_dir, state_dir=tmp_path / "state", service=service,
-        origin=origin, operator_token="review-operator")
+        origin=origin)
     with TestClient(app, base_url=origin) as client:
-        login = client.post("/api/session", json={"token": "review-operator"}, headers={"Origin": origin})
-        assert login.status_code == 200
-        headers = {"Origin": origin, "X-CSRF-Token": login.json()["csrf"]}
+        headers = {"Origin": origin}
         response = client.post("/api/proposals", headers=headers, json={"action": "gx_import",
             "project_id": project_id, "version_id": base_id, "request_id": "bound-preview"})
         assert response.status_code == 201, response.text

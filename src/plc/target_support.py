@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Operation-specific expansion points for every native GX Works2 CPU menu target.
 
@@ -13,12 +13,13 @@ from dataclasses import dataclass
 
 from gxworks2.project_profiles import GXWORKS2_NATIVE_VERSION, NATIVE_PROJECT_PROFILES, native_project_profile
 from plc.runtime_semantics import control_runtime_facts
+from plc.target_identity import CORE_ONLY_TARGETS as CORE_TARGET_IDENTITIES
 
 
 OPERATIONS = ("composition", "fbd_topology", "fbd_native_compile", "closed_loop_scan")
 # Core identities only: these are not GX Works2 native menu options.
 # Operation capabilities remain gated by exact CPU source-scoped facts.
-CORE_ONLY_TARGETS = frozenset({"FX5S", "FX5UJ", "FX5U", "FX5UC"})
+CORE_ONLY_TARGETS = frozenset(CORE_TARGET_IDENTITIES)
 NATIVE_UI_LANGUAGES = ("zh-CN", "en", "ja")
 LIVE_OPERATIONS = (
     "create_global_labels", "edit_global_labels", "edit_pou_labels", "delete_label",

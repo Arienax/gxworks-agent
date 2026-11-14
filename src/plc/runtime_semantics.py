@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Target runtime/special-device semantics for instructions.
 
@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 import copy
 import json
+import re
 from functools import lru_cache
 
 
@@ -44,7 +45,6 @@ def first_scan_fact(plc_model, execution_context=None):
 
 
 def timer_runtime_fact(plc_model, address, opcode='OUT'):
-    import re
     facts = control_runtime_facts(plc_model).get('timers', {})
     match = re.fullmatch(r'T(\d+)', str(address).upper())
     if match:

@@ -55,12 +55,16 @@ def test_connected_paging_preserves_engineering_keys_and_rejects_marker_only_pay
 
 
 @pytest.mark.parametrize('field', ['api_key', 'file_path', 'password'])
-def test_connected_complete_read_does_not_trust_private_object_fields(field):
+@pytest.mark.parametrize('read_format', ['paged', 'resolved'])
+def test_connected_complete_read_does_not_trust_private_object_fields(field, read_format):
     from application.read_delivery import ReadDeliveryStore
     page = ReadDeliveryStore().prepare({'ok': True, 'tool': 'get_fbd_catalog',
-        'data': {'parameter_model': {'networks': []}}}, {}, 'binding')
-    root = page['data']['document']['$ref'].removeprefix('#/objects/')
-    page['data']['objects'][root][field] = 'private-value'
+        'data': {'parameter_model': {'networks': []}}}, {'read_format': read_format}, 'binding')
+    if read_format == 'paged':
+        root = page['data']['document']['$ref'].removeprefix('#/objects/')
+        page['data']['objects'][root][field] = 'private-value'
+    else:
+        page['data']['document'][field] = 'private-value'
     response = {'data': page, 'content': json.dumps(page), 'name': 'get_fbd_catalog',
                 'call_id': 'connected', 'is_error': False}
     class Opener:
@@ -71,7 +75,8 @@ def test_connected_complete_read_does_not_trust_private_object_fields(field):
         client.call_tool('get_fbd_catalog', {}, 'connected', project_id='p1')
 
 
-def test_connected_multi_page_read_checks_later_objects_and_keeps_schema_references():
+@pytest.mark.parametrize('read_format', ['resolved', 'paged'])
+def test_connected_multi_page_read_checks_later_objects_and_keeps_schema_references(read_format):
     from application.read_delivery import ReadDeliveryStore, assemble_read_pages
     from agent_runtime.runtime import _model_tool_value
     name = 'get_fbd_catalog'
@@ -81,7 +86,7 @@ def test_connected_multi_page_read_checks_later_objects_and_keeps_schema_referen
         'parameter_schema': {'$defs': {'item': {'type': 'string'}},
                              '$ref': '#/objects/user-schema-ref'}}
     store = ReadDeliveryStore(max_tokens=1800, max_bytes=8000)
-    first = store.prepare({'ok': True, 'tool': name, 'data': _model_tool_value(name, document)}, {}, 'binding')
+    first = store.prepare({'ok': True, 'tool': name, 'data': _model_tool_value(name, document)}, {'read_format': read_format}, 'binding')
     pages = [first]
     while pages[-1]['data']['delivery']['next']:
         nxt = pages[-1]['data']['delivery']['next']
@@ -92,14 +97,15 @@ def test_connected_multi_page_read_checks_later_objects_and_keeps_schema_referen
     def request(route, payload, **kwargs):
         page = copy.deepcopy(pages[current['index']])
         if current['tamper']:
-            network = next(value for value in page['data']['objects'].values()
-                           if isinstance(value, dict) and 'nodes' in value)
+            network = (page['data']['document']['parameter_model']['networks'][0]
+                       if read_format == 'resolved' else next(value for value in page['data']['objects'].values()
+                           if isinstance(value, dict) and 'nodes' in value))
             network['file_path'] = 'private-value'
         return {'data': page, 'content': json.dumps(page), 'name': name,
                 'call_id': payload['call_id'], 'is_error': False}
     client._request = request
     received = []
-    arguments = {}
+    arguments = {'read_format': read_format}
     for i in range(len(pages)):
         current['index'] = i
         received.append(client.call_tool(name, arguments, str(i), project_id='p1').data)
@@ -472,7 +478,8 @@ raise SystemExit(main())
 """, encoding="utf-8")
     parameters = StdioServerParameters(
         command=sys.executable,
-        args=[str(wrapper), "--stdio", "--service-url", url, "--service-token-env", "ISOLATED_MCP_AGENT_TOKEN", "--project", "p1"],
+        args=[str(wrapper), "--stdio", "--service-url", url, "--service-token-env", "ISOLATED_MCP_AGENT_TOKEN",
+              "--project", "p1", "--read-budget-tokens", "32000"],
         env={**os.environ, "PYTHONPATH": str(ROOT / "src"), "ISOLATED_MCP_AGENT_TOKEN": "isolated-agent-token", "PLC_AI_WORKSPACE_DIR": ""}, cwd=tmp_path,
     )
 
@@ -483,7 +490,8 @@ raise SystemExit(main())
                     async with ClientSession(*streams, read_timeout_seconds=10) as client:
                         initialized = await client.initialize()
                         assert "cannot approve" in initialized.instructions
-                        assert {tool.name for tool in (await client.list_tools()).tools} == set(SAFE_TOOL_NAMES)
+                        assert "The host configures the delivery budget" in initialized.instructions
+                        assert {tool.name for tool in (await client.list_tools()).tools} == set(SAFE_TOOL_NAMES) | {"gxworks_read_context_unit"}
                         result = await client.call_tool("create_program_candidate", {"ladder": {}})
                         assert result.structured_content["proposal_id"] == "proposal_saved_by_backend"
                         assert result.structured_content["status"] == "confirmation_required"
@@ -507,3 +515,78 @@ def test_service_cli_rejects_ambiguous_or_unavailable_configuration(tmp_path):
         assert result.returncode == 2
         assert result.stdout == b""
         assert result.stderr
+
+@pytest.mark.parametrize('read_budget', [None, 32000])
+def test_resolved_reads_and_batch_restore_through_web_service(tmp_path, monkeypatch, read_budget):
+    import io
+    from fastapi.testclient import TestClient
+    from application.read_delivery import assemble_read_pages
+    from application.workbench import WorkbenchService
+    from integrations.mcp.service_client import ServiceMCPToolAdapter
+    from integrations.web.app import create_app
+
+    source = [
+        {'kind': 'instruction', 'target': 'MOV', 'value': {'description': 'Move source to destination. ' * 30}},
+        {'kind': 'device', 'target': 'M8002', 'value': {'description': 'First scan relay. ' * 40}},
+    ]
+    if read_budget is not None:
+        source.extend({'kind': 'instruction', 'target': 'OP' + str(index),
+                       'value': {'description': '本型号操作数写法和适用条件。' * 80}} for index in range(12))
+    def manual(_context, _arguments):
+        return {'plc_model': 'FX3U', 'language': 'ladder', 'results': [{'knowledge': source}]}
+
+    service = WorkbenchService(tmp_path / 'workspace', tmp_path / 'state')
+    from dataclasses import replace
+    registry = service.projects.runtime.registry
+    monkeypatch.setitem(registry._tools, 'search_plc_manual',
+                        replace(registry._tools['search_plc_manual'], handler=manual))
+    token = 'isolated-agent-token'
+    app = create_app(service.projects.store.base_dir, state_dir=service.state_dir,
+                     service=service, origin='http://127.0.0.1:8765', agent_token=token)
+    with TestClient(app, base_url='http://127.0.0.1:8765') as web:
+        project = web.post('/api/projects', headers={'Origin': 'http://127.0.0.1:8765'},
+                           json={'name': 'Read delivery', 'plc_model': 'FX3U'})
+        assert project.status_code == 201, project.text
+
+        class Opener:
+            def open(self, request, timeout):
+                from urllib.parse import urlsplit
+                response = web.post(urlsplit(request.full_url).path, content=request.data, headers=request.headers)
+                assert response.status_code == 200, response.text
+                return io.BytesIO(response.content)
+
+        adapter = ServiceMCPToolAdapter(ApplicationServiceClient('http://127.0.0.1:8765', token, opener=Opener()),
+                                        project.json()['id'], read_budget_tokens=read_budget)
+        def call(name, arguments, identifier):
+            result = adapter.call_tool(name, arguments, identifier)
+            body = json.loads(result.content[0].text)
+            assert not result.is_error, body
+            assert result.structured_content is None
+            return body
+
+        args = {'query': 'MOV M8002', 'language': 'ladder'}
+        first = call('search_plc_manual', args, 'first')
+        assert first['data']['context_schema_version'] == 4
+        assert first['data']['delivery']['complete']
+        facts = first['data']['document']['results'][0]['knowledge']
+        assert len({row['citation_id'] for row in facts}) == len(source)
+        assert [{key: value for key, value in row.items() if key != 'citation_id'} for row in facts] == source
+        second = call('search_plc_manual', args, 'second')
+        refs = second['data']['document']['results'][0]['knowledge']
+        ids = [row['$conversation_ref'] for row in refs]
+        restored = call('gxworks_read_context_unit', {'ids': ids}, 'restore')['data']['units']
+        assert [restored[identity] for identity in ids] == facts
+
+        legacy = call('search_plc_manual', {**args, 'read_format': 'paged'}, 'legacy')
+        pages = [legacy]
+        while follow := pages[-1]['data']['delivery']['next']:
+            pages.append(call(follow['tool'], follow['arguments'], 'legacy-' + str(len(pages))))
+        assert all(page['data']['context_schema_version'] == 3 for page in pages)
+        assert assemble_read_pages(pages)['results'][0]['knowledge'] == source
+
+        if read_budget is not None:
+            small_host = ServiceMCPToolAdapter(adapter.client, project.json()['id'], read_budget_tokens=1000)
+            blocked = small_host.call_tool('search_plc_manual', args, 'too-large')
+            error = json.loads(blocked.content[0].text)['error']
+            assert blocked.is_error and error['code'] == 'HOST_CONTEXT_TOO_LARGE'
+            assert 'next_actions' not in error

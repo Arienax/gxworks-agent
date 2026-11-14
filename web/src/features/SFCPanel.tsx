@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import { useEffect, useId, useRef, useState } from "react";
 import { api, artifactUrl, key } from "../api/client";
@@ -96,7 +96,7 @@ export function SFCPanel({ value, pid, vid, readOnly, preview, onProposal, t }: 
       {!preview && model.graph.position_resolution !== "native-source-bound" && <Button disabled={busy} onClick={() => void loadGeometry()}>{t(busy ? "正在读取…" : "读取原生图形")}</Button>}
       <Button disabled={locked || !(editable || swapSteps.length > 1) || !edits.length} onClick={() => void prepare()}>{t("预览修改")}</Button>
       <Button variant="primary" disabled={locked || !candidate || !candidate.diff.has_changes} onClick={() => void save()}>{t("保存候选")}</Button>
-      {vid && !preview && <a className="button" href={artifactUrl(pid, vid, "gxw")}>{t("下载 GXW")}</a>}
+      {vid && !preview && <a className="button" href={artifactUrl(pid, vid, "gxw", true)} download>{t("下载 GXW")}</a>}
     </header>
     {error && <p className="sfc-error" role="alert">{error}</p>}
     {candidate && <p className="muted">{t("已通过离线保存回读；原生编译与运行尚未验证。")}</p>}

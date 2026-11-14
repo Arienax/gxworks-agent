@@ -178,6 +178,50 @@ def test_legacy_explicit_null_becomes_user_omit_not_a_missing_selection():
     assert "reasoning_effort" not in runtime.overrides
 
 
+def test_retired_legacy_effort_is_omitted_for_the_corrected_deepseek_preset():
+    p = profile(baseUrl="https://api.deepseek.com/v1", model="deepseek-v4-pro",
+                generationDefaults={"reasoning_effort": "low"})
+
+    runtime = materialize_runtime_profile(p, api_key="key")
+
+    assert runtime.contract.parameters["reasoning_effort"].values == ("high", "max")
+    assert runtime.settings.parameters["reasoning_effort"] == {"mode": "omit"}
+    assert "reasoning_effort" not in resolve_request(runtime).options
+
+
+def test_saved_qwen_mode_is_refreshed_without_losing_custom_parameters():
+    from model_runtime.catalog import resolve_capabilities
+
+    p = profile(baseUrl="https://dashscope.aliyuncs.com/compatible-mode/v1", model="qwen3.8-max")
+    old = resolve_capabilities(p, api_key="key")["contract"]
+    old["parameters"]["enable_thinking"]["domain"].pop("values")
+    p["capabilityContract"] = old
+    p["userModelSettings"] = {"scope": old["scope"], "parameters": {"enable_thinking": {"mode": "value", "value": False}},
+                              "request_parameters": {"max_tokens": 1024}}
+    before = copy.deepcopy(p)
+
+    runtime = materialize_runtime_profile(p, api_key="key")
+
+    assert runtime.contract.parameters["enable_thinking"].values == (True,)
+    assert runtime.settings.parameters["enable_thinking"] == {"mode": "omit"}
+    assert resolve_request(runtime).options == {"max_tokens": 1024}
+    assert p == before
+
+
+def test_unlisted_alias_drops_its_old_preset_reasoning_selection():
+    p = current_profile(
+        {"reasoning_effort": {"type": "enum", "source": "catalog", "values": ["high", "xhigh"]}},
+        baseUrl="https://api.openai.com/v1", model="gpt-5.6",
+    )
+    p["userModelSettings"] = {"scope": p["capabilityContract"]["scope"],
+                              "parameters": {"reasoning_effort": {"mode": "value", "value": "xhigh"}}}
+
+    runtime = materialize_runtime_profile(p, api_key="key")
+
+    assert runtime.contract.parameters["reasoning_effort"].status == "unknown"
+    assert "reasoning_effort" not in resolve_request(runtime).options
+
+
 def test_stale_v3_selections_are_not_rebound_to_another_model():
     p = current_profile({"budget": {"type": "integer"}})
     p["userModelSettings"] = {

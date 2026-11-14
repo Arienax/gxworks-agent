@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """One lazy, apartment-bound owner of the local GX desktop execution resource.
 
@@ -448,7 +448,11 @@ class GXExecutionCoordinator:
                     program_name=snapshot_program,
                     revision=int(version.get("revision") or 0) + 1,
                 )
-                candidate = json.loads((Path(directory) / metadata["artifacts"]["ir"]).read_text(encoding="utf-8"))
+                artifacts = metadata["artifacts"]
+                candidate = json.loads((Path(directory) / artifacts["ir"]).read_text(encoding="utf-8"))
+                if candidate.get("source", {}).get("format") in {"instruction_sequence_v1", "instruction_sequence_v2"}:
+                    result["_ordered_csv_artifacts"] = {key: (name, (Path(directory) / name).read_bytes())
+                        for key, name in artifacts.items() if key != "st_from_ir"}
                 result["_candidate_ir"] = candidate
                 result["_confirmed_spec"] = copy.deepcopy(project.get("confirmed_spec"))
                 result["candidate_metadata"] = {key: value for key, value in metadata.items() if key != "artifacts"}

@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Typed index-record projection, stable selection and reference formatting."""
 from __future__ import annotations
@@ -71,6 +71,9 @@ def chunk_result(row, meta, path, plc_model, task_type, connection=None, *, qual
             row_value(row, ("manual_priority", "priority"), 0) or 0
         ),
     }
+    source_file = row_value(row, ('source_file', 'source_path'), '')
+    if source_file:
+        result['_source_file'] = str(source_file)
     if meta.get("corpus_kind") == "authored_plc_facts_v1":
         try:
             authored = json.loads(row_value(row, ("metadata_json",), "{}"))

@@ -1,90 +1,54 @@
-# 接入模式、回执判读与错误恢复
+# 结果、分页与失败恢复
 
-默认交付优先返回 GXW。找到 GX Works2 后，共享保存流程自动编译、保存并冷重开；读取 delivery 与 validation 的实际结果，不根据文件存在宣称编译通过。GXW 无法生成时（例如仅参数目标或未安装 GX Works2，见 output_contract.gxw_delivery），Ladder 降级 CSV、ST 降级为代码 TXT 与全局标签 CSV、FBD/SFC 保留结构化候选及预览，并说明原因。原生编译失败仍保留 GXW 诊断候选，不改交 CSV。新建 ST/SFC 使用 get_generation_context 返回的 operation=generate 合同。GX Works2 1.635.0.1 配合 v4 工作区适配器，按实际 CPU 查询原生系列与子系列，无基底创建对应语言工程。遵守该 CPU 的工程类型和语言条件，读取实际创建及验证结果；不使用 IDE 新建对话框、隐藏窗口控件或预制完整工程。
+## 文档分页
 
-## 三种接入模式的提交结果
+Codex 的 `functions.exec` 读取资料时，每次只输出一页，设置 `max_output_tokens: 16000`，逐个 `text(block.text)` 输出 MCP 的文本内容，不输出整个 MCP 包装对象。检查实际工具输出是否出现 `truncated`：出现时用更大的输出预算重读同一页；不要直接续到下一页，也不要把服务端 `delivery.complete` 当作宿主已完整显示的证明。单页预算不是项目总资料预算。遇到 READ_BUDGET_TOO_SMALL，按返回的 host_output_tokens 提高宿主输出预算，再使用 next_actions 中原查询和 read_budget_tokens 重试；禁止缩减需求、检索范围或自行截取正文。复杂接口与多轴工程也按实际对象体积协商，不按案例或轴数裁减资料。
 
-`status="saved_native_diagnostic"` 表示 GXW 候选及诊断已保存，原生验证失败，该版本未激活。使用返回的实际 `version_id` 和产物路径；需要继续读取时，先显式选择该诊断版本。不能将它表述为编译通过，也不要因为编译失败改交 CSV。
+模板、示例的适用限制只约束该具体构造，不能用于淘汰整个指令族。资料规则与现场是否满足前提分开记录；周期、容量等实现选择不得冒充用户条件。取舍依赖的未确认条件写入 `applicability_conditions` 并保留 conditional，不能借引用一条真实规则升级成 known/excluded。
 
-| 模式 | 识别特征 | 生成与编辑工具的返回结果 |
-| --- | --- | --- |
-| 独立 `local` | 服务 instructions 标明独立 MCP，并暴露 `list_projects`、`create_project`、`select_project`、`import_gxw_project`、`get_project_artifacts` | 通过共享事务直接保存工程版本，返回 `version_id` 与 `save_result`（`draft` 策略保存的中间稿可保持未激活状态）。 |
-| Web `service` | 服务连接已启动的本地 Web 工作台运行时 | 通常生成待审阅提案（`status="pending"`，含 `proposal_id`），由操作员在工作台审阅或批准。 |
-| 固定 `context` | 服务绑定单一工程与版本，instructions 说明仅负责候选生成 | 返回候选内容与 `confirmation_required` 状态，由外层调用方决定后续落盘流程。 |
 
-保存每次调用返回的 `project_id`、`version_id`、`proposal_id` 与 `execution_job_id`，以便后续查询或继续操作。
+版本 4 直接读取 `data.document`，交付标识在 `data.delivery`。超限结果仍为版本 4 正文分段，按 `delivery.next` 继续阅读。仅显式 `read_format="paged"` 使用版本 3，须收集所有对象并解析传输引用。会话引用指向已交付的事实，只有无法使用前文时才用 `gxworks_read_context_unit` 的 `ids` 参数批量恢复。
 
-## 各阶段回执的含义
+单页上限当前为 6,000 个估算 token、32 KiB UTF-8；这是传输预算，不是模型实际计费。支持 cursor-only 续读的服务仍优先使用 next 给出的参数，避免重新构造查询。游标绑定查询、CPU、工程版本、知识版本和会话。
 
-| 阶段 | 回执依据 | 说明与后续衔接 |
-| --- | --- | --- |
-| 源码读取 | 读取工具返回源码结构、指令列表与可编辑范围 | 可直接用于代码解释、局部定位或构造编辑请求。 |
-| 候选生成 | 候选工具返回生成的程序结构与本地校验结果 | 在 `service` / `context` 模式下表示候选已就绪；在 `local` 模式下同时观察是否已完成版本保存。 |
-| 版本保存 | 返回有效的 `version_id` 与 `save_result` | 工程版本与衍生文件已落盘，可继续调用 `get_project_artifacts` 或启动原生编译检查。 |
-| 本地静态检查 | `validate_current_program`、`validate_project(native=false)` 或 `get_diagnostics` 返回通过 | 证明结构、语法与已知指令约束通过 Core 静态检查；需要编译器结论时继续运行原生编译检查。 |
-| 原生编译检查 | `validate_project(native=true)` 返回 `compilation`、`public_check`、`current_source_check` | 反映 GX Works2 对当前保存 `.gxw` 的编译与代码检查结果；查看各项子状态以确认是否全部通过。 |
-| 保存代码比对 | `compare_native_compiled_code` 返回资源与三通道比对结果 | 说明 `.gxw` 内保存的编译结果与当前源码重新编译的输出是否一致。 |
-| 模拟器观察 | `get_simulator_status`、`read_simulator_devices` 或 `get_simulator_trace` 返回采样数据 | 反映当前连接的 Simulator2 目标状态与信号波形。 |
+- `STALE_READ_CURSOR`：上下文已变化，按当前状态去掉旧游标重新读取，不能混拼新旧 objects。
+- `READ_OBJECT_TOO_LARGE`：缩小明确允许的读取范围，不能截断完整必需源码或伪造 complete。
+- 文档缺失、未读完或 review 过期：按 `next_actions` 重新读取对应文档，再提交当前 review。未引用的其他手册文档没有读完，不等于本次实现引用的文档也不完整。
 
-## 常见错误与恢复方式
+`implementation_review.context_document` 使用文档 ID，不能填 `generation_context_id`。手册引用必须与实际查询及使用相符；完整交付也不等于手册包含了所有想知道的知识。
 
-| 状态或错误码 | 常见原因 | 处理方式 |
-| --- | --- | --- |
-| `selection_status="none"` | 当前会话尚未选中 Agent 工程 | 只读外部文件或 GX 窗口时直接调用发现/快照工具；需要操作工程版本时先 `list_projects` → `select_project`，或调用 `create_project` / `import_gxw_project`。 |
-| `NO_PROJECT_SELECTED` / `NO_PROGRAM_SOURCE` | 当前工具需要已选中的工程或已保存的 `.gxw` 版本 | 按返回的 `next_actions` 先选中/导入含 `.gxw` 的版本；若只需分析临时快照，改用接受 `source_ref` 的读取工具。 |
-| `DESIGN_PENDING` / `DESIGN_CONFIRMED` | 工程处于未确认的 Design 流程，或已有确认规格却请求 `direct_generation` | 开放式需求按 `next_actions` 完成 Design 并由用户确认；跨品牌代码转写或完整规格任务在确认前可调用 `get_generation_context(workflow="direct_generation", user_requirement=...)` 退出 Design 直接生成；规格确认后统一传 `workflow="detailed"` 实施。 |
-| `INSTRUCTION_REVIEW_REQUIRED` / `INSTRUCTION_READ_INCOMPLETE` / `STALE_MANUAL_DOCUMENT` | 尚未读取当前工程的 `get_generation_context`、`context_document` 过期，或 `missing_families` 中的候选指令尚未读完手册分页 | 按返回的 `next_actions` 与 `details`（`expected_context_document`、`missing_candidates`）读取最新 `get_generation_context` 或调用 `search_plc_manual` 读完全部分页后，在候选工具顶层提交 `implementation_review={context_document, manual_documents, ...}`。 |
-| 参数校验错误 | 参数字段与当前工具 schema 或读取到的对象名称不一致 | 对照 `tools/list` schema 及上一步读取到的程序名、声明表名、`record_index` 修正参数后重交。 |
-| `UNKNOWN_TOOL` 或工具未暴露 | 当前接入模式未注册该工具（如在 `service` 模式下调用 `local` 专有工具） | 查阅当前连接暴露的工具清单，改用当前模式支持的对应入口。 |
-| 原生组件启动或协议错误（如 `WORKSPACE_*`） | 本地 GX Works2 环境、辅助组件版本或桌面会话条件未满足 | 记录返回的 `error.code`、`details` 与失败阶段并如实告知用户，区分环境配置问题与 PLC 源码编译错误。 |
-| 原生编译报出源码诊断 | GX Works2 编译器或代码检查发现程序/声明错误 | 读取返回的诊断详情与定位信息，按用户要求修正对应源码或声明后重新提交。 |
-| 写入超时或结果未知 | 原生操作或长耗时任务尚未完成或连接中断 | 先调用 `get_operation_status` 或 `get_native_engineering_session` 查询实际完成阶段；Live 会话先 `rebind` 只读观察，不重放不确定动作。恢复已有队列用空命令列表及 `controls.resume_pending=true`。 |
-| Live 原目标丢失、身份不符或持久记录不完整 | 原进程、窗口、工作路径或 CPU 已变化，或旧记录缺少恢复字段 | 按返回错误协调目标；不重复 `start` 新建副本或自动重放。MCP 重启后先查持久状态，再用当前 `expected_revision` 继续。 |
-| `pending` / `confirmation_required` / `execution_consent_required` | 当前操作等待工作台批准或操作员配置原生执行许可 | 向用户说明当前待确认状态、提案编号或所需的执行许可配置。 |
-| `source_ref` / 快照 `session_id` / `target_ref` 失效 | 临时快照过期、GX 窗口重启或模拟器重新连接 | 重新调用对应的发现、快照或连接工具获取最新标识；持续 Live 会话按上面的原目标恢复规则处理。 |
+## 新版 RAG 的判读
 
-## 手册检索结果的判读
+当前结构化知识优先使用匹配 CPU 与完整 opcode 的编译语义 owner，并组合适用的指令族、修饰规则及操作数条件。不要绕过工具直接读取旧单文件事实或跨型号拼规则，也不要把 D/P 字母解释当成所有指令的统一执行效果。
 
-默认继承当前保存版本或工程的语言。结果中的 `language_source` 说明语言来源；`coverage.language.manuals_by_language` 列出当前型号与查询命中的语言专属手册，`missing_languages` 仅表示本次查询缺少该语言的专属事实。通用 CPU 指令仍按各自的资料范围使用。
+检索结果依照 CPU、语言、工程模式、形式及适用条件裁剪。明确指令、地址、错误码及其依赖解析不受补充检索 `top_k` 的简单截断影响；`top_k` 主要限制补充材料。需要时通过 `aspects` 指定执行、效果、类型、时序或语言调用等维度。默认结果是模型所需技术内容；调试模式才展开额外来源/覆盖维护信息。不可要求默认结果必须携带调试字段才能使用。
 
-按 `delivery.next` 读完并合并对象后，使用 `document.results` 中的操作数、用途、条件和示例回答问题。`coverage` 帮助定位目标、已回答方面和待补资料；调用能力字段用于选择当前语言与工程的实现入口。
+区分以下事实：
 
-| 字段 | 如何使用 |
+| 信息 | 可说明什么 |
 | --- | --- |
-| `coverage.targets[].identity_found` | 定位指令、软元件或错误码身份。 |
-| `coverage.targets[].status` | `complete`：所问方面已有核实资料；`incomplete`：按 `reason` 和 `aspects` 定位待补方面，继续使用已返回的内容。 |
-| `aspects[].status` | `answered`：已核实内容；`unverified`：已有声明、待核验；`missing`：待补资料；`unresolved`：待解析或存在差异。按具体方面说明结果。 |
-| `call_available` / `call_admission` | 当前语言与工程的调用支持；`st_not_admitted` 表示当前 ST 入口未准入，`unverified` 表示调用能力待核验。手册中的操作数与用途按返回内容解释。 |
-| `documented_st_call_available` / `core_call_available` | 分别读取手册 ST 调用知识和 Core 调用支持；旧字段 `st_call_available` 对应 Core 准入。 |
-| `results[].knowledge.facts[].knowledge_status` | `source_verified`：核实内容；`candidate_evidence`：候选依据；`declared_unverified`：已有声明；`unknown`：待补内容；`conflict`：差异项；`not_applicable`：适用性说明。 |
-| `count` / `top_k` | `count` 为返回条数；`top_k` 限制补充资料，明确目标和依赖完整返回，条数可超过 `top_k`。 |
+| 手册知识与 coverage | 当前问题、型号、形式的知识覆盖和已知缺项。 |
+| 有效参数表/调用准入 | 本形式接受的参数、设备、类型和必要条件。 |
+| Core 语义与执行覆盖 | 本地软件是否能执行/验证该行为；未知不等于 PLC 不支持。 |
+| native validation | GX Works2 实际编译或检查结果。 |
+| Simulator2/PLC 记录 | 在明确目标、输入和条件下实际观测的运行结果。 |
 
-具体错误码按该码的记录读取原因、触发条件和恢复方法；症状检索按候选码组织结果。`corpus="absent"` 且 `reason="exact_fact_not_found"` 表示本次查库无精确匹配，`delivery="pending"` 表示后续页待取；各方面的 `unknown` 表示待补资料。
+用户显式约束必须保留。可选模型推断、行为或形式验证未知时说明范围，不升级为额外生成硬门槛。发现事实缺项先判断是否影响实现；不要无理由反复查询或改变规格。需要外部手册时遵循用户范围，不能把其它型号的规则补成当前型号的已证实事实。
 
-`INVALID_ARGUMENTS`：补齐有效查询；`UNKNOWN_PLC_MODEL`：核对 CPU 身份与 `details.known_model_count`；`KNOWLEDGE_UNAVAILABLE`：按 `details.knowledge_status` 补齐该型号运行资源。需要补充知识时，沿实际型号查资料并更新对应事实。
+## 保存、批准与产物
 
-`device_address_rule` 提供当前 CPU 的编号范围、进制、空洞和字内位条件；默认分配、可配置范围、共享容量及硬件/版本条件按各自字段使用。当前工程分配通过工程上下文读取。
+`confirmation_required` 或 proposal pending 只表示产生待处理动作。MCP 工具调用的宿主批准不自动等于工程提案批准。不得修改工作区记录或绕过操作端接口强行批准。
 
-## FBD 上下文与静态诊断
+local 会话按已有授权策略执行共享事务；`version_id` 和保存回执证明版本已保存，`active_version_id` 才说明活动版本。保存的行为草稿可能仍不激活。service 模式 pending 应交给其工作台流程；local 模式 pending 则读取实际 `get_operation_status`，不要虚构必须去 Web 确认。context 模式可能不具备提交能力。
 
-`get_generation_context` 成功后按 `generation_input.language_rules` 和 `device_address_rules` 使用必需规则，按 `supported_paths` 选择提交方式。`get_fbd_catalog` 的目录命中不是规则上下文已齐全；`missing_templates` 也不能被替换成名称相近的块。
+`get_project_artifacts` 返回受管理的实际路径，不是重新导出。只交付实际存在且与当前版本对应的产物。梯形图派生 `st_from_ir` 默认关闭/隐藏；不要根据旧版工具描述假定一定有 ST 产物。
 
-Core 诊断使用 `fbd_*` 标识；提交被拒绝时读取 `error.findings` 中的源码、表达式、端口和位置。它与 GX Works2 返回的 C1020、C2054、C2024、C2025 等原生错误码分属不同来源，不能把静态检查结果冒充原生编译结果。`draft` 仍拒绝新增非法 FBD 字面量；保存带有原有错误的可编辑版本不表示错误已修复或原生编译通过。修改源码或接口后，使用当前版本重新取得上下文。
+GXW 原生失败可能保留诊断候选并阻止激活。GXW 存在、SVG 可显示、CSV 可导入均不能证明原生编译通过。超时后先查看操作状态和已有部分结果，不盲目重复原生操作。
 
-## 常见选型对照
+## 原生身份与验证范围
 
-- **后台原生编译 vs. 本地产物导出**：需要用 GX Works2 检查 `.gxw` 能否编译通过时调用 `validate_project(native=true)`；需要生成 SVG、JSON、CSV 等本地产物时调用 `compile_project`。
-- **查看已打开的 GX Works2 窗口**：直接调用 `list_gxworks2_sessions` → `read_gxworks2_snapshot`，无需提前创建或选中 Agent 工程。
-- **修改现有 `.gxw` 文件**：常规程序与声明修改优先使用 `import_gxw_project` → `read_gxw_source` → `edit_gxw_project` 离线完成；当用户需要观看 GX Works2 界面逐步演示或执行前台专属操作时使用 `execute_native_engineering(mode="live")`。
-- **静态代码诊断 vs. 运行状态查看**：排查语法、操作数和结构问题用 `get_diagnostics` / `validate_project`；查看模拟器 RUN 状态和软元件实时值用 `get_simulator_status` / `read_simulator_devices`。
-- **仿真测试方案 vs. 实时波形采样**：`prepare_simulator_scenario` 用于生成测试方案配置；采集已连接 Simulator2 的实时信号波形使用 `start_simulator_trace`。
-- **获取已保存版本的导出文件**：直接调用 `get_project_artifacts` 读取已有产物路径。
+窗口标题或同名文件不能单独确立工程身份。`PROJECT_PATH_UNKNOWN`、`UNBOUND` 或路径/CPU/窗口身份不匹配时先解决绑定；没有保存版本可检查时，不创建无关版本来满足前置条件。
 
+按实际返回分别报告结构/类型检查、Core 编译、原生 compiler/public check、保存、冷重开和行为测试。warnings 不自动等于编译失败；编译失败也不能被“成功保存文件”覆盖。源码未改或某路径未请求交付时，不能推断共享保存必然重新编译、冷重开。
 
-## 分页与适用条件
-
-正文为 `data.document` 与 `data.objects`；`$ref` 指向同一读取中已返回或后续页将返回的对象。`delivery.complete` 只说明该读取序列已交付完毕，不代表所有所问知识已成立。正文 `coverage`/`knowledge_coverage` 的目标条目中，`corpus` 为 `present`/`absent`，`knowledge` 保留 `complete`/`incomplete`/`unresolved`。`delivery=see_delivery_complete` 在读完全部页前按待交付处理，读完后为已交付；`not_available` 表示没有可交付内容。页头 `delivery.coverage` 只给数量汇总，避免重复整张目标表。源码、接口、完整事实不会切半返回；参数、类型、条件、依赖及冲突必须随事实一起判读。
-
-`facts[].depends_on` 引用同一事实包内的局部事实身份，不能只取主结论而略过被引用前提。知识状态不授予模拟器或真实设备执行能力。`generation_instructions` 仅给操作规则；事实位于 `generation_input.knowledge`，接口/源码/语言规则分别使用结构化字段。外层引用不再重复整份目录、当前程序或 schema。
-
-分页中的 `$ref` 指向同一读取的 `objects`。遇到 `{ "$concat": ... }` 时，解析其引用的数组并按顺序拼接；`{ "$merge": ... }` 则合并引用的对象。它们只拆分目录容器，完整事实、接口和源码仍为单个对象。知识结果的 `knowledge_status` 表示来源知识状态，不授予 Core 执行能力。
+操作中断或持续会话恢复，读取服务器持久化状态、会话 ID 和 revision；只有下一步动作明确后才继续。不通过调试注入、进程内存改写或模拟点击冒充工具完成的原生检查。

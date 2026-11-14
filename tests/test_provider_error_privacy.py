@@ -108,12 +108,9 @@ def test_http_jobs_events_outputs_and_saved_reports_never_echo_provider_credenti
     provider = _FailingProvider(typed)
     service = WorkbenchService(store.base_dir, tmp_path / "state", model_factory=lambda: (provider, {"model": "offline"}))
     origin = "http://127.0.0.1:8765"
-    app = create_app(store.base_dir, state_dir=tmp_path / "state", origin=origin, service=service,
-        operator_token="privacy-operator")
+    app = create_app(store.base_dir, state_dir=tmp_path / "state", origin=origin, service=service)
     with TestClient(app, base_url=origin) as client:
-        login = client.post("/api/session", json={"token": "privacy-operator"}, headers={"Origin": origin})
-        assert login.status_code == 200
-        headers = {"Origin": origin, "X-CSRF-Token": login.json()["csrf"]}
+        headers = {"Origin": origin}
         submitted = client.post("/api/jobs", headers=headers, json={"kind": kind, "project_id": project_id,
             "version_id": version_id, "request_id": "auth-error", "text": "Inspect the program", "response_language": "en"})
         assert submitted.status_code == 202, submitted.text

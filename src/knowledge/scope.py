@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Haystack routing at the existing SQLite boundary, not a new agent stack.
 
@@ -89,6 +89,10 @@ def source_kind(record):
         return "design"
     if manual == "third_party_skill":
         return "support"
+    if record.get("content_origin") == "authored_fact":
+        from knowledge.fact_corpus import PUBLICATION_STATUS
+        if record.get("distribution_status") == PUBLICATION_STATUS:
+            return "fact"
     return "fact" if manual else "unclassified"
 
 
@@ -107,10 +111,15 @@ def filter_records(records, lanes):
     return [records[int(doc.id)] for doc in kept]
 
 
+_SOURCE_PARTITION_FIELDS = (
+    "manual_type", "chunk_type", "manual_id", "content_origin", "distribution_status",
+)
+
+
 @lru_cache(maxsize=32)
 def _eligible_partitions(partitions, lanes):
-    records = [{"manual_type": manual, "chunk_type": chunk, "manual_id": identity} for manual, chunk, identity in partitions]
-    return tuple((r["manual_type"], r["chunk_type"], r["manual_id"]) for r in filter_records(records, lanes))
+    records = [dict(zip(_SOURCE_PARTITION_FIELDS, partition)) for partition in partitions]
+    return tuple(tuple(r[key] for key in _SOURCE_PARTITION_FIELDS) for r in filter_records(records, lanes))
 
 
 def source_sql(connection, schema, lanes=None, *, exclude_chunk_types=()):
@@ -123,10 +132,15 @@ def source_sql(connection, schema, lanes=None, *, exclude_chunk_types=()):
     from knowledge.index_access import quote_identifier as _quote_identifier
     table = schema["chunks"]
     columns = table["columns"]
-    expressions = [_quote_identifier(k) if k in columns else "''" for k in ("manual_type", "chunk_type", "manual_id")]
+    expressions = [_quote_identifier(k) if k in columns else "''" for k in _SOURCE_PARTITION_FIELDS]
     expressions = [f"COALESCE({x}, '')" for x in expressions]
-    partitions = tuple(tuple(row) for row in connection.execute(
-        f"SELECT DISTINCT {', '.join(expressions)} FROM {_quote_identifier(table['name'])}").fetchall())
+    from knowledge.index_access import cached_value, cache_value
+    key = ('source_partitions', table['name'], tuple(expressions))
+    partitions = cached_value(connection, key)
+    if partitions is None:
+        partitions = tuple(tuple(row) for row in connection.execute(
+            f"SELECT DISTINCT {', '.join(expressions)} FROM {_quote_identifier(table['name'])}").fetchall())
+        cache_value(connection, key, partitions)
     accepted = (partitions if lanes is None
                 else _eligible_partitions(partitions, tuple(sorted(lanes))))
     excluded = {str(value).strip().casefold() for value in exclude_chunk_types or () if str(value).strip()}
@@ -164,7 +178,13 @@ def source_subquery(
         if requested is None or column is None:
             continue
         expression = f"COALESCE({_quote_identifier(column)}, '')"
-        partitions = connection.execute(f"SELECT DISTINCT {expression} FROM {_quote_identifier(table['name'])}")
+        from knowledge.index_access import cached_value, cache_value
+        key = ('scope_partitions', table['name'], column)
+        partitions = cached_value(connection, key)
+        if partitions is None:
+            partitions = tuple(tuple(row) for row in connection.execute(
+                f"SELECT DISTINCT {expression} FROM {_quote_identifier(table['name'])}"))
+            cache_value(connection, key, partitions)
         accepted = [row[0] for row in partitions if _scope_matches(row[0], requested)]
         if not accepted:
             predicate += " AND 0"
@@ -244,11 +264,10 @@ def runtime_status():
 
 def query_is_out_of_scope(query, plc_model):
     model = normalize_text(plc_model).upper()
-    from gxworks2.project_profiles import native_project_profile
-    from plc.validation import SUPPORTED_PLC_MODELS
-    # Knowledge targets include source-supported CPUs beyond the GX Works2
-    # New-dialog menu. Retrieval never grants native project support.
-    if model and model not in SUPPORTED_PLC_MODELS and native_project_profile(model) is None:
+    from plc.target_identity import reference_target_identity
+    # A checking profile and a native creation option are separate from the
+    # identity of a manual query. Exact fact scopes decide what is delivered.
+    if model and reference_target_identity(model) is None:
         return True
     normalized = normalize_text(query).casefold()
     foreign = any(marker.casefold() in normalized for marker in NON_MITSUBISHI_MARKERS)

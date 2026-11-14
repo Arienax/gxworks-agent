@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import {
   ArrowDownToLine,
@@ -64,7 +64,7 @@ export type EditorContentProps = {
   setWorkflow: Dispatch<SetStateAction<CreationWorkflow>>;
   setReviewRequested: Dispatch<SetStateAction<boolean>>;
   guarded: (action: () => Promise<void>) => Promise<void>;
-  submitJob: (kind?: JobKind, extra?: Record<string, unknown>) => Promise<void>;
+  submitJob: (kind: JobKind, extra?: Record<string, unknown>) => Promise<void>;
   refresh: number;
   diagnosticJobId: string;
   versionDrawing: { key: string; svg: string } | null;
@@ -271,13 +271,13 @@ export function EditorContent({
         <FileCode2 size={15} />
         {preview
           ? "candidate.st"
-          : version?.artifacts?.find((a) => a.id.includes("st"))?.filename || "ST"}
+          : version?.artifacts?.find((a) => a.id === "st")?.filename || "ST"}
         <span className="spacer" />
         {!preview &&
           version?.artifacts
-            ?.filter((a) => ["st", "st_from_ir"].includes(a.id) && a.available)
+            ?.filter((a) => a.id === "st" && a.available)
             .map((a) => (
-              <a key={a.id} href={artifactUrl(pid, vid, a.id, true)}>
+              <a key={a.id} href={artifactUrl(pid, vid, a.id, true)} download>
                 <ArrowDownToLine size={14} />
                 {t("下载")}
               </a>

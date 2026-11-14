@@ -22,6 +22,11 @@ config.json
 *.sqlite-wal
 resources/knowledge/
 resources/instructions/mitsubishi/instruction_definitions*
+resources/instructions/mitsubishi/instruction_catalog.sqlite
+resources/instructions/mitsubishi/instruction_semantics*.sqlite
+resources/instructions/mitsubishi/*_lsa.npz
+resources/instructions/mitsubishi/fx3u_contract_promotions.json
+resources/instructions/mitsubishi/fx3u_operand_semantic_promotions.json
 research/
 /docs/reports/
 /docs/process/
@@ -29,6 +34,10 @@ research/
 /docs/research/
 tests/fixtures/
 AGENTS.md
+publication/public-files.json
+tools/fact_*.py
+tools/fbd_fact_review.py
 *.exe
+/GXWorks-Agent-Launcher.exe.config
 *.dll
 *.pdb

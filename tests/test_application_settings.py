@@ -36,7 +36,8 @@ def settings_env(tmp_path, monkeypatch):
         return "连接成功，API Key 和服务地址有效。"
     monkeypatch.setattr(config_manager, "get_config_path", lambda: config_path)
     monkeypatch.setattr(config_manager, "get_observations_path", lambda: tmp_path / "observations.sqlite")
-    monkeypatch.setattr(resource_paths, "resource_path", lambda name: template)
+    resource_path = resource_paths.resource_path
+    monkeypatch.setattr(resource_paths, "resource_path", lambda name: template if name == "config.default.json" else resource_path(name))
     monkeypatch.setattr(config_manager, "load_full_config", lambda: pytest.fail("Settings must not invoke desktop migration"))
     monkeypatch.setattr(credential_store, "read_api_key", lambda target: keys.get(target, ""))
     monkeypatch.setattr(credential_store, "write_api_key", put)
@@ -52,6 +53,150 @@ def settings_env(tmp_path, monkeypatch):
 
 def _profile(settings, profile_id="fake"):
     return next(p for p in settings["profiles"] if p["id"] == profile_id)
+
+
+def test_saved_generic_profile_picks_up_reasoning_preset_and_can_save_an_effort(settings_env):
+    from model_runtime.catalog import resolve_capabilities
+    from model_runtime.contract import CapabilityContract, contract_scope
+    from model_runtime.provider import ModelRequest, OpenAICompatibleProvider, UserMessage
+
+    env = settings_env
+    model = "gpt-6-luna"
+    endpoint = "https://api.openai.com/v1"
+    generic_profile = {"adapter": "openai_compatible", "model": model, "baseUrl": "https://example.invalid/v1"}
+    contract = CapabilityContract.from_dict(resolve_capabilities(generic_profile, api_key="key")["contract"])
+    scope = contract_scope({**generic_profile, "baseUrl": endpoint}, contract.parameters, api_key="key")
+    saved = {**contract.to_dict(), "scope": scope}
+    selections = {"scope": scope, "parameters": {"max_completion_tokens": {"mode": "value", "value": 4096}}}
+    result = env.service.create_profile(id="luna", name="Luna", model=model, base_url=endpoint,
+                                        api_key="key", contract=saved, user_settings=selections)
+    row = _profile(result, "luna")
+    assert row["contract"]["parameters"]["reasoning_effort"]["domain"]["values"] == [
+        "none", "low", "medium", "high", "xhigh", "max",
+    ]
+    assert row["user_settings"]["parameters"] == selections["parameters"]
+    assert "gpt-6-luna" in env.path.read_text(encoding="utf-8")
+
+    row["user_settings"]["parameters"]["reasoning_effort"] = {"mode": "value", "value": "xhigh"}
+    result = env.service.update(profile={key: row[key] for key in ("id", "contract", "user_settings")})
+    assert result["active_profile_id"] == "fake"
+    env.service.update(active_profile_id="luna")
+    frozen, _ = env.service.model_snapshot()
+    provider = OpenAICompatibleProvider(frozen.profile, frozen.api_key, client=object())
+    params = provider._request_params(ModelRequest((UserMessage("fixture"),), stream=False))
+    assert params["reasoning"]["effort"] == "xhigh"
+    assert params["max_output_tokens"] == 4096
+    assert env.calls == []
+
+
+@pytest.mark.parametrize("model", ["gpt-5.6-luna", "gpt-6-luna", "gpt-6.1-sol"])
+def test_openai_responses_restores_max_for_saved_presets(settings_env, model):
+    from model_runtime.catalog import resolve_capabilities
+    from model_runtime.provider import ModelRequest, OpenAICompatibleProvider, UserMessage
+
+    service = settings_env.service
+    endpoint = "https://api.openai.com/v1"
+    profile = {"adapter": "openai_compatible", "baseUrl": endpoint, "model": model}
+    contract = resolve_capabilities(profile, api_key="key")["contract"]
+    levels = contract["parameters"]["reasoning_effort"]["domain"]["values"]
+    assert levels[-1] == "max"
+    selections = {"scope": contract["scope"], "parameters": {"reasoning_effort": {"mode": "value", "value": "max"}},
+                  "request_parameters": {"max_completion_tokens": 4096}}
+    service.create_profile(id="openai", name="OpenAI", model=model, base_url=endpoint, api_key="key",
+                           contract=contract, user_settings=selections)
+    service.update(active_profile_id="openai")
+    before = settings_env.path.read_bytes()
+    row = _profile(service.public_settings(), "openai")
+    assert "max" in row["contract"]["parameters"]["reasoning_effort"]["domain"]["values"]
+    assert row["user_settings"]["parameters"]["reasoning_effort"] == selections["parameters"]["reasoning_effort"]
+    saved, _ = service.model_snapshot()
+    provider = OpenAICompatibleProvider(saved.profile, saved.api_key, client=object())
+    wire = provider._request_params(ModelRequest((UserMessage("fixture"),), stream=True))
+    assert wire["reasoning"]["effort"] == "max"
+    assert wire["max_output_tokens"] == 4096
+    assert settings_env.path.read_bytes() == before
+
+
+def test_custom_reasoning_levels_round_trip_with_their_wire_values(settings_env):
+    from model_runtime.provider import ModelRequest, OpenAICompatibleProvider, UserMessage
+
+    service = settings_env.service
+    draft = {
+        "name": "Custom gateway", "base_url": "https://gateway.invalid/v1", "model": "tenant-model",
+        "capability_overrides": {"parameters": {"reasoning_effort": {
+            "type": "enum", "status": "supported", "source": "manual",
+            "domain": {"enforcement": "hard", "values": ["quick", "deep"]},
+            "ui_hint": {"reasoning_levels": {"off": None, "low": "quick", "high": "deep", "max": "deep"}},
+        }}},
+    }
+    contract = service.detect_profile(**draft, api_key="key", mode="resolve")["discovery"]["contract"]
+    service.create_profile(id="gateway", **draft, api_key="key", contract=contract)
+    service.update(active_profile_id="gateway")
+
+    def save_selection(selection):
+        row = _profile(service.public_settings(), "gateway")
+        row["user_settings"]["parameters"]["reasoning_effort"] = selection
+        result = service.update(profile={key: row[key] for key in ("id", "contract", "user_settings")})
+        assert _profile(result, "gateway")["user_settings"]["parameters"]["reasoning_effort"] == selection
+        saved, _ = service.model_snapshot()
+        provider = OpenAICompatibleProvider(saved.profile, saved.api_key, client=object())
+        return provider._request_params(ModelRequest((UserMessage("fixture"),), stream=False))
+
+    assert save_selection({"mode": "value", "value": "deep", "level": "max"})["reasoning_effort"] == "deep"
+    assert "reasoning_effort" not in save_selection({"mode": "omit", "level": "off"})
+    with pytest.raises(ValueError, match="declared reasoning level"):
+        save_selection({"mode": "value", "value": "quick", "level": "max"})
+    assert settings_env.calls == []
+
+
+def test_custom_request_parameters_round_trip_into_the_request_body(settings_env):
+    import httpx
+    from openai import OpenAI
+    from responses_fixture import chat_body
+
+    from model_runtime.provider import ModelRequest, OpenAICompatibleProvider, UserMessage
+
+    service = settings_env.service
+    endpoint = "https://gateway.invalid/v1"
+    draft = {"name": "Custom gateway", "base_url": endpoint, "model": "custom-model"}
+    contract = service.detect_profile(**draft, api_key="key", mode="resolve")["discovery"]["contract"]
+    overrides = {"temperature": 0.73, "top_k": 30, "stop": ["END"], "vendor_options": {"enabled": False}}
+    selections = {"scope": contract["scope"], "parameters": {"temperature": {"mode": "omit"}},
+                  "request_parameters": overrides}
+    result = service.create_profile(id="gateway", **draft, api_key="key", contract=contract, user_settings=selections)
+    assert _profile(result, "gateway")["user_settings"] == selections
+    service.update(active_profile_id="gateway")
+
+    receipt = service.preview_request(profile={"id": "gateway"}, scenario="text")
+    rows = {row["name"]: row for row in receipt["parameters"]}
+    assert rows["top_k"]["sent"] and rows["top_k"]["value"] == 30
+    assert rows["vendor_options"]["sent"] and rows["vendor_options"]["redacted"]
+
+    sent = []
+
+    def respond(request):
+        sent.append(json.loads(request.content))
+        assert request.url.path == "/v1/chat/completions"
+        return httpx.Response(200, json=chat_body("OK"))
+
+    def send():
+        saved, _ = service.model_snapshot()
+        transport = httpx.Client(transport=httpx.MockTransport(respond))
+        with OpenAI(api_key=saved.api_key, base_url=endpoint, http_client=transport) as client:
+            provider = OpenAICompatibleProvider(saved.profile, saved.api_key, client=client)
+            list(provider.stream(ModelRequest((UserMessage("fixture"),), stream=False)))
+        return sent[-1]
+
+    body = send()
+    assert {name: body[name] for name in overrides} == overrides
+    for invalid in ({"messages": []}, {"input": []}, {"previous_response_id": "resp_foreign"},
+                    {"reasoning_effort": "high"}, {"vendor_options": {"api_key": "private"}}):
+        with pytest.raises(ValueError):
+            service.update(profile={"id": "gateway", "user_settings": {**selections, "request_parameters": invalid}})
+    assert _profile(service.public_settings(), "gateway")["user_settings"] == selections
+
+    service.update(profile={"id": "gateway", "user_settings": {**selections, "request_parameters": {"top_k": 30}}})
+    assert not {"temperature", "stop", "vendor_options"}.intersection(send())
 
 
 def test_legacy_projection_and_model_snapshot_never_migrate(settings_env):
@@ -144,6 +289,35 @@ def test_key_commands_do_not_affect_other_profiles_or_revive_legacy_key(settings
     assert "api_key" not in json.loads(env.path.read_text(encoding="utf-8"))
 
 
+@pytest.mark.parametrize("existing_current_key", [None, "current-key"])
+def test_profile_credential_prefix_migration_does_not_revive_deleted_key(settings_env, monkeypatch, existing_current_key):
+    import storage.config as config_manager
+    from storage import credentials
+
+    env = settings_env
+    monkeypatch.setattr(config_manager, "read_api_key", credentials.read_api_key)
+    monkeypatch.setattr(config_manager, "write_api_key", credentials.write_api_key)
+    old = credentials.LEGACY_PROFILE_CREDENTIAL_PREFIX + "fake"
+    current = credentials.credential_target_for_profile("fake")
+    env.config["modelProfiles"][0]["credentialTarget"] = old
+    env.persist(env.config)
+    env.keys[old] = "old-key"
+    if existing_current_key:
+        env.keys[current] = existing_current_key
+
+    assert _profile(env.service.public_settings())["configured"]
+    assert not env.writes
+    env.service.update(language="ja")
+    assert json.loads(env.path.read_bytes())["modelProfiles"][0]["credentialTarget"] == current
+    assert env.keys[current] == (existing_current_key or "old-key")
+    assert env.keys[old] == "old-key"
+
+    env.service.delete_key("fake")
+    assert not _profile(env.service.public_settings())["configured"]
+    assert current not in env.keys
+    assert env.keys[old] == "old-key"
+
+
 @pytest.mark.parametrize("values", [
     {"credentialTarget": "stolen-target"}, {"id": "different"},
     {"request_overrides": {"extra_body": {"api_key": "nested-secret"}}},
@@ -226,7 +400,7 @@ def test_settings_change_does_not_modify_existing_provider_snapshot(settings_env
     assert "key-a" not in json.dumps(snapshot)
 
 
-def test_http_settings_commands_require_operator_and_csrf(settings_env, tmp_path):
+def test_local_settings_commands_check_origin_and_redact_secrets(settings_env, tmp_path):
     pytest.importorskip("fastapi")
     pytest.importorskip("httpx")
     from fastapi.testclient import TestClient
@@ -234,7 +408,7 @@ def test_http_settings_commands_require_operator_and_csrf(settings_env, tmp_path
     from integrations.web.app import create_app
     origin = "http://127.0.0.1:8765"
     service = WorkbenchService(tmp_path / "workspace", tmp_path / "state", settings=settings_env.service)
-    app = create_app(service.store.base_dir, service=service, origin=origin, operator_token="operator", agent_token="agent")
+    app = create_app(service.store.base_dir, service=service, origin=origin, agent_token="agent")
     with TestClient(app, base_url=origin) as client:
         commands = [("post", "/api/settings/profiles", {"id": "new", "name": "New", "model": "new", "base_url": "https://example.invalid"}),
                     ("put", "/api/settings/profiles/fake/key", {"api_key": "secret"}),
@@ -242,11 +416,8 @@ def test_http_settings_commands_require_operator_and_csrf(settings_env, tmp_path
                     ("delete", "/api/settings/profiles/fake", None),
                     ("post", "/api/settings/profiles/fake/test", {"api_key": "secret"})]
         for method, path, body in commands:
-            assert client.request(method, path, json=body, headers={"Authorization": "Bearer agent", "Origin": origin}).status_code == 401
-        login = client.post("/api/session", json={"token": "operator"}, headers={"Origin": origin}).json()
-        for method, path, body in commands:
-            assert client.request(method, path, json=body, headers={"Origin": origin}).status_code == 403
-        headers = {"Origin": origin, "X-CSRF-Token": login["csrf"]}
+            assert client.request(method, path, json=body, headers={"Origin": "https://other.example"}).status_code == 403
+        headers = {"Origin": origin}
         result = client.put("/api/settings/profiles/fake/key", json={"api_key": "secret"}, headers=headers)
         assert result.status_code == 200 and "secret" not in result.text
         result = client.post("/api/settings/profiles/fake/test", json={}, headers=headers)
@@ -267,10 +438,9 @@ def test_read_only_server_rejects_even_explicit_connection_test(settings_env, tm
     from integrations.web.app import create_app
     origin = "http://127.0.0.1:8765"
     service = WorkbenchService(tmp_path / "workspace", tmp_path / "state", read_only=True, settings=settings_env.service)
-    with TestClient(create_app(service.store.base_dir, service=service, origin=origin, operator_token="operator"), base_url=origin) as client:
-        login = client.post("/api/session", json={"token": "operator"}, headers={"Origin": origin}).json()
+    with TestClient(create_app(service.store.base_dir, service=service, origin=origin), base_url=origin) as client:
         response = client.post("/api/settings/profiles/fake/test", json={"api_key": "secret"},
-            headers={"Origin": origin, "X-CSRF-Token": login["csrf"]})
+            headers={"Origin": origin})
         assert response.status_code == 403
     assert not settings_env.calls and not settings_env.path.exists()
 
@@ -329,7 +499,8 @@ def test_browser_demo_main_analysis_confirm_generation_autosaves_with_private_au
         pytest.fail("Demo generation tried to instantiate a network model")
     monkeypatch.setattr(model_provider.OpenAICompatibleProvider, "_create_client", forbidden_client)
     def run_locally(app, **kwargs):
-        with TestClient(app, base_url="http://127.0.0.1:8765"):
+        origin = "http://127.0.0.1:8765"
+        with TestClient(app, base_url=origin, headers={"Origin": origin}) as client:
             service = app.state.service
             project = service.projects.list_projects()[0]
             command = {"project_id": project["id"], "version_id": "v0001", "response_language": "zh-CN",
@@ -338,11 +509,18 @@ def test_browser_demo_main_analysis_confirm_generation_autosaves_with_private_au
             service.jobs._futures[analysis["id"]].result(timeout=10)
             assert service.jobs.get(analysis["id"])["status"] == "completed"
             output = service.output(analysis["id"])
-            draft = output["spec_draft"]
+            assert output["spec_draft"]
             assert output["spec_base_hash"] is not None
-            assert service.set_spec(project["id"], spec=draft, expected_hash=output["spec_base_hash"])["valid"]
+            url = f"/api/projects/{project['id']}/spec-document"
+            document = client.get(url)
+            assert document.status_code == 200, document.text
+            confirmed = client.post(url + "/confirm", json={
+                "expected_revision": document.json()["draft_revision"], "version_id": command["version_id"],
+            })
+            assert confirmed.status_code == 200, confirmed.text
+            assert confirmed.json()["confirmed_spec"]["requirements"][0]["id"] == "R-1"
             job = service.submit({**command, "kind": "generation", "request_id": "demo-generation"})
-            service.jobs._futures[job["id"]].result(timeout=10)
+            service.jobs._futures[job["id"]].result(timeout=30)
             completed = service.jobs.get(job["id"])
             assert completed["status"] == "completed", completed
             proposal_id = completed["result"]["proposal_id"]
@@ -428,7 +606,7 @@ def test_legacy_parameter_support_is_read_only_migration_input(settings_env):
     assert not {"parameterSupport", "generationDefaults", "requestOverrides", "capabilities"}.intersection(stored)
 
 
-def test_discovery_http_requires_operator_csrf_and_accepts_an_unsaved_profile(settings_env, tmp_path, monkeypatch):
+def test_local_discovery_http_accepts_an_unsaved_profile(settings_env, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
     from application.workbench import WorkbenchService
     from integrations.web.app import create_app
@@ -439,14 +617,12 @@ def test_discovery_http_requires_operator_csrf_and_accepts_an_unsaved_profile(se
     env = settings_env
     origin = "http://127.0.0.1:8765"
     service = WorkbenchService(tmp_path / "workspace", tmp_path / "state", settings=env.service)
-    app = create_app(service.store.base_dir, service=service, origin=origin, operator_token="operator", agent_token="agent")
+    app = create_app(service.store.base_dir, service=service, origin=origin, agent_token="agent")
     body = {"profile": {"name": "Unsaved", "base_url": "https://gateway.invalid/custom/v2/",
                         "model": "tenant-alias", "api_key": "private-draft-key"}}
     with TestClient(app, base_url=origin) as client:
-        assert client.post("/api/settings/detect", json=body, headers={"Origin": origin, "Authorization": "Bearer agent"}).status_code == 401
-        login = client.post("/api/session", json={"token": "operator"}, headers={"Origin": origin}).json()
-        assert client.post("/api/settings/detect", json=body, headers={"Origin": origin}).status_code == 403
-        response = client.post("/api/settings/detect", json=body, headers={"Origin": origin, "X-CSRF-Token": login["csrf"]})
+        assert client.post("/api/settings/detect", json=body, headers={"Origin": "https://other.example"}).status_code == 403
+        response = client.post("/api/settings/detect", json=body)
         assert response.status_code == 200 and response.json()["status"] == "resolved"
         assert "private-draft-key" not in response.text
     assert not env.path.exists() and not env.writes

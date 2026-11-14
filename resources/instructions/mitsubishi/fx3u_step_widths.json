@@ -2059,6 +2059,14 @@
     ]
   },
   "supplemental_encodings": {
+    "0553072105": [
+      "ANR",
+      0
+    ],
+    "065307210206": [
+      "ANRP",
+      0
+    ],
     "0202": [
       "NOP",
       0
@@ -2125,6 +2133,18 @@
     ],
     "0563092005": [
       "DSZR",
+      4
+    ],
+    "055a092105": [
+      "DDEG",
+      2
+    ],
+    "065a09210206": [
+      "DDEGP",
+      2
+    ],
+    "0563112205": [
+      "DDVIT",
       4
     ]
   },
@@ -2700,6 +2720,26 @@
       "default": {
         "scope": "FAMILY",
         "evidence": "native encoding observation: the stored headers were read from the FX3 native compiler (FX3U/FX3UC programme headers), and the FX applied instruction header is one format across the FX series. A per-series re-measurement of the stored width on FX0/FX1/FX2 is still outstanding"
+      },
+      "overrides": {
+        "DDEG": {
+          "models": [
+            "FX3U"
+          ],
+          "evidence": "CPU520 six offline vendor memory-conversion bodies: fx-ddeg-native-contract-repair/native-forms/probes.json; JY997D16601-R PDF532 own DDEG/DDEGP 9-step table; no project compilation or execution claim"
+        },
+        "DDEGP": {
+          "models": [
+            "FX3U"
+          ],
+          "evidence": "CPU520 six offline vendor memory-conversion bodies: fx-ddeg-native-contract-repair/native-forms/probes.json; JY997D16601-R PDF532 own DDEG/DDEGP 9-step table; no project compilation or execution claim"
+        },
+        "DDVIT": {
+          "models": [
+            "FX3U"
+          ],
+          "evidence": "CPU520 four independent offline memory-conversion bodies fx-ddvit-native-contract-repair/native-forms/probes.json; own R552 DDVIT instruction-format table 17steps; no FX3UC conversion or project/execution claim"
+        }
       }
     }
   }

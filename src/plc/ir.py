@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Canonical project-level PLC intermediate representation.
 
@@ -32,20 +32,35 @@ from plc.device_identity import (
 IR_KIND = "plc_program_ir"
 IR_SCHEMA_VERSION = 3
 
+from plc.device_identity import INDEXED_BASE_PATTERN
+
 _DEVICE_RE = re.compile(
-    r"^(?:(ZR|SM|SD|SB|SW|X|Y|M|D|T|C|S|L|F|B|W|R|V|Z)([0-9A-F]+)(?:\.([0-9A-F]+))?|([VZ]))$", re.IGNORECASE
+    r"^(?:(ZR|ER|SM|SD|SB|SW|ST|TC|TS|TN|CC|CS|CN|X|Y|M|D|T|C|S|L|F|B|W|R|V|Z)([0-9A-F]+)(?:\.([0-9A-F]+))?|([VZ]))$", re.IGNORECASE
 )
 _INDEXED_DEVICE_RE = re.compile(
-    r"^(?P<base>(?:SM|SD|X|Y|M|D|T|C|S)\d+)(?P<index>[VZ]\d*)$",
+    rf"^(?P<base>{INDEXED_BASE_PATTERN})(?P<index>[VZ]\d*)$",
     re.IGNORECASE,
 )
 _DEVICE_TOKEN_RE = re.compile(
     r"(?<![A-Z0-9_])"
-    r"(?:(?P<base>(?:SM|SD|X|Y|M|D|T|C|S)\d+)(?P<index>[VZ]\d*)"
-    r"|(?P<simple>(?:ZR|SM|SD|SB|SW|X|Y|M|D|T|C|S|L|F|B|W|R|V|Z)[0-9A-F]+(?:\.[0-9A-F]+)?|[VZ]))"
+    rf"(?:(?P<base>{INDEXED_BASE_PATTERN})(?P<index>[VZ]\d*)"
+    r"|(?P<simple>(?:ZR|SM|SD|SB|SW|ST|TS|TC|TN|CS|CC|CN|X|Y|M|D|T|C|S|L|F|B|W|R|V|Z)[0-9A-F]+(?:\.[0-9A-F]+)?|[VZ]))"
     r"(?![A-Z0-9_])",
     re.IGNORECASE,
 )
+
+
+def _expand_index_tokens(tokens: Sequence[str]) -> Tuple[str, ...]:
+    expanded: List[str] = []
+    for token in tokens:
+        text = str(token or "").strip().upper()
+        match = re.fullmatch(r"ZZ(\d+)", text)
+        if match:
+            idx = int(match.group(1))
+            expanded.extend((f"Z{idx}", f"Z{idx + 1}"))
+        elif text:
+            expanded.append(text)
+    return tuple(expanded)
 _REVISION_RE = re.compile(r"(\d+)$")
 
 
@@ -72,7 +87,7 @@ def _normalized_device(value: Any) -> str:
     return text if _DEVICE_RE.fullmatch(text) else ""
 
 
-def _device_tokens(value: Any) -> List[str]:
+def _device_tokens(value: Any, plc_model: str = 'FX3U') -> List[str]:
     """Return base devices plus index-register dependencies from an operand."""
 
     from plc.ordered_source import source_label_reference
@@ -81,13 +96,26 @@ def _device_tokens(value: Any) -> List[str]:
     text = str(value or "").upper()
     text = re.sub(r'"(?:\$\.|[^"\n])*"|\'(?:\$\.|[^\'\n])*\'', '', text)
     result: List[str] = []
-    from plc.ordered_source import indexed_literal_register, buffer_memory_reference, source_extended_reference
+    from plc.device_identity import external_operand_reference
+    external = external_operand_reference(text, plc_model)
+    if external:
+        return [external['base'], *_expand_index_tokens(external['index_registers'])]
+    from plc.ordered_source import (
+        indexed_literal_register,
+        buffer_memory_reference,
+        source_extended_reference,
+        source_grouped_reference,
+    )
     buffer = buffer_memory_reference(text)
     if buffer:
         return [value for value in buffer.values() if value]
     extended = source_extended_reference(text)
     if extended:
-        return [extended['base'], *extended['indexes'], *([extended['pointer']] if extended['indirect'] else [])]
+        return [extended['base'], *_expand_index_tokens(extended['indexes']),
+                *([extended['pointer']] if extended['indirect'] else [])]
+    grouped = source_grouped_reference(text)
+    if grouped:
+        return [grouped['base'], *(_expand_index_tokens([grouped['index']]) if grouped['index'] else ())]
     literal_index = indexed_literal_register(text)
     if literal_index:
         result.append(literal_index)
@@ -370,6 +398,183 @@ def _zero_reset_range(operands: Sequence[Any], plc_model: str) -> Optional[Set[s
     return addresses
 
 
+def _instruction_state_access(spec, opcode, operands, plc_model, *, unresolved=None):
+    """Possible implicit accesses, without certifying execution applicability."""
+    from plc.instructions import reviewed_native_fact_groups
+    from plc.validation import SUPPORTED_PLC_MODELS, parse_device_address, parse_indexed_device_address, device_address_radix
+    from plc.device_identity import external_operand_reference
+    reads, writes = set(), set()
+    plc_model = str(plc_model or '').strip().upper()
+    if plc_model not in SUPPORTED_PLC_MODELS:
+        return reads, writes
+    dimensions = {group.dimension for group in spec.definition_facts
+                  if group.dimension.startswith('effects.') and group.value.get('state_accesses')
+                  and group.value.get('state_bindings')} if spec else set()
+    for group in reviewed_native_fact_groups(spec, opcode, operands, plc_model, dimensions=dimensions):
+        accesses, bindings = group.value.get('state_accesses'), group.value.get('state_bindings')
+        if not isinstance(accesses, (list, tuple)) or not isinstance(bindings, Mapping):
+            continue
+        for access in accesses:
+            if not isinstance(access, Mapping) or access.get('access') not in ('read', 'write', 'read_write'):
+                continue
+            target = access.get('target')
+            if (not isinstance(target, Mapping) or target.get('kind') != 'state'
+                    or not isinstance(target.get('parameter'), str) or not target['parameter']):
+                continue
+            binding = bindings.get(target['parameter'])
+            if not isinstance(binding, Mapping):
+                continue
+            devices = binding.get('devices')
+            if devices is None and isinstance(binding.get('source_parameter'), str):
+                names = [name.upper() for name in spec.native_operand_order]
+                name, offset = binding['source_parameter'].upper(), binding.get('offset', 0)
+                if name not in names or type(offset) is not int or offset < 0:
+                    continue
+                head = str(operands[names.index(name)]).strip().upper()
+                indexed = parse_indexed_device_address(head, plc_model)
+                external = external_operand_reference(head, plc_model)
+                if indexed or external and external['indexed']:
+                    if unresolved is not None:
+                        dependencies = [indexed['index_text']] if indexed else external['index_registers']
+                        region = {'operand_index': names.index(name), 'head': head, 'access': access['access'],
+                                  'unit': 'devices', 'count': 1, 'offset': offset,
+                                  'state_parameter': target['parameter'], 'dependencies': sorted(dependencies),
+                                  'requires': ['indexed_effective_address']}
+                        if region not in unresolved:
+                            unresolved.append(region)
+                    continue
+                address = parse_device_address(head, plc_model)
+                if address and '.' not in head:
+                    radix = {8: 'o', 10: 'd', 16: 'X'}[device_address_radix(address[0], plc_model)]
+                    devices = [address[0] + format(address[1] + offset, radix)]
+                elif external and not external['indexed']:
+                    devices = [external['prefix'] + '\\' + external['device_prefix']
+                               + format(external['address'] + offset, 'X' if external['radix'] == 16 else 'd')]
+            if (not isinstance(devices, (list, tuple)) or not devices
+                    or any(not isinstance(device, str) or (parse_device_address(device, plc_model) is None
+                           and external_operand_reference(device, plc_model) is None) for device in devices)):
+                continue
+            devices = {device.strip().upper() for device in devices}
+            if access['access'] in {'read', 'read_write'}:
+                reads.update(devices)
+            if access['access'] in {'write', 'read_write'}:
+                writes.update(devices)
+    return reads, writes
+
+
+def _instruction_operand_access_regions(spec, opcode, operands, plc_model):
+    """Apply source-qualified component directions to existing physical regions."""
+    from plc.device_identity import instruction_operand_regions
+    from plc.instructions import reviewed_native_operand_parameters, reviewed_native_fact_groups
+    from plc.instruction_constraints import _condition, literal_operand_values
+    from plc.instruction_definition import UnknownInstructionSemantics, select_fact_dependencies
+
+    parameters = reviewed_native_operand_parameters(spec, opcode, operands, plc_model)
+    regions = instruction_operand_regions(spec, opcode, operands, plc_model, parameters=parameters)
+    if not regions or not any(isinstance(component, Mapping) and 'semantic_access' in component
+                              for descriptions in parameters for parameter in descriptions
+                              for component in parameter.get('components', [])):
+        return regions
+    component_requirements = {}
+    values = literal_operand_values(spec, operands, plc_model=plc_model, opcode=opcode)
+    context = {'$PLC_MODEL': plc_model, '$LANGUAGE': 'ladder',
+               '$OPERAND_ROLES': spec.native_operand_order if spec else (),
+               'project_mode': 'native_ladder_instruction', 'program_context': 'ladder'}
+    for group in reviewed_native_fact_groups(spec, opcode, operands, plc_model,
+                                             dimensions={'parameters.typed_operands'}):
+        descriptions = group.value.get('operands', [])
+        indexes = [index for index, candidates in enumerate(parameters)
+                   if index < len(descriptions) and descriptions[index] in candidates
+                   and any(isinstance(item, Mapping) and 'semantic_access' in item
+                           for item in descriptions[index].get('components', []))]
+        if not indexes:
+            continue
+        closure = select_fact_dependencies(spec.definition_facts, [group.id], opcode=opcode,
+            model=plc_model, language='ladder', allow_unknown_scope=True)
+        requirements = {gap['reason'] for gap in closure['gaps']}
+        for dependency in closure['groups']:
+            for condition in dependency.get('conditions', []):
+                try:
+                    _condition(condition, values, context)
+                except UnknownInstructionSemantics as error:
+                    requirements.add(str(error))
+        for index in indexes:
+            component_requirements.setdefault(index, set()).update(requirements)
+
+    result = []
+    for region in regions:
+        claims, possible_accesses = [], {region['access']}
+        requirements = set()
+        scope_requirements = component_requirements.get(region['operand_index'], set())
+        for parameter in parameters[region['operand_index']]:
+            components = parameter.get('components')
+            if not isinstance(components, list) or not any(
+                    isinstance(item, Mapping) and 'semantic_access' in item for item in components):
+                continue
+            layout = parameter.get('word_device_layout', {})
+            if region['unit'] == 'bits' and 'occupied_bit_count' in parameter:
+                unit_matches = True
+            elif region['unit'] == 'words' and isinstance(layout, Mapping) and 'word_count' in layout:
+                unit_matches = (layout.get('kind') == 'independent_elements'
+                                and layout.get('element_bits') == layout.get('device_unit_bits')
+                                and type(layout.get('element_bits')) is int)
+            else:
+                continue
+            if not unit_matches:
+                requirements.add('component_unit_not_resolved')
+            offsets = {}
+            for component in components:
+                if not isinstance(component, Mapping):
+                    requirements.add('component_access_incomplete')
+                    continue
+                offset, access = component.get('offset'), component.get('semantic_access')
+                if isinstance(access, str) and access in {'read', 'write', 'read_write'}:
+                    possible_accesses.add(access)
+                if type(offset) is not int or offset < 0:
+                    requirements.add('component_offset_not_resolved')
+                elif not isinstance(access, str) or access not in {'read', 'write', 'read_write'}:
+                    requirements.add('component_access_incomplete')
+                elif offset in offsets and offsets[offset] != access:
+                    requirements.add('component_access_conflict')
+                else:
+                    offsets[offset] = access
+                if component.get('condition') or component.get('conditions') or component.get('requires'):
+                    requirements.add('component_access_condition_not_resolved')
+            claims.append(offsets)
+        if not claims:
+            result.append(region)
+            continue
+        count, addresses = region.get('resolved_count'), region.get('addresses')
+        if (type(count) is not int or not isinstance(addresses, list) or len(addresses) != count):
+            requirements.add('component_addresses_not_resolved')
+        elif any(set(claim) != set(range(count)) for claim in claims):
+            requirements.add('component_access_incomplete')
+        if any(claim != claims[0] for claim in claims[1:]):
+            requirements.add('component_access_conflict')
+        if requirements or region.get('requires'):
+            # Incomplete or conditional layouts cannot narrow an operand's
+            # conservative extent. Include every source-declared possible role.
+            access = ('read_write' if possible_accesses & {'read', 'read_write'}
+                      and possible_accesses & {'write', 'read_write'}
+                      else 'write' if 'write' in possible_accesses else 'read')
+            result.append({**region, 'access': access,
+                           'requires': sorted(requirements | scope_requirements | set(region.get('requires', ())))})
+            continue
+        for offset, access in sorted(claims[0].items()):
+            component_region = {**region, 'access': access, 'offset': offset,
+                                'count': 1, 'resolved_count': 1, 'addresses': [addresses[offset]]}
+            physical = region.get('physical_bit_region')
+            if (isinstance(physical, Mapping) and type(physical.get('bit_count')) is int
+                    and physical['bit_count'] % count == 0):
+                width = physical['bit_count'] // count
+                component_region['physical_bit_region'] = {**physical,
+                    'start_bit': physical['start_bit'] + offset * width, 'bit_count': width}
+            if scope_requirements:
+                component_region['requires'] = sorted(scope_requirements)
+            result.append(component_region)
+    return result
+
+
 def _instruction_access(
     opcode: Any, operands: Sequence[Any], *, plc_model: str = "FX3U"
 ) -> Tuple[Set[str], Set[str]]:
@@ -389,6 +594,16 @@ def _instruction_access(
         if reset_range is not None:
             return reads, reset_range
     spec = DEFAULT_INSTRUCTION_REGISTRY.resolve_source_form(op, len(operands or []), cpu=plc_model)
+    from plc.device_identity import external_operand_reference, digit_specified_operand_reference
+    from plc.instructions import (reviewed_native_operand_parameters, reviewed_comment_device_identity,
+                                  reviewed_remote_device_identity, reviewed_direct_access_output_identity)
+    from plc.validation import parse_device_address, parse_indexed_device_address
+    identity_parameters = reviewed_native_operand_parameters(spec, op, operands or [], plc_model)
+    regions = _instruction_operand_access_regions(spec, op, operands or [], plc_model)
+    region_slots = {}
+    for region in regions:
+        reads.update(_expand_index_tokens(region['dependencies']))
+        region_slots.setdefault(region['operand_index'], []).append(region)
     write_indexes = set(spec.write_indexes if spec is not None else ())
     read_write_indexes = set(spec.read_write_indexes if spec is not None else ())
     if op in {'PWM', 'DPWM'} and str(plc_model).upper() in {'FX5U', 'FX5UC', 'FX5UJ', 'FX5S'} and len(operands or ()) == 3:
@@ -416,11 +631,78 @@ def _instruction_access(
                         read_write_indexes.add(scoped.native_operand_order.index(parameter))
     for index, operand in enumerate(operands or []):
         text = str(operand or "").strip().upper()
-        from plc.ordered_source import indexed_literal_register, buffer_memory_reference, source_extended_reference
+        # A source-qualified metadata selector names a device; its stored
+        # numeric/bit value is not a read. Indexed names still depend on Z/V.
+        if any(reviewed_remote_device_identity(p) for p in identity_parameters[index]):
+            continue  # The target CPU owns this device, including its value and range.
+        if any(reviewed_direct_access_output_identity(p) for p in identity_parameters[index]):
+            from plc.device_identity import direct_access_output_reference
+            reference = direct_access_output_reference(text, plc_model)
+            if reference:
+                writes.add(reference['text'])
+                if reference['index']:
+                    reads.add(reference['index'])
+            continue
+        identity = [p for p in identity_parameters[index] if reviewed_comment_device_identity(p)]
+        if identity:
+            direct = parse_device_address(text, plc_model)
+            indexed_name = parse_indexed_device_address(text, plc_model)
+            if direct is not None:
+                continue
+            if indexed_name is not None and any(p.get('range', {}).get('index_modification') is True for p in identity):
+                reads.add(indexed_name['index_text'])
+                continue
+        local_regions = region_slots.get(index, [])
+        if (local_regions and any('addresses' in region for region in local_regions)
+                and all('addresses' in region for region in local_regions if not region.get('condition'))):
+            for region in local_regions:
+                if 'addresses' not in region:
+                    continue  # An unresolved conditional tail has no fixed address.
+                if region['access'] in {'read', 'read_write'}:
+                    reads.update(region['addresses'])
+                if region['access'] in {'write', 'read_write'}:
+                    writes.update(region['addresses'])
+            continue
+        if local_regions:
+            if any(region['access'] in {'write', 'read_write'} for region in local_regions):
+                write_indexes.add(index)
+            if any(region['access'] in {'read', 'read_write'} for region in local_regions):
+                read_write_indexes.add(index)
+        external = external_operand_reference(text, plc_model)
+        if external:
+            reads.update(_expand_index_tokens(external['index_registers']))
+            if index in write_indexes:
+                writes.add(external['base'])
+                if index in read_write_indexes:
+                    reads.add(external['base'])
+            else:
+                reads.add(external['base'])
+            continue
+        definition = spec.operands[index] if spec is not None and index < len(spec.operands) else None
+        try:
+            digit = (digit_specified_operand_reference(text, plc_model, maximum_groups=definition.digit_groups_max)
+                     if definition and definition.digit_groups_max else None)
+        except ValueError:
+            digit = None
+        if digit and digit['indexed']:
+            reads.update(_expand_index_tokens(digit['index_registers']))
+            if index in write_indexes:
+                writes.add(digit['base'])
+                if index in read_write_indexes:
+                    reads.add(digit['base'])
+            else:
+                reads.add(digit['base'])
+            continue
+        from plc.ordered_source import (
+            indexed_literal_register,
+            buffer_memory_reference,
+            source_extended_reference,
+            source_grouped_reference,
+        )
         buffer = buffer_memory_reference(text)
         if buffer:
             if buffer['index']:
-                reads.add(buffer['index'])
+                reads.update(_expand_index_tokens([buffer['index']]))
             if index in write_indexes:
                 writes.add(buffer['base'])
                 if index in read_write_indexes:
@@ -430,7 +712,7 @@ def _instruction_access(
             continue
         extended = source_extended_reference(text)
         if extended:
-            reads.update(extended['indexes'])
+            reads.update(_expand_index_tokens(extended['indexes']))
             if extended['indirect']:
                 reads.add(extended['pointer'])
             if index in write_indexes:
@@ -439,6 +721,16 @@ def _instruction_access(
                     reads.add(extended['base'])
             else:
                 reads.add(extended['base'])
+            continue
+        source_grouped = source_grouped_reference(text)
+        if source_grouped and source_grouped['index']:
+            reads.update(_expand_index_tokens([source_grouped['index']]))
+            if index in write_indexes:
+                writes.add(source_grouped['base'])
+                if index in read_write_indexes:
+                    reads.add(source_grouped['base'])
+            else:
+                reads.add(source_grouped['base'])
             continue
         literal_index = indexed_literal_register(text)
         if literal_index:
@@ -463,23 +755,27 @@ def _instruction_access(
                 reads.add(base)
             continue
 
-        from plc.device_identity import digit_specified_devices
+        from plc.device_identity import digit_specified_devices, digit_specified_operand_devices
         try:
-            grouped = digit_specified_devices(text, plc_model)
+            definition = spec.operands[index] if spec is not None and index < len(spec.operands) else None
+            grouped = (digit_specified_operand_devices(text, plc_model, maximum_groups=definition.digit_groups_max)
+                       if definition is not None and definition.digit_groups_max else digit_specified_devices(text, plc_model))
         except ValueError:
             grouped = None
-        tokens = set(grouped if grouped is not None else _device_tokens(operand))
-        # Only source-verified operand extents authorize consecutive-word
+        tokens = set(grouped if grouped is not None else _device_tokens(operand, plc_model))
+        # Only source-verified operand extents authorize consecutive-device
         # dependencies. Preserve ordinary imported catalog behavior otherwise.
-        if spec is not None and "operand_types" in spec.verified_fields and index < len(spec.operands):
+        if (not local_regions and spec is not None and "operand_types" in spec.verified_fields
+                and index < len(spec.operands)):
             from plc.validation import SUPPORTED_PLC_MODELS, parse_device_address, device_address_radix
             definition = spec.operands[index]
-            words = max(definition.word_count, 2 if definition.data_type == "dword" else 1)
             address = parse_device_address(text, plc_model) if plc_model in SUPPORTED_PLC_MODELS else None
-            if address and words > 1 and "." not in text:
+            from plc.device_identity import operand_device_point_count
+            points = operand_device_point_count(definition, address, plc_model) if address else definition.device_point_count
+            if address and points > 1 and "." not in text:
                 prefix, first = address
                 radix = "X" if device_address_radix(prefix, plc_model) == 16 else "d"
-                extent = {prefix + format(first + offset, radix) for offset in range(words)}
+                extent = {prefix + format(first + offset, radix) for offset in range(points)}
                 if all(parse_device_address(device, plc_model) is not None for device in extent):
                     tokens = extent
         if index in write_indexes:
@@ -488,6 +784,9 @@ def _instruction_access(
                 reads.update(tokens)
         else:
             reads.update(tokens)
+    state_reads, state_writes = _instruction_state_access(spec, op, operands or [], plc_model)
+    reads.update(state_reads)
+    writes.update(state_writes)
     return reads, writes
 
 
@@ -502,7 +801,7 @@ def analyze_instruction_access(
     writes: Set[str] = set()
     if op.startswith(("LD", "AND", "OR")):
         for operand in args:
-            reads.update(_device_tokens(operand))
+            reads.update(_device_tokens(operand, plc_model))
     elif op in {"OUT", "SET", "RST", "PLS", "PLF"}:
         reads, writes = _instruction_access(op, args, plc_model=plc_model)
     elif op not in {"ANB", "ORB", "MPS", "MRD", "MPP", "INV", "NOP"}:
@@ -511,6 +810,25 @@ def analyze_instruction_access(
         sorted(reads, key=_device_sort_key),
         sorted(writes, key=_device_sort_key),
     )
+
+
+def analyze_instruction_access_regions(opcode, operands, *, plc_model='FX3U'):
+    """Source-defined symbolic storage that cannot be replaced by head addresses."""
+    op, args = str(opcode or '').strip().upper(), list(operands or [])
+    spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(op, cpu=plc_model, operand_count=len(args))
+    regions = [region for region in _instruction_operand_access_regions(spec, op, args, plc_model)
+               if isinstance(region['count'], Mapping) or region.get('requires')]
+    _instruction_state_access(spec, op, args, plc_model, unresolved=regions)
+    return regions
+
+
+def _rung_access_regions(rung, plc_model):
+    regions = []
+    for index, instruction in enumerate(lower_rung_instructions(rung)):
+        for region in analyze_instruction_access_regions(instruction['op'], instruction.get('args', []),
+                                                         plc_model=plc_model):
+            regions.append({'instruction_index': index, **region})
+    return regions
 
 
 def analyze_rung_access(
@@ -534,18 +852,28 @@ def analyze_rung_access(
     for branch in rung.get("branches", []) or []:
         condition_elements.extend(_walk_input_elements(branch.get("inputs", []) or []))
     for element in condition_elements:
-        reads.update(_device_tokens(element.get("address", "")))
-        reads.update(_device_tokens(element.get("expression", "")))
+        reads.update(_device_tokens(element.get("address", ""), plc_model))
+        reads.update(_device_tokens(element.get("expression", ""), plc_model))
 
     for branch in rung.get("branches", []) or []:
         for output in branch.get("outputs", []) or []:
             output_type = str(output.get("type", "") or "").upper()
-            if output_type in {"COIL", "PLS", "PLF", "TIMER", "COUNTER"}:
-                address = _normalized_device(output.get("address"))
-                if address:
-                    writes.add(address)
-                if output_type in {"TIMER", "COUNTER"}:
-                    reads.update(_device_tokens(output.get("value", "")))
+            if output_type in {"COIL", "PLS", "PLF"}:
+                local_reads, local_writes = _instruction_access(
+                    "OUT" if output_type == "COIL" else output_type,
+                    [output.get("address", "")],
+                    plc_model=plc_model,
+                )
+                reads.update(local_reads)
+                writes.update(local_writes)
+            elif output_type in {"TIMER", "COUNTER"}:
+                local_reads, local_writes = _instruction_access(
+                    "OUT",
+                    [output.get("address", ""), output.get("value", "")],
+                    plc_model=plc_model,
+                )
+                reads.update(local_reads)
+                writes.update(local_writes)
             elif output_type == "APP_INSTR":
                 local_reads, local_writes = _instruction_access(
                     output.get("opcode"), output.get("operands", []) or [], plc_model=plc_model
@@ -661,6 +989,9 @@ def build_plc_ir(
                 "ladder": rung,
             }
         )
+        access_regions = _rung_access_regions(rung, plc_model)
+        if access_regions:
+            networks[-1]['access_regions'] = access_regions
 
     from plc.semantics import analyze_program_semantics
 
@@ -671,11 +1002,6 @@ def build_plc_ir(
     )
     networks = semantic_analysis["networks"]
 
-    normalized_comments = {
-        str(address).strip().upper(): str(comment)
-        for address, comment in comments.items()
-        if _normalized_device(address)
-    }
     normalized_io = _normalize_io_map(confirmed_spec, io_map)
     readers: Dict[str, List[str]] = {}
     writers: Dict[str, List[str]] = {}
@@ -684,6 +1010,17 @@ def build_plc_ir(
             readers.setdefault(address, []).append(network["id"])
         for address in network["writes"]:
             writers.setdefault(address, []).append(network["id"])
+
+    from plc.device_identity import direct_access_output_reference
+    normalized_comments = {}
+    for address, comment in comments.items():
+        identity = _normalized_device(address)
+        if not identity:
+            direct = direct_access_output_reference(address, plc_model)
+            if direct and direct['text'] in writers:
+                identity = direct['text']
+        if identity:
+            normalized_comments.setdefault(identity, str(comment))
 
     all_addresses = set(readers) | set(writers) | {
         address
@@ -697,12 +1034,14 @@ def build_plc_ir(
             prefix = (match.group(1) or match.group(4)).upper()
         else:
             from plc.ordered_source import buffer_memory_reference, source_extended_reference
-            if buffer_memory_reference(address):
-                prefix = 'U_G'
-            elif source_extended_reference(address):
-                prefix = 'QUALIFIED'
-            else:
+            from plc.device_identity import external_operand_reference, direct_access_output_reference
+            external = external_operand_reference(address, plc_model)
+            direct = direct_access_output_reference(address, plc_model)
+            extended = source_extended_reference(address)
+            if not direct and not external and not buffer_memory_reference(address) and not extended:
                 raise PLCIRValidationError('unresolved source access identity: ' + address)
+            prefix = ('direct_access_output' if direct else
+                      'link_direct' if external and external['form'] == 'link_direct' else 'QUALIFIED' if extended else 'U_G')
         read_by = readers.get(address, [])
         written_by = writers.get(address, [])
         if read_by and written_by:
@@ -863,6 +1202,9 @@ def validate_plc_ir(
             raise PLCIRValidationError(f"network {network_id} reads are stale")
         if network.get("writes") != expected_writes:
             raise PLCIRValidationError(f"network {network_id} writes are stale")
+        expected_regions = _rung_access_regions(rung, str(plc['cpu']))
+        if network.get('access_regions', []) != expected_regions:
+            raise PLCIRValidationError(f'network {network_id} storage regions are stale')
     if seen_orders != set(range(len(networks))):
         raise PLCIRValidationError("network order values must be contiguous from zero")
     if not isinstance(program.get("devices"), Mapping):
@@ -1090,6 +1432,7 @@ __all__ = [
     "IR_SCHEMA_VERSION",
     "PLCIRValidationError",
     "analyze_instruction_access",
+    "analyze_instruction_access_regions",
     "analyze_rung_access",
     "apply_ladder_partial_to_ir",
     "apply_network_patch",

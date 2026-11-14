@@ -7,6 +7,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from responses_fixture import chat_body, chat_call, chat_stream, function_item, response_body, stream_body
+
 import application.model_api as api
 from storage.config import DEFAULT_MODEL_PROFILES
 from model_runtime.provider import (
@@ -97,30 +99,10 @@ def test_json_tail_recovery_preserves_generated_nested_values():
     check()
 
 
-def _tool_delta(index, *, call_id="", name="", arguments=""):
-    return SimpleNamespace(
-        index=index,
-        id=call_id or None,
-        function=SimpleNamespace(name=name or None, arguments=arguments),
-    )
 
 
-def _chunk(*, reasoning="", content="", tool_calls=None, usage=None, choices=True):
-    values = []
-    if choices:
-        values.append(
-            SimpleNamespace(
-                delta=SimpleNamespace(
-                    reasoning_content=reasoning or None,
-                    content=content or None,
-                    tool_calls=tool_calls or [],
-                )
-            )
-        )
-    return SimpleNamespace(choices=values, usage=usage)
 
-
-class _Completions:
+class _Responses:
     def __init__(self, responses):
         self.responses = list(responses)
         self.calls = []
@@ -135,8 +117,8 @@ class _Completions:
 
 class _Client:
     def __init__(self, responses, models=()):
-        self.completions = _Completions(responses)
-        self.chat = SimpleNamespace(completions=self.completions)
+        self.responses = _Responses(responses)
+        self.chat = SimpleNamespace(completions=_Responses(responses))
         self.models = SimpleNamespace(
             list=lambda: SimpleNamespace(
                 data=[SimpleNamespace(id=value) for value in models]
@@ -155,30 +137,16 @@ def _profile(profile_id):
     )
 
 
+def _official_profile():
+    return {"adapter": "openai_compatible", "baseUrl": "https://api.openai.com/v1", "model": "gpt-6-luna"}
+
+
 @pytest.mark.parametrize("profile_id", ["deepseek-default", "zhipu-glm-5.3-flash"])
 def test_openai_compatible_profiles_normalize_sync_reasoning_tools_and_usage(profile_id):
-    calls = [
-        SimpleNamespace(
-            id="call_1",
-            function=SimpleNamespace(name="read_network", arguments='{"network_id":"N0001"}'),
-        ),
-        SimpleNamespace(
-            id="call_2",
-            function=SimpleNamespace(name="get_diagnostics", arguments="{}"),
-        ),
-    ]
-    response = SimpleNamespace(
-        choices=[
-            SimpleNamespace(
-                message=SimpleNamespace(
-                    reasoning_content="先读取网络，再查看诊断。",
-                    content="已完成检查。",
-                    tool_calls=calls,
-                )
-            )
-        ],
-        usage=SimpleNamespace(prompt_tokens=11, completion_tokens=7, total_tokens=18),
-    )
+    response = chat_body("已完成检查。", reasoning="先读取网络，再查看诊断。",
+        calls=[chat_call("call_1", "read_network", '{"network_id":"N0001"}'),
+               chat_call("call_2", "get_diagnostics", "{}")],
+        usage={"prompt_tokens": 11, "completion_tokens": 7, "total_tokens": 18})
     client = _Client([response])
     provider = OpenAICompatibleProvider(_profile(profile_id), "key", client=client)
     request = ModelRequest(
@@ -195,55 +163,91 @@ def test_openai_compatible_profiles_normalize_sync_reasoning_tools_and_usage(pro
         "get_diagnostics",
     ]
     assert collected.usage == Usage(11, 7, 18)
-    assert client.completions.calls[0]["stream"] is False
+    assert client.chat.completions.calls[0]["stream"] is False
+    assert client.responses.calls == []
 
 
-def test_streaming_fragmented_multi_tool_calls_and_empty_chunks_are_normalized():
-    usage = SimpleNamespace(prompt_tokens=20, completion_tokens=10, total_tokens=30)
-    chunks = [
-        _chunk(choices=False),
-        _chunk(reasoning="分析"),
-        _chunk(
-            reasoning="完成。",
-            tool_calls=[
-                _tool_delta(0, call_id="call_", name="read_", arguments="{"),
-                _tool_delta(1, call_id="diag_", name="get_", arguments="{"),
-            ],
-        ),
-        _chunk(
-            content="开始执行",
-            tool_calls=[
-                _tool_delta(0, call_id="1", name="network", arguments='"network_id":"N0001"}'),
-                _tool_delta(1, call_id="1", name="diagnostics", arguments="}"),
-            ],
-        ),
-        _chunk(choices=False, usage=usage),
-    ]
-    provider = OpenAICompatibleProvider(
-        _profile("deepseek-default"), "key", client=_Client([iter(chunks)])
-    )
+def test_responses_stream_publishes_text_and_completes_interleaved_calls_once():
+    calls = [function_item("call_1", "read_network", '{"network_id":"N0001"}'),
+             function_item("diag_1", "get_diagnostics", "{}")]
+    response = response_body("开始执行", summary="分析完成。", calls=calls,
+        usage={"input_tokens": 20, "output_tokens": 10, "total_tokens": 30})
+    events = stream_body(response,
+        {"type": "response.created"},
+        {"type": "response.reasoning_summary_text.delta", "delta": "分析"},
+        {"type": "response.function_call_arguments.delta", "output_index": 2, "delta": "{"},
+        {"type": "response.reasoning_summary_text.delta", "delta": "完成。"},
+        {"type": "response.function_call_arguments.delta", "output_index": 3, "delta": "{}"},
+        {"type": "response.output_text.delta", "delta": "开始执行"})
+    provider = OpenAICompatibleProvider(_official_profile(), "key", client=_Client([events]))
 
-    events = list(
-        provider.stream(ModelRequest((UserMessage("检查"),), stream=True))
-    )
+    received = list(provider.stream(ModelRequest((UserMessage("检查"),), stream=True)))
 
-    assert [event.text for event in events if isinstance(event, ReasoningDelta)] == [
-        "分析",
-        "完成。",
-    ]
-    assert [event.text for event in events if isinstance(event, TextDelta)] == [
-        "开始执行"
-    ]
-    assert [event.name for event in events if isinstance(event, ToolCallStart)] == [
-        "read_network",
-        "get_diagnostics",
-    ]
-    ended = [event.tool_call for event in events if isinstance(event, ToolCallEnd)]
-    assert ended == [
+    assert [event.text for event in received if isinstance(event, ReasoningDelta)] == ["分析", "完成。"]
+    assert [event.text for event in received if isinstance(event, TextDelta)] == ["开始执行"]
+    assert [event.name for event in received if isinstance(event, ToolCallStart)] == ["read_network", "get_diagnostics"]
+    assert [event.tool_call for event in received if isinstance(event, ToolCallEnd)] == [
         ToolCall("call_1", "read_network", '{"network_id":"N0001"}'),
         ToolCall("diag_1", "get_diagnostics", "{}"),
     ]
-    assert events[-1] == Usage(20, 10, 30)
+    assert [event for event in received if isinstance(event, Usage)] == [Usage(20, 10, 30)]
+
+
+def test_luna_responses_tool_followup_preserves_dsh_wire_prefix():
+    import httpx
+    from openai import OpenAI
+    from agent_runtime.messages import ToolResult
+
+    url = "https://api.openai.com/v1"
+    key = "sk-offline-fixture"
+    profile = {"adapter": "openai_compatible", "baseUrl": url, "model": "gpt-6-luna"}
+    sent = []
+    commentary = response_body("正在检查。")["output"][0]
+    commentary["phase"] = "commentary"
+    tool_call = function_item("call_check", "check", "{}")
+    first_output = response_body(encrypted="encrypted-fixture", calls=[commentary, tool_call],
+        usage={"input_tokens": 30, "output_tokens": 10, "total_tokens": 40,
+               "input_tokens_details": {"cached_tokens": 12}, "output_tokens_details": {"reasoning_tokens": 6}})
+
+    def respond(request):
+        assert request.url.path == "/v1/responses"
+        sent.append(json.loads(request.content))
+        if len(sent) == 1:
+            events = stream_body(first_output,
+                {"type": "response.output_item.added", "output_index": 1, "item": commentary},
+                {"type": "response.output_text.delta", "output_index": 1, "item_id": commentary["id"],
+                 "content_index": 0, "delta": "正在检查。"})
+            return httpx.Response(200, headers={"Content-Type": "text/event-stream"},
+                text="".join("data: " + json.dumps(event) + "\n\n" for event in events))
+        return httpx.Response(200, json=response_body('{"summary":"完成。"}'))
+
+    tool = {"type": "function", "function": {"name": "check", "parameters": {"type": "object"}}}
+    messages = (SystemMessage("检查"), UserMessage("读取工程"))
+    with OpenAI(api_key=key, base_url=url, http_client=httpx.Client(transport=httpx.MockTransport(respond))) as client:
+        provider = OpenAICompatibleProvider(profile, key, client=client)
+        first = collect_response(provider, ModelRequest(messages, tools=(tool,), options={"reasoning_effort": "high"}))
+        assert first.message.content == "" and first.message.tool_calls[0].id == "call_check"
+        assert first.usage.reasoning_tokens == 6
+        assert first.usage.raw_usage["input_tokens_details"]["cached_tokens"] == 12
+        result = ToolResult("call_check", "check", '{"ok":true}')
+        fmt = {"type": "json_schema", "json_schema": {"name": "result", "strict": True,
+               "schema": {"type": "object", "properties": {"summary": {"type": "string"}},
+                          "required": ["summary"], "additionalProperties": False}}}
+        second = collect_response(provider, ModelRequest((*messages, first.message, result), tools=(tool,),
+            stream=False, options={"reasoning_effort": "max", "response_format": fmt}))
+
+    assert second.message.content == '{"summary":"完成。"}'
+    initial, followup = sent
+    assert initial["store"] is followup["store"] is False
+    assert initial["reasoning"] == followup["reasoning"] == {"effort": "medium", "summary": "auto"}
+    assert initial["tools"][0]["name"] == "check" and initial["tools"][0]["strict"] is False
+    assert initial["input"][-1] == {"type": "configuration_update", "reasoning": {"effort": "high"}}
+    assert followup["input"][:len(initial["input"])] == initial["input"]
+    replay = followup["input"][len(initial["input"]):]
+    assert replay[0]["encrypted_content"] == "encrypted-fixture" and replay[1]["phase"] == "commentary"
+    assert replay[2]["call_id"] == replay[3]["call_id"] == "call_check"
+    assert replay[-1] == {"type": "configuration_update", "reasoning": {"effort": "max"}}
+    assert followup["text"]["format"] == {"type": "json_schema", **fmt["json_schema"]}
 
 
 def test_provider_request_path_has_no_legacy_parameter_or_capability_branch():
@@ -293,7 +297,8 @@ def test_parameter_precedence_and_capability_constraints_for_built_in_profiles()
     assert "temperature" not in deepseek_params
     assert "response_format" not in deepseek_params
     assert "tool_choice" not in deepseek_params
-    assert deepseek_params["extra_body"]["thinking"]["type"] == "enabled"
+    assert deepseek_params["thinking"] == {"type": "enabled"}
+    assert deepseek_params["tools"] == [tool]
 
     glm = OpenAICompatibleProvider(
         _profile("zhipu-glm-5.3-flash"), "key", client=_Client([iter([])])
@@ -311,8 +316,8 @@ def test_parameter_precedence_and_capability_constraints_for_built_in_profiles()
     assert glm_params["temperature"] == 0.15
     assert "top_p" not in glm_params
     assert glm_params["reasoning_effort"] == "high"
-    assert glm_params["extra_body"]["thinking"] == {"type": "enabled"}
-    assert glm_params["extra_body"]["tool_stream"] is True
+    assert glm_params["tool_stream"] is True
+    assert glm_params["tools"] == [tool]
 
 
 @pytest.mark.parametrize(
@@ -362,63 +367,40 @@ def test_text_profiles_reject_images_before_calling_the_sdk(profile_id):
     assert "不支持图片输入" in str(captured.value)
 
 
-@pytest.mark.parametrize(
-    ("profile_id", "effort", "thinking_required"),
-    [
-        ("zhipu-glm-5.3", "low", True),
-        ("zhipu-glm-5.2", "high", False),
-    ],
-)
-def test_glm_text_profiles_use_the_shared_streaming_tool_adapter(
-    profile_id, effort, thinking_required
-):
-    tool = {
-        "type": "function",
-        "function": {"name": "get_diagnostics", "parameters": {"type": "object"}},
-    }
-    provider = OpenAICompatibleProvider(
-        _profile(profile_id), "key", client=_Client([iter([])])
-    )
-
-    params = provider._request_params(
-        ModelRequest(
-            (UserMessage("检查"),),
-            tools=(tool,),
-            options={"reasoning_effort": effort},
-            stream=True,
-        )
-    )
-
+@pytest.mark.parametrize(("profile_id", "effort"), [("zhipu-glm-5.3", "low"), ("zhipu-glm-5.2", "high")])
+def test_glm_profiles_keep_chat_tool_definitions_and_effort(profile_id, effort):
+    tool = {"type": "function", "function": {"name": "get_diagnostics", "parameters": {"type": "object"}}}
+    provider = OpenAICompatibleProvider(_profile(profile_id), "key", client=_Client([]))
+    params = provider._request_params(ModelRequest((UserMessage("检查"),), tools=(tool,),
+                                                   options={"reasoning_effort": effort}, stream=True))
     assert params["model"] == _profile(profile_id)["model"]
     assert params["reasoning_effort"] == effort
-    extra = params["extra_body"]
-    if thinking_required:
-        assert extra["thinking"]["type"] == "enabled"
-    else:
-        assert "thinking" not in extra
-    assert extra["tool_stream"] is True
+    assert params["tools"] == [tool]
+    assert params["tool_stream"] is True
 
 
-def test_assistant_reasoning_is_replayed_only_by_transport_adapter():
-    provider = OpenAICompatibleProvider(
-        _profile("deepseek-default"), "key", client=_Client([iter([])])
-    )
-    params = provider._request_params(
-        ModelRequest(
-            (
-                AssistantMessage(
-                    "",
-                    (ToolCall("call_1", "get_diagnostics", "{}"),),
-                    "保留本轮推理回放",
-                ),
-            ),
-            stream=True,
-        )
-    )
+@pytest.mark.parametrize("mode", ["disabled", "enabled"])
+def test_legacy_zai_thinking_modes_stay_on_the_chat_wire(mode):
+    profile = {"adapter": "openai_compatible", "baseUrl": "https://api.z.ai/api/coding/paas/v4", "model": "glm-5.2"}
+    provider = OpenAICompatibleProvider(profile, "key", client=object())
+    params = provider._request_params(ModelRequest((UserMessage("fixture"),),
+        options={"extra_body": {"thinking": {"type": mode, "clear_thinking": True}}}, stream=True))
+    assert params["thinking"] == {"type": mode, "clear_thinking": True}
+    assert "reasoning" not in params
 
-    assistant = next(message for message in params["messages"] if message["role"] == "assistant")
-    assert assistant["reasoning_content"] == "保留本轮推理回放"
-    assert assistant["tool_calls"][0]["function"]["name"] == "get_diagnostics"
+
+@pytest.mark.parametrize("terminal", [None, "incomplete"])
+def test_responses_stream_does_not_accept_partial_program_or_retry(terminal):
+    delta = {"type": "response.output_text.delta", "delta": '{"program":'}
+    response = (stream_body(response_body('{"program":', status=terminal), delta)
+                if terminal else iter([delta]))
+    client = _Client([response])
+    provider = OpenAICompatibleProvider(_official_profile(), "key", client=client)
+    accepted = []
+    with pytest.raises(ModelProviderError) as rejected:
+        collect_response(provider, ModelRequest((UserMessage("生成"),)), on_content_chunk=accepted.append)
+    assert rejected.value.code == "protocol"
+    assert accepted == [] and len(client.responses.calls) == 1
 
 
 @pytest.mark.parametrize("profile_id", ["deepseek-default", "zhipu-glm-5.3-flash"])
@@ -431,10 +413,11 @@ def test_hidden_reasoning_replays_only_to_vendor_in_multiround_tool_requests(pro
 
     private = "The internal analysis requires a tool before answering."
     arguments = '{"network_id":"N0001"}'
+    call = chat_call("call_1", "read_network", arguments)
     client = _Client([
-        iter([_chunk(reasoning=private), _chunk(tool_calls=[
-            _tool_delta(0, call_id="call_1", name="read_network", arguments=arguments)])]),
-        iter([_chunk(reasoning=private), _chunk(content="网络已经检查完成。")]),
+        chat_stream(chat_body(calls=[call]), {"reasoning_content": private[:19]},
+                    {"reasoning_content": private[19:], "tool_calls": [call]}),
+        chat_stream(chat_body("网络已经检查完成。", reasoning=private)),
     ])
     provider = OpenAICompatibleProvider(_profile(profile_id), "offline-key", client=client)
     invoked = []
@@ -459,12 +442,11 @@ def test_hidden_reasoning_replays_only_to_vendor_in_multiround_tool_requests(pro
     assert result.content == "网络已经检查完成。" and result.rounds == 2
     assert displayed_reasoning == [] and displayed_content == [result.content]
     assert len(invoked) == 1 and invoked[0].arguments == arguments
-    assert len(client.completions.calls) == 2
-    second_wire = client.completions.calls[1]["messages"]
-    assistant = next(message for message in second_wire if message["role"] == "assistant")
-    assert assistant["reasoning_content"] == private
-    assert assistant["tool_calls"][0]["function"]["arguments"] == arguments
-    assert assistant["tool_calls"][0]["id"] == "call_1"
+    assert len(client.chat.completions.calls) == 2 and client.responses.calls == []
+    second_wire = client.chat.completions.calls[1]["messages"]
+    assistant = next(item for item in second_wire if item["role"] == "assistant")
+    assert assistant["reasoning_content"] == private and assistant["tool_calls"] == [call]
+    assert next(item for item in second_wire if item["role"] == "tool")["tool_call_id"] == "call_1"
     assert "_provider_reasoning" not in json.dumps(second_wire)
     for collected in accepted:
         assert collected.message.reasoning == "" and collected.message._provider_reasoning == private
@@ -507,19 +489,18 @@ def test_custom_openai_compatible_profile_needs_no_new_provider_code():
     assert isinstance(provider, OpenAICompatibleProvider)
     assert params["model"] == "custom-model"
     assert params["temperature"] == 0.3
-    assert params["extra_body"] == {"vendor_flag": True}
+    assert params["vendor_flag"] is True
 
 
 @pytest.mark.parametrize(
     ("status", "expected_code", "retryable"),
-    [(401, "authentication", False), (429, "rate_limit", True), (503, "unavailable", True)],
+    [(401, "authentication", False), (404, "responses_unavailable", False),
+     (429, "rate_limit", True), (503, "unavailable", True)],
 )
 def test_provider_normalizes_transport_errors(status, expected_code, retryable):
     error = RuntimeError("transport failed")
     error.status_code = status
-    provider = OpenAICompatibleProvider(
-        _profile("deepseek-default"), "key", client=_Client([error])
-    )
+    provider = OpenAICompatibleProvider(_official_profile(), "key", client=_Client([error]))
 
     with pytest.raises(ModelProviderError) as captured:
         list(provider.stream(ModelRequest((UserMessage("hi"),), stream=True)))
@@ -539,11 +520,11 @@ def test_local_progress_storage_permission_is_not_model_authentication():
     assert captured.value.status_code is None
 
 
-def test_provider_rejects_protocol_response_without_choices():
+def test_chat_provider_rejects_protocol_response_without_content_or_tool_calls():
     provider = OpenAICompatibleProvider(
         _profile("deepseek-default"),
         "key",
-        client=_Client([SimpleNamespace(choices=[], usage=None)]),
+        client=_Client([chat_body()]),
     )
 
     with pytest.raises(ModelProviderError, match="候选") as captured:
@@ -553,7 +534,7 @@ def test_provider_rejects_protocol_response_without_choices():
 
 
 def test_request_timeout_and_retry_options_are_applied_to_client():
-    client = _Client([iter([])])
+    client = _Client([chat_stream(chat_body("完成。"))])
     provider = OpenAICompatibleProvider(_profile("deepseek-default"), "key", client=client)
 
     list(
@@ -609,9 +590,7 @@ def test_real_request_parameters_keep_language_and_native_schema_before_acceptan
     from model_runtime.responses import ResponseContract
 
     raw = json.dumps({"summary": "仍然返回中文。"}, ensure_ascii=False)
-    wire_response = iter([_chunk(content=raw)]) if stream else SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(content=raw, tool_calls=[]))],
-    )
+    wire_response = chat_stream(chat_body(raw)) if stream else chat_body(raw)
     client = _Client([wire_response])
     profile = _profile(profile_id)
     profile["capabilityOverrides"] = {
@@ -642,8 +621,8 @@ def test_real_request_parameters_keep_language_and_native_schema_before_acceptan
         )
     assert displayed == []
     assert error.value.raw_response.message.content == raw
-    assert len(client.completions.calls) == 1
-    params = client.completions.calls[0]
+    assert len(client.chat.completions.calls) == 1
+    params = client.chat.completions.calls[0]
     assert params["response_format"] == native_format
     assert params["stream"] == stream
     assert "response_language" not in params  # It is not an OpenAI wire option.
@@ -672,7 +651,7 @@ def test_deepseek_catalog_rejects_undeclared_json_schema_before_sdk(stream):
         )
 
     assert error.value.code == "invalid_request"
-    assert client.completions.calls == []
+    assert client.responses.calls == []
 
 
 def test_ladder_generation_replaces_stale_native_schema_with_current_opcode_contract(monkeypatch):
@@ -812,7 +791,7 @@ def test_usage_receipt_matches_final_wire_and_does_not_claim_tool_execution(with
     profile.update(baseUrl="https://example.invalid/v1", model="unknown")
     profile["name"] = "Frozen profile"
     profile["generationDefaults"] = {"temperature": .733}
-    client = _Client([SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="OK", tool_calls=[]))])])
+    client = _Client([chat_body("OK")])
     provider = OpenAICompatibleProvider(profile, "secret-only-for-transport", client=client)
     records = []
     tool = {"type":"function", "function":{"name":"search_plc_manual", "description":"private-tool-prose", "parameters":{"type":"object"}}}
@@ -823,7 +802,7 @@ def test_usage_receipt_matches_final_wire_and_does_not_claim_tool_execution(with
     assert len(records) == 1 and records[0][0] == "model_request"
     receipt = records[0][1]
     assert receipt == preview
-    wire = client.completions.calls[0]
+    wire = client.chat.completions.calls[0]
     assert receipt["model"] == wire["model"]
     assert receipt["features"]["tools"] == bool(wire.get("tools")) == with_tools
     temperature = next(row for row in receipt["parameters"] if row["name"] == "temperature")
@@ -873,7 +852,7 @@ def test_final_provider_budget_rejects_complete_oversized_wire_before_transport(
     with pytest.raises(ModelProviderError) as failure:
         list(provider.stream(request))
     assert failure.value.code == 'context_budget_exceeded'
-    assert client.completions.calls == []
+    assert client.responses.calls == []
 
 
 def test_unknown_external_model_capacity_is_not_guessed_by_final_wire_accounting():

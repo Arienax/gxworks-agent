@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Synthetic user journeys through WorkbenchService, with private observations.
 
@@ -39,6 +39,7 @@ from scripts.benchmark_agent_b import (
     EVIDENCE_ARMS, NO_RAG_ARM, ObservedProvider, PreviewProvider, no_rag_context, no_rag_scope,
     run_case, evidence_experiment_context, curated_evidence_context, assess_first_candidate,
     summarize,
+    _wire_items, _wire_text,
 )
 from shared.tracing import sanitize
 
@@ -82,7 +83,7 @@ def private_directory(value):
 
 def request_without_examples(request):
     result = copy.deepcopy(request)
-    for message in result.get("messages", []):
+    for message in _wire_items(result):
         if isinstance(message.get("content"), str):
             message["content"] = EXAMPLE_BLOCK.sub("", message["content"])
     return result
@@ -93,7 +94,7 @@ def request_without_rag(request, evidence_text):
     from shared.model_context import technical_context_text
     evidence_text = technical_context_text(evidence_text)
     result = copy.deepcopy(request)
-    system = result["messages"][0]
+    system = _wire_items(result)[0]
     content = system["content"]
     if evidence_text:
         if content.count(evidence_text) != 1:
@@ -117,7 +118,7 @@ def assert_no_rag_request(request, contexts):
                            or row.get("manifest", {}).get("retrieval_enabled") is not False
                            for row in contexts):
         raise ValueError("No-RAG requires explicitly disabled retrieval with empty evidence")
-    content = "\n".join(str(message.get("content", "")) for message in request.get("messages", []))
+    content = "\n".join(map(_wire_text, _wire_items(request)))
     if any(marker in content for marker in KNOWLEDGE_MARKERS):
         raise ValueError("Knowledge, examples or automatic operation binding leaked into the no-RAG request")
     if '"retrieved_text_present":true' in content:
@@ -143,7 +144,7 @@ def evidence_preflight(case, spec, provider):
         request, evidence = record["actual_requests"][0], record["evidence"][0]
         if record.get("handoff", {}).get("construction_examples", {}).get("enabled"):
             raise ValueError("Construction examples must be off in all evidence arms")
-        content = "\n".join(str(m.get("content", "")) for m in request["messages"])
+        content = "\n".join(map(_wire_text, _wire_items(request)))
         if "# Routed construction examples" in content or "# Compacted historical context" in content:
             raise ValueError("Examples or historical context leaked into an evidence arm")
         if arm == "no_manual" and (evidence["text"] or evidence["manifest"].get("records")
@@ -154,7 +155,7 @@ def evidence_preflight(case, spec, provider):
     if any(value != common[0] for value in common[1:]):
         raise ValueError("Specifications, protocol, Core bindings or tuning differ between evidence arms")
     for row in case["curated_evidence"]["records"]:
-        content = requests["curated_evidence"]["messages"][0]["content"]
+        content = _wire_text(_wire_items(requests["curated_evidence"])[0])
         if content.count(format_knowledge_reference(row)) != 1:
             raise ValueError("A required curated source block was lost or changed after budgeting")
     return {"case_id": case["case_id"], "network_calls": 0, "passed": True,
@@ -291,6 +292,15 @@ class Journey:
         self.stack.close()
 
     def job(self, command, *, case_id, arm=None, repeat=None, experiment_seed=None):
+        case = self.cases.get(case_id, {})
+        if "acceptance_cases" in case and command["kind"] in {"analysis", "generation", "direct_generation"}:
+            from application.workspace import atomic_json
+            project_id = command["project_id"]
+            spec = self.service.project_commands.get_spec_document(project_id)
+            atomic_json(self.service.store.project_dir(project_id) / "acceptance-cases.json", {
+                "schema_version": 1, "project_id": project_id, "plc_model": spec["plc_model"],
+                "spec_revision": spec["base_revision"], "cases": case["acceptance_cases"],
+            })
         disabled = command["kind"] == "generation" and arm == NO_RAG_ARM
         diagnostic = command["kind"] == "generation" and arm in (*EVIDENCE_ARMS, *CONSTRUCTION_ARMS)
         if disabled or diagnostic:
@@ -326,6 +336,11 @@ class Journey:
                     record["program"] = self.service.projects.program(command["project_id"], version_id)
                     if record["program"]:
                         record["ladder"] = ir_to_ladder(record["program"])
+                        if case.get("held_out_cases"):
+                            from simulator.io_example import check_independent_acceptance
+                            record["held_out_behavior"] = check_independent_acceptance(
+                                record["ladder"], record["program"]["plc"]["cpu"], project_id=command["project_id"],
+                                loaded_cases=(case["held_out_cases"], None))
                     record["generation_handoff"] = self.service.projects.raw_version(
                         command["project_id"], version_id).get("generation_handoff")
                     if arm in CONSTRUCTION_ARMS:

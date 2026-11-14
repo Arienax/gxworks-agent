@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import { Suspense, lazy, useEffect } from "react";
 import { RetainedPanel } from "../components/RetainedPanel";
@@ -30,7 +30,7 @@ export const settingsDialogFields = [
   "freshConfirmedGeneration",
   "locale",
   "modal",
-  "session",
+  "connection",
   "setApprovalSettings",
   "setConstructionExamples",
   "setFreshConfirmedGeneration",
@@ -51,7 +51,7 @@ export function SettingsDialog(props: Props) {
     freshConfirmedGeneration,
     locale,
     modal,
-    session,
+    connection,
     setApprovalSettings,
     setConstructionExamples,
     setFreshConfirmedGeneration,
@@ -98,7 +98,7 @@ export function SettingsDialog(props: Props) {
             {approvalSettings ? (
               <ApprovalSettingsPanel
                 value={approvalSettings}
-                disabled={!!session?.read_only}
+                disabled={!!connection?.read_only}
                 onChange={setApprovalSettings}
                 t={t}
               />
@@ -123,7 +123,7 @@ export function SettingsDialog(props: Props) {
                   locale={locale}
                   value={settings}
                   t={t}
-                  disabled={!session || !!session?.read_only}
+                  disabled={!connection || !!connection?.read_only}
                   onChange={setSettings}
                 />
               </Suspense>
@@ -139,7 +139,7 @@ export function SettingsDialog(props: Props) {
             <DeveloperSettingsPanel
               constructionExamples={constructionExamples}
               freshConfirmedGeneration={freshConfirmedGeneration}
-              disabled={!session || !!session?.read_only}
+              disabled={!connection || !!connection?.read_only}
               onConstructionExamplesChange={setConstructionExamples}
               onFreshConfirmedGenerationChange={setFreshConfirmedGeneration}
               t={t}

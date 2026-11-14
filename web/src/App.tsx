@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import { X } from "lucide-react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
@@ -9,7 +9,6 @@ import { AgentConversation, agentConversationFields } from "./workbench/AgentCon
 import { CanvasPanels, canvasPanelFields } from "./workbench/CanvasPanels";
 import { ComposerPanel, composerPanelFields } from "./workbench/ComposerPanel";
 import { ConversationHistory, conversationHistoryFields } from "./workbench/ConversationHistory";
-import { LoginScreen, loginScreenFields } from "./workbench/LoginScreen";
 import { ProgramWorkspace, programWorkspaceFields } from "./workbench/ProgramWorkspace";
 import { ProjectSidebar, projectSidebarFields } from "./workbench/ProjectSidebar";
 import { ProposalList, proposalListFields } from "./workbench/ProposalList";
@@ -17,6 +16,8 @@ import { workbenchDialogsFields } from "./workbench/dialogFields";
 import { clampCanvasWidth } from "./workbench/usePanelResize";
 import { usePanelTransition } from "./workbench/usePanelTransition";
 import { useWorkbenchController } from "./workbench/useWorkbenchController";
+import type { Job } from "./api/client";
+import { useConversations } from "./workbench/useConversations";
 import { pickView } from "./workbench/viewProps";
 
 const WorkbenchDialogs = lazy(() => import("./workbench/WorkbenchDialogs").then((module) => ({ default: module.WorkbenchDialogs })));
@@ -27,6 +28,31 @@ const MIN_CONVERSATION = 360;
 
 export default function App() {
   const view = useWorkbenchController();
+  // The service may start without a workspace; the picker then owns the screen.
+  const workspace = view.workspaceBinding;
+  const conversations = useConversations(view.connection, workspace.busy);
+  const pendingJob = useRef<Job | null>(null);
+  const openConversation = (job: Job) => {
+    if (view.busy) return;
+    if (job.project_id && job.project_id !== view.pid) {
+      const projectId = job.project_id;
+      void view.guarded(async () => {
+        pendingJob.current = job;
+        let selected = false;
+        try { selected = await view.selectProject(projectId); }
+        finally { if (!selected && pendingJob.current === job) pendingJob.current = null; }
+      });
+      return;
+    }
+    view.selectConversation(job);
+  };
+  useEffect(() => {
+    const pending = pendingJob.current;
+    if (pending && pending.project_id === view.pid) {
+      pendingJob.current = null;
+      view.selectConversation(pending);
+    }
+  }, [view.pid, view.selectConversation]);
   const dialogsOpened = useRef(false);
   const root = useRef<HTMLDivElement>(null);
   const [resizing, setResizing] = useState(false);
@@ -69,7 +95,13 @@ export default function App() {
     return () => cancelAnimationFrame(frame);
   }, [view.leftOpen]);
 
-  if (!view.session) return <LoginScreen {...pickView(view, loginScreenFields)} />;
+  if (!view.connection) {
+    return (
+      <p className="panel-empty" role={view.connecting ? "status" : "alert"}>
+        {view.t(view.connecting ? "正在连接本地服务" : "无法连接本地服务，请确认工作台仍在运行。")}
+      </p>
+    );
+  }
   if (view.modal || view.gxSend) dialogsOpened.current = true;
   const startResize = (event: ReactPointerEvent<HTMLDivElement>) => {
     setResizing(true);
@@ -102,7 +134,14 @@ export default function App() {
       }}
     >
       <div className="sidebar-host" inert={sidebarPhase === "closed" || undefined}>
-        <ProjectSidebar {...pickView(view, projectSidebarFields)} />
+        <ProjectSidebar {...pickView(view, projectSidebarFields)}
+          conversations={conversations} onOpenConversation={openConversation}
+          onOpenProject={(id) => void view.guarded(async () => { await view.selectProject(id); })}
+          workspaces={workspace.workspaces}
+          workspaceError={workspace.error} workspacesBusy={view.busy}
+          onAddWorkspace={workspace.addViaPicker}
+          onActivateWorkspace={workspace.activate}
+          onForgetWorkspace={workspace.forget} />
       </div>
       <div className="sidebar-scrim" aria-hidden="true" onClick={() => view.setLeftOpen(false)} />
       <AgentConversation {...pickView(view, agentConversationFields)}

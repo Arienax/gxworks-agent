@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 param(
     [string]$OutputDirectory = "",
@@ -11,7 +11,7 @@ Set-StrictMode -Version Latest
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     $localDataRoot = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)
-    $OutputDirectory = Join-Path $localDataRoot "PLC AI Studio\hardware-reader"
+    $OutputDirectory = Join-Path $localDataRoot "gxworks-agent\hardware-reader"
 }
 $resolvedOutput = [IO.Path]::GetFullPath($OutputDirectory)
 $repositoryPrefix = $repositoryRoot.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar

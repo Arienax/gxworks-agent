@@ -19,7 +19,7 @@ from integrations.web.responses import (
     Version, PLCProgram, DiagnosticsEnvelope, document_sse_events,
 )
 from scripts.export_web_schema import build_schema, export_schema
-from test_web_api import ORIGIN, _legacy_workspace, _ladder, _login
+from test_web_api import ORIGIN, _legacy_workspace, _ladder
 
 
 def _roundtrip(model, value):
@@ -224,9 +224,8 @@ def test_http_response_validation_rejects_private_settings_without_echoing_secre
         "id": "test", "configured": True, "api_key": secret,
     }]}
     app = create_app(tmp_path / "workspace", state_dir=tmp_path / "state", service=service,
-                     origin=ORIGIN, operator_token="operator-test")
+                     origin=ORIGIN)
     with TestClient(app, base_url=ORIGIN, raise_server_exceptions=False) as client:
-        _login(client)
         response = client.get("/api/settings")
         assert response.status_code == 500
         assert secret not in response.text
@@ -328,9 +327,8 @@ def test_http_engineering_maps_survive_program_and_diagnostics_boundaries(tmp_pa
     diagnostics = {"ok": True, "tool": "get_diagnostics", "data": {"variables": metadata}}
     service.projects.diagnostics = lambda *_: copy.deepcopy(diagnostics)
     app = create_app(tmp_path / "workspace", state_dir=tmp_path / "state", service=service,
-                     origin=ORIGIN, operator_token="operator-test")
+                     origin=ORIGIN)
     with TestClient(app, base_url=ORIGIN) as client:
-        _login(client)
         response = client.get("/api/projects/p/versions/v/program")
         assert response.status_code == 200 and response.json() == program
         # Core's native editor accepts integer coordinates, including on a
@@ -358,9 +356,9 @@ def test_http_and_mcp_share_real_runtime_engineering_projection(tmp_path):
     runtime = InProcessToolRuntime(registry)
     service.projects.runtime = runtime
     app = create_app(store.base_dir, state_dir=tmp_path / "state", service=service,
-                     origin=ORIGIN, operator_token="operator-test", agent_token="agent-engineering-contract")
+                     origin=ORIGIN, agent_token="agent-engineering-contract")
     with TestClient(app, base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         diagnostics = client.get(f'/api/projects/{project_id}/versions/{version_id}/diagnostics')
         assert diagnostics.status_code == 200 and diagnostics.json()['data'] == {'variables': data}
         response = client.post('/api/agent/tools/call', headers={"Authorization": "Bearer agent-engineering-contract"}, json={
@@ -459,9 +457,8 @@ def test_http_candidate_preview_keeps_real_core_metadata_diff(tmp_path, monkeypa
     monkeypatch.setattr(service.proposals, 'read_private', lambda *_: {
         '_candidate_ir': after, '_preview_diff': diff})
     app = create_app(store.base_dir, state_dir=tmp_path / "state", service=service,
-                     origin=ORIGIN, operator_token="operator-test")
+                     origin=ORIGIN)
     with TestClient(app, base_url=ORIGIN) as client:
-        _login(client)
         response = client.get('/api/proposals/review/preview')
         assert response.status_code == 200, response.text
         assert response.json()['diff']['property_changes']['metadata']['after'] == metadata

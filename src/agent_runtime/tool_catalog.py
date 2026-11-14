@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Public tool declarations grouped by their stable capabilities."""
 from __future__ import annotations
@@ -102,7 +102,7 @@ def program_definitions(generation):
     )
     yield ToolDefinition(
         "search_plc_manual",
-        "检索当前 PLC 型号的指令、语言及软元件资料，用返回的操作数、用途、条件和示例回答问题。coverage 定位目标与待补方面，调用字段说明当前 Core 支持；地址规则提供编号、分配与参数条件。",
+        "检索当前 PLC 型号的指令、语言及软元件事实。指令按已登记的族关系组装参数表、行为和适用条件，保留实际请求的助记符；共享修饰知识只返回一次。Ladder 的已知具名指令形式在 instruction_forms 中交付。精确地址规则区分编号范围、默认分配和参数条件，不表示当前已分配或原生访问许可；来源记录仅供显式 debug 查询。",
         {
             "type": "object",
             "properties": {
@@ -120,7 +120,7 @@ def program_definitions(generation):
                 },
                 "debug": {
                     "type": "boolean", "default": False,
-                    "description": "仅显式调试时设为 true，返回来源、证据和核验记录。普通生成与分析保持 false。",
+                    "description": "仅显式调试时设为 true，通过 fact_packet 返回完整结构化事实、来源和核验记录。普通生成与分析保持 false。",
                 },
                 "language": {'type': 'string', 'enum': ['ladder', 'st', 'fbd', 'sfc'],
                     'description': '默认使用当前保存版本或工程语言，可显式查询另一种语言。无工程时从问题识别。coverage.language 给出本地匹配手册与缺项。'},
@@ -128,7 +128,7 @@ def program_definitions(generation):
                     'arity', 'order', 'roles', 'purpose', 'unit', 'encoding', 'devices', 'types',
                     'effects', 'execution', 'constraints', 'st_call', 'fbd_call', 'operand_range', 'operand_condition',
                     'timing_state', 'same_scan', 'first_execution', 'disabled', 'jump']},
-                    'description': '明确要回答的知识维度；省略时自动识别。'},
+                    'description': '明确要回答的知识维度；省略时返回指令使用说明、参数表与适用条件，并保留缺失和未核实状态。'},
             },
             "required": ["query"],
             "additionalProperties": False,
@@ -182,11 +182,12 @@ def generation_definitions(generation):
             "properties": {
                 "user_requirement": {
                     "type": "string", "maxLength": 64000,
-                    "description": "逐字传入用户消息，可按时间顺序换行拼接多轮原文。不得加入模型提出的方案、容量、地址或检索词。省略时只读取工程上下文。",
+                    "description": "新 Direct 任务传用户原文，编辑只传本轮用户修改。确认后的 Design 直接沿用保存的规格和选中方案。不得加入模型提出的方案、容量、地址或检索词。",
                 },
                 "instruction_details": {"type": "boolean", "description": "新建程序时随上下文一次读取当前型号和工程语言的候选指令事实与缺项。读完后在同一次生成中比较和提交。"},
-                "workflow": {"type": "string", "enum": ["direct_generation", "detailed"],
-                             "description": "新程序直接生成（含跨品牌代码移植转写与已给定完整规格）使用 direct_generation；Ladder/ST/FBD/SFC 处于未确认 Design 会话时，均可显式传 direct_generation 配合 user_requirement 退出 Design 切换为直接生成；已确认 Design 规格按 detailed 实施（确认后的 Design 工程省略此项时也默认返回 compact_ladder），已有版本编辑沿用原入口。"},
+                "workflow": {"type": "string", "enum": ["direct_generation", "detailed", "plan_review"],
+                             "description": "新程序直接生成（含跨品牌代码移植转写与已给定完整规格）使用 direct_generation；Ladder/ST/FBD/SFC 处于未确认 Design 会话时，均可显式传 direct_generation 配合 user_requirement 退出 Design 切换为直接生成；已确认 Design 规格按 detailed 实施（确认后的 Design 工程省略此项时也默认返回 compact_ladder），已保存的 canonical Ladder 返回 compact 局部编辑合同，只需传入本次修改；原生有序源码沿用来源补丁入口。"},
+                "program": {"type": "string", "minLength": 1, "description": "已有 GXW 中要规划或修改的完整逻辑程序名。"},
                 "execution_mode": {"type": "string", "enum": ["background", "live"],
                     "description": "选择保存版本的后台上下文或持续原生会话当前确认的源码。省略时优先使用已启动的原生会话。"},
                 "catalog_scope": {"type": "string", "enum": ["task", "full"], "default": "task",
@@ -200,7 +201,7 @@ def generation_definitions(generation):
     )
     yield ToolDefinition(
         "create_program_candidate",
-        "提交完整或局部 ladder JSON，经共享解析、结构检查和本地编译生成待确认候选。新建含 instruction_research 的上下文需同时提交顶层 implementation_review（含当前 delivery.document_id 与已读 manual_documents）。确认保存优先通过本机 GX Works2 与 v4 后台组件按所选 CPU 无基底创建并编译保存 GXW（型号是否支持 Program 工程见 output_contract.gxw_delivery；仅参数型号或未安装 GX Works2 时返回程序与注释 CSV 及降级原因）。device_comments 填最多16字符的软元件用途短名称。",
+        "提交完整或局部 ladder JSON，经共享解析、结构检查和本地编译生成待确认候选。可用 generation_context_id 或 implementation_review 引用本次上下文；多个任务并行时明确引用。确认保存优先通过本机 GX Works2 与 v4 后台组件按所选 CPU 无基底创建并编译保存 GXW（型号是否支持 Program 工程见 output_contract.gxw_delivery；仅参数型号或未安装 GX Works2 时返回程序与注释 CSV 及降级原因）。device_comments 填最多16字符的软元件用途短名称。",
         {
             "type": "object",
             "properties": {
@@ -210,12 +211,14 @@ def generation_definitions(generation):
                 },
                 "ladder": {
                     "type": "object",
-                    "description": "按 output_schema 直接将程序对象传入此字段（不要再外包一层 {ladder:...} 或 {networks:...}）：Direct 使用 {result:{program:{r:[...]},decisions:[],open_items:[]}}，已确认的 Design 使用 {r:[...]}，旧版上下文兼容 ladder_v1 {rungs:[...]}；device_comments 兼容 [{address,comment}] 与 {address:comment}。不要用示例或空工程试格式。",
+                    "description": "按 output_schema 直接将程序对象传入此字段。Direct 使用 result 对象，先在 decisions 记录候选及指令选择，再输出 program 和 open_items。已确认的 Design 使用 {r:[...]}，旧版上下文兼容 ladder_v1 {rungs:[...]}。device_comments 兼容 [{address,comment}] 与 {address:comment}。不要外包 {ladder:...} 或 {networks:...}，不要用示例或空工程试格式。",
                 },
                 "io_example": IO_EXAMPLE_SCHEMA,
+                "workflow": {"type": "string", "enum": ["direct_generation", "detailed"],
+                    "description": "新工程默认先确认规格；仅用户明确要求直接生成时选择 direct_generation。已有保存版本的维护入口保持兼容。"},
                 "generation_context_id": {
                     "type": "string", "maxLength": 128,
-                    "description": "Copy the ID returned by get_generation_context to preserve source lineage. Optional; absence or expiry is recorded as a trace gap, not a validation failure.",
+                    "description": "Optional task reference. Supply it only to select among concurrent generation tasks.",
                 },
             },
             "required": ["ladder"],
@@ -226,17 +229,21 @@ def generation_definitions(generation):
     )
     yield ToolDefinition(
         "patch_program",
-        "在当前保存版本上修改 Network 或来源绑定的 GXW 指令，生成差异及候选。已有 GXW 使用 instruction_edits 的原始 record_index 和完整 expected；P/I 标签用 op=P0 或 I0、args=[]，来源标签 expected 同形。declaration_edits 使用既有表名及 upserts/renames/remove；指令、标签、声明、注释联合离线写回。确认后保存新版本，发现可用 GX Works2 后自动编译、保存及冷重开，原文件保留。",
+        "在当前保存版本上修改 Network 或来源绑定的 GXW 指令，生成差异及候选。GXW 补丁使用 patch.instruction_edits 的原始 record_index；已绑定的源码由后端读取旧记录，省略 expected。新增记录写在 instructions，P/I 标签用 op=P0 或 I0、args=[]。declaration_edits 使用既有表名及 upserts/renames/remove；指令、标签、声明、注释联合离线写回。确认后保存新版本，发现可用 GX Works2 后自动编译、保存及冷重开，原文件保留。",
         {
             "type": "object",
             "properties": {
                 "generation_context_id": {
                     "type": "string", "maxLength": 128,
-                    "description": "Optional context receipt from get_generation_context; preserves edit discovery evidence without adding a model call.",
+                    "description": "Optional task reference to select among concurrent reads of this source version.",
+                },
+                "save_policy": {
+                    "type": "string", "enum": ["draft", "checked"],
+                    "description": "兼容写法，等同 patch.save_policy。两处都提供时必须相同。",
                 },
                 "patch": {
                     "type": "object",
-                    "description": "基于当前 revision/sha256 的补丁：图形 IR 版本使用 operations；导入或保存的有序 GXW Ladder 版本仅接受 instruction_edits（按原始 record_index 与精确 expected 编辑，不接受图形 operations），可与 device_comments、declaration_edits 联合提交。",
+                    "description": "基于当前版本的补丁。图形 IR 使用 operations；有序 GXW Ladder 使用原始 record_index 提交 instruction_edits，可与 device_comments、declaration_edits 联合提交。",
                     "properties": {
                         "base_revision": {"type": "integer"},
                         "base_ir_sha256": {"type": "string"},
@@ -272,8 +279,9 @@ def generation_definitions(generation):
                         },
                         'comment_table': {'type': 'string', 'maxLength': 512},
                         'declaration_edits': _engineering_declaration_edits(),
-                        'instruction_edits': {'type': 'array', 'maxItems': 512, 'items': _source_instruction_edit_schema()},
-                        'save_policy': {'enum': ['draft', 'checked']},
+                        'instruction_edits': {'type': 'array', 'maxItems': 512, 'items': _source_instruction_edit_schema(bound=True)},
+                        'save_policy': {'type': 'string', 'enum': ['draft', 'checked'],
+                            'description': '已有 GXW 的离线保存策略，直接调用默认 checked。'},
                     },
                     'anyOf': [{'required': ['operations']}, {'required': ['instruction_edits']},
                               {'required': ['device_comments']}, {'required': ['declaration_edits']}],
@@ -435,6 +443,7 @@ def native_definitions(generation):
 
 
 def default_tool_definitions(generation):
-    definitions = chain(project_definitions(generation), program_definitions(generation),
+    from agent_runtime.specification_tools import specification_definitions
+    definitions = chain(project_definitions(generation), specification_definitions(), program_definitions(generation),
                         generation_definitions(generation), native_definitions(generation))
     return sorted(definitions, key=lambda tool: SAFE_TOOL_NAMES.index(tool.name))

@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import copy
 import difflib
@@ -421,6 +421,8 @@ def validate_spec_draft(spec, plc_model=None):
                 )
             )
 
+    from plc.specification.implementation import plan_issues
+    errors.extend(plan_issues(spec))
     seen_parameter_names = set()
     seen_parameter_ids = {}
     parameters = spec.get("parameters", []) or []
@@ -1046,7 +1048,7 @@ def _merge_io_rows(base_rows, incoming_rows):
             "label": str(row.get("label", "")).strip(),
             "source": str(row.get("source", "")).strip() or "analysis",
         }
-        for field in ("binding_id", "source_parameter_id", "row_id"):
+        for field in ("binding_id", "source_parameter_id", "row_id", "id"):
             if isinstance(row.get(field), str):
                 clean[field] = row[field]
         if position >= base_count and not clean.get("binding_id"):
@@ -1199,6 +1201,10 @@ def _preserve_pinned_instruction_instances(previous_selected, approaches):
             approach["implementation_semantics"] = copy.deepcopy(
                 previous_selected["implementation_semantics"]
             )
+        if "instruction_choices" not in approach and "instruction_choices" in previous_selected:
+            approach["instruction_choices"] = copy.deepcopy(previous_selected["instruction_choices"])
+        if "output_logic" not in approach and "output_logic" in previous_selected:
+            approach["output_logic"] = copy.deepcopy(previous_selected["output_logic"])
         if "explicit_user_constraints" not in approach and "explicit_user_constraints" in previous_selected:
             approach["explicit_user_constraints"] = copy.deepcopy(
                 previous_selected["explicit_user_constraints"]
@@ -1539,6 +1545,9 @@ def canonicalize_confirmed_spec(spec):
     if not isinstance(io_table, list):
         io_table = raw_to_io_table(canonical.get("io_allocation_raw", ""))
     parameters = _merge_parameters([], canonical.get("parameters", []) or [])
+    if "open_questions" in canonical:
+        from plc.specification.implementation import normalize_open_questions
+        canonical["open_questions"] = normalize_open_questions(canonical["open_questions"], parameters=parameters)
     for parameter in parameters:
         if not parameter.get("source"):
             parameter["source"] = "user"

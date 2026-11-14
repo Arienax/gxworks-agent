@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Source-page applicability, shared by the offline manual build.
 
@@ -15,6 +15,94 @@ import re
 from knowledge.instruction_document import extract_model_badge_marks
 
 SCOPE_EXTRACTOR_VERSION = 2
+
+
+def numeric_named_glyph_characters(characters, font_encodings):
+    """Decode the page's explicit C<ASCII> glyph names, without guessing CIDs.
+
+    Some embedded legacy fonts omit ToUnicode but declare every glyph through
+    Encoding/Differences (for example C83 for S). Only that complete, printable
+    numeric-name convention is read; other font encodings are left untouched.
+    """
+    encodings = {}
+    for font in font_encodings:
+        if font.get('to_unicode') or not font.get('fontname'):
+            continue
+        mapping, code, valid = {}, None, True
+        for item in font.get('differences') or ():
+            if type(item) is int:
+                code = item
+                continue
+            name = re.fullmatch(r'C(\d+)', str(item))
+            if code is None or not name or not 32 <= int(name[1]) <= 126:
+                valid = False
+                break
+            mapping[code] = chr(int(name[1]))
+            code += 1
+        if valid and mapping:
+            prior = encodings.get(font['fontname'])
+            encodings[font['fontname']] = mapping if prior is None or prior == mapping else {}
+    output = []
+    for character in characters:
+        text = character.get('text', '')
+        cid = re.fullmatch(r'\(cid:(\d+)\)', text)
+        code = int(cid[1]) if cid else ord(text) if len(text) == 1 else None
+        decoded = encodings.get(character.get('fontname'), {}).get(code, text)
+        output.append({**character, 'text': decoded})
+    return output
+
+
+def reviewed_header_applicability(record, reviews):
+    """Bind a checked artwork reading to its exact source heading only.
+
+    This is offline source input for badges drawn as outlines. It does not
+    supply runtime rules and cannot borrow a different page or manual edition.
+    """
+    candidates = []
+    pages = record.get('pdf_pages') or ()
+    for review in reviews or ():
+        if (not pages or type(review.get('pdf_page')) is not int
+                or review['pdf_page'] != min(pages)
+                or any(review.get(key) != record.get(key)
+                       for key in ('manual_id', 'manual_number', 'revision', 'section'))
+                or review.get('verification') != 'source_checked'
+                or review.get('status') != 'source_verified'):
+            continue
+        source = review.get('source')
+        if (not isinstance(source, dict)
+                or any(source.get(key) != record.get(key)
+                       for key in ('manual_id', 'manual_number', 'revision'))
+                or source.get('pdf_pages') != [review['pdf_page']]
+                or source.get('representation') != 'instruction_header_cpu_version_badges'
+                or not source.get('review_artifact')):
+            continue
+        marks = review.get('model_marks')
+        if (not isinstance(marks, list) or not marks
+                or len({mark.get('model') for mark in marks if isinstance(mark, dict)}) != len(marks)
+                or {mark.get('model') for mark in marks if isinstance(mark, dict)}
+                   != set(record.get('manual_models') or ())):
+            continue
+        valid = True
+        for mark in marks:
+            if not isinstance(mark, dict) or mark.get('state') not in {'supported', 'conditional', 'unsupported'}:
+                valid = False
+                break
+            minimum = mark.get('minimum_version')
+            if minimum is not None and (mark['state'] != 'conditional'
+                    or not isinstance(minimum, str) or not re.fullmatch(r'\d+(?:\.\d+)+', minimum)):
+                valid = False
+                break
+            if mark['state'] == 'conditional' and minimum is None:
+                valid = False
+                break
+        if valid:
+            candidates.append({'basis': 'instruction_header', 'model_marks': marks,
+                'supported_models': [mark['model'] for mark in marks if mark['state'] != 'unsupported'],
+                'conditional_models': [mark['model'] for mark in marks if mark['state'] == 'conditional'],
+                'evidence_pages': [review['pdf_page']], 'reviewed_source': source})
+    if not candidates or any(candidate != candidates[0] for candidate in candidates[1:]):
+        return None
+    return candidates[0]
 
 
 def _inside(obj, box, tolerance=1):
@@ -211,7 +299,30 @@ def _iqf_icons(words, curves, lines, layout):
     return marks
 
 
-def _legacy_shading(words, rectangles, layout):
+def _legacy_grey_fill(rect):
+    color = rect.get('non_stroking_color')
+    if isinstance(color, (tuple, list)) and len(color) == 4:
+        c, m, y, k = color
+        brightness = sum((1-v)*(1-k) for v in (c, m, y))/3
+    elif isinstance(color, (tuple, list)):
+        brightness = sum(color)/len(color)
+    else:
+        brightness = float(color or 0)
+    return bool(rect.get('fill')) and .5 < brightness < .99
+
+
+def _legacy_partial_fill(shape):
+    """A partially shaded badge is conditional, rather than an empty badge."""
+    points = shape.get('pts') or []
+    if not _legacy_grey_fill(shape) or len(points) < 3:
+        return False
+    area = abs(sum(x1 * y2 - x2 * y1 for (x1, y1), (x2, y2)
+                   in zip(points, [*points[1:], points[0]]))) / 2
+    bounds = (shape['x1'] - shape['x0']) * (shape['bottom'] - shape['top'])
+    return bounds > 0 and .05 < area / bounds < .95
+
+
+def _legacy_shading(words, rectangles, layout, *, polygons=()):
     labels = []
     for cell in layout['cells']:
         candidates = [w for w in words if 80 < w['top'] < 150 and w['x0'] > 300
@@ -229,18 +340,143 @@ def _legacy_shading(words, rectangles, layout):
                 continue
             if not 20 < rect['x1'] - rect['x0'] < 45 or not 12 < rect['bottom']-rect['top'] < 22:
                 continue
-            color = rect.get('non_stroking_color')
-            if isinstance(color, (tuple, list)) and len(color) == 4:
-                c, m, y, k = color
-                brightness = sum((1-v)*(1-k) for v in (c,m,y))/3
-            elif isinstance(color, (tuple, list)):
-                brightness = sum(color)/len(color)
-            else:
-                brightness = float(color or 0)
-            if .5 < brightness < .99:
+            if _legacy_grey_fill(rect):
                 shades.append(rect)
-        marks.extend({'model': model, 'state': 'supported' if shades else 'unsupported'} for model in cell['models'])
+        partial = any(_legacy_partial_fill(shape)
+                      and 20 < shape['x1'] - shape['x0'] < 45
+                      and 12 < shape['bottom'] - shape['top'] < 22
+                      and _inside(word, [shape['x0'], shape['top'], shape['x1'], shape['bottom']])
+                      for shape in polygons)
+        state = 'conditional' if partial else 'supported' if shades else 'unsupported'
+        marks.extend({'model': model, 'state': state} for model in cell['models'])
     return marks
+
+
+def _legacy_heading_tops(words):
+    """Numbered chapter/section titles also end the preceding instruction."""
+    return sorted({w['top'] for w in words if w['x0'] < 110
+                   and re.fullmatch(r'\d+(?:\.\d+)+', w['text'])})
+
+
+def legacy_instruction_sections(words, rectangles, tables, *, layout, characters=(), polygons=()):
+    """Read each legacy heading's own CPU strip and optional per-form matrix.
+
+    A physical page can contain several independent instructions. Continuation
+    strips and neighbouring instructions never supply a heading's CPU scope.
+    Table/cell geometry uses the same shape as SourcePageGeometry.
+    """
+    if layout.get('kind') != 'legacy_shading':
+        return []
+    headings = []
+    for word in words:
+        if word['x0'] >= 110 or not re.fullmatch(r'\d+(?:\.\d+){2,}', word['text']):
+            continue
+        line = ' '.join(w['text'] for w in sorted(words, key=lambda w: w['x0'])
+                        if abs(w['top'] - word['top']) < 3)
+        match = re.match(r'(\d+(?:\.\d+){2,})\s+([A-Z][A-Z0-9]*)\s+\(FNC\s*(\d+)\)', line)
+        if match:
+            headings.append({'section': match[0], 'opcode': match[2],
+                             'fnc_number': int(match[3]), 'top': word['top']})
+    headings.sort(key=lambda h: h['top'])
+    compact = lambda text: re.sub(r'[^a-z0-9]', '', text.casefold())
+    categories = {'pulsep': 'pulse', '16bitoperation': '16', '32bitoperation': '32'}
+    for index, heading in enumerate(headings):
+        top = heading['top']
+        bottom = min((y for y in _legacy_heading_tops(words) if y > top + 1), default=float('inf'))
+        heading['bottom'] = bottom
+        anchors = [w for w in words if top <= w['top'] < min(bottom, top + 35)
+                   and w['x0'] > 300 and w['text'].casefold() == layout['cells'][0]['label'].casefold()]
+        marks = None
+        if len(anchors) == 1:
+            shift = anchors[0]['top'] - 100
+            def normalize(item):
+                return {**item, 'top': item['top'] - shift, 'bottom': item['bottom'] - shift}
+            marks = _legacy_shading([normalize(w) for w in words if top <= w['top'] < bottom],
+                                    [normalize(r) for r in rectangles], layout,
+                                    polygons=[normalize(shape) for shape in polygons])
+        heading['model_marks'], heading['form_models'] = marks, {}
+        form_tables = list(tables)
+        # A snapped table can lose an outer header entirely. Recover only an
+        # original, labelled header rectangle and its immediately adjacent row;
+        # the same CPU-cell checks below still decide every support value.
+        for rect in rectangles:
+            box = tuple(rect[k] for k in ('x0', 'top', 'x1', 'bottom'))
+            if not top < box[1] < bottom:
+                continue
+            text = ''.join(c['text'] for c in sorted(characters, key=lambda c: c['x0'])
+                           if _inside(c, box, tolerance=.6))
+            if compact(text) not in categories:
+                continue
+            adjacent = [r for r in rectangles if abs(r['top'] - box[3]) < 1
+                        and box[0] <= (r['x0'] + r['x1']) / 2 <= box[2]
+                        and 4 < r['x1'] - r['x0'] < (box[2] - box[0]) / len(layout['cells']) * 1.25]
+            bottoms = {round(r['bottom'], 1) for r in adjacent}
+            if len(bottoms) == 1:
+                form_tables.append({'bbox': [*box[:3], next(iter(bottoms))],
+                                    'cells': [{'bbox': box, 'text': text}]})
+        for table in form_tables:
+            if not top < table['bbox'][1] < bottom:
+                continue
+            headers = [cell for cell in table['cells'] if compact(cell['text']) in categories]
+            if not headers:
+                continue
+            for header in headers:
+                category = categories[compact(header['text'])]
+                x0, _, x1, body_top = header['bbox']
+                body_bottom = table['bbox'][3]
+                if body_bottom - body_top < 2:
+                    # A single-row strip shades the form itself. Its CPU
+                    # header cannot make a white 32-bit form applicable.
+                    # Table extraction snaps edges by up to three points;
+                    # match the original cell, never its enclosing strip.
+                    frame = [r for r in rectangles if all(abs(r[key] - value) < 3
+                        for key, value in zip(('x0', 'top', 'x1', 'bottom'), header['bbox']))]
+                    if not frame:
+                        states = None
+                    else:
+                        shaded = any(_legacy_grey_fill(r) for r in frame)
+                        partial = any(_legacy_partial_fill(shape) and any(
+                            _inside(shape, [r[key] for key in ('x0', 'top', 'x1', 'bottom')], tolerance=1)
+                            for r in frame) for shape in polygons)
+                        states = {}
+                        for mark in marks or ():
+                            if (not shaded and not partial) or mark['state'] == 'unsupported':
+                                state = False
+                            elif shaded and not partial and mark['state'] == 'supported':
+                                state = True
+                            else:
+                                state = None
+                            states[mark['model']] = state
+                else:
+                    states = {}
+                    # PDF table snapping can cut a printed label or merge two
+                    # adjacent cells. The five drawn badge boxes own the CPU
+                    # columns; equal divisions of a snapped envelope do not.
+                    boxes = {tuple(round(r[k], 1) for k in ('x0', 'top', 'x1', 'bottom'))
+                             for r in rectangles if x0 <= (r['x0'] + r['x1']) / 2 <= x1
+                             and abs(r['top'] - body_top) < 1
+                             and abs(r['bottom'] - body_bottom) < 1
+                             and 4 < r['x1'] - r['x0'] < (x1 - x0) / len(layout['cells']) * 1.25}
+                    boxes = sorted(boxes)
+                    if len(boxes) != len(layout['cells']):
+                        heading['form_models'][category] = None
+                        continue
+                    for box, configured in zip(boxes, layout['cells']):
+                        text = ''.join(c['text'] for c in sorted(characters, key=lambda c: c['x0'])
+                                       if _inside(c, box, tolerance=.6))
+                        if compact(text) != compact(configured['label']):
+                            states = None
+                            break
+                        shaded = any(_legacy_grey_fill(r) and _inside(r, box, tolerance=1)
+                                     and r['bottom'] - r['top'] > (body_bottom - body_top) * .7
+                                     for r in rectangles)
+                        partial = any(_legacy_partial_fill(shape) and _inside(shape, box, tolerance=1)
+                                      and shape['bottom'] - shape['top'] > (body_bottom - body_top) * .7
+                                      for shape in polygons)
+                        states.update({model: None if partial else shaded for model in configured['models']})
+                prior = heading['form_models'].get(category)
+                heading['form_models'][category] = states if category not in heading['form_models'] or prior == states else None
+    return headings
 
 
 def extract_header_applicability(words, rectangles, curves, lines, layout):

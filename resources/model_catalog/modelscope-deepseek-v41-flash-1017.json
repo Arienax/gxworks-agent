@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "modelscope-deepseek-v41-flash-1017",
+  "extends": "generic-openai-compatible",
+  "match": {
+    "endpoints": ["https://api-inference.modelscope.cn/v1"],
+    "models": ["deepseek-ai/DeepSeek-V4.1-Flash-1017"]
+  },
+  "capabilities": {
+    "tools": {"status": "supported", "source": "catalog"},
+    "streaming": {"status": "supported", "source": "catalog"}
+  },
+  "references": ["GXWorks Agent ModelScope interoperability run, rounds 26–30"],
+  "reviewed_at": "2026-11-11"
+}

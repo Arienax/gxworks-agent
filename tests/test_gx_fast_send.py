@@ -10,7 +10,7 @@ from gxworks2.import_service import ImportService
 from gxworks2.models import ImportErrorCode
 from test_gxworks2_import import FakeAutomation, FakeFinder, _session, _write_comments, _write_program
 from test_approval_modes import setup_external
-from test_web_api import ORIGIN, _app, _login
+from test_web_api import ORIGIN, _app
 
 
 @pytest.fixture
@@ -164,12 +164,11 @@ def test_http_confirmation_is_bound_and_dispatches_once(tmp_path, monkeypatch, m
     service = WorkbenchService(tmp_path / "workspace", tmp_path / "state")
     with TestClient(_app(service.store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as client:
         pid, vid, calls = setup_external(service, mode, monkeypatch)
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         command = {"action": "gx_import", "project_id": pid, "version_id": vid,
                    "request_id": "confirmed-send", "manual_backup_acknowledged": True}
         if project_path is not None:
             command["project_path"] = project_path
-        assert client.post("/api/proposals", json=command).status_code == 403
         assert client.post("/api/proposals", json=command, headers={**headers, "Origin": "https://evil.example"}).status_code == 403
         response = client.post("/api/proposals", json=command, headers=headers)
         assert response.status_code == 201, response.text

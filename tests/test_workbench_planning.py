@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from application.workbench import WorkbenchService
 from model_runtime.provider import TextDelta
-from test_web_api import ORIGIN, _app, _login
+from test_web_api import ORIGIN, _app
 from test_workbench_service import saved
 
 
@@ -32,7 +32,7 @@ def test_generated_test_plan_job_returns_persisted_binding_and_retries_without_m
     provider = Provider()
     service = WorkbenchService(store.base_dir, tmp_path / "state", model_factory=lambda: (provider, {"model": "offline"}))
     with TestClient(_app(store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         command = {"kind": "test_plan", "project_id": project["id"], "version_id": version["id"],
                    "request_id": "generate-one-plan", "response_language": "en"}
         submitted = client.post("/api/jobs", json=command, headers=headers)

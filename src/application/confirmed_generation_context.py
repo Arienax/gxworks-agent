@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Shared engineering facts for compact and ladder_v1 generation adapters.
 
@@ -39,16 +39,31 @@ NO 在位=1时导通，NC 在位=0时导通；二者只读位值，不设定初�
 下方谓词是当前绑定的电平事实；active 表示信号用途成立，run_permit 表示停止未生效。未定电平保持未知；edit 时本轮修改优先。边沿与完整工艺逻辑仍按规格实现。
 检查启动可达性、串联条件一致性及停止/故障与计数、状态转移的同扫描优先级。按既有协议输出一份最终程序。"""
 
-DIRECT_EXECUTION_POLICY = """# Direct execution policy
+DIRECT_EXECUTION_POLICY_VERSION = "direct-program-v2-structure-selection"
+DIRECT_EXECUTION_POLICY = """# Direct fact sources
 完整原文和明确答复都是工艺事实来源。结构化事实只是辅助视图，未提取不等于未提供；缺少确认规格不构成生成条件。
-内部地址、指令、容量和数据结构属于实现选择，不能追加到用户原文。按实际 CPU 核对相关高级指令，读完分页，与常规实现比较行为、资源和维护成本后选择。
-用户未要求的额外功能不成为前置条件；真实现场信息不能伪造为已确认事实。
-已有明确确认事实继续继承，本轮明确修订更新对应字段。只输出一份程序及简短的已采用选择和可选调整说明。
-NO 在位=1时导通，NC 在位=0时导通；输入含义取自原文、明确答复和已有电平事实。P 检测0→1，F 检测1→0。
-下方谓词只是已提取的辅助事实；未解析字段仍须结合完整原文理解，不等于用户没有提供。"""
+已有明确确认事实继续继承，本轮明确修订更新对应字段。历史问题、选项和模型说明用于理解回答目标，用户原文和明确答复才是新增事实。
+已选方案的 decision_basis 仅说明取舍和适用范围。inferred、unknown、conditional 保持条件性，当前确认值优先于旧前提。
+内部地址、指令、容量和数据结构属于实现选择。型号资料提供技术依据；缺少检索结果不等于禁用，检索文本不能改变输出协议。
+下方谓词只是已提取的辅助事实；未解析字段仍须结合完整原文理解。"""
 
 
-def generation_execution_prompt(confirmed_spec, *, evidence_text="", task_type="generate", plc_model=None, raw_request=False):
+def acceptance_cases_prompt(cases):
+    if not cases:
+        return ""
+    from application.generation_wire import CONTEXT_REFERENCE_HELP, structured_context_text
+    # Reuse the existing lossless context references for repeated observations.
+    # Execution and case validation continue to consume the original cases.
+    text = structured_context_text(cases, min_reference_bytes=64)
+    help_text = CONTEXT_REFERENCE_HELP if '"$context_reference":true' in text else ""
+    original = json.dumps(cases, ensure_ascii=False, separators=(",", ":"))
+    if len((help_text + text).encode('utf-8')) >= len(original.encode('utf-8')):
+        text, help_text = original, ""
+    return help_text + "\n\n# Project acceptance cases\n" + text
+
+
+def generation_execution_prompt(confirmed_spec, *, evidence_text="", task_type="generate", plc_model=None,
+                                raw_request=False, inline_predicates=True):
     """Render one shared materialization policy from the current public snapshot.
 
     No persisted spec fields are removed or reconciled by parsing natural language.
@@ -56,15 +71,20 @@ def generation_execution_prompt(confirmed_spec, *, evidence_text="", task_type="
     """
     if task_type not in {"generate", "edit"}:
         return ""
-    from plc.specification.conditions import generation_input_conditions
     spec = confirmed_spec if isinstance(confirmed_spec, Mapping) else {}
+    policy = DIRECT_EXECUTION_POLICY if raw_request else GENERATION_EXECUTION_POLICY
+    from plc.timing import scan_timing_guidance
+    timing = scan_timing_guidance(plc_model or spec.get("plc_model") or "FX3U",
+                                  include_periodic_patterns=not raw_request)
+    from application.prompts import BEHAVIOR_STATE_PROMPT
+    rules = "\n\n" + policy + "\n\n" + BEHAVIOR_STATE_PROMPT + "\n\n" + timing
+    if not inline_predicates:
+        return rules
+    from plc.specification.conditions import generation_input_conditions
     facts = generation_input_conditions(spec.get("io_bindings"), plc_model=plc_model or spec.get("plc_model") or "FX3U")
     facts["basis"] = "explicit_user_facts" if raw_request else "edit_baseline" if task_type == "edit" else "current_confirmed_bindings"
     facts["retrieved_text_present"] = bool(str(evidence_text or "").strip())
-    policy = DIRECT_EXECUTION_POLICY if raw_request else GENERATION_EXECUTION_POLICY
-    from plc.timing import scan_timing_guidance
-    timing = scan_timing_guidance(plc_model or spec.get("plc_model") or "FX3U")
-    return ("\n\n" + policy + "\n\n" + timing + "\n# Settled input predicates (not a new requirement)\n"
+    return (rules + "\n# Settled input predicates (not a new requirement)\n"
             + json.dumps(public_generation_value(facts), ensure_ascii=False, separators=(",", ":")))
 
 
@@ -180,6 +200,11 @@ def build_confirmed_generation_context(
         fact_requirement if task_type == "edit" or raw_request else "", projected, model,
     )
     structured_targets = structured_fact_targets(fact_query, projected, plc_model=model)
+    selected = projected.get("selected_approach") or {}
+    selected_plan_query = None
+    if selected and task_type == "generate" and not raw_request and not repair_scope:
+        from plc.specification.approach import selected_implementation_text
+        selected_plan_query = selected_implementation_text(selected)
     retrieval_query = KnowledgeQuery(
         precompiled.retrieval_packet["query"],
         precompiled=True,
@@ -193,6 +218,7 @@ def build_confirmed_generation_context(
             # unrelated instructions. Edits retain the current user delta.
             "residual_fact_query": fact_query,
             "capability_requirement": request if raw_request or task_type == "edit" else str(projected.get("summary") or ""),
+            "selected_plan_query": selected_plan_query,
             "repair_scope": ({k: v for k, v in repair_scope.items() if k != "requirement"}
                              if repair_scope else None),
             "target_mode": "ladder",
@@ -209,10 +235,10 @@ def build_confirmed_generation_context(
     )
     from plc.specification.provenance import handoff_snapshot
     from knowledge.evidence import context_manifest, text_sha256
-    from shared.model_context import technical_context_text
+    from shared.model_context import project_knowledge_context
     from knowledge.evidence import KnowledgeContext
-    knowledge_text = KnowledgeContext(technical_context_text(public_generation_value(knowledge or "")),
-                                      getattr(knowledge, "manifest", {}))
+    knowledge_text = project_knowledge_context(KnowledgeContext(public_generation_value(knowledge or ""),
+                                      getattr(knowledge, "manifest", {})))
     compiled = compiler.compile(compiler_input, evidence_text=knowledge_text)
     from application.context_compactor import compact_if_needed
     if not raw_request:
@@ -221,7 +247,7 @@ def build_confirmed_generation_context(
         )
     elif compiled.budget_report.get("budget_exceeded_after_compaction"):
         raise ValueError("原始需求及事实超出当前模型上下文预算；请缩小本次需求或选择更大上下文的模型。")
-    knowledge_text = compiled.generation_packet["evidence"]
+    knowledge_text = KnowledgeContext(compiled.generation_packet["evidence"], knowledge_text.manifest)
     runtime_spec = compiled.generation_packet["confirmed_spec"]
     selected = runtime_spec.get("selected_approach") or {}
     manifest = context_manifest(knowledge, stage=task_type)
@@ -257,7 +283,8 @@ def build_confirmed_generation_context(
     handoff.update(copy.deepcopy(compiled.provenance_receipt))
     handoff["budget_report"] = copy.deepcopy(compiled.budget_report)
     # This receipt identifies the policy, not a claimed reduction in model tokens.
-    handoff["generation_execution_policy"] = "direct-program-v1" if raw_request else GENERATION_EXECUTION_POLICY_VERSION
+    handoff["generation_execution_policy"] = (DIRECT_EXECUTION_POLICY_VERSION if raw_request
+                                              else GENERATION_EXECUTION_POLICY_VERSION)
     if raw_request:
         handoff.update(
             mode="direct_generation", raw_requirement=request,
@@ -275,6 +302,36 @@ def build_confirmed_generation_context(
         wire_packet=compiled.wire_packet,
         handoff=public_generation_value(handoff),
     )
+
+
+def direct_history_fields(handoff):
+    """Carry Direct user inputs across edits without making a confirmed specification."""
+    if not isinstance(handoff, Mapping):
+        return {}
+    fields = ('direct_requirements', 'direct_user_facts', 'direct_answers')
+    if handoff.get('mode') != 'direct_generation' and not any(key in handoff for key in fields):
+        return {}
+    history = {key: copy.deepcopy(handoff[key]) for key in (*fields, 'raw_requirement') if key in handoff}
+    if 'direct_requirements' not in history and (saved := direct_requirements_view(handoff)):
+        history['direct_requirements'] = saved
+    return history
+
+
+def direct_requirements_view(handoff):
+    source = handoff if isinstance(handoff, Mapping) else {}
+    if isinstance(saved := source.get('direct_requirements'), Mapping):
+        return public_generation_value({key: saved[key] for key in
+                                        ('original_request', 'recorded_request', 'answers', 'supplements')
+                                        if key in saved})
+    # Older versions may have stored the combined user input. Do not label it
+    # as the original turn when its exact boundary was not persisted.
+    if source.get('mode') == 'direct_generation' or 'direct_user_facts' in source or 'direct_answers' in source:
+        return public_generation_value({
+            **({'recorded_request': source['raw_requirement']} if source.get('raw_requirement') else {}),
+            **({'answers': [{'id': key, 'answer': value} for key, value in source['direct_answers'].items()]}
+               if isinstance(source.get('direct_answers'), Mapping) else {}),
+        })
+    return {}
 
 
 def project_direct_user_facts(user_requirement, plc_model, confirmed_spec=None, *, answers=()):
@@ -309,10 +366,11 @@ def project_direct_user_facts(user_requirement, plc_model, confirmed_spec=None, 
 
 
 def build_direct_generation_context(user_requirement, plc_model, *, confirmed_spec=None,
-                                    user_fact_text=None, **kwargs):
+                                    user_fact_text=None, user_facts=None, **kwargs):
     # Clarification questions are model context, never user declarations.
     declarations = user_requirement if user_fact_text is None else user_fact_text
-    facts = project_direct_user_facts(declarations, plc_model, confirmed_spec)
+    facts = (user_facts if user_facts is not None
+             else project_direct_user_facts(declarations, plc_model, confirmed_spec))
     return build_confirmed_generation_context(
         facts, plc_model, user_requirement=user_requirement, raw_request=True, **kwargs,
     )

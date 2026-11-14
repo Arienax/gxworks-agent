@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Shared deterministic tool boundary for desktop and external agents."""
 
@@ -54,6 +54,9 @@ def _model_tool_value(name, value):
         # the object table and invalidate the measured final envelope.
         return copy.deepcopy(value)
     public = _public_value(value)
+    if name in {"get_project_spec", "update_project_spec", "confirm_project_spec"}:
+        # Specification fields are engineering content, including user parameter names.
+        return public
     # Selection belongs to the registered tool owner, never to a payload flag.
     document = {"get_current_program_info": "program", "read_network": "program",
                 "get_diagnostics": "diagnostics", "read_sfc_project": "source_snapshot",
@@ -101,6 +104,13 @@ def _model_tool_value(name, value):
                 restored['validation'] = {key: original['validation'][key] for key in (
                     'gx_compile', 'native_save', 'cold_reopen', 'public_check',
                     'native_compile_message', 'native_compile_reason', 'native_phase') if key in original['validation']}
+                findings = original['validation'].get('native_compile_findings')
+                if isinstance(findings, list):
+                    fields = ('code', 'category', 'severity', 'device', 'occurrences', 'steps',
+                              'rung_ids', 'message', 'fixable')
+                    restored['validation']['native_compile_findings'] = [
+                        {key: row[key] for key in fields if key in row}
+                        for row in findings[:32] if isinstance(row, Mapping)]
             return restored
         if isinstance(current, list) and isinstance(original, (list, tuple)):
             return [live_receipts(before, after) for before, after in zip(original, current)]
@@ -133,6 +143,7 @@ class InProcessToolRuntime:
             tool_call.name,
             tool_call.arguments,
             context,
+            **({'defer_read': True} if tool_call.defer_read else {}),
         )
         public = _model_tool_value(tool_call.name, envelope)
         return ToolResult(
@@ -191,10 +202,10 @@ class ReadOnlyToolRuntime:
                           json.dumps(envelope, ensure_ascii=False), envelope, is_error=True)
 
 
-def build_default_tool_runtime() -> InProcessToolRuntime:
+def build_default_tool_runtime(*, receipt_store=None) -> InProcessToolRuntime:
     from agent_runtime.plc_tools import build_default_tool_registry
 
-    return InProcessToolRuntime(build_default_tool_registry())
+    return InProcessToolRuntime(build_default_tool_registry(receipt_store=receipt_store))
 
 
 __all__ = [

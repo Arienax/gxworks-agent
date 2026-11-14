@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Build the section-aware, fidelity-preserving FX3U knowledge database.
 
@@ -32,7 +32,10 @@ import sys
 import tempfile
 import time
 import unicodedata
-from typing import Any, Iterable, Iterator
+from typing import TYPE_CHECKING, Any, Iterable, Iterator
+
+if TYPE_CHECKING:
+    from pypdf import PdfReader
 
 BUILDER_VERSION = "3.0.6"
 SCHEMA_VERSION = 4

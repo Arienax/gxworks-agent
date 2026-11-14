@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Durable, monotonically numbered job events."""
 
@@ -62,10 +62,15 @@ def _public_context_audit(value) -> dict:
 
 
 def append_event(record: dict, event_type: str, data=None) -> dict:
-    from model_runtime.usage import public_usage
-    payload = (public_usage(data) if event_type == "model_request" else
-               _public_context_audit(data) if event_type == "context_audit" else
-               public_payload(data or {}, native_live=record.get('kind') == 'execution'))
+    from model_runtime.usage import public_token_counts, public_usage
+    if event_type == "model_request":
+        payload = public_usage(data)
+    elif event_type == "model_token_usage":
+        payload = public_token_counts(data)
+    elif event_type == "context_audit":
+        payload = _public_context_audit(data)
+    else:
+        payload = public_payload(data or {}, native_live=record.get('kind') == 'execution')
     event = {
         "job_id": record["id"],
         "project_id": record.get("snapshot", {}).get("project_id"),

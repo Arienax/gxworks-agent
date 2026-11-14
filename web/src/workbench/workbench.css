@@ -95,6 +95,171 @@
   min-height: 56px;
   padding: 0 16px;
 }
+/* The product mark matches the assistant-plugin icon: a square badge, not a glyph. */
+.brand-mark {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border-radius: 4px;
+  display: block;
+}
+/* Workspace rows: a folder line that switches or folds, and its projects below. */
+.workspace-pick-error {
+  margin: 0;
+  color: var(--danger, var(--text));
+  font-size: 10px;
+}
+.workspace-group {
+  margin-bottom: 1px;
+}
+.workspace-group.active > .workspace-row-wrap > .workspace-row {
+  background: var(--hover);
+  color: var(--text);
+  font-weight: 500;
+}
+.workspace-row-wrap {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.workspace-row {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.workspace-row:hover:not(:disabled) {
+  background: var(--hover);
+}
+.workspace-row:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.workspace-caret {
+  display: grid;
+  place-items: center;
+  width: 13px;
+  flex: none;
+  color: var(--muted);
+}
+.workspace-row-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-row-count {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+/* The remove action stays out of the way until the row is hovered. */
+.workspace-group-forget,
+.workspace-new-project {
+  flex: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.workspace-row-wrap:hover .workspace-group-forget,
+.workspace-row-wrap:hover .workspace-new-project,
+.workspace-group-forget:focus-visible,
+.workspace-new-project:focus-visible {
+  opacity: 0.7;
+}
+.workspace-group-forget:hover,
+.workspace-new-project:hover {
+  opacity: 1;
+}
+/* Projects of the active workspace hang under its row, like a session list. */
+.workspace-group.active .project-node,
+.project-node.remote {
+  margin-left: 14px;
+}
+/* A conversation row: the request text, when it ran, and how it ended. */
+.conversation-node {
+  margin-left: 20px;
+}
+.conversation-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 28px;
+  padding: 4px 8px;
+  margin: 1px 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.conversation-item:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.conversation-item.selected {
+  background: var(--panel);
+  color: var(--text);
+}
+.conversation-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.conversation-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conversation-item > small {
+  flex: none;
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.conversation-item > .status-dot {
+  flex: none;
+}
+.project-item-remote,
+.project-item-flat {
+  color: var(--text);
+}
+.project-item-flat > small,
+.project-item-remote > span > small {
+  color: var(--muted);
+}
+.sidebar-search {
+  padding: 0 10px 4px;
+}
+.sidebar-search > input {
+  width: 100%;
+  min-height: 24px;
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+}
+.sidebar-search > input::placeholder {
+  color: var(--muted);
+}
 .sidebar-brand > svg {
   color: var(--accent);
   flex-shrink: 0;
@@ -516,6 +681,13 @@
   text-overflow: ellipsis;
   color: var(--muted);
 }
+.pane-project-select {
+  width: auto;
+  max-width: min(180px, 40vw);
+  padding: 2px 5px;
+  background: var(--panel);
+  font-size: inherit;
+}
 .pane-sep {
   color: var(--border);
   flex-shrink: 0;
@@ -560,18 +732,28 @@
   max-width: 800px;
   margin: auto;
   overflow-wrap: anywhere;
-  animation: conversation-in var(--motion-quick) var(--ease-out);
 }
 .conversation-inner:has(.assistant-turn) {
   margin-block: 0;
 }
-@keyframes conversation-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
+.project-job-history {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto 12px;
+  color: var(--muted);
+  font-size: 12px;
 }
-
+.project-job-history summary {
+  cursor: pointer;
+}
+.project-job-history ul {
+  max-height: 160px;
+  overflow: auto;
+  padding: 4px 0;
+}
+.project-job-history button[aria-current="true"] {
+  color: var(--accent);
+}
 .welcome {
   display: flex;
   flex-direction: column;
@@ -1043,7 +1225,7 @@
   display: flex;
   align-items: center;
   min-width: 0;
-  max-width: 220px;
+  max-width: 310px;
   position: relative;
 }
 .agent-pane .model-switcher.compact .form-actions {
@@ -1052,37 +1234,6 @@
   gap: 4px;
   margin: 0;
   min-width: 0;
-}
-.agent-pane .model-switcher.compact select {
-  width: 100%;
-  min-width: 0;
-  min-height: 28px;
-  padding: 0 20px 0 8px;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  font-size: 11px;
-  appearance: none;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.agent-pane .model-switcher.compact::after {
-  content: "";
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  width: 5px;
-  height: 5px;
-  margin-top: -4px;
-  border-right: 1px solid var(--muted);
-  border-bottom: 1px solid var(--muted);
-  transform: rotate(45deg);
-  pointer-events: none;
-}
-.agent-pane .model-switcher.compact select:hover {
-  color: var(--text);
 }
 .agent-pane .approval-mode-indicator {
   display: inline-flex;
@@ -1123,8 +1274,42 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
-.agent-pane .gxw-drop-hint {
+.agent-pane .composer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   padding: 8px 4px 0;
+}
+.composer-token-usage {
+  flex-shrink: 0;
+}
+.composer-token-usage > summary {
+  min-height: 28px;
+  color: var(--text);
+}
+.composer-token-usage > .popover-content {
+  left: auto;
+  right: 0;
+  transform-origin: bottom right;
+}
+.composer-token-usage-values {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 20px;
+  margin: 0;
+  padding: 6px 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.composer-token-usage-values > dd {
+  margin: 0;
+  color: var(--text);
+  font-weight: 600;
+  text-align: right;
+}
+.agent-pane .gxw-drop-hint {
   text-align: center;
   font-size: 11px;
   color: var(--muted);
@@ -1232,23 +1417,57 @@
   font-size: 11px;
   flex-shrink: 0;
 }
-.canvas-meta .version-select {
-  width: auto;
-  max-width: 200px;
+.canvas-meta .version-history-trigger {
   min-height: 24px;
-  padding: 0 18px 0 0;
-  border: 0;
-  background: transparent;
+  padding: 2px 6px;
   color: var(--muted);
   font-size: 11px;
-  appearance: none;
-  text-overflow: ellipsis;
-  overflow: hidden;
-  white-space: nowrap;
-  cursor: pointer;
 }
-.canvas-meta select.version-select {
-  position: relative;
+.version-history-list {
+  max-height: 36vh;
+  overflow: auto;
+  margin-block: 8px 12px;
+  padding: 0;
+  list-style: none;
+}
+.version-history-row {
+  display: grid;
+  grid-template-columns: auto auto auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 7px 8px;
+  text-align: left;
+  border-radius: 6px;
+}
+.version-history-row:hover,
+.version-history-row[aria-pressed="true"] {
+  background: var(--accent-soft);
+}
+.version-history-row > svg {
+  color: var(--accent);
+}
+.version-history-summary {
+  grid-column: 5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.version-history-row time {
+  grid-column: 6;
+  color: var(--muted);
+  font-size: 11px;
+}
+.version-history-details {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.version-history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-block: 8px;
 }
 .canvas-title-row > .icon-button {
   margin-left: auto;
@@ -1400,7 +1619,7 @@
     padding: 0 12px 10px;
   }
   /* 1. Shrink the model name to an ellipsis. */
-  .agent-pane .model-switcher.compact {
+  .agent-pane .model-switcher.compact .model-picker-pill:not(.reasoning-picker-pill) {
     max-width: 108px;
   }
   .agent-pane .composer-select .select-value {

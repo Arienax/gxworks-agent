@@ -1,8 +1,8 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import { useEffect, useState } from "react";
-import type { Session } from "../api/client";
+import type { WorkbenchConnection } from "../api/client";
 import { api } from "../api/client";
 export type CreationType = {
   value: string;
@@ -27,11 +27,11 @@ export type CreationCapabilities = {
   target_modes: { value: string; label: string }[];
   native_targets: CreationTarget[];
 };
-export function useCapabilities(session: Session | null, setError: (error: string) => void) {
+export function useCapabilities(connection: WorkbenchConnection | null, setError: (error: string) => void) {
   const [creation, setCreation] = useState<CreationCapabilities | null>(null);
   const [defaultOperations, setDefaultOperations] = useState<Record<string, boolean>>({});
   useEffect(() => {
-    if (!session?.authenticated) return;
+    if (!connection?.selected) return;
     let active = true;
     api<{ creation: typeof creation; operations: Record<string, boolean> }>("/capabilities")
       .then((value) => {
@@ -46,7 +46,7 @@ export function useCapabilities(session: Session | null, setError: (error: strin
     return () => {
       active = false;
     };
-  }, [session?.authenticated]);
+  }, [connection]);
 
   return { creation, defaultOperations };
 }

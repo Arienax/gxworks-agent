@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import { Suspense, lazy } from "react";
 import { Button, Modal } from "../components/ui";
@@ -23,6 +23,7 @@ const FBDImport = lazy(() =>
 type Props = Pick<WorkbenchModel, typeof workbenchDialogsFields[number]>;
 export function WorkbenchDialogs(props: Props) {
   const {
+    adoptProject,
     busy,
     canWrite,
     confirmGXSend,
@@ -35,9 +36,6 @@ export function WorkbenchDialogs(props: Props) {
     pid,
     setGXSend,
     setModal,
-    setPid,
-    setProjectListRevision,
-    setVid,
     showFBDProposal,
     t,
     vid,
@@ -102,10 +100,8 @@ export function WorkbenchDialogs(props: Props) {
             busy={busy}
             guarded={guarded}
             onCreated={(p) => {
-              setPid(p.id);
-              setVid("");
+              adoptProject(p, null);
               setModal("");
-              setProjectListRevision((n) => n + 1);
             }}
           />
         </Suspense>

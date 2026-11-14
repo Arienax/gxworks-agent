@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Model API-key targets stored in Windows Credential Manager."""
 
@@ -7,7 +7,8 @@ from storage.windows_credentials import delete_secret, read_secret, write_secret
 
 
 CREDENTIAL_TARGET = "PLC AI Studio/GXWorks2 Ladder Generator/API Key"
-PROFILE_CREDENTIAL_PREFIX = "PLC-AI-Studio/model-profile/"
+PROFILE_CREDENTIAL_PREFIX = "gxworks-agent/model-profile/"
+LEGACY_PROFILE_CREDENTIAL_PREFIX = "PLC-AI-Studio/model-profile/"
 
 
 def credential_target_for_profile(profile_id):

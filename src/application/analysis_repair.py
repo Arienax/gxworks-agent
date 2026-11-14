@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Private, path-scoped repairs of Agent-A drafts; the application owns assembly."""
 from __future__ import annotations
@@ -8,6 +8,8 @@ import copy
 import json
 import re
 from dataclasses import dataclass, field, replace
+
+from jsonschema import Draft202012Validator
 
 from application.analysis_results import (
     AnalysisProtocolError, analysis_grounding_details, current_analysis_protocol_details,
@@ -19,20 +21,25 @@ from plc.execution_intent import (
     execution_claim_anchors, execution_claim_preservable_fields,
     extract_explicit_execution_semantics,
 )
-from plc.specification.approach import SUPPORTED_STRUCTURES
+from plc.specification.approach import INSTRUCTION_CHOICES_SCHEMA, SUPPORTED_STRUCTURES
+from plc.specification.decision_basis import (
+    DECISION_BASIS_SCHEMA, DecisionSources, review_decision_basis,
+)
 from plc.specification.explicit_constraint_claims import (
     OPERATIONS, SCOPES, compile_explicit_constraint_claims, explicit_claim_anchors,
     explicit_constraint_protocol, explicit_target_contracts, normalize_explicit_claim_representations,
 )
+from plc.specification.implementation import PLAN_ROW_SCHEMAS, uncovered_requirements
+from plc.specification.output_logic import OUTPUT_LOGIC_SCHEMA, output_logic_details
 
 
 REPAIR_SYSTEM_PROMPT = """# Analysis local repair
-应用持有完整分析对象；只修 targets 中的失败片段，不重做需求分析、方案、结构标签或问题列表。
+应用持有完整分析对象；只修 targets 中的失败片段，保留其余需求、方案、结构标签和问题。
 只返回 {"repairs":[{"path":"/…","value":…}]}。每个 path 必须恰好出现一次，不能输出完整分析对象或额外字段。
 claim 的 value 是 0..n 个规范 claim 的数组；普通字段按 value_schema 替换；remove 字段用 null。
 只从 current_request 复制逐字 evidence，不翻译、不改写。must_preserve 中的身份、操作、作用范围必须保留，不增添别的目标。
 无依据候选允许删除；有原文依据的目标不能删。具体设备列表只放具体地址；方法描述由应用保留原文，不发明 target 类型。
-不补默认地址或证据，不新增首扫、架构、工艺假设、问题或硬件。操作数原样保留。只输出 JSON。
+不补默认地址或证据，不新增首扫、工艺假设、问题或硬件。操作数原样保留。只输出 JSON。
 """ + explicit_constraint_protocol()
 
 SYNTAX_SYSTEM_PROMPT = """# Analysis JSON syntax repair
@@ -44,10 +51,17 @@ SYNTAX_SYSTEM_PROMPT = """# Analysis JSON syntax repair
 @dataclass(frozen=True)
 class AnalysisResponse(CollectedResponse):
     repair_receipt: dict = field(default_factory=dict, repr=False)
+    continuation_message: object = field(default=None, repr=False)
 
 
 def assembled_response(response, payload, receipt, attempts=None):
-    return AnalysisResponse(message=replace(response.message, content=json.dumps(payload, ensure_ascii=False, separators=(",", ":"))),
+    content = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    message = replace(response.message, content=content)
+    if content != response.message.content and message._provider_fields.get("responses_items"):
+        # Responses items include the original answer and cannot be replayed
+        # as the assembled answer. Keep the corrected assistant text.
+        message = replace(message, _provider_fields={})
+    return AnalysisResponse(message=message,
                             usage=response.usage, response_language=response.response_language,
                             raw_attempts=response.raw_attempts if attempts is None else attempts,
                             repair_receipt=copy.deepcopy(receipt))
@@ -77,6 +91,22 @@ def _semantic_schema():
                            "values": {"type": "array", "items": {"enum": sorted(SUPPORTED_STRUCTURES)}}}}
 
 
+def _approach_schema(*, require_decision_basis=False, require_output_logic=False):
+    required = ["approach_id", "name", "description", "implementation_semantics"]
+    if require_decision_basis:
+        required.append("decision_basis")
+    if require_output_logic:
+        required.append("output_logic")
+    return {"type": "object", "required": required,
+            "properties": {
+                **dict.fromkeys(("approach_id", "name", "description", "pros", "cons", "generation_guide"), {"type": "string"}),
+                "implementation_semantics": {"type": "array", "items": _semantic_schema()},
+                "instruction_choices": copy.deepcopy(INSTRUCTION_CHOICES_SCHEMA),
+                "output_logic": copy.deepcopy(OUTPUT_LOGIC_SCHEMA),
+                "decision_basis": copy.deepcopy(DECISION_BASIS_SCHEMA),
+            }}
+
+
 def design_submission_schema():
     """Wire shape for external Design models; grounding and acceptance still use the Web validators."""
     text = {"type": "string"}
@@ -101,27 +131,85 @@ def design_submission_schema():
     explicit = record({"operation": {"enum": sorted(OPERATIONS)}, "scope": {"enum": sorted(SCOPES)},
                        "target": {"anyOf": [c["schema"] for c in explicit_target_contracts().values()]},
                        "evidence": evidence, "inferred": inferred}, ["operation", "scope", "target"])
-    approach = record({**dict.fromkeys(("approach_id", "name", "description", "pros", "cons", "generation_guide"), text),
-                       "implementation_semantics": rows(_semantic_schema())},
-                      ["approach_id", "name", "description", "implementation_semantics"])
-    return record({"summary": text, "approaches": {**rows(approach), "minItems": 1, "maxItems": 3},
+    return record({"summary": text, "approaches": {**rows(_approach_schema(require_decision_basis=True, require_output_logic=True)), "minItems": 1, "maxItems": 3},
                    "execution_intent_claims": rows(execution), "explicit_constraint_claims": rows(explicit),
                    "suggested_io": {"type": "object", "description": "Group user-declared address-to-label maps by device type."},
                    "missing_info": rows(record({"id": text, "question": text, "required": {"type": "boolean"},
                                                 "options": strings}, ["id", "question"])),
-                   "hardware_config": {"type": "object"}, "assumptions": strings}, ["summary", "approaches"])
+                   "hardware_config": {"type": "object"}, "assumptions": strings,
+                   **copy.deepcopy(PLAN_ROW_SCHEMAS)}, ["summary", "approaches"])
 
 
-def _field_schema(segments):
-    if not segments or segments[-1] == "approaches":
-        return {"type": "array", "items": {"type": "object", "required": ["implementation_semantics"]}}
+def _field_schema(segments, *, require_decision_basis=False, require_output_logic=False):
+    schema = PLAN_ROW_SCHEMAS.get(segments[0]) if segments else None
+    if schema is not None:
+        for segment in segments[1:]:
+            schema = schema["items"] if isinstance(segment, int) else schema["properties"][segment]
+        return copy.deepcopy(schema)
+    if not segments or segments == ["approaches"]:
+        return {"type": "array", "items": _approach_schema(require_decision_basis=require_decision_basis, require_output_logic=require_output_logic)}
+    if segments == ["summary"]:
+        return {"type": "string", "pattern": r"\S"}
+    if segments[-1] == "instruction_choices":
+        return copy.deepcopy(INSTRUCTION_CHOICES_SCHEMA)
+    if segments[-1] == "output_logic":
+        return copy.deepcopy(OUTPUT_LOGIC_SCHEMA)
+    if "decision_basis" in segments:
+        schema = DECISION_BASIS_SCHEMA
+        for segment in segments[segments.index("decision_basis") + 1:]:
+            schema = schema["items"] if isinstance(segment, int) else schema["properties"][segment]
+        return copy.deepcopy(schema)
     if "implementation_semantics" in segments:
         schema = _semantic_schema()
         return {"type": "array", "items": schema} if segments[-1] == "implementation_semantics" else {"anyOf": [schema, {"type": "null"}]}
     return {"type": "array"} if str(segments[-1]).endswith("claims") else {"type": "object"}
 
 
-def plan_analysis_repair(payload, user_text, *, plc_model="FX3U", confirmed_spec=None, contract_stage="bound"):
+def design_coverage_target(payload, working_draft, user_text):
+    if working_draft is None:
+        return None
+
+    from application.spec_document import merge_analysis
+
+    sections = ("requirements", "implementation_items")
+    previous = {key: working_draft[key] for key in ("plc_model", "target_mode", *sections) if key in working_draft}
+    updates = {key: payload[key] for key in sections if key in payload}
+    merged = merge_analysis(previous, {}, updates, user_text)
+    missing = uncovered_requirements(merged)
+    if not missing:
+        return None
+
+    fields = (*PLAN_ROW_SCHEMAS["implementation_items"]["items"]["required"], "requirement_ids")
+    items = [{key: row[key] for key in fields if key in row} for row in merged["implementation_items"]
+             if isinstance(row, dict) and isinstance(row.get("id"), str) and row["id"].strip()]
+    return {
+        "path": "/implementation_items",
+        "mode": "requirement_links",
+        "current_value": items,
+        "missing_requirements": [{"id": row["id"], "text": row.get("text", "")} for row in missing],
+        "instruction": "将每个遗漏的需求分配给实际负责它的现有实现项。value 用实现项 ID 映射到需追加的需求 ID 列表，只列需要补充的关联。",
+        "value_schema": {
+            "type": "object", "minProperties": 1,
+            "propertyNames": {"enum": [row["id"] for row in items]},
+            "additionalProperties": {"type": "array", "minItems": 1, "uniqueItems": True,
+                                     "items": {"enum": [row["id"] for row in missing]}},
+        },
+        "errors": [{"code": "invalid_project_plan", "path": "$.requirements",
+                    "message": f"需求 {row['id']} 尚未安排实现分工"} for row in missing],
+    }
+
+
+def citation_repair_target(path, current, schema):
+    fields = schema["properties"]
+    editable = [key for key in ("references", "status", "conclusion") if key in fields]
+    return {"path": path, "mode": "decision_citation", "current_value": current,
+            "value_schema": {"type": "object", "minProperties": 1,
+                             "properties": {key: fields[key] for key in editable}, "additionalProperties": False},
+            "must_preserve": {key: value for key, value in current.items() if key not in editable}}
+
+
+def plan_analysis_repair(payload, user_text, *, plc_model="FX3U", confirmed_spec=None, contract_stage="bound",
+                         working_draft=None, decision_sources=None, require_output_logic=False):
     """Normalize known representations, then whitelist all remaining failures."""
     base = copy.deepcopy(payload)
     local = []
@@ -129,11 +217,19 @@ def plan_analysis_repair(payload, user_text, *, plc_model="FX3U", confirmed_spec
         base["explicit_constraint_claims"], local = normalize_explicit_claim_representations(base["explicit_constraint_claims"])
     prepared = prepare_analysis_payload(base, contract_stage=contract_stage, user_text=user_text,
                                         confirmed_spec=confirmed_spec)
+    for section, action in (("implementation_items", "normalize_instance_names"),
+                            ("missing_info", "normalize_review_questions"),
+                            ("open_questions", "normalize_review_questions")):
+        if prepared.get(section) != base.get(section):
+            base[section] = prepared[section]
+            local.append({"path": f"/{section}", "action": action})
     deferred = {item["index"] for item in prepared.get("_deferred_execution_claims", [])}
     claims = base.get("execution_intent_claims")
     execution_indices = [i for i in range(len(claims)) if i not in deferred] if isinstance(claims, list) else []
     details = [*current_analysis_protocol_details(prepared),
-               *analysis_grounding_details(prepared, user_text, plc_model=plc_model, confirmed_spec=confirmed_spec)]
+               *output_logic_details(prepared, required=require_output_logic),
+               *analysis_grounding_details(prepared, user_text, plc_model=plc_model, confirmed_spec=confirmed_spec,
+                                           decision_sources=decision_sources)]
     for item in details:
         match = re.match(r"\$\.execution_intent_claims\[(\d+)\]", item["path"])
         if match and execution_indices:
@@ -176,7 +272,51 @@ def plan_analysis_repair(payload, user_text, *, plc_model="FX3U", confirmed_spec
                 target["must_preserve"] = preserve
                 target["value_schema"] = {"type": "array", "items": {"type": "object", "required": ["target" if family == "explicit_constraint_claims" else "trigger"]}}
             else:
-                target["value_schema"] = {"type": "null"} if mode == "remove" else _field_schema(segments)
+                target["value_schema"] = ({"type": "null"} if mode == "remove" else
+                    _field_schema(segments, require_decision_basis=decision_sources is not None, require_output_logic=require_output_logic))
+                if segments[-1] == "output_logic":
+                    approach = _get(base, segments[:2])
+                    target["comparison"] = {key: copy.deepcopy(approach[key]) for key in (
+                        "name", "description", "generation_guide", "instruction_choices", "decision_basis",
+                    ) if key in approach}
+                    target["instruction"] = (
+                        "由模型补全该方案从状态到输出的实现，比较同一条件下的可行输出方法并选定。"
+                        "说明触发、更新顺序、并发合并、释放及中断恢复；不适用时说明原因。"
+                        "selection 记录规模和行为取舍，不只写算法名称。"
+                        "保持既定方案、用户要求及未知条件，不把技术方法转交用户，不新增工艺条件。"
+                    )
+                if segments == ["approaches"]:
+                    target["instruction"] = (
+                        "依据本轮需求和已有分工补齐候选方案。方案文字写在 description。"
+                        "implementation_semantics 是结构对象数组，没有明确结构约束时写 []。"
+                    )
+                if "decision_basis" in segments:
+                    if segments[-1] == "decision_basis":
+                        approach = _get(base, segments[:2])
+                        target["comparison"] = {key: approach[key] for key in (
+                            "name", "description", "pros", "cons", "generation_guide",
+                        ) if key in approach}
+                    elif len(segments) == 4:
+                        sources = decision_sources or DecisionSources(user_text, confirmed_spec)
+                        reviewed, _ = review_decision_basis([current], path=pointer,
+                                                            resolve_reference=sources.resolve)
+                        target["supported_references"] = reviewed[0]["references"] if reviewed else []
+                        target["available_sources"] = sources.reference_prompt()
+                        if reviewed and (error or {}).get("code") in {
+                            "ungrounded_decision_basis", "unconfirmed_decision_basis",
+                        }:
+                            target["must_preserve"] = {"variant": current["variant"]}
+                            target["original_premise"] = current["premise"]
+                    elif len(segments) == 6 and segments[-2] == "applicability_conditions" and isinstance(current, dict):
+                        sources = decision_sources or DecisionSources(user_text, confirmed_spec)
+                        target["supported_references"] = [ref for ref in current.get("references", []) if sources.matches(ref)]
+                        target["available_sources"] = sources.reference_prompt()
+                        target["original_premise"] = current.get("premise", "")
+                    if isinstance(current, dict) and (error or {}).get("code") in {
+                        "ungrounded_decision_basis", "unconfirmed_decision_basis", "unconfirmed_applicability_condition",
+                    } and len(segments) in (4, 6):
+                        target.update(citation_repair_target(pointer, current, target["value_schema"]))
+                        target["instruction"] = "只返回需要改动的引用、状态或结论字段，未提交字段由本地保留。"
                 if len(segments) == 4 and "implementation_semantics" in segments and isinstance(current, dict):
                     preserve = {}
                     if str(current.get("kind") or "").strip().casefold() == "structure":
@@ -221,11 +361,27 @@ def plan_analysis_repair(payload, user_text, *, plc_model="FX3U", confirmed_spec
                 if "implementation_semantics" in segments and len(segments) > 4:
                     segments = segments[:4]
                 add(segments, "field", error)
+    if not any(error["path"].startswith(("$.requirements", "$.implementation_items")) for error in details):
+        coverage = design_coverage_target(base, working_draft, user_text)
+        if coverage:
+            targets[coverage["path"]] = coverage
+    if "/approaches" in targets and working_draft is not None:
+        targets["/approaches"]["value_schema"].update(minItems=1, maxItems=3)
+        summary = base.get("summary")
+        if not working_draft.get("summary") and not (isinstance(summary, str) and summary.strip()):
+            add(["summary"], "field", {"path": "$.summary", "code": "invalid_analysis_shape",
+                                       "message": "initial review draft needs a summary"})
+        if "/implementation_items" not in targets and base.get("implementation_items"):
+            targets["/approaches"]["implementation_items"] = base["implementation_items"]
     return {"base": base, "targets": list(targets.values()), "receipt": {"local": local, "model_paths": [], "retained_text": []}}
 
 
 def repair_messages(plan, user_text):
-    return [{"role": "system", "content": REPAIR_SYSTEM_PROMPT},
+    prompt = REPAIR_SYSTEM_PROMPT
+    if any("/decision_basis" in target["path"] for target in plan["targets"]):
+        prompt += ("\n修复 decision_basis 时可使用 current_request、supported_references 和 available_sources 中的依据。decision_citation 的 value 只提交有变化的引用、状态或结论。"
+                   "保留有依据的引用。缺少来源的前提用 unknown 或 inferred，结论用 conditional。")
+    return [{"role": "system", "content": prompt},
             {"role": "user", "content": json.dumps({"current_request": user_text, "targets": plan["targets"]}, ensure_ascii=False, separators=(",", ":"))}]
 
 
@@ -320,8 +476,36 @@ def apply_analysis_repair(plan, patch, user_text, *, plc_model="FX3U", confirmed
         if not isinstance(path, str) or path not in expected or path in changes:
             _reject("$", "duplicate or unlisted repair path")
         target = expected[path]
+        value = repair["value"]
         if target["mode"] == "claim":
-            _validate_claim_replacement(target, repair["value"], user_text, plc_model, confirmed_spec)
+            _validate_claim_replacement(target, value, user_text, plc_model, confirmed_spec)
+        elif target["mode"] == "decision_citation":
+            if not isinstance(value, dict):
+                _reject(path, "citation repair requires the changed fields")
+            # Older clients may echo the full row. Accept only identical
+            # immutable fields and apply only the editable values.
+            for key in value.keys() & target["must_preserve"].keys():
+                if value[key] != target["must_preserve"][key]:
+                    _reject(path, "citation repair changes an immutable field")
+            value = {key: item for key, item in value.items() if key not in target["must_preserve"]}
+            if not Draft202012Validator(target["value_schema"]).is_valid(value):
+                _reject(path, "citation repair requires references, status or conclusion")
+        elif target["mode"] == "field" and (
+            path in ("/approaches", "/summary") or path.endswith(("/instruction_choices", "/output_logic")) or "/decision_basis" in path
+        ):
+            if not Draft202012Validator(target["value_schema"]).is_valid(repair["value"]):
+                _reject(path, "repair value must match the requested field schema")
+            if any(repair["value"].get(key) != value for key, value in target.get("must_preserve", {}).items()):
+                _reject(path, "citation repair changes the original variant")
+            if ("original_premise" in target and repair["value"]["status"] == "known"
+                    and repair["value"]["premise"] != target["original_premise"]):
+                _reject(path, "citation repair changes the premise it claims is known")
+        elif target["mode"] == "requirement_links":
+            value = repair["value"]
+            if not Draft202012Validator(target["value_schema"]).is_valid(value):
+                _reject(path, "repair must add missing requirement IDs to existing implementation items")
+            if {ref for refs in value.values() for ref in refs} != {row["id"] for row in target["missing_requirements"]}:
+                _reject(path, "repair must cover every missing requirement ID")
         elif target.get("unsupported_structure"):
             if repair["value"] is not None:
                 _reject(path, "unsupported structure candidates must be removed, not approximated")
@@ -330,7 +514,7 @@ def apply_analysis_repair(plan, patch, user_text, *, plc_model="FX3U", confirmed
                 _reject(path, "repair changes valid structure fields")
         if target["mode"] == "remove" and repair["value"] is not None:
             _reject(path, "forbidden metadata removal requires null")
-        changes[path] = copy.deepcopy(repair["value"])
+        changes[path] = copy.deepcopy(value)
     if set(changes) != set(expected):
         _reject("$", "every failed path requires exactly one repair")
     result = copy.deepcopy(plan["base"])
@@ -356,7 +540,22 @@ def apply_analysis_repair(plan, patch, user_text, *, plc_model="FX3U", confirmed
                         if unresolved:
                             retained.update(unresolved_values=copy.deepcopy(unresolved), projection_status="not_projected")
                     receipt["retained_text"].append(retained)
-        elif target["mode"] == "remove" or isinstance(leaf, int) and value is None:
+        elif target["mode"] == "decision_citation":
+            parent[leaf].update(value)
+        elif target["mode"] == "requirement_links":
+            rows = result.setdefault("implementation_items", [])
+            by_id = {row["id"]: row for row in rows}
+            for item in target["current_value"]:
+                identity = item["id"]
+                if identity not in value:
+                    continue
+                row = by_id.get(identity)
+                if row is None:
+                    row = copy.deepcopy(item)
+                    rows.append(row)
+                existing = item.get("requirement_ids")
+                row["requirement_ids"] = [*(existing if isinstance(existing, list) else []), *value[identity]]
+        elif target["mode"] == "remove" or (isinstance(leaf, int) and value is None and segments[0] not in PLAN_ROW_SCHEMAS):
             if isinstance(parent, list):
                 parent.pop(leaf)
             else:

@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Advisory capability selection and local review; never an acceptance gate."""
 from __future__ import annotations
@@ -15,7 +15,7 @@ SELECTION_POLICY = """\n# Capability selection and maintainability
 保留用户原文和明确指定的限制。模型提出的指令、数据结构、容量、内部地址只属于实现选择，不能写入用户需求或已确认规格。
 新设计先按实际 CPU、语言与工艺功能找相关应用指令。按功能选取有意义的代表和配套调用，查实用途、操作数、执行与复位条件、型号限制，读完每次查询的全部分页。资料缺失要指出，不能把候选名称当作支持证据。
 对照普通实现与有依据的高级指令实现，比较等效行为、扫描顺序、并发与容量、资源和重复代码，再选一份实现。显式指定的方案保留，仅比较其中仍开放的实现选择。简单任务没有相关高级指令时直接说明。
-选定后只在具体矛盾、新证据或用户修订时重选。不得以缩短程序为由损失精度、吞吐或停止/复位行为。无需用户另行确认选型。
+选定后只在具体矛盾、新证据或用户修订时重选。不得以缩短程序为由损失精度、吞吐或停止/复位行为。Design 呈现完整候选供用户选择，Direct 在本轮自行选型并生成。
 """
 
 
@@ -110,7 +110,59 @@ def _review_conditions(ladder, model, result):
         {"check": "output_effect_footprints", "status": "unverified" if unknown_writes else "checked"}])
 
 
-def review_maintainability(program, *, target_mode="ladder", plc_model="FX3U"):
+def _review_selected_implementation(program, confirmed_spec, model, result):
+    from plc.device_identity import canonical_reference_device, reference_device_tokens
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+    from plc.specification.approach import selected_implementation_targets
+
+    approach = (confirmed_spec or {}).get("selected_approach")
+    targets = selected_implementation_targets(approach)
+    if not targets:
+        return
+
+    registry = DEFAULT_INSTRUCTION_REGISTRY
+    operations = Counter()
+    devices = set()
+    for network in program.get("networks", []):
+        for instruction in network.get("instructions", []):
+            operations[instruction["op"]] += 1
+            for operand in instruction.get("args", []):
+                devices.update(canonical_reference_device(token) for token in reference_device_tokens(operand))
+
+    checked = []
+    missing = []
+    for target in targets:
+        value = target["value"]
+        form = registry.resolve_catalog_form(value, cpu=model)
+        if form is not None:
+            target = {**target, "kind": "opcode"}
+            present = value in operations or form.opcode in operations
+        elif target["kind"] == "device":
+            present = value in devices
+        else:
+            continue
+        checked.append(value)
+        if not present:
+            missing.append(target)
+
+    if not checked:
+        return
+    result["coverage"].append({
+        "check": "selected_implementation_symbols", "status": "checked",
+        "symbols": sorted(set(checked)),
+    })
+    if missing:
+        result["findings"].append({
+            "code": "selected_implementation_review", "severity": "advisory",
+            "message": "候选未观察到部分所选实现的关键指令或软元件。按列出的职责核对状态推进、输出和回收。"
+                       "若更换了实现，请按原方案修正，或说明所用的等价写法及依据。",
+            "expected": missing,
+            "actual": {"instruction_counts": dict(sorted(operations.items()))},
+            "replacement_verified": False,
+        })
+
+
+def review_maintainability(program, *, target_mode="ladder", plc_model="FX3U", confirmed_spec=None):
     """Report observable structure only. Repetition does not prove equivalence."""
     result = {"policy_version": SELECTION_POLICY_VERSION, "status": "local_only",
               "used_capabilities": [], "findings": [], "coverage": [],
@@ -135,7 +187,10 @@ def review_maintainability(program, *, target_mode="ladder", plc_model="FX3U"):
                                                               "address": output.get("address")})
         result["coverage"] = [{"check": "capability_calls_and_repeated_writes", "status": "checked"},
                               {"check": "replacement_equivalence_and_process_behavior", "status": "unverified"}]
-        _review_conditions(ladder, (program.get("plc", {}).get("cpu") if is_plc_ir(program) else None) or plc_model, result)
+        model = (program.get("plc", {}).get("cpu") if is_plc_ir(program) else None) or plc_model
+        _review_conditions(ladder, model, result)
+        if confirmed_spec and is_plc_ir(program):
+            _review_selected_implementation(program, confirmed_spec, model, result)
     elif target_mode == "fbd":
         connections = []
         connected = defaultdict(list)

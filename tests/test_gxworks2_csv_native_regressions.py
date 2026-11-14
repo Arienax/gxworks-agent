@@ -269,8 +269,13 @@ def test_export_checks_whole_shared_output_network_height(tmp_path, widths):
     if sum(widths) <= 24:
         assert generate_gx_works2_csv(source, program, comments)
     else:
-        with pytest.raises(GXNativeLoweringError, match="超过24行"):
+        with pytest.raises(GXNativeLoweringError, match="超过24行") as raised:
             lower_large_parallel_blocks_for_gxworks2(source)
+        assert raised.value.details == {
+            "parallel_rows": sum(widths), "max_parallel_rows": 24,
+            "branch_rows": [{"branch_id": index + 1, "parallel_rows": width}
+                            for index, width in enumerate(widths)],
+        }
         assert not generate_gx_works2_csv(source, program, comments)
         assert not program.exists() and not comments.exists()
     assert source == before
@@ -281,9 +286,62 @@ def test_oversized_shared_network_is_not_reported_as_compiled_artifacts(tmp_path
     from plc.ir import build_plc_ir
     source = _shared_parallel_outputs([1, 1, 1, 1, 1, 10, 10, 10])
     program = build_plc_ir(source, plc_model="FX3U")
-    with pytest.raises(ValueError, match="CSV 渲染失败"):
+    with pytest.raises(GXNativeLoweringError, match="超过24行") as raised:
         CandidateService().compile(program, tmp_path)
+    assert raised.value.rung_id == 1
+    assert raised.value.details['parallel_rows'] == 35
     assert not (tmp_path / "program.csv").exists()
+
+
+@pytest.mark.parametrize("writes_condition", [False, True])
+def test_oversized_output_group_only_repeats_stable_conditions(tmp_path, writes_condition):
+    from plc.ladder_limits import parallel_ladder_rows
+
+    outputs = [{"type": "APP_INSTR", "opcode": "MOV", "operands": [f"K{i}", f"D{i}"]}
+               for i in range(30, 0, -1)]
+    if writes_condition:
+        outputs[0]["operands"][-1] = "D0"
+    source = {"rungs": [{
+        "rung_id": 1, "header_element": None,
+        "shared_inputs": [{"type": "COMPARE", "expression": ">= D0 K1"}],
+        "branches": [{"branch_id": 1, "y_offset_level": 0, "inputs": [], "outputs": outputs}],
+    }], "device_comments": {}}
+    original = copy.deepcopy(source)
+    if writes_condition:
+        with pytest.raises(GXNativeLoweringError, match="超过24行"):
+            lower_large_parallel_blocks_for_gxworks2(source)
+    else:
+        lowered = lower_large_parallel_blocks_for_gxworks2(source)["rungs"]
+        assert [parallel_ladder_rows(rung) for rung in lowered] == [24, 6]
+        assert [item for rung in lowered for item in rung["branches"][0]["outputs"]] == outputs
+        program_csv = tmp_path / "program.csv"
+        assert generate_gx_works2_csv(source, program_csv, tmp_path / "comments.csv")
+        assert [row[3] for row in _instruction_rows(program_csv) if row[2] == "MOV"] == [
+            " ".join(output["operands"]) for output in outputs
+        ]
+    assert source == original
+
+
+def test_oversized_initialization_group_splits_only_with_matching_scan_context(tmp_path):
+    outputs = [{"type": "APP_INSTR", "opcode": "RST", "operands": [f"M{i}"]} for i in range(47)]
+    source = {"device_comments": {}, "rungs": [{
+        "rung_id": 1, "header_element": None,
+        "shared_inputs": [{"type": "NO", "address": "M8002"}],
+        "branches": [{"branch_id": 1, "y_offset_level": 0, "inputs": [], "outputs": outputs}],
+    }]}
+    scan = {"program_type": "scan"}
+    for context in ({}, {"program_type": "interrupt"}):
+        with pytest.raises(GXNativeLoweringError, match="超过24行"):
+            lower_large_parallel_blocks_for_gxworks2(source, plc_model="FX3U", execution_context=context)
+    lowered = lower_large_parallel_blocks_for_gxworks2(source, plc_model="FX3U", execution_context=scan)
+    assert [len(row["branches"][0]["outputs"]) for row in lowered["rungs"]] == [24, 23]
+    assert all(row["shared_inputs"] == source["rungs"][0]["shared_inputs"] for row in lowered["rungs"])
+    assert [item for rung in lowered["rungs"] for item in rung["branches"][0]["outputs"]] == outputs
+    from plc.candidate_service import CandidateService
+    from plc.ir import build_plc_ir
+    CandidateService().compile(build_plc_ir(source, plc_model="FX3U"), tmp_path)
+    rows = _instruction_rows(tmp_path / "program.csv")
+    assert [row[3] for row in rows if row[2] == "RST"] == [o["operands"][0] for o in outputs]
 
 
 def test_repartitioned_sorting_shape_exports_two_independent_shared_networks(tmp_path):

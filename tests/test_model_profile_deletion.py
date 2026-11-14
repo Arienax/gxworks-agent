@@ -114,10 +114,9 @@ def test_http_delete_last_profile_and_recreate_without_a_model_call(isolated_pro
     config_manager.save_config(config)
     origin = "http://127.0.0.1:8765"
     service = WorkbenchService(tmp_path / "workspace", tmp_path / "state", settings=env.service)
-    app = create_app(service.store.base_dir, service=service, origin=origin, operator_token="isolated-delete")
+    app = create_app(service.store.base_dir, service=service, origin=origin)
     with TestClient(app, base_url=origin) as client:
-        login = client.post("/api/session", json={"token": "isolated-delete"}, headers={"Origin": origin}).json()
-        headers = {"Origin": origin, "X-CSRF-Token": login["csrf"]}
+        headers = {"Origin": origin}
         removed = client.delete("/api/settings/profiles/deepseek-default", headers=headers)
         assert removed.status_code == 200
         assert removed.json()["profiles"] == []

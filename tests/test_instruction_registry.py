@@ -122,6 +122,55 @@ def test_definition_dependency_closure_is_atomic_scoped_and_verification_indepen
     assert not select_fact_dependencies(groups, ['outputs'], opcode='TEST', model='FX5U')['groups']
 
 
+def test_dependency_selection_keeps_copy_isolation_and_existing_results():
+    import copy
+    from hypothesis import given, settings, strategies as st
+    from plc.instruction_definition import InstructionFactGroup, select_fact_dependencies
+
+    @settings(max_examples=100, deadline=None)
+    @given(st.integers(1, 12), st.lists(st.integers(), max_size=8),
+           st.sampled_from(['valid', 'missing', 'cycle', 'unknown', 'other_model']))
+    def check(length, items, condition):
+        facts = [{'id': str(i), 'dimension': 'constraints.range', 'value': {'items': items},
+                  'status': 'source_verified', 'verification': 'source_checked',
+                  'sources': [{'manual_id': 'synthetic', 'pages': items}],
+                  'conditions': [{'context': 'channels', 'equals': items}],
+                  'scope': {'models': ['FX3U'], 'forms': ['TEST']},
+                  'depends_on': [str(i - 1)] if i else []} for i in range(length)]
+        if condition in {'missing', 'cycle'}:
+            facts[0]['depends_on'] = ['missing' if condition == 'missing' else str(length - 1)]
+        elif condition == 'unknown':
+            facts[0]['status'] = 'unknown'
+        elif condition == 'other_model':
+            facts[0]['scope']['models'] = ['Q02']
+        before = copy.deepcopy(facts)
+        detached = [InstructionFactGroup.from_mapping(fact) for fact in facts]
+        expected = select_fact_dependencies(detached, [str(length - 1)], opcode='TEST', model='FX3U')
+        actual = select_fact_dependencies(facts, [str(length - 1)], opcode='TEST', model='FX3U')
+        assert actual == expected
+        if actual['groups']:
+            group = actual['groups'][0]
+            group['value']['items'].append('changed')
+            group['sources'][0]['pages'].append('changed')
+            group['scope']['models'].append('changed')
+            group['conditions'][0]['equals'].append('changed')
+        assert facts == before
+        facts[0]['value']['items'].append('source changed')
+        assert detached[0].value == before[0]['value']
+    check()
+
+
+def test_dependency_selection_still_validates_unselected_facts():
+    import pytest
+    from plc.instruction_definition import DefinitionError, select_fact_dependencies
+
+    with pytest.raises(DefinitionError, match='Unknown fact dimension'):
+        select_fact_dependencies([
+            {'id': 'selected', 'dimension': 'constraints.range'},
+            {'id': 'unselected', 'dimension': 'invalid.dimension'}],
+            ['selected'], opcode='TEST', model='FX3U')
+
+
 def test_definition_source_inventory_does_not_admit_manual_only_calls(tmp_path):
     import json
     from plc.instructions import InstructionRegistry, InstructionSpec

@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from application.approval import ApprovalPolicy, allows
 from application.workspace import ConflictError
 from application.workbench import WorkbenchService
-from test_web_api import ORIGIN, AGENT, _app, _login, _Provider, _complete, offline
+from test_web_api import ORIGIN, _app, _Provider, _complete, offline
 
 
 def test_policy_default_read_never_creates_files(tmp_path):
@@ -32,24 +32,18 @@ def test_delegation_is_bounded_to_existing_actions(mode, action):
 def test_workspace_settings_require_explicit_full_consent_and_compare_revision(tmp_path):
     service = WorkbenchService(tmp_path / 'workspace', tmp_path / 'state')
     with TestClient(_app(service.store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as client:
-        assert client.get('/api/settings/approval').status_code == 401
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         initial = client.get('/api/settings/approval').json()
         assert initial == {'mode': 'ask', 'revision': 0, 'local_autosave': True, 'read_only': False}
         value = {'mode': 'full', 'expected_revision': 0}
         assert client.put('/api/settings/approval', json=value, headers=headers).status_code == 403
         value['confirm_full_access'] = True
-        assert client.put('/api/settings/approval', json=value).status_code == 403
         assert client.put('/api/settings/approval', json=value, headers={**headers, 'Origin': 'https://evil.example'}).status_code == 403
         assert client.put('/api/settings/approval', json=value, headers=headers).json()['mode'] == 'full'
-        # Even full mode does not remove session, host, origin or CSRF checks.
-        assert client.post('/api/projects', json={'name': 'no-csrf'}).status_code == 403
         assert client.get('/api/settings/approval', headers={'Host': 'evil.example'}).status_code == 403
         assert client.put('/api/settings/approval', json={'mode':'auto','expected_revision':0}, headers=headers).status_code == 409
         assert client.put('/api/settings/approval', json={'mode':'invented','expected_revision':1}, headers=headers).status_code == 422
         assert client.put('/api/settings/approval', json={'mode':'ask','expected_revision':1}, headers=headers).json()['mode'] == 'ask'
-        unauthenticated = TestClient(_app(service.store.base_dir, service.state_dir, service=service), base_url=ORIGIN)
-        assert unauthenticated.put('/api/settings/approval', json=value, headers={'Authorization': 'Bearer '+AGENT, 'Origin': ORIGIN}).status_code == 401
     reopened = WorkbenchService(service.store.base_dir, service.state_dir)
     reopened.start()
     try:
@@ -65,7 +59,7 @@ def test_generation_saves_once_and_exports_without_a_second_approval(offline, tm
     provider = _Provider()
     service = WorkbenchService(tmp_path / 'workspace', tmp_path / 'state', model_factory=lambda: (provider, {'model':'offline'}))
     with TestClient(_app(service.store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         service.update_approval_settings(mode=mode, expected_revision=0, confirm_full_access=True)
         pid = service.create_project(name='autosave')['id']
         command = {'kind':'generation','project_id':pid,'request_id':'only-once','text':'X0 controls Y0','response_language':'en'}

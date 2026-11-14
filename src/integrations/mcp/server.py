@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Official MCP SDK server; transport is independent of runtime adaptation."""
 
@@ -22,14 +22,32 @@ from .context_provider import ToolContextProvider
 from .tool_adapter import MCPToolAdapter
 
 
+READ_DELIVERY_EXTENSION = "io.github.arienax.gxworks-agent/read-delivery"
+
+
+LEGACY_READ_INSTRUCTIONS = (
+    "Read data.document directly when context_schema_version=4. This format has no transport references. "
+    "When the client declares capacity, the server assembles the complete document within that capacity. "
+    "A legacy client that receives delivery.next can follow it to the end; version 3 additionally requires resolving its object table. "
+    "The host sets delivery capacity; it does not change the scope of technical retrieval. "
+    "Delivery.complete reports server delivery, not proof that a host displayed all text. "
+)
+
+HOSTED_READ_INSTRUCTIONS = (
+    "Read data.document directly. The host configures the delivery budget and assembles the document. "
+    "If HOST_CONTEXT_TOO_LARGE is returned, request the specific missing facts or let the host adjust its configured capacity. "
+    "Explicit read_format=paged is for legacy clients that assemble delivery.next themselves. "
+)
+
 WORKFLOW_INSTRUCTIONS = (
     f"GXWorks Agent project source and releases: {PROJECT_URL}. "
-    "search_plc_manual, get_generation_context and get_fbd_catalog return one JSON text block with "
-    "data.context_schema_version=3, document, objects and delivery. Follow delivery.next exactly until "
-    "delivery.complete=true, merge all objects, then resolve document $ref pointers, $concat list chunks "
-    "and $merge map chunks. Use the assembled document to answer the query. "
-    "Stale cursors require restarting the same query. Each final MCP response "
-    "is bounded to 6000 estimated tokens and 32 KiB UTF-8; indivisible oversized sources fail explicitly. "
+) + LEGACY_READ_INSTRUCTIONS + (
+    "Construction/example limitations apply only to that implementation, not the whole instruction. "
+    "Unconfirmed applicability conditions cannot exclude alternatives; keep them conditional. "
+    "After saving, get_generation_context returns a version-bound local edit contract. Canonical ladder keeps compact partial syntax; "
+    "reuse applicable manuals across saved versions and submit only changed rungs, without repeating selection. "
+    "The server binds a unique generation task and resolves fact IDs locally. Supply one task reference only when selecting among concurrent tasks. "
+    "Use previously delivered facts when marked $conversation_ref; gxworks_read_context_unit(ids=[...]) restores them together. "
     "top_k limits only supplementary search; explicit targets and their dependencies remain required. "
     "Manual search inherits the saved project language. Override language for a cross-language question. Report material local coverage gaps together; do not repeat a lookup or search the web solely because a fact is missing. Use returned operands, purpose, conditions and examples; "
     "coverage identifies answered aspects and additional information, while call fields describe current Core support. "
@@ -49,7 +67,7 @@ WORKFLOW_INSTRUCTIONS = (
     "A code difference is an observation; a match does not establish execution correspondence. "
     "For runtime faults, separately call list_simulator_targets and get_simulator_status/read_simulator_devices "
     "with the returned target_ref. get_diagnostics is static analysis; runtime reads do not prove program correspondence. "
-    "For a generic live timeline, connect_simulator explicitly opens the existing Simulator2-only gateway, then "
+    "For a generic live timeline, connect_simulator(plc_model=actual_CPU) explicitly opens the existing Simulator2-only gateway for a registered FX/Q/L target, then "
     "start_simulator_trace takes target_ref and config.signals (id, label, address, data_type), sample_ms and duration_ms. "
     "It returns a Web view URL for all signals; no custom page code is needed. Use get_simulator_trace or stop_simulator_trace "
     "with view_ref. prepare_simulator_scenario lowers named initial/set/expect values into the existing version-bound test DSL; "
@@ -57,16 +75,23 @@ WORKFLOW_INSTRUCTIONS = (
     "For generation, select/create the actual Agent project and get_generation_context. "
     "Generation and edits prefer a saved GXW for Ladder, ST, FBD and SFC. The application automatically compiles, saves and cold-reopens when GX Works2 is installed. "
     "Read the returned delivery and validation: CSV, ST text or structured candidates are explicit fallback outputs only. A failed native compile retains a diagnostic GXW, not a verified active version. "
+    "For an editable implementation plan, read get_project_spec and prepare the requirements, IO, parameters and implementation_items in update_project_spec. "
+    "Each implementation item states requirement_ids, language, location, method and state_owner; clarify real missing facts. "
+    "Show the plan and differences to the user; call confirm_project_spec(user_confirmed=true) only after explicit approval, "
+    "passing the exact current draft_revision as expected_revision. Do not treat the model's tool call as user approval. "
+    "Record explicit user parameter changes with a scoped update. Material model-proposed implementation changes need renewed "
+    "user confirmation before generation. Updates preserve other entries; historical version_spec remains a read-only reference. "
+    "Then get_generation_context. Explicit workflow=direct_generation retains the existing direct path. "
     "Follow structured next_actions when a precondition is missing. Do not scan source files or hand-write CSV/GXW to bypass the engineering tools. "
-    "For generation or normal edits call get_generation_context with user_requirement containing the user's request. "
+    "For a new Direct task send the user's verbatim request. After Design confirmation, get_generation_context uses the saved specification and selected approach. For edits send only the user's current change. "
     "Use its generation_instructions, generation_request, confirmed specification and current program: "
     "these are the same engineering context, output guidance and local RAG used by the built-in API. "
     "In local mode, choose create_project(generation_mode=...) by specification completeness and follow create_project.next_actions: "
     "use generation_mode=direct for cross-vendor/cross-language program porting or translation (such as Siemens/CODESYS/Omron to Mitsubishi), already-specified sequences/timings/formulas, deterministic FB/FUNCTION authoring, or explicit direct requests; "
-    "use generation_mode=design for open-ended process or machine requirements where comparing 1-3 approaches helps before human approval (get_design_context with the verbatim human requirement, finish its pages, propose_design_plan, wait for the human choice, confirm_design_plan, then get_generation_context(workflow=detailed)). "
+    "use generation_mode=design for open-ended process or machine requirements where comparing 1-3 approaches helps before human approval (get_design_context with the verbatim human requirement, read its document, propose_design_plan, wait for the human choice, confirm_design_plan, then get_generation_context(workflow=detailed)). "
     "If an unconfirmed Design session is active on Ladder, ST, FBD or SFC for a porting or already-specified task, call get_generation_context(workflow=direct_generation, user_requirement=...) to exit Design and generate directly instead of inventing artificial approaches. "
     "If a real process fact is missing, ask only the necessary question and do not submit a candidate until answered. "
-    "Pass verbatim human requests only. Keep design choices separate. For a new design, use instruction_details=true in get_generation_context to read CPU and language-specific instruction facts together, or search_plc_manual for relevant representatives and companion operations. Finish every page, compare behavior and cost against an ordinary implementation and submit implementation_review with the candidate. "
+    "Resume an existing Design with get_design_context without repeating the request. If several tasks are pending, choose an analysis_id or repair_id. Keep design choices separate. Use the delivered facts and batch only missing forms of instructions you intend to use. Suggested families are optional. In confirmed Design, implement the chosen plan without repeating comparisons. "
     "Read device numbering, default allocations and configurable conditions from device facts; "
     "read actual allocations and native access through current-project tools. "
     "Design the ladder yourself and submit one full or partial response with create_program_candidate. "
@@ -75,7 +100,7 @@ WORKFLOW_INSTRUCTIONS = (
     "If a submission fails, report the returned error; do not start an automatic repeated-submission loop. "
     "Use read_network and patch_program for explicit scoped Debug patches. "
     "Use get_generation_context for the shared functional discovery, selection policy and source coverage; "
-    "copy its generation_context_id only to a submission tool whose schema accepts that field. "
+    "the server binds a unique generation context. When several contexts are pending, reference the intended one using a field accepted by the submission tool. "
     "Discovery and local review do not call a model. "
     "For FBD, get_generation_context supplies generation_input.device_address_rules and language_rules, "
     "task-scoped interfaces, source_context, call_bindings, project_options and supported_paths. "
@@ -99,6 +124,9 @@ WORKFLOW_INSTRUCTIONS = (
     "use create_fbd_candidate with operation=import_library, library_name and the donor GXW in data_base64; "
     "this transfers supported ST implementations, interfaces and library types while preserving target caller programs. "
     "Readable FBD library interfaces do not imply supported FBD implementation transfer. "
+    "For a new ST project without GXW, create_st_candidate(operation=generate, st_code=...) uses the same source preparation "
+    "and static inspection as Web generation, saves UTF-8 ST source through the shared transaction, and does not create GXW "
+    "or perform native compilation. Source-only saved versions can be read with read_st_project and replaced with generate. "
     "For an existing ordinary ST Program use read_st_project and import the saved GXW with "
     "create_st_candidate(operation=import, program=<exact logical source>, data_base64=...); "
     "operation=generate prepares a new ST candidate from st_text and declarations; GXW creation requires the headless backend. "
@@ -138,7 +166,7 @@ WORKFLOW_INSTRUCTIONS = (
 
 SERVER_INSTRUCTIONS = WORKFLOW_INSTRUCTIONS + (
     "GXWorks tools inspect the configured saved PLC project through ToolRuntime. "
-    "create_program_candidate, create_fbd_candidate, create_st_candidate, edit_gxw_project, patch_program and import_current_program_to_gxworks2 return confirmation_required; "
+    "update_project_spec, confirm_project_spec, create_program_candidate, create_fbd_candidate, create_st_candidate, edit_gxw_project, patch_program and import_current_program_to_gxworks2 return confirmation_required; "
     "they do not save a version, change active_version_id or import into GX Works2. "
     "This standalone server cannot approve, commit candidates or execute imports; read-only native snapshots remain available. "
     "MCP tool approval is not engineering confirmation. "
@@ -159,7 +187,7 @@ SERVICE_SERVER_INSTRUCTIONS = WORKFLOW_INSTRUCTIONS + (
 LOCAL_SERVER_INSTRUCTIONS = (
     "GXWorks Agent runs independently inside this MCP process; no Web workbench is required. "
     "For saved engineering work, use list_projects and select_project explicitly, or create_project with the user's actual "
-    "plc_model and target_mode. Existing-program diagnosis can start with native discovery without any Agent project. "
+    "plc_model; target_mode defaults to ladder. Existing-program diagnosis can start with native discovery without any Agent project. "
     "Never create/select an unrelated project merely to satisfy a read precondition. "
 ) + WORKFLOW_INSTRUCTIONS + (
     "Explicit local generation and edits save validated versions through the shared application transaction. "
@@ -174,42 +202,57 @@ LOCAL_SERVER_INSTRUCTIONS = (
 
 
 def create_server(
-    context_provider: ToolContextProvider, runtime: ToolRuntime | None = None
+    context_provider: ToolContextProvider, runtime: ToolRuntime | None = None, *, read_budget_tokens=None,
 ) -> Server:
     adapter = MCPToolAdapter(
-        runtime if runtime is not None else build_default_tool_runtime(), context_provider
+        runtime if runtime is not None else build_default_tool_runtime(), context_provider,
+        read_budget_tokens=read_budget_tokens,
     )
     return _create_adapter_server(adapter, SERVER_INSTRUCTIONS)
 
 
-def create_service_server(client, project_id, version_id=None) -> Server:
+def create_service_server(client, project_id, version_id=None, *, read_budget_tokens=None) -> Server:
     from .service_client import ServiceMCPToolAdapter
 
-    return _create_adapter_server(ServiceMCPToolAdapter(client, project_id, version_id), SERVICE_SERVER_INSTRUCTIONS)
+    return _create_adapter_server(ServiceMCPToolAdapter(client, project_id, version_id,
+        read_budget_tokens=read_budget_tokens), SERVICE_SERVER_INSTRUCTIONS)
 
 
-def create_local_server(session) -> Server:
+def create_local_server(session, *, read_budget_tokens=None) -> Server:
     from .local_adapter import LocalMCPToolAdapter
 
-    return _create_adapter_server(LocalMCPToolAdapter(session), LOCAL_SERVER_INSTRUCTIONS)
+    return _create_adapter_server(LocalMCPToolAdapter(session, read_budget_tokens=read_budget_tokens),
+                                  LOCAL_SERVER_INSTRUCTIONS)
 
 
 def _create_adapter_server(adapter, instructions):
+    if adapter.read_budget_tokens is not None:
+        instructions = instructions.replace(LEGACY_READ_INSTRUCTIONS, HOSTED_READ_INSTRUCTIONS)
     limiter = anyio.CapacityLimiter(1)
     query_limiter = anyio.CapacityLimiter(4)
     cached_controls = {'get_operation_status', 'get_native_engineering_session',
                        'pause_native_engineering_session'}
 
+    def read_budget(ctx):
+        capacities = ctx.session.client_capabilities
+        extensions = capacities.extensions if capacities else None
+        advertised = ((extensions or {}).get(READ_DELIVERY_EXTENSION) or {}).get("readBudgetTokens")
+        configured = adapter.read_budget_tokens
+        if type(advertised) is int and 1000 <= advertised <= 128000:
+            return advertised if configured is None else min(advertised, configured)
+        return configured
+
     async def list_tools(
         ctx: ServerRequestContext, params: PaginatedRequestParams | None
     ) -> ListToolsResult:
-        return ListToolsResult(tools=adapter.list_tools())
+        return ListToolsResult(tools=adapter.list_tools(read_budget_tokens=read_budget(ctx)))
 
     async def call_tool(
         ctx: ServerRequestContext, params: CallToolRequestParams
     ) -> CallToolResult:
+        budget = read_budget(ctx)
         return await anyio.to_thread.run_sync(
-            adapter.call_tool, params.name, params.arguments, str(ctx.request_id),
+            lambda: adapter.call_tool(params.name, params.arguments, str(ctx.request_id), read_budget_tokens=budget),
             limiter=query_limiter if params.name in cached_controls else limiter,
         )
 
@@ -221,22 +264,22 @@ def _create_adapter_server(adapter, instructions):
     )
 
 
-async def serve_stdio(context_provider: ToolContextProvider) -> None:
+async def serve_stdio(context_provider: ToolContextProvider, read_budget_tokens=None) -> None:
     # SDK v2 owns UTF-8 framing and diverts stray Python/native stdout to stderr.
     async with stdio_server() as (read_stream, write_stream):
-        server = create_server(context_provider)
+        server = create_server(context_provider, read_budget_tokens=read_budget_tokens)
         await server.run(
             read_stream, write_stream, server.create_initialization_options()
         )
 
 
-async def serve_service_stdio(client, project_id, version_id=None) -> None:
+async def serve_service_stdio(client, project_id, version_id=None, read_budget_tokens=None) -> None:
     async with stdio_server() as (read_stream, write_stream):
-        server = create_service_server(client, project_id, version_id)
+        server = create_service_server(client, project_id, version_id, read_budget_tokens=read_budget_tokens)
         await server.run(read_stream, write_stream, server.create_initialization_options())
 
 
-async def serve_local_stdio(session) -> None:
+async def serve_local_stdio(session, read_budget_tokens=None) -> None:
     async with stdio_server() as (read_stream, write_stream):
-        server = create_local_server(session)
+        server = create_local_server(session, read_budget_tokens=read_budget_tokens)
         await server.run(read_stream, write_stream, server.create_initialization_options())

@@ -1,15 +1,15 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import { useEffect, useRef, useState } from "react";
-import type { Json, ModelSettings, Session } from "../api/client";
+import type { Json, ModelSettings, WorkbenchConnection } from "../api/client";
 import { api } from "../api/client";
 import type { ApprovalSettings } from "../features/ApprovalSettings";
 import { LatestRead, sameValue } from "../lifecycle/requests";
 import { usePolling } from "../lifecycle/usePolling";
 
 export function useSettings(
-  session: Session | null,
+  connection: WorkbenchConnection | null,
   modal: string,
   setError: (value: string) => void,
 ) {
@@ -21,10 +21,11 @@ export function useSettings(
     [environment, setEnvironment] = useState<Record<string, Json>>({});
 
   const settingsRead = useRef(new LatestRead());
+  useEffect(() => setApprovalSettings(null), [connection?.path]);
   const settingsOpen = modal === "settings",
     environmentOpen = modal === "environment";
   useEffect(() => {
-    if (!session || (!settingsOpen && settings)) return;
+    if (!connection?.selected || (!settingsOpen && settings)) return;
     const read = settingsRead.current.begin();
     void api<ModelSettings>("/settings", "GET", undefined, { signal: read.signal })
       .then((value) => {
@@ -34,9 +35,9 @@ export function useSettings(
         if (read.current()) setError(e.message);
       });
     return () => read.cancel();
-  }, [session, settingsOpen]);
+  }, [connection, settingsOpen]);
   useEffect(() => {
-    if (!session) return;
+    if (!connection) return;
     const controller = new AbortController();
     void api<Record<string, Json>>("/environment", "GET", undefined, { signal: controller.signal })
       .then((value) => {
@@ -46,9 +47,9 @@ export function useSettings(
         if (!controller.signal.aborted) setError(e.message);
       });
     return () => controller.abort();
-  }, [session, environmentOpen]);
+  }, [connection, environmentOpen]);
   usePolling(
-    session ? `approval:${settingsRetry}` : null,
+    connection?.selected ? `approval:${connection.path}:${settingsRetry}` : null,
     (signal) => api<ApprovalSettings>("/settings/approval", "GET", undefined, { signal }),
     (value) => {
       setApprovalSettings((old) =>

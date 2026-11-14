@@ -49,14 +49,15 @@ def _mcp_body(result):
 
 
 def _finish_mcp_read(adapter, result):
-    from application.read_delivery import assemble_read_pages, serialized_size
+    from application.read_delivery import assemble_read_pages, read_limits, serialized_size
     pages = []
     while True:
         page = _mcp_body(result)
         assert not result.is_error, page
         assert result.structured_content is None
         size = serialized_size(result.model_dump(by_alias=True, exclude_none=True))
-        assert size['estimated_tokens'] <= 6000 and size['utf8_bytes'] <= 32768
+        max_tokens, max_bytes = read_limits(page)
+        assert size['estimated_tokens'] <= max_tokens and size['utf8_bytes'] <= max_bytes
         pages.append(page)
         continuation = page['data']['delivery']['next']
         if continuation is None:
@@ -65,7 +66,7 @@ def _finish_mcp_read(adapter, result):
 
 
 async def _complete_client_read(client, name, arguments, initial=None):
-    from application.read_delivery import assemble_read_pages, serialized_size
+    from application.read_delivery import assemble_read_pages, read_limits, serialized_size
     pages = []
     while True:
         result = initial if initial is not None else await client.call_tool(name, arguments)
@@ -73,7 +74,8 @@ async def _complete_client_read(client, name, arguments, initial=None):
         page = _mcp_body(result)
         assert not result.is_error, page
         size = serialized_size(result.model_dump(by_alias=True, exclude_none=True))
-        assert size['estimated_tokens'] <= 6000 and size['utf8_bytes'] <= 32768
+        max_tokens, max_bytes = read_limits(page)
+        assert size['estimated_tokens'] <= max_tokens and size['utf8_bytes'] <= max_bytes
         pages.append(page)
         continuation = page['data']['delivery']['next']
         if continuation is None:
@@ -496,7 +498,7 @@ def test_local_mcp_project_selection_and_argument_boundaries(tmp_path):
 
     session = EngineeringSession(tmp_path / "workspace", state_dir=tmp_path / "state")
     adapter = LocalMCPToolAdapter(session)
-    assert {tool.name for tool in adapter.list_tools()} == set(SAFE_TOOL_NAMES) | set(SESSION_TOOL_NAMES)
+    assert {tool.name for tool in adapter.list_tools()} == set(SAFE_TOOL_NAMES) | set(SESSION_TOOL_NAMES) | {"gxworks_read_context_unit"}
     assert not session.workspace.exists() and not session.service.state_dir.exists()
     missing = adapter.call_tool("get_current_project", {}, "none")
     assert not missing.is_error
@@ -831,7 +833,7 @@ raise SystemExit(main())
                         assert "no Web workbench is required" in initialized.instructions
                         assert "read_native_device_assignments" in initialized.instructions
                         assert "does not establish execution correspondence" in initialized.instructions
-                        assert {tool.name for tool in (await client.list_tools()).tools} == set(SAFE_TOOL_NAMES) | set(SESSION_TOOL_NAMES)
+                        assert {tool.name for tool in (await client.list_tools()).tools} == set(SAFE_TOOL_NAMES) | set(SESSION_TOOL_NAMES) | {"gxworks_read_context_unit"}
                         unselected = await client.call_tool("get_current_project", {})
                         assert not unselected.is_error and _mcp_body(unselected)["data"]["selection_status"] == "none"
                         created = await client.call_tool("create_project", {"name": "Direct", "plc_model": "FX3U", "target_mode": "ladder"})
@@ -1526,7 +1528,7 @@ def test_mcp_client_discovers_and_calls_the_shared_runtime(saved_project):
     async def exercise():
         async with Client(create_server(_provider(saved_project), runtime)) as client:
             discovered = await client.list_tools()
-            assert {tool.name for tool in discovered.tools} == set(SAFE_TOOL_NAMES)
+            assert {tool.name for tool in discovered.tools} == set(SAFE_TOOL_NAMES) | {"gxworks_read_context_unit"}
             for name, arguments in [
                 ("get_current_project", {}),
                 ("get_current_program_info", {}),
@@ -1856,24 +1858,24 @@ def test_project_without_version_has_a_valid_context(tmp_path):
 
 
 def test_generation_tool_schemas_describe_only_model_owned_input(empty_project):
-    from plc.generation_contract import ladder_v1_schema
-
     store, project_id = empty_project
     adapter = MCPToolAdapter(build_default_tool_runtime(), SessionToolContextProvider(store.base_dir, project_id))
     schemas = {tool.name: tool.input_schema for tool in adapter.list_tools()}
     context_schema = schemas["get_generation_context"]
-    assert set(context_schema["properties"]) == {"user_requirement", "workflow", "execution_mode", "cursor", "catalog_scope", "templates", "instruction_details"}
-    assert context_schema["properties"]["workflow"]["enum"] == ["direct_generation", "detailed"]
+    assert set(context_schema["properties"]) == {"user_requirement", "workflow", "execution_mode",
+        "program", "cursor", "catalog_scope", "templates", "instruction_details", "read_format", "read_budget_tokens"}
+    assert context_schema["properties"]["workflow"]["enum"] == ["direct_generation", "detailed", "plan_review"]
     assert context_schema["properties"]["execution_mode"]["enum"] == ["background", "live"]
     assert not context_schema.get("required")
     assert context_schema["additionalProperties"] is False
     schema = schemas["create_program_candidate"]
     assert schema["required"] == ["ladder"]
     assert schema["additionalProperties"] is False
-    assert set(schema["properties"]) == {"program_name", "ladder", "generation_context_id", "implementation_review", "io_example"}
+    assert set(schema["properties"]) == {"program_name", "ladder", "workflow", "generation_context_id",
+        "implementation_review", "io_example"}
     assert schema["properties"]["io_example"]["properties"]["steps"]["maxItems"] == 16
     review = schema["properties"]["implementation_review"]
-    assert set(review["required"]) == {"context_document", "manual_documents"}
+    assert review["required"] == []
     assert schema["properties"]["generation_context_id"]["type"] == "string"
     assert "generation_context_id" not in schema["required"]
     assert schema["properties"]["program_name"]["default"] == "MAIN"
@@ -1881,6 +1883,8 @@ def test_generation_tool_schemas_describe_only_model_owned_input(empty_project):
     assert "oneOf" not in schema["properties"]["ladder"]
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema).validate({"ladder": _generation_ladder()})
+    Draft202012Validator(schema).validate({"ladder": _generation_ladder(),
+                                           "implementation_review": {"selected": "Direct output"}})
     for bad in [
         {"ladder": _generation_ladder(), "revision": 8},
         {"ladder": {"device_comments": {}, "rungs": [], "networks": []}},
@@ -1966,15 +1970,26 @@ def test_local_design_implements_only_the_selected_web_approach(tmp_path, langua
         assert {'tool': 'get_generation_context', 'arguments': {'workflow': 'direct_generation'}} in pending_err['next_actions']
         context = read('get_design_context', user_requirement=text)
         assert 'Analysis mode: design' in context['analysis_instructions'] and context['target_mode'] == language
+        assert '# Pre-selection evidence' in context['analysis_instructions']
         analysis = {'summary': text, 'execution_intent_claims': [], 'explicit_constraint_claims': [],
-                    'approaches': [{'approach_id': key, 'name': title, 'implementation_semantics': []}
+                    'approaches': [{'approach_id': key, 'name': title, 'implementation_semantics': [], 'decision_basis': [],
+                        'description': title, 'output_logic': [{
+                            'target': 'Y0', 'state': title, 'activation': 'Start at X0.',
+                            'update': 'Process stop before updating Y0.', 'release': 'Stop at X1.',
+                            'interruption': 'Stop clears the run state.', 'selection': title,
+                        }]}
                                    for key, title in [('state', 'Store a run flag'), ('contact', 'Output seal-in')]]}
         def propose():
-            return _mcp_body(run('propose_design_plan', analysis_id=context['analysis_id'], analysis=analysis))['data']
+            return _mcp_body(run('propose_design_plan', analysis=analysis))['data']
+        assert _mcp_body(run('propose_design_plan', analysis_id='old-analysis',
+                             analysis=analysis))['error']['code'] == 'DESIGN_CONTEXT_REQUIRED'
         if language == 'ladder':
+            choices = [{'opcode': 'OUT', 'role': 'Drive the output from the seal-in circuit.'}]
             validator = Draft202012Validator(context['analysis_schema'])
             analysis['approaches'][0]['description'] = 'Remember run in a state bit.'
+            analysis['approaches'][0]['instruction_choices'] = [{'opcode': 'SET', 'role': 'Store the run flag.'}]
             analysis['approaches'][1]['description'] = 'Use the output contact.'
+            analysis['approaches'][1]['instruction_choices'] = choices
             validator.validate(analysis)
             analysis['execution_intent_claims'] = [{'claim': 'Start on a button'}]
             analysis['approaches'][0]['implementation_semantics'] = 'unsupported'
@@ -1996,6 +2011,10 @@ def test_local_design_implements_only_the_selected_web_approach(tmp_path, langua
         if language == 'ladder':
             analysis['missing_info'] = [{'id': 'restart_behavior', 'question': 'How should the motor restart?',
                                          'required': True, 'options': ['Wait for start', 'Resume automatically']}]
+            analysis['open_questions'] = [
+                {'id': 'permit', 'text': 'Is external enable required?', 'required': True},
+                {'id': 'indication', 'text': 'Should status be shown on the HMI?', 'required': False},
+            ]
         draft = propose()
         assert draft['user_requirement'] == text
         assert not session.service.projects.raw_project(session.project_id)['confirmed_spec']
@@ -2003,10 +2022,11 @@ def test_local_design_implements_only_the_selected_web_approach(tmp_path, langua
         assert run('confirm_design_plan', draft_id=draft['draft_id'], approach_id='invented').is_error
         approval = {'draft_id': draft['draft_id'], 'approach_id': 'contact'}
         if language == 'ladder':
-            assert [issue['code'] for issue in draft['issues']['errors']] == ['required_parameter_missing']
+            assert {issue['code'] for issue in draft['issues']['errors']} == {'required_parameter_missing', 'invalid_project_plan'}
+            assert {row['id'] for row in draft['review']['open_questions']} == {'permit', 'indication'}
             assert not _mcp_body(run('confirm_design_plan', **approval))['data']['confirmed']
             assert run('confirm_design_plan', **approval, parameter_answers={'unknown': 'Start'}).is_error
-            approval['parameter_answers'] = {'restart_behavior': 'Wait for start'}
+            approval['parameter_answers'] = {'restart_behavior': 'Wait for start', 'permit': 'Use existing X0 input only'}
         confirmed = _mcp_body(run('confirm_design_plan', **approval))['data']
         assert confirmed['confirmed'] and session.service.projects.raw_project(session.project_id)['confirmed_decision_receipt_id']
         assert run('get_generation_context', user_requirement=text, workflow='direct_generation').is_error
@@ -2017,10 +2037,18 @@ def test_local_design_implements_only_the_selected_web_approach(tmp_path, langua
         assert generation['output_contract']['tool'] == ('create_program_candidate' if language == 'ladder' else f'create_{language}_candidate')
         if language == 'ladder':
             persisted = session.service.projects.raw_project(session.project_id)['confirmed_spec']
+            assert persisted['selected_approach']['instruction_choices'] == choices
+            assert spec['selected_approach']['instruction_choices'] == choices
+            assert spec['selected_approach']['generation_contract']['required_opcodes'] == []
+            assert any(unit.get('kind') == 'instruction' and unit.get('target') == 'OUT'
+                       for unit in generation['generation_input']['knowledge'])
             answer = next(row for row in persisted['parameters'] if row['id'] == 'restart_behavior')
             assert answer['value'] == 'Wait for start' and answer['source'] == 'user'
             assert spec['intent_context']['requests'][-1]['text'] == text
-            assert generation['output_contract']['protocol'] == 'compact_ladder/1.3'
+            questions = {row['id']: row for row in spec['open_questions']}
+            assert questions['permit']['answer'] == 'Use existing X0 input only' and questions['permit']['source'] == 'user'
+            assert questions['indication']['required'] is False and not questions['indication'].get('answer')
+            assert generation['output_contract']['protocol'] == 'compact_ladder/1.4'
             Draft202012Validator(generation['generation_input']['output_schema']).validate(
                 {'r': [{'c': ['NO X0'], 'b': [{'i': [], 'o': ['COIL Y0']}]}], 'device_comments': [{'address': 'Y0', 'comment': 'Run'}]})
 
@@ -2110,7 +2138,7 @@ def test_versionless_generation_context_and_candidate_over_mcp(empty_project):
             assert pending["ladder_sha256"] == canonical_sha256(_generation_ladder())
             assert pending["confirmed_spec_hash"] == canonical_sha256(spec)
             assert 'diagnostics' not in pending
-            assert len(pending["artifact_hashes"]) == 6
+            assert set(pending["artifact_hashes"]) == {"json", "ir", "svg", "program_csv", "comment_csv"}
             assert pending["summary"]["network_count"] == 1
             assert pending["summary"]["device_count"] == 3
             assert "_candidate_ir" not in result.model_dump_json()
@@ -2123,6 +2151,103 @@ def test_versionless_generation_context_and_candidate_over_mcp(empty_project):
     project = store.get_project(project_id)
     assert project["versions"] == []
     assert project["active_version_id"] is None
+
+
+def test_mcp_client_declares_read_capacity_without_model_arguments():
+    from types import SimpleNamespace
+    from mcp.client.session import ClientSession
+    from mcp.shared.memory import create_client_server_memory_streams
+    from agent_runtime.plc_tools import ToolDefinition, ToolRegistry, build_tool_context
+    from agent_runtime.runtime import InProcessToolRuntime
+    from integrations.mcp.server import READ_DELIVERY_EXTENSION, create_server
+
+    rows = [{'kind': 'instruction', 'target': f'OP{i}', 'value': {'description': '当前型号写法。' * 100}}
+            for i in range(16)]
+    registry = ToolRegistry()
+    registry.register(ToolDefinition('search_plc_manual', 'manual',
+        {'type': 'object', 'properties': {'query': {'type': 'string'}}},
+        lambda *_: {'plc_model': 'FX3U', 'language': 'ladder', 'results': [{'knowledge': [row]} for row in rows]}))
+    provider = SimpleNamespace(get_context=lambda: build_tool_context({'id': 'test', 'plc_model': 'FX3U'}))
+
+    async def exercise(advertised, configured):
+        server = create_server(provider, InProcessToolRuntime(registry), read_budget_tokens=configured)
+        extensions = {READ_DELIVERY_EXTENSION: {'readBudgetTokens': advertised}} if advertised else None
+        async with create_client_server_memory_streams() as (client_streams, server_streams):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(server.run, *server_streams, server.create_initialization_options())
+                async with ClientSession(*client_streams, extensions=extensions) as client:
+                    await client.initialize()
+                    schema = next(tool.input_schema for tool in (await client.list_tools()).tools
+                                  if tool.name == 'search_plc_manual')
+                    result = await client.call_tool('search_plc_manual', {'query': 'operand'})
+                    body = json.loads(result.content[0].text)
+                    assert result.structured_content is None
+                tg.cancel_scope.cancel()
+        return schema, body
+
+    with_capacity, complete = anyio.run(exercise, 32000, None)
+    assert 'read_budget_tokens' not in with_capacity['properties']
+    assert complete['ok'] and complete['data']['delivery']['next'] is None
+    facts = [row['knowledge'][0] for row in complete['data']['document']['results']]
+    assert [{key: value for key, value in row.items() if key != 'citation_id'} for row in facts] == rows
+    _, limited = anyio.run(exercise, 32000, 6000)
+    assert limited['error']['code'] == 'HOST_CONTEXT_TOO_LARGE'
+    legacy, first_page = anyio.run(exercise, None, None)
+    assert 'read_budget_tokens' in legacy['properties']
+    assert first_page['ok'] and first_page['data']['delivery']['next'], first_page
+
+
+def test_local_mcp_interleaved_design_tasks_require_an_explicit_binding(tmp_path):
+    from itertools import count
+    from application.engineering_session import EngineeringSession
+    from application.read_delivery import assemble_read_pages
+    from design_output_examples import contact_output_en
+    from integrations.mcp.local_adapter import LocalMCPToolAdapter
+
+    sequence = count()
+    with EngineeringSession(tmp_path / 'workspace', state_dir=tmp_path / 'state') as session:
+        adapter = LocalMCPToolAdapter(session, read_budget_tokens=32000)
+        tool = next(tool for tool in adapter.list_tools() if tool.name == 'get_design_context')
+        assert 'read_budget_tokens' not in tool.input_schema['properties']
+
+        def call(tool, **args):
+            return _mcp_body(adapter.call_tool(tool, args, str(next(sequence))))
+
+        def read(text):
+            page = call('get_design_context', user_requirement=text)
+            assert page['data']['delivery']['complete'] and page['data']['delivery']['next'] is None
+            return assemble_read_pages([page])['analysis_id']
+
+        assert call('create_project', name='Design tasks', plc_model='FX3U', generation_mode='design')['ok']
+        limited = LocalMCPToolAdapter(session, read_budget_tokens=1000)
+        blocked = limited.call_tool('get_design_context', {'user_requirement': 'X2 controls Y0.'}, 'overbudget')
+        assert _mcp_body(blocked)['error']['code'] == 'HOST_CONTEXT_TOO_LARGE'
+        a, b = [read(text) for text in ('X0 controls Y0.', 'X1 controls Y0.')]
+        analysis = {'summary': 'Direct input and output.', 'approaches': [{
+            'approach_id': 'contact', 'name': 'Contact', 'description': 'Drive Y0.',
+            'implementation_semantics': [], 'decision_basis': [], 'output_logic': contact_output_en(),
+        }]}
+        ambiguous = call('propose_design_plan', analysis=analysis)
+        assert ambiguous['error']['code'] == 'DESIGN_TASK_REQUIRED'
+        assert {row['analysis_id'] for row in ambiguous['error']['design_tasks']} == {a, b}
+        assert call('get_design_context')['error']['code'] == 'DESIGN_TASK_REQUIRED'
+
+        from copy import deepcopy
+        incomplete = deepcopy(analysis)
+        incomplete['approaches'][0].pop('output_logic')
+        repair = call('propose_design_plan', analysis_id=a, analysis=incomplete)['data']
+        recovered = call('get_design_context', repair_id=repair['repair_id'])
+        assert recovered['ok'] and recovered['data']['document']['analysis_id'] == a
+        draft_b = call('propose_design_plan', analysis_id=b, analysis=analysis)['data']
+        fixes = [{'path': '/approaches/0/output_logic', 'value': contact_output_en()}]
+        assert call('propose_design_plan', analysis_id=b, repair_id=repair['repair_id'],
+                    repairs=fixes)['error']['code'] == 'DESIGN_CONTEXT_REQUIRED'
+        draft_a = call('propose_design_plan', repair_id=repair['repair_id'], repairs=fixes)['data']
+        assert draft_a['analysis_id'] == a and draft_a['user_requirement'] == 'X0 controls Y0.'
+        assert call('propose_design_plan', analysis_id=b)['data']['draft_id'] == draft_b['draft_id']
+        assert call('confirm_design_plan', draft_id=draft_a['draft_id'], approach_id='contact')['data']['confirmed']
+        assert call('confirm_design_plan', draft_id=draft_b['draft_id'],
+                    approach_id='contact')['error']['code'] == 'DESIGN_PROJECT_CHANGED'
 
 
 def test_generation_context_has_no_private_state_or_credentials():
@@ -2165,7 +2290,7 @@ def test_generation_context_has_no_private_state_or_credentials():
     assert context.project["confirmed_spec"]["api_key"] == secret
 
 
-def test_generation_uses_the_context_model_and_version_spec_snapshot():
+def test_generation_uses_bound_model_and_current_requirements_with_version_fallback():
     spec = {"summary": "Selected version spec", "selected_approach": {
         "name": "no motor", "generation_contract": {"forbidden_devices": ["Y0"]},
     }}
@@ -2176,12 +2301,12 @@ def test_generation_uses_the_context_model_and_version_spec_snapshot():
     runtime = build_default_tool_runtime()
     projected = _complete_runtime_read(runtime, ToolCall("context", "get_generation_context", {}), context)
     assert projected["plc_model"] == "FX5U"
-    assert projected["generation_input"]["confirmed_spec"]["summary"] == spec["summary"]
+    assert projected["generation_input"]["confirmed_spec"]["summary"] == "current project spec"
     failed = runtime.invoke(ToolCall("candidate", "create_program_candidate", {"ladder": _generation_ladder()}), context)
     assert not failed.is_error
     pending = failed.data["data"]["pending_action"]
     assert pending["_candidate_ir"]["plc"]["cpu"] == "FX5U"
-    assert pending["_confirmed_spec"] == spec
+    assert pending["_confirmed_spec"] == context.project["confirmed_spec"]
     assert pending["_validation_profile"] == "generation_structural"
     no_spec = build_tool_context({"id": "empty", "plc_model": "FX5U"})
     projected = _complete_runtime_read(runtime, ToolCall("context", "get_generation_context", {}), no_spec)
@@ -2309,7 +2434,7 @@ raise SystemExit(main())
                         assert "do not start an automatic repeated-submission loop" in initialized.instructions
                         assert "locate_native_code_steps" in initialized.instructions
                         assert initialized.capabilities.tools is not None
-                        assert {tool.name for tool in (await client.list_tools()).tools} == set(SAFE_TOOL_NAMES)
+                        assert {tool.name for tool in (await client.list_tools()).tools} == set(SAFE_TOOL_NAMES) | {"gxworks_read_context_unit"}
                         calls = [] if without_version else [
                             ("read_network", {"network_id": "N0001"}),
                             ("compile_project", {}),
@@ -2364,7 +2489,7 @@ def test_scriptable_stdio_smoke():
     assert result.returncode == 0, result.stderr
     summary = json.loads(result.stdout)
     assert summary["ok"] is True
-    assert summary["tool_count"] == len(SAFE_TOOL_NAMES)
+    assert summary["tool_count"] == len(SAFE_TOOL_NAMES) + 1
     assert summary["called_tool"] == "read_network"
     assert summary["generation"] == {
         "called_tools": ["get_generation_context", "create_program_candidate"],
@@ -2758,13 +2883,13 @@ def test_manual_availability_distinguishes_empty_model_facts_from_a_broken_index
         connection.execute('CREATE TABLE facts(plc_model TEXT)')
         connection.execute("INSERT INTO facts VALUES('FX3U')")
     index_access.close_thread_connection()
-    monkeypatch.setattr(index_access, 'index_path', lambda: path)
+    monkeypatch.setattr('knowledge.fact_corpus.runtime_index_path', lambda kind: path)
     assert model_corpus_status('FX3U')['status'] == 'facts_available'
     assert model_corpus_status('FX5U')['status'] == 'no_facts_for_model'
     group = model_corpus_status('FX3U/FX3UC')
     assert group['missing_members'] == ['FX3UC'] and group['status'] == 'no_facts_for_model'
     index_access.close_thread_connection()
-    monkeypatch.setattr(index_access, 'index_path', lambda: None)
+    monkeypatch.setattr('knowledge.fact_corpus.runtime_index_path', lambda kind: None)
     assert model_corpus_status('FX3U')['status'] == 'index_unavailable'
 
 
@@ -2773,12 +2898,15 @@ def test_manual_availability_distinguishes_empty_model_facts_from_a_broken_index
 ])
 def test_manual_search_resolves_hardware_spellings_without_native_project_support(tmp_path, spelling, expected):
     session, _ = _inspection_session(tmp_path)
+    # This corpus can contain a single complete interface above the default
+    # host page budget. The caller advertises its available output budget.
+    arguments = {"query": "MOV 指令 操作数", "plc_model": spelling, "top_k": 3, 'read_budget_tokens': 16000}
     found = session.invoke(ToolCall("manual", "search_plc_manual",
-                                    {"query": "MOV 指令 操作数", "plc_model": spelling, "top_k": 3}))
+                                    arguments))
     assert not found.is_error, found.data
     from integrations.mcp.local_adapter import LocalMCPToolAdapter
     document, _ = _complete_mcp_read(LocalMCPToolAdapter(session), "search_plc_manual",
-        {"query": "MOV 指令 操作数", "plc_model": spelling, "top_k": 3})
+        arguments)
     assert document["plc_model"] == expected
     unknown = session.invoke(ToolCall("bad-model", "search_plc_manual",
                                       {"query": "MOV 指令 操作数", "plc_model": "FX9Z"}))
@@ -3689,17 +3817,20 @@ def test_live_generation_context_routes_current_session_state_without_replaying(
 
 # Paged read protocol: exercise the actual public envelope, not only a builder.
 def _complete_mcp_read(adapter, name, arguments, call_id='paged'):
-    from application.read_delivery import assemble_read_pages, serialized_size
+    from application.read_delivery import assemble_read_pages, read_limits, serialized_size
     pages = []
+    arguments = {**arguments, 'read_format': 'paged'}
     while True:
         result = adapter.call_tool(name, arguments, f'{call_id}-{len(pages)}')
         page = json.loads(result.content[0].text)
         assert not result.is_error, page
         assert result.structured_content is None
         wire_size = serialized_size(result.model_dump(by_alias=True, exclude_none=True))
-        assert wire_size['estimated_tokens'] <= 6000 and wire_size['utf8_bytes'] <= 32768
+        max_tokens, max_bytes = read_limits(page)
+        assert wire_size['estimated_tokens'] <= max_tokens and wire_size['utf8_bytes'] <= max_bytes
         size = serialized_size(page)
-        assert size['estimated_tokens'] <= 6000 and size['utf8_bytes'] <= 32768
+        max_tokens, max_bytes = read_limits(page)
+        assert size['estimated_tokens'] <= max_tokens and size['utf8_bytes'] <= max_bytes
         pages.append(page)
         continuation = page['data']['delivery']['next']
         if continuation is None:
@@ -3719,7 +3850,7 @@ def test_paged_read_roundtrip_preserves_complete_objects_and_limits(values):
         'value': value, 'scope': {'languages': ['st']}, 'depends_on': []}]} for i, value in enumerate(values)],
         'source': '完整源码保持不变', 'schema': {'properties': {'_user_key': {'type': 'boolean'}}}}
     store = ReadDeliveryStore(max_tokens=1000, max_bytes=4000)
-    page = store.prepare({'ok': True, 'tool': 'get_generation_context', 'data': document}, {}, ('v1',))
+    page = store.prepare({'ok': True, 'tool': 'get_generation_context', 'data': document}, {'read_format': 'paged'}, ('v1',))
     pages = [page]
     while page['data']['delivery']['next']:
         page = store.resume('get_generation_context', page['data']['delivery']['next']['arguments'], ('v1',))
@@ -3879,7 +4010,7 @@ def test_group_operations_require_scoped_region_facts(monkeypatch):
     store.check_review(binding, {**review, 'alternatives': [{'method': 'BMOV', 'tradeoff': 'Copies a contiguous region in a single operation.'}]})
 
 
-def test_instruction_selection_requires_relevant_complete_reads_before_submission():
+def test_instruction_selection_only_requires_explicitly_referenced_reads():
     from application.instruction_research import research_plan
     from application.read_delivery import ReadDeliveryStore
     from agent_runtime.tool_errors import ToolPreconditionError
@@ -3911,16 +4042,10 @@ def test_instruction_selection_requires_relevant_complete_reads_before_submissio
     with pytest.raises(ToolPreconditionError) as error:
         store.resume('search_plc_manual', {'query': 'OUT', 'cursor': timer_id + ':2'}, binding)
     assert error.value.code == 'READ_PAGE_SKIPPED'
-    with pytest.raises(ToolPreconditionError) as error:
-        store.check_review(binding, review)
-    assert error.value.code == 'INSTRUCTION_READ_INCOMPLETE'
+    assert not store.check_review(binding, dict(review))['model_facts']
     finish(timer)
-    with pytest.raises(ToolPreconditionError) as error:
-        store.check_review(binding, review)
-    assert error.value.details['missing_families'] == ['queue']
     queue = search('SFWR')
-    finish(queue)
-    review['manual_documents'].append(queue['data']['delivery']['document_id'])
+    assert queue['data']['delivery']['next']
     store.check_review(binding, review)
     review['limitations'] = '队列容量与实际生产节拍尚待确认。'
     store.check_review(binding, review)
@@ -3934,7 +4059,7 @@ def test_paged_read_rejects_indivisible_source_instead_of_truncating():
     source = {'source_name': 'MAIN', 'st_text': 'IF X0 THEN Y0 := TRUE; END_IF;\n' * 2000}
     with pytest.raises(ToolPreconditionError) as caught:
         ReadDeliveryStore().prepare({'ok': True, 'tool': 'get_generation_context',
-            'data': {'st_sources': [source]}}, {}, ('v1',))
+            'data': {'st_sources': [source]}}, {'read_format': 'paged'}, ('v1',))
     assert caught.value.payload()['code'] == 'READ_OBJECT_TOO_LARGE'
     assert source['st_text'].endswith('END_IF;\n')
 
@@ -3945,7 +4070,7 @@ def test_paged_schema_keeps_its_own_objects_and_merge_properties():
               'properties': {'$merge': {'type': 'number'}}}
     document = {'input_schema': schema, 'schema': {'$ref': '#/objects/local_schema'}}
     page = ReadDeliveryStore().prepare({'ok': True, 'tool': 'get_generation_context',
-        'data': document}, {}, ('v1',))
+        'data': document}, {'read_format': 'paged'}, ('v1',))
     assert assemble_read_pages([page]) == document
 
 
@@ -3959,11 +4084,10 @@ def test_manual_explicit_targets_survive_top_k_in_actual_public_return(top_k):
     targets = {row['target']: row for row in document['coverage']['targets']}
     assert {'LDP', 'ANDP', 'ANDF', 'SET', 'RST'} <= targets.keys()
     for target in ('LDP', 'ANDP', 'ANDF', 'SET', 'RST'):
-        assert targets[target]['corpus'] == 'present'
-        assert targets[target]['reason'] != 'exact_fact_not_found'
-        assert {'effects', 'execution', 'st_call'} <= {row['aspect'] for row in targets[target]['aspects']}
+        assert targets[target]['identity_found'] is True
+        assert targets[target]['delivery'] == 'delivered'
     assert len([row for row in document['results'] if row.get('fact_target') == 'LDP']) == 1
-    assert all(item['delivery'] == ('delivered' if item['corpus'] == 'present' else 'not_available')
+    assert all(item['delivery'] == ('delivered' if item['identity_found'] else 'not_available')
                for item in targets.values())
     assert pages[-1]['data']['delivery']['coverage']['delivery'] == 'delivered'
     for i, page in enumerate(pages):
@@ -3977,7 +4101,7 @@ def test_large_target_coverage_is_paged_without_repeating_it_in_each_header():
     targets = [{'kind': 'instruction', 'target': 'OP' + str(i), 'corpus': 'present',
                 'knowledge': 'incomplete', 'delivery': 'delivered'} for i in range(1000)]
     pages = [store.prepare({'ok': True, 'tool': 'get_generation_context',
-        'data': {'knowledge_coverage': {'targets': targets}}}, {}, ('version',))]
+        'data': {'knowledge_coverage': {'targets': targets}}}, {'read_format': 'paged'}, ('version',))]
     while not pages[-1]['data']['delivery']['complete']:
         followup = pages[-1]['data']['delivery']['next']
         pages.append(store.resume(followup['tool'], followup['arguments'], ('version',)))
@@ -3992,7 +4116,7 @@ def test_paged_large_models_split_networks_but_preserve_interface_lists():
         'previous': {'nodes': [{'id': str(i), 'text': 'y' * 700} for i in range(30)]},
         'call_interface': {'FB': [{'name': 'port' + str(i), 'type': 'BOOL'} for i in range(140)]}}
     store = ReadDeliveryStore()
-    pages = [store.prepare({'ok': True, 'tool': 'get_generation_context', 'data': document}, {}, ('v1',))]
+    pages = [store.prepare({'ok': True, 'tool': 'get_generation_context', 'data': document}, {'read_format': 'paged'}, ('v1',))]
     while pages[-1]['data']['delivery']['next']:
         follow = pages[-1]['data']['delivery']['next']
         pages.append(store.resume(follow['tool'], follow['arguments'], ('v1',)))
@@ -4175,6 +4299,7 @@ def test_executable_range_fragment_is_scoped_and_keeps_model_provenance(monkeypa
     plan = {'families': {'block_move': ['BMOV']}}
     fragments = executable_fragments(plan, plc_model='FX3U', target_mode='ladder')
     assert len(fragments) == 1
+    assert fragments[0]['limitation_scope'] == 'this_construction_only'
     assert fragments[0]['example']['rung'] == {
         'c': ['P X0'], 'b': [{'i': [], 'o': ['FRAG range-bmov D100 D200 K16']}]}
     assert executable_fragments(plan, plc_model='FX3U', target_mode='st') == []
@@ -4593,7 +4718,7 @@ def test_confirmed_design_ladder_context_and_candidate_boundary_guards(tmp_path,
         param_meta = gxw_delivery_capability('LJ72GF15-T2')
         assert param_meta['cpu_supported'] is False and 'LJ72GF15-T2' in param_meta['reason']
 
-        # 2. Confirmed Design project omitting workflow="detailed" still returns compact_ladder/1.3.
+        # 2. Confirmed Design defaults to the same compact protocol as Direct.
         assert not run('create_project', name='Design-Ladder', plc_model='FX3U',
                        target_mode='ladder', generation_mode='design').is_error
         req = 'X0 starts Y0; X1 stops Y0. Hold the output until stopped.'
@@ -4601,14 +4726,19 @@ def test_confirmed_design_ladder_context_and_candidate_boundary_guards(tmp_path,
         draft = _mcp_body(run('propose_design_plan', analysis_id=design_ctx['analysis_id'], analysis={
             'summary': req, 'execution_intent_claims': [], 'explicit_constraint_claims': [],
             'approaches': [{'approach_id': 'contact', 'name': 'Seal-in',
-                            'description': 'Use output contact.', 'implementation_semantics': []}],
+                            'description': 'Use output contact.', 'implementation_semantics': [], 'decision_basis': [],
+                            'output_logic': [{
+                                'target': 'Y0', 'state': 'Y0 seal-in contact.', 'activation': 'Start at X0.',
+                                'update': 'Evaluate stop before driving Y0.', 'release': 'Stop at X1.',
+                                'interruption': 'Stop clears the seal-in.', 'selection': 'Use one output coil and its feedback contact.',
+                            }]}],
         }))['data']
         assert _mcp_body(run('confirm_design_plan', draft_id=draft['draft_id'], approach_id='contact'))['data']['confirmed']
 
         doc_id, gen_ctx = read_all('get_generation_context', user_requirement=req, instruction_details=True)
         contract = gen_ctx['output_contract']
-        assert contract['protocol'] == 'compact_ladder/1.3'
-        assert contract['required_fields'] == ['ladder', 'implementation_review']
+        assert contract['protocol'] == 'compact_ladder/1.4'
+        assert contract['required_fields'] == ['ladder']
         assert contract['review_contract']['argument'] == 'implementation_review'
         assert contract['gxw_delivery']['cpu_supported'] is True
         review = {'context_document': doc_id, 'manual_documents': [],
@@ -4655,7 +4785,7 @@ def test_confirmed_design_ladder_context_and_candidate_boundary_guards(tmp_path,
         assert v1_saved['ok'], v1_saved
 
 
-def test_instruction_review_errors_expose_expected_document_and_manual_actions():
+def test_instruction_review_requires_a_valid_task_but_ignores_optional_manual_ids():
     from application.instruction_research import research_plan
     from application.read_delivery import ReadDeliveryStore
     from agent_runtime.tool_errors import ToolPreconditionError
@@ -4667,7 +4797,7 @@ def test_instruction_review_errors_expose_expected_document_and_manual_actions()
     with pytest.raises(ToolPreconditionError) as missing_ctx:
         store.check_review(binding, fake_review)
     assert missing_ctx.value.code == 'INSTRUCTION_REVIEW_REQUIRED'
-    assert missing_ctx.value.next_actions == [{'tool': 'get_generation_context'}]
+    assert not missing_ctx.value.next_actions
 
     plan = research_plan({'knowledge': [{'kind': 'instruction', 'functions': ['queue'], 'name': 'SFWR'}]})
     page = store.prepare({'tool': 'get_generation_context', 'data': {
@@ -4678,23 +4808,13 @@ def test_instruction_review_errors_expose_expected_document_and_manual_actions()
     with pytest.raises(ToolPreconditionError) as wrong_doc:
         store.check_review(binding, fake_review)
     assert wrong_doc.value.code == 'INSTRUCTION_REVIEW_REQUIRED'
-    assert wrong_doc.value.details['expected_context_document'] == doc_id
-    assert wrong_doc.value.next_actions == [{'tool': 'get_generation_context'}]
+    assert not wrong_doc.value.next_actions
 
-    with pytest.raises(ToolPreconditionError) as missing_manual:
-        store.check_review(binding, None)
-    assert missing_manual.value.code == 'INSTRUCTION_READ_INCOMPLETE'
-    assert missing_manual.value.details['missing_families'] == ['queue']
-    assert missing_manual.value.details['missing_candidates'] == {'queue': ['SFWR']}
-    assert missing_manual.value.details['expected_context_document'] == doc_id
-    assert missing_manual.value.next_actions == [{
-        'tool': 'search_plc_manual', 'arguments': {'query': 'SFWR', 'language': 'ladder'}}]
+    store.check_review(binding, None)
 
-    with pytest.raises(ToolPreconditionError) as stale_manual:
-        store.check_review(binding, {'context_document': doc_id, 'manual_documents': ['read-' + 'f' * 32]})
-    assert stale_manual.value.code == 'STALE_MANUAL_DOCUMENT'
-    assert stale_manual.value.details['expected_context_document'] == doc_id
-    assert stale_manual.value.next_actions == [{'tool': 'search_plc_manual'}]
+    review = {'context_document': doc_id, 'manual_documents': ['read-' + 'f' * 32]}
+    assert store.check_review(binding, review)['families'] == {'queue': ['SFWR']}
+    assert review['manual_documents'] == []
 
 
 def test_st_code_alias_accepted_by_mcp_create_st_candidate(tmp_path, monkeypatch):
@@ -4830,3 +4950,35 @@ def test_fresh_fbd_generate_remaps_local_label_table_and_surfaces_pool_rules(tmp
         assert global_rows['OUT_RUN'].iec_address == '%QX8'
         local_rows = {row.name: row for row in built.declarations[built.sources.local_table].rows}
         assert 'LocalPermit' in local_rows
+
+def test_instruction_review_binds_interleaved_tasks_to_explicit_ids():
+    from application.read_delivery import ReadDeliveryStore
+    from agent_runtime.tool_errors import ToolPreconditionError
+
+    store = ReadDeliveryStore(capacity=2)
+    binding = ('project', 'FX3U', 'spec-rev-1')
+    def context(receipt, instruction):
+        result = store.prepare({'tool': 'get_generation_context', 'data': {
+            'generation_context_id': receipt,
+            'instruction_research': {'families': {'batch': [instruction]}},
+        }}, {}, binding)
+        return result['data']['delivery']['document_id']
+
+    a = context('generation-a', 'BMOV')
+    b = context('generation-b', 'SFWR')
+    review = {'context_document': a, 'manual_documents': []}
+    assert store.check_review(binding, review, 'generation-a')['families'] == {'batch': ['BMOV']}
+    assert store.check_review(binding, review, 'missing-alias')['generation_context_id'] == 'generation-a'
+    assert store.check_review(binding, None, 'generation-b')['generation_context_id'] == 'generation-b'
+    with pytest.raises(ToolPreconditionError) as conflict:
+        store.check_review(binding, review, 'generation-b')
+    assert conflict.value.details['expected_generation_context_id'] == 'generation-a'
+    with pytest.raises(ToolPreconditionError) as ambiguous:
+        store.check_review(binding, None)
+    assert {row['context_document'] for row in ambiguous.value.details['context_candidates']} == {a, b}
+    with pytest.raises(ToolPreconditionError):
+        store.check_review(('project', 'FX3U', 'spec-rev-2'), review)
+    context('generation-c', 'SFTL')
+    with pytest.raises(ToolPreconditionError) as expired:
+        store.check_review(binding, review)
+    assert not expired.value.next_actions

@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Workflow instructions. Core contracts own schema values and engineering facts."""
 
@@ -17,22 +17,24 @@ ANALYSIS_SYSTEM_PROMPT = """# Role
 协议/应用阶段>本轮>确认规格>型号/证据>历史；检索只读。
 
 # 输出要求
-approaches 每项含 approach_id、name、description、pros、cons、generation_guide、implementation_semantics；数量按模式。generation_contract 由 Core 生成，不输出。
+approaches 每项含 approach_id、name、description、pros、cons、generation_guide、instruction_choices、implementation_semantics、decision_basis；数量按模式。generation_contract 由 Core 生成，不输出。
 返回纯JSON（不要```json包裹），格式：
 {"summary":"一句话总结","approaches":[],"execution_intent_claims":[],"explicit_constraint_claims":[],"missing_info":[],"suggested_io":{},"hardware_config":{},"assumptions":[]}
 # suggested_io / hardware_config
-X/Y/M/D/T/C/S 用“地址:用途”对象分组，如 {"X":{"X10":"到位检测"}}；不得只给地址数组。special_relays/special_registers 可用数组或对象，SM/SD 分别归类。未知地址不填 suggested_io；需确认地址只放 missing_info，不同时预分配一个“建议地址”。hardware_config 只放相关硬件事实。
+X/Y/M/D/T/C/S 用“地址:用途”对象分组，如 {"X":{"X10":"到位检测"}}，不得只给地址数组。special_relays/special_registers 可为数组或对象，SM/SD 分列。未知地址不填 suggested_io，只在 missing_info 确认，不同时预分配一个“建议地址”。hardware_config 只写相关硬件事实。
 
 # Explicit low-level claims
-explicit_constraint_claims 只报告本轮写死/撤销的条件，不选择 opcode、完整操作数或地址。项含 operation、scope=global|scoped|ambiguous、target、evidence[]（本轮逐字，实例含完整指令）；仅 global 投影。未明说的推断设 inferred=true 且省去 evidence（只进回执，不编造原文）。target 形状及允许操作：
+explicit_constraint_claims 只报本轮明确设定/撤销的条件，勿选 opcode、完整操作数或地址。项含 operation、scope=global|scoped|ambiguous、target、evidence[]（逐字引本轮，实例含完整指令）。仅投影 global。推断设 inferred=true，省去 evidence，仅供回执。target 和操作：
 __EXPLICIT_TARGETS__
 category 仅用于 clear，value=opcodes/devices/instruction_instances/all。device.values 只放具体设备；方法禁令留原文，不伪装成地址。
 
 # Implementation semantics
-原始用户请求由应用另行保留。implementation_semantics 必须为数组；无明确结构用 []，不强配标签。字段示例：{"implementation_semantics":[{"kind":"structure","status":"required","value":"self_hold"}]}。status=required/forbidden/any_of，any_of 用 values，结构名用 Core 词表。approach 不输出低层字段。generation_guide 只补方案差异；没有这种差异就用空字符串。
+原始用户请求由应用另行保留。implementation_semantics 用数组，无明确结构用 []，不强配标签。字段示例：{"implementation_semantics":[{"kind":"structure","status":"required","value":"self_hold"}]}。status=required/forbidden/any_of，any_of 用 values，结构名用 Core 词表。
 
 # Missing-info minimality
-仅问确实缺失且会改变程序的事实，不重复已给答案。项含稳定 id、question、required、options；default 不是已确认答案，从属项用 required_when。缺失接线、极性、数值等必要输入仍为 required；内部地址不设必填。PLC 常识、常规扫描行为不是 assumptions；不新增硬件或按钮。
+仅问缺失且影响程序的事实。项含稳定 id、question、required、options。default 不是已确认答案，依赖用 required_when。接线、极性、数值等必要输入仍为 required，内部地址无需必填。PLC 常识、常规扫描行为不列为 assumptions，不添硬件或按钮。
+方案只列在 approaches，missing_info/open_questions 勿重复问选方案。options 为可直接提交的答案，需填地址、数值或说明时用 options=[]，填写提示放题干。
+各候选的内部技术方法由模型确定。Design 的方案选择在 approaches 中交给用户，待答问题只用于确认现场条件。
 """.replace("__EXPLICIT_TARGETS__", explicit_constraint_protocol())
 
 
@@ -46,31 +48,72 @@ behavior_claims[] 可选，使用同一表达式类型，附id、label、provena
 """.replace("__EXECUTION_EXAMPLE__", json.dumps(execution_intent_claim_example(), ensure_ascii=False, separators=(",", ":")))
 
 ANALYSIS_REQUIREMENTS_PROMPT = """# Analysis information stage: requirements
-本轮仍在确认逻辑 I/O 与必要现场参数。保留所有明确工艺要求、优先级、时序、恢复条件及写死限制；不为未知地址构造执行约束、效果/行为表达式或内部范围。execution_intent_claims 用 []；不输出 operation_intent_claims、behavior_claims、construction_plan。逻辑身份用 io_binding。不从常规起保停推导源上升沿启动或恢复后重按启动。已知要求不变新问题，未知接线不猜地址或电平。
+确认 I/O 和必要参数，保留所有明确工艺要求、优先级、时序、恢复条件和限制。execution_intent_claims 用 []，不输出 operation_intent_claims、behavior_claims、construction_plan。用 io_binding 标识逻辑 I/O，未知地址、电平和内部范围留空。起保停不推断上升沿或重启条件。
 """
 
 
 ANALYSIS_DIRECT_PROMPT = """# Analysis mode: direct
-用户选择直接实现：approaches 恰好 1 项（exactly one approach），不是方案咨询。没有用户指定方案时，先结合实际 CPU 的资料比较相关指令族与常规实现，再返回所选方案。模型提出的实现选择不得进入用户要求。
-可见方案保持最小：name 是短名称，description 只说明控制结构，pros 和 cons 用空字符串；明确结构写入 implementation_semantics。
-generation_guide 只补结构化字段表达不了的非显然方案差异，通常应为空字符串。不自行选择具体 opcode/operands/内部软元件；用户已写死的低层条件只报告到 explicit_constraint_claims，不展开扫描周期等通用知识。
+用户选择直接实现：approaches 恰好 1 项（exactly one approach），不是方案咨询。模型提出的实现选择不得进入用户要求。
+只提交选中的一项。name 是短名称，description 简述选中的控制结构，pros 和 cons 记录影响选型的具体取舍；明确结构写入 implementation_semantics。
 assumptions 无实际非必要不确定性时用 []。
-只补当前实现真正缺失的必要参数；不因缺参或复杂度切换 Design，不编造已确认答案。用户要求直接生成或不做分析，仍不能省略必要参数确认。
-移位跟踪不等于寄存器加减计数或状态机，SFTL 不自动要求 data_register_counter；只声明有依据的结构，其余留空。
-“同一件只登记一次”不等于“分类数值变化沿”。逐件登记事实未给齐时，missing_info 必须列出 required=true 的必要问题，覆盖每项未明事实：物料之间是否经过无物料值、同件分类能否变化、怎样重新允许登记，以及待注入结果在 Encoder shift 前后怎样保持/消耗/清零；不假设额外传感器。按钮用途与地址不等于按下时有效电平，未给时同样列入 missing_info。""" + "\n结构名：" + "、".join(sorted(SUPPORTED_STRUCTURES)) + "。无依据就留空。"
+只问会改变程序行为且无法由已有事实确定的现场条件。不因缺参或复杂度切换 Design，不编造已确认答案。对影响候选的未知条件说明适用范围，避免为内部实现参数反复提问。""" + "\n结构名：" + "、".join(sorted(SUPPORTED_STRUCTURES)) + "。无依据就留空。"
 
 
 ANALYSIS_PINNED_PROMPT = """# Direct substate: pinned / extract
 已有 selected_approach。沿用并修改这个唯一实现，保留 approach_id，不重新探索。已有 implementation_semantics 时逐项沿用，只有本轮明确修订才更新对应项；旧规格只有 generation_contract 时保留其既有含义，不从 prose 重建。未变更的指令、操作数、地址、数据表示和生成语义保持不变。
-已有 generation_guide 原样保留；原来为空就不要为了“说明完整”重新扩写。只有本轮新增且其他结构化字段无法表达的方案差异，才追加最短必要语义。
-只核对相关事实并补当前实现确实缺少的参数。事实冲突应如实指出，不静默换方案；参数未齐不等于架构重新开放。"""
+沿用已有 generation_guide 和 instruction_choices，同时沿用 output_logic；本轮明确修订方案时只更新相关做法和指令职责。
+只核对相关事实并补当前实现确实缺少的参数。decision_basis 沿用仍适用的条目，按本轮明确修订更新对应前提及来源。事实冲突应如实指出，不静默换方案；参数未齐不等于架构重新开放。"""
 
 
 ANALYSIS_DESIGN_PROMPT = """# Analysis mode: design / open
 用户显式选择方案探索。有 selected_approach 时仍可比较本轮允许调整的部分，不自动退回 pinned；保留未解除的用户明确约束、已确认 I/O 和参数，不把切换 Design 当作清空规格。候选是供确认的新草稿，不直接覆盖当前确认规格。
 结合需求、选定型号和 Retrieved PLC knowledge 中的设计证据，给出 1~3 个本质不同的候选。仅换编号、梯级顺序或增加同条件的中间位不算新的架构方案；设计空间很窄时允许只给 1 个。部分已固定的用户约束仍须保留，只比较开放部分。
-每个候选是一种控制结构方案；implementation_semantics 只表达 required/forbidden/any_of 结构。generation_guide 只写必要的方案级差异，不选择具体 opcode、operands 或内部地址；这些留给 Agent B。
+每个候选是一种控制结构方案；implementation_semantics 只表达 required/forbidden/any_of 结构。分别给出本方案的 generation_guide 和 instruction_choices，以便确认后继续实施。
+用户在完整候选之间做最终选择。description 用一两句写实际实现与关键指令职责。pros 和 cons 供方案卡片并排比较，使用相同的行首键，键固定、正文用回复语言：
+behavior: 并发、精度、停机恢复等相关行为与适用条件
+program_size: 固定逻辑和按对象、通道或容量复制的部分
+scan_work: 每扫描、每节拍或每事件的处理量，区分平均与峰值（如适用）
+maintenance: 增加对象、通道或容量时涉及的程序改动
+每项给出本方案的可观察差异，pros 和 cons 可互补，无内容的行可省略。若推荐某项，以 recommendation: 单独写明推荐依赖的工艺条件和收益。以已知规模或共同变量说明估算依据，程序尚未生成时不报精确步数。用户可见说明不放内部地址、手册引用或实现记录原文。
+
 """ + "\n结构名：" + "、".join(sorted(SUPPORTED_STRUCTURES)) + "。无依据就留空。"
+
+
+DECISION_BASIS_PROMPT = """# Decision basis
+decision_basis 为 [{variant,premise,status,conclusion,references}]，无影响取舍的前提用 []。variant 指明具体实现，premise 写影响选用或淘汰的条件，全部列在这里。单方案也记录实质影响选择的未采用变体。
+status 为 known（来源明确支持）、inferred（实现推导或暂用条件）或 unknown（尚未给定）。conclusion 为 applicable、conditional 或 excluded。inferred 和 unknown 只用 conditional。excluded 须说明这个变体违反哪项已知要求或本型号限制，不能由资料缺失推定指令不支持。
+known 必须有引用。技术资料有 citation_id 时提交 {source:"model_fact",ref:"该 ID"}，本地关联资料正文及版本。没有 ID 的旧资料仍可用 {source,ref,quote}：model_fact 的 ref 用 profile 或 knowledge。request 用本轮原文或仍有效的用户原话，ref 本轮用空字符串、历史用请求 ID。answer 用已答参数 ID，quote 复制当前答案值。confirmed_spec 引用当前规格的标量字段，quote 复制该值。可直接采用 Confirmed decision references 给出的条目。旧格式的 quote 最多 240 字符，长值摘录相关原句。缺依据时用 []，问题、选项和模型提议不算已确认事实。
+内部容量、地址等属于实现选择。工艺前提未经确认时保持条件性，方案获选也不会把这些前提变成用户要求。不要在摘要、分工或生成说明中把条件性前提写成已知事实。
+凡结论依赖额外条件，在该条记录的 applicability_conditions 中逐项给出 {premise,status,references}，无额外条件用 []。把资料中的条件规则与现场是否满足该条件分开；规则已知不代表现场条件已知。任一必要条件 inferred/unknown，整体结论只能 conditional，不能 excluded。模型自行选定的周期、容量、精度或数据布局不能成为淘汰其他实现的已知现场条件。
+模板、示例和复合构造的限制仅适用于其指定的数据组织、触发与状态策略；不能引用它来宣称底层指令或整个结构类别不支持。需要排除时指出具体变体及真实冲突，缺少条件时保留可行条件，不用猜测补齐。"""
+
+
+BEHAVIOR_STATE_PROMPT = """# Observable behavior
+共享状态时说明保留的顺序、分组边界和独立进度；若不同输入历史要求不同输出，不能压成相同的最早、最晚或累计值。核对触发、推进、合并、释放、暂停与恢复。
+Project acceptance cases 是有限采样：set 从 at_ms 起生效并保持到下次修改；expect 只断言该时刻的值，不表示状态恰在此刻切换，也不约束未观测区间。不得用采样点间距反推或替换工艺时长，不得用示例数量确定现场容量。扫描周期、时钟相位、初态和示例间隔只用于该用例；工艺条件以用户原文、有效答复和当前确认规格为准。
+""".strip()
+
+
+ANALYSIS_OUTPUT_LOGIC_PROMPT = """# Complete output implementation
+确认前由模型完成从输入、状态处理到最终输出的完整实现比较。选定状态组织后，还要比较该结构内部有实质差异的输出实现及其推进、回收方式，选出自洽的组合写入 generation_guide、instruction_choices 和 output_logic。使用同一组工艺条件和共同变量，比较状态存储、重复代码和每扫描处理量；只比较有依据的可行变体，简单任务不强凑多方案。内部写法由模型确定，用户确认的是可独立实施的完整候选。
+每个方案必须提交内部 output_logic 数组，按行为相同的输出组记录（数值结果、通信命令也属于输出，不局限于 Y 线圈）：
+{target:逻辑输出或输出组, state:保存哪些状态和历史/无状态时说明, activation:何时开始输出及触发消费规则, update:输出如何由状态计算/同扫描更新顺序/并发或重叠如何合并, release:何时结束或替换并如何回收状态, interruption:按已有要求处理禁止输出、暂停和恢复/未给定的工艺条件保持未知, selection:选定的具体输出方法及与可行替代实现的规模和行为取舍/只有一种可行实现时说明理由}。所有字段为非空文字，不能只写“窗口控制”“按需求实现”或留到生成阶段；不适用的环节说明原因。禁止为填满记录编造停止、时钟、容量、精度或硬件要求。
+output_logic 是模型的实现决策，不是新增用户要求；generation_guide 衔接这些决定，instruction_choices 覆盖实现输出所需的关键指令职责。先利用已有资料，不清楚相关写法时按需查询。记录随方案交给生成阶段，不要求用户填写或展开审阅这些内部字段。"""
+
+
+ANALYSIS_IMPLEMENTATION_PROMPT = """# Implementation details
+generation_guide 只写本方案的状态组织、推进、并发处理和输出实现要点。 交付方案前确定记录布局、更新与回收方法，以及重复处理的具体实现；不要把“固定槽位或队列”等尚未决定的分支留给生成阶段。instruction_choices 记录已选择的职责，未采用的指令放在取舍说明，不能以“可选”冒充已确定实现。pros 和 cons 概述取舍，使用 decision_basis 中的工艺前提。已有实现分工时，method 和 state_owner 分别说明操作与状态归属。
+instruction_choices 为 [{"opcode":"指令或系统软元件名称","role":"在此方案中承担的操作"}]。只列当前 CPU 与语言有资料支持、影响方案成立的选择，普通实现细节留到生成阶段，无适用选择时用 []。系统软元件可以列入，内部地址和完整操作数留到生成阶段。用户明确指定的低层约束由 explicit_constraint_claims 单独报告。""" + "\n\n" + DECISION_BASIS_PROMPT + "\n\n" + BEHAVIOR_STATE_PROMPT
+
+
+IMPLEMENTATION_COMPARISON_PROMPT = """# Pre-selection evidence
+只比较仍开放的实现，各候选共用已知要求、参数和现场条件。未定的规模、精度或时序用相同变量或已知范围，不编造取值或否定条件。比较单位是满足共同条件的完整实现；不满足要求的变体说明淘汰依据，不能用这些变体代替可行实现之间的比较。简单任务或只有一种有依据的可行实现时允许只给一个。
+写清状态组织及归属、输入登记和消费、无事件时的更新、同周期多事件处理、状态与输出推进、释放和恢复；核对型号、语言、指令条件、数据顺序、宽度和工程量换算。区分旧值读取与同扫描新值读取、输出门控与暂停推进、复位与恢复。恢复延续未完成状态和进度，清空须有明确条件。
+同一逻辑仅地址、索引或常数不同时，比较普通逻辑与有资料支持的成组或复用实现。共享状态冲突时，考察分组、调整数据组织、分离推进与释放；不能由一种组织方式不适用排除整类实现。
+对有重复处理的候选，在该结构内部比较可行的推进、输出计算和回收方法。核对是否可用共享时间或事件更新、是否可利用记录顺序或维护摘要计算输出、是否可复用更新和回收代码。说明选定组合如何保留工艺需要的信息；采用逐项展开时，给出同结构下更紧凑做法无法满足的具体条件，或明确资料不足。把所选做法落实到候选方案，勿留给生成阶段重选。
+先列已知约束与未定变量，再比较实现；不先选定某个参数值，再用该值制造另一方案的缺陷。模板限制须连同适用条件阅读，模板不适用时继续评估其底层指令可组成的其他实现。保留信息的要求按用户需要区分的状态和输出判断，不擅自增加身份、计数或精度要求。各方案的容量上限、溢出、量化误差和采样限制使用同一标准，不能只审查未选方案。
+未知事件间隔、扫描时间、容量或精度只限定适用范围，不默认要求处理任意输入速率。对所有候选同时列出各自的容量与采样边界，模型自选参数按实现选择处理。未知条件下仍有可行范围的候选应保留。
+在共同精度、吞吐、顺序和恢复要求下，分别比较状态存储、程序重复量、每扫描处理量随规模的增长。按共同容量估算重复的比较、搬移和状态操作数量，不以梯级数代替指令步数；循环缩短代码不等于降低扫描工作量。估算注明依据和未定变量，生成前不用精确步数。按正确性与实际开销选型，合理 SET/RST 保持和状态机照常使用。已有字段简述关键取舍，不重复抄写需求或资料。"""
 
 
 ANALYSIS_VFD_PROMPT = """# Relevant questions: VFD

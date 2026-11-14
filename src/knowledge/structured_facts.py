@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Exact PLC fact lookup from structured index tables.
 
@@ -64,16 +64,15 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None, langu
     """Return exact fact identities without retrieving any manual prose."""
     from knowledge.analysis_router import route_analysis_request
     from knowledge.instruction_facts import instruction_fact_targets
+    from plc.device_identity import canonical_reference_device
     from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
     from plc.semantics import generation_process_fact_needs
+    from plc.specification.approach import selected_implementation_targets
     from knowledge.device_evidence import family_targets
 
     spec = confirmed_spec if isinstance(confirmed_spec, Mapping) else {}
-    # Device/error targets come only from the current retrieval query. The
-    # confirmed specification contains settled I/O bindings and required
-    # devices that are generation inputs, not automatic manual fact requests.
-    # Selected opcodes are different: instruction_fact_targets deliberately
-    # carries required_opcodes from the confirmed generation contract.
+    # Exact implementation choices can request device or instruction facts.
+    # Settled wiring and generic required devices do not become lookup targets.
     # Tool callers commonly prefix a question with "CPU:". L02 is also a
     # syntactically valid latch-device spelling; the explicit scope prefix is
     # metadata, not an address request that should consume retrieval slots.
@@ -102,6 +101,11 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None, langu
         index_access.close_thread_connection()
         alias_targets = []
     for target in alias_targets:
+        # A descriptive alias identifies a family; it does not add its base
+        # form when the request already names a literal form of that family.
+        if any(item.get('base_opcode', item.get('opcode')) == target.get('base_opcode', target.get('opcode'))
+               for item in instructions):
+            continue
         if target["opcode"] not in identified:
             instructions.append(target)
             identified.add(target["opcode"])
@@ -114,6 +118,18 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None, langu
     st_context = 'st' in requested_languages
     feature_languages, feature_aliases = {}, {}
     for original in getattr(DEFAULT_INSTRUCTION_REGISTRY, 'language_facts', ()):
+        # Match catalogue identities before loading a technical body. An exact
+        # Ladder instruction does not consume every ST/FBD feature in the store.
+        if requested_languages and original['target'].partition('.')[0].lower() not in requested_languages:
+            continue
+        aliases = original.get('aliases', [])
+        def matches_alias(alias):
+            if alias == '**':
+                return '**' in str(query) and (st_context or str(query).strip() == '**'
+                    or bool(re.search(r'\bST\b|幂|运算|\d\s*\*\*\s*\d', str(query), re.I)))
+            return alias_occurs(str(query), alias)
+        if not any(matches_alias(alias) for alias in aliases):
+            continue
         feature = DEFAULT_INSTRUCTION_REGISTRY.language_feature(original['target'], cpu=plc_model)
         if feature is None:
             continue
@@ -132,12 +148,7 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None, langu
             aliases += [alias[len(prefix):] for alias in aliases if alias.upper().startswith(prefix)]
         feature_aliases[feature['target']] = aliases
         for alias in aliases:
-            if alias == '**':
-                matched = '**' in str(query) and (st_context or str(query).strip() == '**'
-                    or bool(re.search(r'\bST\b|幂|运算|\d\s*\*\*\s*\d', str(query), re.I)))
-            else:
-                matched = alias_occurs(str(query), alias)
-            if matched:
+            if matches_alias(alias):
                 language_features.append(feature['target'])
                 feature_scores[feature['target']] = (feature['target'].count('.'), len(alias))
                 break
@@ -166,6 +177,11 @@ def structured_fact_targets(query, confirmed_spec=None, *, plc_model=None, langu
         diagnostics = re.findall(r'\bC[0-9A-F]{4,7}\b', str(query).upper())
         devices = [device for device in devices if device not in diagnostics]
         errors = list(dict.fromkeys(diagnostics))
+    routed_addresses = {canonical_reference_device(value) for value in devices}
+    devices.extend(dict.fromkeys(
+        target["value"] for target in selected_implementation_targets(spec.get("selected_approach"))
+        if target["kind"] == "device" and target["value"] not in routed_addresses
+    ))
     return {
         "version": _VERSION,
         "instructions": copy.deepcopy(instructions),
@@ -457,6 +473,99 @@ def merge_exact_records(records, *, plc_model):
     return merged
 
 
+def _semantic_unknown(value):
+    """Unknown content stays unknown even when a row declares its coverage."""
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return value in {'', 'unknown', 'not_stated', 'not_established', 'source_not_stated'}
+    if isinstance(value, Mapping):
+        return not value or any(_semantic_unknown(item) for item in value.values())
+    if isinstance(value, list):
+        return any(_semantic_unknown(item) for item in value)
+    return False
+
+
+def _diagnostic_coverage(query, records, *, plc_model):
+    """Assess requested diagnostic fields, separately from CPU applicability."""
+    from plc.target_identity import target_members
+    members = set(target_members(plc_model))
+    if not records:
+        return {'identity_found': False, 'aspects': [], 'status': 'unresolved',
+                'reason': 'exact_fact_not_found', 'runtime_execution': 'not_established'}
+    packets = [authored_packet(record) for record in records]
+    packets = [packet for packet in packets if packet.get('kind') == 'error']
+    requested_registers = set(re.findall(r'(?<![A-Za-z0-9_])D[0-9]+(?![A-Za-z0-9_])', str(query), re.I))
+    query_registers = {value.upper() for value in requested_registers}
+    known_registers = {packet.get('value', {}).get('register') for packet in packets if packet.get('value', {}).get('register')}
+    explicit_registers = {value.upper() for value in re.findall(
+        r'(?<![A-Za-z0-9_])(D[0-9]+)(?![A-Za-z0-9_])\s*(?:的|中|里|寄存器)?\s*(?:错误码|故障码|error\s*code|fault\s*code)', str(query), re.I)}
+    requested_registers = (query_registers & known_registers) | explicit_registers
+    matching = [packet for packet in packets if not requested_registers or packet.get('value', {}).get('register') in requested_registers]
+    registers = known_registers & requested_registers if requested_registers else known_registers
+    register_complete = bool(registers) and (len(registers) == 1 or bool(requested_registers))
+    wanted = []
+    for field, pattern in (
+        ('meaning', r'含义|什么意思|代表|意思|meaning|means|definition'),
+        ('cause', r'原因|为什么|cause|why'),
+        ('trigger', r'触发|发生条件|trigger|when.*occur'),
+        ('recovery', r'处理|恢复|解决|修复|怎么办|措施|remed|recover|corrective|fix'),
+        ('plc_operation', r'停机|停止|继续|运行|stop|continue|PLC operation'),
+    ):
+        if re.search(pattern, str(query), re.I):
+            wanted.append(field)
+    if not wanted:
+        wanted = ['meaning', 'cause', 'recovery', 'plc_operation']
+    if re.search(r'PID|自整定|auto.?tun|指令响应|instruction response', str(query), re.I):
+        wanted.append('instruction_response')
+    aspects = [{'aspect': 'register_context', 'status': 'answered' if register_complete else 'unverified',
+                'candidate_registers': sorted(known_registers)}]
+    for field in dict.fromkeys(wanted):
+        covered, present, claims = set(), False, []
+        for packet in matching:
+            value = packet.get('value') or {}
+            from shared.model_context import technical_value
+            claim = technical_value(value.get(field))
+            if isinstance(claim, Mapping):
+                claim = {key: item for key, item in claim.items() if key not in {'knowledge_status', 'knowledge_status_by_field', 'available'}}
+            if claim is None or _semantic_unknown(claim):
+                continue
+            if field in {'cause', 'trigger', 'instruction_response'} and not isinstance(claim, Mapping):
+                continue
+            if field == 'recovery' and isinstance(claim, Mapping):
+                no_action_needed = claim.get('required') is False and bool(claim.get('reason'))
+                action_content = any(claim.get(key) for key in ('actions', 'adjustment_options', 'operator_action', 'after_adjustment'))
+                if not no_action_needed and not action_content:
+                    continue
+            present = True
+            state = value.get('knowledge_status_by_field', {}).get(field, packet.get('status', packet.get('technical_status')))
+            if state == 'source_verified' and packet.get('verification') == 'source_checked' and packet.get('sources'):
+                models = set(packet.get('scope', {}).get('models', ())) & members
+                covered.update(models)
+                context = json.dumps([packet.get('conditions', []), packet.get('requires', [])], sort_keys=True, ensure_ascii=False)
+                claims.append((models, context, json.dumps(claim, sort_keys=True, ensure_ascii=False)))
+        # The two reviewed FX3 editions actually disagree on some PID remedies.
+        # Both claims remain visible; their union cannot certify one answer.
+        conflict = any(left[0] & right[0] and left[1] == right[1] and left[2] != right[2]
+                       for index, left in enumerate(claims) for right in claims[index + 1:])
+        aspects.append({'aspect': field, 'status': 'conflict' if conflict else 'answered' if members <= covered and covered else 'unverified' if present else 'missing'})
+    applicable = set()
+    for packet in matching:
+        value = packet.get('value') or {}
+        unresolved_scope = value.get('cpu_applicability')
+        if (packet.get('conditions') or packet.get('requires') or unresolved_scope is not None and _semantic_unknown(unresolved_scope)
+                or any(re.search(r'CPU|model|scope|condition|dependenc|prerequisite', str(gap), re.I) for gap in packet.get('gaps', ()))):
+            continue
+        if (packet.get('status', packet.get('technical_status')) == 'source_verified'
+                and packet.get('verification') == 'source_checked' and packet.get('sources')):
+            applicable.update(set(packet.get('scope', {}).get('models', ())) & members)
+    aspects.append({'aspect': 'applicability', 'status': 'answered' if members <= applicable and applicable else 'unverified'})
+    complete = bool(packets) and all(aspect['status'] == 'answered' for aspect in aspects)
+    return {'identity_found': bool(records), 'aspects': aspects, 'status': 'complete' if complete else 'incomplete',
+            'reason': '' if complete else 'register_context_required' if not register_complete else 'requested_facts_not_established',
+            'runtime_execution': 'not_established'}
+
+
 def fact_record_coverage(record, *, limits=False):
     if record.get("fact_kind") == "positioning" and record.get("positioning_hardware_status") == "unverified":
         return False
@@ -471,7 +580,9 @@ def fact_record_coverage(record, *, limits=False):
     value = packet.get('value', {})
     facts = value.get('facts', [])
     if packet.get('kind') not in {'instruction', 'language'}:
-        return True
+        from shared.model_context import technical_value
+        state = packet.get('status', packet.get('technical_status'))
+        return bool(value) and state == 'source_verified' and not packet.get('gaps') and not _semantic_unknown(technical_value(value)) and not packet.get('conditions') and not packet.get('requires')
     if not facts:
         return False
     required = [f for f in facts if f.get('dimension', '').startswith('constraints.')] if limits else facts
@@ -486,6 +597,22 @@ def fact_record_coverage(record, *, limits=False):
     def complete(fact):
         if fact['id'] in visiting or fact.get('status') != 'source_verified':
             return False
+        if packet.get('kind') == 'language':
+            # Language facts have no instruction selection receipt to resolve
+            # their product/version prerequisites. Delivery retains them, but
+            # a reviewed label alone cannot certify applicable knowledge.
+            from shared.model_context import technical_value
+            claim = technical_value(fact.get('value'))
+            if isinstance(claim, Mapping):
+                claim = {key: item for key, item in claim.items() if key not in {
+                    'available', 'knowledge_status', 'knowledge_status_by_field'}}
+            if (packet.get('gaps') or packet.get('conditions') or packet.get('requires')
+                    or fact.get('verification') != 'source_checked' or not fact.get('sources')
+                    or fact.get('conditions') or fact.get('requires')
+                    or any(source.get('conditions') or source.get('applicability') for source in fact.get('sources', ()))
+                    or _semantic_unknown(claim) or _unresolved_programming_content(fact)
+                    or isinstance(claim, Mapping) and claim.get('source_conflicts')):
+                return False
         if fact.get('dimension') == 'constraints.source_qualifications':
             return False
         visiting.add(fact['id'])
@@ -537,9 +664,13 @@ def requested_aspects(query, *, language=None, aspects=None):
 
 
 def generation_aspects(query, *, language):
-    """Generation always needs operands and behaviour as well as a call form."""
-    return list(dict.fromkeys(['arity', 'order', 'roles', 'types', 'effects', 'execution',
-        'constraints', *requested_aspects(query, language=language)]))
+    """Deliver the complete programming view, including optional dimensions.
+
+    Scope still selects CPU/language/project-mode facts. Explicit caller aspects
+    remain a supported narrow view; a default generation request cannot drop a
+    parameter's range, encoding, unit or hardware/resource requirement.
+    """
+    return list(dict.fromkeys(['programming_semantics', *requested_aspects(query, language=language)]))
 
 
 def instruction_aspect_gap_reasons(packet, aspect, *, state, model, language):
@@ -595,10 +726,183 @@ def instruction_aspect_gap_reasons(packet, aspect, *, state, model, language):
     return sorted(reasons)
 
 
+def _output_layout_complete(groups):
+    """Check declared result spans against actual expression/range targets."""
+    from plc.instruction_definition import DefinitionError, Expression
+    layouts = []
+    for group in groups:
+        if group.get('dimension') != 'parameters.typed_operands':
+            continue
+        for parameter in group.get('value', {}).get('operands', []):
+            if parameter.get('direction') not in {'output', 'in_out'}:
+                continue
+            count, unit = parameter.get('occupied_bit_count'), 'bit'
+            if type(count) is not int:
+                count, unit = (parameter.get('word_device_layout') or {}).get('word_count'), 'word'
+            if type(count) is int and count > 0:
+                layouts.append((str(parameter.get('name', '')).upper(), unit, set(range(count))))
+    if not layouts:
+        return True
+    writes, ranges = {}, set()
+    def collect(value):
+        if not isinstance(value, Mapping):
+            return
+        kind = value.get('behavior') or value.get('kind')
+        if (isinstance(value.get('inputs'), list) and value['inputs'] and isinstance(value.get('output'), str)
+                and value.get('operation') and value.get('knowledge_scope') != 'operation_summary'):
+            ranges.add(value['output'].upper())
+        if (kind in {'range_copy', 'range_fill', 'range_shift', 'digit_transfer'}
+                or value.get('operation') == 'digit_transfer') and (value.get('count_operand') or value.get('count')):
+            destination = value.get('destination') or value.get('region') or value.get('destination_operand')
+            if isinstance(destination, str):
+                ranges.add(destination.upper())
+            for branch in (value.get('direction_selector') or {}).values():
+                if isinstance(branch, Mapping) and isinstance(branch.get('destination'), str):
+                    ranges.add(branch['destination'].upper())
+        if kind == 'encoding_conversion' and isinstance(value.get('target'), str):
+            ranges.add(value['target'].upper())
+        output = value.get('output')
+        if isinstance(output, Mapping) and isinstance(output.get('parameter'), str):
+            offset, unit = output.get('offset', 0), output.get('kind')
+            if type(offset) is int and unit in {'bit', 'word'}:
+                writes.setdefault((output['parameter'].upper(), unit), set()).add(offset)
+        for output in value.get('outputs', []) if isinstance(value.get('outputs'), list) else []:
+            target = output.get('target') if isinstance(output, Mapping) else None
+            if not isinstance(target, Mapping) or not isinstance(target.get('parameter'), str):
+                continue
+            try:
+                expression = Expression.from_mapping(output.get('expression'))
+            except (DefinitionError, TypeError, ValueError, KeyError):
+                continue
+            offset, unit = target.get('offset', 0), target.get('kind')
+            if type(offset) is not int or unit not in {'bit', 'word'}:
+                continue
+            count = 1 if unit == 'bit' else max(1, expression.value_type.bits // 16)
+            writes.setdefault((target['parameter'].upper(), unit), set()).update(range(offset, offset + count))
+        for rule in value.get('rules', []) if isinstance(value.get('rules'), list) else []:
+            collect(rule)
+    for group in groups:
+        if str(group.get('dimension', '')).startswith('effects.'):
+            collect(group.get('value'))
+    return all(name in ranges or span <= writes.get((name, unit), set()) for name, unit, span in layouts)
+
+
+def _unresolved_programming_content(fact):
+    value = fact.get('value') or {}
+    return (fact.get('dimension') == 'constraints.source_qualifications'
+            or bool(value.get('unresolved_items') or value.get('unbound_condition_markers')
+                    or value.get('unresolved_glyphs') or value.get('unparsed_input_qualification'))
+            or value.get('full_source_relation_complete') is False
+            or value.get('technical_relation_resolved') is False)
+
+
+def _disabled_call_output_coverage(facts, *, opcode, model, language):
+    """None for calls without a proved EN/output contract; otherwise cover OFF outputs.
+
+    Stopping evaluation and the values of its data/status outputs are separate
+    claims. This predicate only checks existing source records, never executes
+    a call or fills an unspecified output/internal state.
+    """
+    from plc.instruction_definition import DefinitionError, select_fact_dependencies
+
+    def qualified(fact):
+        scope = fact.get('scope', {})
+        if (scope.get('models') and model not in scope['models']
+                or scope.get('forms') and opcode not in scope['forms']
+                or language and scope.get('languages') and language not in scope['languages']
+                or fact.get('selection_applicability') in {'not_applicable', 'unverified'}
+                or fact.get('conditions') and fact.get('selection_applicability') != 'applicable'
+                or fact.get('value', {}).get('full_source_relation_complete') is False
+                or fact.get('value', {}).get('unresolved_items')):
+            return False
+        try:
+            closure = select_fact_dependencies(facts, [fact['id']], opcode=opcode, model=model,
+                                              language=language, allow_unknown_scope=True)
+        except (DefinitionError, KeyError, TypeError, ValueError):
+            return False
+        return (not any(gap['reason'] != 'scope_context_missing' for gap in closure['gaps'])
+                and bool(closure['groups']) and all(group.get('status') == 'source_verified'
+                    and group.get('verification') == 'source_checked' and group.get('sources')
+                    for group in closure['groups']))
+
+    # Only declarations, explicit OFF/outcome records and existing execution
+    # bindings can contribute. Ordinary arithmetic/resource facts need no new
+    # dependency walk for this output-coverage question.
+    candidates = [fact for fact in facts if fact.get('dimension') in {
+        'parameters.typed_operands', 'execution.outcome'}
+        or 'disabled' in str(fact.get('dimension', ''))
+        or any(key in fact.get('value', {}) for key in ('when_disabled', 'disabled_ENO', 'disabled_eno'))
+        or fact.get('value', {}).get('operand_binding', {}).get('execution_arguments')]
+    eligible = [fact for fact in candidates if qualified(fact)]
+    execution_roles = {}
+    for fact in eligible:
+        for pin in fact.get('value', {}).get('operand_binding', {}).get('execution_arguments', []):
+            if isinstance(pin, Mapping) and pin.get('parameter'):
+                execution_roles[pin['parameter']] = pin.get('role')
+
+    def role(pin):
+        result = pin.get('role') or execution_roles.get(pin.get('name'))
+        if not result:
+            result = (pin.get('purpose') or {}).get('semantic_role') if isinstance(pin.get('purpose'), Mapping) else None
+        return result
+
+    contracts = []
+    for fact in eligible:
+        if fact.get('dimension') != 'parameters.typed_operands':
+            continue
+        pins = fact.get('value', {}).get('operands', [])
+        enabled = any(pin.get('direction') == 'input' and pin.get('type', pin.get('data_type')) in ('BOOL', {'kind': 'bool'})
+            and (role(pin) in {'enable', 'enable_condition', 'execution_condition'} or pin.get('enable_pin') is True)
+            for pin in pins)
+        outputs = {pin['name'] for pin in pins if pin.get('name') and pin.get('direction') in {'output', 'output_variable', 'in_out'}}
+        if not enabled or not outputs:
+            continue
+        status = {pin['name'] for pin in pins if pin.get('name') in outputs
+            and pin.get('type', pin.get('data_type')) in ('BOOL', {'kind': 'bool'})
+            and (role(pin) in {'execution_status', 'enable_status'} or pin.get('enable_pin') is True)}
+        contracts.append((outputs - status, status))
+    if not contracts:
+        return None
+
+    def output_state(value):
+        return (type(value) in (bool, int) or isinstance(value, str) and value in {
+            'undefined_do_not_use', 'undefined', 'indefinite_value', 'retain_previous',
+            'retain_previous_scan_output', 'retained', 'retain', 'clear', 'cleared',
+            'zero', 'set_to_zero', 'reset_to_zero'})
+
+    def targets(value):
+        rows = value.get('outputs', [value['output']] if 'output' in value else [])
+        return {row if isinstance(row, str) else row.get('parameter', (row.get('target') or {}).get('parameter'))
+                for row in rows if isinstance(row, (str, Mapping))} - {None}
+
+    for data_outputs, status_outputs in contracts:
+        covered = set()
+        for fact in eligible:
+            value = fact.get('value', {})
+            if output_state(value.get('when_disabled')):
+                covered.update(targets(value) & (data_outputs | status_outputs))
+            if type(value.get('disabled_ENO', value.get('disabled_eno'))) is bool:
+                covered.update(status_outputs)
+            if fact.get('dimension') == 'execution.outcome':
+                for row in value.get('cases', []):
+                    if not isinstance(row, Mapping) or row.get('EN') is not False:
+                        continue
+                    if type(row.get('ENO')) is bool:
+                        covered.update(status_outputs)
+                    if output_state(row.get('result')):
+                        # One generic result column cannot identify multiple FB outputs.
+                        covered.update(targets(row) & data_outputs if targets(row)
+                                       else data_outputs if len(data_outputs) == 1 else set())
+        if not data_outputs | status_outputs <= covered:
+            return False
+    return True
+
+
 def _aspect_state(packet, aspect, *, model, language, query):
     """Require every requested slot and the shared atomic dependency closure."""
     from plc.instruction_definition import DefinitionError, select_fact_dependencies
-    if packet.get('fact_selection', {}).get('gaps'):
+    if any(gap.get('reason') in {'duplicate_identity', 'owner_model_not_requested'}
+           for gap in packet.get('fact_selection', {}).get('gaps', [])):
         return 'unresolved'
     value = packet.get('value') or {}
     # Owners can merge several source packets.  A different CPU's unresolved
@@ -619,7 +923,8 @@ def _aspect_state(packet, aspect, *, model, language, query):
         if fact.get('dimension') not in {'constraints.cpu_availability', 'identity.applicability'}:
             continue
         scope = fact.get('scope', {})
-        if (fact.get('conditions') or scope.get('models') and model not in scope['models']
+        if (fact.get('conditions') and fact.get('selection_applicability') != 'applicable'
+                or scope.get('models') and model not in scope['models']
                 or scope.get('languages') and language not in scope['languages']):
             continue
         claim = fact.get('value', {})
@@ -659,6 +964,18 @@ def _aspect_state(packet, aspect, *, model, language, query):
         signatures = [f for f in value.get('facts', ())
                       if f.get('dimension') == 'parameters.' + language + '_signature'
                       and (not f.get('scope', {}).get('languages') or language in f['scope']['languages'])]
+        # The IEC symbolic ST operator and the Mitsubishi instruction block
+        # may share an owner name. A documented absence of the former's FBD
+        # representation does not contradict the latter's positive signature.
+        # Keep both source facts; distinguish their declarations for this check.
+        if language == 'fbd' and any(
+                f.get('value', {}).get('available') is True
+                and f.get('value', {}).get('representation') == 'fbd_instruction_block'
+                and f.get('status') == 'source_verified' for f in signatures):
+            signatures = [f for f in signatures if not (
+                f.get('value', {}).get('available') is False
+                and f.get('value', {}).get('representation') == 'literal_operator'
+                and f.get('value', {}).get('reason') == 'literal_operator_has_no_FBD_block')]
         expressions = [f for f in value.get('facts', ())
                        if f.get('dimension') == 'parameters.language_expression'
                        and f.get('value', {}).get('available') is not False
@@ -718,23 +1035,41 @@ def _aspect_state(packet, aspect, *, model, language, query):
     for fact in facts:
         by_dimension.setdefault(fact.get('dimension'), []).append(fact)
     prefixes = {'effects': ('effects.',), 'execution': ('execution.',),
+                'memory': ('memory.',), 'resources': ('resources.',),
                 'constraints': ('constraints.',),
                 'same_scan': ('execution.same_scan', 'effects.same_scan'),
                 'first_execution': ('execution.first_execution', 'execution.startup', 'execution.mode_change'),
                 'jump': ('execution.jump',)}
-    aliases = {'arity': ('parameters.arity', 'parameters.typed_operands'),
+    aliases = {'applicability': ('identity.applicability', 'constraints.cpu_availability'),
+               'arity': ('parameters.arity', 'parameters.typed_operands'),
                'order': ('parameters.order', 'parameters.st_signature', 'parameters.source_order', 'parameters.typed_operands'),
-               'roles': ('parameters.roles', 'parameters.typed_operands'),
+               'roles': ('parameters.roles', 'parameters.operand_roles', 'parameters.typed_operands'),
                'types': ('parameters.types', 'parameters.value_type', 'parameters.typed_operands'),
                'devices': ('parameters.devices', 'constraints.operand_devices'),
                'st_call': ('parameters.st_signature',),
                'fbd_call': ('parameters.fbd_signature', 'parameters.fbd_pins', 'parameters.language_expression')}
     roots, alternatives = [], []
     if aspect in {'purpose', 'unit', 'encoding', 'operand_range', 'operand_condition'}:
+        facet = {'operand_range': 'range', 'operand_condition': 'condition'}.get(aspect, aspect)
+        for fact in by_dimension.get('parameters.typed_operands', []):
+            operands = fact.get('value', {}).get('operands')
+            def inline(operand):
+                claim = operand.get(facet)
+                if facet == 'purpose' and not claim:
+                    role = operand.get('role') or operand.get('semantic_name')
+                    if role not in {'read', 'write', 'read_write', 'input', 'output', 'in_out', 'source', 'destination'}:
+                        claim = role
+                return known_value(claim)
+            if isinstance(operands, list) and operands and all(inline(operand) for operand in operands):
+                alternatives.append([fact['id']])
         arities = by_dimension.get('parameters.arity') or ()
         count = next((f.get('value', {}).get('maximum') for f in arities
                       if f.get('value', {}).get('maximum') == f.get('value', {}).get('minimum')), None)
-        if type(count) is not int:
+        if (count == 0 and not any(f.get('value', {}).get('maximum', 0) for f in arities)
+                and not any(f.get('value', {}).get('operands') for f in by_dimension.get('parameters.typed_operands', []))
+                and _aspect_state(packet, 'arity', model=model, language=language, query=query) == 'answered'):
+            return 'not_applicable'
+        if type(count) is not int and not alternatives:
             return 'missing'
         order = (value.get('registry_contract') or {}).get('native_operand_order') or next(
             (f.get('value', {}).get('symbols') for f in by_dimension.get('parameters.order', ())), ())
@@ -746,14 +1081,19 @@ def _aspect_state(packet, aspect, *, model, language, query):
                 return 'missing'
             roots.extend(f['id'] for f in ordering)
         facet = {'operand_range': 'range', 'operand_condition': 'condition'}.get(aspect, aspect)
-        for position in positions or range(1, count + 1):
+        for position in positions or range(1, (count if type(count) is int else 0) + 1):
             slot = by_dimension.get(f'parameters.{position}.{facet}')
             if not slot:
-                return 'missing'
+                if not alternatives:
+                    return 'missing'
+                roots = []
+                break
             roots.extend(f['id'] for f in slot)
-        roots.extend(f['id'] for f in arities)
+        if roots:
+            roots.extend(f['id'] for f in arities)
+            alternatives.append(roots)
     elif aspect in aliases:
-        groups = [by_dimension[key] for key in aliases[aspect] if by_dimension.get(key)]
+        groups = [[fact] for key in aliases[aspect] for fact in by_dimension.get(key, [])]
         if any(f.get('status') == 'conflict' for group in groups for f in group):
             return 'unresolved'
         for selected in groups:
@@ -762,6 +1102,12 @@ def _aspect_state(packet, aspect, *, model, language, query):
             # only this completeness calculation chooses a representation.
             complete = True
             for fact in selected:
+                if aspect == 'applicability':
+                    claim = fact.get('value') or {}
+                    available = claim.get('available')
+                    state = claim.get('model_states', {}).get(model)
+                    if type(available) is not bool and state not in {'supported', 'unsupported'}:
+                        complete = False
                 if fact.get('dimension') != 'parameters.typed_operands':
                     continue
                 operands = fact.get('value', {}).get('operands')
@@ -793,12 +1139,37 @@ def _aspect_state(packet, aspect, *, model, language, query):
                     or isinstance(value, list) and any(has_slot(child) for child in value))
         selected = [fact for fact in facts if has_slot(fact.get('value'))
                     or aspect == 'disabled' and 'disabled' in str(fact.get('dimension'))]
+        if aspect == 'disabled':
+            verified = [fact for fact in selected if fact.get('status') == 'source_verified'
+                        and fact.get('verification') == 'source_checked' and fact.get('sources')]
+            if verified:
+                # A chart-derived candidate cannot veto a verified disable rule.
+                selected = verified
         roots.extend(fact['id'] for fact in selected)
     else:
         selected = [f for f in facts if any(str(f.get('dimension', '')).startswith(prefix)
                                            for prefix in prefixes.get(aspect, ()))
                     and not (aspect == 'effects' and f.get('dimension') in
-                             {'effects.source_read', 'effects.destination_write'})]
+                             {'effects.source_read', 'effects.destination_write'})
+                    and not (aspect == 'execution' and f.get('dimension') == 'execution.core_execution_capability')]
+        if aspect == 'effects':
+            from knowledge.instruction_presentation import substantive_effect
+            selected = [fact for fact in selected if substantive_effect(fact) or _unresolved_programming_content(fact)
+                        or fact.get('status') == 'conflict']
+        if aspect == 'execution':
+            verified_forms = {fact.get('value', {}).get('form') for fact in selected
+                              if fact.get('dimension') == 'execution.form' and fact.get('status') == 'source_verified'
+                              and (not fact.get('conditions') or fact.get('selection_applicability') == 'applicable')}
+            triggers = {'execution_condition_rising_edge': 'pulse',
+                        'each_scan_when_execution_condition_true': 'continuous',
+                        'each_evaluation_when_execution_condition_true': 'continuous'}
+            verified_forms.update(triggers[fact['value']['trigger']] for fact in selected
+                if fact.get('dimension') == 'execution.trigger' and fact.get('status') == 'source_verified'
+                and fact.get('value', {}).get('trigger') in triggers
+                and (not fact.get('conditions') or fact.get('selection_applicability') == 'applicable'))
+            selected = [fact for fact in selected if not (
+                fact.get('dimension') == 'execution.source_form'
+                and fact.get('value', {}).get('form') in verified_forms)]
         roots.extend(f['id'] for f in selected)
         if not roots:
             return 'missing'
@@ -816,6 +1187,18 @@ def _aspect_state(packet, aspect, *, model, language, query):
                 continue
             visited.add(identity)
             fact = by_id[identity]
+            if _unresolved_programming_content(fact):
+                return 'unresolved'
+            scope = fact.get('scope') or {}
+            language_only = (not language and scope.get('languages') and not scope.get('versions')
+                and not set(scope) - {'forms', 'models', 'languages', 'versions'}
+                and not fact.get('conditions')
+                and not any(s.get('conditions') or s.get('applicability') for s in fact.get('sources', [])))
+            if (fact.get('selection_applicability') == 'not_applicable'
+                    or fact.get('selection_applicability') == 'unverified' and not language_only):
+                return 'unresolved'
+            if fact.get('conditions') and not fact.get('selection_applicability'):
+                return 'unresolved'
             if fact.get('scope', {}).get('languages'):
                 scopes.append(set(fact['scope']['languages']))
             pending.extend(fact.get('depends_on', ()))
@@ -826,6 +1209,8 @@ def _aspect_state(packet, aspect, *, model, language, query):
                                              model=model, language=lang) for lang in languages]
         if any(closure['gaps'] for closure in closures):
             return 'unresolved'
+        if aspect == 'effects' and any(not _output_layout_complete(closure['groups']) for closure in closures):
+            return 'missing'
         return 'answered' if all(closure['source_verification_complete'] for closure in closures) else 'unverified'
     states = []
     for option in alternatives or [roots]:
@@ -833,7 +1218,11 @@ def _aspect_state(packet, aspect, *, model, language, query):
             states.append(closure_state(option))
         except (DefinitionError, KeyError, TypeError, ValueError):
             states.append('unresolved')
-    return next(state for state in ('answered', 'unverified', 'unresolved') if state in states)
+    state = next(state for state in ('answered', 'unverified', 'unresolved', 'missing') if state in states)
+    if (aspect == 'disabled' and state == 'answered' and _disabled_call_output_coverage(facts,
+            opcode=packet.get('target') or value.get('opcode'), model=model, language=language) is False):
+        return 'unresolved'
+    return state
 
 
 def _instruction_aspects(records, aspects, *, plc_model, language, query):
@@ -944,8 +1333,11 @@ def retrieval_coverage(query, records, *, plc_model, targets=None, language=None
     language = language or ('fbd' if re.search(r'\bFBD\b', str(query), re.I) else
                            'st' if re.search(r'\bST\b|结构化文本', str(query), re.I) else
                            'ladder' if re.search(r'梯形图|\bladder\b', str(query), re.I) else None)
-    aspects = requested_aspects(query, language=language, aspects=aspects) or ['arity', 'order', 'roles', 'types', 'purpose',
-                                          'effects', 'execution', 'constraints']
+    explicit_aspects = aspects
+    aspects = requested_aspects(query, language=language, aspects=aspects)
+    if explicit_aspects is None or 'programming_semantics' in aspects:
+        aspects = list(dict.fromkeys(['applicability', 'arity', 'order', 'roles', 'types', 'purpose',
+            'effects', 'execution', 'disabled', 'constraints', *[a for a in aspects if a != 'programming_semantics']]))
     def identity(kind, value):
         value = str(value or '').upper()
         if kind == 'device':
@@ -968,8 +1360,15 @@ def retrieval_coverage(query, records, *, plc_model, targets=None, language=None
             entry = {'kind': kind, 'target': target, 'identity_found': bool(selected),
                                  'status': 'complete' if complete else 'incomplete' if selected else 'unresolved',
                                  'reason': '' if complete else 'requested_facts_not_established' if selected else 'exact_fact_not_found'}
+            if kind == 'error':
+                entry.update(_diagnostic_coverage(query, selected, plc_model=plc_model))
             if kind == 'instruction' and selected and aspects and any(authored_packet(row) for row in selected):
-                aspect_rows = _instruction_aspects(selected, aspects, plc_model=plc_model,
+                instruction_aspects = list(dict.fromkeys(['applicability', *aspects]))
+                if explicit_aspects is None or 'programming_semantics' in (explicit_aspects or []):
+                    dimensions = {str(f.get('dimension', '')).split('.', 1)[0] for row in selected
+                                  for f in (authored_packet(row).get('value') or {}).get('facts', [])}
+                    instruction_aspects.extend(kind for kind in ('memory', 'resources') if kind in dimensions)
+                aspect_rows = _instruction_aspects(selected, instruction_aspects, plc_model=plc_model,
                     language=language,
                     query=query)
                 answered = all(row['status'] in {'answered', 'not_applicable'} for row in aspect_rows)
@@ -1026,8 +1425,48 @@ def _declared_instruction_alias_targets(query, *, plc_model=None):
     Incidental English prose is not an opcode or a free-form title match.
     """
     from knowledge.analysis_router import instruction_reference_text
+    from plc.instructions import LITERAL_ARITHMETIC_MNEMONIC_PATTERN
     query = instruction_reference_text(query)
     _index, _path, connection, schema, _meta = _runtime('instruction')
+    if connection is not None and _meta.get('owner_store_serialization') == 'instruction-owner-store-v1':
+        from plc.target_identity import target_members
+        sql = ('SELECT DISTINCT e.entity AS alias,f.target AS opcode FROM entity_index e '
+               "JOIN facts f ON f.id=e.chunk_id WHERE f.kind='instruction'")
+        members = sorted(target_members(plc_model)) if plc_model else []
+        if members:
+            sql += ' AND f.plc_model IN (' + ','.join('?' for _ in members) + ')'
+        rows = [dict(row) for row in connection.execute(sql, members)]
+        literals = {row['alias'] for row in rows}
+        scoped = re.sub(r'^\s*' + re.escape(str(plc_model)) + r'\s*[:：]?\s*', '', query,
+                        count=1, flags=re.I) if plc_model else query
+        listed = [token.strip('`\"\'') for token in re.split(r'[\s,，;；]+', scoped.strip()) if token]
+        literal_list = bool(listed) and all(token.upper() in literals for token in listed)
+        targets = []
+        for row in rows:
+            alias = row['alias']
+            # Word-shaped known opcodes already passed the context-aware
+            # router. Only its unsupported literal spellings need this path.
+            if (re.fullmatch(r'(?:[$A-Z][A-Z0-9_.$@+<>!=\-]{0,63}|' + LITERAL_ARITHMETIC_MNEMONIC_PATTERN + ')', alias, re.I)
+                    and alias.upper() == row['opcode'].upper()):
+                continue
+            boundary = r'[A-Za-z0-9_$.:/+*<>=!&%~?\-]'
+            if not re.search(r'(?<!' + boundary + ')' + re.escape(alias) + r'(?!' + boundary + ')', scoped, re.I):
+                continue
+            if (not re.search(r'[A-Za-z0-9_]', alias) and not literal_list
+                    and not re.search(r'指令|运算符|算子|使用|采用|\b(?:instruction|operator|opcode)\b', scoped, re.I)):
+                continue
+            targets.append({'opcode': row['opcode'], 'base_opcode': row['opcode'],
+                'target_resolution': 'declared_source_opcode', 'requested_alias': alias})
+        # The mixed corpus remains the existing alias catalogue. Its aliases
+        # identify owners; instruction evidence still comes from this v4 store.
+        _index, _path, connection, schema, _meta = _runtime()
+        if (connection is not None and connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='fact_aliases'").fetchone()):
+            for row in connection.execute("SELECT DISTINCT alias,opcode,plc_models FROM fact_aliases WHERE alias_type!='opcode'"):
+                if (not plc_model or scope_matches(row['plc_models'], plc_model)) and alias_occurs(query, row['alias']):
+                    targets.append({'opcode': row['opcode'], 'base_opcode': row['opcode'],
+                        'target_resolution': 'declared_manual_alias', 'requested_alias': row['alias']})
+        return targets
     if connection is not None and not connection.execute("SELECT 1 FROM sqlite_master WHERE name='fact_aliases'").fetchone():
         from knowledge.index_access import index_path, index_identity
         installed = index_path()
@@ -1689,15 +2128,24 @@ def resolve_instruction_records(targets, *, plc_model="FX3U", task_type="generat
     from knowledge.fact_corpus import resolve
     from knowledge.source_authority import instruction_source_authority
 
+    if project_mode is None and task_type in {'generate', 'edit'} and language == 'ladder':
+        project_mode = 'native_ladder_instruction'
+
     authored = resolve("instruction", targets, plc_model=plc_model, task_type=task_type)
     if authored is not None:
+        from knowledge.instruction_presentation import enrich_instruction_records
+        authored = enrich_instruction_records(authored, plc_model=plc_model)
         admitted, decided = _adjudicated_rows(authored, targets, plc_model)
         from knowledge.fact_selection import project_instruction_records
-        selected_aspects = (generation_aspects(query, language=language) if task_type in {'generate', 'edit'} and aspects is None
+        selected_aspects = (generation_aspects(query, language=language) if aspects is None
                             else requested_aspects(query, language=language, aspects=aspects))
-        return project_instruction_records(admitted if decided else authored, plc_model=plc_model,
+        projected = project_instruction_records(admitted if decided else authored, plc_model=plc_model,
             language=language, aspects=selected_aspects, project_mode=project_mode,
             instance_context=instance_context, version=version, query=query)
+        return [{**row, '_knowledge_context': {'model': (authored_packet(row).get('value') or {}).get('target_model') or plc_model,
+                 'language': language,
+                 'project_mode': project_mode, 'version': version, 'aspects': selected_aspects}}
+                for row in projected]
     _index, _path, connection, schema, _meta = _runtime()
     table = schema.get("instructions") if schema is not None else None
     table_available = bool(
@@ -2006,6 +2454,24 @@ def _device_range_records(devices, *, plc_model, task_type, connection):
     return results
 
 
+def _current_device_numbering_rows(rows, cpu):
+    """Supplement stored numbering facts with the current Core numeric units."""
+    from plc.device_profiles import device_address_rules
+    families = device_address_rules(cpu).get('families', {})
+    results = []
+    for row in rows:
+        packet = authored_packet(row)
+        value = packet.get('value') or {}
+        family = families.get(value.get('family'), {})
+        if (value.get('range_basis') == 'model_address_numbering' and value.get('cpu') == cpu
+                and family.get('word_value_regions')):
+            # Address ranges, source status and model admission stay untouched.
+            packet['value']['word_value_regions'] = copy.deepcopy(family['word_value_regions'])
+            row = {**row, 'text': json.dumps(packet, ensure_ascii=False)}
+        results.append(row)
+    return results
+
+
 def _device_address_records(devices, *, plc_model, task_type, connection):
     """Deliver exact address-numbering facts, including a rejected boundary."""
     from knowledge.fact_corpus import resolve
@@ -2026,6 +2492,7 @@ def _device_address_records(devices, *, plc_model, task_type, connection):
     rows = [row for family in dict.fromkeys(parts[0] for _, parts in requests)
             for row in (resolve('device_family', [family], plc_model=cpu,
                         task_type=task_type, connection=connection, domain_results=True) or [])]
+    rows = _current_device_numbering_rows(rows, cpu)
     results = []
     for address, (prefix, digits, bit) in requests:
         for row in rows:
@@ -2242,6 +2709,7 @@ def resolve_device_family_records(families, *, plc_model="FX3U", task_type="anal
         # only this identity's numbering profile; keep other kinds of facts.
         rows = [row for row in authored if (authored_packet(row).get('value') or {}).get('range_basis')
                 != 'model_address_numbering' or (authored_packet(row).get('value') or {}).get('cpu') == cpu]
+        rows = _current_device_numbering_rows(rows, cpu)
         return sorted(rows, key=lambda row: (authored_packet(row).get('value') or {}).get('range_basis')
                       != 'model_address_numbering')
     if connection is None:

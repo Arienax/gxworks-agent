@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 // One-shot offline workspace save. Python owns source/declaration semantics.
 // Slots/layouts are bound to DZDataABS_Workspace 1.635.0.1 (32-bit).
@@ -75,11 +75,13 @@ namespace PlcAi.NativeAdapter
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int WriteBodyCall(IntPtr self, ObjectId id, int size, IntPtr buffer, out int code);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int CreateSourceCall(IntPtr self, ObjectId parent, IntPtr name, int type, byte language, out ObjectId created, out int code);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int SystemVariablesCall(IntPtr self, ObjectId project, int size, IntPtr ranges, out int code);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int CompileOptionsCall(IntPtr self, ObjectId project, IntPtr words, out int code);
 
         readonly List<IntPtr> strings = new List<IntPtr>();
         readonly List<IntPtr> interfaces = new List<IntPtr>();
         internal readonly List<object> Calls = new List<object>();
         bool initialized, missingGuiProjectEntry;
+        object projectOpenAttributes;
         IntPtr workspace, operations;
         string installation;
         const string NativeVersion = "1.635.0.1";
@@ -269,6 +271,7 @@ namespace PlcAi.NativeAdapter
             try
             {
                 if (ReadBStr(attributes.Cpu) != cpu) throw new InvalidOperationException("selected_native_cpu_differs");
+                projectOpenAttributes = new { attribute = attributes.Attribute, mode = attributes.Mode };
                 if (Validation != null)
                     Event(new { operation = "NativeProjectOpenAttributes", name = ReadBStr(attributes.Name), cpu = ReadBStr(attributes.Cpu),
                         attribute = attributes.Attribute, mode = attributes.Mode, user_manage = attributes.UserManage,
@@ -989,6 +992,27 @@ namespace PlcAi.NativeAdapter
             CreatedSource = new { library = facts, groups = groups };
             if (import) ExportSavedProject(root, id, home, ws, project);
         }
+        object ReadProjectCompileOptions(ObjectId id)
+        {
+            // Workspace2.GetCompileOption, 1.635.0.1: at most 32 DWORDs,
+            // including the terminal 0xffffffff. Never expose this ABI to callers.
+            IntPtr buffer = Marshal.AllocCoTaskMem(32 * 4);
+            try
+            {
+                for (int i = 0; i < 32; i++) Marshal.WriteInt32(buffer, i * 4, -1);
+                int code;
+                Check("Workspace.GetCompileOption", Slot<CompileOptionsCall>(workspace, 1712)(workspace, id, buffer, out code), code);
+                var words = new List<uint>();
+                for (int i = 0; i < 32; i++)
+                {
+                    uint value = unchecked((uint)Marshal.ReadInt32(buffer, i * 4));
+                    words.Add(value);
+                    if (value == UInt32.MaxValue) return words.ToArray();
+                }
+                throw new InvalidOperationException("native_compile_options_missing_sentinel");
+            }
+            finally { Marshal.FreeCoTaskMem(buffer); }
+        }
         void CreateSource(string root, IDictionary<string, object> request)
         {
             NativeRequest.Version(request, 1);
@@ -1002,6 +1026,7 @@ namespace PlcAi.NativeAdapter
             Initialize(Text(request["installation"]));
             IntPtr home, ws, project;
             ObjectId id = Open(root, Text(source["cpu"]), NativeRequest.Integer(source["codepage"]), out home, out ws, out project);
+            object compileOptionsBefore = ReadProjectCompileOptions(id);
             int code, kind; string actual; ObjectId collection;
             Check("Workspace.GetPOUCollection", Slot<CollectionCall>(workspace, 36)(workspace, id, 25, out collection, out code), code);
             object collectionFacts = ObjectFacts(collection, out kind, out actual);
@@ -1047,7 +1072,8 @@ namespace PlcAi.NativeAdapter
             Parent(labels, created);
             CreatedSource = new { collection = collectionFacts, source = createdSelection, labels = labelFacts,
                 pou_type = createdType, program_kind = (int)createdLanguage, body = Convert.ToBase64String(ReadBody(createdBody)),
-                existing_sources = existing };
+                existing_sources = existing, project_attributes = projectOpenAttributes,
+                compile_options_before = compileOptionsBefore, compile_options_after = ReadProjectCompileOptions(id) };
             ExportSavedProject(root, id, home, ws, project);
         }
         static void PrepareProjectFiles(string root)

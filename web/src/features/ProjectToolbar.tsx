@@ -1,11 +1,11 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { ArrowDownToLine, ArrowLeft, ArrowRight, ChevronDown, MoreHorizontal, RefreshCw, Trash2 } from "lucide-react";
 import type { Artifact } from "../api/client";
-import { api, artifactUrl, freshGxCsvUrl, jobDiagnosticsUrl } from "../api/client";
+import { artifactUrl, freshGxCsvUrl, jobDiagnosticsUrl } from "../api/client";
 import { Button } from "../components/ui";
 
 export function artifactLabel(id: string) {
@@ -33,25 +33,22 @@ function Menu({ label, icon, children, disabled, title, className = "" }: {
   </details>;
 }
 export function ProjectToolbar({ pid, vid, artifacts, exportable, diagnosticJobId, canRead, canSend, canRefresh,
-  refreshing, onRead, onSend, onRefresh, more, t }: {
+  canDelete, refreshing, onRead, onSend, onRefresh, onDelete, more, t }: {
   pid: string; vid: string; artifacts: Artifact[]; exportable: boolean; diagnosticJobId?: string; canRead: boolean;
-  canSend: boolean; canRefresh: boolean; refreshing: boolean; onRead: () => void;
-  onSend: () => void; onRefresh: () => void; more: ReactNode; t: (s:string) => string;
+  canSend: boolean; canRefresh: boolean; canDelete: boolean; refreshing: boolean; onRead: () => void;
+  onSend: () => void; onRefresh: () => void; onDelete: () => Promise<void>; more: ReactNode; t: (s:string) => string;
 }) {
-  const files = artifacts.filter((a) => a.available);
+  const files = artifacts.filter((a) => a.available && a.id !== "st_from_ir");
   const canArtifactExport = exportable && !!pid && !!vid && files.length > 0;
   const canDiagnosticExport = !!diagnosticJobId;
   const canFreshExport = canArtifactExport && files.some((a) => ["ir", "json", "program_csv"].includes(a.id));
   const [deleting, setDeleting] = useState(false);
   async function deleteProject() {
-    if (!pid || deleting) return;
-    if (!window.confirm(t("确认删除当前项目？项目文件和全部版本将被永久删除。"))) return;
+    if (!canDelete || deleting) return;
+    if (!window.confirm(t("确认删除当前项目？项目文件、版本、对话和任务记录将被永久删除。"))) return;
     setDeleting(true);
     try {
-      await api<{ deleted: boolean }>(`/projects/${encodeURIComponent(pid)}`, "DELETE");
-      window.location.assign(window.location.pathname);
-    } catch (error) {
-      window.alert(String((error as Error).message || error));
+      await onDelete();
     } finally {
       setDeleting(false);
     }
@@ -60,10 +57,10 @@ export function ProjectToolbar({ pid, vid, artifacts, exportable, diagnosticJobI
     <div className="toolbar-group">
       <Menu label={t("导出文件")} icon={<ArrowDownToLine size={15}/>} disabled={!canArtifactExport && !canDiagnosticExport}
         title={t(canArtifactExport ? (canDiagnosticExport ? "下载当前版本的文件和任务记录" : "下载当前版本的文件") : canDiagnosticExport ? "下载当前任务记录" : "生成并通过校验后即可导出文件")} className="export-menu">
-        {canArtifactExport && files.map((a) => <a key={a.id} href={artifactUrl(pid, vid, a.id, true)}>
+        {canArtifactExport && files.map((a) => <a key={a.id} href={artifactUrl(pid, vid, a.id, true)} download>
           <span>{t(artifactLabel(a.id))}</span><small>{a.filename}</small>
         </a>)}
-        {canFreshExport && <a href={freshGxCsvUrl(pid, vid)}>
+        {canFreshExport && <a href={freshGxCsvUrl(pid, vid)} download>
           <span>{t("重新导出 GX Works2 CSV")}</span>
         </a>}
         {canDiagnosticExport && <a href={jobDiagnosticsUrl(diagnosticJobId)} download>
@@ -83,7 +80,7 @@ export function ProjectToolbar({ pid, vid, artifacts, exportable, diagnosticJobI
       </Button>
       <Menu label={t("更多")} icon={<MoreHorizontal size={16}/>} className="more-menu">
         {more}
-        <Button variant="danger" disabled={!pid || deleting} onClick={() => void deleteProject()}>
+        <Button variant="danger" disabled={!canDelete || deleting} onClick={() => void deleteProject()}>
           <Trash2 size={15}/>{t(deleting ? "正在删除…" : "删除项目")}
         </Button>
       </Menu>

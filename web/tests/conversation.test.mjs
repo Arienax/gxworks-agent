@@ -20,6 +20,7 @@ test("task history preserves unresolved generation and failed execution outcomes
     ["execution", "completed", { status: "conflict" }, "failed"],
     ["direct_generation", "completed", { status: "needs_input" }, "needs_input"],
     ["generation", "completed", { status: "contract_mismatch" }, "contract_mismatch"],
+    ["generation", "completed", { status: "behavior_mismatch" }, "behavior_mismatch"],
     ["generation", "completed", { proposal_id: "proposal-1" }, "candidate_ready"],
     ["generation", "completed", { version_id: "v0001", proposal_id: "proposal-1" }, "saved"],
     ["generation", "running", { status: "needs_input" }, "running"],
@@ -43,6 +44,7 @@ test("canvas shows only the current program language, including imported program
     "../components/ui": { Button: ({ children, ...props }) => createElement("button", props, children) },
     "../features/ProjectToolbar": { ProjectToolbar: () => null },
     "../workbench/EditorContent": { EditorContent: ({ visibleTab }) => createElement("article", { "data-view": visibleTab }) },
+    "./VersionHistory": { VersionHistory: () => null },
   };
   new Function("require", "module", "exports", code)(name => dependencies[name] || require(name), module, module.exports);
   const labels = { ladder: "梯形图", fbd: "FBD", sfc: "SFC", st: "ST" };
@@ -97,7 +99,7 @@ test("ST and FBD retain analysis and confirmed generation without a Direct route
 
 test("modification requires a baseline and an actual change request, including Direct-created programs", () => {
   assert.equal(route({ task: "edit" }).available, false);
-  for (const hasSpec of [false, true]) {
+  for (const hasSpec of [true]) {
     const editing = route({ task: "edit", hasVersions: true, hasSpec });
     assert.equal(editing.kind, "generation");
     assert.equal(editing.generationAction, "edit");
@@ -108,7 +110,7 @@ test("modification requires a baseline and an actual change request, including D
 });
 
 test("an existing SFC version submits an edit through the shared generation route", () => {
-  const editing = route({ targetMode: "sfc", task: "edit", hasVersions: true });
+  const editing = route({ targetMode: "sfc", task: "edit", hasVersions: true, hasSpec: true });
   assert.equal(editing.kind, "generation");
   assert.equal(editing.available, true);
   assert.equal(editing.generationAction, "edit");
@@ -129,7 +131,7 @@ test("full regeneration first obtains a specification and explicitly selects reg
 
 test("clarification wording belongs only to active Direct creation", () => {
   assert.equal(route({ continuingDirect: true }).submitLabel, "补充并继续");
-  assert.equal(route({ continuingDirect: true, task: "edit", hasVersions: true }).submitLabel, "修改当前程序");
+  assert.equal(route({ continuingDirect: true, task: "edit", hasVersions: true, hasSpec: true }).submitLabel, "修改当前程序");
   assert.equal(route({ continuingDirect: true, workflow: "review", hasSpec: true }).submitLabel, "按需求生成");
 });
 
@@ -181,4 +183,27 @@ test("Direct renders a separate answer box for each question, with editable sugg
   assert.match(markup, /aria-pressed="true"[^>]*>1秒/);
   assert.match(markup, /aria-pressed="false"[^>]*>2秒/);
   assert.doesNotMatch(markup, /undefined/);
+});
+
+
+test("all existing projects without confirmed specifications first organize requirements", () => {
+  for (const targetMode of ["ladder", "st", "fbd", "sfc"]) {
+    const editing = route({targetMode, task:"edit", hasVersions:true, hasSpec:false});
+    assert.equal(editing.kind, "analysis");
+    assert.equal(editing.available, true);
+    const confirmed = route({targetMode, task:"edit", hasVersions:true, hasSpec:true});
+    assert.equal(confirmed.kind, "generation");
+    assert.equal(confirmed.generationAction, "edit");
+  }
+});
+
+test("modern implementation plans review natural-language edits before generation", () => {
+  for (const targetMode of ["ladder", "st", "fbd", "sfc"]) {
+    const input = {targetMode, task:"edit", hasVersions:true, hasSpec:true, hasImplementationPlan:true, workflow:"review"};
+    assert.equal(route(input).kind, "analysis");
+    const direct = route({...input, workflow:"direct"});
+    assert.equal(direct.kind, "generation");
+    assert.equal(direct.generationAction, "edit");
+    assert.equal(route({...input,hasImplementationPlan:false}).kind, "generation");
+  }
 });

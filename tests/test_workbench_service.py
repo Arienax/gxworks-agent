@@ -36,7 +36,9 @@ def test_workbench_start_close_are_idempotent_and_preserve_one_running_service(t
         assert (service.jobs, service.execution, service.lock) == (jobs, execution, lock)
         service.close()
         service.close()
-        assert not lock.acquired and jobs._closed and execution._closed
+        assert jobs._closed and execution._closed
+        with pytest.raises(RuntimeError, match="closed"):
+            lock.require_open()
         assert service.start() is service
         assert service.jobs is not jobs and service.execution is not execution
     finally:
@@ -1007,16 +1009,26 @@ def test_debug_plan_rejects_cross_version_or_changed_candidate(saved_debug_plan,
 
 
 
-def test_job_receipt_uses_submission_provider_when_global_selection_changes(workbench, saved, monkeypatch):
+@pytest.mark.parametrize("cache_fields, cached_total", [
+    ({"prompt_cache_hit_tokens": 30}, 30),
+    ({"prompt_cache_hit_tokens": 0}, 0),
+    ({}, None),
+])
+def test_job_receipt_uses_submission_provider_when_global_selection_changes(
+        workbench, saved, monkeypatch, cache_fields, cached_total):
     import threading
     from types import SimpleNamespace
-    from model_runtime.provider import OpenAICompatibleProvider, ModelRequest, UserMessage
+    from model_runtime.provider import OpenAICompatibleProvider, ModelRequest, UserMessage, collect_response
     from model_runtime.usage import tool_executed
+    from responses_fixture import chat_body, chat_stream
     from test_model_provider import _Client
     _, project, version, _ = saved
-    client = _Client([SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="OK",tool_calls=[]))])])
+    sync = chat_body("OK", usage={"prompt_tokens": 120, "completion_tokens": 40, **cache_fields})
+    stream = chat_stream(chat_body("OK", usage={"prompt_tokens": 80, "completion_tokens": 12,
+        "prompt_tokens_details": {"cached_tokens": 0}}))
+    client = _Client([sync, stream])
     profile = {"id":"frozen", "name":"Submitted model", "adapter":"openai_compatible",
-               "baseUrl":"https://test.invalid/v1", "model":"exact-original", "generationDefaults":{"temperature":.37}}
+               "baseUrl":"https://api-inference.modelscope.cn/v1", "model":"exact-original", "generationDefaults":{"temperature":.37}}
     provider = OpenAICompatibleProvider(profile,"private-key",client=client)
     current = [provider]
     workbench.model_factory = lambda: (current[0], {"profile_id":current[0].profile["id"],
@@ -1025,7 +1037,8 @@ def test_job_receipt_uses_submission_provider_when_global_selection_changes(work
     def run_job(ctx, snapshot, context, images, bound):
         entered.set()
         assert release.wait(5)
-        list(bound.stream(ModelRequest((UserMessage("private-program-text"),),stream=False)))
+        for streaming in (False, True):
+            collect_response(bound, ModelRequest((UserMessage("private-program-text"),), stream=streaming))
         tool_executed("search_plc_manual", True)
         return {"status":"complete"}
     monkeypatch.setattr(workbench,"_run_job",run_job)
@@ -1040,11 +1053,20 @@ def test_job_receipt_uses_submission_provider_when_global_selection_changes(work
     workbench.jobs._futures[submitted["id"]].result(timeout=10)
     completed = workbench.jobs.get(submitted["id"])
     assert completed["status"] == "completed", completed
-    assert completed["model_usage"]["model"] == client.completions.calls[0]["model"] == "exact-original"
+    assert completed["model_usage"]["model"] == client.chat.completions.calls[0]["model"] == "exact-original"
     assert next(p for p in completed["model_usage"]["parameters"] if p["name"] == "temperature")["value"] == .37
     events = workbench.jobs.events(submitted["id"])
-    request = next(e for e in events if e["event_type"] == "model_request")
-    assert request["payload"] == completed["model_usage"]
+    receipts = [e["payload"] for e in events if e["event_type"] == "model_request"]
+    assert receipts[0]["features"]["streaming"] is False
+    usage = dict(completed["model_usage"])
+    tokens = usage.pop("tokens")
+    assert receipts[1] == usage
+    expected = {"input_tokens": 200, "output_tokens": 52}
+    if cached_total is not None:
+        expected["cached_input_tokens"] = cached_total
+    assert tokens == expected
+    assert len([e for e in events if e["event_type"] == "model_token_usage"]) == 2
+    assert all("stream_options" not in call for call in client.responses.calls)
     assert next(e for e in events if e["event_type"] == "tool_execution")["payload"] == {"name":"search_plc_manual","success":True}
     public = json.dumps([completed,events])
     assert "private-key" not in public and "private-program-text" not in public

@@ -57,7 +57,7 @@ def hardware(tmp_path):
 
 def proposal(hardware, *, station=2, ttl=60):
     module, _, _, project, version, _ = hardware
-    return module.propose(project, version, "operator-a", {"logical_station": station,
+    return module.propose(project, version, {"logical_station": station,
         "target_label": "测试电柜 A", "addresses": ["X0", "D0"], "ttl_seconds": ttl})
 
 
@@ -67,12 +67,12 @@ def approval_command(session):
 
 def approve(hardware, session):
     module, _, _, project, version, _ = hardware
-    return module.approve(project, version, session["id"], "operator-a", approval_command(session))
+    return module.approve(project, version, session["id"], approval_command(session))
 
 
-def read(hardware, session, *, addresses=None, request="read_one", owner="operator-a"):
+def read(hardware, session, *, addresses=None, request="read_one"):
     module, _, _, project, version, _ = hardware
-    return module.read(project, version, session["id"], owner,
+    return module.read(project, version, session["id"],
         {"request_id": request, "addresses": addresses or ["X0", "D0"]})
 
 
@@ -83,8 +83,8 @@ def files(root):
 def test_default_off_queries_proposals_and_approval_never_connect(hardware):
     module, service, reader, project, version, _ = hardware
     state = files(service.state_dir)
-    assert module.list(project, version, "operator-a")["sessions"] == []
-    assert module.list(project, version, "operator-a")["default_enabled"] is False
+    assert module.list(project, version)["sessions"] == []
+    assert module.list(project, version)["default_enabled"] is False
     assert files(service.state_dir) == state
     workspace = files(service.store.base_dir)
     session = proposal(hardware)
@@ -105,14 +105,14 @@ def test_manual_read_is_audited_and_duplicate_request_does_not_read_again(hardwa
     clock[0] += 100  # Saved observations remain readable without physical I/O.
     assert read(hardware, session)["replayed"] is True
     assert len(reader.calls) == 1
-    item = module.list(project, version, "operator-a")["sessions"][0]
+    item = module.list(project, version)["sessions"][0]
     assert item["status"] == "expired"
     assert [entry["action"] for entry in item["audit"]] == ["proposed", "approved", "read_requested", "read_completed"]
     assert item["audit"][-1]["values"] == result["values"]
     assert item["read_count"] == 1
 
 
-def test_pending_outside_expired_revoked_and_other_operator_are_rejected(hardware):
+def test_pending_outside_expired_and_revoked_reads_are_rejected(hardware):
     module, _, reader, project, version, clock = hardware
     session = proposal(hardware)
     with pytest.raises(HardwareError, match="未确认"):
@@ -120,13 +120,11 @@ def test_pending_outside_expired_revoked_and_other_operator_are_rejected(hardwar
     approve(hardware, session)
     with pytest.raises(HardwareError, match="白名单"):
         read(hardware, session, addresses=["Y0"])
-    with pytest.raises(HardwareError, match="另一操作员"):
-        read(hardware, session, owner="operator-b")
     clock[0] += 61
     with pytest.raises(HardwareError, match="过期"):
         read(hardware, session)
-    module.revoke(project, version, session["id"], "operator-a")
-    assert module.list(project, version, "operator-a")["sessions"][0]["status"] == "revoked"
+    module.revoke(project, version, session["id"])
+    assert module.list(project, version)["sessions"][0]["status"] == "revoked"
     assert reader.calls == []
 
 
@@ -137,7 +135,7 @@ def test_confirmation_must_repeat_exact_target_scope_and_duration(hardware):
     for key, value in (("logical_station", 3), ("target_label", "另一个设备"), ("addresses", ["X0"]),
                        ("ttl_seconds", 300), ("mapping_confirmed", False)):
         with pytest.raises(HardwareError, match="不一致"):
-            module.approve(project, version, session["id"], "operator-a", {**expected, key: value})
+            module.approve(project, version, session["id"], {**expected, key: value})
     assert reader.calls == []
 
 
@@ -150,9 +148,9 @@ def test_pending_authorization_expires_and_restart_revokes_active_session(hardwa
     session = proposal(hardware)
     approve(hardware, session)
     reopened = HardwareService(service, reader=reader, clock=lambda: clock[0])
-    assert all(item["status"] == "revoked" for item in reopened.list(project, version, "operator-a")["sessions"])
+    assert all(item["status"] == "revoked" for item in reopened.list(project, version)["sessions"])
     with pytest.raises(HardwareError, match="过期"):
-        reopened.read(project, version, session["id"], "operator-a", {"request_id": "after_restart", "addresses": ["X0"]})
+        reopened.read(project, version, session["id"], {"request_id": "after_restart", "addresses": ["X0"]})
     assert reader.calls == []
 
 
@@ -182,7 +180,7 @@ def test_read_after_deadline_records_failure_and_no_accepted_values(hardware):
     with pytest.raises(HardwareError, match="不会自动重试"):
         read(hardware, session)
     assert len(reader.calls) == 1
-    audit = module.list(project, version, "operator-a")["sessions"][0]["audit"]
+    audit = module.list(project, version)["sessions"][0]["audit"]
     assert audit[-1]["action"] == "read_failed"
     assert all("values" not in row for row in audit)
 
@@ -208,7 +206,7 @@ def test_read_failure_is_audited_without_leaking_backend_exception(hardware):
     reader.callback = fail
     with pytest.raises(HardwareError, match="适配器执行失败"):
         read(hardware, session)
-    assert "password" not in json.dumps(module.list(project, version, "operator-a"))
+    assert "password" not in json.dumps(module.list(project, version))
 
 
 def test_read_only_workspace_cannot_create_hardware_permission(hardware):
@@ -259,7 +257,7 @@ def test_permission_expiring_during_durable_audit_never_calls_reader(hardware, m
     with pytest.raises(HardwareError, match="本次没有连接设备"):
         read(hardware, session)
     assert reader.calls == []
-    assert module.list(project, version, "operator-a")["sessions"][0]["audit"][-1]["action"] == "read_failed"
+    assert module.list(project, version)["sessions"][0]["audit"][-1]["action"] == "read_failed"
 
 
 def test_reader_fingerprint_check_cannot_extend_remaining_permission(tmp_path, monkeypatch):
@@ -328,7 +326,7 @@ def test_no_write_or_cpu_controls_in_hardware_reader_source():
         assert forbidden not in source
 
 
-def test_operator_routes_reject_agent_tokens_and_unknown_mutating_fields(hardware, tmp_path):
+def test_local_routes_require_explicit_read_approval_and_reject_mutating_fields(hardware, tmp_path):
     pytest.importorskip("fastapi", reason="Web integration requires requirements-web.txt")
     pytest.importorskip("httpx", reason="Web integration requires requirements-web.txt")
     from fastapi.testclient import TestClient
@@ -338,15 +336,13 @@ def test_operator_routes_reject_agent_tokens_and_unknown_mutating_fields(hardwar
     # create_app owns start/close only during lifespan; the fixture already owns
     # this service, so make requests without starting a second writer lease.
     origin = "http://127.0.0.1:8765"
-    app = create_app(service.store.base_dir, state_dir=service.state_dir, service=service,
-                     operator_token="operator-test", agent_token="agent-test", origin=origin)
+    app = create_app(service.store.base_dir, state_dir=service.state_dir, service=service, agent_token="agent-test", origin=origin)
     if not any(route.path.endswith("/hardware") for route in app.routes):
         register(app, service)
     client = TestClient(app, base_url=origin)
     path = f"/api/projects/{project}/versions/{version}/hardware"
-    assert client.get(path, headers={"Authorization": "Bearer agent-test"}).status_code == 401
-    session = client.post("/api/session", json={"token": "operator-test"}).json()
-    headers = {"Origin": origin, "X-CSRF-Token": session["csrf"]}
+    assert client.get(path).status_code == 200
+    headers = {"Origin": origin}
     response = client.post(path + "/sessions", headers=headers, json={"logical_station": 2,
         "target_label": "测试柜", "addresses": ["X0"], "ttl_seconds": 60, "write_values": {"Y0": 1}})
     assert response.status_code == 422

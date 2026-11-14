@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Explicit, agent-only bridge to the running loopback application service.
 
@@ -72,10 +72,10 @@ class ApplicationServiceClient:
             raise ValueError("--service-token-env must name the environment variable holding the agent token.")
         return cls(service_url, os.environ.get(variable, ""), **kwargs)
 
-    def _request(self, path, payload=None, *, native_validation=False):
+    def _request(self, path, payload=None, *, native_validation=False, defer_read=False):
         # Keeping routes internal prevents an adapter user from turning a tool
         # call into an arbitrary authenticated operator HTTP request.
-        if path not in {"/api/agent/tools", "/api/agent/tools/call"}:
+        if path not in {"/api/agent/tools", "/api/agent/tools/call", "/api/agent/read-delivery"}:
             raise ValueError("Unsupported agent service route.")
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8") if payload is not None else None
         request = urllib.request.Request(
@@ -83,6 +83,8 @@ class ApplicationServiceClient:
             headers={"Authorization": "Bearer " + self._token, "Content-Type": "application/json", "Accept": "application/json"},
             method="POST" if payload is not None else "GET",
         )
+        if defer_read:
+            request.add_header('X-GXWorks-Deferred-Read', '1')
         try:
             # A native task owns its temporary workspace until natural exit.
             # Do not turn an arbitrary transport deadline into a retryable
@@ -118,7 +120,12 @@ class ApplicationServiceClient:
                 safe.append(copy.deepcopy(schema))
         return safe
 
-    def call_tool(self, name, arguments, call_id, *, project_id, version_id=None):
+    def finish_host_read(self, tool, document_id, accepted, *, project_id):
+        response = self._request("/api/agent/read-delivery", {
+            "tool": tool, "document_id": document_id, "accepted": accepted, "project_id": project_id})
+        return response.get('ok') is True
+
+    def call_tool(self, name, arguments, call_id, *, project_id, version_id=None, defer_read=False):
         if name not in SAFE_TOOL_NAMES or name in FORBIDDEN_TOOL_NAMES:
             raise ValueError("Tool is not in the shared safe tool list.")
         payload = {"project_id": project_id, "name": name, "arguments": arguments, "call_id": call_id}
@@ -126,7 +133,8 @@ class ApplicationServiceClient:
             payload["version_id"] = version_id
         response = self._request("/api/agent/tools/call", payload,
             native_validation=name in NATIVE_INSPECTION_TOOL_NAMES or (
-                name == 'validate_project' and isinstance(arguments, dict) and arguments.get('native') is True))
+                name == 'validate_project' and isinstance(arguments, dict) and arguments.get('native') is True),
+            defer_read=defer_read)
         data = response.get("data")
         if not isinstance(data, dict):
             raise ServiceConnectionError("Local agent service returned an invalid tool result.")
@@ -138,8 +146,8 @@ class ApplicationServiceClient:
                 if json.loads(response.get('content') or '') != data:
                     raise ValueError('Read response content differs from its data')
                 data = self._read_receiver.receive(name, data,
-                    binding=(name, project_id, version_id,
-                             {key: value for key, value in arguments.items() if key != 'cursor'}),
+                    binding=(name, project_id, None if name == 'search_plc_manual' else version_id),
+                    query_arguments={key: value for key, value in arguments.items() if key != 'cursor'},
                     cursor=arguments.get('cursor'))
             except (ValueError, TypeError) as error:
                 raise ServiceConnectionError('Local agent service returned an invalid paged read result.') from error
@@ -161,24 +169,34 @@ class ApplicationServiceClient:
 class ServiceMCPToolAdapter:
     """Translate the existing runtime schema and results; no PLC operations."""
 
-    def __init__(self, client, project_id, version_id=None):
+    def __init__(self, client, project_id, version_id=None, *, read_budget_tokens=None):
         from shared.records import record_id
         from .context_provider import ContextUnavailableError
 
+        from application.context_units import ContextUnits
+        self.read_units = ContextUnits()
+        self.read_budget_tokens = read_budget_tokens
         self.client = client
         self.project_id = record_id(project_id, message="Invalid project ID.", error_type=ContextUnavailableError)
         self.version_id = record_id(version_id, message="Invalid version ID.", error_type=ContextUnavailableError) if version_id is not None else None
         self._session_id = uuid.uuid4().hex
         self._call_ids = {}
 
-    def list_tools(self):
+    def list_tools(self, *, read_budget_tokens=None):
         from .tool_adapter import mcp_tool
-        return [mcp_tool(schema) for schema in self.client.list_tools()]
+        from application.context_units import restore_tool_schema
+        budget = self.read_budget_tokens if read_budget_tokens is None else read_budget_tokens
+        return [mcp_tool(schema, read_budget_tokens=budget)
+                for schema in [*self.client.list_tools(), restore_tool_schema()]]
 
-    def call_tool(self, name: str, arguments: Any, call_id: str):
-        from .tool_adapter import _error, to_mcp_result
+    def call_tool(self, name: str, arguments: Any, call_id: str, *, read_budget_tokens=None):
+        from .tool_adapter import _error, to_mcp_result, restore_context_units, invoke_host_read
+        from application.context_units import RESTORE_TOOL
 
+        budget = self.read_budget_tokens if read_budget_tokens is None else read_budget_tokens
         call = ToolCall(call_id, name, arguments)
+        if name == RESTORE_TOOL:
+            return restore_context_units(self.read_units, call, budget)
         if name not in SAFE_TOOL_NAMES or name in FORBIDDEN_TOOL_NAMES:
             return _error(call, "UNKNOWN_TOOL", "Tool is not in the shared safe tool list.")
         try:
@@ -186,7 +204,13 @@ class ServiceMCPToolAdapter:
             # Give each logical call a stable UUID within this server session;
             # a failed response retried with the same id keeps its backend key.
             logical_id = self._call_ids.setdefault(str(call_id), self._session_id + "_" + uuid.uuid4().hex)
-            result = self.client.call_tool(name, arguments, logical_id, project_id=self.project_id, version_id=self.version_id)
-            return to_mcp_result(ToolResult(call_id, result.name, result.content, result.data, result.is_error))
+            result = invoke_host_read(ToolCall(logical_id, name, arguments),
+                lambda request: self.client.call_tool(request.name, request.arguments, request.id,
+                    project_id=self.project_id, version_id=self.version_id,
+                    **({'defer_read': True} if request.defer_read else {})), budget,
+                read_units=self.read_units, finish_read=lambda tool, document_id, accepted:
+                    self.client.finish_host_read(tool, document_id, accepted, project_id=self.project_id))
+            return to_mcp_result(ToolResult(call_id, result.name, result.content, result.data, result.is_error),
+                                 read_units=self.read_units)
         except (ServiceConnectionError, ValueError):
             return _error(call, "SERVICE_UNAVAILABLE", "Local application service call failed; inspect the existing operation receipt before submitting a new action.")

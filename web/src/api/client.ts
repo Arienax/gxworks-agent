@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 export type Json =
   | null
@@ -17,7 +17,7 @@ export type Job = components["schemas"]["Job"];
 export type JobEvent = components["schemas"]["JobEvent"];
 export type Proposal = components["schemas"]["Proposal"];
 export type ModelSettings = components["schemas"]["ModelSettings"];
-export type Session = components["schemas"]["Session"];
+export type WorkbenchConnection = components["schemas"]["WorkspaceState"];
 export type JobKind = components["schemas"]["JobCreate"]["kind"];
 export type FBDModel = components["schemas"]["FBDModel"];
 export type SFCModel = components["schemas"]["SFCModel"];
@@ -43,10 +43,6 @@ export function isFBDEditorView(value: unknown): value is FBDEditorView {
     && "presentation" in value && !!value.presentation && "catalog" in value && Array.isArray(value.catalog);
 }
 
-let csrf = "";
-export function setSession(value: Session) {
-  csrf = value.csrf || "";
-}
 export async function api<T>(
   path: string,
   method = "GET",
@@ -56,11 +52,9 @@ export async function api<T>(
   const response = await fetch(`/api${path}`, {
     method,
     signal: options.signal,
-    credentials: "same-origin",
     headers: {
       ...options.headers,
       "Content-Type": "application/json",
-      ...(method !== "GET" ? { "X-CSRF-Token": csrf } : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });

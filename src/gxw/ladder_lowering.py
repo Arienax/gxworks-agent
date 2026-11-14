@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Lower logical FBD parameters and verified relay logic to existing GXW objects."""
 from copy import deepcopy
@@ -360,6 +360,7 @@ def fbd_topology_to_object_model(value, context):
         def union(table, left, right):
             table[find(table, right)] = find(table, left)
         predecessors = {name: set() for name in nodes}
+        wire_edges = []
         seen_wires = set()
         for wire in wires:
             if not isinstance(wire, dict) or set(wire) != {'from','to'}:
@@ -371,7 +372,7 @@ def fbd_topology_to_object_model(value, context):
             seen_wires.add((wire['from'], wire['to']))
             if lp['x'] != templates[left].bbox.right-templates[left].bbox.left or rp['x'] != 0:
                 raise GXWFormatError('logical wire must connect an output to an input')
-            predecessors[right].add(left)
+            wire_edges.append((left, right))
             union(parent, left, right)
             union(net_parent, wire['from'], wire['to'])
         # A caller's list order supplies the order for shared storage and
@@ -381,6 +382,15 @@ def fbd_topology_to_object_model(value, context):
         if (not isinstance(requested_order, list) or len(requested_order) != len(set(requested_order))
                 or set(requested_order) != set(call_names)):
             raise GXWFormatError('execution_order must name every callable once')
+        requested_index = {name: index for index, name in enumerate(requested_order)}
+        for left, right in wire_edges:
+            # A backward connection is a feedback net, not a layout level: the
+            # requested execution order stays authoritative and the existing
+            # track router draws the return path below the callables.
+            if (left in requested_index and right in requested_index
+                    and (left == right or requested_index[left] > requested_index[right])):
+                continue
+            predecessors[right].add(left)
         accesses = {name: dict(read=set(), write=set()) for name in call_names}
         from plc.fbd_semantics import storage_keys
         def keys(name, call, formal):

@@ -6,7 +6,7 @@ import copy
 def _analysis(**extra):
     base = {"summary": "按颜色分选来料",
             "approaches": [{"approach_id": "word", "name": "整字移位", "description": "整字移位",
-                            "implementation_semantics": []}]}
+                            "implementation_semantics": [], "decision_basis": []}]}
     base.update(extra)
     return base
 
@@ -44,6 +44,24 @@ def test_inferred_execution_claim_is_reported_and_never_applied():
     assert [row["reason"] for row in receipt["rejected"]] == ["inferred_claim_not_grounded"]
 
 
+def test_inferred_execution_claim_does_not_send_valid_analysis_to_repair():
+    import json
+    from application.analysis_repair import plan_analysis_repair
+    from application.analysis_response import _parse_analysis_response
+
+    requirement = "记录 D20 的数值和 X2 的当前状态。"
+    claim = {"inferred": True, "trigger": {"kind": "transition", "source_devices": ["D20"],
+                                           "from": 0, "to": 1}}
+    draft = _analysis(execution_intent_claims=[claim])
+    assert plan_analysis_repair(draft, requirement)["targets"] == []
+    result = _parse_analysis_response(json.dumps(draft, ensure_ascii=False), user_text=requirement)
+    assert result["approaches"][0]["approach_id"] == "word"
+    assert result["execution_semantics"] == []
+    assert result["execution_intent_receipt"]["rejected"] == [
+        {"index": 0, "reason": "inferred_claim_not_grounded", "claim": claim},
+    ]
+
+
 def test_dropped_claims_survive_into_the_confirmed_spec_receipt():
     from plc.specification.confirmed import build_review_draft, validate_spec_draft
     rejected = [{"field": "explicit_constraint_claims", "reason": "inferred_claim_not_grounded",
@@ -71,6 +89,8 @@ def test_inferred_claims_allow_omitted_evidence_in_validators_schema_and_repairs
     schema = design_submission_schema()
     submission = _analysis(explicit_constraint_claims=[explicit_claim],
                            execution_intent_claims=[exec_claim])
+    from design_output_examples import contact_output_en
+    submission['approaches'][0]['output_logic'] = contact_output_en()
     Draft202012Validator(schema).validate(submission)
 
     # User text mentions Y0, so an ungrounded claim on Y0 enters repair_targets and can be marked inferred=True.

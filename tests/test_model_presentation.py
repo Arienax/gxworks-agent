@@ -118,6 +118,40 @@ def test_display_limit_does_not_truncate_the_actual_response():
     assert records[-1][1]["truncated"] is True
 
 
+def test_long_stream_persists_only_stage_changes_and_keeps_live_text():
+    records, checkpoints = [], []
+    now = [0.0]
+    reporter = ModelProgressReporter(SimpleNamespace(
+        emit=lambda kind, data: records.append((kind, data)),
+        checkpoint=lambda: checkpoints.append(True)), clock=lambda: now[0])
+    reporter(ResponseProgress('waiting'))
+    reporter.preview(ResponsePreview('start'))
+    for count in range(1, 201):
+        # Slow chunks previously defeated the time throttle, causing a durable
+        # progress write for every chunk even though the phase never changed.
+        now[0] += 0.5
+        reporter(ResponseProgress('thinking', count))
+        reporter.preview(ResponsePreview('reasoning', 'x'))
+    reporter(ResponseProgress('receiving', 202))
+    reporter.preview(ResponsePreview('content', '{}'))
+    reporter(ResponseProgress('validating', 202))
+    reporter.preview(ResponsePreview('complete'))
+    progress = [row for kind, row in records if kind == 'model_progress']
+    assert [row['phase'] for row in progress] == ['waiting', 'thinking', 'receiving', 'validating']
+    assert progress[-1]['received_characters'] == 202
+    assert len(checkpoints) == 406
+    assert ''.join(row.get('reasoning', '') for kind, row in records if kind == 'model_preview') == 'x' * 200
+    assert ''.join(row.get('content', '') for kind, row in records if kind == 'model_preview') == '{}'
+
+
+def test_repeated_waiting_starts_distinct_requests_even_without_output():
+    records = []
+    reporter = ModelProgressReporter(SimpleNamespace(emit=lambda kind, data: records.append(data)))
+    reporter(ResponseProgress('waiting'))
+    reporter(ResponseProgress('waiting'))
+    assert [row['request_number'] for row in records] == [1, 2]
+
+
 def test_accepted_chunks_are_coalesced_before_next_stage_without_losing_text():
     records = []
     context = ModelJobContext(SimpleNamespace(emit=lambda kind, data: records.append((kind, data))))

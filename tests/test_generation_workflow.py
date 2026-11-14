@@ -236,7 +236,11 @@ def test_compact_complex_request_reaches_csv_once(monkeypatch, tmp_path, strict,
             row['rung_id'] = identity
         answer = program
     else:
-        answer = {'result': {'program': program, 'decisions': [], 'open_items': []}}
+        answer = {'result': {'program': program, 'open_items': [], 'decisions': {
+            'candidates': [{'method': '共享条件与分支', 'tradeoff': '一组公用触点',
+                            'instruction_choices': [], 'decision_basis': []}],
+            'selected': 0, 'rationale': '多输出共用使能',
+        }}}
 
     class Provider:
         def __init__(self):

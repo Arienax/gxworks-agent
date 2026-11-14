@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Shared schemas and handlers for source discovery and runtime observation."""
 from __future__ import annotations
@@ -28,8 +28,8 @@ def register_inspection_tools(registry):
         "required": ["id", "address", "data_type"], "additionalProperties": False}
     config = {"type": "object", "properties": {
         "title": {"type": "string", "maxLength": 160, "default": "仿真观察"},
-        "plc_model": {"type": "string", "maxLength": 64, "default": "FX3U",
-                      "description": "方案按此型号校验地址；实时 Simulator2 采样当前使用 FX3U 路由。"},
+        "plc_model": {"type": "string", "maxLength": 64,
+                      "description": "按实际 FX/Q/L 型号校验地址。实时采样省略时沿用 target_ref 型号；独立准备方案省略时默认 FX3U。"},
         "signals": {"type": "array", "minItems": 1, "maxItems": MAX_TRACE_DEVICES, "items": signal,
                     "description": f"最多 {MAX_TRACE_DEVICES} 个信号，展开并去重后的物理地址也最多 {MAX_TRACE_DEVICES} 个。"},
         "sample_ms": {"type": "integer", "minimum": 50, "maximum": 5000, "default": 100},
@@ -72,11 +72,12 @@ def register_inspection_tools(registry):
          {"target_ref": ref, "addresses": {"type": "array", "minItems": 1, "maxItems": 64,
                                            "items": {"type": "string"}}},
          ("target_ref", "addresses"), "read_simulator_devices"),
-        ("connect_simulator", "连接现有 GX Simulator2，必要时启动本机专用网关并返回 target_ref；不启动、下载、编译、修改或停止 PLC 程序。当前原生路由只支持 FX3U。",
-         {}, (), "connect_simulator"),
+        ("connect_simulator", "按实际 FX/Q/L 型号连接现有 GX Simulator2，必要时启动本机专用网关并返回 target_ref；不启动、下载、编译、修改或停止 PLC 程序。型号必须有已登记的原生连接配置。省略型号时沿用已连接目标，首次连接默认 FX3U。",
+         {"plc_model": {"type": "string", "minLength": 1, "maxLength": 64,
+                        "description": "实际 CPU 型号，例如 FX3G、Q06UDEH、L06；不能用 FX3U 代替其他型号。"}}, (), "connect_simulator"),
         ("prepare_simulator_scenario", "按 signals 定义类型化仿真方案，initial/steps 使用信号 id 和类型化数值，expect 支持绝对容差。返回测试 DSL suite、execution_started=false、view_ref 和 Web 时间轴 URL；实际执行通过既有版本绑定测试服务。RAW 信号用于观察。",
          {"config": config}, ("config",), "prepare_simulator_scenario"),
-        ("start_simulator_trace", "对已连接的 FX3U Simulator2 target_ref 进行有限时长只读采样；按 data_type 解码位值或 D 字值，返回 view_ref、最新数值和 Web 时间轴 URL。sample_ms 默认100，duration_ms 默认10000。initial/steps 表达计划，采样期间不执行写入或断言；无需选择 Agent 工程。",
+        ("start_simulator_trace", "按已连接 Simulator2 target_ref 的实际型号进行有限时长只读采样；按 data_type 解码位值或 D 字值，返回 view_ref、最新数值和 Web 时间轴 URL。sample_ms 默认100，duration_ms 默认10000。initial/steps 表达计划，采样期间不执行写入或断言；无需选择 Agent 工程。",
          {"target_ref": ref, "config": config}, ("target_ref", "config"), "start_simulator_trace"),
         ("get_simulator_trace", "读取本会话视图的 status、latest.values/errors、sample_count、dropped_samples、elapsed_ms 和 URL；完整采样序列在 Web 时间轴查看，工具返回摘要（samples 为空数组）。",
          {"view_ref": ref}, ("view_ref",), "get_simulator_trace"),

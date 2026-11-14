@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Generic simulator view lifecycle. HTTP serves observations, never device I/O."""
 from __future__ import annotations
@@ -138,15 +138,16 @@ class SimulationViewService:
 
     def watch(self, inspection, target_ref, config):
         binding = inspection._target(target_ref)
-        normalized, _suite = normalize_scenario(config)
-        if normalized["plc_model"] != "FX3U":
-            raise ValueError("The current native simulator gateway route supports FX3U only")
+        from plc.device_policy import native_simulator_profile, native_simulator_read_plan
+        model = inspection.simulator_target_model(target_ref)
+        normalized, _suite = normalize_scenario({'plc_model': model, **config})
+        if native_simulator_profile(normalized['plc_model'])['cpu_menu'] != native_simulator_profile(model)['cpu_menu']:
+            raise ValueError(f'采样方案型号 {normalized["plc_model"]} 与已连接目标 {model} 不一致')
         view = self.create_normalized(normalized, source={"kind": "runtime_device_observation", "route": "GX Simulator2",
             "program_correspondence": "unverified", "physical_plc": False, "target_ref": target_ref})
         addresses = sorted({a for s in view.config["signals"] for a in s["addresses"]})
-        from plc.device_policy import native_read_plan
         from simulator.models import MAX_TRACE_DEVICES
-        plan = native_read_plan(addresses, view.config["plc_model"], maximum=MAX_TRACE_DEVICES)
+        plan = native_simulator_read_plan(addresses, view.config["plc_model"], maximum=MAX_TRACE_DEVICES)
         # Preflight before returning a live URL. No empty list implies success.
         try:
             raw = inspection.gateway.read_bound(plan, binding)

@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import type { ReactNode } from "react";
 import { lazy, Suspense } from "react";
@@ -18,6 +18,9 @@ export const canvasPanelFields = [
   "pid",
   "preview",
   "saveSpec",
+  "specDocument",
+  "refreshSpecDocument",
+  "saveSpecDraft",
   "spec",
   "specIssues",
   "t",
@@ -34,6 +37,7 @@ export function CanvasPanels(props: Props) {
     preview,
     proposalsView,
     saveSpec,
+    specDocument, refreshSpecDocument, saveSpecDraft,
     spec,
     specIssues,
     t,
@@ -44,6 +48,9 @@ export function CanvasPanels(props: Props) {
       <div className="canvas-document">
         <Suspense fallback={<p role="status">{t("正在读取…")}</p>}><SpecEditor
           value={spec}
+          document={specDocument}
+          onRefresh={() => void guarded(async () => { await refreshSpecDocument(); })}
+          onSaveDraft={(s) => void guarded(async () => { await saveSpecDraft(s); })}
           issues={specIssues}
           onChange={changeSpec}
           t={t}

@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import copy
 import json
@@ -89,6 +89,42 @@ def normalize_app_instr_out_outputs(ladder):
                     f"{location}: OUT {address} -> {replacement['type']}"
                 )
     return normalized, converted
+
+
+# SH-080809ENG-X, 6.2 (printed pp. 222–233): three-operand BIN integer
+# operations use these literal Q mnemonics; D and P remain width and trigger.
+_Q_INTEGER_ARITHMETIC = {'ADD': '+', 'SUB': '-', 'MUL': '*', 'DIV': '/'}
+_Q_INTEGER_ALIAS_RE = re.compile(r'(D?)(ADD|SUB|MUL|DIV)(P?)')
+
+
+def normalize_q_arithmetic_outputs(ladder, *, plc_model):
+    """Normalize model-style integer arithmetic in an owned fresh Q candidate."""
+    from plc.target_identity import target_family
+    if target_family(plc_model) != 'Q':
+        return []
+    from plc.storage.q_encoder import source_instruction_arities
+
+    converted = []
+    for rung in ladder.get('rungs', []):
+        if 'ordered_instructions' in rung:
+            continue
+        for branch in rung.get('branches', []):
+            for output in branch.get('outputs', []):
+                if output.get('type') != 'APP_INSTR':
+                    continue
+                operands = output.get('operands')
+                if not isinstance(operands, list) or len(operands) != 3:
+                    continue
+                opcode = str(output.get('opcode', '')).strip().upper()
+                alias = _Q_INTEGER_ALIAS_RE.fullmatch(opcode)
+                if not alias or 3 in source_instruction_arities(opcode, cpu=plc_model):
+                    continue
+                width, operation, pulse = alias.groups()
+                native = width + _Q_INTEGER_ARITHMETIC[operation] + pulse
+                if 3 in source_instruction_arities(native, cpu=plc_model):
+                    output['opcode'] = native
+                    converted.append(f"rung {rung.get('rung_id')}: {opcode} -> {native}")
+    return converted
 
 
 def _expand_input_path(header, inputs):

@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Lazy lifecycle manager for the local GX Simulator2 HTTP gateway.
 
@@ -20,6 +20,8 @@ import weakref
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+from shared.paths import local_helper_candidates
 
 from .gateway import (
     DEFAULT_GATEWAY_URL,
@@ -91,14 +93,8 @@ def _gateway_candidates():
     executable_dir = Path(os.path.abspath(os.path.dirname(os.sys.executable)))
     yield executable_dir / "simulator-gateway" / "PlcAi.GxSimulator2Gateway.exe"
     yield executable_dir / "PlcAi.GxSimulator2Gateway.exe"
-    local_app_data = os.environ.get("LOCALAPPDATA", "").strip()
-    if local_app_data:
-        yield (
-            Path(local_app_data)
-            / "PLC AI Studio"
-            / "simulator-gateway"
-            / "PlcAi.GxSimulator2Gateway.exe"
-        )
+    if os.name == "nt":
+        yield from local_helper_candidates("simulator-gateway", "PlcAi.GxSimulator2Gateway.exe")
 
 
 class SimulatorGatewayRuntime:

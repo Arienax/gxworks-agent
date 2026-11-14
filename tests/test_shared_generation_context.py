@@ -75,15 +75,19 @@ def test_existing_operand_purpose_projects_positive_facts_without_changing_backe
     original = copy.deepcopy(record)
     output = technical_knowledge_text(record)
     projected = json.loads(output.removeprefix('[PLC KNOWLEDGE]\n').removesuffix('\n[/PLC KNOWLEDGE]'))
-    operand = projected['value']['facts'][0]
+    operand = next(item for item in projected['value']['additional_knowledge']
+                   if 'parameters.table' in item.get('semantics', {}))
+    table = operand['semantics']['parameters.table']
 
-    assert operand['value'] == facts[0]['value']
+    assert table['value'] == facts[0]['value']
     assert operand['scope'] == facts[0]['scope']
     assert operand['conditions'] == facts[0]['conditions']
-    assert operand['requires'] == facts[0]['requires']
+    assert table['requires'] == facts[0]['requires']
     if has_purpose:
-        assert 'declared_unverified' not in output
-        assert projected['value']['facts'][1]['value'] == facts[1]['value']
+        assert any(item.get('semantics', {}).get('effects.operation') == facts[1]['value']
+                   for item in projected['value']['additional_knowledge'])
+        from shared.model_context import model_knowledge_value
+        assert 'declared_unverified' not in json.dumps(model_knowledge_value(projected))
     else:
         assert operand['knowledge_status'] == 'declared_unverified'
     assert record == original
@@ -127,6 +131,34 @@ def test_selected_approach_does_not_reopen_functional_alternatives(monkeypatch):
     assert spec == before
 
 
+def test_confirmed_generation_retrieves_facts_for_the_selected_behavior():
+    from application.confirmed_generation_context import build_confirmed_generation_context
+    from application.generation_agent import _compact_wire_renderer
+    from application.generation_wire import expand_context_document
+
+    spec = {
+        'plc_model': 'FX3U',
+        'summary': '评估用位区移位寄存器或 FIFO 记录在途事件及其延时。',
+        'selected_approach': {
+            'approach_id': 'fifo', 'name': '顺序缓冲',
+            'generation_guide': '用先进先出队列保存记录，按顺序写入和读取。',
+        },
+    }
+    context = build_confirmed_generation_context(
+        spec, 'FX3U', wire_renderer=_compact_wire_renderer('FX3U'),
+    )
+    assert 'queue' in context.handoff['capability_discovery']['functions']
+    assert 'range_shift' not in context.handoff['capability_discovery']['functions']
+    exact = context.handoff['structured_facts']
+    assert exact['targets']['instructions'] == []
+    assert not exact['residual_retrieval']
+    payload = expand_context_document(json.loads(context.wire_packet['messages'][1]['content']))
+    instructions = {unit['target'] for unit in payload['knowledge'] if unit['kind'] == 'instruction'}
+    assert {'SFWR', 'SFRD'} <= instructions
+    assert not instructions & {'SFTL', 'WSFL'}
+    assert not any(unit['kind'] == 'example' for unit in payload['knowledge'])
+
+
 @pytest.mark.parametrize('direct', [False, True])
 def test_generation_wire_excludes_audit_values_without_mutating_backend(direct):
     from application.confirmed_generation_context import build_confirmed_generation_context, build_direct_generation_context
@@ -151,7 +183,7 @@ def test_generation_wire_excludes_audit_values_without_mutating_backend(direct):
                build_confirmed_generation_context(spec, 'FX3U', **options))
     wire = json.dumps(context.wire_packet)
     assert 'SENTINEL' not in wire
-    assert 'knowledge_status' in wire and 'source_verified' in wire
+    assert 'knowledge_status' not in wire and 'source_verified' not in wire
     assert 'parameters.arity' in wire and 'MOV' in wire and 'X0' in wire
     assert 'PRIVATE_RECORD_SENTINEL' in json.dumps(context.handoff)
     assert spec == before
@@ -312,7 +344,8 @@ def test_direct_still_uses_one_request_without_spec_confirmation(monkeypatch, re
     assert requests[0].max_retries == 0
     prompt = requests[0].messages[0].content
     assert '未提取不等于未提供' in prompt
-    assert '内部地址、指令、数据结构和实现方法由生成器自行决定' in prompt
+    assert '内部地址、指令、容量和数据结构属于实现选择' in prompt
+    assert 'instruction_choices' in prompt
     for obsolete in ('needs_input', '二者不能混合', '首次追问前完整检查', '真实缺参先问', 'Agent A'):
         assert obsolete not in prompt
 
@@ -339,13 +372,13 @@ def test_st_numeric_rules_reach_first_model_request_without_an_extra_call(requir
     assert 'power_base_must_be_positive' in prompt
     assert 'power_result_outside_normal_REAL_range' in prompt
     assert 'call_available' in prompt and 'false' in prompt
-    assert 'knowledge_status' in prompt
-    assert 'depends_on' in prompt and '"id":"source:' not in prompt
+    assert 'knowledge_status' not in prompt
+    assert 'depends_on' not in prompt and '"id":"source:' not in prompt
     assert 'requires' in prompt
     assert handoffs[0]['generation_evidence']['status'] != 'excluded'
 
 
-def test_unselected_option_does_not_trigger_detail_lookup(monkeypatch):
+def test_functional_option_receives_scoped_facts_without_changing_user_requirements(monkeypatch):
     from application.capability_context import augment_generation_knowledge
     from knowledge.evidence import KnowledgeContext
     import knowledge.instruction_facts as facts
@@ -355,13 +388,25 @@ def test_unselected_option_does_not_trigger_detail_lookup(monkeypatch):
                  'functions': ['timer'], 'sources': [{'id': 'timer-source'}]}
     monkeypatch.setattr(knowledge_retriever, 'discover_capabilities', lambda *a, **k:
         {'version': 'test', 'functions': ['timer'], 'candidates': [candidate], 'gaps': []})
-    monkeypatch.setattr(facts, 'retrieve_instruction_facts', lambda *a, **k: pytest.fail('Unselected detail expansion'))
+    original = facts.retrieve_instruction_facts
+    calls = []
+    def retrieve(query, **kwargs):
+        calls.append((query, kwargs))
+        return original(query, **kwargs)
+    monkeypatch.setattr(facts, 'retrieve_instruction_facts', retrieve)
+    specification = {'summary': '延时动作', 'hardware_profile': {'cpu_version': '2.20'}}
+    before = copy.deepcopy(specification)
     context = augment_generation_knowledge('延时动作', KnowledgeContext('',
-        {'structured_facts': {'targets': {'instructions': []}}}))
+        {'status': 'excluded', 'reason': 'no_specific_fact_target',
+         'structured_facts': {'targets': {'instructions': []}}}), confirmed_spec=specification)
     assert context.manifest['capability_discovery']['included_candidates'] == ['instruction:STMR']
     assert 'timer-source' not in context and 'process_applicability' in context
     assert context.manifest['capability_discovery']['candidates'][0]['sources'][0]['id'] == 'timer-source'
-    assert context.manifest['capability_discovery']['included_evidence'] == []
+    assert context.manifest['capability_discovery']['included_evidence']
+    assert calls[0][1]['language'] == 'ladder'
+    assert calls[0][1]['instance_context'] == {'cpu_version': '2.20'}
+    assert context.manifest['status'] == 'included'
+    assert specification == before
 
 
 def test_query_projection_keeps_all_distinct_values_and_handles_shared_containers():
@@ -480,15 +525,16 @@ def test_new_cpu_reaches_api_and_tool_retrieval_without_fx3u_profile(monkeypatch
     if language == "st":
         assert f"# Selected PLC\n{model}" in messages[0]["content"]
         contract = result['data']['output_contract']
-        assert contract['format'] == 'st_body_json'
-        assert contract['schema_ref'] == '#/generation_input/output_schema'
-        assert result['data']['generation_input']['output_schema']['required'] == ['st_code']
+        assert contract['tool'] == 'create_st_candidate' and contract['operation'] == 'generate'
+        schema = result['data']['generation_input']['output_schema']
+        assert contract['parameter_schema'] == schema
+        assert 'st_text' in schema['properties'] and 'declarations' in schema['properties']
         assert 'rungs' not in result['data']['generation_input']['output_schema']['properties']
         assert 'create_program_candidate' not in str(contract)
 
 
 @pytest.mark.parametrize('language', ['ladder', 'st'])
-def test_source_call_contract_is_carried_with_discovery_when_detail_lookup_is_not_packed(language):
+def test_source_call_contract_and_scoped_semantics_are_delivered_with_discovery(language):
     import json
     from application.capability_context import augment_generation_knowledge
     knowledge = augment_generation_knowledge(
@@ -503,7 +549,16 @@ def test_source_call_contract_is_carried_with_discovery_when_detail_lookup_is_no
     assert source['st_signature'] == 'DUTY(EN, n1, n2, D)'
     assert source['ladder_signature'] == 'DUTY n1 n2 D'
     assert 'enclosing IF does not replace EN' in source['enable_rule']
-    assert 'ON scans' in source['source_notes'] and 'OFF scans' in source['source_notes']
+    from shared.model_context import technical_context_units
+    duty = next(unit for unit in technical_context_units(knowledge)
+                if unit.get('kind') == 'instruction' and unit.get('target') == 'DUTY')
+    operations = [entry['semantics']['effects.operation']
+                  for entry in duty['value']['additional_knowledge']
+                  if 'effects.operation' in entry.get('semantics', {})]
+    assert any(operation.get('on_scans') == 'n1' and operation.get('off_scans') == 'n2'
+               and operation.get('update_at') == 'END_processing' for operation in operations)
+    assert duty['scope']['models'] == ['Q00J']
+    assert duty['context']['language'] == language
     from shared.model_context import technical_value
     assert json.dumps(technical_value(source), ensure_ascii=False, separators=(',', ':'), sort_keys=True) in knowledge
     assert 'contract_sources' not in knowledge
@@ -513,9 +568,9 @@ def test_source_call_contract_is_carried_with_discovery_when_detail_lookup_is_no
 def test_composition_is_opt_in_and_shared_between_fbd_api_and_mcp():
     from application.composition_context import CompositionExperiment, composition_scope, composition_experiment
     from application.fbd import build_fbd_generation_context, catalog_snapshot
-    from gxw.object_model import default_baseline
+    from gxw.project_templates import blank_fbd_baseline
     requirement = "使用TON实现延时控制"
-    catalog = catalog_snapshot(default_baseline())
+    catalog = catalog_snapshot(blank_fbd_baseline('FX3U'))
     with composition_scope(CompositionExperiment("D", input_version=(("version_id", "v1"),))):
         direct = build_fbd_generation_context(requirement, plc_model="FX3U", catalog=catalog)
         context = build_tool_context({"id": "composed-fbd", "plc_model": "FX3U", "target_mode": "fbd"})
@@ -541,10 +596,9 @@ def test_public_composition_receipts_never_expose_omitted_units():
 
 def test_fbd_api_and_mcp_expose_identical_directory_discovery_and_selection():
     from application.fbd import build_fbd_generation_context, catalog_snapshot
-    from gxw.object_model import default_baseline
-    from plc.maintainability import SELECTION_POLICY
+    from gxw.project_templates import blank_fbd_baseline
     raw = "使用TON实现延时控制，保留既有目录接口。"
-    catalog = catalog_snapshot(default_baseline())
+    catalog = catalog_snapshot(blank_fbd_baseline('FX3U'))
     api_context = build_fbd_generation_context(raw, plc_model="FX3U", catalog=catalog)
     context = build_tool_context({"id": "fbd-context", "plc_model": "FX3U", "target_mode": "fbd"})
     registry = build_default_tool_registry()
@@ -714,7 +768,7 @@ def test_raw_direct_api_mcp_share_context_and_keep_user_facts(monkeypatch):
     from application.generation_agent import _compact_wire_renderer
     monkeypatch.setattr(knowledge_retriever, "build_knowledge_context", lambda *a, **k: "")
     raw = "X0：启动按钮，按下为1。Y0：输出。按住启动按钮时输出，不自保持。"
-    direct = build_direct_generation_context(raw, "FX3U", wire_renderer=_compact_wire_renderer("FX3U", direct=True))
+    direct = build_direct_generation_context(raw, "FX3U", wire_renderer=_compact_wire_renderer("FX3U", direct=True, bindings=False))
     registry = build_default_tool_registry()
     context = build_tool_context({"id": "raw-direct", "plc_model": "FX3U"})
     result = registry.call("get_generation_context", {"user_requirement": raw}, context)
@@ -735,7 +789,7 @@ def test_raw_direct_api_mcp_share_context_and_keep_user_facts(monkeypatch):
 @pytest.mark.parametrize("direct", [False, True])
 def test_compact_paths_deliver_core_scan_timing_guidance_without_examples(monkeypatch, direct):
     from application.confirmed_generation_context import (
-        build_confirmed_generation_context, build_direct_generation_context,
+        build_confirmed_generation_context, build_direct_generation_context, DIRECT_EXECUTION_POLICY_VERSION,
     )
     from application.construction_examples import prepare_construction_examples
     from application.generation_agent import _compact_wire_renderer
@@ -749,8 +803,12 @@ def test_compact_paths_deliver_core_scan_timing_guidance_without_examples(monkey
     else:
         context = build_confirmed_generation_context({"summary": raw}, "FX3U", wire_renderer=renderer)
     delivered = context.wire_packet["messages"][0]["content"]
-    assert scan_timing_guidance("FX3U") in delivered
-    assert context.handoff["generation_execution_policy"] == ("direct-program-v1" if direct else "settled-facts-v8-native-timing")
+    assert scan_timing_guidance("FX3U", include_periodic_patterns=not direct) in delivered
+    assert "共用同一个持续时间基准" not in delivered
+    if not direct:
+        assert "不预设共享累计时间基准" in delivered
+    assert "只输出一份程序及简短的已采用选择" not in delivered
+    assert context.handoff["generation_execution_policy"] == (DIRECT_EXECUTION_POLICY_VERSION if direct else "settled-facts-v8-native-timing")
     assert "## PLC execution semantics" not in delivered
 
 
@@ -941,6 +999,42 @@ def test_public_generation_tool_uses_confirmed_function_when_request_is_omitted(
                           'hardware_profile':hardware,'selected_approach':{}}})
     result=build_default_tool_registry().call('get_generation_context',{},context)
     assert result['ok'],result
-    text=json.dumps(result['data']['generation_input']['knowledge'])
+    data = result['data']
+    text=json.dumps(data['knowledge'] if language == 'st' else data['generation_input']['knowledge'])
     assert device in text
     assert 'PDF pages' not in text
+
+
+@pytest.mark.parametrize('selected', [None, {}, {'generation_guide': '按块复制保存的记录'}])
+def test_new_source_context_keeps_confirmed_query_and_reuses_discovery(monkeypatch, selected):
+    from types import SimpleNamespace
+    from agent_runtime.generation_tools import _source_knowledge
+    from knowledge.evidence import KnowledgeContext
+    import application.generation_context as generation
+    import application.capability_context as capabilities
+
+    spec = {'summary': '更新输入滤波设置', 'hardware_profile': {'input_voltage': '24V DC'}}
+    if selected is not None:
+        spec['selected_approach'] = selected
+    original = copy.deepcopy(spec)
+    calls = []
+
+    def retrieve(query, **kwargs):
+        calls.append((query, kwargs))
+        return KnowledgeContext('', {'capability_discovery': {'candidates': []}})
+
+    monkeypatch.setattr(generation, '_build_knowledge_context', retrieve)
+    monkeypatch.setattr(capabilities, 'augment_generation_knowledge',
+                        lambda *a, **kw: pytest.fail('completed discovery must not run twice'))
+    result = _source_knowledge(SimpleNamespace(plc_model='FX1N'), {}, '', 'st', spec, task_type='generate')
+    assert len(calls) == 1
+    query, kwargs = calls[0]
+    assert spec['summary'] in query
+    assert query.metadata['target_mode'] == 'st'
+    assert query.metadata['hardware_context'] == spec['hardware_profile']
+    assert query.metadata['selected_plan_query'] == (selected or {}).get('generation_guide')
+    if selected:
+        assert selected['generation_guide'] in query
+    assert kwargs['confirmed_context'] == spec
+    assert result['generation_handoff']['capability_discovery'] == {'candidates': []}
+    assert spec == original

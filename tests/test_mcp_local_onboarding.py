@@ -180,6 +180,7 @@ def test_codex_connect_replaces_only_gxworks_table(monkeypatch, tmp_path):
         encoding="utf-8",
     )
     monkeypatch.setattr(integrations, "_codex_config_path", lambda: config)
+    monkeypatch.setenv("GXWORKS_MCP_READ_BUDGET_TOKENS", "32000")
     monkeypatch.setattr(
         integrations,
         "launcher_invocation",
@@ -198,6 +199,7 @@ def test_codex_connect_replaces_only_gxworks_table(monkeypatch, tmp_path):
     assert "old-secret" not in text and "PLC_WEB_AGENT_TOKEN" not in text
     assert "127.0.0.1" not in text and "project_abc" not in text
     assert '"--service"' in text
+    assert '"--read-budget-tokens", "32000"' in text
 
 
 def test_independent_codex_install_preserves_other_config_without_web_credentials(monkeypatch, tmp_path):
@@ -212,10 +214,11 @@ def test_independent_codex_install_preserves_other_config_without_web_credential
     monkeypatch.setattr(integrations, "launcher_invocation", lambda: [r"C:\GXWorks Agent\gxworks-agent-mcp.exe"])
     monkeypatch.setattr(service_credentials, "load_service_binding", lambda: pytest.fail("Independent install must not discover Web"))
     session = EngineeringSession(tmp_path / "workspace", state_dir=tmp_path / "state")
-    result = integrations.install_local_codex(session)
+    result = integrations.install_local_codex(session, read_budget_tokens=28000)
     text = config.read_text(encoding="utf-8")
     assert result["status"] == "configured" and result["mode"] == "local"
     assert '"--local"' in text and '"--workspace"' in text
+    assert '"--read-budget-tokens", "28000"' in text
     assert "'keep'" in text and "'test-model'" in text and "trust_level='trusted'" in text
     assert "--service" not in text and "TOKEN" not in text and "--confirm-full-access" not in text
     assert not session.workspace.exists() and not session.service.state_dir.exists()

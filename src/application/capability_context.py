@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Task-relevant capability hints and explicit facts shared by context adapters."""
 from __future__ import annotations
@@ -10,7 +10,7 @@ import re
 
 from knowledge.evidence import KnowledgeContext, estimate_tokens
 from plc.maintainability import SELECTION_POLICY, SELECTION_POLICY_VERSION
-from shared.model_context import technical_block, technical_value, technical_context_text
+from shared.model_context import technical_block, technical_value, project_knowledge_context
 
 
 _BLOCK = re.compile(r"(?ms)(?:^Reference role:[^\n]*\n)?^\[KNOWLEDGE ([^\n]*)\]\n.*?^\[/KNOWLEDGE\]")
@@ -23,6 +23,12 @@ def _json(value):
 def _candidate_brief(candidate, target_mode):
     brief = {k: copy.deepcopy(candidate[k]) for k in
              ("kind", "name", "purpose", "interface", "execution", "unknown", "functions")}
+    if candidate['kind'] == 'instruction':
+        # Registry coverage describes Core call support. Keep it separate from
+        # the source-backed programming semantics delivered by the retriever.
+        brief['kind'] = 'instruction_capability'
+        for key in ('interface', 'execution', 'unknown'):
+            brief['core_' + key] = brief.pop(key)
     if candidate.get("st_call"):
         brief["st_call"] = copy.deepcopy(candidate["st_call"])
     if candidate.get("target_call"):
@@ -43,17 +49,24 @@ def _call_contract_units(records, *, plc_model, explicit):
     # Only declared evidence targets qualify. Incidental mnemonics in examples,
     # navigation or comparisons must not expand the implementation catalogue.
     names += [str(row.get("instruction_opcode") or "") for row in records]
-    forms = [DEFAULT_INSTRUCTION_REGISTRY.resolve_form(op, cpu=plc_model)
-             for op in DEFAULT_INSTRUCTION_REGISTRY.known_mnemonics()]
-    st_names = {form.spec.st_call["name"]: form.opcode for form in forms
-                if form and form.spec.supports_cpu(plc_model) and form.spec.st_call}
+    contracts = {name: DEFAULT_INSTRUCTION_REGISTRY.describe_call(name, cpu=plc_model)
+                 for name in dict.fromkeys(names) if name}
+    unresolved = {name for name, contract in contracts.items() if not contract}
+    st_names = {}
+    if unresolved:
+        for opcode in DEFAULT_INSTRUCTION_REGISTRY.known_mnemonics():
+            form = DEFAULT_INSTRUCTION_REGISTRY.resolve_form(opcode, cpu=plc_model)
+            if (form and form.spec.supports_cpu(plc_model) and form.spec.st_call
+                    and form.spec.st_call['name'] in unresolved):
+                st_names[form.spec.st_call['name']] = form.opcode
     units, seen = [], set()
     for name in names:
         opcode = st_names.get(name, name)
         if opcode in seen:
             continue
         seen.add(opcode)
-        contract = DEFAULT_INSTRUCTION_REGISTRY.describe_call(opcode, cpu=plc_model)
+        contract = contracts.get(name) or (
+            DEFAULT_INSTRUCTION_REGISTRY.describe_call(opcode, cpu=plc_model) if name in st_names else {})
         if contract:
             identity = "call-contract:" + plc_model + ":" + opcode
             units.append((identity, technical_block(contract)))
@@ -84,7 +97,8 @@ def public_discovery(value):
 
 
 def augment_generation_knowledge(requirement, knowledge="", *, plc_model="FX3U", target_mode="ladder",
-                                 confirmed_spec=None, catalog=(), token_budget=None, repair_scope=None):
+                                 confirmed_spec=None, catalog=(), token_budget=None, repair_scope=None,
+                                 selected_plan_query=None, for_analysis=False):
     """Deliver relevant complete discovery units; legacy token_budget is ignored."""
     from knowledge.structured_facts import structured_fact_targets
     from knowledge.instruction_facts import retrieve_instruction_facts
@@ -94,14 +108,17 @@ def augment_generation_knowledge(requirement, knowledge="", *, plc_model="FX3U",
     explicit = targets.get("instructions") or []
     from application.composition_context import composition_experiment
     experiment = composition_experiment()
-    selected = (confirmed_spec or {}).get("selected_approach") or {}
-    selection_scope = "repair_baseline" if repair_scope else "selected_approach" if selected else "task_options"
+    selected = None if for_analysis else (confirmed_spec or {}).get("selected_approach")
+    selection_scope = ("analysis_options" if for_analysis else "repair_baseline" if repair_scope
+                       else "selected_approach" if selected else "task_options")
+    discovery_query = (selected_plan_query or "") if selected else requirement
     try:
         from knowledge.retriever import discover_capabilities
         options = ({"relation_limit": experiment.relation_limit,
                     "relation_records": manifest.get("records", [])} if experiment.arm in {"C", "D"} else {})
-        discovery = discover_capabilities("" if selected or repair_scope else requirement, plc_model=plc_model, target_mode=target_mode,
-                                          explicit_targets=explicit, catalog=catalog, **options)
+        discovery = discover_capabilities("" if repair_scope else discovery_query, plc_model=plc_model, target_mode=target_mode,
+                                          explicit_targets=explicit, catalog=catalog,
+                                          retrieved_records=manifest.get("records", []), **options)
     except Exception as error:
         # Discovery is advisory; existing exact facts and acceptance stay usable.
         discovery = {"version": "functional-discovery-v1", "functions": [], "candidates": [],
@@ -112,9 +129,63 @@ def augment_generation_knowledge(requirement, knowledge="", *, plc_model="FX3U",
                      included_evidence=[], omitted_evidence=[], replaced_evidence=[])
     if repair_scope:
         discovery["repair_scope"] = copy.deepcopy(repair_scope)
-    base = technical_context_text(knowledge)
+    # Coverage-first ordering, then alternatives in the existing retrieval order.
+    candidates = discovery["candidates"]
+    # A complete project catalogue is a lookup table, not task evidence. Select
+    # before rendering; explicit calls are unlimited, advisory alternatives use
+    # the same cap as the FBD catalogue selector.
+    from application.fbd_context import DISCOVERY_CALLABLE_LIMIT
+    relevant = [c for c in candidates if set(c['functions']) - {'project_catalog'}]
+    mandatory = [c for c in relevant if 'explicit' in c['functions']]
+    advisory, advisory_ids = [], set()
+    lanes = [[c for c in relevant if function in c['functions'] and 'explicit' not in c['functions']]
+             for function in discovery['functions']]
+    open_ladder = selection_scope == "task_options" and target_mode == "ladder"
+    if not repair_scope and (for_analysis or open_ladder or selected and selected_plan_query is not None):
+        # Keep distinct families per operation without spending the planning
+        # or generation budget on multiple variants of the same operation.
+        for lane in lanes:
+            families = {}
+            for candidate in lane:
+                families.setdefault(candidate.get("family") or candidate["id"], candidate)
+            lane[:] = list(families.values())[:2]
+    while any(lanes) and len(advisory) < DISCOVERY_CALLABLE_LIMIT:
+        for lane in lanes:
+            while lane and lane[0]['id'] in advisory_ids:
+                lane.pop(0)
+            if lane and len(advisory) < DISCOVERY_CALLABLE_LIMIT:
+                candidate = lane.pop(0)
+                advisory.append(candidate)
+                advisory_ids.add(candidate['id'])
+    retained_ids = {c['id'] for c in [*mandatory, *advisory]}
+    discovery['omitted_candidates'] = [c['id'] for c in candidates if c['id'] not in retained_ids]
+    candidates = [c for c in candidates if c['id'] in retained_ids]
+
+    base = str(knowledge)
+    if discovery['functions'] and target_mode in {'ladder', 'st'}:
+        # The primary query also recalls broad instruction hits. They must not
+        # bypass the same purpose selection used by functional discovery.
+        exact_ids = set((manifest.get('structured_facts') or {}).get('record_ids', ()))
+        allowed = {c['name'] for c in candidates if c['kind'] == 'instruction'}
+        allowed.update(str(t.get('opcode') or '').upper() for t in explicit)
+        kept, dropped = [], []
+        for record in manifest.get('records', []):
+            opcode = str(record.get('instruction_opcode') or '').upper()
+            if opcode and opcode not in allowed and str(record['id']) not in exact_ids and record.get('model_text'):
+                dropped.append(record)
+            else:
+                kept.append(record)
+        retained_blocks = {row.get('model_text') for row in kept}
+        for record in dropped:
+            if record['model_text'] not in retained_blocks:
+                base = base.replace(record['model_text'], '')
+            manifest.setdefault('omitted_ids', []).append(record['id'])
+        manifest['records'] = kept
     from application.context_compiler import deduplicate_evidence_text
     base, duplicate_units = deduplicate_evidence_text(base)
+    base = project_knowledge_context(KnowledgeContext(base, manifest))
+    if 'citation_sources' in base.manifest:
+        manifest['citation_sources'] = base.manifest['citation_sources']
     discovery["deduplicated_units"] = duplicate_units
     source_tokens = estimate_tokens(base)
     call_units = _call_contract_units(manifest.get("records", []), plc_model=plc_model, explicit=explicit)
@@ -127,20 +198,9 @@ def augment_generation_knowledge(requirement, knowledge="", *, plc_model="FX3U",
         discovery["included_call_contracts"].append(identity)
     if base:
         parts.append(base)
-    parts.append(SELECTION_POLICY)
+    if not for_analysis:
+        parts.append(SELECTION_POLICY)
 
-    # Coverage-first ordering, then alternatives in the existing retrieval order.
-    candidates = discovery["candidates"]
-    # A complete project catalogue is a lookup table, not task evidence. Select
-    # before rendering; explicit calls are unlimited, advisory alternatives use
-    # the same cap as the FBD catalogue selector.
-    from application.fbd_context import DISCOVERY_CALLABLE_LIMIT
-    relevant = [c for c in candidates if set(c['functions']) - {'project_catalog'}]
-    mandatory = [c for c in relevant if 'explicit' in c['functions']]
-    advisory = [c for c in relevant if 'explicit' not in c['functions']][:DISCOVERY_CALLABLE_LIMIT]
-    retained_ids = {c['id'] for c in [*mandatory, *advisory]}
-    discovery['omitted_candidates'] = [c['id'] for c in candidates if c['id'] not in retained_ids]
-    candidates = [c for c in candidates if c['id'] in retained_ids]
     ordered, seen = [], set()
     for function in ["explicit", *discovery["functions"], "project_catalog"]:
         candidate = next((c for c in candidates if function in c["functions"] and c["id"] not in seen), None)
@@ -162,15 +222,25 @@ def augment_generation_knowledge(requirement, knowledge="", *, plc_model="FX3U",
         candidates_tokens += cost
         discovery["included_candidates"].append(candidate["id"])
     included = set(discovery["included_candidates"])
-    # The exact-fact path normally supplies explicit/selected calls. Fill only
-    # missing explicit targets here, never expand a merely suggested option.
+    # A functional hit identifies an option, not its programming semantics.
+    # Resolve retained options through the same CPU/language-scoped fact path
+    # as explicit calls, without promoting them into user requirements. The
+    # discovery card's authored family view can contain other CPU scopes.
     covered = {str(r.get("fact_target") or r.get("instruction_opcode") or "").upper()
                for r in manifest.get("records", [])}
-    additional = [t for t in explicit if str(t.get("opcode") or "").upper() not in covered]
+    additional = []
+    for target in [*explicit, *({"opcode": c["name"], "base_opcode": c.get("family") or c["name"]}
+                               for c in ordered if c["kind"] == "instruction")]:
+        opcode = str(target.get("opcode") or "").upper()
+        if opcode and opcode not in covered:
+            additional.append(target)
+            covered.add(opcode)
     facts_tokens = 0
+    related_seeds = []
     for target in additional:
-        rows, report = retrieve_instruction_facts("", plc_model=plc_model, task_type="generate",
-            targets=[target], compact_sources=True)
+        rows, report = retrieve_instruction_facts(requirement, plc_model=plc_model, task_type="generate",
+            targets=[target], compact_sources=True, language=target_mode,
+            instance_context=(confirmed_spec or {}).get('hardware_profile') or None)
         for view in report.get("definition_views", []):
             for gap in view.get("gaps", []):
                 item = {"target": target["opcode"], **copy.deepcopy(gap)}
@@ -180,6 +250,7 @@ def augment_generation_knowledge(requirement, knowledge="", *, plc_model="FX3U",
             discovery["omitted_evidence"].append(target["opcode"])
             discovery["gaps"].append({"target": target["opcode"], "reason": "no_complete_fact_unit"})
         for row in rows:
+            related_seeds.append(row)
             from knowledge.retriever import format_knowledge_reference
             block = format_knowledge_reference(row)
             model_units[str(row['id'])] = block
@@ -187,11 +258,33 @@ def augment_generation_knowledge(requirement, knowledge="", *, plc_model="FX3U",
             parts.append(block)
             facts_tokens += cost
             discovery["included_evidence"].append(row["id"])
-            manifest.setdefault("records", []).append({k: copy.deepcopy(row[k]) for k in
-                ("id", "source", "manual_id", "revision", "pdf_page", "instruction_opcode") if k in row})
-            manifest['records'][-1]['model_text'] = block
+            from knowledge.evidence import evidence_record
+            manifest.setdefault('records', []).append({**evidence_record(row, include_origin=True), 'model_text': block})
+    from knowledge.fact_dependencies import related_device_facts
+    functions = set(discovery['functions'])
+    timer_counter_families = [family for family, uses in (
+        ('T', {'timer', 'off_delay'}), ('C', {'counter', 'counter_read', 'counter_range_write'}),
+    ) if explicit or uses & functions]
+    supplements = [*discovery.pop('supporting_evidence', []),
+                   *related_device_facts(related_seeds, plc_model=plc_model,
+                                         timer_counter_families=timer_counter_families)]
+    present = {str(record.get('id')) for record in manifest.get('records', [])}
+    for row in supplements:
+        if str(row['id']) in present:
+            continue
+        from knowledge.retriever import format_knowledge_reference
+        from knowledge.evidence import evidence_record
+        block = format_knowledge_reference(row)
+        parts.append(block)
+        facts_tokens += estimate_tokens(block + '\n\n')
+        model_units[str(row['id'])] = block
+        discovery['included_evidence'].append(row['id'])
+        manifest.setdefault('records', []).append({**evidence_record(row, include_origin=True), 'model_text': block})
+        present.add(str(row['id']))
+    if discovery['included_evidence'] and manifest.get('status') == 'excluded':
+        manifest.update(status='included', reason='functional_instruction_facts')
     # Suggestions retain their status and provenance after exact source facts.
-    if experiment.arm != "A":
+    if experiment.arm != "A" and not for_analysis:
         from plc.composition import derive_composition
         view = derive_composition({**(confirmed_spec or {}), "plc_model": plc_model}, input_version=dict(experiment.input_version),
                                   relations=discovery.get("relations", []))
@@ -239,15 +332,32 @@ def augment_generation_knowledge(requirement, knowledge="", *, plc_model="FX3U",
 
 def reconcile_discovery(discovery, evidence):
     """The final compiler determines what actually reached the model."""
+    from shared.model_context import technical_context_units
     result = copy.deepcopy(discovery)
     model_units = result.get('model_units', {})
+    delivered_units = technical_context_units(evidence)
+    def delivered(block, *, capability=False):
+        if not block:
+            return False
+        if block in evidence:
+            return True
+        expected = technical_context_units(block)
+        if capability:
+            # The wire keeps the functional discovery link after complete
+            # semantics replace the redundant Core signature in its brief.
+            return bool(expected) and all(value in delivered_units or any(
+                unit.get('kind') == value.get('kind') == 'instruction_capability'
+                and unit.get('name') == value.get('name')
+                and set(value.get('functions', ())) <= set(unit.get('functions', ()))
+                for unit in delivered_units) for value in expected)
+        return bool(expected) and all(value in delivered_units for value in expected)
     for included_key, omitted_key, prefix in (("included_call_contracts", "omitted_call_contracts", ""),
                                               ("included_candidates", "omitted_candidates", "capability:"),
                                               ("included_evidence", "omitted_evidence", "")):
         retained = []
         for identity in result.get(included_key, []):
             block = model_units.get(prefix + str(identity))
-            if (block and block in evidence) or '"id":' + _json(prefix + str(identity)) in evidence:
+            if delivered(block, capability=prefix == 'capability:') or '"id":' + _json(prefix + str(identity)) in evidence:
                 retained.append(identity)
             else:
                 result.setdefault(omitted_key, []).append(identity)

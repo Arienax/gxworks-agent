@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Q/L native token encodings and stored widths, shared by Core and the writers.
 
@@ -412,9 +412,10 @@ def _parameter_rule(family, variant, index):
 
 def _literal_code(op, index, text, *, profile, source=None, cpu=None, token_code=None,
                   indexed=False):
-    float_match = re.fullmatch(r'E[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)([+-][0-9]+)?', text)
+    from plc.ordered_source import native_real_literal
+    float_match = native_real_literal(text)
     wanted = (0xe8, 0xe9) if text.startswith('K') else ((0xea, 0xeb) if text.startswith('H') else
-             (0xee,) if text.startswith('"') else (0xed, 0xe4) if float_match and float_match[1] else (0xec, 0xe3))
+             (0xee,) if text.startswith('"') else (0xed, 0xe4) if float_match and float_match[2] else (0xec, 0xe3))
     if token_code is not None:
         if float_match and token_code in (0xec, 0xed, 0xe3, 0xe4):
             wanted = (token_code,)
@@ -446,8 +447,8 @@ def _literal_code(op, index, text, *, profile, source=None, cpu=None, token_code
             return selected(0xee)
         if text.startswith('E'):
             modern = _cpu_mode(profile, cpu) in ('q66', 'q71')
-            normal = (0xe4 if float_match and float_match[1] else 0xe3) if modern else (
-                0xed if float_match and float_match[1] else 0xec)
+            normal = (0xe4 if float_match and float_match[2] else 0xe3) if modern else (
+                0xed if float_match and float_match[2] else 0xec)
             return selected(normal, {0xe3, 0xe4} if modern else {0xec, 0xed})
     codes = set()
     for header, count in _header_choices(op, profile=profile):
@@ -625,7 +626,8 @@ def _rounded(value, digits):
 
 
 def _float_literal(text, code, *, mode):
-    match = re.fullmatch(r'E([+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+))([+-][0-9]+)?', text)
+    from plc.ordered_source import native_real_literal
+    match = native_real_literal(text)
     if match is None:
         raise StorageRuleError('unsupported Q floating-point literal spelling')
     exponent = int(match[2] or '0')
@@ -669,6 +671,22 @@ def _cpu_mode(profile, cpu):
     if profile in ('l', 'l02'):
         return 'q66'
     return None
+
+
+def real_literal_value(text, *, op, index, cpu):
+    """Read the stored value of an explicit Q/L real input constant.
+
+    Reuse parameter token selection and native input rounding. This does not
+    evaluate an instruction or infer the contents of a device operand.
+    """
+    profile = storage_profile(cpu)
+    if profile not in {'q', 'q02', 'q03udv', 'l', 'l02'} or _cpu_mode(profile, cpu) is None:
+        raise StorageRuleError('real constant value needs a supported Q/L CPU storage mode')
+    raw = encode_q_operand(text, op=op, index=index, profile=profile, cpu=cpu)
+    formats = {0xec: '<f', 0xed: '<f', 0xe3: '<d', 0xe4: '<d'}
+    if len(raw) not in {7, 11} or raw[1] not in formats:
+        raise StorageRuleError('operand is not one explicit Q/L real constant')
+    return struct.unpack(formats[raw[1]], raw[2:-1])[0]
 
 
 def _descriptors(operands, mode='q71', storage_context=None):

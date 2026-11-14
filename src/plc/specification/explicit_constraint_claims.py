@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Ground Agent-A reports of user-fixed low-level PLC constraints.
 
@@ -25,13 +25,13 @@ CLEAR_CATEGORIES = frozenset({"opcodes", "devices", "instruction_instances", "al
 _STRINGS = {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
 TARGET_CONTRACTS = {
     "opcode": {"operations": ("require", "forbid", "clear"), "fields": {"values": _STRINGS},
-               "example": {"kind": "opcode", "values": ["SFTL"]}},
+               "example": {"kind": "opcode", "values": ["<原文助记符>"]}},
     "device": {"operations": ("require", "forbid", "clear"), "fields": {"values": _STRINGS},
-               "example": {"kind": "device", "values": ["M8011"]}},
+               "example": {"kind": "device", "values": ["<原文软元件地址>"]}},
     "instruction_instance": {"operations": ("require", "clear"),
                              "fields": {"opcode": {"type": "string", "minLength": 1}, "operands": _STRINGS},
-                             "example": {"kind": "instruction_instance", "opcode": "SFTL",
-                                         "operands": ["M10", "M100", "K128", "K1"]}},
+                             "example": {"kind": "instruction_instance", "opcode": "<原文助记符>",
+                                         "operands": ["<原文操作数1>", "<原文操作数2>"]}},
     "category": {"operations": ("clear",), "fields": {"value": {"enum": sorted(CLEAR_CATEGORIES)}},
                  "example": {"kind": "category", "value": "all"}},
 }
@@ -41,7 +41,8 @@ _OPERAND = re.compile(
     r"\d+(?:[VZ]\d+)?|[+-]?\d+(?:\.\d+)?)$",
     re.IGNORECASE,
 )
-_TOKEN_BOUNDARY = r"A-Za-z0-9_.$@+<>!=\-"
+_DEVICE_TOKEN_BOUNDARY = r"A-Za-z0-9_.$@+\-"
+_TOKEN_BOUNDARY = _DEVICE_TOKEN_BOUNDARY + r"<>!="
 _INSTANCE_SEPARATOR = r"[\s,，/、:：()（）\[\]{}]+"
 
 
@@ -54,15 +55,15 @@ def _claim_id(frame):
     return "LC-" + hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
 
 
-def _token_in_evidence(token, evidence):
-    pattern = re.compile(rf"(?<![{_TOKEN_BOUNDARY}]){re.escape(str(token))}(?![{_TOKEN_BOUNDARY}])", re.IGNORECASE)
+def _token_in_evidence(token, evidence, *, boundary=_TOKEN_BOUNDARY):
+    pattern = re.compile(rf"(?<![{boundary}]){re.escape(str(token))}(?![{boundary}])", re.IGNORECASE)
     return any(pattern.search(item) for item in evidence)
 
 
 def _device_in_evidence(device, evidence):
-    # Retain the stricter claim token boundaries while comparing device aliases.
+    # Comparison operators delimit devices in compact expressions like D0=0.
     return any(canonical_device(match.group(0).upper()) == device
-               and _token_in_evidence(match.group(0), [text])
+               and _token_in_evidence(match.group(0), [text], boundary=_DEVICE_TOKEN_BOUNDARY)
                for text in evidence for match in DEVICE_TOKEN_RE.finditer(text))
 
 
@@ -77,10 +78,12 @@ def explicit_target_contracts():
 
 
 def explicit_constraint_protocol():
-    """Compact, literal examples, with operation rules from the Core table."""
-    return "\n".join(json.dumps(item["example"], ensure_ascii=False, separators=(",", ":"))
-                     + " " + "|".join(item["operations"])
-                     for item in TARGET_CONTRACTS.values())
+    """Describe the claim shape without suggesting a particular PLC call."""
+    return "\n".join([
+        "尖括号内为字段占位符，按本轮逐字原文填写，不输出占位符；操作数数量随实际指令。",
+        *(json.dumps(item["example"], ensure_ascii=False, separators=(",", ":"))
+          + " " + "|".join(item["operations"]) for item in TARGET_CONTRACTS.values()),
+    ])
 
 
 def _canonical_opcode(value, plc_model):

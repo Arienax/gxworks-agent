@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Real DeepSeek browser acceptance against a fresh temporary workspace.
 
@@ -161,7 +161,7 @@ def live_app(directory, api_key, *, model="deepseek-v4-flash", port=8877):
         service.hardware = HardwareService(service, reader=DemoHardwareReader())
         origin = f"http://127.0.0.1:{port}"
         app = create_app(service.store.base_dir, state_dir=service.state_dir, service=service, origin=origin,
-                         operator_token="live-browser-acceptance", agent_token="live-acceptance-agent")
+                         agent_token="live-acceptance-agent")
 
         @app.exception_handler(DemoIntegrationDisabled)
         async def disabled_host_integration(_request, _error):

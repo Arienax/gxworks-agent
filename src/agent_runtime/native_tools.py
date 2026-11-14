@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Saved native project queries and approved engineering intents."""
 from __future__ import annotations
@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 from agent_runtime.tool_errors import ToolPreconditionError, PROJECT_ACTIONS, SOURCE_ACTIONS
 from agent_runtime.tool_context import (
     ToolContext,
-    _confirmed_spec,
+    _generation_spec,
 )
 
 
@@ -194,6 +194,15 @@ def _read_fbd_definition(context: ToolContext, arguments: Mapping[str, Any]) -> 
 
 
 def _create_fbd_candidate(context: ToolContext, arguments: Mapping[str, Any], *, generation_handoff=None) -> Dict[str, Any]:
+    bindings = (context.version or {}).get('source_program_bindings') or {}
+    if arguments.get('operation') == 'edit' and isinstance(arguments.get('model'), Mapping):
+        program = arguments['model'].get('program')
+        if program in bindings:
+            arguments = copy.deepcopy(arguments)
+            arguments['model']['program'] = bindings[program]
+    if arguments.get('operation') == 'generate':
+        from agent_runtime.tool_context import _require_generation_plan
+        _require_generation_plan(context, arguments, generation_handoff=generation_handoff)
     from pathlib import Path
     import tempfile
     from application.fbd import (AUTHORING_OPERATIONS, authoring_command, decode_upload, pack_candidate,
@@ -288,13 +297,18 @@ def _create_fbd_candidate(context: ToolContext, arguments: Mapping[str, Any], *,
             payload['metadata']['generation_handoff'] = {'stage': operation,
                 'external_model_use': 'not_observed', 'trace_gaps': ['generation_context_not_observed']}
         graph = json.loads((Path(directory) / 'fbd.json').read_bytes())
+        if operation in {'generate', 'edit'}:
+            from application.fbd import attach_plan_check
+            models = {graph.get('program'): graph}
+            models.update({original: graph for original, actual in bindings.items() if actual == graph.get('program')})
+            attach_plan_check(payload['metadata']['validation'], _generation_spec(context), models)
         svg = (Path(directory) / 'fbd.svg').read_text(encoding='utf-8')
         authored_definition = json.loads((Path(directory) / 'definition.json').read_bytes()) if 'definition' in payload['artifacts'] else None
         snapshot = pack_candidate(payload, directory)
     action = {'type': 'accept_fbd_candidate', 'project_id': context.project_id,
               'base_version_id': context.version_id or None, 'target_mode': 'fbd',
               'summary': payload['metadata']['summary'], 'validation': payload['metadata']['validation'],
-              '_confirmed_spec': copy.deepcopy(_confirmed_spec(context)), '_fbd_candidate': snapshot}
+              '_confirmed_spec': copy.deepcopy(_generation_spec(context)), '_fbd_candidate': snapshot}
     return {'requires_confirmation': True, 'model': graph, 'svg': svg,
             **({'definition': authored_definition} if authored_definition is not None else {}),
             **({'library_import': copy.deepcopy(payload['metadata']['library_import'])}
@@ -374,7 +388,7 @@ def _create_sfc_candidate(context: ToolContext, arguments: Mapping[str, Any]) ->
             'pending_action': {'type': 'accept_sfc_candidate', 'project_id': context.project_id,
                 'base_version_id': context.version_id or None, 'target_mode': 'sfc',
                 'summary': payload['metadata']['summary'], 'validation': payload['metadata']['validation'],
-                '_confirmed_spec': copy.deepcopy(_confirmed_spec(context)), '_sfc_candidate': snapshot}}
+                '_confirmed_spec': copy.deepcopy(_generation_spec(context)), '_sfc_candidate': snapshot}}
 
 
 def _read_st_project(context: ToolContext, arguments: Mapping[str, Any]) -> Dict[str, Any]:
@@ -382,6 +396,14 @@ def _read_st_project(context: ToolContext, arguments: Mapping[str, Any]) -> Dict
     from gxw.fb_authoring import st_program_snapshot
     raw = decode_upload(arguments['data_base64']) if 'data_base64' in arguments else context.native_snapshot
     if raw is None:
+        if 'data_base64' not in arguments and isinstance(context.st_text, str):
+            selected = (context.version or {}).get('program_name') or 'MAIN'
+            if arguments.get('program') not in (None, selected):
+                raise ValueError('所选 ST 源码版本不包含请求的 Program。')
+            return {'available': True, 'version_id': context.version_id, 'source_kind': 'generated_st_source',
+                'programs': [{'program': selected, 'name': selected, 'kind': 'program',
+                    'language': 'st', 'st_text': context.st_text}],
+                'limitations': ['ST source only; no GXW declarations or task bindings are available.']}
         raise ValueError('请选择带 GXW 快照的版本或提供已有 ST 工程。')
     snapshot = st_program_snapshot(raw)
     selected = arguments.get('program') or (context.analysis_source or {}).get('program_name')
@@ -413,7 +435,7 @@ def _create_st_candidate(context: ToolContext, arguments: Mapping[str, Any]) -> 
         if baseline is None:
             raise ValueError('ST candidate engineering requires a current saved GXW baseline')
         prepared = candidate_native_plan(arguments['candidate'], baseline=baseline, plc_model=context.plc_model,
-                                         program_name=(context.version or {}).get('program_name'), confirmed_spec=_confirmed_spec(context))
+                                         program_name=(context.version or {}).get('program_name'), confirmed_spec=_generation_spec(context))
         result = _request_native_engineering(context, {'plan': prepared['plan']})
         result['inspection'] = prepared['inspection']
         result['pending_action'].update(st_program_name=prepared['candidate']['program']['name'], validation=prepared['inspection'])
@@ -462,4 +484,4 @@ def _create_st_candidate(context: ToolContext, arguments: Mapping[str, Any]) -> 
         'pending_action': {'type': 'accept_st_candidate', 'project_id': context.project_id,
             'base_version_id': context.version_id or None, 'target_mode': 'st',
             'summary': payload['metadata']['summary'], 'validation': payload['metadata']['validation'],
-            '_confirmed_spec': copy.deepcopy(_confirmed_spec(context)), '_st_candidate': snapshot}}
+            '_confirmed_spec': copy.deepcopy(_generation_spec(context)), '_st_candidate': snapshot}}

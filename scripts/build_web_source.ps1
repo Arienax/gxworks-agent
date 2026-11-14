@@ -1,5 +1,5 @@
 ﻿# Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 param(
     [switch]$FrontendOnly
@@ -90,6 +90,8 @@ try {
         $previousPythonPath = $env:PYTHONPATH
         try {
             $env:PYTHONPATH = Join-Path $root "src"
+            & $venvPython -m plc.instruction_catalog_store (Join-Path $root "resources\instructions\mitsubishi")
+            if ($LASTEXITCODE -ne 0) { throw "Instruction catalogue compilation failed." }
             $knowledgeIndex = Join-Path $root "resources\knowledge\runtime\plc_facts.sqlite"
             if (Test-Path -LiteralPath $knowledgeIndex -PathType Leaf) {
                 & $venvPython (Join-Path $root "scripts\web_entry.py") --self-test-knowledge
@@ -138,7 +140,9 @@ try {
     Write-Host ""
     Write-Host "[OK] Frontend build completed: web\dist" -ForegroundColor Green
     if (-not $FrontendOnly) {
-        Write-Host "[OK] Source Web runtime is ready. You can now run start-web.cmd." -ForegroundColor Green
+        & $venvPython (Join-Path $root "scripts\build_web_launcher.py") (Join-Path $root "GXWorks-Agent-Launcher.exe")
+        if ($LASTEXITCODE -ne 0) { throw "Web launcher build failed." }
+        Write-Host "[OK] Source Web runtime is ready. Double-click GXWorks-Agent-Launcher.exe." -ForegroundColor Green
     }
     $exitCode = 0
 } catch {

@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Model-specific device limits and reserved/read-only special devices."""
 import json
@@ -40,6 +40,71 @@ DEVICE_LIMITS = {
 DEVICE_LIMITS.update({cpu: p["device_limits"] for cpu, p in SOURCE_DEVICE_PROFILES.items()})
 
 
+def program_pointer_domain(plc_model):
+    """A sourced CPU P-number domain, separate from memory and allocation.
+
+    The existing model validation resource owns every numeric value. A merged
+    menu resolves through the identity catalogue and requires agreement from
+    all members; a missing or wrongly bound source grants no numeric domain.
+    """
+    import copy
+    from plc.target_identity import target_identity_state, target_family
+    members, reason = target_identity_state(plc_model)
+    if reason is not None or not members or target_family(plc_model) not in {'Q', 'L'}:
+        return None
+    domains = []
+    for member in members:
+        profile = SOURCE_DEVICE_PROFILES.get(member, {})
+        domain = profile.get('program_pointer_domain')
+        if (not isinstance(domain, dict) or domain.get('status') != 'source_verified'
+                or domain.get('kind') != 'program_pointer_identity' or domain.get('prefix') != 'P'
+                or type(domain.get('radix')) is not int or domain['radix'] != 10
+                or type(domain.get('minimum_number')) is not int or domain['minimum_number'] != 0
+                or type(domain.get('maximum_number')) is not int or domain['maximum_number'] < 0
+                or domain.get('allocation_verified') is not False):
+            return None
+        sources = domain.get('sources')
+        model_manuals = {(s.get('manual_id'), s.get('revision')) for s in profile.get('sources', [])
+                         if s.get('target_model') == member and member in s.get('covered_models', [])}
+        if (not isinstance(sources, list) or not sources or any(
+                not isinstance(s, dict) or (s.get('manual_id'), s.get('revision')) not in model_manuals
+                or s.get('target_model') != member or s.get('covered_models') != [member]
+                or s.get('conditions') or s.get('applicability')
+                or type(s.get('pdf_page')) is not int or s['pdf_page'] < 1 for s in sources)):
+            return None
+        domains.append(domain)
+    if len({(d['minimum_number'], d['maximum_number']) for d in domains}) != 1:
+        return None
+    result = copy.deepcopy(domains[0])
+    result['sources'] = [copy.deepcopy(s) for d in domains for s in d['sources']]
+    return result
+
+
+def native_word_value_layout(prefix, number, plc_model):
+    """Width of one valid device's numeric value, separate from its contact."""
+    from plc.target_identity import target_identity_state
+    members, reason = target_identity_state(plc_model)
+    if reason is not None or not members:
+        return None
+    layouts = []
+    for member in members:
+        profile = SOURCE_DEVICE_PROFILES.get(member)
+        if profile is None:
+            return None
+        regions = profile.get('word_value_regions', {}).get(prefix, [])
+        matches = [r for r in regions if r['minimum'] <= number <= r['maximum']]
+        if len(matches) > 1:
+            return None
+        layouts.append({k: matches[0][k] for k in ('bits', 'minimum_operand_bits') if k in matches[0]}
+                       if matches else {'bits': 16})
+    return layouts[0] if all(layout == layouts[0] for layout in layouts) else None
+
+
+def native_word_value_bits(prefix, number, plc_model):
+    layout = native_word_value_layout(prefix, number, plc_model)
+    return layout['bits'] if layout else None
+
+
 def device_address_rules(plc_model):
     """The same numbering rules for checking, retrieval and generation.
 
@@ -52,8 +117,12 @@ def device_address_rules(plc_model):
     model = normalize_target_cpu(plc_model)
     profile = SOURCE_DEVICE_PROFILES.get(model, {})
     limits = DEVICE_LIMITS.get(model)
+    pointer = program_pointer_domain(plc_model)
+    pointer_rules = {'program_pointer_domain': pointer} if pointer is not None else {}
+    if pointer is not None and profile.get('program_pointer_auto_assignment'):
+        pointer_rules['program_pointer_auto_assignment'] = copy.deepcopy(profile['program_pointer_auto_assignment'])
     if limits is None:
-        return {'cpu': model, 'status': 'unavailable', 'families': {}}
+        return {'cpu': model, 'status': 'unavailable', 'families': {}, **pointer_rules}
     bits = profile.get('bit_prefixes', ['X', 'Y', 'M', 'SM', 'S', 'T', 'C'])
     families = {}
     for prefix, maximum in limits.items():
@@ -63,7 +132,9 @@ def device_address_rules(plc_model):
             value_type='bit' if prefix in bits else 'word',
             word_bit_view=prefix in profile.get('word_bit_prefixes', []),
             allocation=copy.deepcopy(profile.get('allocation_rules', {}).get(prefix, {'kind': 'fixed_numbering'})))
-    return {'cpu': model, 'status': 'available', 'families': families,
+        if prefix in profile.get('word_value_regions', {}):
+            families[prefix]['word_value_regions'] = copy.deepcopy(profile['word_value_regions'][prefix])
+    return {'cpu': model, 'status': 'available', 'families': families, **pointer_rules,
             'default_allocations': copy.deepcopy(profile.get('default_allocations', {})),
             'special_regions': copy.deepcopy(profile.get('special_regions', {})),
             'special_access': copy.deepcopy(profile.get('special_access', {})),

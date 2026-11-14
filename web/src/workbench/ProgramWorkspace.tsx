@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import {
   Activity,
@@ -9,6 +9,7 @@ import {
   FileCheck2,
   FolderOpen,
   GitBranch,
+  History,
   ListChecks,
   Network,
   PackageCheck,
@@ -26,6 +27,7 @@ import { Button } from "../components/ui";
 import { ProjectToolbar } from "../features/ProjectToolbar";
 import { EditorContent } from "../workbench/EditorContent";
 import type { WorkbenchModel } from "./useWorkbenchController";
+import { VersionHistory } from "./VersionHistory";
 
 const DOCUMENT_VIEWS = ["diagnostics", "reports", "simulation", "delivery"];
 
@@ -34,6 +36,7 @@ export const programWorkspaceFields = [
   "canWrite",
   "clearPreview",
   "currentJob",
+  "deleteProject",
   "diagnosticJobId",
   "displayedVersionStatus",
   "editorProps",
@@ -53,7 +56,7 @@ export const programWorkspaceFields = [
   "requestGXSend",
   "selectVersion",
   "selectedProposal",
-  "session",
+  "connection",
   "setCanvasOpen",
   "setModal",
   "setPanel",
@@ -75,6 +78,7 @@ export function ProgramWorkspace(props: Props) {
     clearPreview,
     contextView,
     currentJob,
+    deleteProject,
     diagnosticJobId,
     displayedVersionStatus,
     editorProps,
@@ -94,7 +98,7 @@ export function ProgramWorkspace(props: Props) {
     requestGXSend,
     selectVersion,
     selectedProposal,
-    session,
+    connection,
     setCanvasOpen,
     setModal,
     setPanel,
@@ -123,6 +127,7 @@ export function ProgramWorkspace(props: Props) {
   const activeTab = useRef<HTMLButtonElement | null>(null);
   const [slide, setSlide] = useState<{ left: number; width: number } | null>(null);
   const [overflowing, setOverflowing] = useState(false);
+  const [historyProjectId, setHistoryProjectId] = useState("");
   // The active pill slides inside its own group; groups never overlap, so a
   // single indicator measured against the active button is enough.
   const measure = useCallback(() => {
@@ -141,7 +146,6 @@ export function ProgramWorkspace(props: Props) {
     observer.observe(bar);
     return () => observer.disconnect();
   }, [measure]);
-  const versions = project?.id === pid ? project.versions?.slice().reverse() || [] : [];
   const open = (id: string) => {
     if (programViews.includes(id)) {
       setPanel("agent");
@@ -172,29 +176,12 @@ export function ProgramWorkspace(props: Props) {
           <h1>{project?.name || t("选择工程")}</h1>
           <div className="canvas-meta">
             <span>{project?.plc_model || "MITSUBISHI FX"}</span>
-            {versions.length ? (
-              <select
-                className="version-select mono"
-                aria-label={t("版本历史")}
-                title={t("版本历史")}
-                value={vid}
-                disabled={busy}
-                onChange={(e) => selectVersion(e.target.value)}
-              >
-                {!versions.some((v) => v.id === vid) && <option value={vid}>{vid}</option>}
-                {versions.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.id} ·{" "}
-                    {new Date(v.created_at || "").toLocaleString(locale, {
-                      month: "2-digit",
-                      day: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                    {v.id === project?.active_version_id ? ` · ${t("当前版本")}` : ""}
-                  </option>
-                ))}
-              </select>
+            {project?.id === pid ? (
+              <Button className="version-history-trigger" variant="ghost" aria-label={t("版本历史")}
+                title={t("版本历史")} onClick={() => setHistoryProjectId(pid)}>
+                <History size={14} aria-hidden="true" />
+                {vid ? <span className="mono">{vid}</span> : t("暂无版本")}
+              </Button>
             ) : (
               <span>{t("暂无版本")}</span>
             )}
@@ -215,11 +202,13 @@ export function ProgramWorkspace(props: Props) {
           diagnosticJobId={currentJob && !activeJob(currentJob) ? currentJob.id : ""}
           canRead={canWrite && !!pid && !!operations.gx_inspect}
           canSend={canWrite && !preview && !jobs.some(activeJob) && !!operations.gx_import}
-          canRefresh={!!session && !!pid && !busy && !loading && !jobs.some(activeJob)}
+          canRefresh={!!connection && !!pid && !busy && !loading && !jobs.some(activeJob)}
+          canDelete={canWrite && !!pid && !jobs.some(activeJob)}
           refreshing={refreshingDrawing}
           onRead={() => void guarded(() => submitJob("gx_read"))}
           onSend={requestGXSend}
           onRefresh={() => void guarded(refreshDrawing)}
+          onDelete={() => guarded(deleteProject)}
           t={t}
           more={
             <>
@@ -252,26 +241,27 @@ export function ProgramWorkspace(props: Props) {
                   {t("转换为 FBD")}
                 </Button>
               )}
-              {version && vid !== project?.active_version_id && (
-                <Button
-                  disabled={!canWrite}
-                  onClick={() =>
-                    void guarded(async () => {
-                      await api(`/projects/${pid}/active-version`, "POST", {
-                        version_id: vid,
-                        expected_active_version_id: project?.active_version_id,
-                      });
-                      await reloadProjectSilently(pid);
-                    })
-                  }
-                >
-                  {t("设为当前版本")}
-                </Button>
-              )}
             </>
           }
         />
       </header>
+      {project?.id === pid && historyProjectId === pid && (
+        <VersionHistory project={project} viewedId={vid} canActivate={canWrite && !jobs.some(activeJob)}
+          locale={locale} t={t} onClose={() => setHistoryProjectId("")}
+          onView={id => {
+            selectVersion(id);
+            setPanel("agent");
+            setTab(project.versions?.find(item => item.id === id)?.target_mode || "ladder");
+            setHistoryProjectId("");
+          }}
+          onActivate={id => void guarded(async () => {
+            await api(`/projects/${pid}/active-version`, "POST", {
+              version_id: id,
+              expected_active_version_id: project.active_version_id,
+            });
+            await reloadProjectSilently(pid);
+          })} />
+      )}
 
       <nav className="canvas-tabs" aria-label={t("工程画布")} ref={nav} data-overflow={overflowing || undefined}>
         {groups.map((group, index) => (

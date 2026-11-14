@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Shared instruction facts, finite-width expressions and dependency views.
 
@@ -158,6 +158,7 @@ class ValueType:
 
 _COMPARISONS = frozenset({"eq", "ne", "gt", "ge", "lt", "le"})
 _ARITHMETIC = frozenset({"add", "sub", "mul", "div", "mod", "bit_and", "bit_or", "bit_xor", "shift_left", "shift_right"})
+_REAL_ARITHMETIC = frozenset({"add", "sub", "mul", "div"})
 _BOOLEAN = frozenset({"and", "or", "xor"})
 _LEAVES = frozenset({"parameter", "device", "constant", "state"})
 _OPERATORS = _COMPARISONS | _ARITHMETIC | _BOOLEAN | _LEAVES | {"not", "bit_not", "select", "vector", "read"}
@@ -213,9 +214,15 @@ class Expression:
             if op not in {"eq", "ne"} and args[0].value_type.kind == "bool":
                 raise DefinitionError("Ordered boolean comparison is unsupported")
         elif op in _ARITHMETIC:
-            if len(args) != 2 or value_type.kind != "int" or args[0].value_type.kind != "int":
+            if len(args) != 2:
                 raise DefinitionError("Invalid typed arithmetic")
-            if op in {"shift_left", "shift_right"}:
+            if value_type.kind == "real":
+                if (op not in _REAL_ARITHMETIC or any(arg.value_type != value_type for arg in args)
+                        or overflow != "unknown"):
+                    raise DefinitionError("REAL arithmetic needs equal types and separate rounding rules")
+            elif value_type.kind != "int" or args[0].value_type.kind != "int":
+                raise DefinitionError("Invalid typed arithmetic")
+            elif op in {"shift_left", "shift_right"}:
                 if args[0].value_type != value_type or args[1].value_type.kind != "int" or args[1].value_type.signed:
                     raise DefinitionError("Shift amount needs an unsigned integer type")
             elif args[1].value_type != args[0].value_type:
@@ -257,6 +264,8 @@ class Expression:
 def evaluate_expression(expression, values, *, state=None, memory_reader=None):
     """Evaluate the formal subset; unknown overflow/protocol behavior stays unknown."""
     expr = expression if isinstance(expression, Expression) else Expression.from_mapping(expression)
+    if expr.value_type.kind == 'real' and expr.op in _REAL_ARITHMETIC:
+        raise UnknownInstructionSemantics('Floating-point arithmetic rounding and exception rules are not executable')
     if expr.op == "constant":
         return expr.value_type.decode_bits(expr.value)
     if expr.op in {"parameter", "device", "state"}:
@@ -352,7 +361,7 @@ class InstructionFactGroup:
     note: str | None = None
 
     @classmethod
-    def from_mapping(cls, raw):
+    def from_mapping(cls, raw, *, copy_content=True):
         if not isinstance(raw, Mapping):
             raise DefinitionError("Fact group must be an object")
         identity, dimension, status = raw.get("id"), raw.get("dimension"), raw.get("status", "unknown")
@@ -393,10 +402,11 @@ class InstructionFactGroup:
             raise DefinitionError("Invalid fact authority decision")
         if decision is not None and str(decision.get("fact_id") or "") not in {"", identity}:
             raise DefinitionError("Authority decision belongs to another fact")
-        return cls(identity, dimension, copy.deepcopy(dict(value)), status, tuple(copy.deepcopy(sources)),
-                   tuple(dependencies), tuple(members), copy.deepcopy(dict(scope)), verification,
-                   tuple(copy.deepcopy(conditions)),
-                   copy.deepcopy(dict(decision)) if decision is not None else None,
+        detach = copy.deepcopy if copy_content else lambda item: item
+        return cls(identity, dimension, detach(dict(value)), status, tuple(detach(sources)),
+                   tuple(dependencies), tuple(members), detach(dict(scope)), verification,
+                   tuple(detach(conditions)),
+                   detach(dict(decision)) if decision is not None else None,
                    note.strip() if isinstance(note, str) else None)
 
     def as_mapping(self):
@@ -425,7 +435,9 @@ def select_fact_dependencies(groups, requested_ids, *, opcode, model, language="
     """Return complete dependency closures and explicit gaps, without a budget cut."""
     by_id = {}
     for raw in groups:
-        group = raw if isinstance(raw, InstructionFactGroup) else InstructionFactGroup.from_mapping(raw)
+        # Selection only reads these temporary groups; as_mapping below detaches
+        # the selected closures. Do not copy every unselected fact first.
+        group = raw if isinstance(raw, InstructionFactGroup) else InstructionFactGroup.from_mapping(raw, copy_content=False)
         if group.id in by_id:
             raise DefinitionError("Duplicate fact group identity")
         by_id[group.id] = group

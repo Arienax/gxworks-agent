@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Read-only, bounded-unit audit of a local runtime package; emits no fact prose.
 
@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 from contextlib import closing
 from collections import Counter
+from contextlib import closing
 import gzip
 import hashlib
 import json
@@ -362,7 +363,6 @@ def audit_package(path, *, max_unit_bytes=64 * 1024 * 1024, owner_breakdown=Fals
             maximum_unit = max(maximum_unit, parser.maximum)
         counts['distinct_bare_fact_ids'] = db.execute('SELECT count(*) FROM bare_ids').fetchone()[0]
         counts['unique_exact_source_reference_objects'] = db.execute('SELECT count(*) FROM source_refs').fetchone()[0]
-        db.close()
     # Exact decompressed bytes, bounded read; unlike expanded-owner bytes above,
     # this measures the actual stored JSON representation, including whitespace.
     with path.open('rb') as stream:

@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import { usePanelVisible } from "../lifecycle/visibility";
 import { useEffect, useRef, useState } from "react";
@@ -62,19 +62,17 @@ export function HardwarePanel({pid,vid,readOnly,t}:{pid:string;vid:string;readOn
         const seconds=session.expires_at?Math.max(0,Math.ceil(session.expires_at-now/1000)):0;
         const state=session.status==="active"&&seconds===0?"expired":session.status;
         const active=state==="active";
-        const mayAct=!disabled&&session.owned_by_current_operator;
         return <article key={session.id} className="hardware-session"><header><strong>{session.target.target_label}</strong><span>{t(({pending:"待确认",active:"只读授权有效",expired:"授权已过期",revoked:"授权已撤销"} as Record<string,string>)[state]||state)}{active?` · ${seconds}s`:""}</span></header>
           <p>{t("逻辑站")} {session.target.logical_station} · {session.target.plc_model} · {session.target.ttl_seconds}s</p><p><strong>{t("地址白名单")}</strong>：{session.target.addresses.join(", ")}</p>
-          {!session.owned_by_current_operator&&<p>{t("仅创建者可操作")}</p>}
-          {state==="pending"&&<><label className="hardware-confirm"><input type="checkbox" disabled={!mayAct} checked={!!confirm[session.id]} onChange={event=>setConfirm({...confirm,[session.id]:event.target.checked})}/>{t("我已在 MX 配置中核对该逻辑站对应上方现场设备，并确认只读取列出的地址。")}</label>
-            <Button disabled={!mayAct||!confirm[session.id]} onClick={()=>void act(()=>api(`${path}/sessions/${session.id}/approve`,"POST",{
+          {state==="pending"&&<><label className="hardware-confirm"><input type="checkbox" disabled={disabled} checked={!!confirm[session.id]} onChange={event=>setConfirm({...confirm,[session.id]:event.target.checked})}/>{t("我已在 MX 配置中核对该逻辑站对应上方现场设备，并确认只读取列出的地址。")}</label>
+            <Button disabled={disabled||!confirm[session.id]} onClick={()=>void act(()=>api(`${path}/sessions/${session.id}/approve`,"POST",{
               logical_station:session.target.logical_station,target_label:session.target.target_label,addresses:session.target.addresses,
               ttl_seconds:session.target.ttl_seconds,mapping_confirmed:true,
             }))}>{t("确认并开启限时只读授权")}</Button></>}
-          {active&&<Button disabled={!mayAct||session.read_count>=30} onClick={()=>void act(()=>api<Observation>(`${path}/sessions/${session.id}/read`,"POST",{
+          {active&&<Button disabled={disabled||session.read_count>=30} onClick={()=>void act(()=>api<Observation>(`${path}/sessions/${session.id}/read`,"POST",{
             addresses:session.target.addresses,request_id:`read_${crypto.randomUUID()}`,
           }),value=>setObservation(value as Observation))}>{t("手动读取一次")}</Button>}
-          {(active||state==="pending")&&<Button variant="ghost" disabled={!mayAct} onClick={()=>void act(()=>api(`${path}/sessions/${session.id}/revoke`,"POST"))}>{t("撤销授权")}</Button>}
+          {(active||state==="pending")&&<Button variant="ghost" disabled={disabled} onClick={()=>void act(()=>api(`${path}/sessions/${session.id}/revoke`,"POST"))}>{t("撤销授权")}</Button>}
           <details><summary>{t("操作审计")} · {session.audit.length}</summary><ol>{session.audit.map(event=><li key={event.sequence}><time>{new Date(event.created_at).toLocaleString()}</time> · {t(actionText[event.action]||event.action)}{event.addresses&&` · ${event.addresses.join(", ")}`}{event.reason&&<p>{event.reason}</p>}{event.values&&<pre>{Object.entries(event.values).map(([address,value])=>`${address}: ${value}`).join("\n")}</pre>}</li>)}</ol></details>
         </article>;
       })}

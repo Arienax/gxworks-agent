@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Version-bound active-document transport, independent of offline Workspace."""
 from __future__ import annotations
@@ -10,16 +10,16 @@ from pathlib import Path
 import subprocess
 import uuid
 
-from shared.paths import bundled_executable
+from shared.paths import bundled_executable, cached_executable
 from .engineering_driver import NativeEngineeringDriverError
 from gxw.native_locale import label_title, native_language, program_title
 
 
 class ActiveDocumentAdapter:
     def __init__(self, executable=None, *, timeout=8):
-        default = Path(os.environ.get('LOCALAPPDATA', '')) / 'PLC AI Studio/native-active/PlcAi.ActiveDocument.exe'
         self.executable = Path(executable or os.environ.get('GX_ACTIVE_DOCUMENT_ADAPTER_EXE')
-                               or bundled_executable('native-active', 'PlcAi.ActiveDocument.exe') or default)
+                               or bundled_executable('native-active', 'PlcAi.ActiveDocument.exe')
+                               or cached_executable('native-active', 'PlcAi.ActiveDocument.exe'))
         self.timeout = timeout
         self._pending = {}
 

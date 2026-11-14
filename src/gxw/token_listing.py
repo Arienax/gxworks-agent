@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Source-bound instruction/text projection of explicit token grammars.
 
@@ -116,7 +116,8 @@ class TokenOperand:
         return result
 
 
-def _operand_groups(tokens: tuple[LadderToken, ...], text_encoding: str | None) -> tuple[TokenOperand, ...]:
+def _operand_groups(tokens: tuple[LadderToken, ...], text_encoding: str | None, *,
+                    allow_indexed_call_pointer: bool = False) -> tuple[TokenOperand, ...]:
     groups, start = [], 0
     for end, token in enumerate(tokens):
         item = token.annotation()
@@ -133,7 +134,9 @@ def _operand_groups(tokens: tuple[LadderToken, ...], text_encoding: str | None) 
             raise GXWFormatError("unobserved operand modifier sequence")
         if (any(r.startswith("index_") for r in roles)
                 and prefix not in ("M", "X", "Y", "S", "D", "R", "T", "C", "G")
-                and item.get('constant_type') not in ('K', 'H')):
+                and item.get('constant_type') not in ('K', 'H')
+                and not (allow_indexed_call_pointer and prefix == 'P'
+                         and roles in (("index_z",), ("index_v",)))):
             raise GXWFormatError("unobserved indexed base type")
         if 'module_prefix' in roles and prefix != 'G':
             raise GXWFormatError('FX module prefix requires its buffer-memory operand')
@@ -348,7 +351,9 @@ def decode_token_program(program: TokenProgram, *, text_encoding: str | None = N
             if arity is None:
                 arity = _ARITY[mnemonic]
             try:
-                operands = _operand_groups(tokens[1:], text_encoding)
+                operands = _operand_groups(tokens[1:], text_encoding,
+                    allow_indexed_call_pointer=(profile == 'fx3u'
+                                                and mnemonic in {'CALL', 'CALLP'} and arity == 1))
                 if len(operands) != arity:
                     raise GXWFormatError(f"observed operand count {len(operands)} != {arity}")
             except GXWFormatError as exc:

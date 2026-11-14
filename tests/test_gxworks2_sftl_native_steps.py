@@ -164,7 +164,10 @@ def test_export_mixed_variants_get_exact_cumulative_steps_once(tmp_path):
     ladder = _ladder(("MOVP", ["K1", "D0"]), ("ADD", ["D0", "K1", "D1"]),
                      ("WSFL", ["D0", "D10", "K56", "K1"]),
                      ("DADD", ["D0", "D2", "D4"]), ("RST", ["D10"]))
-    assert generate_gx_works2_csv(ladder, program, comments)
+    size = {}
+    assert generate_gx_works2_csv(ladder, program, comments, program_size=size)
+    assert size == {"basis": "export_instruction_widths", "instruction_count": 7, "steps": 39,
+                    "unknown_width_count": 0, "unknown_width_locations": []}
     assert [(row[2], int(row[0])) for row in _instruction_rows(program)] == [
         ("LD", 0), ("MOVP", 1), ("ADD", 6), ("WSFL", 13),
         ("DADD", 22), ("RST", 35), ("END", 38)]
@@ -177,14 +180,17 @@ def test_export_unknown_width_is_nonblocking_and_keeps_instruction(tmp_path, cap
     from gxworks2.csv_export import generate_gx_works2_csv
     from gxworks2.csv_manager import CSVManager
     program, comments = tmp_path / "program.csv", tmp_path / "comments.csv"
-    findings = []
+    findings, size = [], {}
     ladder = _ladder(("CUSTOM_VENDOR_OP", ["D0"]), ("MOV", ["K1", "D1"]))
-    assert generate_gx_works2_csv(ladder, program, comments, step_diagnostics=findings)
+    assert generate_gx_works2_csv(ladder, program, comments, step_diagnostics=findings, program_size=size)
     rows = _instruction_rows(program)
     assert [(row[2], row[0]) for row in rows] == [
         ("LD", "0"), ("CUSTOM_VENDOR_OP", "1"), ("MOV", ""), ("END", "")]
     assert rows[1][3] == "D0"
     assert findings[0]["opcode"] == "CUSTOM_VENDOR_OP"
+    assert size["steps"] is None and size["instruction_count"] == 4
+    assert size["unknown_width_count"] == 1
+    assert size["unknown_width_locations"][0]["opcode"] == "CUSTOM_VENDOR_OP"
     assert "unresolved" in caplog.text
     # This asserts the application's existing format contract, not GX compile.
     assert CSVManager().validate(program).valid

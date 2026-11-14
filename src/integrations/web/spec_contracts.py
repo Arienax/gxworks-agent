@@ -1,10 +1,11 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Specification wire records; Core owns confirmation and PLC semantics."""
 from __future__ import annotations
 
-from pydantic import Field
+from pydantic import Field, field_validator
+from plc.specification.implementation import normalize_open_questions
 
 from .response_types import EngineeringMap, EngineeringObject, EngineeringValue, ExtensibleResource
 
@@ -19,6 +20,7 @@ class TextProvenance(ExtensibleResource):
 
 
 class IORow(ExtensibleResource):
+    id: str | None = None
     address: str | None = None
     name: str | None = None
     label: str | None = None
@@ -165,7 +167,37 @@ class SpecificationApproach(ExtensibleResource):
     construction_plan: SpecificationConstructionPlan | None = None
 
 
+class SpecificationRequirement(ExtensibleResource):
+    id: str
+    text: str
+    source: str | None = None
+    status: str | None = None
+
+
+class SpecificationOpenQuestion(ExtensibleResource):
+    id: str
+    text: str
+    source: str | None = None
+    required: bool | None = None
+
+
+class SpecificationImplementationItem(ExtensibleResource):
+    id: str
+    requirement_ids: list[str] = Field(default_factory=list)
+    language: str
+    location: str
+    method: str
+    state_owner: str
+    template: EngineeringValue = None
+    instances: EngineeringValue = None
+    source: str | None = None
+    rationale: str | None = None
+
+
 class Specification(ExtensibleResource):
+    requirements: list[SpecificationRequirement] | None = None
+    implementation_items: list[SpecificationImplementationItem] | None = None
+    open_questions: list[SpecificationOpenQuestion] | None = None
     schema_version: int | None = None
     plc_model: str | None = None
     summary: str | None = None
@@ -182,3 +214,39 @@ class Specification(ExtensibleResource):
     extensions: EngineeringObject | None = None
     variables: EngineeringObject | None = None
     structs: EngineeringObject | None = None
+
+    @field_validator("open_questions", mode="before")
+    @classmethod
+    def normalize_question_text(cls, rows):
+        return normalize_open_questions(rows)
+
+
+class SpecificationDifference(ExtensibleResource):
+    path: str
+    before: EngineeringValue = None
+    after: EngineeringValue = None
+
+
+class SpecDocumentIssue(ExtensibleResource):
+    path: str | None = None
+    message: str
+    code: str | None = None
+
+
+class SpecDocumentIssues(ExtensibleResource):
+    errors: list[SpecDocumentIssue] = Field(default_factory=list)
+    warnings: list[SpecDocumentIssue] = Field(default_factory=list)
+
+
+class SpecDocument(ExtensibleResource):
+    project_id: str
+    plc_model: str
+    target_mode: str
+    path: str
+    draft: Specification | None = None
+    confirmed_spec: Specification | None = None
+    base_revision: str | None = None
+    draft_revision: str
+    differences: list[SpecificationDifference] = Field(default_factory=list)
+    version_spec: Specification | None = None
+    issues: SpecDocumentIssues | None = None

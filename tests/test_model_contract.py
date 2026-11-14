@@ -268,7 +268,7 @@ def test_json_schema_multiple_of_stays_anchored_at_zero():
     with pytest.raises(ValueError): budget.validate(1124)
 
 
-def test_legacy_transport_defaults_coexist_with_nested_user_mapping():
+def test_chat_completions_preserves_nested_custom_mapping_for_legacy_profiles():
     p = make_profile({"budget": {"type": "integer", "wire_location": "extra_body",
         "wire_path": ["thinking", "budget_tokens"]}}, capabilities={})
     p["capabilities"] = {"thinking_required": True}
@@ -279,7 +279,7 @@ def test_legacy_transport_defaults_coexist_with_nested_user_mapping():
     select(p, budget=2048)
     wire = OpenAICompatibleProvider(p, "key", client=Endpoint())._request_params(
         ModelRequest((UserMessage("check"),), stream=False))
-    assert wire["extra_body"]["thinking"] == {"type": "enabled", "budget_tokens": 2048}
+    assert wire["thinking"] == {"type": "enabled", "budget_tokens": 2048}
 
 
 def test_public_http_settings_schema_roundtrips_v2_without_exposing_key(settings_env):
@@ -298,16 +298,18 @@ def test_v2_selections_override_production_workflow_hints():
     import application.model_api as api
     import agent_runtime.agent as plc_agent
     from types import SimpleNamespace
-    from test_model_provider import _Client, _chunk
+    from responses_fixture import chat_body, chat_stream
+    from test_model_provider import _Client
     p = select(make_profile({"reasoning_effort": {"type": "enum", "values": ["low", "max"]},
          "temperature": {"minimum": 0, "maximum": 2, "step": .1}}), reasoning_effort=None, temperature=.7)
-    client = _Client([{"choices": [{"message": {"content": "完成。"}}]}, iter([_chunk(content="完成。")])])
+    client = _Client([chat_body("完成。"), chat_stream(chat_body("完成。"))])
     provider = OpenAICompatibleProvider(p, "key", client=client)
     with api.provider_scope(provider):
         api._request_model([{"role": "user", "content": "检查"}], effort="high", stream=False,
                            options={"temperature": 1.5})
     plc_agent.run_tool_agent("检查", context=None, provider=provider, runtime=SimpleNamespace(list_tools=lambda context: []))
-    for request in client.completions.calls:
+    assert len(client.chat.completions.calls) == 2
+    for request in client.chat.completions.calls:
         assert "reasoning_effort" not in request
         assert request["temperature"] == .7
 
@@ -362,7 +364,7 @@ def test_application_effort_is_profile_owned_on_the_actual_wire(legacy, selectio
         selection == "medium" or legacy and selection in {"advanced", "inherit"}
     ) else None
     assert provider.params.get("reasoning_effort") == expected
-    assert provider.params["extra_body"]["keep"] is True
+    assert provider.params["keep"] is True
     assert p == before and options == saved
 
 

@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Declarative operation schemas and engineering request bounds."""
 from __future__ import annotations
@@ -236,6 +236,9 @@ def _engineering_fbd_schema():
     text = _engineering_text(maximum=255)
     commands.update({name: _engineering_object({'model': {'type': 'object'},
         'native_save': {'type': 'boolean'},
+        **({'workflow': {'type': 'string', 'enum': ['direct_generation', 'detailed'],
+            'description': '新工程先确认规格；仅用户明确要求直接生成时选择 direct_generation。'}}
+            if name == 'generate' else {}),
         **({'device_comments': {'type': 'object', 'additionalProperties': {'oneOf': [{'type': 'string'}, {'type': 'null'}]}},
             'comment_table': text})}, ['model'])
                      for name in ('generate', 'edit')})
@@ -271,14 +274,25 @@ def _source_instruction_schema(*, expected=False):
     return _engineering_object(properties, ['op', 'args'])
 
 
-def _source_instruction_edit_schema():
+def _source_instruction_edit_schema(*, bound=False):
+    record = _source_record_schema()
+    if bound:
+        from application.compact_protocol import bound_output_schemas
+        condition = _engineering_object({'op': {'enum': ['LD', 'AND', 'OR']},
+            'condition_ref': _engineering_text(maximum=160),
+            'when': {'enum': ['active', 'inactive', 'run_permit']}}, ['op', 'condition_ref', 'when'])
+        record['oneOf'].extend([*bound_output_schemas(), condition])
     return _engineering_object({
         'operation': {'enum': ['replace', 'insert_before', 'delete', 'move_before']},
-        'record_index': {'type': 'integer', 'minimum': 0},
+        'record_index': {'type': 'integer', 'minimum': 0, 'description': 'Original source record index.'},
         'target_record_index': {'type': 'integer', 'minimum': 0},
-        'expected': _source_record_schema(expected=True),
-        'instructions': {'type': 'array', 'maxItems': 8192, 'items': _source_record_schema()}},
-        ['operation', 'record_index', 'expected'])
+        'expected': {**_source_record_schema(expected=True),
+            'description': ('Omit for a bound source version; the server reads the old record.'
+                            if bound else
+                            'Exact old record at record_index. For insert_before this is the existing record immediately after the insertion.')},
+        'instructions': {'type': 'array', 'maxItems': 8192, 'items': record,
+            'description': 'New records for replace or insert_before, such as [{"op":"LD","args":["M0"]}]. Omit for delete or move_before.'}},
+        ['operation', 'record_index'] if bound else ['operation', 'record_index', 'expected'])
 
 
 def _source_record_schema(*, expected=False):

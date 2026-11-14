@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Compact, auditable generation prompt assembly for API and MCP clients.
 
@@ -39,6 +39,7 @@ ST_SYSTEM_PROMPT = """# Role
 # ST semantic kernel
 """ + CYCLIC_ASSIGNMENT_PROMPT + """
 - 保持已给地址、电平和参数，不新增 I/O、停止/急停、硬件、模块寄存器或未确认别名；遵守 selected_approach.generation_contract。
+- 有 selected_approach.output_logic 时，落实其中的输出状态、触发、更新顺序、释放和恢复决定，与 generation_guide 和 instruction_choices 一起实施；本轮未修改的部分不重新选型。
 - 非保持输出每扫描赋值或用完整 IF/ELSE；缺 ELSE 保留旧值。最高优先条件不得被后写覆盖。
 - `:=` 赋值，BOOL 用 TRUE/FALSE，逻辑用 AND/OR/NOT/XOR，语句以 `;` 结束；比较用 `> >= < <= = <>`，符号转换遵守平台要求。
 - 定时器用 `OUT_T(条件, TCx, 设定值)`/TSx，计数器用 `OUT_C(条件, CCx, 设定值)`/CSx；普通定时器使能必须能变 FALSE，常 ON 不能形成周期。
@@ -62,6 +63,7 @@ LADDER_SYSTEM_PROMPT = """# Role
 - NO 检查位=1，NC 检查位=0；停止 active_level=0 时运行允许用 NO，反之用 NC。不得把物理常闭直接翻译成 NC。
 - 不得擅自新增 I/O、停止/急停、硬件、模块寄存器或未确认别名；用户明确给出的地址、NO/NC 极性和参数必须保持。
 - selected_approach.generation_contract 的结构化 required_* 必须满足，forbidden_* 不得出现；unverified_constraints 保留方案语义，但不升级为额外硬约束，也不覆盖当前参数/I/O。
+- 有 selected_approach.output_logic 时，落实其中的输出状态、触发、更新顺序、释放和恢复决定，与 generation_guide 和 instruction_choices 一起实施；本轮未修改的部分不重新选型。
 - 普通 COIL 导通写 TRUE、断开写 FALSE；同一普通 Y/M 一个 COIL，不再增加反条件 COIL“清零”。
 - AND 用串联，输入 OR 用 parallel_block，NOT 用 NC。一个输出的完整条件放在同一输入路径；输出 branches 不能表达输入 OR。
 - `shared_inputs` 只放公共串联输入；局部 `parallel_block` 只放在 branch.inputs，且不得嵌套。
@@ -152,7 +154,8 @@ def _select_system_prompt(target_mode, is_edit_mode=False, user_requirement="", 
         base = _st_system_prompt_for_model(selected_vendor)
     audit_section("base_prompt", base, reason="canonical_generation_base", source="base_prompt")
     dynamic = _specialist_context(classification, target_mode=target_mode, plc_model=selected_vendor)
-    result = "\n\n".join(part for part in (base, dynamic) if part)
+    from plc.instruction_knowledge import programming_system_prompt
+    result = "\n\n".join(part for part in (base, programming_system_prompt(), dynamic) if part)
     audit_section("system_prompt", result, reason="compact_generation", source="api")
     return result
 
@@ -164,18 +167,28 @@ def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="gene
     from plc.specification.provenance import retrieval_projection
 
     normalized_task = str(task_type or "generate").strip().casefold()
+    metadata = getattr(primary_query, "metadata", {})
+    if not isinstance(metadata, dict):
+        metadata = {}
+    selected_plan_query = metadata.get("selected_plan_query")
+    analysis_discovery = normalized_task == "analysis" and "capability_requirement" in metadata
+
     def finish(context):
-        if normalized_task in {"generate", "edit"}:
+        if analysis_discovery or normalized_task in {"generate", "edit"}:
             from application.capability_context import augment_generation_knowledge
-            meta = getattr(primary_query, "metadata", {})
-            requirement = (meta.get("capability_requirement") or meta.get("residual_fact_query") or str(primary_query)) if isinstance(meta, dict) else str(primary_query)
-            target = meta.get("target_mode", "ladder") if isinstance(meta, dict) else "ladder"
-            context = augment_generation_knowledge(requirement, context, plc_model=plc_model,
-                target_mode=target, confirmed_spec=confirmed_context,
-                repair_scope=meta.get("repair_scope") if isinstance(meta, dict) else None,
-                catalog=meta.get("callable_catalog", ()) if isinstance(meta, dict) else ())
-        from shared.model_context import technical_context_text
-        return KnowledgeContext(technical_context_text(context), getattr(context, 'manifest', {}))
+            requirement = metadata.get("capability_requirement") or metadata.get("residual_fact_query") or str(primary_query)
+            if selected_plan_query is not None:
+                requirement = metadata.get("residual_fact_query", "")
+            context = augment_generation_knowledge(
+                requirement, context, plc_model=plc_model, target_mode=metadata.get("target_mode", "ladder"),
+                confirmed_spec=confirmed_context, repair_scope=metadata.get("repair_scope"),
+                catalog=metadata.get("callable_catalog", ()), selected_plan_query=selected_plan_query,
+                for_analysis=analysis_discovery,
+            )
+        from shared.model_context import project_knowledge_context
+        from shared.cpu_version_projection import cpu_version_requested
+        request = metadata.get('capability_requirement') or str(primary_query)
+        return project_knowledge_context(context, cpu_version=cpu_version_requested(request, confirmed_context))
     # Retrieval executes the caller's choice. Omitted/None never means "infer".
     def absent(status, reason, **metadata):
         audit_section("manual_context", status=status, reason=reason, source="manual_retriever")
@@ -186,6 +199,10 @@ def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="gene
     base_top_k = _KNOWLEDGE_TASK_TOP_K.get(
         normalized_task, _KNOWLEDGE_TASK_TOP_K["generate"]
     )
+    if selected_plan_query is not None:
+        # Exact facts survive top_k=0. Supplement them through the chosen
+        # plan's functional lanes instead of replaying generic examples.
+        base_top_k = 0
     engineering = retrieval_projection(confirmed_context)
     if getattr(primary_query, "precompiled", False):
         query = primary_query
@@ -202,11 +219,12 @@ def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="gene
     elif normalized_task in {"generate", "edit"}:
         from knowledge.analysis_router import has_generation_fact_target
         from plc.device_definitions import device_definition_targets
-        metadata = getattr(query, 'metadata', {})
-        feature_query = metadata.get('capability_requirement') or query if isinstance(metadata, dict) else query
-        should_lookup = bool(query_text) and (has_generation_fact_target(query)
+        query_metadata = getattr(query, 'metadata', {})
+        feature_query = query_metadata.get('capability_requirement') or query if isinstance(query_metadata, dict) else query
+        should_lookup = bool(query_text) and (selected_plan_query is not None
+            or has_generation_fact_target(query, plc_model=plc_model)
             or bool(device_definition_targets(feature_query, plc_model))
-            or metadata.get('target_mode') == 'st')
+            or query_metadata.get('target_mode') == 'st')
         lookup_reason = (
             "generation_fact_retrieval"
             if should_lookup else "no_specific_fact_target"
@@ -223,7 +241,7 @@ def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="gene
         from knowledge.structured_facts import generation_aspects
         language = getattr(query, 'metadata', {}).get('target_mode')
         aspect_options = ({'aspects': generation_aspects(query, language=language)}
-                          if normalized_task in {'generate', 'edit'} else {})
+                          if analysis_discovery or normalized_task in {'generate', 'edit'} else {})
         analysis_options = ({"include_design": bool(include_design), "design_query": design_query}
                             if normalized_task == "analysis" else {})
         context = retrieve_context(query, plc_model=plc_model, task_type=normalized_task,
@@ -408,7 +426,7 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
                                   current_version_json=None, prompt_builder=None, knowledge_builder=None,
                                   profile_builder=None, confirmed_builder=None, on_context=None,
                                   model_profile=None, wire_history=None, compact_edit=False,
-                                  include_output_schema=True):
+                                  include_output_schema=True, additional_rules=""):
     normalized_task = str(task_type or review_mode or ("edit" if is_edit_mode else "generate")).strip().casefold()
     if _is_format_repair(normalized_task, user_requirement):
         audit_section("model_profile", status="excluded", reason="format_repair", source="model_registry")
@@ -466,22 +484,27 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
                 confirmed_context=runtime_spec,
             )
             from shared.model_context import technical_context_units, technical_value, technical_knowledge_coverage
+            knowledge = technical_context_units(evidence_text)
             payload = {
                 'context_schema_version': 3, 'plc_model': plc_model,
                 'confirmed_spec': technical_value(runtime_spec),
                 'target_profile': profile_builder(plc_model, runtime_spec, compact=bool(evidence_text)),
-                'knowledge': technical_context_units(evidence_text),
+                'knowledge': knowledge,
                 'knowledge_coverage': technical_knowledge_coverage(evidence_text),
                 'current_program': retrieval_evidence,
                 'historical_context': render_context_checkpoint(context_checkpoint),
             }
+            if compact_edit:
+                from application.compact_bindings import CompactBindings, instruction_form_units
+                payload['input_conditions'] = CompactBindings(plc_model, runtime_spec).conditions
+                knowledge.extend(instruction_form_units(plc_model, knowledge))
             from plc.generation_contract import generation_output_contract
             if include_output_schema:
                 from application.compact_protocol import compact_response_schema
                 payload['output_schema'] = (compact_response_schema(partial=True) if compact_edit else
                     generation_output_contract(allow_partial=is_edit_mode, plc_model=plc_model, target_mode=target_mode)['schema'])
-            system = selected + SOURCE_PRECEDENCE + generation_execution_prompt(
-                runtime_spec, evidence_text=evidence_text, task_type=normalized_task, plc_model=plc_model)
+            system = selected.rstrip() + "\n\n" + SOURCE_PRECEDENCE + generation_execution_prompt(
+                runtime_spec, evidence_text=evidence_text, task_type=normalized_task, plc_model=plc_model) + additional_rules
             message_history = (runtime_history if isinstance(runtime_history, list) and runtime_history
                 else history if history is not None else [{'role': 'user', 'content': generation_request}])
             return {'messages': render_wire_messages(system, [
@@ -520,7 +543,9 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
                 source="application",
             )
             from application.generation_wire import GenerationWirePrompt
-            return GenerationWirePrompt(system_prompt, context.wire_packet)
+            from shared.model_context import knowledge_origins
+            return GenerationWirePrompt(system_prompt, context.wire_packet,
+                                        fact_origins=knowledge_origins(knowledge_ctx))
     else:
         from knowledge.evidence import KnowledgeQuery
         from application.context_compiler import model_budget
@@ -564,19 +589,25 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
     from shared.model_context import technical_context_text, technical_value
     from shared.model_context import technical_context_units, technical_knowledge_coverage
     from application.generation_wire import GenerationWirePrompt, render_wire_messages
-    system_prompt = selected_prompt + SOURCE_PRECEDENCE
-    if (target_mode == 'ladder' and normalized_task in {'generate', 'edit'}
-            and isinstance(confirmed_context, dict) and confirmed_context):
+    system_prompt = selected_prompt.rstrip() + "\n\n" + SOURCE_PRECEDENCE
+    if target_mode == 'ladder' and normalized_task in {'generate', 'edit'}:
         system_prompt += generation_execution_prompt(confirmed_context, evidence_text=knowledge_ctx,
             task_type=normalized_task, plc_model=plc_model)
+    system_prompt += additional_rules
+    origins = {}
+    knowledge_units = technical_context_units(knowledge_ctx, origins=origins)
     payload = {
         'context_schema_version': 3, 'plc_model': plc_model,
         'confirmed_spec': technical_value(confirmed_context),
         'target_profile': profile_builder(plc_model, technical_value(confirmed_context), compact=bool(knowledge_ctx)),
-        'knowledge': technical_context_units(knowledge_ctx),
+        'knowledge': knowledge_units,
         'knowledge_coverage': technical_knowledge_coverage(knowledge_ctx),
         'current_program': retrieval_evidence,
     }
+    if compact_edit:
+        from application.compact_bindings import CompactBindings, instruction_form_units
+        payload['input_conditions'] = CompactBindings(plc_model, confirmed_context).conditions
+        payload['knowledge'].extend(instruction_form_units(plc_model, payload['knowledge']))
     from plc.generation_contract import generation_output_contract
     if include_output_schema:
         from application.compact_protocol import compact_response_schema
@@ -585,7 +616,7 @@ def build_generation_instructions(user_requirement, *, plc_model, target_mode="l
     history = wire_history if isinstance(wire_history, list) else [{'role': 'user', 'content': user_requirement}]
     messages = render_wire_messages(system_prompt, [
         {'role': 'user', 'content': json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}, *history])
-    return GenerationWirePrompt(system_prompt, {'messages': messages})
+    return GenerationWirePrompt(system_prompt, {'messages': messages}, fact_origins=origins)
 
 
 

@@ -14,6 +14,25 @@ remain available internally so parent/child and source-page retrieval query the
 correct original rows. This does not rewrite stored fact identities or primary
 keys and does not expand CPU or native engineering support.
 
+## Vector indexes and functional recall
+
+Each database declares its own sibling `vector_artifact`. Runtime checks both
+the corpus identity and the current chunk coverage before using that sidecar;
+an index built for an older database cannot supply vectors for appended facts.
+Owner-store text IDs are preserved throughout vector lookup.
+
+`tools/build_dense_embeddings.py` accepts `--database`, `--output` and
+`--manifest` for the selected store. Supply its actual manifest explicitly;
+`--basis` can reuse a rebuilt domain sidecar's feature/LSA basis while projecting
+the owner documents in bounded batches. Build the domain sidecar first. The
+builder updates database vector metadata and its corresponding manifest, and
+the package collector includes the declared owner sidecar.
+
+Functional lookup keeps BM25 and LSA active alongside aliases. Resource queries
+use the same scoped retriever; typed instruction references fetch related device
+families after selection. `knowledge/retrieval_vocabulary.json` supplies case
+synonyms and resource concepts, not CPU support or mandatory instruction choices.
+
 ## Packaging boundary
 
 `build_release.py --resource-root` stages the resource graph selected by the same

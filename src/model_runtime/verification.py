@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """One explicitly authorized synthetic request. No scans, retries or fallback."""
 from __future__ import annotations
@@ -16,9 +16,10 @@ from model_runtime.provider import (
 )
 from model_runtime.observations import request_observer
 from model_runtime.probes import VERIFIERS
+from model_runtime.responses_wire import OUTPUT_LIMITS
 
 
-_LIMIT_NAMES = {"max_tokens", "max_completion_tokens"}
+_LIMIT_NAMES = set(OUTPUT_LIMITS)
 _PROBE_STRIP_NAMES = _LIMIT_NAMES | {"timeout", "max_retries", "n"}
 
 
@@ -42,10 +43,10 @@ def _probe_output_limit(contract, target, kind, value):
         if (
             not isinstance(value, (int, float))
             or isinstance(value, bool)
-            or not 1 <= value <= 64
+            or not 16 <= value <= 64
         ):
             raise ValueError(
-                "Single verification permits only an output budget from 1 to 64; "
+                "Single verification permits only an output budget from 16 to 64; "
                 "use higher limits in normal requests"
             )
         return int(value)
@@ -60,7 +61,7 @@ def _probe_output_limit(contract, target, kind, value):
             for item in limit.values
             if not isinstance(item, bool)
             and isinstance(item, (int, float))
-            and 1 <= item <= 64
+            and 16 <= item <= 64
         ]
         if not allowed:
             raise ValueError(
@@ -81,7 +82,7 @@ def _probe_output_limit(contract, target, kind, value):
                 + math.floor((output_limit - anchor) / limit.step) * limit.step
             )
     limit.validate(output_limit)
-    if not 1 <= output_limit <= 64:
+    if not 16 <= output_limit <= 64:
         raise ValueError(
             "Declared output domain cannot fit a 64-token verification budget"
         )
@@ -231,6 +232,8 @@ def verify_one(
         isinstance(event, (TextDelta, ReasoningDelta, ToolCallEnd))
         for event in events
     )
+    if kind == "parameter":
+        ok = ok or any(isinstance(event, Usage) for event in events)
     if kind == "capability" and target == "tools":
         calls = [
             event.tool_call

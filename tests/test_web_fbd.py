@@ -136,7 +136,7 @@ from tests.test_gxw_object_model import (two_timers, source_binding_baseline, pr
                                        flat_project_structure_baseline, compound_structure_context, created_fbd_context,
                                        source_creation_witness, source_creation_stage, created_inout_context)
 from tests.test_execution_coordinator import FakeCOM
-from tests.test_web_api import _app, _login, ORIGIN
+from tests.test_web_api import _app, ORIGIN
 from tests.test_workbench_service import _program
 
 
@@ -274,7 +274,7 @@ def test_http_native_engineering_accepts_only_explicit_saved_version_plan_with_o
     from tests.test_execution_coordinator import native_delivery_receipt
     service = WorkbenchService(tmp_path / 'workspace', tmp_path / 'state', model_factory=lambda: (None, {}))
     with TestClient(_app(service.store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         pid, base, _raw = visible_native_version(service)
         command = {'action': 'native_engineering', 'project_id': pid, 'version_id': base,
                    'plan': visible_native_plan(), 'request_id': 'native-http'}
@@ -286,9 +286,7 @@ def test_http_native_engineering_accepts_only_explicit_saved_version_plan_with_o
                 '_native_result': native_delivery_receipt(_raw, payload['plan']['commands'])})
             return future
         monkeypatch.setattr(service.execution, 'submit_approved', execute)
-        anonymous = TestClient(client.app, base_url=ORIGIN)
-        assert anonymous.post('/api/proposals', json=command, headers={'Authorization': 'Bearer ' + AGENT}).status_code == 401
-        assert client.post('/api/proposals', json=command).status_code == 403
+        assert client.post('/api/proposals', json=command, headers={'Origin': 'https://evil.example'}).status_code == 403
         invalid = deepcopy(command)
         invalid.update(request_id='native-path')
         invalid['plan']['commands'][0]['path'] = r'D:\unmanaged.gxw'
@@ -322,7 +320,7 @@ def test_http_background_native_sfc_uses_shared_version_transaction(service, mon
         return future
     monkeypatch.setattr(service.execution, 'submit_approved', execute)
     with TestClient(_app(service.store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         command = dict(action='native_engineering', project_id=pid, version_id=base, request_id='background-http',
             plan=dict(schema_version=1, mode='background',
                 commands=[{'operation': name} for name in ('compile', 'save', 'reopen')]))
@@ -418,7 +416,7 @@ def test_program_creation_http_and_connected_agent_reuse_the_shared_candidate(tm
     states, after, case, calls = program_creation_native_replay(monkeypatch, tmp_path)
     raw = states['program']
     with TestClient(_app(tmp_path / 'workspace', tmp_path / 'state'), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         project = client.post('/api/projects', headers=headers, json={'name': entry, 'target_mode': 'fbd'}).json()
         imported = client.post('/api/fbd/proposals', headers=headers, json={'operation': 'import',
             'project_id': project['id'], 'request_id': 'import', 'program': 'FBD_MATRIX.Program.pou',
@@ -429,7 +427,7 @@ def test_program_creation_http_and_connected_agent_reuse_the_shared_candidate(tm
             'resource': case['resource'], 'task': case['task'], 'scope_mode': 'existing_task'}
         if entry == 'web':
             command = {**selection, **arguments, 'request_id': 'create-program'}
-            assert client.post('/api/fbd/proposals', json=command).status_code == 403
+            assert client.post('/api/fbd/proposals', json=command, headers={'Origin': 'https://other.example'}).status_code == 403
             response = client.post('/api/fbd/proposals', headers=headers, json=command)
             assert response.status_code == 201, response.text
             proposal = response.json()
@@ -579,15 +577,15 @@ def test_existing_ladder_converts_with_comments_in_source_artifact(service):
     assert {n["symbol"] for n in service.projects.program(p["id"], result)["nodes"]} == {"X0", "Y0"}
 
 
-def test_http_import_download_review_and_csrf_are_consistent(tmp_path):
+def test_local_http_import_download_and_review_are_consistent(tmp_path):
     with TestClient(_app(tmp_path / "workspace", tmp_path / "state"), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         p = client.post('/api/projects', json={"name": "Native", "target_mode": "fbd"}, headers=headers).json()
         raw = default_baseline()
         upload = {"filename": "source.gxw", "data_base64": base64.b64encode(raw).decode()}
         assert client.post('/api/fbd/inspect', json=upload, headers=headers).json()["programs"] == ["1.Program.pou"]
         command = {"operation": "import", "project_id": p["id"], "request_id": "upload", "data_base64": upload["data_base64"]}
-        assert client.post('/api/fbd/proposals', json=command).status_code == 403
+        assert client.post('/api/fbd/proposals', json=command, headers={'Origin': 'https://other.example'}).status_code == 403
         response = client.post('/api/fbd/proposals', json=command, headers=headers)
         assert response.status_code == 201, response.text
         proposal = response.json()
@@ -988,7 +986,7 @@ def test_project_fb_type_selection_updates_draft_interface_declaration_preview_a
 def test_http_and_connected_agent_share_source_catalog_and_candidate_validation(tmp_path):
     from tests.test_web_api import AGENT
     with TestClient(_app(tmp_path / 'workspace', tmp_path / 'state'), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         project = client.post('/api/projects', headers=headers,
             json={'name': 'FBD v2 application', 'target_mode': 'fbd'}).json()
         response = client.post('/api/fbd/proposals', headers=headers, json={'operation': 'import',
@@ -1215,7 +1213,7 @@ def test_http_created_fb_uses_saved_roles_then_rebinds_formals_and_caller(tmp_pa
     monkeypatch.setattr(NativeWorkspaceSourceSave, 'create', create)
     monkeypatch.setattr(NativeWorkspaceSourceSave, 'save', save)
     with TestClient(_app(tmp_path / 'workspace', tmp_path / 'state'), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         project = client.post('/api/projects', headers=headers, json={'name': cpu, 'target_mode': 'fbd', 'plc_model': cpu}).json()
         imported = client.post('/api/fbd/proposals', headers=headers, json={'operation': 'import',
             'project_id': project['id'], 'request_id': 'import', 'program': original_program,
@@ -1224,7 +1222,7 @@ def test_http_created_fb_uses_saved_roles_then_rebinds_formals_and_caller(tmp_pa
         base = imported.json()['result']['version_id']
         command = dict(operation='create_fb', project_id=project['id'], version_id=base,
                        request_id='create', source_name=case['created_name'])
-        assert client.post('/api/fbd/proposals', json=command).status_code == 403
+        assert client.post('/api/fbd/proposals', json=command, headers={'Origin': 'https://other.example'}).status_code == 403
         response = client.post('/api/fbd/proposals', headers=headers, json=command)
         assert response.status_code == 201, response.text
         proposal = response.json()
@@ -1377,7 +1375,7 @@ def test_http_definition_authoring_reviews_structure_and_keeps_base_bytes(tmp_pa
         return verify_authoring(raw,arguments,after,report['native_workspace'])
     monkeypatch.setattr(NativeWorkspaceSourceSave,'author',author)
     with TestClient(_app(tmp_path/'workspace',tmp_path/'state'),base_url=ORIGIN) as client:
-        headers=_login(client)
+        headers={"Origin": ORIGIN}
         project=client.post('/api/projects',headers=headers,json={'name':'Independent FB','plc_model':'FX3U','target_mode':'fbd'}).json()
         base=client.post('/api/fbd/proposals',headers=headers,json=dict(operation='import',project_id=project['id'],
             request_id='base',data_base64=base64.b64encode(before).decode())).json()['result']['version_id']
@@ -1413,7 +1411,7 @@ def test_http_motion_declarations_and_configuration_reuse_shared_authoring(tmp_p
         return verify_authoring(raw,arguments,after,report['native_workspace'])
     monkeypatch.setattr(NativeWorkspaceSourceSave,'author',author)
     with TestClient(_app(tmp_path/'workspace',tmp_path/'state'),base_url=ORIGIN) as client:
-        headers=_login(client)
+        headers={"Origin": ORIGIN}
         project=client.post('/api/projects',headers=headers,json=dict(name='Motion configuration',plc_model='FX3U',target_mode='fbd')).json()
         imported=client.post('/api/fbd/proposals',headers=headers,json=dict(operation='import',project_id=project['id'],
             request_id='base',program='FBD_MATRIX.Program.pou',data_base64=base64.b64encode(before).decode()))
@@ -1792,11 +1790,11 @@ def test_fbd_import_native_save_choice_is_explicit_in_web_and_standalone_mcp(tmp
     from agent_runtime.runtime import build_default_tool_runtime
     from integrations.mcp.context_provider import SessionToolContextProvider
     from integrations.mcp.tool_adapter import MCPToolAdapter
-    from tests.test_web_api import _app, _login, ORIGIN
+    from tests.test_web_api import _app, ORIGIN
     raw = default_baseline(); data = base64.b64encode(raw).decode()
     app = _app(tmp_path/'workspace',tmp_path/'state')
     with TestClient(app,base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         pid = client.post('/api/projects',headers=headers,json={'name':'native import choice','target_mode':'fbd'}).json()['id']
         for invalid in (1, 'true'):
             response = client.post('/api/fbd/proposals',headers=headers,json=dict(operation='import',project_id=pid,
@@ -2163,7 +2161,7 @@ def test_http_st_primary_gxw_version_can_edit_preview_save_and_reopen_an_existin
     monkeypatch.setattr(fbd,'_native_candidate',lambda *args,**kwargs:pytest.fail('offline mixed-language editing started native'))
     raw,_=offline_fbd_project(6)
     with TestClient(_app(tmp_path/'workspace',tmp_path/'state'),base_url=ORIGIN) as client:
-        headers=_login(client)
+        headers={"Origin": ORIGIN}
         imported=client.post('/api/gxw/import',headers=headers,json=dict(filename='Calculator.gxw',
             data_base64=base64.b64encode(raw).decode(),program='Calculator.Program.pou',request_id='mixed-import'))
         assert imported.status_code==201,imported.text

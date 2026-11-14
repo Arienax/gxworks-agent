@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """HTTP adapter for simulator plan editing and recorded replay; no execution."""
 from typing import Any
@@ -9,6 +9,7 @@ from pydantic import Field
 
 from application.projects import public
 from application.simulation_workbench import SimulationWorkbenchService, SimulationWorkbenchError
+from .workspaces import companion
 from .schemas import Command
 from .responses import SimulationWorkbench, SimulationDraft, SimulationPlan, SimulationReplay
 
@@ -27,7 +28,7 @@ class SimulatorPlanSave(Command):
 
 
 def register(app, service):
-    simulation = SimulationWorkbenchService(service)
+    simulation = companion(service, SimulationWorkbenchService)
 
     @app.exception_handler(SimulationWorkbenchError)
     async def invalid_simulation(_request, error):
@@ -37,19 +38,19 @@ def register(app, service):
 
     @app.get(prefix, response_model=SimulationWorkbench, response_model_exclude_unset=True)
     def read_simulation_workbench(project_id: str, version_id: str):
-        return simulation.read(project_id, version_id)
+        return simulation().read(project_id, version_id)
 
     @app.post(prefix + "/draft", response_model=SimulationDraft, response_model_exclude_unset=True)
     def edit_simulation_draft(project_id: str, version_id: str, command: SimulatorDraftEdit):
-        return simulation.edit_draft(project_id, version_id, **command.model_dump())
+        return simulation().edit_draft(project_id, version_id, **command.model_dump())
 
     @app.post(prefix + "/plans", status_code=201, response_model=SimulationPlan, response_model_exclude_unset=True)
     def save_simulation_plan(project_id: str, version_id: str, command: SimulatorPlanSave):
-        return simulation.save(project_id, version_id, **command.model_dump())
+        return simulation().save(project_id, version_id, **command.model_dump())
 
     @app.get(prefix + "/runs/{run_id}/replay", response_model=SimulationReplay, response_model_exclude_unset=True)
     def simulation_replay(project_id: str, version_id: str, run_id: str):
-        return simulation.replay(project_id, version_id, run_id)
+        return simulation().replay(project_id, version_id, run_id)
 
     @app.get(prefix + "/live", response_model=None)
     def simulation_live(project_id: str, version_id: str, after: int = 0, view_id: str = ""):

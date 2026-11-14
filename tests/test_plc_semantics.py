@@ -126,6 +126,10 @@ def test_device_evidence_aliases_use_identity_and_do_not_renumber(prefix, index,
 
 
 @pytest.mark.parametrize("text,evidence,values,reason", [
+    ("d000=0", "d000=0", ["D0"], None),
+    ("D1>=D2", "D1>=D2", ["D1", "D2"], None),
+    ("X3<>X4", "X3<>X4", ["X3", "X4"], None),
+    ("M0!=1", "M0!=1", ["M0"], None),
     ("禁止 M8011 和手工逐位移位。", "禁止 M8011 和手工逐位移位。", ["M8011", "手工逐位移位"], "target_not_grounded_in_evidence"),
     ("使用 Y000。", "使用 Y0。", ["Y0"], "evidence_not_in_current_request"),
     ("禁止 M8011。", "禁止 M8011。", ["M8012"], "target_not_grounded_in_evidence"),
@@ -139,7 +143,11 @@ def test_device_grounding_retains_exact_evidence_and_token_boundaries(text, evid
     receipt = compile_explicit_constraint_claims([{
         "operation": "forbid", "scope": "global", "target": {"kind": "device", "values": values}, "evidence": [evidence],
     }], text)
-    assert receipt["operations"] == [] and receipt["rejected"][0]["reason"] == reason
+    if reason is None:
+        assert receipt["rejected"] == []
+        assert receipt["operations"] == [{"operation": "forbid", "kind": "device", "values": values}]
+    else:
+        assert receipt["operations"] == [] and receipt["rejected"][0]["reason"] == reason
 
 
 @pytest.mark.parametrize('bits', [8, 16, 32, 64])

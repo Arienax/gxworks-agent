@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Generic accounting for exact fact evidence that actually reaches a model."""
 from __future__ import annotations
@@ -252,6 +252,18 @@ def included_evidence_ids(text, records=()):
     }
     ids = [str(record['id']) for record in records if isinstance(record, Mapping)
            and record.get('id') and record.get('model_text') and record['model_text'] in str(text)]
+    if '[PLC KNOWLEDGE]' in str(text):
+        from shared.model_context import technical_context_units
+        from knowledge.instruction_presentation import instruction_form_units
+        def literal_keys(value):
+            return {json.dumps(item, sort_keys=True, ensure_ascii=False, separators=(',', ':'))
+                    for unit in technical_context_units(value) for item in instruction_form_units(unit)}
+        delivered = literal_keys(text)
+        for record in records:
+            if (isinstance(record, Mapping) and record.get('id') and record.get('model_text')
+                    and str(record['id']) not in ids
+                    and literal_keys(record['model_text']) <= delivered):
+                ids.append(str(record['id']))
     pattern = (
         r"(?ms)^\[KNOWLEDGE (\{[^\n]*\})\]\n"
         r"((?:(?!^\[KNOWLEDGE |^\[/KNOWLEDGE\]).)*?)\n"

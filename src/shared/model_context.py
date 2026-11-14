@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Technical context presented to models; audit/debug records stay elsewhere.
 
@@ -11,13 +11,15 @@ engineering references; document/source identities are removed.
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import re
 from collections.abc import Mapping
 
 
 _DEBUG_FIELDS = frozenset({
-    'sources', 'source_id', 'source_ids', 'source_evidence', 'source_references',
+    'sources', 'source_id', 'source_ids', 'source_evidence', 'source_references', 'fact_citations',
+    'citation_origin', 'citation_sources', 'source_excerpts', 'source_claims', 'source_text_status',
     'source_chunk_id', 'source_section_id', 'source_address_locations',
     'document_id', 'manual_id', 'manual_number', 'manual_title', 'pdf_page', 'pdf_pages', 'pdf_page_end',
     'content_sha256', 'text_sha256', 'proof_sha256', 'source_sha256',
@@ -46,6 +48,8 @@ _DEBUG_FIELDS = frozenset({
     'manual_text', 'layout_text', 'raw_text',
     'source_page', 'source_line', 'clause_index', 'complete_clause_review',
     'full_clause_review', 'source_block', 'source_kind',
+    'superseded_facts', 'type_basis', 'direction_basis', 'condition_extraction_basis',
+    'binding_basis', 'relation_coverage', 'covered_aspects',
 })
 
 _REVIEW_STATES = frozenset({
@@ -102,7 +106,8 @@ def _technical_facts(groups):
         if dimension == 'identity.source_model_mark' and fact.get('id') not in referenced:
             continue
         item = {key: technical_value(fact[key]) for key in
-                ('dimension', 'value', 'scope', 'conditions', 'requires', 'note', 'selection_applicability') if key in fact}
+                ('dimension', 'value', 'scope', 'conditions', 'requires', 'note', 'selection_applicability',
+                 'generation_requirements', 'avoid_relying_on', 'required_prerequisites') if key in fact}
         if fact.get('id'):
             item['id'] = local_ids[fact['id']]
         if fact.get('status'):
@@ -166,12 +171,13 @@ def technical_value(value):
 
 def technical_fact_packet(packet):
     """Render an authored record without its proof graph or source envelope."""
-    result = {key: technical_value(packet[key]) for key in ('kind', 'target', 'scope') if key in packet}
     raw = packet.get('value')
-    value = technical_value(raw)
-    if packet.get('content_origin') == 'original_case' and isinstance(value, Mapping):
-        value = {key: value[key] for key in ('requirement', 'models', 'family', 'program') if key in value}
-    result['value'] = value
+    if packet.get('kind') == 'instruction' and isinstance(raw, Mapping):
+        from knowledge.instruction_presentation import instruction_card
+        result = instruction_card(packet, technical_value)
+    else:
+        result = {key: technical_value(packet[key]) for key in ('kind', 'target', 'scope', 'conditions', 'requires') if key in packet}
+        result['value'] = technical_value(raw)
     if packet.get('status'):
         result['knowledge_status'] = packet['status']
     if packet.get('gaps'):
@@ -193,10 +199,36 @@ def technical_block(value):
         separators=(',', ':'), sort_keys=True) + '\n[/PLC KNOWLEDGE]'
 
 
-def technical_context_units(context):
+_KNOWLEDGE_BODY = re.compile(r'(?s)\[PLC KNOWLEDGE\]\s*(.*?)\s*\[/PLC KNOWLEDGE\]')
+
+
+def knowledge_unit_key(unit):
+    content = {key: value for key, value in unit.items() if key != 'citation_id'}
+    return hashlib.sha256(json.dumps(content, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def _add_origins(index, key, records):
+    for record in records:
+        sources = index.setdefault(key, [])
+        if record not in sources:
+            sources.append(record)
+
+
+def knowledge_origins(context):
+    """Private index keyed by the exact technical input to the projection."""
+    manifest = getattr(context, 'manifest', {})
+    index = {key: list(rows) for key, rows in (manifest.get('citation_sources') or {}).items()}
+    for record in manifest.get('records', []):
+        if record.get('citation_origin'):
+            for body in _KNOWLEDGE_BODY.findall(record.get('model_text') or ''):
+                _add_origins(index, knowledge_unit_key(json.loads(body)), [record['citation_origin']])
+    return index
+
+
+def technical_context_units(context, *, origins=None, source_index=None):
     """Structured complete knowledge units, without repeating instruction prose."""
     units, seen = [], set()
-    for body in re.findall(r'(?s)\[PLC KNOWLEDGE\]\s*(.*?)\s*\[/PLC KNOWLEDGE\]', str(context or '')):
+    for body in _KNOWLEDGE_BODY.findall(str(context or '')):
         value = json.loads(body)
         marker = json.dumps(value, sort_keys=True, ensure_ascii=False)
         if marker not in seen:
@@ -204,14 +236,235 @@ def technical_context_units(context):
             units.append(value)
     if not units and str(context or '').strip():
         units.append({'text': str(context).strip()})
-    return units
+    from knowledge.instruction_presentation import merge_instruction_units, SHARED_INSTRUCTION_KINDS
+    if origins is not None and source_index is None:
+        source_index = knowledge_origins(context)
+    lineage = {} if origins is not None and source_index else None
+    projected = [(unit, projected_unit) for unit in merge_instruction_units(units, origins=lineage)
+                 if unit.get('kind') not in SHARED_INSTRUCTION_KINDS
+                 and (projected_unit := model_knowledge_value(unit)) not in (None, {}, [])]
+    described = {form['opcode'] for _, unit in projected if unit.get('kind') == 'instruction'
+                 for form in unit.get('value', {}).get('forms', [])}
+    families = {(unit['value']['family'], model) for _, unit in projected if unit.get('kind') == 'instruction'
+                for model in unit.get('scope', {}).get('models', [])}
+    def compact_capability(unit):
+        if unit.get('kind') != 'instruction_capability':
+            return unit
+        redundant = unit.get('name') in described
+        if not redundant:
+            from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+            redundant = any((resolution := DEFAULT_INSTRUCTION_REGISTRY.resolve_catalog_form(unit.get('name', ''), cpu=model))
+                            and resolution.base_mnemonic == family for family, model in families)
+        if not redundant:
+            return unit
+        # Keep the task-to-instruction link used by MCP research, without
+        # repeating a Core signature beside the complete manual semantics.
+        return ({key: unit[key] for key in ('kind', 'name', 'functions')}
+                if unit.get('functions') else None)
+    result = []
+    for original, unit in projected:
+        value = compact_capability(unit)
+        if value is None:
+            continue
+        result.append(value)
+        if lineage:
+            # Technical wrappers also remove debug keys before being rendered.
+            from shared.cpu_version_projection import without_cpu_versions
+            content = technical_value(value)
+            key = knowledge_unit_key(content)
+            clean = without_cpu_versions(content)
+            clean_key = knowledge_unit_key(clean) if clean is not None else key
+            for index in lineage.get(id(original), []):
+                records = source_index.get(knowledge_unit_key(units[index]), [])
+                _add_origins(origins, key, records)
+                if clean_key != key:
+                    _add_origins(origins, clean_key, records)
+    return result
+
+
+_DELIVERY_AUDIT_FIELDS = frozenset({
+    'knowledge_status', 'knowledge_status_by_field', 'selection',
+    'selection_applicability', 'unresolved_aspects', 'unresolved_reasons',
+    'core_unresolved_aspects', 'core_call_available', 'core_execution_capability',
+    'call_available', 'call_admission_reason', 'call_admission_details',
+    'support_status', 'binding_status', 'identity_knowledge', 'gap_kind',
+    'unknown', 'core_unknown', 'gap_reasons', 'runtime_execution',
+    'conflicts', 'depends_on', 'missing_prerequisites', 'required_prerequisites',
+    'generation_requirements', 'avoid_relying_on', 'gaps',
+    'reviewed_behavior_does_not_establish_Core_execution',
+})
+_ABSENT_MODEL_TEXT = frozenset({'not_stated_in_reviewed_source', 'not_stated'})
+_ABSENT_KNOWLEDGE = frozenset({'unknown', 'unresolved', 'unverified', 'not_established'})
+_UNPROVEN_STATES = _ABSENT_KNOWLEDGE | {
+    'declared_unverified', 'candidate_evidence', 'source_review_pending',
+    'source_present_not_extracted', 'partially_source_verified',
+}
+
+
+def _absent_knowledge(value):
+    return isinstance(value, str) and value in _ABSENT_KNOWLEDGE
+
+
+def model_knowledge_value(value):
+    """Deliver only applicable programming semantics.
+
+    Review states, coverage, conflicts and unresolved placeholders stay in the
+    Core/debug record and private ledger. The model receives concrete
+    applicability, parameters, operations, outputs, timing and state rules.
+    """
+    if isinstance(value, (list, tuple)):
+        return [item for item in (model_knowledge_value(entry) for entry in value)
+                if item not in (None, {}, [])]
+    if not isinstance(value, Mapping):
+        return None if _absent_knowledge(value) else copy.deepcopy(value)
+    if value.get('kind') == 'plc_program_ir':
+        # Retrieved examples carry the same full IR as previews. Present their
+        # ordered program once; derived reports are not programming facts.
+        value = {key: item for key, item in value.items()
+                 if key not in {'analysis', 'timing', 'devices', 'source'}}
+        if isinstance(value.get('networks'), list):
+            value['networks'] = [
+                {key: item for key, item in network.items() if key != 'ladder'}
+                if isinstance(network, Mapping) and isinstance(network.get('instructions'), list)
+                and network['instructions'] else network
+                for network in value['networks']]
+    if value.get('kind') in {'instruction_modifiers', 'instruction_execution'}:
+        return None
+    if value.get('status') == 'conflict' or value.get('knowledge_status') == 'conflict':
+        return None
+    result = {}
+    state = value.get('knowledge_status', value.get('status'))
+    unproven_availability = (isinstance(state, str)
+                            and state in _UNPROVEN_STATES
+                            and isinstance(value.get('value'), Mapping)
+                            and value['value'].get('available') is True)
+    field_states = value.get('knowledge_status_by_field') or {}
+    operator_source_details = (isinstance(value.get('operators'), Mapping)
+        and (isinstance(value.get('source_resolution'), Mapping)
+             or isinstance(value.get('source_conflicts'), Mapping)))
+    conflicted_operators = ({symbol for symbol, conflict in value.get('source_conflicts', {}).items()
+                            if conflict} if operator_source_details
+                            and isinstance(value.get('source_conflicts'), Mapping) else set())
+    for key, item in value.items():
+        if operator_source_details:
+            if key == 'source_conflicts':
+                continue
+            if key == 'operators' and isinstance(item, Mapping):
+                item = {symbol: rule for symbol, rule in item.items() if symbol not in conflicted_operators}
+            elif key == 'standard_function_aliases' and isinstance(item, Mapping):
+                item = {symbol: target for symbol, target in item.items()
+                        if symbol not in conflicted_operators and target not in conflicted_operators}
+            elif key == 'source_resolution' and isinstance(item, Mapping):
+                # This mixed source-review record also owns concrete pin/domain
+                # rules. Keep those fields without publishing review attribution.
+                item = {symbol: {field: detail for field, detail in resolution.items() if field in {
+                    'formal_pin_domains', 'pin_count', 'QL_NE_and_not_equal_input_count',
+                    'extend_ANY_BIT_to_signed_or_real_from_example'}}
+                    for symbol, resolution in item.items()
+                    if symbol not in conflicted_operators and isinstance(resolution, Mapping)}
+        if key == 'unknown_fb_options':
+            result['missing_fb_options'] = model_knowledge_value(item)
+            continue
+        if (key == 'other_type_branches' and item == 'unresolved'
+                and value.get('source_verified_type_branches')):
+            # This limits callable input branches; it is not a research note.
+            result[key] = item
+            continue
+        if key == 'literal_or_expression_support' and item == 'not_stated':
+            # A source-backed reference input does not establish value inputs.
+            result[key] = item
+            continue
+        if (value.get('kind') == 'start_data_reference'
+                and key in {'scalar_types', 'array_element_types'} and isinstance(item, (list, tuple))):
+            # Empty is a binding limit, not optional presentation metadata.
+            result[key] = list(item)
+            continue
+        if key == 'signed' and value.get('kind') == 'real':
+            continue  # REAL's sign is part of its representation, not an integer signedness selector.
+        if key == 'id' and (value.get('dimension') or 'value' in value):
+            continue  # Fact identities stay in the dependency graph, not in model semantics.
+        if key in _DELIVERY_AUDIT_FIELDS or key == 'unresolved_items':
+            continue
+        if key == 'status' and isinstance(item, str) and item in _REVIEW_STATES | _ABSENT_KNOWLEDGE:
+            continue
+        if key in field_states and _absent_knowledge(field_states[key]):
+            continue
+        if key == 'value' and unproven_availability:
+            continue
+        if key == 'conditions' and isinstance(item, (list, tuple)):
+            conditions = []
+            for condition in item:
+                projected = model_knowledge_value(condition)
+                if projected in (None, {}, []):
+                    continue
+                if isinstance(projected, Mapping) and set(projected) <= {'kind', 'context'}:
+                    continue
+                conditions.append(projected)
+            if conditions:
+                result[key] = conditions
+            continue
+        if key.endswith('.unresolved_source'):
+            continue
+        if key == 'dimension' and isinstance(item, str) and item.endswith('.unresolved_source'):
+            continue
+        if _absent_knowledge(item):
+            continue
+        if isinstance(item, str) and item in _ABSENT_MODEL_TEXT:
+            continue
+        projected = model_knowledge_value(item)
+        if projected is None:
+            continue
+        if projected in ({}, []) and not (key == 'value' and 'forms' in value) and not (
+                key == 'parameter_bindings' and 'semantic_ref' in value):
+            continue
+        result[key] = projected
+    if not result:
+        return {}
+    if set(result) <= {'conditions', 'scope', 'forms'}:
+        return None
+    if result.get('kind') == 'instruction' and 'family' in (result.get('value') or {}):
+        from knowledge.instruction_presentation import model_instruction_view
+        return model_instruction_view(result)
+    return result
+
+
+def technical_knowledge_results(records, *, origins=None):
+    """Use the same batch composition for a manual-tool response as a prompt."""
+    records = list(records)
+    blocks = [technical_knowledge_text(row) for row in records]
+    source_index = {}
+    if origins is not None:
+        from knowledge.evidence import citation_origin
+        for row, block in zip(records, blocks):
+            if block and (origin := citation_origin(row)):
+                for body in _KNOWLEDGE_BODY.findall(block):
+                    _add_origins(source_index, knowledge_unit_key(json.loads(body)), [origin])
+    units = technical_context_units('\n'.join(blocks), origins=origins, source_index=source_index)
+    results = []
+    for unit in units:
+        original = next((row for row in records if row.get('fact_target') == unit.get('target')
+                         and row.get('fact_kind') == unit.get('kind')), {})
+        item = {key: copy.deepcopy(original[key]) for key in
+                ('fact_kind', 'fact_target', 'plc_models', 'instruction_opcode') if original.get(key)}
+        if unit.get('kind') != 'instruction':
+            # Equal display identities can belong to different register/model
+            # scopes. The delivered unit owns its scope, not the first hit.
+            item.update(fact_kind=unit.get('kind'), fact_target=unit.get('target'))
+            models = unit.get('scope', {}).get('models')
+            if models:
+                item['plc_models'] = '|'.join(models)
+        if unit.get('targets'):
+            item['instruction_opcodes'] = copy.deepcopy(unit['targets'])
+        item['knowledge'] = [unit]
+        results.append(item)
+    return results
 
 
 def technical_knowledge_coverage(context):
     """Keep a retrieval failure visible without exposing its local diagnostics."""
     manifest = getattr(context, 'manifest', {})
     if isinstance(manifest.get('retrieval_coverage'), Mapping):
-        return copy.deepcopy(manifest['retrieval_coverage'])
+        return model_knowledge_coverage(manifest['retrieval_coverage'])
     status = manifest.get('status')
     if status in {'unavailable', 'failed', 'error'}:
         return {'status': 'unavailable', 'reason': 'retrieval_failed', 'targets': [],
@@ -219,6 +472,17 @@ def technical_knowledge_coverage(context):
     if status == 'excluded':
         return {'status': 'not_requested', 'reason': manifest.get('reason'), 'targets': []}
     return None
+
+
+def model_knowledge_coverage(coverage):
+    """Keep transport delivery; semantic review states stay in Core/debug."""
+    result = {key: copy.deepcopy(coverage[key]) for key in ('delivery',) if key in coverage}
+    result['targets'] = []
+    for target in coverage.get('targets', []):
+        item = {key: copy.deepcopy(target[key]) for key in
+                ('kind', 'target', 'identity_found', 'delivery') if key in target}
+        result['targets'].append(item)
+    return model_knowledge_value(result)
 
 
 def technical_knowledge_text(record):
@@ -244,6 +508,7 @@ def technical_knowledge_text(record):
             except ValueError:
                 continue
             if isinstance(packet, dict) and packet.get('content_origin') in {'authored_fact', 'original_case'}:
+                packet['_knowledge_context'] = record.get('_knowledge_context', {})
                 value = technical_fact_packet(packet)
                 if isinstance(record.get('device_definition'), Mapping):
                     value['device_definition'] = _device_definition(record['device_definition'])
@@ -276,7 +541,7 @@ def _device_definition(definition):
     return value
 
 
-def technical_context_text(text):
+def technical_context_text(text, *, origins=None):
     """Project complete injected JSON blocks, including custom knowledge builders."""
     value = str(text or '')
     pattern = re.compile(r'(?ms)^\[(?:KNOWLEDGE [^\n]*|PLC KNOWLEDGE)\]\n(.*?)\n\[/(?:KNOWLEDGE|PLC KNOWLEDGE)\]')
@@ -291,9 +556,37 @@ def technical_context_text(text):
             return rendered
         return technical_block(data)
     value = pattern.sub(project, value)
+    if '[PLC KNOWLEDGE]' in value:
+        units = technical_context_units(value, origins=origins,
+                                        source_index=knowledge_origins(text) if origins is not None else None)
+        rendered = '\n\n'.join(technical_block(unit) for unit in units)
+        blocks = re.compile(r'(?ms)^\[PLC KNOWLEDGE\]\n.*?\n\[/PLC KNOWLEDGE\]')
+        first = True
+        def replace_blocks(match):
+            nonlocal first
+            if not first:
+                return ''
+            first = False
+            return rendered
+        return blocks.sub(replace_blocks, value)
     # Custom builders may return one JSON payload without a knowledge wrapper.
     try:
         data = json.loads(value)
     except ValueError:
         return value
-    return json.dumps(technical_value(data), ensure_ascii=False, separators=(',', ':'))
+    return json.dumps(model_knowledge_value(technical_value(data)), ensure_ascii=False, separators=(',', ':'))
+
+
+def project_knowledge_context(context, *, cpu_version=None):
+    """Project the model text and carry its exact source associations privately."""
+    from knowledge.evidence import KnowledgeContext
+
+    origins = {}
+    text = technical_context_text(context, origins=origins)
+    if cpu_version is not None:
+        from shared.cpu_version_projection import project_cpu_version_text
+        text = project_cpu_version_text(text, requested=cpu_version)
+    manifest = dict(getattr(context, 'manifest', {}))
+    if origins or 'citation_sources' in manifest:
+        manifest['citation_sources'] = origins
+    return KnowledgeContext(text, manifest)

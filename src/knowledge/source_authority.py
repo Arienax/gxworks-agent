@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Data-backed authority for choosing the primary official instruction source."""
 from __future__ import annotations
@@ -110,9 +110,16 @@ def instruction_source_authority(opcode, plc_model="FX3U", fact_type=None):
     from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
     if DEFAULT_INSTRUCTION_REGISTRY._definition_owner_store is not None:
         owner = DEFAULT_INSTRUCTION_REGISTRY.definition_entry(opcode, cpu=plc_model) or {}
-        primary = [row for row in owner.get('source_materials', []) if row.get('primary_semantic_source') is True]
+        # One manual revision may own several sections of this literal form.
+        # Section locators are distinct records, not competing authorities.
+        primary = list({(row.get('manual_id'), row.get('revision')): row
+                        for row in owner.get('source_materials', [])
+                        if row.get('primary_semantic_source') is True}.values())
         if len(primary) > 1:
-            raise ValueError('Conflicting primary semantic sources in selected instruction owner')
+            # Multiple primary manuals may jointly support one fact or cover
+            # different aspects. There is no whole-instruction precedence in
+            # that case; retain scoped facts and their existing conflict checks.
+            return None
         if not primary:
             return None
         source, = primary

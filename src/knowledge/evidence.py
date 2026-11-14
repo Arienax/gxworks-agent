@@ -1,11 +1,12 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Detached retrieval provenance alongside the backward-compatible text API."""
 from __future__ import annotations
 
 import copy
 import hashlib
+import json
 import math
 import re
 
@@ -151,7 +152,52 @@ def context_manifest(context, *, stage="generate", status=None):
     return result
 
 
-def evidence_record(result):
+def citation_origin(result):
+    """Retain the indexed witness before technical projection removes it."""
+    from knowledge.structured_facts import authored_packet
+
+    origin = {key: copy.deepcopy(result[key]) for key in (
+        'id', 'original_id', 'source', 'source_file', 'manual_id', 'manual_number', 'revision', 'section',
+        'page', 'page_end', 'pdf_page', 'pdf_page_end', 'plc_models', 'source_chunk_id',
+        'source_section_id', 'source_spans', 'source_address_locations', 'source_evidence',
+        'raw_evidence_sources', 'raw_evidence_references', 'source_text_sha256',
+    ) if result.get(key) not in (None, '', [], {})}
+    if result.get('_source_file'):
+        origin['source_file'] = result['_source_file']
+    if not origin:
+        return None
+    packet = authored_packet(result)
+    groups = result.get('definition_fact_groups') or (packet.get('value') or {}).get('facts') or []
+    if packet.get('sources'):
+        origin['sources'] = copy.deepcopy(packet['sources'])
+    claims = [{key: copy.deepcopy(group[key]) for key in ('id', 'dimension', 'scope', 'sources') if key in group}
+              for group in groups if isinstance(group, dict) and group.get('sources')]
+    if claims:
+        origin['source_claims'] = claims
+    text = str(result.get('text') or '').strip()
+    raw = list(re.finditer(r'(?m)^\[UNINTERPRETED SOURCE (\{[^\n]+\})\]\n', text))
+    if raw:
+        excerpts = []
+        for index, match in enumerate(raw):
+            try:
+                location = json.loads(match[1])
+            except ValueError:
+                continue
+            end = raw[index+1].start() if index+1 < len(raw) else len(text)
+            body = text[match.end():end].split('\n[SHARED SOURCE REFERENCES', 1)[0].rstrip()
+            if body:
+                excerpts.append({**location, 'text': body})
+        if excerpts:
+            origin['source_excerpts'] = excerpts
+    elif (text and not packet and not groups and result.get('content_origin') not in {'authored_fact', 'original_case'}
+          and not text.startswith(('{', '[INSTRUCTION FACTS ', '[PLC KNOWLEDGE]'))):
+        if any(origin.get(key) for key in ('source', 'manual_id', 'source_chunk_id')):
+            origin['source_text'] = text
+    origin['source_text_status'] = 'available' if 'source_text' in origin or 'source_excerpts' in origin else 'not_in_record'
+    return origin
+
+
+def evidence_record(result, *, include_origin=False):
     # Metadata from the index, not the model, supplies source identity. Preserve
     # unknown manual types honestly rather than upgrading everything to official.
     record = {key: copy.deepcopy(result[key]) for key in (
@@ -166,6 +212,8 @@ def evidence_record(result):
     record["role"] = ("design_reference" if kind == "curated_design" else
                       "supporting_reference" if kind == "third_party_skill" else "technical_reference")
     record["content_sha256"] = text_sha256(result.get("text", ""))
+    if include_origin and (origin := citation_origin(result)):
+        record['citation_origin'] = origin
     return record
 
 

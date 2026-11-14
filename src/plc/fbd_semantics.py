@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Source-scoped FBD values and constraints, independent of GXW storage.
 
@@ -8,6 +8,7 @@ literal admission, type domains and call/net constraints, not file layouts.
 """
 from __future__ import annotations
 
+from copy import deepcopy
 from decimal import Decimal, InvalidOperation
 from fractions import Fraction
 import re
@@ -21,6 +22,18 @@ class FBDSemanticError(ValueError):
         self.finding = dict(code=code, severity=severity, message=message, **details)
 
 
+def _merge_language_rule(values, additions, *, target, member, path=()):
+    """Independent facts can describe different fields of one rule group."""
+    for key, value in additions.items():
+        if key not in values:
+            values[key] = deepcopy(value)
+        elif isinstance(values[key], dict) and isinstance(value, dict):
+            _merge_language_rule(values[key], value, target=target, member=member, path=(*path,key))
+        elif values[key] != value:
+            raise FBDSemanticError('fbd_rule_conflict', 'Conflicting FBD rule: ' + target,
+                severity='unverified', rule=target, plc_model=member, field='.'.join((*path,key)))
+
+
 def language_rules(target, plc_model, *, registry=None):
     """Read complete rules for every member of the selected native CPU menu."""
     from .instructions import DEFAULT_INSTRUCTION_REGISTRY
@@ -28,7 +41,13 @@ def language_rules(target, plc_model, *, registry=None):
     registry = registry or DEFAULT_INSTRUCTION_REGISTRY
     if not registry.fact_bundle_current():
         raise FBDSemanticError('fbd_rule_resource', 'FBD fact resources changed; reload the runtime', severity='unverified')
-    feature = registry.language_feature(target, language='fbd')
+    try:
+        feature = registry.language_feature(target, language='fbd')
+    except ValueError as error:
+        raise FBDSemanticError('fbd_rule_resource',
+            'Current FBD language rule failed published-resource validation: ' + target,
+            severity='unverified', rule=target, plc_model=plc_model,
+            reason=type(error).__name__) from error
     members = _cpu_members(str(plc_model).upper())
     if not feature:
         raise FBDSemanticError('fbd_rule_coverage', 'Missing FBD language rule: ' + target,
@@ -42,11 +61,7 @@ def language_rules(target, plc_model, *, registry=None):
                 continue
             if fact.get('status') != 'source_verified' or fact.get('conditions'):
                 continue
-            for key, value in fact.get('value', {}).items():
-                if key in values and values[key] != value:
-                    raise FBDSemanticError('fbd_rule_conflict', 'Conflicting FBD rule: ' + target,
-                                           severity='unverified', rule=target, plc_model=member)
-                values[key] = value
+            _merge_language_rule(values, fact.get('value', {}), target=target, member=member)
         if not values:
             raise FBDSemanticError('fbd_rule_coverage', 'FBD rule has no applicable definition: ' + target,
                                    severity='unverified', rule=target, plc_model=member)
@@ -213,7 +228,25 @@ def call_type_groups(name, ports, rules):
 
 def check_timer_resolution(name, actual, rules):
     """No implicit rounding: valid TIME syntax does not prove block precision."""
+    if name.upper() in rules.get('unavailable_timer_forms', []):
+        return dict(code='fbd_timer_form_unavailable', severity='error', expression=actual['text'],
+                    message='Timer form is excluded by the source CPU table')
+    if name.upper() in rules.get('precision_requires_source_timer_profile', []):
+        return dict(code='fbd_timer_resolution_coverage', severity='unverified', expression=actual['text'],
+                    message='Timer precision requires a source-bound CPU profile', requires='source_timer_profile')
+    for profile in rules.get('shared_time_units_and_profile_selection', {}).values():
+        if (not isinstance(profile, dict) or name.upper() not in profile.get('forms', [])
+                or not actual.get('constant') or actual.get('types') != ['TIME']):
+            continue
+        bounds = profile.get('PT_range_ms', {})
+        if type(actual.get('value')) is int and not bounds['minimum'] <= actual['value'] <= bounds['maximum']:
+            return dict(code='fbd_timer_preset_range', severity='error', expression=actual['text'],
+                        message='Timer preset is outside the source profile range', range_ms=bounds)
     resolution = rules.get('resolution_ms', {}).get(name.upper())
+    if resolution is None and name.upper() in rules.get('precision_requires_project_timer_setting', []):
+        return dict(code='fbd_timer_resolution_coverage', severity='unverified', expression=actual['text'],
+                    message='Timer precision requires the current PLC parameter Timer limit setting',
+                    requires='project_timer_limit_setting')
     if resolution and actual.get('constant') and actual.get('types') == ['TIME']:
         if type(actual.get('value')) is not int:
             return dict(code='fbd_timer_resolution_coverage', severity='unverified', expression=actual['text'],

@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """User-approved, version-bound GX Works2 import and simulator-test workflow."""
 
@@ -123,6 +123,9 @@ class SimulatorVersionWorkflowService:
         test_progress=None,
     ):
         version, _program, suite = self._validate_plan(project_id, version_id, plan)
+        select_model = getattr(self.preparer, 'select_model', None)
+        if callable(select_model):
+            select_model(suite['plc_model'])
         binding = execution_binding(project_id, version_id, _program, suite)
         artifacts = version.get("artifacts") or {}
         version_dir = self.store.version_dir(project_id, version_id)

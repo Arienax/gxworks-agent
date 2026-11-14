@@ -65,11 +65,9 @@ def test_issue_links_cross_http_boundary_without_granting_write_or_execution(sce
     store, service, _simulation, pid, vid, _ = scenario
     report(store, pid, vid)
     plan = save_plan(scenario, issue_ids=["review-links:stop"])
-    app = create_app(store.base_dir, service=service, operator_token="operator")
+    app = create_app(store.base_dir, service=service)
     client = TestClient(app, base_url="http://127.0.0.1:8765")
     route = f"/api/projects/{pid}/versions/{vid}/issues?report_id=review-links"
-    assert client.get(route).status_code == 401
-    client.post("/api/session", json={"token": "operator"})
     before = files(store.base_dir)
     result = client.get(route)
     assert result.status_code == 200, result.text

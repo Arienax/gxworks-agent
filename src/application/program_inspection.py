@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Ephemeral, source-bound program analysis and simulator observation.
 
@@ -369,6 +369,7 @@ class ProgramInspectionService:
 
     def list_simulator_targets(self):
         from simulator.gateway import GatewayError
+        from plc.device_policy import native_simulator_model, DevicePolicyError
         try:
             health = self.gateway.health()
         except GatewayError as error:
@@ -381,10 +382,14 @@ class ProgramInspectionService:
             return {"targets": [], "available": False,
                     "reason": "模拟器网关尚未连接，或不支持明确的只读目标绑定。",
                     "runtime_verified": False, "next_actions": []}
+        try:
+            model = native_simulator_model(health)
+        except DevicePolicyError as error:
+            raise ToolPreconditionError(error.code, str(error)) from error
         ref = uuid.uuid4().hex
-        self._targets[ref] = {"binding": health["target_binding"], "created": self._clock()}
+        self._targets[ref] = {"binding": health["target_binding"], "created": self._clock(), "plc_model": model}
         return {"available": True, "targets": [{"target_ref": ref,
-                "route": "GX Simulator2", "plc_model": "FX3U", "connected": True,
+                "route": "GX Simulator2", "plc_model": model, "connected": True,
                 "program_correspondence": "unverified", "physical_plc": False}],
                 "next_actions": [{"tool": "get_simulator_status", "arguments": {"target_ref": ref}}]}
 
@@ -395,12 +400,17 @@ class ProgramInspectionService:
                 next_actions=({"tool": "list_simulator_targets"},))
         return entry["binding"]
 
+    def simulator_target_model(self, target_ref):
+        self._target(target_ref)
+        return self._targets[target_ref]['plc_model']
+
     def read_simulator_devices(self, target_ref, addresses):
-        from plc.device_policy import DevicePolicyError, native_read_plan
+        from plc.device_policy import DevicePolicyError, native_simulator_read_plan
         from simulator.gateway import GatewayError
         binding = self._target(target_ref)
+        model = self.simulator_target_model(target_ref)
         try:
-            plan = native_read_plan(addresses, "FX3U", maximum=64)
+            plan = native_simulator_read_plan(addresses, model, maximum=64)
         except DevicePolicyError as error:
             raise ToolPreconditionError("INVALID_ARGUMENTS", str(error)) from error
         try:
@@ -408,30 +418,43 @@ class ProgramInspectionService:
         except GatewayError as error:
             raise ToolPreconditionError(getattr(error, "code", "") or "SIMULATOR_UNAVAILABLE", str(error),
                 next_actions=({"tool": "list_simulator_targets"},)) from error
-        return {"target_ref": target_ref, "route": "GX Simulator2", "plc_model": "FX3U",
+        return {"target_ref": target_ref, "route": "GX Simulator2", "plc_model": model,
                 "values": values, "read_at": _now(), "evidence_kind": "runtime_device_observation",
                 "program_correspondence": "unverified", "physical_plc": False}
 
     def get_simulator_status(self, target_ref):
-        from plc.device_policy import simulator_run_monitor
-        monitor, expected = simulator_run_monitor("FX3U")
+        from plc.device_policy import simulator_run_monitor, simulator_cpu_is_running
+        model = self.simulator_target_model(target_ref)
+        monitor, _expected = simulator_run_monitor(model)
         result = self.read_simulator_devices(target_ref, [monitor])
         return {**result, "run_monitor": monitor,
-                "run_state": "run" if result["values"][monitor] == expected else "not_running",
+                "run_state": "run" if simulator_cpu_is_running(result["values"][monitor], model) else "not_running",
                 "state_basis": "model_specific_run_monitor"}
 
-    def connect_simulator(self):
+    def connect_simulator(self, plc_model=None):
         """Open the existing Simulator2-only gateway; never start a PLC program."""
         from simulator.runtime import get_simulator_gateway_runtime
         from simulator.gateway import GatewayError
+        from plc.device_policy import native_simulator_profile, native_simulator_model, DevicePolicyError
         try:
+            if plc_model is not None:
+                native_simulator_profile(plc_model)
             runtime = get_simulator_gateway_runtime()
             runtime.ensure_gateway()
             self._gateway = runtime.client(timeout=2)
             health = self._gateway.health()
-            if not health.get("connected"):
+            if health.get("connected"):
+                actual = native_simulator_model(health)
+                if plc_model is not None and (native_simulator_profile(actual)['cpu_menu']
+                        != native_simulator_profile(plc_model)['cpu_menu']):
+                    raise ToolPreconditionError('SIMULATOR_TARGET_MISMATCH',
+                        f'当前网关连接的是 {actual}，与请求的 {plc_model} 不同。')
+            else:
+                self._gateway.plc_model = plc_model or getattr(runtime, 'plc_model', 'FX3U')
                 self._gateway.connect()
             return self.list_simulator_targets()
+        except DevicePolicyError as error:
+            raise ToolPreconditionError('INVALID_ARGUMENTS', str(error)) from error
         except (GatewayError, RuntimeError) as error:
             raise ToolPreconditionError(getattr(error, "code", "") or "SIMULATOR_GATEWAY_UNAVAILABLE", str(error),
                 next_actions=({"tool": "list_simulator_targets"},)) from error

@@ -6,6 +6,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from responses_fixture import chat_body, chat_call, chat_stream
+
 from application.model_detection import inspect_openai_compatible
 from model_runtime.legacy_migration import (
     apply_parameter_contract, capability_scope, metadata_parameters,
@@ -53,20 +55,19 @@ class Endpoint:
         wire = {**params, **params.get("extra_body", {})}
         assert wire["model"] == "tenant-alias"
         for name, allowed in (("reasoning_effort", self.efforts), ("temperature", self.temperatures)):
-            if name not in wire or self.ignore:
+            value = wire.get(name)
+            if value is None or self.ignore:
                 continue
             if self.unsupported:
                 raise Rejection(name, code="unsupported_parameter", message="secret-must-not-leak")
-            if wire[name] not in allowed:
+            if value not in allowed:
                 raise Rejection(name)
-        message = {"content": "OK"}
         if wire.get("tools"):
-            message["tool_calls"] = [{"id": "probe", "type": "function", "function": {
-                "name": "capability_probe", "arguments": '{"value":"ok"}'}}]
-            message["content"] = ""
-        elif wire.get("response_format"):
-            message["content"] = '{"probe":true}'
-        return {"choices": [{"message": message}]}
+            return chat_body(calls=[chat_call("probe", "capability_probe", '{"value":"ok"}')])
+        if wire.get("response_format"):
+            return chat_body('{"probe":true}')
+        return chat_body("OK")
+
 
 
 def profile(**changes):
@@ -233,12 +234,10 @@ def test_extra_body_cannot_replace_canonical_tools_messages_or_response_contract
 @pytest.mark.parametrize("stream", [False, True])
 def test_private_thought_signatures_roundtrip_without_entering_callbacks_or_history(stream):
     signature = "opaque-signature-never-display"
-    raw_call = {"id": "call-1", "index": 0, "function": {"name": "probe", "arguments": "{}"},
-                "extra_content": {"google": {"thought_signature": signature}}}
-    message = {"content": "", "tool_calls": [raw_call]}
-    response = iter([{"choices": [{"delta": message}]}]) if stream else {"choices": [{"message": message}]}
+    call = {**chat_call("call-1", "probe", "{}"), "extra_content": {"thought_signature": signature}}
+    payload = chat_body(calls=[call])
     endpoint = Endpoint()
-    endpoint.chat.completions.create = lambda **params: response
+    endpoint.chat.completions.create = lambda **params: chat_stream(payload) if stream else payload
     p = provider(endpoint)
     events = []
     collected = collect_response(p, ModelRequest((UserMessage("检查"),), stream=stream), on_event=events.append)
@@ -246,8 +245,7 @@ def test_private_thought_signatures_roundtrip_without_entering_callbacks_or_hist
     assert signature not in str([asdict(event) for event in events])
     assert signature not in json.dumps(strip_legacy_provider_fields(asdict(collected.message)))
     replay = p._request_params(ModelRequest((collected.message,)))
-    assistant = next(m for m in replay["messages"] if m["role"] == "assistant")
-    assert assistant["tool_calls"][0]["extra_content"]["google"]["thought_signature"] == signature
+    assert replay["messages"][-1]["tool_calls"] == [call]
     other = p._request_params(ModelRequest((collected.message,), model="different"))
     assert signature not in json.dumps(other)
     untrusted = coerce_message({"role": "assistant", "content": "公开", "_provider_fields": collected.message._provider_fields})
@@ -258,23 +256,44 @@ def test_private_thought_signatures_roundtrip_without_entering_callbacks_or_hist
     "https://dashscope.aliyuncs.com/compatible-mode/v1/",
     "https://api.moonshot.cn/v1/", "https://api.anthropic.com/v1/",
     "https://generativelanguage.googleapis.com/v1beta/openai/", "https://tenant.invalid/llm/v9/",
+    "https://api-inference.modelscope.cn/v1/",
 ])
-def test_real_openai_sdk_serializes_all_compatible_endpoints_with_one_transport(base_url):
+def test_real_openai_sdk_serializes_third_party_endpoints_as_chat_completions(base_url):
     openai = pytest.importorskip("openai")
     import httpx
     seen = []
+    streaming = "modelscope.cn" in base_url
+
     def handle(request):
         body = json.loads(request.content)
         seen.append((str(request.url), body))
-        return httpx.Response(200, json={"id": "test", "object": "chat.completion", "created": 1,
-            "model": "tenant-alias", "choices": [{"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": "完成。"}}]})
+        if streaming:
+            reply = chat_body("完成。", reasoning="先核对。", usage={
+                "prompt_tokens": 15, "completion_tokens": 4, "total_tokens": 19,
+                "prompt_cache_hit_tokens": 5,
+            })
+            sse = "".join(f"data: {json.dumps(chunk)}\n\n" for chunk in chat_stream(reply))
+            return httpx.Response(200, headers={"Content-Type": "text/event-stream"}, text=sse + "data: [DONE]\n\n")
+        return httpx.Response(200, json=chat_body("完成。"))
     with httpx.Client(transport=httpx.MockTransport(handle)) as http:
         client = openai.OpenAI(api_key="test-not-real", base_url=base_url, http_client=http)
-        p = OpenAICompatibleProvider(profile(baseUrl=base_url, generationDefaults={"enable_thinking": True}), "test-not-real", client=client)
-        result = collect_response(p, ModelRequest((UserMessage("测试"),), stream=False))
+        extension = {"google": {"thinking_config": {"thinking_budget": 800}}}
+        defaults = {"enable_thinking": True}
+        if "googleapis.com" in base_url:
+            defaults["extra_body"] = {"extra_body": extension}
+        p = OpenAICompatibleProvider(profile(baseUrl=base_url, generationDefaults=defaults), "test-not-real", client=client)
+        result = collect_response(p, ModelRequest((UserMessage("测试"),), stream=streaming))
     assert result.message.content == "完成。"
     assert seen[0][0] == base_url + "chat/completions"
-    assert seen[0][1]["enable_thinking"] is True and "extra_body" not in seen[0][1]
+    assert seen[0][1]["enable_thinking"] is True
+    assert seen[0][1]["messages"][-1] == {"role": "user", "content": "测试"}
+    assert "input" not in seen[0][1] and "reasoning" not in seen[0][1]
+    assert seen[0][1].get("extra_body") == (extension if "googleapis.com" in base_url else None)
+    if streaming:
+        assert seen[0][1]["stream_options"] == {"include_usage": True}
+        assert result.usage.raw_usage["prompt_cache_hit_tokens"] == 5
+        replay = p._request_params(ModelRequest((result.message, UserMessage("继续"))))
+        assert replay["messages"][-2]["reasoning_content"] == "先核对。"
 
 
 @pytest.mark.parametrize("invalid", [False, 0, "", []])
@@ -298,7 +317,7 @@ def test_effective_parameter_matches_sdk_extra_body_precedence_and_deletion():
 def test_slider_and_server_default_override_real_workflow_and_agent_hints(selected):
     import application.model_api as api
     import agent_runtime.agent as plc_agent
-    from test_model_provider import _Client, _chunk
+    from test_model_provider import _Client
 
     settings = profile(generationDefaults={"temperature": .5})
     if selected is not None:
@@ -307,8 +326,8 @@ def test_slider_and_server_default_override_real_workflow_and_agent_hints(select
         reasoning_effort={"status": "supported", "source": "probe", "values": ["low", "high", "max"]},
         temperature={"status": "supported", "source": "probe", "values": [0, .5, 1], "reasoning_effort": selected})
     client = _Client([
-        {"choices": [{"message": {"content": "完成。"}}]},
-        iter([_chunk(content="完成。")]),
+        chat_body("完成。"),
+        chat_stream(chat_body("完成。")),
     ])
     p = OpenAICompatibleProvider(settings, "test-key", client=client)
     # Exercise the production analysis/repair helper with its own stage hint.
@@ -318,8 +337,8 @@ def test_slider_and_server_default_override_real_workflow_and_agent_hints(select
     # Exercise the production agent, which normally supplies effort=high.
     runtime = SimpleNamespace(list_tools=lambda context: [])
     plc_agent.run_tool_agent("检查", context=None, provider=p, runtime=runtime)
-    assert len(client.completions.calls) == 2
-    for request in client.completions.calls:
+    assert len(client.chat.completions.calls) == 2
+    for request in client.chat.completions.calls:
         if selected is None:
             assert "reasoning_effort" not in request
         else:

@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Run an isolated, explicitly labelled browser acceptance fixture.
 
@@ -116,8 +116,14 @@ class DemoProvider:
         print(f"DEMO_MODEL_CALL {next(self.calls)} {kind}", file=sys.stderr, flush=True)
         time.sleep(self.delay)
         if kind == "analysis":
-            output = {"summary": "演示：启动按钮置位运行保持，停止按钮复位，保护输入禁止电机输出。", "approaches": [], "missing_info": [],
-                      "suggested_io": {"X": {"X0": "启动", "X1": "停止", "X2": "保护输入"}, "Y": {"Y0": "电机"}, "M": {"M0": "运行保持"}}, "assumptions": []}
+            output = {
+                "summary": "演示：启动按钮置位运行保持，停止按钮复位，保护输入禁止电机输出。",
+                "approaches": [], "missing_info": [], "assumptions": [],
+                "suggested_io": {"X": {"X0": "启动", "X1": "停止", "X2": "保护输入"}, "Y": {"Y0": "电机"}, "M": {"M0": "运行保持"}},
+                "requirements": [{"id": "R-1", "text": "电机启动后保持运行，停止或保护输入动作时关闭电机。", "source": "user"}],
+                "implementation_items": [{"id": "I-1", "requirement_ids": ["R-1"], "language": "ladder",
+                                          "location": "MAIN", "method": "运行保持与输出互锁", "state_owner": "MAIN"}],
+            }
         else:
             output = demo_ladder()
             if any("验收越界" in str(getattr(message, "content", "")) for message in request.messages):
@@ -256,7 +262,7 @@ def isolated_demo_app(directory, *, port=8765, model_delay=2.0):
         service._run_job = run_job
         origin = f"http://127.0.0.1:{port}"
         app = create_app(service.store.base_dir, state_dir=service.state_dir, service=service, origin=origin,
-                         operator_token="isolated-browser-acceptance", agent_token="isolated-demo-agent")
+                         agent_token="isolated-demo-agent")
         @app.exception_handler(DemoIntegrationDisabled)
         async def demo_integration_disabled(_request, error):
             return JSONResponse({"error": {"code": "disabled_demo", "message": str(error)}}, status_code=400)

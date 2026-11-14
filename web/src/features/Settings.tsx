@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import { useEffect, useRef, useState } from "react";
 import { usePolling } from "../lifecycle/usePolling";
@@ -10,12 +10,15 @@ import type { components } from "../api/generated";
 import { Button, Badge, Modal } from "../components/ui";
 import { Popover } from "../components/Popover";
 import { Check, ChevronDown } from "lucide-react";
-import { ModelParameters } from "./ModelParameterControls";
-import { ENDPOINT_PRESETS, adoptSelections, modifiedParameters } from "./modelParameters";
+import { ModelParameterDiagnostics } from "./ModelParameterControls";
+import { ModelReasoningLevels } from "./ModelReasoningLevels";
+import { ModelRequestParameters } from "./ModelRequestParameters";
+import { ENDPOINT_PRESETS, adoptSelections, editableReasoningLevels, parseRequestParameterRows, reasoningOverride,
+  rebindReasoningSelection, requestParameterRows, withRequestParameters } from "./modelParameters";
 import { settingsTranslation } from "./modelSettingsLocale";
 import type { Locale } from "../i18n";
 import { RequestSummary } from "./ModelUsage";
-import type { CapabilityContract, UserModelSettings, DiscoveryMode, Scalar } from "./modelParameters";
+import type { CapabilityContract, Descriptor, UserModelSettings, DiscoveryMode, ReasoningLevels, RequestParameterRow, Scalar } from "./modelParameters";
 
 type Profile = NonNullable<ModelSettings["profiles"]>[number] & {
   deletable?: boolean;
@@ -23,6 +26,7 @@ type Profile = NonNullable<ModelSettings["profiles"]>[number] & {
   user_settings?: Record<string, Json>;
   capability_overrides?: Record<string, Json>;
 };
+type ManualOverrides = Record<string, unknown> & { parameters?: Record<string, Descriptor> };
 
 type Discovery = {
   kind?: "model_discovery_v1";
@@ -221,6 +225,7 @@ export function Settings({
   const [discoveredModels, setDiscoveredModels] = useState<string[]>([]);
   const [contract, setContract] = useState<CapabilityContract>({});
   const [userSettings, setUserSettings] = useState<UserModelSettings>({});
+  const [requestRows, setRequestRows] = useState<RequestParameterRow[] | null>(null);
   const [listing, setListing] = useState(false);
   const [manualOverrides, setManualOverrides] = useState("{}");
   const [resolving, setResolving] = useState(false);
@@ -228,12 +233,12 @@ export function Settings({
   const [resolveRevision, retryResolve] = useState(0);
   const [preview, setPreview] = useState<Record<string, Json> | null>(null);
   const [scenario, setScenario] = useState("text");
-  const moreSettings = useRef<HTMLDetailsElement>(null);
   const draftRevision = useRef(0);
   const invalidate = (clearModels = false) => {
     draftRevision.current += 1;
     setContract({});
     setUserSettings({});
+    setRequestRows(null);
     setMessage("");
     setDebugMessage("");
     setPreview(null);
@@ -261,6 +266,7 @@ export function Settings({
     setSecret("");
     setContract((target?.contract || {}) as CapabilityContract);
     setUserSettings((target?.user_settings || {}) as UserModelSettings);
+    setRequestRows(null);
     setManualOverrides(JSON.stringify(target?.capability_overrides || {}, null, 2));
     setDiscoveredModels([]);
   };
@@ -288,25 +294,42 @@ export function Settings({
     const result = JSON.parse(text);
     if (!result || typeof result !== "object" || Array.isArray(result))
       throw new Error(t("配置数据必须是有效 JSON 对象。"));
-    return result;
+    return result as ManualOverrides;
   };
-  const command = () => {
-    const invalid = document.querySelector<HTMLInputElement>(".model-parameters input:invalid");
-    if (invalid || document.querySelector('.model-parameters [data-invalid="true"]')) {
-      if (moreSettings.current) moreSettings.current.open = true;
-      invalid?.reportValidity();
-      throw new Error(t("请检查更多设置中的参数。"));
-    }
-    return ({
+  let overrides: ManualOverrides | undefined;
+  try { overrides = parse(manualOverrides); } catch { /* The resolver reports invalid JSON. */ }
+  const customEffort = overrides?.parameters?.reasoning_effort;
+  const effortDescriptor = contract.parameters?.reasoning_effort;
+  const reasoningLevels = customEffort?.ui_hint?.reasoning_levels ?? editableReasoningLevels(effortDescriptor ?? customEffort);
+  const showReasoningEditor = mode === "custom" || !!customEffort ||
+    (effortDescriptor?.source === "generic" && !contract.parameters?.thinking_mode && !contract.parameters?.enable_thinking);
+  const changeReasoningLevels = (levels?: ReasoningLevels) => {
+    if (!overrides) return;
+    draftRevision.current += 1;
+    setResolving(true);
+    setManualOverrides(JSON.stringify({ ...overrides, parameters: {
+      ...overrides.parameters,
+      reasoning_effort: reasoningOverride(effortDescriptor ?? customEffort, levels),
+    } }, null, 2));
+    setUserSettings(old => {
+      const selection = old.parameters?.reasoning_effort;
+      return selection ? { ...old, parameters: {
+        ...old.parameters, reasoning_effort: rebindReasoningSelection(selection, levels),
+      } } : old;
+    });
+  };
+  const visibleRequestRows = requestRows ?? requestParameterRows(userSettings);
+  const requestDraft = parseRequestParameterRows(visibleRequestRows, contract);
+  const draftSettings = requestRows && requestDraft.parameters ? withRequestParameters(userSettings, requestDraft.parameters) : userSettings;
+  const command = () => ({
     ...(creating ? {} : { id: selected }),
     name,
     model,
     base_url: baseUrl,
     contract,
-    user_settings: contract.scope ? userSettings : {},
+    user_settings: contract.scope ? draftSettings : {},
     capability_overrides: parse(manualOverrides),
   });
-  };
   const commandPending = useRef(false);
   const run = async (action: () => Promise<void>) => {
     if (commandPending.current || disabled) return;
@@ -325,7 +348,7 @@ export function Settings({
     }
   };
   const ready =
-    !busy && !disabled && !resolving && !resolveError && !!contract.scope && !!name.trim() && !!model.trim() && !!baseUrl.trim();
+    !busy && !disabled && !resolving && !resolveError && !requestDraft.error && !!contract.scope && !!name.trim() && !!model.trim() && !!baseUrl.trim();
   const discoverReady =
     !busy && !disabled && !!baseUrl.trim() && (!creating || !!secret.trim());
   const discover = () => void run(async () => {
@@ -369,6 +392,7 @@ export function Settings({
     setSecret("");
     setContract({});
     setUserSettings({});
+    setRequestRows(null);
     setManualOverrides("{}");
     setDiscoveredModels([]);
     setError("");
@@ -394,7 +418,7 @@ export function Settings({
     setListing(false);
   };
 
-  useEffect(() => { setPreview(null); }, [userSettings, model, baseUrl, secret, manualOverrides, scenario]);
+  useEffect(() => { setPreview(null); }, [userSettings, requestRows, model, baseUrl, secret, manualOverrides, scenario]);
   useEffect(() => {
     if (!cardOpen || !model.trim() || !baseUrl.trim()) { setResolving(false); return; }
     const abort = new AbortController();
@@ -474,7 +498,6 @@ export function Settings({
   };
 
   const profiles = (value.profiles || []) as Profile[];
-  const customized = modifiedParameters(contract, userSettings).length;
   const connectionFields = <>
     <label>{t("配置名称")}<input value={name} onChange={e => setName(e.target.value)} /></label>
     <label>API URL
@@ -574,6 +597,7 @@ export function Settings({
           </select>
         </label>}
         {mode === "custom" && connectionFields}
+        <p className="muted">{t("OpenAI 官方地址使用 Responses API，第三方地址使用 Chat Completions。")}</p>
         <label>
           API Key
           <input
@@ -610,17 +634,15 @@ export function Settings({
           </div>
         </div>
         {resolveError && <p role="alert">{t("无法读取模型配置")} <Button onClick={()=>retryResolve(n=>n+1)}>{t("重试")}</Button></p>}
-        <details className="more-settings" ref={moreSettings}>
-          <summary>{t("更多设置")}{customized > 0 && <Badge>{customized}</Badge>}</summary>
-          <div className="more-settings-body">
-            {mode === "catalog" && connectionFields}
-            <ModelParameters contract={contract} settings={userSettings}
-              disabled={busy || disabled || resolving || !!resolveError} t={t} onChange={next => {
-                draftRevision.current += 1;
-                setUserSettings(next);
-              }} />
-          </div>
-        </details>
+        {showReasoningEditor && <ModelReasoningLevels levels={reasoningLevels}
+          disabled={!overrides || !model.trim() || !baseUrl.trim()}
+          onChange={changeReasoningLevels} t={t} />}
+        <ModelRequestParameters rows={visibleRequestRows} error={requestDraft.error} field={requestDraft.field}
+          t={t} onChange={setRequestRows} />
+        {mode === "catalog" && <details className="more-settings">
+          <summary>{t("连接设置")}</summary>
+          <div className="more-settings-body">{connectionFields}</div>
+        </details>}
         <details className="model-debug">
           <summary>debug</summary>
           {resolveError && <p role="alert" className="error-text">{resolveError}</p>}
@@ -656,7 +678,7 @@ export function Settings({
             <textarea className="mono" aria-label={t("手动能力覆盖 JSON")} value={manualOverrides}
               onChange={e=>{setManualOverrides(e.target.value);draftRevision.current+=1;}} />
           </label>
-          <ModelParameters contract={contract} settings={userSettings} disabled={busy || disabled || resolving} t={t} onChange={setUserSettings} onVerify={verify} diagnostics />
+          <ModelParameterDiagnostics contract={contract} settings={draftSettings} disabled={!ready} t={t} onVerify={verify} />
           <Button disabled={busy || disabled || !model.trim() || !contract.scope}
             onClick={()=>verify("chat","chat")}>{t("验证模型可生成（1 次请求）")}</Button>
           {contract.scope && <details><summary>{t("查看能力合同")}</summary><pre className="mono">{JSON.stringify(contract, null, 2)}</pre></details>}

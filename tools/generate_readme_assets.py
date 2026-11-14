@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Generate the README banner and feature figures as PNG files.
 
@@ -263,7 +263,7 @@ def banner(lang):
         c.rect(x, 296, w, 26, '#ffffff', LINE, 1, 2)
         c.text(x + w / 2, 313.5, chip, 12.5, INK, 400, 'middle')
         x += w + 8
-    c.text(64, 380, 'Apache-2.0  ·  Windows 10/11 x64  ·  github.com/Arienax/gxworks-agent', 12, SOFT, mono=True)
+    c.text(64, 380, 'AGPL-3.0  ·  Windows 10/11 x64  ·  github.com/Arienax/gxworks-agent', 12, SOFT, mono=True)
 
     # the real workbench window, captured by tools/capture_readme_ui_shots.py
     wx, wy, ww, wh = 632, 38, 584, 365
@@ -299,7 +299,7 @@ def feature_architecture(lang):
     ay = 204
     c.line(600, bus1, 600, ay, BLUE, 1.4)
     block(c, x0, ay, width, 196, pick(('GXWorks Agent · Python Core', 'GXWorks Agent · Python Core', 'GXWorks Agent · Python Core'), lang),
-          INK, 'gxworks-agent-mcp.exe  ·  start-web.cmd')
+          INK, 'gxworks-agent-mcp.exe  ·  GXWorks-Agent-Launcher.exe')
     modules = pick((
         (('工程与版本管理', ('工程 · 版本 · 规格', '候选审阅与版本差异', '现场只读快照')),
          ('CPU 作用域 RAG', ('实体 · BM25 · Dense/LSA', '域内局部 RRF 融合', '指令事实库')),

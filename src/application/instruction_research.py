@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Model-facing comparison of task-relevant instructions before a new design."""
 import re
@@ -10,23 +10,24 @@ CANDIDATE_TOOLS = frozenset({'create_program_candidate', 'create_st_candidate',
 _TEXT = {'type': 'string', 'minLength': 1, 'maxLength': 4000}
 _DOCUMENT = {'type': 'string', 'pattern': r'read-[0-9a-f]{32}'}
 REVIEW_SCHEMA = {'type': 'object', 'additionalProperties': False,
-    'description': '新设计的选型记录。按实际型号查证每组相关指令，读完分页后填写；引用 delivery.document_id。',
+    'description': '可选的选型说明及明确的资料引用。只记录实际采用的实现和影响行为的假设。',
     'properties': {'assumptions': {'type': 'array', 'maxItems': 32, 'items': {
                        'type': 'object', 'additionalProperties': True,
                        'properties': {'condition': _TEXT}, 'required': ['condition']},
                        'description': '记录模型选择的容量、节拍等实现假设，与原始用户需求分开保存。'},
-                   'context_document': _DOCUMENT,
-                   'manual_documents': {'type': 'array', 'items': _DOCUMENT, 'maxItems': 32},
+                   'context_document': {**_DOCUMENT, 'description': '只有需要区分并行任务时才需指定。'},
+                   'manual_documents': {'type': 'array', 'items': _DOCUMENT, 'maxItems': 32,
+                                        'description': '旧客户端可附加已读手册文档。事实引用由本地解析。'},
                    'reviewed_instructions': {'type': 'array', 'maxItems': 96,
                        'items': {'type': 'string', 'pattern': r'[A-Z][A-Z0-9_.]*', 'maxLength': 32},
-                       'description': '各相关功能已读的代表助记符。方案取舍在 alternatives 只写一次。'},
+                       'description': '实际查证过的助记符。已有选型说明无需重复。'},
                    'limitations': {**_TEXT, 'description': '查询覆盖不完整时，具体说明仍未知的条件和对选型的影响。'},
                    'selected': {**_TEXT, 'description': '最终采用的实现与理由。'},
                    'alternatives': {'type': 'array', 'maxItems': 32, 'items': {'type': 'object',
                        'properties': {'method': _TEXT, 'tradeoff': _TEXT}, 'required': ['method', 'tradeoff'],
                        'additionalProperties': False},
                        'description': '列出其他可行或已排除的方法，逐项比较具体指令、行为和资源取舍，说明未证实条件。'}},
-    'required': ['context_document', 'manual_documents']}
+    'required': []}
 
 
 def new_candidate(tool, arguments):
@@ -41,24 +42,21 @@ def research_plan(data):
     cards = [*(data.get('knowledge') or []), *(inputs.get('knowledge') or [])]
     spec = data.get('confirmed_spec') or inputs.get('confirmed_spec') or {}
     selected = spec.get('selected_approach') or {}
-    gaps = []
+    manual_targets = None
     if selected and data.get('workflow_mode') != 'direct_generation':
-        from knowledge.retriever import discover_capabilities
-        # The architecture is settled. Discover implementation instructions
-        # for its guide; rejected architectures must not become search inputs.
-        guide = ' '.join(str(selected.get(key) or '') for key in ('name', 'description', 'generation_guide'))
-        try:
-            discovery = discover_capabilities(guide, plc_model=data['plc_model'], target_mode=data['target_mode'])
-            for candidate in discovery['candidates']:
-                # Explicit mentions in a model-authored implementation guide are research leads.
-                # Only the original request can require a particular mnemonic.
-                functions = ['selected_approach' if f == 'explicit' else f for f in candidate.get('functions', [])]
-                cards.append({**candidate, 'functions': functions})
-            gaps = discovery.get('gaps', [])
-        except (OSError, LookupError, ValueError) as error:
-            gaps = [{'reason': 'discovery_unavailable', 'error_type': type(error).__name__}]
+        from knowledge.instruction_facts import instruction_fact_targets
+        from plc.specification.approach import selected_implementation_text, selected_implementation_targets
+        # The shared context builder already did functional retrieval. Resolve
+        # only this implementation's exact mentions here, without a second search.
+        text = selected_implementation_text(selected)
+        opcodes = list(dict.fromkeys(row['opcode'] for row in instruction_fact_targets(text, spec)))
+        devices = [row['value'] for row in selected_implementation_targets(selected) if row['kind'] == 'device']
+        groups = {'selected_approach': opcodes} if opcodes else {}
+        manual_targets = [*opcodes, *devices]
+        cards = []
     for card in cards:
-        if not isinstance(card, dict) or card.get('kind') != 'instruction' or not card.get('name'):
+        if (not isinstance(card, dict) or card.get('kind') not in {'instruction', 'instruction_capability'}
+                or not card.get('name')):
             continue
         for function in card.get('functions', []):
             names = groups.setdefault(function, [])
@@ -68,10 +66,10 @@ def research_plan(data):
                   if selected and data.get('workflow_mode') != 'direct_generation' else
                   '若准备按元素或通道复制逻辑，用一两句话比较另一种状态表示：什么保存状态、什么事件推进状态，'
                   '哪条原始要求使其中一种不适用。一个用法的缺点不能排除该指令的其他用法。')
-    return {'families': groups, **({'gaps': gaps} if gaps else {}),
-            'instructions': '按实际 CPU 和语言检索每组最相关的代表及配套操作；按任务补查列表外的相关指令；一组不适用时查证后说明原因。工程 FB 以当前目录接口为准。'
-                '同一查询可列出多个助记符。读完每份资料的全部分页。' + comparison + '内部假设不能当成用户限制。'
-                '在满足实际要求的方案中优先选择重复少且易维护的实现。用 reviewed_instructions 记已查指令，'
+    return {'families': groups, **({'manual_targets': manual_targets} if manual_targets is not None else {}),
+            'instructions': '这些指令族是选型建议。按实际 CPU 和语言批量补查拟用指令缺少的写法及配套操作。工程 FB 以当前目录接口为准。'
+                '同一查询可列出多个助记符；仅引用实际使用且已完整交付的资料。' + comparison + '内部假设不能当成用户限制。'
+                '在满足实际要求的方案中优先选择重复少且易维护的实现。'
                 '在 implementation_review 中只记录会改变选择的取舍。'}
 
 
@@ -106,19 +104,32 @@ def _describes_region_update(fact):
     return False
 
 
-def include_manual_facts(plan, context, language):
+def include_manual_facts(plan, context, language, *, stage="generate", supplied=(), explicit=False):
     """Read the local functional candidates together, preserving fact scopes and gaps."""
     from agent_runtime.manual_tools import _search_plc_manual
-    names = list(dict.fromkeys(name for family in plan['families'].values() for name in family))
+    selected = plan.get('manual_targets')
+    if selected is not None:
+        # The generation payload already carries the facts for many of these
+        # forms. Ask only for selected targets without usable delivered forms.
+        known = {unit.get('opcode') for unit in supplied if unit.get('kind') == 'ladder_instruction_form'}
+        known.update(unit.get('target') for unit in supplied if unit.get('kind') == 'device')
+        names = [name for name in selected if name not in known or explicit]
+    else:
+        names = [name for function, family in plan['families'].items()
+                 for name in (family if function == 'explicit' else family[:1])]
+    names = list(dict.fromkeys(names))
     if not names:
         return plan
-    collection = {name for group in ('queue', 'shift', 'block_move') for name in plan['families'].get(group, [])}
-    aspects = ['purpose', 'arity', 'order', 'roles', 'devices', 'execution', 'constraints']
-    if collection:
-        aspects.append('effects')
+    collection = {name for group in ('queue', 'shift', 'range_shift', 'block_move')
+                  for name in plan['families'].get(group, [])}
+    aspects = (['purpose', 'execution', 'constraints', 'effects'] if stage == 'analysis' else
+               ['purpose', 'arity', 'order', 'roles', 'devices', 'execution', 'constraints', 'effects'])
     manual = _search_plc_manual(context, {'query': ' '.join(names), 'language': language, 'aspects': aspects,
         'top_k': 1})
     units = [unit for row in manual['results'] for unit in row['knowledge']]
+    known_forms = {unit.get('form_ref') for unit in supplied}
+    units.extend({'kind': 'ladder_instruction_form', **form} for form in manual.get('instruction_forms', [])
+                 if form['form_ref'] not in known_forms)
     group_operations = []
     for unit in units:
         name = unit.get('target')
@@ -128,18 +139,13 @@ def include_manual_facts(plan, context, language):
         if any(_describes_region_update(fact) for fact in facts):
             group_operations.append(name)
     from application.instruction_fragments import executable_fragments
-    fragments = executable_fragments(plan, plc_model=manual['plc_model'], target_mode=language)
+    fragments = executable_fragments(plan, plc_model=manual['plc_model'], target_mode=language) if stage == 'generate' else []
     return {**plan, **({'executable_fragments': fragments} if fragments else {}),
             **({'group_operations': group_operations} if group_operations else {}),
+            **({'_fact_origins': manual['_fact_origins']} if manual.get('_fact_origins') else {}),
             'manual': {'plc_model': manual['plc_model'], 'language': language,
             'coverage': manual['coverage'],
             'knowledge': units}}
-
-
-def missing_families(groups, researched):
-    """Check actual document reads, not whether the model repeats their names."""
-    missing = [group for group, names in groups.items() if group != 'explicit' and researched.isdisjoint(names)]
-    return [*missing, *sorted(set(groups.get('explicit', [])) - researched)]
 
 
 def normalize_review_assumptions(review):

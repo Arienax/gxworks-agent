@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Tool exposure and context requirements shared by every transport."""
 from __future__ import annotations
@@ -8,6 +8,9 @@ import re
 
 SAFE_TOOL_NAMES = (
     "get_current_project",
+    "get_project_spec",
+    "update_project_spec",
+    "confirm_project_spec",
     "get_operation_status",
     "get_native_engineering_session",
     "pause_native_engineering_session",
@@ -53,7 +56,7 @@ SAFE_TOOL_NAMES = (
 
 
 READ_ONLY_TOOL_NAMES = frozenset({
-    'read_gxw_source',
+    'read_gxw_source', 'get_project_spec',
     "get_current_project", "get_operation_status", "get_native_engineering_session", "get_current_program_info", "read_network",
     "search_plc_manual", "get_diagnostics", "validate_project",
     "read_native_device_assignments", "compare_native_compiled_code", "locate_native_code_steps",

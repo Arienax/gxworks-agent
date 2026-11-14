@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Shared generation planning and final provider-wire size accounting."""
 from __future__ import annotations
@@ -40,12 +40,15 @@ def _output_limit(profile):
     if isinstance(settings, Mapping):
         parameters = settings.get("parameters")
         if isinstance(parameters, Mapping):
-            for key in ("max_completion_tokens", "max_tokens"):
+            for key in ("max_output_tokens", "max_completion_tokens", "max_tokens"):
                 choice = parameters.get(key)
                 if isinstance(choice, Mapping) and choice.get("mode") == "value":
                     value = _positive_int(choice.get("value"))
                     if value is not None:
                         selected.append(value)
+        custom = settings.get("request_parameters")
+        if isinstance(custom, Mapping) and (value := _positive_int(custom.get("max_output_tokens"))):
+            return value
     if selected:
         return max(selected)
 
@@ -54,7 +57,7 @@ def _output_limit(profile):
     if isinstance(contract, Mapping):
         params = contract.get("parameters")
         if isinstance(params, Mapping):
-            for key in ("max_completion_tokens", "max_tokens"):
+            for key in ("max_output_tokens", "max_completion_tokens", "max_tokens"):
                 raw = params.get(key)
                 if not isinstance(raw, Mapping):
                     continue
@@ -88,7 +91,7 @@ def model_budget(profile):
     }
 
 
-def final_request_budget(profile, options):
+def final_request_budget(profile, options, *, replayed_reasoning_tokens=0):
     """Measure the complete resolved request, including tools and native schemas.
 
     Image payload bytes count toward transport size. Their token cost is an
@@ -96,18 +99,20 @@ def final_request_budget(profile, options):
     """
     counted = copy.deepcopy(options)
     images = 0
-    for message in counted.get('messages', ()):
+    for message in counted.get('input', counted.get('messages', ())):
+        if isinstance(message, dict) and message.get('type') == 'reasoning':
+            message.pop('encrypted_content', None)
         parts = message.get('content') if isinstance(message, Mapping) else None
         if isinstance(parts, list):
             for part in parts:
-                if isinstance(part, dict) and part.get('type') == 'image_url':
+                if isinstance(part, dict) and part.get('type') in {'image_url', 'input_image'}:
                     images += 1
-                    part['image_url'] = {'url': '[image]'}
+                    part['image_url'] = '[image]'
     encoded = json.dumps(options, ensure_ascii=False, separators=(',', ':'))
-    measured = estimate_tokens(json.dumps(counted, ensure_ascii=False, separators=(',', ':'))) + images * 2048
+    measured = estimate_tokens(json.dumps(counted, ensure_ascii=False, separators=(',', ':'))) + images * 2048 + replayed_reasoning_tokens
     report = model_budget(profile)
     # An explicitly resolved output cap is more precise than a profile maximum.
-    sent_limits = [options.get(name) for name in ('max_tokens', 'max_completion_tokens')]
+    sent_limits = [options.get(name) for name in ('max_output_tokens', 'max_tokens', 'max_completion_tokens')]
     output = max((_positive_int(value) or 0 for value in sent_limits), default=0)
     if output:
         report['reserved_output_tokens'] = output

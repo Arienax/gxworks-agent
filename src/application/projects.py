@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Headless, non-migrating project queries and one bounded file boundary."""
 from __future__ import annotations
@@ -59,10 +59,10 @@ def public(value: Any, *, document: str | None = None) -> Any:
 
 
 class ProjectService:
-    def __init__(self, workspace: Path):
+    def __init__(self, workspace: Path, *, receipt_store=None):
         self.workspace = Path(workspace).expanduser().resolve()
         self.store = ProjectSession(base_dir=self.workspace, create=False)
-        self.runtime = build_default_tool_runtime()
+        self.runtime = build_default_tool_runtime(receipt_store=receipt_store)
         self.read_revision = uuid.uuid4().hex
         from application.program_inspection import ProgramInspectionService
         self.inspection = ProgramInspectionService()
@@ -242,6 +242,11 @@ class ProjectService:
         selected = version_id or project.get("active_version_id")
         version = self.raw_version(project_id, selected) if selected else None
         if requirement == 'model':
+            if version is None:
+                # Manual receipts for a new program must bind to the same editable
+                # specification snapshot as generation, without loading program IR.
+                from application.spec_document import read_document
+                project = {**project, "_spec_document": read_document(self.store, project, None)}
             return build_tool_context(project, version=version, inspection=self.inspection,
                                       read_revision=self.read_revision)
         program = self.program(project_id, selected) if version and version.get("target_mode") == "ladder" else None
@@ -255,6 +260,8 @@ class ProjectService:
         sfc_graph = self.sfc_graph(project_id, selected) if version and version.get('target_mode') == 'sfc' and native_snapshot is not None else None
         if self.raw_project(project_id) != project:
             raise ProjectError("Project changed during read; retry")
+        from application.spec_document import read_document
+        project = {**project, "_spec_document": read_document(self.store, project, version)}
         return build_tool_context(project, version=version, program_ir=program,
                                   read_revision=self.read_revision,
                                   ladder=ir_to_ladder(program) if program else None, fbd_baseline=fbd_baseline,
@@ -278,6 +285,50 @@ class ProjectService:
                         or not same_ordered_source_inputs(stored, program)):
                     raise ConflictError("Version IR changed after validation")
         return program
+
+    def version_diff(self, project_id: str, version_id: str, base_version_id: str) -> dict | None:
+        """Compare saved programs within one project without creating a job."""
+        before = self.raw_version(project_id, base_version_id)
+        after = self.raw_version(project_id, version_id)
+        mode = after.get("target_mode")
+        if before.get("target_mode") != mode or mode not in {"ladder", "st", "fbd", "sfc"}:
+            return None
+        if mode == "st":
+            from difflib import unified_diff
+
+            def saved_source(version):
+                artifacts = version.get("artifacts") or {}
+                if "st" in artifacts:
+                    return self.artifact(project_id, version["id"], "st").read_text(encoding="utf-8-sig")
+                if "gxw" in artifacts:
+                    from .gxw_files import read_source
+                    raw = self.artifact(project_id, version["id"], "gxw").read_bytes()
+                    return read_source(raw, version.get("program_name"))["model"]["st_text"]
+                return None
+
+            left, right = saved_source(before), saved_source(after)
+            if left is None or right is None:
+                return None
+            lines = unified_diff(left.splitlines(keepends=True), right.splitlines(keepends=True),
+                                 fromfile=base_version_id, tofile=version_id)
+            diff = {"kind": "st", "has_changes": left != right, "before": left, "after": right,
+                    "unified_diff": "".join(line if line.endswith("\n") else line + "\n\\ No newline at end of file\n"
+                                            for line in lines)}
+        else:
+            left = self.verified_program(project_id, base_version_id)
+            right = self.verified_program(project_id, version_id)
+            if left is None or right is None:
+                return None
+            if mode == "ladder":
+                from plc.core import PLCCore
+                diff = PLCCore().diff_programs(left, right)
+            elif mode == "fbd":
+                from .fbd import graph_diff
+                diff = graph_diff(left.get("source", left), right.get("source", right))
+            else:
+                from .sfc import source_diff
+                diff = source_diff(left.get("source", left), right.get("source", right))
+        return public({**diff, "base_version_id": base_version_id}, document="preview_diff")
 
     def invoke(self, project_id: str, version_id: str | None, call_id: str, name: str, arguments: dict):
         return self.runtime.invoke(ToolCall(call_id, name, arguments), self.invocation_context(project_id, version_id, name))

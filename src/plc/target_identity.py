@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Registered CPU target identity: menu identities, their members and their series.
 
@@ -44,7 +44,8 @@ CPU_GROUPS = ((SERIES_Q, Q_CPUS), (SERIES_L, L_CPUS), (SERIES_FX, FX_CPUS))
 PARAMETER_ONLY = frozenset({"QJ72LP25/QJ72BR15(RemoteI/O)", "LJ72GF15-T2", "LJ72MS15"})
 
 #: Identities the project knows without a GX Works2 creation option.
-CORE_ONLY_TARGETS = {"FX5U": SERIES_FX + "5U"}
+# Keep Core identities queryable without borrowing native FX step rules.
+CORE_ONLY_TARGETS = {cpu: SERIES_FX + "5U" for cpu in ("FX5S", "FX5UJ", "FX5U", "FX5UC")}
 
 REMOTE_IO_SUFFIX = "(REMOTEI/O)"
 
@@ -119,6 +120,15 @@ def target_identity_state(plc_model: Any) -> Tuple[Optional[Tuple[str, ...]], Op
 def target_series(plc_model: Any) -> Optional[Tuple[str, str]]:
     """``(series, owning menu identity)`` for one identity or concrete member."""
     return _catalog().get(_key(plc_model))
+
+
+def execution_target_member(source_model, selected_model):
+    """Refine a native menu identity to the project's concrete CPU member."""
+    selected = _key(selected_model)
+    menu = target_series(source_model)
+    if menu and selected in target_members(source_model) and target_series(selected) == menu:
+        return selected
+    return source_model
 
 
 def is_parameter_only(plc_model: Any) -> bool:

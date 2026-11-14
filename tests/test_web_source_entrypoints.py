@@ -29,7 +29,8 @@ def test_source_build_script_prepares_python_runtime_by_default():
     assert "npm ci failed" in text
     assert "npm run types failed" in text
     assert "npm run build failed" in text
-    assert "Source Web runtime is ready. You can now run start-web.cmd." in text
+    assert 'scripts\\build_web_launcher.py' in text
+    assert "Source Web runtime is ready. Double-click GXWorks-Agent-Launcher.exe." in text
 
 
 def test_start_web_resolves_source_or_locally_built_package():
@@ -110,19 +111,16 @@ def test_release_notices_keep_working_demos_and_component_launchers(tmp_path, mo
     source = tmp_path / 'source'
     source.mkdir()
     for name in ('LICENSE', 'NOTICE', 'LICENSE-SCOPE.md', 'THIRD_PARTY_NOTICES.md',
-                 'README.md', 'README.zh-CN.md', 'README.ja.md', 'CHANGELOG.md',
-                 'start-web.cmd', 'gxworks-agent-mcp.cmd'):
+                 'README.md', 'README.zh-CN.md', 'README.ja.md', 'CHANGELOG.md'):
         (source / name).write_text(f'{name}\nCopyright 2026 Arienax · 原作者\n![Demo](resources/assets/demo.gif)\n', encoding='utf-8')
     (source / 'resources/assets').mkdir(parents=True)
     (source / 'resources/assets/demo.gif').write_bytes(b'GIF89a')
-    (source / 'scripts').mkdir()
-    (source / 'scripts/start_web.ps1').write_text('launcher', encoding='utf-8')
     package = tmp_path / 'package'
     package.mkdir()
     monkeypatch.setattr(release_notices, 'ROOT', source)
     monkeypatch.setattr(release_notices.metadata, 'distributions', lambda: [])
     release_notices.stage(package, component)
-    assert (package / 'gxworks-agent-mcp.cmd').is_file()
+    assert not tuple(package.glob('*.cmd'))
     for name in ('LICENSE', 'NOTICE', 'LICENSE-SCOPE.md', 'THIRD_PARTY_NOTICES.md'):
         assert (package / name).read_bytes() == (source / name).read_bytes()
     for name in ('README.md', 'README.zh-CN.md', 'README.ja.md'):
@@ -132,5 +130,4 @@ def test_release_notices_keep_working_demos_and_component_launchers(tmp_path, mo
             assert 'https://raw.githubusercontent.com/Arienax/gxworks-agent/main/resources/assets/demo.gif' in readme
         else:
             assert (package / 'resources/assets/demo.gif').read_bytes() == b'GIF89a'
-    assert (package / 'start-web.cmd').exists() == (component == 'full')
     assert (package / 'resources/assets').exists() == (component == 'full')

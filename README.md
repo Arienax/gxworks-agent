@@ -2,7 +2,7 @@
 
 <p align="center"><strong>Originally created by <a href="https://github.com/Arienax">Arienax</a></strong> · <a href="https://github.com/Arienax/gxworks-agent">github.com/Arienax/gxworks-agent</a></p>
 
-<p align="center">© 2026 Arienax · Apache-2.0</p>
+<p align="center">© 2026 Arienax · AGPL-3.0</p>
 
 <h3 align="center">MCP engineering tools and an AI workbench for Mitsubishi PLC workflows.</h3>
 
@@ -12,7 +12,7 @@
   <a href="https://github.com/Arienax/gxworks-agent/releases/latest"><img src="https://img.shields.io/github/v/release/Arienax/gxworks-agent?style=flat-square&amp;color=2563eb" alt="Latest release"></a>
   <a href="#mcp"><img src="https://img.shields.io/badge/MCP-engineering_tools-7c3aed?style=flat-square" alt="MCP engineering tools"></a>
   <a href="#quick-start"><img src="https://img.shields.io/badge/Windows-10%2F11_x64-0078d4?style=flat-square" alt="Windows 10/11 x64"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache--2.0-f59e0b?style=flat-square" alt="License: Apache-2.0"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-f59e0b?style=flat-square" alt="License: AGPL-3.0"></a>
 </p>
 
 <p align="center"><strong><a href="https://github.com/Arienax/gxworks-agent/releases/latest">Downloads</a> · <a href="#mcp">MCP &amp; Web</a> · <a href="https://github.com/Arienax/gxworks-agent/issues">Issues</a></strong></p>
@@ -57,7 +57,7 @@ Modifying source or declarations marks earlier compilation results stale. Saving
 
 ## Ladder: from engineering context to deliverable artifacts
 
-In this FX3U conveyor example, the agent retrieves CPU-specific facts and manual evidence for `WSFL`, `INC`, and `T200`, constructs a Ladder candidate, and commits it through MCP. Python Core validates structure and operands, merges shared conditions, and checks maintainability. Each saved version produces Ladder JSON, PLC IR, SVG diagrams, traceable ST derived from IR, and GX Works2 import CSVs for `MAIN` and device comments. For targeted fixes on an existing version, `read_network` and `patch_program` apply scoped network patches.
+In this FX3U conveyor example, the agent retrieves CPU-specific facts and manual evidence for `WSFL`, `INC`, and `T200`, constructs a Ladder candidate, and commits it through MCP. Python Core validates structure and operands, merges shared conditions, and checks maintainability. Each saved version produces Ladder JSON, PLC IR, SVG diagrams, and GX Works2 import CSVs for `MAIN` and device comments. For targeted fixes on an existing version, `read_network` and `patch_program` apply scoped network patches.
 
 <a name="st"></a>
 
@@ -65,7 +65,7 @@ In this FX3U conveyor example, the agent retrieves CPU-specific facts and manual
 
 ST workflows cover both standalone text generation and native `.gxw` project maintenance:
 
-- **Generation and review in Web**: Analyze requirements, confirm the specification, and generate bodies and declarations using the selected CPU's instruction context and ST call signatures. Assemble and deliver GXW first; fall back to `program.txt` plus a GX Works2 global-label `global_labels.csv`, with a reason only when a project cannot be created. Initial values or declaration properties that CSV cannot represent are listed in the TXT for configuration after import. Preview candidates and inspect text diffs across versions. Ladder versions can also export traceable ST from their PLC IR.
+- **Generation and review in Web**: Analyze requirements, confirm the specification, and generate bodies and declarations using the selected CPU's instruction context and ST call signatures. Assemble and deliver GXW first; fall back to `program.txt` plus a GX Works2 global-label `global_labels.csv`, with a reason only when a project cannot be created. Initial values or declaration properties that CSV cannot represent are listed in the TXT for configuration after import. Preview candidates and inspect text diffs across versions.
 - **GXW ST project editing**: `read_st_project` reads existing Program, FB, and FUNCTION bodies, declarations, and ownership; `create_st_candidate` edits their bodies and declarations offline. Creating an ordinary ST Program retains the explicit resource, task, and native-operation workflow. Persistent native sessions separately support coordinated FBD editing and compilation.
 
 The local ST checker quickly validates supported syntax and semantics and highlights constructs that need attention, working alongside GX Works2 native compilation for full compiler verification.
@@ -104,7 +104,7 @@ Native engineering sessions require an interactive Windows desktop, GX Works2 `1
 
 ![The web workbench: project sidebar, conversation, and the program panel showing a saved Ladder network](resources/assets/web-workbench-en.png)
 
-Configure a model API in the workbench to use the built-in **Direct generation workflow**—analyzing requirements, confirming specifications, and generating programs—then inspect Ladder networks, FBD/SFC graphs, device usage, version diffs, and downloadable artifacts. Direct shares the same engineering context and RAG pipeline as MCP while reducing external agent orchestration overhead; workbench Q&A can still invoke read-only tools as needed.
+Configure a model API in the workbench to use the built-in **Direct generation workflow** to generate from the supplied requirements without a separate plan-confirmation step; use **Design** for analysis and specification confirmation. You can inspect Ladder networks, FBD/SFC graphs, device usage, version diffs, and downloadable artifacts. Direct shares the same engineering context and RAG pipeline as MCP while reducing external agent orchestration overhead; workbench Q&A can still invoke read-only tools as needed.
 
 When process facts are missing, each clarification question appears as an individual input field that preserves entered text across panel switches and reloads until submitted together. Generation uses strict structured output where supported by the endpoint and normalizes unambiguous format differences locally before Core validation.
 
@@ -128,7 +128,7 @@ Generic document-chunking RAG frameworks are tailored for open-ended text Q&A an
 
 - **Knowledge text pooling with BM25 statistical invariance**: To handle recurring descriptions across multi-model technical specifications and engineering records, [`exact_search_storage`](src/knowledge/exact_search_storage.py) consolidates long text into a SHA-256 deduplicated pool while retaining distinct chunk rows and attributes in the binding layer, exposed to SQLite FTS5 via a compatibility view. This design achieves multi-fold physical compression while ensuring BM25 scores and term frequencies remain mathematically identical to uncompressed baselines; a `+rowid` constraint prevents redundant FTS virtual table MATCH loops across CPU pre-filter subqueries.
 - **Graph-level fact pooling and on-demand hydration**: The transport layer adopts the `owner-field-row-v3` layout with [`fact_field_codec`](src/knowledge/fact_field_codec.py), interning repetitive structured fields (scope, conditions, dependencies, parameter specifications) into integer references. At runtime, [`OwnerDefinitionStore`](src/plc/instruction_owner_store.py) mounts an authenticated read-only SQLite database via `instruction_definitions.manifest.json`, reading only lightweight identity headers at startup for CPU admission preflight and hydrating full fact graphs (`hydrate_owner`) strictly on demand.
-- **Domain-Local Rank Fusion (RRF)**: Retrieval is coordinated through [`knowledge.retriever`](src/knowledge/retriever.py), combining exact entity routing, BM25 full-text search, dense/LSA vector similarity, and lexical coverage gating. When querying across distinct databases (e.g., the instruction fact store and general engineering records), domain-local RRF (smoothing constant $k=60.0$) and qualified identifiers prevent cross-corpus score distortion; top-level arbitration prioritizes exact entity hits, normalized domain scores, query coverage, and deterministic record IDs.
+- **Domain-Local Rank Fusion (RRF)**: Retrieval is coordinated through [`knowledge.retriever`](src/knowledge/retriever.py), combining exact entity routing, BM25 full-text search, dense/LSA vector similarity, and lexical coverage gating. Each database uses its own matching vector sidecar. Cross-domain ranking uses fused scores, query coverage and qualified record IDs; explicit targets retain their exact-owner path. Functional aliases supplement hybrid retrieval, with device/resource facts and declared instruction dependencies carried into the generation context. Case-derived vocabulary expands recall without assigning an implementation or establishing instruction semantics.
 - **Technical projection and deterministic Core validation**: Retrieval hits are never treated as direct execution permission. For LLM generation, [`model_context`](src/shared/model_context.py) extracts compact technical constraints (pin specifications, step widths, prerequisite conditions) to manage prompt budget. Generated logic must subsequently pass deterministic CPU whitelist, operand bit-width, and timing checks enforced by [`instruction_constraints`](src/plc/instruction_constraints.py) and the Core validation engine.
 
 ## What the toolchain provides
@@ -164,15 +164,26 @@ On Windows 10/11 x64, download the package you need from the [releases page](htt
 | Package | Best for | Entry point |
 | --- | --- | --- |
 | `GXWorks-Agent-MCP-windows-x64.zip` | Connecting an MCP client (Codex, Claude Desktop, DeepSeek Harness) and using its model | `gxworks-agent-mcp.exe --local` |
-| `GXWorks-Agent-Full-windows-x64.zip` | Running the Web workbench and MCP with shared runtime resources | `start-web.cmd` / `gxworks-agent-mcp.exe --local` |
+| `GXWorks-Agent-Full-windows-x64.zip` | Running the Web workbench and MCP with shared runtime resources | `GXWorks-Agent-Launcher.exe` / `gxworks-agent-mcp.exe --local` |
 
 The lean `MCP` package omits the Web server, model SDK, offline PDF ingestion dependencies, while keeping the engineering tools, RAG retrieval, engineering templates, native helpers, and the simulator timeline viewer. `Full` includes both entrypoints: its MCP server runs independently with `--local`, or connects to a running Web workbench with `--service` to share projects and review flows.
+
+Full builds include an independent DeepSeek Harness SDK runtime in `dsh-runtime/`.
+Web Ladder Design, single-plan analysis, Direct, and later edits use this runtime
+with the model settings saved in Web. Neither DSH Desktop, a separate DSH account,
+nor a system Node.js installation is required. Engineering tools continue to use
+the selected Web project, its RAG resources and the existing GXW delivery service.
+Model/tool history is persisted under the workspace's application state directory;
+confirmation and later changes resume that conversation. Existing ST/FBD/SFC model
+flows remain unchanged.
 
 <a name="mcp"></a>
 
 ### Standalone MCP
 
 Register a stdio server in your MCP client using the full path to `gxworks-agent-mcp.exe` as the command and `--local` as its argument. Refresh the connection, call `list_projects` to select an existing project or create one with your actual CPU and program type, use [offline GXW import](#offline-gxw) for a saved file, or call `list_gxworks2_sessions` to inspect an already-open GX Works2 window.
+
+For complete document delivery, an MCP host can declare its capacity in `capabilities.extensions["io.github.arienax.gxworks-agent/read-delivery"].readBudgetTokens` or configure `--read-budget-tokens N` on the server command. Use an integer from 1,000 to 128,000 within the host's actual output capacity. GXWorks Agent assembles pages server-side and uses the smaller limit when both are set. Clients that supply neither retain paged delivery.
 
 Try a prompt like:
 
@@ -184,9 +195,11 @@ External clients use their own models without starting Web. GX import and native
 
 **Bundled MCP router skill**: Both the source repository and the release packages include an Agent Skill under [`skills/gxworks-mcp-router/`](skills/gxworks-mcp-router) (`SKILL.md` and `references/`) covering MCP tool selection, key parameters, and call sequences for common PLC tasks—such as read-only snapshots versus versioned edits, offline `.gxw` changes versus live GX Works2 sessions, local artifact generation versus headless native compilation checks, and receipt handling across `local`, `service`, and `context` modes. Once MCP is connected, copy the `gxworks-mcp-router/` directory into your client's skills folder to enable it.
 
+New MCP projects default to Ladder when no language is specified. For first generation, read `get_project_spec`, then use `update_project_spec` for scoped requirements, IO, parameters and `implementation_items` (linked requirements, language, location, method and state ownership). Show the plan and differences; only after explicit user approval call `confirm_project_spec(user_confirmed=true, expected_revision=...)` with the latest string `draft_revision`, then obtain generation context. Record explicit user parameter changes locally; material model-proposed plan changes need renewed confirmation. Specification writes use the shared local transaction or existing service proposal approvals; fixed context mode reads without creating files. Historical version specifications are reference snapshots. Explicit `workflow=direct_generation` retains the direct generation path.
+
 ### Web workbench
 
-Run `start-web.cmd` in the extracted `Full` directory and choose an engineering workspace folder. Create a project for a new program, or [import an existing GXW](#offline-gxw). Configure a model service under **Settings → Model → Model API** for AI generation and changes; browsing existing projects, inspecting files and graphs, and exporting artifacts require no model calls. When updating, extract the new release into a fresh directory—your separate workspace and personal settings remain intact.
+Double-click `GXWorks-Agent-Launcher.exe` in the extracted `Full` directory. Choose a port and start the workbench. The launcher remembers the port and closes any idle workbench using the same state directory before opening the browser. Create a project for a new program, or [import an existing GXW](#offline-gxw). Configure a model service under **Settings → Model → Model API** for AI generation and changes; browsing existing projects, inspecting files and graphs, and exporting artifacts require no model calls. When updating, extract the new release into a fresh directory—your separate workspace and personal settings remain intact.
 
 ### Run from source
 
@@ -196,10 +209,20 @@ Install Python 3.13 and Node.js 22.14 or newer, then run:
 git clone https://github.com/Arienax/gxworks-agent.git
 cd gxworks-agent
 .\build-web.bat --no-pause
-.\start-web.cmd
 ```
 
-For MCP-only source use, create `.venv-mcp`, install `requirements/mcp.txt`, and launch `gxworks-agent-mcp.cmd --local`. Node.js is not required for MCP-only source runs.
+After the build, double-click `GXWorks-Agent-Launcher.exe` in the repository root.
+
+For source development, copy `dsh-runtime/` from a Full package into
+`.runtime/dsh-runtime/`, or stage the official DSH SDK runtime using
+`python scripts/stage_dsh_runtime.py --help`. Full package builders pass
+`--dsh-source` to `scripts/build_release.py` (or set `GXWORKS_DSH_SOURCE`);
+the build copies the independent runtime and its notices into the package.
+`GXWORKS_GENERATION_RUNTIME=legacy` retains the prior generation route for a
+controlled comparison; the normal Web Ladder route is `dsh`. This does not change
+the RAG index or instruction-selection policy.
+
+For MCP-only source use, create `.venv-mcp`, install `requirements/mcp.txt`, and run `.\.venv-mcp\Scripts\python.exe .\scripts\mcp_entry.py --local`. Node.js is not required for MCP-only source runs.
 
 ### Engineering templates and knowledge resources
 
@@ -221,4 +244,4 @@ Implement emergency stops, safety interlocks, and overtravel protection in an in
 
 [Release changes](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Issues](https://github.com/Arienax/gxworks-agent/issues)
 
-Project-authored Core, Web, MCP, and native-adapter source code is licensed under the [Apache License 2.0](LICENSE); see the [license scope](LICENSE-SCOPE.md) and [third-party notices](THIRD_PARTY_NOTICES.md) for details. Contributors retain their copyright, and previously distributed releases retain their original licenses. [NOTICE](NOTICE) records the original project, author and repository for copyrighted project material.
+Project-authored Core, Web, MCP, and native-adapter source code is licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE); see the [license scope](LICENSE-SCOPE.md) and [third-party notices](THIRD_PARTY_NOTICES.md) for details. Contributors retain their copyright, and previously distributed releases retain their original licenses. [NOTICE](NOTICE) records the original project, author and repository for copyrighted project material.

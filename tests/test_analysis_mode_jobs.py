@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from agent_runtime.tool_context import ToolContext
 from application.job_submission import JobSubmission
 from application.job_execution import JobExecution
 from application.workspace import ConflictError, atomic_json, canonical_hash
@@ -87,8 +88,7 @@ def test_analysis_mode_is_not_added_to_generation_identity(tmp_path):
 def test_submit_freezes_mode_in_the_actual_job_snapshot(tmp_path, mode):
     service, _ = service_stub(tmp_path)
     del service.submit_job
-    context = SimpleNamespace(project={"plc_model": "FX3U", "target_mode": "ladder"},
-                              version=None, version_id=None, program_ir=None)
+    context = ToolContext(project={"id": "project_test", "plc_model": "FX3U", "target_mode": "ladder"})
     service.projects = SimpleNamespace(tool_context=lambda *args: context)
     service.command_scope = lambda *args: None
     service.attachments = SimpleNamespace(load=lambda *args: [])
@@ -143,8 +143,8 @@ def test_analysis_worker_passes_snapshot_mode_and_persists_it(monkeypatch, tmp_p
     if mode is not None:
         snapshot["analysis_mode"] = mode
     ctx = SimpleNamespace(job_id="job_mode", emit=lambda *args: None)
-    service.run(ctx, snapshot, None, [], None)
-    output = json.loads((tmp_path / "outputs" / "job_mode.json").read_text())
+    service.run(ctx, snapshot, SimpleNamespace(version=None), [], None)
+    output = json.loads((tmp_path / "outputs" / "job_mode.json").read_text(encoding="utf-8"))
     assert len(calls) == 1
     assert calls[0][1]["analysis_mode"] == (mode or "direct")
     assert output["analysis_mode"] == (mode or "direct")

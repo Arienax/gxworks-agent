@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Stage project notices and installed dependency licenses for executable ZIPs."""
 import importlib.metadata as metadata
@@ -22,9 +22,6 @@ def stage(package: Path, component: str):
         for source in sorted((ROOT / 'resources/assets').iterdir()):
             if source.suffix.lower() in {'.gif', '.png'}:
                 shutil.copyfile(source, assets / source.name)
-        shutil.copyfile(ROOT / 'start-web.cmd', package / 'start-web.cmd')
-        (package / 'scripts').mkdir(exist_ok=True)
-        shutil.copyfile(ROOT / 'scripts/start_web.ps1', package / 'scripts/start_web.ps1')
     else:
         # Keep README demos usable without shipping their animation payloads.
         for name in ('README.md', 'README.zh-CN.md', 'README.ja.md'):
@@ -32,7 +29,6 @@ def stage(package: Path, component: str):
             path.write_text(path.read_text(encoding='utf-8').replace(
                 '(resources/assets/', '(https://raw.githubusercontent.com/Arienax/gxworks-agent/main/resources/assets/'),
                 encoding='utf-8')
-    shutil.copyfile(ROOT / 'gxworks-agent-mcp.cmd', package / 'gxworks-agent-mcp.cmd')
     output = package / 'THIRD_PARTY_LICENSES'
     output.mkdir(exist_ok=True)
     index = ['# Included dependency licenses', '']
