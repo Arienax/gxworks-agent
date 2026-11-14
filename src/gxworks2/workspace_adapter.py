@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Isolated native source saves and checks; no UI or PLC session is used."""
 from __future__ import annotations
@@ -22,7 +22,7 @@ from gxw.native_write import (native_program_task_plan, native_scope_creation_pl
                               verify_native_source_creation)
 from gxw.native_diagnostics import native_validation_source_plan, project_native_validation
 from .finder import GXWorks2Finder
-from shared.paths import bundled_executable
+from shared.paths import bundled_executable, cached_executable
 from .workspace_protocol import WORKSPACE_PROTOCOL, workspace_business_request
 
 logger = logging.getLogger(__name__)
@@ -71,6 +71,30 @@ def _clean_native_temp(pid, token):
     shutil.rmtree(target)
 
 
+def _windows_common_files_x86():
+    import ctypes
+
+    folder = ctypes.create_unicode_buffer(260)  # SHGetFolderPathW uses MAX_PATH.
+    if ctypes.windll.shell32.SHGetFolderPathW(None, 0x002C, None, 0, folder) == 0:  # CSIDL_PROGRAM_FILES_COMMONX86
+        return Path(folder.value)
+    return None
+
+
+def _native_adapter_environment(error_type):
+    if os.name != 'nt':
+        return None
+    key = 'COMMONPROGRAMFILES(X86)'
+    configured = Path(os.environ.get(key, ''))
+    if configured.is_absolute() and configured.is_dir():
+        return None  # Inherit the working environment unchanged.
+    # Restricted MCP launch environments can omit this variable. GX Works2's
+    # 32-bit Navigator requires it even when its COM registration is correct.
+    folder = _windows_common_files_x86()
+    if folder is None or not folder.is_absolute() or not folder.is_dir():
+        raise error_type('无法定位 32 位 Common Files 目录，请检查 CommonProgramFiles(x86) 的设置。')
+    return {**os.environ, key: str(folder)}
+
+
 def _run_native_adapter(executable, request, root, timeout, error_type):
     # The outer process deadline also covers a COM call that never returns,
     # where the adapter's bounded progress iterator cannot run another check.
@@ -85,6 +109,7 @@ def _run_native_adapter(executable, request, root, timeout, error_type):
         gui = gui_application_save_plan((root/'input.gxw').read_bytes(), request['source'])
         if gui is not None:
             wire_request['change']['gui_application'] = b64encode(gui).decode('ascii')
+    child_env = _native_adapter_environment(error_type)
     deadline = time.monotonic() + timeout
     def incomplete(message):
         error = error_type(message)
@@ -95,7 +120,7 @@ def _run_native_adapter(executable, request, root, timeout, error_type):
     for attempt in range(3):
         try:
             process = subprocess.Popen([str(executable)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE, text=True, encoding='utf-8', cwd=root,
+                stderr=subprocess.PIPE, text=True, encoding='utf-8', cwd=root, env=child_env,
                 creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         except OSError as error:
             raise error_type('无法启动 GX Works2 离线工作区适配器。') from error
@@ -144,10 +169,10 @@ class _NativeWorkspaceAdapter:
     """Execute validated engineering objects with the version-bound runtime."""
 
     def __init__(self, executable=None, installation=None):
-        default = Path(os.environ.get('LOCALAPPDATA', '')) / f'PLC AI Studio/workspace-adapter/v{WORKSPACE_PROTOCOL}/PlcAi.WorkspaceSourceSave.exe'
         self.executable = Path(executable or os.environ.get('GX_WORKSPACE_ADAPTER_EXE')
                                or bundled_executable('workspace-adapter', 'PlcAi.WorkspaceSourceSave.exe')
-                               or default).expanduser().resolve()
+                               or cached_executable(f'workspace-adapter/v{WORKSPACE_PROTOCOL}',
+                                                    'PlcAi.WorkspaceSourceSave.exe')).expanduser().resolve()
         gx = GXWorks2Finder().find_executable() if installation is None else None
         self.installation = Path(installation).resolve() if installation else gx.parent.parent if gx else None
 
@@ -393,7 +418,7 @@ class NativeWorkspaceSourceSave(_NativeWorkspaceAdapter):
             return graph
 
     def create(self, raw, name, *, pou_kind='function_block', timeout=None):
-        """Create a native empty FBD Program or FB and verify its selected type."""
+        """Create an empty FBD Program, FB or FUNCTION and verify its selected type."""
         source = native_source_creation_plan(raw, name, pou_kind=pou_kind)
         if os.name != 'nt' or not self.executable.is_file() or self.installation is None:
             raise WorkspaceSaveError('新建原生 POU 需要本地 GX Works2 离线工作区适配器；请先构建 workspace adapter。')
@@ -689,6 +714,8 @@ class NativeWorkspaceValidation(_NativeWorkspaceAdapter):
             try:
                 snapshots = _validation_snapshots(root, validation['events'])
                 result = project_native_validation(raw, observation, snapshots)
+                from gxw.diagnostic_reports import bind_installed_diagnostic_messages
+                bind_installed_diagnostic_messages(result, self.installation)
                 from gxw.project_metadata import project_gui_configuration
                 result['gui_configuration'] = project_gui_configuration(raw)
                 if source.get('inspection') is not None:

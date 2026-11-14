@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Project inspection, deterministic validation and patch intents."""
 from __future__ import annotations
 import copy
@@ -132,6 +135,8 @@ def _get_current_program_info(
     }
     program_ir = context.program_ir
     if isinstance(program_ir, Mapping):
+        from plc.ir import canonical_sha256
+        result['ir_sha256'] = canonical_sha256(program_ir)
         networks = [
             {
                 "id": str(network.get("id") or ""),
@@ -395,25 +400,41 @@ def _patch_program(context: ToolContext, arguments: Mapping[str, Any], *, genera
     from plc.ir import canonical_sha256
 
     program = _require_program_ir(context)
-    if (program.get('source') or {}).get('format') in {'instruction_sequence_v1', 'instruction_sequence_v2'}:
-        from application.gxw_files import ladder_patch_candidate
-        return ladder_patch_candidate(context, arguments.get('patch') or {})
-    if not isinstance(context.version, Mapping):
-        raise ValueError("当前没有绑定候选补丁的基础版本。")
-    patch = copy.deepcopy(arguments.get("patch"))
+    patch = arguments.get("patch")
     if not isinstance(patch, Mapping):
         raise ValueError("patch 必须是 JSON 对象。")
-    patch = dict(patch)
+    if "save_policy" in arguments:
+        policy = arguments["save_policy"]
+        if "save_policy" in patch and patch["save_policy"] != policy:
+            raise ToolPreconditionError("INVALID_ARGUMENTS",
+                "save_policy 与 patch.save_policy 的值冲突，请只提供一处或使两处相同。")
+        patch = {**patch, "save_policy": policy}
+    if (program.get('source') or {}).get('format') in {'instruction_sequence_v1', 'instruction_sequence_v2'}:
+        from application.gxw_files import ladder_patch_candidate
+        return ladder_patch_candidate(context, patch, generation_handoff=generation_handoff)
+    if not isinstance(context.version, Mapping):
+        raise ValueError("当前没有绑定候选补丁的基础版本。")
+    patch = copy.deepcopy(dict(patch))
     patch.setdefault("base_revision", program.get("revision"))
     patch.setdefault("base_ir_sha256", canonical_sha256(program))
     patch.setdefault("target_revision", int(program.get("revision") or 0) + 1)
     core = PLCCore()
     confirmed_spec = copy.deepcopy(_generation_spec(context))
     candidate = dict(core.patch_program(program, patch, confirmed_spec))
+    from application.spec_document import project_acceptance_cases, project_behavior_cpu
+    from plc.ir import ir_to_ladder
+    from simulator.io_example import check_independent_acceptance
+    behavior = check_independent_acceptance(ir_to_ladder(candidate["candidate_ir"]),
+        project_behavior_cpu(context.project, context.plc_model),
+        project_id=context.project_id, confirmed_spec=confirmed_spec,
+        loaded_cases=project_acceptance_cases(context.project, context.plc_model))
     from application.source_plan import attach_source_check
     validation = {}
     attach_source_check(validation, confirmed_spec, "ladder", model=candidate["candidate_ir"])
     compiled = core.compile_project(candidate["candidate_ir"])
+    from application.confirmed_generation_context import direct_history_fields
+    handoff = direct_history_fields((context.version or {}).get('generation_handoff'))
+    handoff.update(copy.deepcopy(generation_handoff or {}))
     action = {
         "type": "accept_candidate_patch",
         "project_id": context.project_id,
@@ -432,8 +453,9 @@ def _patch_program(context: ToolContext, arguments: Mapping[str, Any], *, genera
         "artifact_hashes": copy.deepcopy(compiled.get("hashes") or {}),
         "_candidate_ir": copy.deepcopy(candidate["candidate_ir"]),
         "_confirmed_spec": confirmed_spec,
+        "_behavior_result": behavior,
         "maintainability_review": copy.deepcopy(candidate.get("maintainability_review")),
-        "_generation_handoff": copy.deepcopy(generation_handoff),
+        "_generation_handoff": handoff or None,
     }
     return {
         "requires_confirmation": True,
@@ -441,6 +463,8 @@ def _patch_program(context: ToolContext, arguments: Mapping[str, Any], *, genera
         **validation,
         "maintainability_review": copy.deepcopy(candidate.get("maintainability_review")),
         "generation_handoff": copy.deepcopy(generation_handoff),
+        "behavior_result": behavior,
+        **({"program_size": compiled["program_size"]} if "program_size" in compiled else {}),
         "candidate_id": candidate["candidate_id"],
         "diff": copy.deepcopy(candidate["diff"]),
         "diagnostics": copy.deepcopy(candidate["diagnostics"]),

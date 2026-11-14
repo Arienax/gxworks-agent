@@ -1231,7 +1231,7 @@ def test_session_store_never_overwrites_an_existing_future_ir(tmp_path):
     ("linux", "XDG_DATA_HOME", "data", ""),
     ("darwin", "HOME", "home", "Library/Application Support"),
 ])
-def test_default_workspace_keeps_historical_identity_without_gui(monkeypatch, tmp_path, platform, env_name, env_value, suffix):
+def test_default_workspace_prefers_current_directory_and_preserves_legacy(monkeypatch, tmp_path, platform, env_name, env_value, suffix):
     import storage.session as session
     monkeypatch.setattr(session.sys, "platform", platform)
     monkeypatch.setattr(session.Path, "home", classmethod(lambda cls: tmp_path / "home"))
@@ -1240,9 +1240,15 @@ def test_default_workspace_keeps_historical_identity_without_gui(monkeypatch, tm
     monkeypatch.setenv(env_name, str(root))
     if suffix:
         root = root / suffix
-    expected = root / "PLC AI Studio" / "PLC AI Workbench" / "workspace"
+    expected = root / "gxworks-agent" / "workspace"
     assert session.SessionStore(create=False).base_dir == expected
     assert not expected.exists()
+    legacy = root / "PLC AI Studio" / "PLC AI Workbench" / "workspace"
+    legacy.mkdir(parents=True)
+    assert session.SessionStore(create=False).base_dir == legacy
+    assert session.default_workspace_dir("mcp-workspace") == root / "gxworks-agent" / "mcp-workspace"
+    expected.mkdir(parents=True)
+    assert session.SessionStore(create=False).base_dir == expected
 
 
 def test_explicit_workspace_and_override_do_not_migrate_old_projects(monkeypatch, tmp_path):

@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import type { SetStateAction } from "react";
 import { useEffect, useRef, useState } from "react";
@@ -12,16 +12,17 @@ import type {
   TaskPurpose,
 } from "../features/conversationRouting";
 
-export function useComposer(pid: string, vid: string, t: (value: string) => string = (value) => value) {
+export function useComposer(pid: string, vid: string, workspacePath: string | null | undefined, t: (value: string) => string = (value) => value) {
   const [directAnswers, setDirectAnswers] = useState<Record<string, Record<string, string>>>({});
   const [ignoredClarification, setIgnoredClarification] = useState("");
-  const activeProjectRef = useRef(pid);
-  activeProjectRef.current = pid;
+  const scope = JSON.stringify([workspacePath, pid]);
+  const activeProjectRef = useRef(scope);
+  activeProjectRef.current = scope;
   const [scopeEnabled, setScopeEnabled] = useState(false);
   const [scopeNetworks, setScopeNetworks] = useState("");
   const [scopeAddresses, setScopeAddresses] = useState("");
   const [task, setTask] = useState<TaskPurpose>("create");
-  const [workflow, setWorkflow] = useState<CreationWorkflow>("direct");
+  const [workflow, setWorkflow] = useState<CreationWorkflow>("review");
   const [editAction, setEditAction] = useState<GenerationAction>("edit");
   const [reviewRequested, setReviewRequested] = useState(false);
   const [drafts, setDrafts] = useState<Record<TaskPurpose, string>>({
@@ -38,16 +39,16 @@ export function useComposer(pid: string, vid: string, t: (value: string) => stri
   const [analysisMode, setAnalysisMode] = useState<AnalysisMode>("direct");
   useEffect(() => {
     setAnalysisMode("direct");
-  }, [pid]);
+  }, [scope]);
   const [attachments, setAttachments] = useState<{ attachment_id: string; filename: string }[]>([]);
   const composerProjectRef = useRef("");
   function syncComposerRoute(value: Project) {
     const editRegenerate = (value.version_count || 0) > 0 || (value.versions?.length || 0) > 0;
-    const routeKey = `${value.id}:${editRegenerate ? "edit-regenerate" : value.confirmed_spec ? "confirmed" : "new-requirement"}`;
+    const routeKey = `${scope}:${editRegenerate ? "edit-regenerate" : value.confirmed_spec ? "confirmed" : "new-requirement"}`;
     if (composerProjectRef.current === routeKey) return;
     composerProjectRef.current = routeKey;
     setTask(editRegenerate ? "edit" : "create");
-    setWorkflow(value.confirmed_spec || value.target_mode !== "ladder" ? "review" : "direct");
+    setWorkflow("review");
     setEditAction("edit");
     setReviewRequested(false);
   }
@@ -62,13 +63,13 @@ export function useComposer(pid: string, vid: string, t: (value: string) => stri
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
-      const uploadProject = pid;
+      if (activeProjectRef.current !== scope) return;
       const added = await api<{ attachment_id: string; filename: string }>(
         `/projects/${pid}/attachments`,
         "POST",
         { filename: file.name, data_base64: encoded },
       );
-      if (activeProjectRef.current === uploadProject) setAttachments((old) => [...old, added]);
+      if (activeProjectRef.current === scope) setAttachments((old) => [...old, added]);
     }
   }
 
@@ -77,12 +78,12 @@ export function useComposer(pid: string, vid: string, t: (value: string) => stri
     setIgnoredClarification("");
     setDrafts({ create: "", edit: "", question: "" });
     setAttachments([]);
-  }, [pid]);
+  }, [scope]);
   useEffect(() => {
     setScopeEnabled(false);
     setScopeNetworks("");
     setScopeAddresses("");
-  }, [pid, vid]);
+  }, [scope, vid]);
   return {
     directAnswers, setDirectAnswers, ignoredClarification, setIgnoredClarification,
     scopeEnabled,

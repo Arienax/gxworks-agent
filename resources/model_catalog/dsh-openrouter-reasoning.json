@@ -1,0 +1,1379 @@
+[
+  {
+    "schema_version": 1,
+    "id": "dsh-openrouter-1",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://openrouter.ai/api/v1"
+      ],
+      "models": [
+        "openai/gpt-6-astra",
+        "openai/gpt-6-astra-pro",
+        "openai/gpt-6.1-sol",
+        "openai/gpt-6.1-sol-pro",
+        "~anthropic/claude-fable-latest",
+        "~anthropic/claude-opus-latest",
+        "~anthropic/claude-sonnet-latest",
+        "~openai/gpt-astra-latest",
+        "~openai/gpt-sol-latest"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openrouter.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openrouter-2",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://openrouter.ai/api/v1"
+      ],
+      "models": [
+        "openai/gpt-5.6-luna",
+        "openai/gpt-5.6-luna-pro",
+        "openai/gpt-5.6-sol",
+        "openai/gpt-5.6-sol-pro",
+        "openai/gpt-5.6-terra",
+        "openai/gpt-5.6-terra-pro",
+        "openai/gpt-6-luna",
+        "openai/gpt-6-luna-pro",
+        "openai/gpt-6-sol",
+        "openai/gpt-6-sol-pro",
+        "~anthropic/claude-haiku-latest",
+        "~openai/gpt-luna-latest",
+        "~openai/gpt-terra-latest"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openrouter.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openrouter-3",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://openrouter.ai/api/v1"
+      ],
+      "models": [
+        "deepseek/deepseek-v4-flash-0731",
+        "deepseek/deepseek-v4-flash-vision-exp",
+        "deepseek/deepseek-v4-pro-0813",
+        "deepseek/deepseek-v4.1-flash",
+        "fireworks/ember-1",
+        "moonshotai/kimi-k3",
+        "~deepseek/deepseek-flash-latest",
+        "~deepseek/deepseek-pro-latest",
+        "~deepseek/deepseek-v4-flash-latest",
+        "~moonshotai/kimi-latest"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "low",
+            "high",
+            "max"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openrouter.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openrouter-4",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://openrouter.ai/api/v1"
+      ],
+      "models": [
+        "google/gemini-3.1-pro-preview",
+        "google/gemini-3.1-pro-preview-customtools",
+        "google/gemini-3.7-flash",
+        "google/gemini-3.8-flash",
+        "google/gemini-4-argon",
+        "inception/mercury-2",
+        "inception/mercury-2.5",
+        "openai/gpt-5.1-codex",
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "stepfun/step-3.7-flash",
+        "stepfun/step-5-preview",
+        "x-ai/grok-4.5",
+        "~google/gemini-flash-latest",
+        "~google/gemini-pro-latest"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openrouter.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openrouter-5",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://openrouter.ai/api/v1"
+      ],
+      "models": [
+        "openai/gpt-5.2",
+        "openai/gpt-5.3-codex",
+        "openai/gpt-5.4",
+        "openai/gpt-5.4-mini",
+        "openai/gpt-5.4-nano",
+        "openai/gpt-5.5",
+        "~openai/gpt-mini-latest"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openrouter.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openrouter-6",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://openrouter.ai/api/v1"
+      ],
+      "models": [
+        "meta/muse-glimmer-30b",
+        "meta/muse-spark-open",
+        "openai/gpt-5.1-codex-max",
+        "openai/gpt-5.2-codex",
+        "x-ai/grok-4.6",
+        "x-ai/grok-4.7",
+        "~x-ai/grok-latest"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openrouter.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openrouter-7",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://openrouter.ai/api/v1"
+      ],
+      "models": [
+        "aion-labs/aion-3.5",
+        "aion-labs/aion-3.5-mini",
+        "z-ai/glm-5.3",
+        "z-ai/glm-5.3-flash",
+        "z-ai/glm-5.3-flashx",
+        "z-ai/glm-5.3-prime",
+        "~z-ai/glm-flash-latest",
+        "~z-ai/glm-latest"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "low",
+            "high",
+            "max"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openrouter.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openrouter-8",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://openrouter.ai/api/v1"
+      ],
+      "models": [
+        "aion-labs/aion-2.0",
+        "aion-labs/aion-3.0",
+        "aion-labs/aion-3.0-mini",
+        "arcee-ai/trinity-large-thinking",
+        "deepseek/deepseek-r1",
+        "deepseek/deepseek-r1-0528",
+        "google/gemini-2.5-pro",
+        "google/gemini-2.5-pro-preview",
+        "google/gemini-3-pro-image",
+        "google/gemini-3.5-flash",
+        "google/gemini-3.5-flash-lite",
+        "google/gemini-3.6-flash",
+        "liquid/lfm-2.5-2.6b:free",
+        "liquid/lfm-2.5-24b-a2b",
+        "minimax/minimax-m2",
+        "minimax/minimax-m2.1",
+        "minimax/minimax-m2.5",
+        "minimax/minimax-m2.7",
+        "moonshotai/kimi-k2-thinking",
+        "moonshotai/kimi-k2.7-code",
+        "openai/gpt-5",
+        "openai/gpt-5-mini",
+        "openai/gpt-5-nano",
+        "openai/gpt-oss-safeguard-20b",
+        "qwen/qwen3-235b-a22b-thinking-2507",
+        "qwen/qwen3-next-80b-a3b-thinking",
+        "qwen/qwen3-vl-30b-a3b-thinking",
+        "stepfun/step-3.5-flash",
+        "x-ai/grok-build-0.1"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "minimal",
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openrouter.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openrouter-9",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://openrouter.ai/api/v1"
+      ],
+      "models": [
+        "amazon/nova-2-lite-v1",
+        "auto",
+        "bytedance-seed/seed-1.6",
+        "bytedance-seed/seed-1.6-flash",
+        "bytedance-seed/seed-2-1-turbo",
+        "bytedance-seed/seed-2.0-lite",
+        "bytedance-seed/seed-2.0-mini",
+        "cohere/command-a-plus",
+        "cohere/north-mini-code:free",
+        "deepseek/deepseek-chat-v3.1",
+        "deepseek/deepseek-v3.1-terminus",
+        "deepseek/deepseek-v3.2",
+        "deepseek/deepseek-v3.2-exp",
+        "dots-studio/dots-3-note-preview:free",
+        "google/gemini-2.5-flash",
+        "google/gemini-2.5-flash-lite",
+        "google/gemini-3-flash-preview",
+        "google/gemini-3.1-flash-lite",
+        "google/gemini-3.1-flash-lite-preview",
+        "google/gemma-4-26b-a4b-it",
+        "google/gemma-4-26b-a4b-it:free",
+        "google/gemma-4-31b-it",
+        "google/gemma-4-31b-it:free",
+        "inclusionai/ling-3.0-flash",
+        "inclusionai/ling-3.0-flash-vl",
+        "inclusionai/ling-3.1-flash",
+        "meituan/longcat-2.0",
+        "minimax/minimax-m1",
+        "minimax/minimax-m3",
+        "moonshotai/kimi-k2.5",
+        "moonshotai/kimi-k2.6",
+        "nvidia/nemotron-3-nano-30b-a3b",
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "nvidia/nemotron-3.5-lightning",
+        "nvidia/nemotron-3.5-lightning:free",
+        "nvidia/nemotron-3.5-super-vl",
+        "nvidia/nemotron-3.5-super-vl:free",
+        "openai/o1",
+        "openai/o3",
+        "openai/o3-mini",
+        "openai/o3-pro",
+        "openai/o4-mini",
+        "openrouter/auto",
+        "openrouter/auto-beta",
+        "openrouter/free",
+        "openrouter/fusion",
+        "openrouter/pareto-code",
+        "perceptron/perceptron-mk1.5",
+        "poolside/laguna-s-2.1",
+        "poolside/laguna-s-2.1:free",
+        "poolside/laguna-xs-2.1",
+        "poolside/laguna-xs-2.1:free",
+        "qwen/qwen3-14b",
+        "qwen/qwen3-30b-a3b",
+        "qwen/qwen3-32b",
+        "qwen/qwen3.5-122b-a10b",
+        "qwen/qwen3.5-27b",
+        "qwen/qwen3.5-35b-a3b",
+        "qwen/qwen3.5-397b-a17b",
+        "qwen/qwen3.5-9b",
+        "qwen/qwen3.5-flash-02-23",
+        "qwen/qwen3.5-plus-02-15",
+        "qwen/qwen3.5-plus-20260420",
+        "qwen/qwen3.6-27b",
+        "qwen/qwen3.6-35b-a3b",
+        "qwen/qwen3.6-flash",
+        "qwen/qwen3.6-plus",
+        "qwen/qwen3.7-flash",
+        "qwen/qwen3.7-max",
+        "qwen/qwen3.7-plus",
+        "qwen/qwen3.8-flash",
+        "qwen/qwen3.8-omni-flash",
+        "typesafe/jev-router",
+        "upstage/solar-pro-3",
+        "x-ai/grok-4.20",
+        "xiaomi/mimo-v2.5",
+        "xiaomi/mimo-v2.5-pro",
+        "xiaomi/mimo-v2.6-flash",
+        "xiaomi/mimo-v2.6-pro",
+        "xiaomi/mimo-v2.6-pro-ultraspeed",
+        "z-ai/glm-4.5",
+        "z-ai/glm-4.5-air",
+        "z-ai/glm-4.5v",
+        "z-ai/glm-4.6",
+        "z-ai/glm-4.6v",
+        "z-ai/glm-4.7",
+        "z-ai/glm-4.7-flash",
+        "z-ai/glm-5",
+        "z-ai/glm-5-turbo",
+        "z-ai/glm-5.1",
+        "z-ai/glm-5v-turbo"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "minimal",
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openrouter.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openrouter-10",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://openrouter.ai/api/v1"
+      ],
+      "models": [
+        "bytedance-seed/seed-2.0-code",
+        "openai/gpt-5.1",
+        "openai/gpt-5.1-codex-mini",
+        "x-ai/grok-4.3"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openrouter.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openrouter-11",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://openrouter.ai/api/v1"
+      ],
+      "models": [
+        "deepseek/deepseek-v4-flash",
+        "deepseek/deepseek-v4-pro",
+        "z-ai/glm-5.2"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "high",
+            "xhigh"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openrouter.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openrouter-12",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://openrouter.ai/api/v1"
+      ],
+      "models": [
+        "google/gemini-nano-banana-2.1"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "minimal",
+            "high"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openrouter.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openrouter-13",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://openrouter.ai/api/v1"
+      ],
+      "models": [
+        "ibm-granite/granite-4.2-8b",
+        "tencent/hy3",
+        "tencent/hy3-preview",
+        "tencent/hy4-preview"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "low",
+            "high"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openrouter.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openrouter-14",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://openrouter.ai/api/v1"
+      ],
+      "models": [
+        "meta/muse-spark-1.1",
+        "meta/muse-spark-1.2",
+        "meta/muse-spark-1.2-contributor",
+        "qwen/qwen3.8-max-0902",
+        "qwen/qwen3.8-max-prime"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openrouter.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openrouter-15",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://openrouter.ai/api/v1"
+      ],
+      "models": [
+        "meta/muse-spark-1.3",
+        "meta/muse-spark-1.3-contributor",
+        "meta/muse-wonder"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openrouter.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openrouter-16",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://openrouter.ai/api/v1"
+      ],
+      "models": [
+        "mistralai/mistral-large-4-0",
+        "mistralai/mistral-medium-3-5",
+        "mistralai/mistral-small-2603",
+        "sakana/sakana-namazu"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "high"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openrouter.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openrouter-17",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://openrouter.ai/api/v1"
+      ],
+      "models": [
+        "nex-agi/nex-n2.5-pro",
+        "nvidia/nemotron-3-ultra-550b-a55b",
+        "nvidia/nemotron-3-ultra-550b-a55b:free"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "medium",
+            "high"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openrouter.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openrouter-18",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://openrouter.ai/api/v1"
+      ],
+      "models": [
+        "nvidia/nemotron-3-super-120b-a12b",
+        "nvidia/nemotron-3-super-120b-a12b:free"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "low",
+            "medium"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openrouter.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openrouter-19",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://openrouter.ai/api/v1"
+      ],
+      "models": [
+        "openai/gpt-5-pro",
+        "openai/o3-mini-high",
+        "openai/o4-mini-high"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "high"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openrouter.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openrouter-20",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://openrouter.ai/api/v1"
+      ],
+      "models": [
+        "openai/gpt-5.2-pro",
+        "openai/gpt-5.4-pro",
+        "openai/gpt-5.5-pro"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "medium",
+            "high",
+            "xhigh"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openrouter.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openrouter-21",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://openrouter.ai/api/v1"
+      ],
+      "models": [
+        "prism-ml/ternary-bonsai-2-27b"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "medium",
+            "xhigh"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openrouter.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openrouter-22",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://openrouter.ai/api/v1"
+      ],
+      "models": [
+        "qwen/qwen3.8-2.4t-a95b"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "low",
+            "medium",
+            "xhigh"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openrouter.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openrouter-23",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://openrouter.ai/api/v1"
+      ],
+      "models": [
+        "qwen/qwen3.8-27b"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "low",
+            "medium",
+            "xhigh"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openrouter.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openrouter-24",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://openrouter.ai/api/v1"
+      ],
+      "models": [
+        "sakana/fugu-max",
+        "sakana/fugu-ultra",
+        "sakana/fugu-ultra-v2"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "high",
+            "xhigh",
+            "max"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openrouter.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openrouter-25",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://openrouter.ai/api/v1"
+      ],
+      "models": [
+        "thinkingmachines/inkling",
+        "thinkingmachines/inkling-small",
+        "thinkingmachines/inkling-small:free",
+        "thinkingmachines/inkling:free"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openrouter.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openrouter-26",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://openrouter.ai/api/v1"
+      ],
+      "models": [
+        "upstage/solar-mini4",
+        "upstage/solar-pro4"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openrouter.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  }
+]

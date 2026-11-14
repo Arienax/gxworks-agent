@@ -8,15 +8,15 @@ from model_runtime.observations import ObservationStore, request_observer
 from model_runtime.verification import verify_one
 from test_model_capabilities import Endpoint, Rejection, provider
 from test_application_settings import settings_env
+from responses_fixture import chat_stream
 
 
 class WireEndpoint(Endpoint):
     def create(self,**params):
         payload=super().create(**params)
-        if not params.get('stream'):return payload
-        message=payload['choices'][0]['message']
-        return iter([{'choices':[{'delta':message,'finish_reason':'stop'}],
-            'usage':{'prompt_tokens':5,'completion_tokens':2,'total_tokens':7}}])
+        payload["usage"] = {"prompt_tokens": 5, "completion_tokens": 2, "total_tokens": 7}
+        return chat_stream(payload) if params.get("stream") else payload
+
 
 
 def scoped_provider(endpoint=None,**changes):
@@ -60,7 +60,8 @@ def test_verification_uses_one_actual_request_no_preflight_negative_or_fallback(
     wire=p._client.calls[0]
     assert wire['max_completion_tokens']==64 and len(wire['messages'])==1
     assert '工程' not in str(wire) and 'secret' not in str(wire)
-    if kind=='parameter':assert wire[target]==value
+    if kind == 'parameter':
+        assert wire[target] == value
     assert p.profile==before
     assert result['input_tokens']==5 and result['output_tokens']==2
 
@@ -100,7 +101,7 @@ def test_single_verification_budget_cannot_be_shadowed_by_advanced_options(optio
     verify_one(p,p.profile['capabilityContract'],'chat',kind='chat',consent=True)
     wire=p._client.calls[0]
     extra=wire.get('extra_body',{})
-    effective_limit=extra.get('max_completion_tokens',wire.get('max_completion_tokens'))
+    effective_limit=wire.get('max_completion_tokens')
     assert effective_limit==64
     assert 'max_tokens' not in wire and 'max_tokens' not in extra
     assert 'n' not in wire and 'n' not in extra
@@ -115,7 +116,7 @@ def test_unsupported_verification_target_or_budget_is_rejected_without_cost(targ
     assert p._client.calls==[]
 
 
-def test_verification_keeps_materialized_legacy_transport_capabilities():
+def test_verification_uses_chat_tools_for_third_party_profiles():
     p = scoped_provider(
         capabilities={
             "thinking_required": True,
@@ -132,5 +133,6 @@ def test_verification_keeps_materialized_legacy_transport_capabilities():
 
     assert result["outcome"] == "observed"
     wire = p._client.calls[0]
-    assert wire["extra_body"]["thinking"]["type"] == "enabled"
-    assert wire["extra_body"]["tool_stream"] is True
+    assert wire["tools"][0]["function"]["name"] == "capability_probe"
+    assert wire["thinking"] == {"type": "enabled"}
+    assert wire["tool_stream"] is True

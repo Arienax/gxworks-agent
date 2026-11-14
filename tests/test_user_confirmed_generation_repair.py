@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from application.generation import GenerationDependencies, GenerationRequest, GenerationWorkflow
 from application.workbench import WorkbenchService
 from model_runtime.provider import TextDelta
-from test_web_api import ORIGIN, _app, _ladder, _login, offline, offline_runtime_profile
+from test_web_api import ORIGIN, _app, _ladder, offline, offline_runtime_profile
 
 
 def test_incremental_prompt_keeps_only_partial_edit_hint(tmp_path):
@@ -51,7 +51,7 @@ class DeterministicDmovTypoProvider:
         }, ensure_ascii=False))
 
 
-def test_user_confirmed_deterministic_field_repair_uses_no_second_model_call(offline, tmp_path):
+def test_automatic_deterministic_field_repair_uses_no_second_model_call(offline, tmp_path):
     provider = DeterministicDmovTypoProvider()
     factory_calls = []
 
@@ -63,7 +63,7 @@ def test_user_confirmed_deterministic_field_repair_uses_no_second_model_call(off
         tmp_path / "workspace", tmp_path / "state", model_factory=factory,
     )
     with TestClient(_app(service.store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         project = client.post("/api/projects", json={"name": "repair"}, headers=headers).json()["id"]
         service.store.set_confirmed_spec(project, {"summary": "X0 clears D0", "io_table": [], "parameters": []})
         created = client.post("/api/jobs", headers=headers, json={
@@ -77,38 +77,19 @@ def test_user_confirmed_deterministic_field_repair_uses_no_second_model_call(off
         bad_job = created.json()["id"]
         service.jobs._futures[bad_job].result(timeout=15)
 
-        preserved = client.get(f"/api/jobs/{bad_job}").json()
-        assert preserved["status"] == "completed", preserved
-        assert preserved["result"]["status"] == "saved_invalid"
-        bad_output = client.get(f"/api/jobs/{bad_job}/output").json()
-        violation = bad_output["generation"]["validation"]["violations"][0]
-        assert violation["observed_opcode"] == "DDMOV"
-        assert len(provider.requests) == 1 and len(factory_calls) == 1
-        assert service.projects.project(project)["version_count"] == 1
-
-        repaired = client.post(f"/api/jobs/{bad_job}/repair", headers=headers, json={"request_id": "repair-once"})
-        assert repaired.status_code == 202, repaired.text
-        repair_job = repaired.json()["id"]
-        service.jobs._futures[repair_job].result(timeout=15)
-        completed = client.get(f"/api/jobs/{repair_job}").json()
+        completed = client.get(f"/api/jobs/{bad_job}").json()
         assert completed["status"] == "completed", completed
         assert completed["result"]["status"] == "saved"
         assert len(provider.requests) == 1, "deterministic field repair must not call the provider"
         assert len(factory_calls) == 1, "deterministic field repair must not initialize provider"
-        repair_snapshot = service.jobs._load(repair_job)["snapshot"]
-        assert repair_snapshot["repair_mode"] is True
-        assert repair_snapshot["format_repair"] is False
-        assert repair_snapshot["task_type"] == "contract_repair"
-        assert repair_snapshot["repair_plan"]["mode"] == "field_patch"
-        assert repair_snapshot["repair_plan"]["target"]["strategy"] == "deterministic"
-        assert repair_snapshot["repair_plan"]["target"]["path"] == "/rungs/0/branches/0/outputs/0/opcode"
-        assert repair_snapshot["repair_plan"]["target"]["deterministic_value"] == "DMOV"
-        assert repair_snapshot["allowed_rung_ids"] == []
-        assert service.projects.project(project)["version_count"] == 2
+        output = client.get(f"/api/jobs/{bad_job}/output").json()
+        assert output["generation"]["generation_handoff"]["candidate_flow"]["local_field_repaired"]
+        assert service.projects.project(project)["version_count"] == 1
 
-        preview = client.get(f"/api/jobs/{repair_job}/preview")
+        preview = client.get(f"/api/jobs/{bad_job}/preview")
         assert preview.status_code == 200, preview.text
         assert "<svg" in preview.json()["svg"]
+        assert preview.json()["ladder"]["rungs"][0]["branches"][0]["outputs"][0]["opcode"] == "DMOV"
 
 
 class ModifierTypoProvider:
@@ -125,7 +106,7 @@ class ModifierTypoProvider:
         }, ensure_ascii=False))
 
 
-def test_user_confirmed_unique_opcode_repair_is_model_free(offline, tmp_path):
+def test_automatic_unique_opcode_repair_is_model_free(offline, tmp_path):
     provider = ModifierTypoProvider()
     factory_calls = []
 
@@ -137,7 +118,7 @@ def test_user_confirmed_unique_opcode_repair_is_model_free(offline, tmp_path):
         tmp_path / "workspace", tmp_path / "state", model_factory=factory,
     )
     with TestClient(_app(service.store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         project = client.post("/api/projects", json={"name": "opcode-repair"}, headers=headers).json()["id"]
         service.store.set_confirmed_spec(project, {"summary": "X0 triggers one calculation", "io_table": [], "parameters": []})
         first = client.post("/api/jobs", headers=headers, json={
@@ -145,27 +126,14 @@ def test_user_confirmed_unique_opcode_repair_is_model_free(offline, tmp_path):
             "text": "X0 triggers one calculation", "response_language": "zh-CN",
         }).json()["id"]
         service.jobs._futures[first].result(timeout=15)
-        preserved = client.get(f"/api/jobs/{first}").json()
-        assert preserved["status"] == "completed", preserved
-        assert preserved["result"]["status"] == "saved_invalid"
-        output = client.get(f"/api/jobs/{first}/output").json()
-        assert output["generation"]["validation"]["violations"][0]["observed_opcode"] == "DDADDP"
-        assert len(provider.requests) == 1 and len(factory_calls) == 1
-
-        response = client.post(f"/api/jobs/{first}/repair", headers=headers, json={"request_id": "fix-modifier"})
-        assert response.status_code == 202, response.text
-        repair_job = response.json()["id"]
-        service.jobs._futures[repair_job].result(timeout=15)
-        completed = client.get(f"/api/jobs/{repair_job}").json()
+        completed = client.get(f"/api/jobs/{first}").json()
         assert completed["status"] == "completed", completed
         assert completed["result"]["status"] == "saved"
         assert len(provider.requests) == 1, "deterministic modifier repair must not call model"
         assert len(factory_calls) == 1, "deterministic modifier repair must not initialize provider"
-        snapshot = service.jobs._load(repair_job)["snapshot"]
-        target = snapshot["repair_plan"]["target"]
-        assert target["strategy"] == "deterministic"
-        assert target["deterministic_value"] == "DADDP"
-        assert service.projects.project(project)["version_count"] == 2
+        preview = client.get(f"/api/jobs/{first}/preview").json()
+        assert preview["ladder"]["rungs"][0]["branches"][0]["outputs"][0]["opcode"] == "DADDP"
+        assert service.projects.project(project)["version_count"] == 1
 
 
 class FormatRewriteProvider:
@@ -193,7 +161,7 @@ def test_format_repair_rejects_model_whole_program_rewrite(offline, tmp_path):
         model_factory=lambda: (provider, {"model": "offline"}),
     )
     with TestClient(_app(service.store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         project = client.post("/api/projects", json={"name": "format-local-only"}, headers=headers).json()["id"]
         service.store.set_confirmed_spec(project, {"summary": "X0 controls Y0", "io_table": [], "parameters": []})
         first = client.post("/api/jobs", headers=headers, json={
@@ -201,19 +169,18 @@ def test_format_repair_rejects_model_whole_program_rewrite(offline, tmp_path):
             "text": "X0 controls Y0", "response_language": "zh-CN",
         }).json()["id"]
         service.jobs._futures[first].result(timeout=15)
-        response = client.post(f"/api/jobs/{first}/repair", headers=headers, json={"request_id": "format-local-only-repair"})
-        assert response.status_code == 202, response.text
-        job = response.json()["id"]
-        service.jobs._futures[job].result(timeout=15)
-        failed = client.get(f"/api/jobs/{job}").json()
+        failed = client.get(f"/api/jobs/{first}").json()
         # A whole-program reply is not accepted as a repair. The original
         # candidate remains visible/renderable instead of being silently replaced.
         assert failed["status"] in {"failed", "completed"}
+        if failed["status"] == "completed":
+            assert failed["result"]["status"] == "saved_invalid"
         assert len(provider.requests) == 2
-        prompt = str(provider.requests[1].messages[0].content)
-        assert "local format patch" in prompt
-        assert "Never output the full repaired JSON" in prompt
-        assert "complete top-level ladder JSON" not in prompt
+        initial, repair = provider.requests
+        assert repair.messages[:len(initial.messages)] == initial.messages
+        payload = json.loads(repair.messages[-1].content)
+        assert payload["candidate_repair"]["action"] == "format_patch"
+        assert "patches" in payload["output_schema"]["properties"]
 
 
 def test_failure_ui_offers_explicit_repair_not_fake_automatic_attempts():
@@ -238,7 +205,9 @@ def test_direct_fallback_repair_preserves_clarification_facts_and_original_candi
             self.requests.append(request)
             if len(self.requests) == 1:
                 yield TextDelta(raw)
-            elif len(self.requests) == 2:
+            elif len(self.requests) in (2, 3):
+                yield TextDelta('{"invalid_patch":true}')
+            elif len(self.requests) == 4:
                 import hashlib
                 yield TextDelta(json.dumps({"schema_version": 1, "mode": "format_patch",
                     "base_sha256": hashlib.sha256(raw.encode()).hexdigest(),
@@ -250,7 +219,7 @@ def test_direct_fallback_repair_preserves_clarification_facts_and_original_candi
     service = WorkbenchService(tmp_path / "workspace", tmp_path / "state",
         model_factory=lambda: (provider, {"model": provider.profile["model"]}))
     with TestClient(_app(service.store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         pid = client.post("/api/projects", json={"name": "Direct 修复", "plc_model": "FX3U"}, headers=headers).json()["id"]
         requirement = "Y0：运行输出。按住输入时运行，松开停止。"
         first = _historical_direct_job(service, pid, requirement, [
@@ -277,7 +246,7 @@ def test_direct_fallback_repair_preserves_clarification_facts_and_original_candi
             return
         repair_id, output = _complete(client, service, repair)
         assert output["status"] == "saved", output
-        assert len(provider.requests) == 2
+        assert len(provider.requests) == 4
         snapshot = service.jobs._load(repair_id)["snapshot"]
         assert requirement in snapshot["repair_requirement"]
         assert "X0" in snapshot["user_fact_text"] and "X7" not in snapshot["user_fact_text"]

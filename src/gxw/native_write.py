@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Source-bound plans and saved-source verification for the offline workspace.
 
@@ -168,13 +168,25 @@ def _native_project_source_inventory(raw: bytes) -> tuple[dict, list[dict]]:
         for row in programs]
 
 
+_NATIVE_POU_TYPES = {'program': 0x01000000, 'function_block': 0x01000002,
+                     'function': 0x01000003}
+
+
 def native_source_creation_plan(raw: bytes, name: str, *, pou_kind='function_block') -> dict:
-    """Create an empty FBD Program or FB through its original native constructor."""
-    if not isinstance(pou_kind, str) or pou_kind not in ('program', 'function_block'):
-        raise GXWFormatError('native FBD creation requires program or function_block POU kind')
+    """Create an empty FBD Program, FB or FUNCTION through its native constructor."""
+    if not isinstance(pou_kind, str) or pou_kind not in _NATIVE_POU_TYPES:
+        raise GXWFormatError('native FBD creation requires program, function_block or function POU kind')
     if not isinstance(name, str) or not re.fullmatch(r'[^\W\d]\w*', name, re.UNICODE):
         raise GXWFormatError('invalid native POU name')
     project, programs = _native_project_source_inventory(raw)
+    if pou_kind == 'function':
+        from gxworks2.project_profiles import native_project_profile
+        profile = native_project_profile(project['cpu'])
+        # GX Works2 Structured Project AG, PDF105: FUNCTION accepts ST and
+        # Structured Ladder/FBD for Q, L and FX. This binds the constructor
+        # request only; exact-CPU native acceptance remains a separate result.
+        if profile is None or not profile.program_supported:
+            raise GXWFormatError('FBD FUNCTION creation applicability is not bound for this CPU')
     if any(row['name'].casefold() == name.casefold() for row in programs):
         raise GXWFormatError('native POU name already exists')
     try:
@@ -182,7 +194,7 @@ def native_source_creation_plan(raw: bytes, name: str, *, pou_kind='function_blo
     except (LookupError, UnicodeError) as error:
         raise GXWFormatError('native POU name cannot be represented by the project codepage') from error
     return {'program_name': name, 'cpu': project['cpu'], 'codepage': project['codepage'],
-            'pou_type': 0x01000000 if pou_kind == 'program' else 0x01000002,
+            'pou_type': _NATIVE_POU_TYPES[pou_kind],
             'program_kind': 208, 'programs': programs}
 
 
@@ -784,6 +796,7 @@ def verify_native_source_creation(baseline: bytes, name: str, raw: bytes, observ
     after_by_stream = {stream: logical for logical, stream in mapping.items()}
     changes = []
     debug_map_changes = []
+    compile_option_changes = []
     for logical, stream in previous_mapping.items():
         before = previous_nested.get(stream)
         if before is None:
@@ -797,21 +810,29 @@ def verify_native_source_creation(baseline: bytes, name: str, raw: bytes, observ
             if logical == saved_name == 'DebugInformation2.dat':
                 from .compiler_debug import compiler_debug_search_map_permutation
                 debug_permutation = compiler_debug_search_map_permutation(before, after)
-            if saved_name != logical or not (logical in vendor_resources or debug_permutation):
+            compile_initialization = None
+            if logical == saved_name and logical.endswith('.prj'):
+                from .project_metadata import native_project_compile_option_initialization
+                compile_initialization = native_project_compile_option_initialization(before, after, observation)
+            if saved_name != logical or not (logical in vendor_resources or debug_permutation or compile_initialization):
                 raise GXWFormatError('native creation changed an unedited original object: ' + logical)
             changes.append(logical)
+            if compile_initialization:
+                compile_option_changes.append({'object':logical, **compile_initialization})
             if debug_permutation:
                 debug_map_changes.append({'object': logical, 'change': 'search-map-entry-order-only',
                     'offset_tables_and_elements': 'exact', 'group_order_and_fields': 'exact', 'unknown_suffix': 'exact'})
     report = {'schema_version': 1, 'operation': 'native_source_creation', 'created_program': program,
               'created_declarations': group['labels'], 'native_workspace': observation,
               'native_folder_renumbering': renumbered, 'vendor_changed_streams': changes,
-              'debug_map_changes': debug_map_changes,
+              'debug_map_changes': debug_map_changes, 'native_compile_option_initializations':compile_option_changes,
               'validation': {'parser': 'passed', 'source_body': 'exact', 'declarations': 'passed',
+                             'unedited_configuration': 'native_open_compile_profile_initialized' if compile_option_changes else 'preserved',
                              'unedited_sources': 'preserved', 'workspace_load': 'passed', 'native_save': 'passed',
                              'saved_file_readback': 'passed', 'gxworks_compile': 'not_run', 'gxworks_check': 'not_run'},
               'pou_kind': pou_kind,
-              'limitations': ['Empty project FBD ' + ('Program' if pou_kind == 'program' else 'FB')
+              'limitations': ['Empty project FBD ' + {'program': 'Program', 'function_block': 'FB',
+                                                       'function': 'FUNCTION'}[pou_kind]
                               + '; task registration, source edits and compilation/checking are separate operations']}
     return ProjectWriteResult(bytes(raw), report)
 

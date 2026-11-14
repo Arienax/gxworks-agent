@@ -1,6 +1,10 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Immutable engineering snapshots and explicit context preconditions."""
 from __future__ import annotations
 import copy
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 from agent_runtime.tool_errors import ToolPreconditionError, PROJECT_ACTIONS, SOURCE_ACTIONS
@@ -21,12 +25,14 @@ class ToolContext:
     native_snapshot: Optional[bytes] = None
     st_text: Optional[str] = None
     sfc_graph: Optional[Mapping[str, Any]] = None
-    read_revision: Optional[str] = None
+    read_revision: str = field(default_factory=lambda: uuid.uuid4().hex)
     inspection: Any = None
     analysis_source: Optional[Mapping[str, Any]] = None
     operation_status: Any = None
     native_session_status: Any = None
     native_session_pause: Any = None
+    direct_input: Optional[Mapping[str, Any]] = None
+    defer_read: bool = False
 
     @property
     def project_id(self) -> str:
@@ -79,7 +85,7 @@ def build_tool_context(
         native_snapshot=bytes(native_snapshot) if native_snapshot is not None else None,
         st_text=st_text,
         sfc_graph=copy.deepcopy(dict(sfc_graph)) if isinstance(sfc_graph, Mapping) else None,
-        read_revision=read_revision,
+        read_revision=read_revision if read_revision is not None else uuid.uuid4().hex,
         inspection=inspection,
         analysis_source=copy.deepcopy(analysis_source),
         operation_status=operation_status,
@@ -112,6 +118,9 @@ def resolve_tool_context(definition, context, arguments):
         requirement = "version"
     if definition.name == 'create_st_candidate' and arguments.get('operation') in {'create_st_program', 'edit_st_program'}:
         requirement = 'version'
+    if (definition.name == 'create_fbd_candidate' and arguments.get('operation') == 'create_st_fb'
+            and not context.version_id and context.project.get('target_mode') == 'fbd'):
+        requirement = 'project'
     if requirement == "none":
         return context
     if requirement == "model":
@@ -138,13 +147,21 @@ def resolve_tool_context(definition, context, arguments):
             unavailable = status["status"] == "index_unavailable"
             raise ToolPreconditionError("KNOWLEDGE_INDEX_UNAVAILABLE" if unavailable else "KNOWLEDGE_UNAVAILABLE",
                 "知识索引不可用，无法完成手册检索。" if unavailable else f"当前资料未覆盖请求的型号 {model}。",
-                details=status, next_actions=({"tool": "search_plc_manual", "required_arguments": ["query", "plc_model"]},))
+                details={**status, "language": arguments.get("language") or (context.version or {}).get("target_mode")
+                         or context.project.get("target_mode")})
         return replace(context, project={**context.project, "plc_model": model},
                        version={**context.version, "plc_model": model} if context.version is not None else None)
     if not context.project_id and context.analysis_source is None:
         raise ToolPreconditionError("NO_PROJECT_SELECTED", "未选中 Agent 工程；可先发现原生工程并读取分析快照。",
                                     next_actions=PROJECT_ACTIONS)
     if requirement == "version" and not context.version_id:
+        if definition.name in {"create_fbd_candidate", "create_st_candidate", "create_sfc_candidate"}:
+            extra = '（如需先建 ST 功能块也可使用 operation="create_st_fb"）' if definition.name == "create_fbd_candidate" else ''
+            raise ToolPreconditionError(
+                "NO_PROGRAM_SOURCE",
+                f'此操作需要已保存的工程版本；全新空工程请使用 {definition.name}(operation="generate"){extra}。',
+                next_actions=({"tool": definition.name, "arguments": {"operation": "generate"}}, *SOURCE_ACTIONS),
+            )
         raise ToolPreconditionError("NO_PROGRAM_SOURCE", "此操作需要已保存的工程版本。", next_actions=SOURCE_ACTIONS)
     if requirement == "program" and not any((context.program_ir, context.ladder, context.native_snapshot,
                                              context.fbd_baseline, context.st_text, context.analysis_source)):
@@ -194,6 +211,18 @@ def _generation_spec(context: ToolContext):
     return _confirmed_spec(context)
 
 
+def _ladder_user_facts(context: ToolContext):
+    """Facts bound by the host, or recorded with the source being edited."""
+    if isinstance(facts := (context.direct_input or {}).get('facts'), Mapping):
+        return facts
+    spec = _generation_spec(context)
+    if spec is not None:
+        return spec
+    handoff = (context.version or {}).get('generation_handoff') or {}
+    facts = handoff.get('direct_user_facts')
+    return facts if isinstance(facts, Mapping) else None
+
+
 def _require_generation_plan(context: ToolContext, arguments, *, generation_handoff=None):
     """Keep managed first-generation drafts out of candidate implementation.
 
@@ -203,6 +232,9 @@ def _require_generation_plan(context: ToolContext, arguments, *, generation_hand
     document = context.project.get('_spec_document')
     if not isinstance(document, Mapping) or context.version_id or _generation_spec(context):
         return
+    if (not document.get('differences') and arguments.get('workflow') is None
+            and (generation_handoff or {}).get('mode') != 'plan_review'):
+        return  # A new empty document retains the public direct-generation path.
     if arguments.get('workflow') == 'direct_generation' or (
             arguments.get('workflow') is None and isinstance(generation_handoff, Mapping)
             and generation_handoff.get('mode') == 'direct_generation'):

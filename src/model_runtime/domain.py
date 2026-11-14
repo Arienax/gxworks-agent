@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Non-executable v3 parameter domains, presentation hints and bounded evidence.
 
 UI precision is not server precision. Observations never define allowed values.
@@ -50,7 +53,8 @@ def evidence(value):
             raise ValueError("Observation needs an opaque context fingerprint")
         if not finite(item.get("at")):
             raise ValueError("Invalid observation timestamp")
-        if item.get("code", "") not in {"", "unsupported_parameter", "invalid_parameter", "invalid_value", "unknown_parameter"}:
+        if item.get("code", "") not in {"", "unsupported_parameter", "invalid_parameter", "invalid_value",
+                                        "unsupported_value", "unknown_parameter"}:
             raise ValueError("Unrecognized observation code")
         val = item.get("value")
         if val is not None and not scalar(val):
@@ -71,7 +75,7 @@ def prepare(raw):
     raw = copy.deepcopy(dict(raw))
     observed = evidence(raw.pop("evidence", {}))
     hints = raw.pop("ui_hint", {})
-    if not isinstance(hints, dict) or set(hints) - {"minimum", "maximum", "step", "suggestions", "advanced"}:
+    if not isinstance(hints, dict) or set(hints) - {"minimum", "maximum", "step", "suggestions", "advanced", "reasoning_levels"}:
         raise ValueError("Invalid UI hint")
     domain = raw.pop("domain", None)
     if domain is not None:

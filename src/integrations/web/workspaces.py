@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Single-level directory listing for the in-app workspace picker.
 
@@ -17,6 +17,10 @@ import ntpath
 import posixpath
 import re
 from pathlib import Path
+
+from filelock import FileLock
+
+from application.workspace import atomic_json, read_json
 
 MAX_ENTRIES_DEFAULT = 1000
 
@@ -225,17 +229,25 @@ class WorkspaceRegistry:
     workspace's service is started.
     """
 
-    def __init__(self, path: str | Path):
+    def __init__(self, path: str | Path, *, legacy_path: Path | None = None):
         self.path = Path(path)
+        self._legacy_path = legacy_path
+        self._writes = FileLock(self.path.with_suffix(".lock"))
 
     def entries(self) -> list[dict]:
+        return self._entries(self._read())
+
+    def _read(self) -> dict:
         try:
-            payload = json.loads(self.path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            return []
-        rows = payload.get("workspaces") if isinstance(payload, dict) else None
+            path = self._legacy_path if self._legacy_path is not None and not self.path.exists() else self.path
+            return read_json(path)
+        except FileNotFoundError:
+            return {}
+
+    @staticmethod
+    def _entries(payload: dict) -> list[dict]:
         result = []
-        for row in rows or ():
+        for row in payload.get("workspaces") or ():
             if not isinstance(row, dict):
                 continue
             path, identifier = row.get("path"), row.get("id")
@@ -245,51 +257,37 @@ class WorkspaceRegistry:
                            "label": Path(path).name or path})
         return result
 
-    def save(self, rows: list[dict]) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {"version": 1, "active": getattr(self, "_active_id", None),
+    def _save(self, rows: list[dict], active: str | None) -> None:
+        payload = {"version": 1, "active": active,
                    "workspaces": [{"id": row["id"], "path": row["path"]} for row in rows]}
-        temporary = self.path.with_suffix(".tmp")
-        temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
-        temporary.replace(self.path)
+        atomic_json(self.path, payload)
 
     def active(self) -> str | None:
-        """The workspace the next page load binds, remembered across restarts."""
-        if not hasattr(self, "_active_loaded"):
-            try:
-                payload = json.loads(self.path.read_text(encoding="utf-8"))
-                value = payload.get("active") if isinstance(payload, dict) else None
-                self._active_id = value if isinstance(value, str) else None
-            except (OSError, ValueError):
-                self._active_id = None
-            self._active_loaded = True
-        known = {row["id"] for row in self.entries()}
-        return self._active_id if self._active_id in known else None
+        """Last selected workspace for a newly started workbench."""
+        payload = self._read()
+        identifier = payload.get("active")
+        return identifier if any(row["id"] == identifier for row in self._entries(payload)) else None
 
-    def set_active(self, identifier: str | None) -> None:
-        self._active_id = identifier
-        self._active_loaded = True
-        self.save(self.entries())
-
-    def add(self, path: str | Path) -> dict:
+    def remember(self, path: str | Path) -> None:
+        """Register an opened workspace and remember it in one write."""
         resolved = Path(path).expanduser().resolve()
-        rows = self.entries()
         identifier = workspace_id(resolved)
-        for row in rows:
-            if row["id"] == identifier:
-                return row
-        row = {"id": identifier, "path": str(resolved), "label": resolved.name or str(resolved)}
-        rows.append(row)
-        self.save(rows)
-        return row
+        with self._writes:
+            rows = self.entries()
+            if not any(row["id"] == identifier for row in rows):
+                rows.append({"id": identifier, "path": str(resolved)})
+            self._save(rows, identifier)
 
     def remove(self, identifier: str) -> bool:
-        rows = self.entries()
-        kept = [row for row in rows if row["id"] != identifier]
-        if len(kept) == len(rows):
-            return False
-        self.save(kept)
-        return True
+        with self._writes:
+            payload = self._read()
+            rows = self._entries(payload)
+            kept = [row for row in rows if row["id"] != identifier]
+            if len(kept) == len(rows):
+                return False
+            active = payload.get("active")
+            self._save(kept, None if active == identifier else active)
+            return True
 
     def find(self, identifier: str) -> dict | None:
         return next((row for row in self.entries() if row["id"] == identifier), None)

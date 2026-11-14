@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Freeze model and project inputs before scheduling work."""
 from __future__ import annotations
@@ -7,6 +7,7 @@ import base64
 import copy
 import hashlib
 import json
+from dataclasses import replace
 from application.projects import record_id
 from application.workspace import (
     ConflictError,
@@ -15,6 +16,7 @@ from application.workspace import (
     read_json,
 )
 from plc.change_scope import ChangeScopeError
+from application.jobs import job_conversation_id
 from shared.context_audit import ContextAudit, context_audit_scope
 
 class JobSubmission:
@@ -33,6 +35,7 @@ class JobSubmission:
                  read_gx,
                  validate_snapshot,
                  require_writable,
+                 generation_runtime='legacy',
                  ):
         self.projects = projects
         self.state_dir = state_dir
@@ -46,29 +49,38 @@ class JobSubmission:
         self.read_gx = read_gx
         self.validate_snapshot = validate_snapshot
         self.require_writable = require_writable
+        self.generation_runtime = generation_runtime
 
     def submit(self, command):
         self.require_writable()
         # Mode is a frozen job input, never a PLC contract or mutable UI setting.
         command = copy.deepcopy(command)
+        if command.get("conversation_id") is None:
+            command.pop("conversation_id", None)
+        if not command.get("start_conversation"):
+            command.pop("start_conversation", None)
+        elif command.get("conversation_id") or command.get("clarification_job_id"):
+            raise ValueError("接续任务必须沿用原对话。")
         if command.get('program') is None:
             command.pop('program', None)
-        elif command.get('kind') != 'generation' or command.get('generation_action') == 'regenerate':
+        elif command.get('kind') not in ('analysis', 'generation') or command.get('generation_action') == 'regenerate':
             raise ValueError('程序选择仅适用于已有 GXW 源码编辑。')
         if command.get("generation_action") is not None and command.get("kind") != "generation":
             raise ValueError("生成动作仅适用于生成程序任务。")
         if command.get("generation_action") is None:
             command.pop("generation_action", None)
-        if command.get("clarification_job_id") and command.get("kind") != "direct_generation":
-            raise ValueError("续答仅适用于 Direct 一次生成。")
+        clarification_kinds = {'direct_generation'} | ({'analysis', 'generation'} if self.generation_runtime == 'dsh' else set())
+        if command.get("clarification_job_id") and command.get("kind") not in clarification_kinds:
+            raise ValueError("当前任务不支持续答。")
         if not command.get("clarification_job_id"):
             command.pop("clarification_job_id", None)
         if command.get("clarification_answers") is None:
             command.pop("clarification_answers", None)
-        elif command.get("kind") != "direct_generation" or not command.get("clarification_job_id"):
-            raise ValueError("逐项答复必须绑定 Direct 待补充信息的作业。")
+        elif command.get("kind") not in clarification_kinds or not command.get("clarification_job_id"):
+            raise ValueError("逐项答复必须绑定等待补充信息的作业。")
         if command.get("kind") == "analysis":
-            command["analysis_mode"] = "design" if command.get("analysis_mode") == "design" else "direct"
+            if 'analysis_mode' in command or not command.get('clarification_job_id'):
+                command["analysis_mode"] = "design" if command.get("analysis_mode") == "design" else "direct"
         else:
             command.pop("analysis_mode", None)
         # Retry identity is the original HTTP command, not a newly observed
@@ -99,7 +111,31 @@ class JobSubmission:
         self.require_writable()
         project_id = command["project_id"]
         with self.lock.thread_lock:
+            parent = None
+            if command.get('clarification_job_id') and self.generation_runtime == 'dsh':
+                parent = self.jobs.record(record_id(command['clarification_job_id']))
+                source = parent.get('snapshot') or {}
+                if (parent.get('kind') != command['kind'] or parent.get('status') != 'completed'
+                        or source.get('project_id') != project_id
+                        or (parent.get('result') or {}).get('status') != 'needs_input'):
+                    raise ConflictError('续答必须绑定同一工程、同类任务中等待答复的作业。')
+                self.validate_snapshot(source)
+                for field in ('version_id', 'program', 'change_scope', 'analysis_mode', 'generation_action', 'construction_examples'):
+                    if field in command and command[field] != source.get(field):
+                        raise ConflictError('续答不能改变原任务绑定：' + field)
+                    if source.get(field) is not None:
+                        command[field] = copy.deepcopy(source[field])
+                command['conversation_id'] = job_conversation_id(parent)
             context = self.projects.tool_context(project_id, command.get("version_id"))
+            if command.get("conversation_id"):
+                anchor = self.jobs.record(command["conversation_id"])
+                if anchor["snapshot"].get("project_id") != project_id:
+                    raise ValueError("对话必须属于当前工程。")
+            if command.get("program") and context.native_snapshot is None:
+                raise ValueError("程序选择需要绑定已保存的 GXW 工程。")
+            if command.get('program'):
+                from application.gxw_files import source_context
+                context = source_context(context, command['program'])
             scope = self.command_scope(command, context)
             project = dict(context.project)
             snapshot = {**copy.deepcopy(command), "project": project, "version": context.version,
@@ -112,7 +148,7 @@ class JobSubmission:
                 if context.version is None:
                     raise ValueError("修改或重新生成必须绑定已选择的程序版本。")
                 if generation_action == "edit":
-                    if not str(command.get("text") or "").strip():
+                    if not str(command.get("text") or "").strip() and not command.get('clarification_answers'):
                         raise ValueError("请描述希望修改的程序行为。")
                     snapshot["fresh_confirmed_generation"] = False
                 else:
@@ -139,6 +175,7 @@ class JobSubmission:
                     if parent.get("request_id") == command["request_id"]:
                         raise ConflictError("续答需要新的请求 ID。")
                     self.validate_snapshot(parent["snapshot"])
+                    snapshot["conversation_id"] = job_conversation_id(parent)
                     previous = self.previews.output(parent_id)
                     prior_text = parent["snapshot"].get("raw_requirement", parent["snapshot"].get("text", ""))
                     questions = (previous.get("generation") or {}).get("missing_info", [])
@@ -160,6 +197,21 @@ class JobSubmission:
                             + "\n用户续答：\n" + answer_text)
                     snapshot["user_fact_text"] = (self.direct_user_fact_text(parent["snapshot"])
                         + "\n用户续答：\n" + answer_text)
+                    prior_answers = self._direct_answers(parent['snapshot'])
+                    snapshot['direct_answers'] = {**prior_answers,
+                                                  **snapshot.get('clarification_answers', {})}
+                    from application.confirmed_generation_context import direct_requirements_view
+                    recorded = parent['snapshot']
+                    origin = direct_requirements_view({
+                        'mode': 'direct_generation', 'raw_requirement': prior_text,
+                        'direct_answers': prior_answers,
+                        'direct_requirements': recorded.get('direct_requirements'),
+                    })
+                    answers = {row['id']: row for row in origin.get('answers', [])}
+                    answers.update({row['id']: {key: row[key] for key in ('id', 'question', 'answer')} for row in rows})
+                    snapshot['direct_requirements'] = {**origin, 'answers': list(answers.values())}
+                    if command.get('text', '').strip():
+                        snapshot['direct_requirements']['supplements'] = [*origin.get('supplements', []), command['text']]
                     parent_facts = self._direct_snapshot_facts(parent["snapshot"])
                     snapshot["direct_user_facts"] = project_direct_user_facts(
                         command.get("text", ""), project["plc_model"], parent_facts, answers=rows)
@@ -167,14 +219,34 @@ class JobSubmission:
                         *parent["snapshot"].get("attachment_ids", []), *command.get("attachment_ids", [])]))
                 else:
                     snapshot["raw_requirement"] = command["text"]
+                    snapshot['direct_requirements'] = {'original_request': command['text'], 'answers': []}
                     snapshot["user_fact_text"] = command["text"]
                     snapshot["direct_user_facts"] = project_direct_user_facts(
                         command["text"], project["plc_model"], project.get("confirmed_spec"))
+            elif parent is not None:
+                previous = self.previews.output(command['clarification_job_id'])
+                questions = (previous.get('generation') or {}).get('missing_info', [])
+                rows = self._direct_answer_rows(questions, command.get('clarification_answers') or {})
+                snapshot['clarification_answers'] = {row['id']: row['answer'] for row in rows}
+                answers = '\n'.join([*(row['answer'] for row in rows), command.get('text', '')]).strip()
+                source = parent['snapshot']
+                snapshot['user_fact_text'] = self.direct_user_fact_text(source) + '\n用户续答：\n' + answers
+                snapshot['raw_requirement'] = (source.get('raw_requirement', source.get('text', ''))
+                    + '\n逐项用户答复（question 仅对应问题，answer 才是用户答复）：\n'
+                    + json.dumps(rows, ensure_ascii=False)
+                    + ('\n用户补充：\n' + command.get('text', '') if command.get('text') else ''))
+                snapshot['attachment_ids'] = list(dict.fromkeys([
+                    *source.get('attachment_ids', []), *command.get('attachment_ids', [])]))
             if context.version and (context.version.get("target_mode") == "fbd" or
                     context.version.get('target_mode') == 'st' and context.native_snapshot is not None):
                 raw = self.projects.artifact(project_id, context.version_id, "gxw").read_bytes()
                 snapshot["fbd_baseline"] = base64.b64encode(raw).decode("ascii")
                 snapshot["fbd_program"] = context.version.get("program_name")
+            if (command["kind"] in {"analysis", "generation", "direct_generation"}
+                    and (context.version or {}).get("target_mode", project["target_mode"]) == "ladder"):
+                from application.spec_document import project_acceptance_cases
+                project["_acceptance_cases"] = list(project_acceptance_cases(project, context.plc_model))
+                context = replace(context, project=project)
             # Resolve files and credentials at submission, never later from mutable UI state.
             images = self.attachments.load(project_id, snapshot.get("attachment_ids", []))
             repair_plan = command.get("repair_plan") if isinstance(command.get("repair_plan"), dict) else {}
@@ -191,6 +263,17 @@ class JobSubmission:
             )
             provider, model = self.model_factory() if requires_model else (None, {})
             snapshot["model"] = model
+            if (requires_model and self.generation_runtime == 'dsh'
+                    and command['kind'] in {'analysis', 'generation', 'direct_generation'}
+                    and (context.version or {}).get('target_mode', project['target_mode']) == 'ladder'):
+                snapshot['generation_runtime'] = 'dsh'
+            conversation_id = snapshot.get("conversation_id")
+            keep_model_turn = (requires_model and (conversation_id or snapshot.get("start_conversation"))
+                               and command["kind"] in {"analysis", "generation", "direct_generation"}
+                               and not (snapshot.get("repair_mode") or snapshot.get("format_repair"))
+                               and snapshot.get('generation_runtime') != 'dsh')
+            previous_turns = (self.jobs.completed_conversation_jobs(project_id, conversation_id)
+                              if keep_model_turn and conversation_id else ())
             snapshot["approval_consent"] = self.approval.read()
             if command["kind"] == "debug_plan":
                 snapshot["saved_run"] = self.projects.simulator_run(project_id, context.version_id, command.get("run_id"))
@@ -207,13 +290,23 @@ class JobSubmission:
             from model_runtime.provider import response_policy_scope
             from model_runtime.usage import usage_scope
             from application.model_progress import ModelJobContext, ModelProgressReporter
+            from application.conversation_model import ModelTurn, model_turn_scope
             ctx.checkpoint()
             model_context = ModelJobContext(ctx)
             model_progress = ModelProgressReporter(model_context)
             context_audit = ContextAudit(lambda report: ctx.emit("context_audit", report))
-            with usage_scope(lambda kind, data: ctx.emit(kind, data)), language_context(snapshot["response_language"]), context_audit_scope(context_audit), provider_scope(
-                    provider, model_name=model.get("model")), response_policy_scope(
-                    enforce_language=False, on_progress=model_progress, on_preview=model_progress.preview):
+            turn = (ModelTurn(self.state_dir, previous_turns, model, getattr(provider, "profile", {}) or {},
+                              snapshot["response_language"], session_id=conversation_id or ctx.job_id)
+                    if keep_model_turn else None)
+            with (
+                model_turn_scope(turn),
+                usage_scope(lambda kind, data: ctx.emit(kind, data)),
+                language_context(snapshot["response_language"]),
+                context_audit_scope(context_audit),
+                provider_scope(provider, model_name=model.get("model")),
+                response_policy_scope(enforce_language=False, on_progress=model_progress,
+                                      on_preview=model_progress.preview),
+            ):
                 try:
                     result = self.run_job(model_context, snapshot, context, images, provider)
                 except ChangeScopeError as error:
@@ -221,6 +314,8 @@ class JobSubmission:
                     raise
                 finally:
                     model_context.flush()
+            if turn and (command["kind"] == "analysis" or (result or {}).get("version_id")):
+                turn.save(ctx.job_id)
             return result
         return self.jobs.submit(command["kind"], snapshot, worker, request_id=command["request_id"])
 
@@ -289,6 +384,22 @@ class JobSubmission:
                 turn["project"].get("plc_model", "FX3U"), facts, answers=answers)
         return copy.deepcopy(facts)
 
+    def _direct_answers(self, snapshot):
+        """Recover answer IDs from saved turns, applying later answers last."""
+        answers, visited = {}, set()
+        while True:
+            saved = snapshot.get('direct_answers')
+            if isinstance(saved, dict):
+                return {**saved, **answers}
+            answers = {**(snapshot.get('clarification_answers') or {}), **answers}
+            parent_id = snapshot.get('clarification_job_id')
+            if not parent_id:
+                return answers
+            if parent_id in visited:
+                raise ConflictError('续答作业链存在循环。')
+            visited.add(parent_id)
+            snapshot = self.jobs.record(record_id(parent_id))['snapshot']
+
     @staticmethod
     def command_scope(command, context):
         from plc.change_scope import validate_scope_baseline
@@ -296,6 +407,4 @@ class JobSubmission:
         if scope is not None and command.get("kind") not in (None, "generation", "gx_read"):
             raise ValueError("修改范围仅适用于生成程序和读取程序候选。")
         mode = (context.version or {}).get("target_mode") or context.project.get("target_mode", "ladder")
-        if command.get("kind") == "generation" and context.project.get("target_mode") != "ladder":
-            mode = context.project["target_mode"]
         return validate_scope_baseline(scope, context.program_ir, target_mode=mode)

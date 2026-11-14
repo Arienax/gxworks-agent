@@ -14,7 +14,7 @@ pytest.importorskip("httpx", reason="Web integration requires requirements/web.t
 from fastapi.testclient import TestClient
 
 from application.workbench import WorkbenchService
-from test_web_api import AGENT, ORIGIN, _app, _login
+from test_web_api import AGENT, ORIGIN, _app
 
 
 @pytest.fixture
@@ -52,7 +52,7 @@ def onboarding(tmp_path, monkeypatch):
     credentials.save_service_binding(ORIGIN, "isolated-onboarding-agent-secret")
     app = _app(service.store.base_dir, service.state_dir, service=service)
     with TestClient(app, base_url=ORIGIN) as client:
-        yield SimpleNamespace(client=client, headers=_login(client), service=service, project=project["id"],
+        yield SimpleNamespace(client=client, headers={"Origin": ORIGIN}, service=service, project=project["id"],
             integrations=integrations, credentials=credentials, secrets=secrets, config=config,
             skill=skill, launches=launches)
 
@@ -278,16 +278,11 @@ def test_failed_connection_keeps_failure_response_and_redacts_paths(onboarding, 
 
 
 @pytest.mark.parametrize("path", ["/api/integrations/mcp/test", "/api/integrations/mcp/codex/connect"])
-def test_operator_only_onboarding_preserves_csrf_origin_and_read_only_checks(onboarding, path):
+def test_local_onboarding_checks_host_origin_and_workspace_mode(onboarding, path):
     env = onboarding
     body = {"project_id": env.project}
-    assert env.client.post(path, json=body).status_code == 403
     assert env.client.post(path, json=body, headers={**env.headers, "Origin": "https://other.example"}).status_code == 403
     assert env.client.post(path, json=body, headers={**env.headers, "Host": "other.example"}).status_code == 403
     env.service.read_only = True
     assert env.client.post(path, json=body, headers=env.headers).status_code == 403
-    env.service.read_only = False
-    env.client.cookies.clear()
-    assert env.client.post(path, json=body, headers={"Origin": ORIGIN, "Authorization": "Bearer " + AGENT}).status_code == 401
-    assert env.client.get("/api/integrations/mcp", params=body, headers={"Authorization": "Bearer " + AGENT}).status_code == 401
     assert env.launches == [] and not env.config.exists()

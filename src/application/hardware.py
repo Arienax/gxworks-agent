@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Operator-owned short-lived read permissions and durable read audit records."""
 from __future__ import annotations
@@ -77,26 +77,25 @@ class HardwareService:
             return "expired"
         return status
 
-    def _public(self, record, owner):
+    def _public(self, record):
         binding = record["binding"]
         return public({"id": record["id"], "status": self._status(record), "created_at": record["created_at"],
                        "approved_at": record.get("approved_at"), "expires_at": record.get("expires_at"),
                        "remaining_seconds": max(0, int(self.leases.get(record["id"], 0) - self.clock())),
-                       "owned_by_current_operator": record["owner"] == owner,
                        "target": {k: binding[k] for k in ("logical_station", "target_label", "addresses", "plc_model", "ttl_seconds")},
                        "project_id": binding["project_id"], "version_id": binding["version_id"],
                        "audit": record["audit"], "read_count": sum(a["action"] == "read_requested" for a in record["audit"]),
                        "target_verification": "operator_confirmed_logical_station_mapping"})
 
-    def list(self, project_id, version_id, owner):
+    def list(self, project_id, version_id):
         self.workbench.projects.raw_version(project_id, version_id)
         records = [self._load(path.stem) for path in self.directory.glob("*.json")] if self.directory.exists() else []
         records = [record for record in records if record["binding"]["project_id"] == project_id
                    and record["binding"]["version_id"] == version_id]
         return {"default_enabled": False, "reader": self.reader.availability(), "sessions":
-                [self._public(r, owner) for r in sorted(records, key=lambda record: record["created_at"], reverse=True)]}
+                [self._public(r) for r in sorted(records, key=lambda record: record["created_at"], reverse=True)]}
 
-    def propose(self, project_id, version_id, owner, command):
+    def propose(self, project_id, version_id, command):
         self.workbench.writable()
         with self.workbench.lock.thread_lock:
             version_hash, plc_model = self._binding(project_id, version_id)
@@ -113,25 +112,23 @@ class HardwareService:
                        "logical_station": station, "target_label": label, "addresses": addresses,
                        "plc_model": plc_model, "ttl_seconds": ttl, "reader_hash": self.reader.fingerprint()}
             record = {"id": "hardware_" + uuid.uuid4().hex, "status": "pending", "boot_id": self.boot_id,
-                      "created_at": utc_now(), "owner": owner, "binding": binding,
+                      "created_at": utc_now(), "binding": binding,
                       "binding_hash": canonical_hash(binding), "audit": [], "reads": {}}
             self.leases[record["id"]] = self.clock() + 300
             self._audit(record, "proposed")
-            return self._public(record, owner)
+            return self._public(record)
 
-    def _owned(self, session_id, owner, project_id, version_id):
+    def _bound(self, session_id, project_id, version_id):
         record = self._load(session_id)
         binding = record["binding"]
-        if record["owner"] != owner:
-            raise HardwareError("此只读会话属于另一操作员登录，请创建自己的授权。")
         if (binding["project_id"], binding["version_id"]) != (project_id, version_id):
             raise HardwareError("只读会话与所选工程版本不一致。")
         return record
 
-    def approve(self, project_id, version_id, session_id, owner, command):
+    def approve(self, project_id, version_id, session_id, command):
         self.workbench.writable()
         with self.workbench.lock.thread_lock:
-            record = self._owned(session_id, owner, project_id, version_id)
+            record = self._bound(session_id, project_id, version_id)
             binding = record["binding"]
             if self._status(record) != "pending":
                 raise HardwareError("此只读请求已过期或已处理，请重新创建授权。")
@@ -144,22 +141,22 @@ class HardwareService:
             record.update(status="active", approved_at=utc_now(), expires_at=time.time() + binding["ttl_seconds"])
             self.leases[session_id] = self.clock() + binding["ttl_seconds"]
             self._audit(record, "approved")
-            return self._public(record, owner)
+            return self._public(record)
 
-    def revoke(self, project_id, version_id, session_id, owner):
+    def revoke(self, project_id, version_id, session_id):
         self.workbench.writable()
         with self.workbench.lock.thread_lock:
-            record = self._owned(session_id, owner, project_id, version_id)
+            record = self._bound(session_id, project_id, version_id)
             if record["status"] != "revoked":
                 record["status"] = "revoked"
                 self.leases.pop(session_id, None)
                 self._audit(record, "revoked")
-            return self._public(record, owner)
+            return self._public(record)
 
-    def read(self, project_id, version_id, session_id, owner, command):
+    def read(self, project_id, version_id, session_id, command):
         self.workbench.writable()
         with self.workbench.lock.thread_lock:
-            record = self._owned(session_id, owner, project_id, version_id)
+            record = self._bound(session_id, project_id, version_id)
             binding = record["binding"]
             request_id = record_id(command["request_id"])
             addresses = normalize_read_addresses(command.get("addresses"), binding["plc_model"])

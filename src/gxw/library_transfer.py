@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Source-bound user-library inventory and native import readback.
 
@@ -32,6 +32,33 @@ def _project(raw):
 def _row(row):
     return {key: getattr(row, key) for key in ('name', 'data_type', 'class_code', 'device',
             'iec_address', 'initial_value', 'comment')}
+
+
+def _fbd_library_source(body, owner):
+    """Describe the selected source, retaining bytes outside the graph projection.
+
+    Source headers belong to each saved project and may use localized names.
+    Graph record identities therefore use payload-relative offsets. The saved
+    language payload remains exact: readable opaque records/options must not
+    disappear from the comparison just because the editable model omits them.
+    """
+    from .object_model import export_object_model
+    from .source_header import source_payload_offset
+    from .structured_pou import parse_structured_pou
+
+    program = parse_structured_pou(body, logical_name=owner['source_program'],
+                                   preserve_unsupported_records=True)
+    model = export_object_model(program)
+    payload = source_payload_offset(body)
+    for node in model['nodes']:
+        node['id'] = 'n' + str(node.pop('source_offset') - payload)
+    for wire in model['wires']:
+        wire.pop('source_offset')
+    for block in model.get('blocks', []):
+        block.pop('source_offset')
+    for key in ('program', 'labels', 'declaration_edits', 'issues'):
+        model.pop(key)
+    return {'model': model, 'payload_hex': body[payload:].hex()}
 
 
 def library_inventory(raw, library_name=None, *, include_source=False):
@@ -69,9 +96,13 @@ def library_inventory(raw, library_name=None, *, include_source=False):
                                          for row in sources.fixed_interface(owner['name'])[side]]
                                    for side in ('inputs', 'outputs')}}
             if include_source:
-                if entry['language'] != 'st':
-                    raise GXWFormatError('library source transfer currently verifies ST definitions only')
-                entry['source_text'] = parse_st_pou(body).text
+                if entry['language'] == 'st':
+                    entry['source_text'] = parse_st_pou(body).text
+                elif entry['language'] == 'fbd':
+                    entry['source_graph'] = _fbd_library_source(body, owner)
+                else:
+                    raise GXWFormatError('library source transfer cannot read saved source language: ' +
+                                         str(body[language]))
             definitions.append(entry)
         structures = []
         for (namespace, type_name), documents in sources.library_structures.items():
@@ -133,12 +164,19 @@ def _first_difference(expected, actual, path='library'):
             if difference:
                 return difference
     elif expected != actual:
+        if path.endswith('.payload_hex') and isinstance(expected, str) and isinstance(actual, str):
+            before, after = bytes.fromhex(expected), bytes.fromhex(actual)
+            offset = next((index for index, pair in enumerate(zip(before, after))
+                           if pair[0] != pair[1]), min(len(before), len(after)))
+            return (f'{path}: byte offset {offset} (0x{offset:X}), '
+                    f'{before[offset:offset+8].hex()!r} -> {after[offset:offset+8].hex()!r}; '
+                    f'length {len(before)} -> {len(after)}')
         return f'{path}: {str(expected)[:120]!r} -> {str(actual)[:120]!r}'
     return None
 
 
 def _initial_value_changes(expected, actual):
-    """Keep native declaration-cache changes visible, separate from ST source."""
+    """Keep native declaration-cache changes visible, separate from POU source."""
     compared = deepcopy(actual)
     changes = []
     def visit(before, after, path):
@@ -269,4 +307,6 @@ def verify_library_import(target, donor, library_name, saved, observation):
         'library_import': actual['libraries'][0], 'native_initial_value_changes': initial_changes,
         'native_workspace': observation,
         'validation': {'native_save': 'passed', 'library_definitions': 'matched_with_initial_value_changes' if initial_changes else 'matched',
-                       'source_text': 'matched', 'initial_value_semantics': 'unverified', 'gx_compile': 'not_run'}})
+                       'source_text': 'matched' if any(row['language'] == 'st' for row in plan['expected']['definitions']) else 'not_applicable',
+                       **({'source_graph': 'matched'} if any(row['language'] == 'fbd' for row in plan['expected']['definitions']) else {}),
+                       'initial_value_semantics': 'unverified', 'gx_compile': 'not_run'}})

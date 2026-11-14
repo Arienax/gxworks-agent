@@ -1,11 +1,10 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Audit and exercise executable distributions in isolated temporary state."""
 from __future__ import annotations
 import argparse
 import hashlib
-import http.cookiejar
 import json
 import os
 from pathlib import Path
@@ -33,7 +32,7 @@ def audit(package, component):
                 "resources/instructions/mitsubishi/pwm_contract.generated.json"}
     for name in required:
         assert (package / name).is_file(), name
-    assert "Apache License" in (package / "LICENSE").read_text(encoding="utf-8")[:500]
+    assert "GNU AFFERO GENERAL PUBLIC LICENSE" in (package / "LICENSE").read_text(encoding="utf-8")[:500]
     internal_template_keys = {'source_evidence', 'evidence', 'float32_evidence',
                               'dll_sha256', 'instruction_lookup_rva', 'instruction_text_rva', 'operand_text_rva'}
     for path in (package / 'gxw/templates').glob('*.json'):
@@ -55,7 +54,7 @@ def audit(package, component):
     from PyInstaller.archive.readers import CArchiveReader
     mcp_exe = package / "gxworks-agent-mcp.exe"
     assert mcp_exe.is_file()
-    assert (package / "gxworks-agent-mcp.cmd").is_file()
+    assert not tuple(package.glob("*.cmd"))
     modules = set(CArchiveReader(str(mcp_exe)).open_embedded_archive('PYZ.pyz').toc)
     forbidden = {'openai', 'jiter', 'fastapi', 'uvicorn', 'pdfplumber', 'pdfminer', 'pypdfium2',
                  'haystack_experimental', 'PyQt5', 'PyQt6', 'PySide2', 'PySide6', 'pytest', '_pytest', 'IPython'}
@@ -71,7 +70,7 @@ def audit(package, component):
         assert not (package / "resources/assets").exists()
         assert (package / "web/dist/simulator.html").is_file()
     else:
-        assert (package / "start-web.cmd").is_file()
+        assert (package / "GXWorks-Agent-Launcher.exe").is_file()
         assert (package / "web/dist/index.html").is_file()
         assert (package / "web/dist/simulator.html").is_file()
     return exe
@@ -196,8 +195,8 @@ def smoke_web(exe, scratch):
         assert result.returncode == 0, (flag, result.stdout.decode(errors="replace"), result.stderr.decode(errors="replace"))
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0)); port = listener.getsockname()[1]
-    token = secrets.token_urlsafe(32)
-    env.update(PLC_WEB_OPERATOR_TOKEN=token, PLC_WEB_AGENT_TOKEN=secrets.token_urlsafe(32))
+    agent_token = secrets.token_urlsafe(32)
+    env["PLC_WEB_AGENT_TOKEN"] = agent_token
     workspace = scratch / "absent"
     with (scratch / "web.log").open("w+", encoding="utf-8") as log:
         process = subprocess.Popen([str(exe), "--workspace", str(workspace), "--state-dir", str(scratch / "state"),
@@ -205,10 +204,10 @@ def smoke_web(exe, scratch):
              stdout=log, stderr=log, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         try:
             origin = "http://127.0.0.1:" + str(port)
-            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
             for attempt in range(200):
                 if process.poll() is not None:
-                    log.seek(0); raise RuntimeError(log.read().replace(token, "[redacted]"))
+                    log.seek(0); raise RuntimeError(log.read().replace(agent_token, "[redacted]"))
                 try:
                     if json.load(opener.open(origin + "/api/health", timeout=.5))["status"] == "ok": break
                 except Exception:
@@ -219,9 +218,7 @@ def smoke_web(exe, scratch):
             assert assets, "No frontend asset references in the served HTML"
             bodies = [opener.open(urllib.parse.urljoin(origin + "/", name)).read() for name in assets]
             assert any(URL.encode() in body for body in bodies)
-            request = urllib.request.Request(origin + "/api/session", data=json.dumps({"token": token}).encode(),
-                headers={"Content-Type": "application/json", "Origin": origin})
-            assert json.load(opener.open(request))["authenticated"]
+            assert json.load(opener.open(origin + "/api/workspace"))["read_only"] is True
             assert json.load(opener.open(origin + "/api/projects")) == {"projects": []}
             assert isinstance(json.load(opener.open(origin + "/api/capabilities")), dict)
             bridge = subprocess.run([str(exe.with_name('gxworks-agent-mcp.exe')), '--service',
@@ -230,7 +227,7 @@ def smoke_web(exe, scratch):
             bridge_status = json.loads(bridge.stdout)
             assert bridge_status['ok'] and bridge_status['tool_count'] > 0
             assert not workspace.exists()
-            return {"http_started": True, "login": True, "assets": len(assets), "github_link": True,
+            return {"http_started": True, "workspace_ready": True, "assets": len(assets), "github_link": True,
                     "core_and_knowledge": True, "mcp_service_bridge": True}
         finally:
             process.terminate()

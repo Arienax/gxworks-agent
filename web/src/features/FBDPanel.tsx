@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GitBranch, FileUp, Download } from "lucide-react";
@@ -812,7 +812,7 @@ export function FBDPanel({
         ) : <strong>{model.program.replace(".Program.pou", "")} · FBD</strong>}
         <span className="muted">{model.cpu}{model.cpu && " · "}{blocks.length || 1} {t("网络")}</span>
         {vid && !preview && <div className="fbd-toolbar-actions">
-          <a className="button" href={artifactUrl(pid, vid, "gxw", true)}>
+          <a className="button" href={artifactUrl(pid, vid, "gxw", true)} download>
             <Download size={14} />{t("下载 GXW")}
           </a>
         </div>}

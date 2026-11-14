@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Export the actual local HTTP contract without starting a backend or workspace."""
 from __future__ import annotations
@@ -24,7 +24,7 @@ def build_schema():
     # workspace. Constructing a read-only app performs no mkdir or migration.
     app = create_app(
         ROOT / ".schema-only-workspace", state_dir=ROOT / ".schema-only-state",
-        read_only=True, operator_token="schema-export-never-started",
+        read_only=True,
     )
     return document_sse_events(app.openapi())
 

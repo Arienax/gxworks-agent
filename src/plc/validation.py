@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 import json
 import re
 from collections.abc import Mapping
@@ -21,18 +24,29 @@ from plc.device_profiles import (
 
 
 DEVICE_ADDRESS_RE = re.compile(
-    r"^(ZR|ER|SM|SD|SB|SW|ST|X|Y|M|D|T|C|S|L|F|B|W|R|V|Z)([0-9A-F]+)(?:\.([0-9A-F]+))?$", re.IGNORECASE
+    r"^(ZR|ER|SM|SD|SB|SW|ST|TC|TS|TN|CC|CS|CN|X|Y|M|D|T|C|S|L|F|B|W|R|V|Z)([0-9A-F]+)(?:\.([0-9A-F]+))?$", re.IGNORECASE
 )
+from plc.device_identity import (
+    INDEXABLE_DEC_PREFIXES,
+    INDEXABLE_HEX_PREFIXES,
+    INDEXED_BASE_PATTERN,
+)
+from plc.device_profiles import device_address_rules as _device_address_rules
+
 INDEXED_DEVICE_ADDRESS_RE = re.compile(
-    r"^(?P<base>(?:SM|SD|X|Y|M|D|T|C|S)\d+)(?P<index>[VZ]\d+)$",
+    rf"^(?P<base>{INDEXED_BASE_PATTERN})(?P<index>[VZ]\d*)$",
     re.IGNORECASE,
 )
 INDEXED_DEVICE_TOKEN_RE = re.compile(
-    r"(?<![A-Z0-9_])(?:SM|SD|X|Y|M|D|T|C|S)\d+[VZ]\d+(?![A-Z0-9_])",
+    rf"(?<![A-Z0-9_]){INDEXED_BASE_PATTERN}[VZ]\d*(?![A-Z0-9_])",
     re.IGNORECASE,
 )
 DEVICE_TOKEN_RE = re.compile(
-    r"(?<![A-Z0-9_])(?:SM|SD|X|Y|M|D|T|C|S|V|Z)\d+(?![A-Z0-9_])",
+    r"(?<![A-Z0-9_])(?:(?:"
+    + "|".join(INDEXABLE_HEX_PREFIXES)
+    + r")[0-9A-F]+|(?:"
+    + "|".join(INDEXABLE_DEC_PREFIXES + ("Z",))
+    + r")\d+)(?![A-Z0-9_])",
     re.IGNORECASE,
 )
 
@@ -140,6 +154,7 @@ def should_auto_repair_validation_error(error):
 
 def _fail(path, message, *, observed_opcode=None):
     error = PLCJsonValidationError(f"{path}: {message}")
+    error.path = path
     if isinstance(observed_opcode, str) and observed_opcode:
         error.observed_opcode = observed_opcode
     raise error
@@ -225,6 +240,26 @@ def parse_device_address(value, plc_model="FX3U"):
     return prefix, index
 
 
+def parse_device_reference(value, plc_model="FX3U"):
+    """Preserve the bit selector alongside the legacy base-address pair."""
+    parsed = parse_device_address(value, plc_model)
+    if parsed is None:
+        return None
+    text = value.strip().upper()
+    return {'prefix': parsed[0], 'number': parsed[1],
+            'bit': int(text.rsplit('.', 1)[1], 16) if '.' in text else None,
+            'text': text}
+
+
+def _index_register_prefixes(plc_model="FX3U"):
+    """Return allowed index-register prefixes (V+Z on FX, Z on Q/L/FX5)."""
+    rules = _device_address_rules(normalize_plc_model(plc_model)).get("families", {})
+    prefixes = {"Z"}
+    if rules.get("V", {}).get("value_type") == "word":
+        prefixes.add("V")
+    return frozenset(prefixes)
+
+
 def parse_indexed_device_address(value, plc_model="FX3U"):
     """Parse an FX-style indexed operand such as ``D100Z0``.
 
@@ -241,15 +276,24 @@ def parse_indexed_device_address(value, plc_model="FX3U"):
         return None
     base_text = match.group("base").upper()
     index_text = match.group("index").upper()
+    index_prefixes = _index_register_prefixes(model)
     base = parse_device_address(base_text, model)
     index = parse_device_address(index_text, model)
-    if base is None or index is None or index[0] not in {"V", "Z"}:
+    if (
+        base is None
+        or index is None
+        or base[0] in index_prefixes
+        or index[0] not in index_prefixes
+        or is_bit_device(index_text, model)
+    ):
         return None
     return {
         "base_text": base_text,
         "index_text": index_text,
         "base": base,
         "index": index,
+        "base_reference": parse_device_reference(base_text, model),
+        "index_reference": parse_device_reference(index_text, model),
     }
 
 
@@ -285,11 +329,15 @@ def _validate_indexed_device_address(value, path, plc_model="FX3U"):
     match = INDEXED_DEVICE_ADDRESS_RE.fullmatch(value.strip())
     if not match:
         return None
+    model = normalize_plc_model(plc_model)
     base_text = match.group("base").upper()
     index_text = match.group("index").upper()
-    _validate_device_address(base_text, path, plc_model)
+    index_prefixes = _index_register_prefixes(model)
+    parsed_base = _validate_device_address(base_text, path, plc_model)
+    if parsed_base[0] in index_prefixes:
+        _fail(path, f"{model} index register {base_text} cannot be index-modified")
     _validate_device_address(
-        index_text, path, plc_model, expected_prefixes={"V", "Z"}
+        index_text, path, plc_model, expected_prefixes=index_prefixes
     )
     return {"base_text": base_text, "index_text": index_text}
 
@@ -351,15 +399,47 @@ def _is_read_only_special_device(value, plc_model="FX3U"):
     )
 
 
-def _validate_writable_device(value, path, plc_model="FX3U", *, opcode=None):
+def _validate_writable_device(value, path, plc_model="FX3U", *, opcode=None, allow_unverified=False):
     """Reject writes to model-specific CPU-owned special relays."""
 
     if not isinstance(value, str):
         return
     address = value.strip().upper()
     model = normalize_plc_model(plc_model)
+    # Write roles are known even when the catalogue has no verified operand
+    # type table. A literal is never storage; K4M100 remains a valid bit group.
+    if re.fullmatch(r'(?:K[+-]?\d+|H[0-9A-F]+)', address):
+        _fail(path, 'Expected a writable device operand, not a constant')
+    if allow_unverified:
+        from plc.ordered_source import (source_label_reference, source_extended_reference,
+                                       source_grouped_reference, buffer_memory_reference)
+        if source_label_reference(value) or buffer_memory_reference(address) or source_extended_reference(address):
+            return  # These source bindings remain explicitly unverified.
+        grouped = source_grouped_reference(address)
+        if grouped:
+            address = grouped['base']
+        from plc.device_identity import REFERENCE_DEVICE_TOKEN_RE
+        if not (REFERENCE_DEVICE_TOKEN_RE.fullmatch(address) or INDEXED_DEVICE_ADDRESS_RE.fullmatch(address)):
+            _fail(path, 'Expected a writable device operand')
+        if INDEXED_DEVICE_ADDRESS_RE.fullmatch(address):
+            base_match = DEVICE_ADDRESS_RE.fullmatch(_operand_base_device(address))
+            if (
+                base_match
+                and (
+                    model not in SOURCE_DEVICE_PROFILES
+                    or SOURCE_DEVICE_PROFILES[model].get('address_families_complete')
+                    or base_match.group(1).upper() in DEVICE_LIMITS.get(model, {})
+                )
+                and parse_indexed_device_address(address, model) is None
+            ):
+                _fail(path, 'Expected a writable device operand')
     match = DEVICE_ADDRESS_RE.fullmatch(_operand_base_device(address))
     if match and match.group(1) == "X":
+        from plc.target_identity import target_family
+        if allow_unverified and opcode == 'RST' and target_family(model) == 'Q':
+            # Saved Q source and native ProgramCheck admit input-image resets.
+            # This does not grant generation or physical input-write semantics.
+            return
         _fail(path, f"{model} input device {address} cannot be used as a write target")
     indexed = parse_indexed_device_address(address, model)
     writable_address = indexed["base_text"] if indexed else address
@@ -371,7 +451,7 @@ def _validate_writable_device(value, path, plc_model="FX3U", *, opcode=None):
         regions = SOURCE_DEVICE_PROFILES.get(model, {}).get("special_regions", {}).get(parsed[0], [])
         # FX3U already has independently reviewed read-only/reserved tables.
         # Adding its numbering profile must not replace that access policy.
-        if model != 'FX3U' and any(lo <= parsed[1] <= hi for lo, hi in regions):
+        if not allow_unverified and model != 'FX3U' and any(lo <= parsed[1] <= hi for lo, hi in regions):
             _fail(path, f"Write access to {model} special device {address} is not source-verified")
     if _is_read_only_special_device(writable_address, plc_model):
         model = normalize_plc_model(plc_model)
@@ -383,9 +463,9 @@ def _validate_writable_device(value, path, plc_model="FX3U", *, opcode=None):
 
 
 def _validate_app_instruction_write_targets(
-    opcode, operands, path, plc_model="FX3U", *, allow_buffer_references=False
+    opcode, operands, path, plc_model="FX3U", *, allow_unverified=False, source_spec=None, allow_buffer_references=False
 ):
-    spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode, cpu=normalize_plc_model(plc_model),
+    spec = source_spec or DEFAULT_INSTRUCTION_REGISTRY.resolve(opcode, cpu=normalize_plc_model(plc_model),
                                                 operand_count=len(operands))
     indexes = spec.write_indexes if spec is not None else ()
     for operand_idx in indexes:
@@ -407,7 +487,7 @@ def _validate_app_instruction_write_targets(
                    digit_specified_operand_devices(operand, plc_model, maximum_groups=definition.digit_groups_max)
                    if definition and definition.digit_groups_max else None)
         for target in grouped if grouped is not None else [operand]:
-            _validate_writable_device(target, f"{path}.operands[{operand_idx}]", plc_model, opcode=opcode)
+            _validate_writable_device(target, f"{path}.operands[{operand_idx}]", plc_model, opcode=opcode, allow_unverified=allow_unverified)
 
 
 def _validate_device_address(value, path, plc_model, expected_prefixes=None):
@@ -800,6 +880,32 @@ def _validate_reviewed_remote_operand(spec, operands, index, path, plc_model, *,
     return True
 
 
+def _validate_reviewed_integer_literal_width(spec, index, value, path):
+    if (spec is None or 'operand_types' not in spec.verified_fields or index >= len(spec.operands)
+            or not isinstance(value, str)):
+        return
+    token = value.strip().upper()
+    if not re.fullmatch(r'K[+-]?\d+|H[0-9A-F]+', token):
+        return
+    prefix = token[0]
+    widths = dict(spec.operands[index].integer_literal_widths)
+    if widths:
+        if prefix not in widths:
+            _fail(path, "Literal prefix is not in the reviewed operand formats")
+        bits = widths[prefix]
+        bounds = (-(1 << (bits - 1)), (1 << (bits - 1)) - 1)
+    else:
+        from plc.instruction_constraints import numeric_operand_type
+        value_type = numeric_operand_type(spec, index)
+        if value_type is None or value_type.kind != 'int':
+            return
+        bits, bounds = value_type.bits, value_type.bounds
+    minimum, maximum = bounds if prefix == 'K' else (0, (1 << bits) - 1)
+    number = int(token[1:], 10 if prefix == 'K' else 16)
+    if not minimum <= number <= maximum:
+        _fail(path, f"Constant exceeds the reviewed literal width ({bits} bits, {prefix}: {minimum} to {maximum})")
+
+
 def _validate_source_operand_types(spec, operands, path, plc_model, *, allow_indexed_literals=False,
                                    allow_buffer_references=False, allow_unverified_devices=False):
     """Validate only dimensions actually reviewed for this CPU/form."""
@@ -1018,11 +1124,53 @@ def _validate_source_operand_types(spec, operands, path, plc_model, *, allow_ind
             continue
         if _validate_reviewed_program_pointer(spec, operands, index, operand_path, plc_model):
             continue
-        if allow_buffer_references and definition.data_type in {'word', 'dword'}:
-            from plc.ordered_source import buffer_memory_reference
-            if buffer_memory_reference(value):
-                # Existing source keeps its module address and explicit
-                # unverified finding, independently of new-call head limits.
+        if allow_buffer_references:
+            from plc.ordered_source import (buffer_memory_reference, source_label_reference,
+                                           source_grouped_reference, source_extended_reference)
+            if source_label_reference(value):
+                # This is a native symbol, not a string literal or an ordinary
+                # device. Ordered-source findings retain the missing binding.
+                continue
+            if source_extended_reference(value) and not buffer_memory_reference(value):
+                continue
+            grouped = source_grouped_reference(value)
+            if grouped:
+                _validate_device_address(grouped['base'], operand_path, plc_model)
+                if grouped['index']:
+                    model = normalize_plc_model(plc_model)
+                    base_match = DEVICE_ADDRESS_RE.fullmatch(grouped['base'])
+                    if (
+                        base_match
+                        and (
+                            model not in SOURCE_DEVICE_PROFILES
+                            or SOURCE_DEVICE_PROFILES[model].get('address_families_complete')
+                            or base_match.group(1).upper() in DEVICE_LIMITS.get(model, {})
+                        )
+                    ):
+                        _validate_device_address(
+                            grouped['index'],
+                            operand_path,
+                            plc_model,
+                            expected_prefixes=_index_register_prefixes(plc_model),
+                        )
+                if definition.data_type == 'bit':
+                    _fail(operand_path, 'Expected a bit device, not a digit-specified word')
+                if definition.role in {'write', 'read_write'}:
+                    _validate_writable_device(grouped['base'], operand_path, plc_model, opcode=spec.mnemonic,
+                                              allow_unverified=True)
+                continue
+            indexed = parse_indexed_device_address(value, plc_model)
+            if indexed:
+                value = indexed['base_text']
+            reference = buffer_memory_reference(value)
+            if reference and definition.data_type in {'bit', 'word', 'dword'}:
+                bit_selected = '.' in reference['base']
+                if definition.data_type == 'bit' and not bit_selected:
+                    _fail(operand_path, 'Expected a bit device')
+                if definition.data_type in {'word', 'dword'} and bit_selected:
+                    _fail(operand_path, 'Expected a word device')
+                # The source keeps its hardware-qualified address and explicit
+                # unverified finding. No ordinary-device access is certified.
                 continue
         if _validate_reviewed_buffer_operand(spec, definition, value, operand_path, plc_model):
             continue
@@ -1093,16 +1241,7 @@ def _validate_source_operand_types(spec, operands, path, plc_model, *, allow_ind
                     continue
             if not re.fullmatch(r"(?:K[+-]?\d+|H[0-9A-F]+)", value, re.I):
                 _fail(operand_path, "Operand syntax/type is not verified for this instruction")
-            if definition.integer_literal_widths:
-                prefix = value[0].upper()
-                widths = dict(definition.integer_literal_widths)
-                if prefix not in widths:
-                    _fail(operand_path, "Literal prefix is not in the reviewed operand formats")
-                width = widths[prefix]
-                number = int(value[1:], 10 if prefix == 'K' else 16)
-                minimum, maximum = (-(1 << (width - 1)), (1 << (width - 1)) - 1) if prefix == 'K' else (0, (1 << width) - 1)
-                if not minimum <= number <= maximum:
-                    _fail(operand_path, "Constant exceeds the reviewed literal width")
+            _validate_reviewed_integer_literal_width(spec, index, value, operand_path)
 
 
 def _app_instr_arity_error(spec, actual_count):
@@ -1175,13 +1314,29 @@ def _validate_element(
             expected = {"C"}
         else:
             expected = {"X", "Y", "M", "SM", "S", "T", "C"}
+        indexed_addr = (
+            _validate_indexed_device_address(address, f"{path}.address", plc_model)
+            if INDEXED_DEVICE_ADDRESS_RE.fullmatch(address.strip())
+            else None
+        )
+        target_address = indexed_addr["base_text"] if indexed_addr else elem.get("address")
         if plc_model in SOURCE_DEVICE_PROFILES and elem_type not in {"TIMER", "COUNTER"}:
-            parsed = _validate_device_address(elem.get("address"), f"{path}.address", plc_model)
-            if not is_bit_device(elem["address"], plc_model) or elem_type in {"COIL", "PLS", "PLF"} and parsed[0] == "X":
+            parsed = _validate_device_address(target_address, f"{path}.address", plc_model)
+            if not is_bit_device(target_address, plc_model) or elem_type in {"COIL", "PLS", "PLF"} and parsed[0] == "X":
                 _fail(f"{path}.address", f"{elem_type} requires a {'writable ' if is_output else ''}bit device")
-            expected = None
+            if elem_type in {"COIL", "PLS", "PLF"}:
+                if parsed[0] in {'T', 'ST', 'C'}:
+                    _fail(f"{path}.address", 'timer/counter outputs require their complete typed instruction')
+                from plc.target_identity import target_family
+                if target_family(plc_model) in {'Q', 'L'}:
+                    expected = (None if '.' in target_address else
+                                set(SOURCE_DEVICE_PROFILES[plc_model].get('bit_prefixes', ())) - {'X', 'T', 'ST', 'C'})
+                elif '.' in target_address:
+                    _fail(f"{path}.address", f'{elem_type} word-bit output form is not established for {plc_model}')
+            else:
+                expected = None
         _validate_device_address(
-            elem.get("address"), f"{path}.address", plc_model, expected
+            target_address, f"{path}.address", plc_model, expected
         )
         if elem_type in {"COIL", "PLS", "PLF"}:
             _validate_writable_device(
@@ -1306,7 +1461,7 @@ def _validate_element(
         # must not accidentally make them valid latch targets.
         if opcode in {"SET", "RST"} and operands:
             target = parse_device_address(operands[0], plc_model)
-            if target is not None and target[0] in {"V", "Z"}:
+            if target is not None and target[0] in {"V", "Z"} and not is_bit_device(operands[0], plc_model):
                 _fail(
                     f"{path}.operands[0]",
                     f"{opcode} requires a bit target; {operands[0]} is an index register",
@@ -2036,13 +2191,16 @@ def _validate_ladder_structure(data, plc_model, *, partial=False, syntax_only=Fa
         if isinstance(rung, dict) and 'ordered_instructions' in rung:
             from plc.ordered_source import validate_ordered_rung
             validate_ordered_rung(rung, plc_model=model,
-                require_catalogued=require_catalogued_instructions, syntax_only=syntax_only)
+                require_catalogued=require_catalogued_instructions, syntax_only=syntax_only, check_stack=False)
         else:
             _validate_rung(rung,f'$.rungs[{index}]',model,
                 require_catalogued_instructions=require_catalogued_instructions,syntax_only=syntax_only)
         if rung['rung_id'] in seen:
             _fail(f'$.rungs[{index}].rung_id',f"duplicate rung_id {rung['rung_id']}")
         seen.add(rung['rung_id'])
+    if is_ordered_ladder(data):
+        from plc.ordered_source import validate_ordered_circuits
+        validate_ordered_circuits(rungs, plc_model=model)
 
 
 def _validate_ladder_syntax(data, plc_model, *, partial=False, require_catalogued_instructions=True):
@@ -2098,6 +2256,11 @@ def _confirmed_instruction_versions(confirmed_spec):
     common = [confirmed_spec, project, execution]
     hardware = [confirmed_spec.get('hardware_profile'), confirmed_spec.get('hardware_context')]
     result = {}
+    if any(isinstance(source, Mapping) and (
+            source.get('check_cpu_version') is True
+            or any(source.get(alias) not in (None, '') for alias in ('cpu_version', 'firmware')))
+            for source in [*common, *hardware]):
+        result['check_cpu_version'] = True
     for key, sources, aliases in (
             ('cpu_version', [*common, *hardware], ('cpu_version', 'firmware')),
             ('software_version', common, ('software_version',))):

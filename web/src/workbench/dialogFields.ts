@@ -1,7 +1,8 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 export const workbenchDialogsFields = [
+  "adoptProject",
   "approvalSettings",
   "busy",
   "canWrite",
@@ -17,7 +18,7 @@ export const workbenchDialogsFields = [
   "modal",
   "pid",
   "report",
-  "session",
+  "connection",
   "setApprovalSettings",
   "setConstructionExamples",
   "setFreshConfirmedGeneration",
@@ -28,8 +29,6 @@ export const workbenchDialogsFields = [
   "setModal",
   "setNetwork",
   "setPanel",
-  "setPid",
-  "setProjectListRevision",
   "setSettings",
   "setSettingsRetry",
   "setSettingsTab",

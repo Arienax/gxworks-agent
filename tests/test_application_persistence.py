@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from application import gxw_delivery
 from application.jobs import JobManager
 from application.proposals import ProposalService
 from application.workspace import ConflictError, WorkspaceBusyError, WorkspaceWriterLock, atomic_json
@@ -487,19 +488,23 @@ def test_external_proposal_actions_require_callback_and_never_retry_uncertain_ex
 def test_st_artifacts_are_frozen_and_managed(services):
     store, project, lock, state = services
     staging = state / "generation" / "one"
-    staging.mkdir(parents=True)
-    data = b"VAR x : BOOL; END_VAR\nx := TRUE;"
-    (staging / "program.st").write_bytes(data)
+    st_text = "D0 := 1;"
+    payload = gxw_delivery.fallback(
+        staging, "st", project["plc_model"],
+        {"st_text": st_text, "declarations": []}, "Source-only persistence fixture",
+    )
+    payload["metadata"].update(
+        summary="ST candidate",
+        behavior_result={"source": "operator_acceptance_file", "status": "passed_in_cases"},
+        io_example_result={"source": "generator_self_check", "status": "mismatch"},
+    )
     service = ProposalService(store, state, lock)
-    payload = {"target_mode": "st", "staging_dir": str(staging), "artifacts": {
-        "st": {"path": "program.st", "sha256": hashlib.sha256(data).hexdigest()}},
-        "metadata": {"summary": "ST candidate", 'behavior_result': {'source': 'operator_acceptance_file', 'status': 'passed_in_cases'},
-                     'io_example_result': {'source': 'generator_self_check', 'status': 'mismatch'}}}
     proposal = service.create("accept_local", project["id"], payload)
-    (staging / "program.st").write_text("mutated", encoding="utf-8")
+    (staging / payload["artifacts"]["st"]["path"]).write_text("mutated", encoding="utf-8")
     accepted = service.accept(proposal["id"])
     version = store.get_version(project["id"], accepted["result"]["version_id"])
-    assert (store.version_dir(project["id"], version["id"]) / version["artifacts"]["st"]).read_bytes() == data
+    saved_source = store.version_dir(project["id"], version["id"]) / version["artifacts"]["st"]
+    assert saved_source.read_bytes() == st_text.encode("utf-8")
     assert version["summary"] == "ST candidate"
     assert version['behavior_result'] == payload['metadata']['behavior_result']
     assert version['io_example_result'] == payload['metadata']['io_example_result']
@@ -615,13 +620,12 @@ def test_candidate_commit_write_failure_keeps_only_the_completed_base_version(se
     base, _ = _base(store, project['id'])
     service = ProposalService(store, state, lock)
     staging = state / 'staging' / 'commit-failure'
-    staging.mkdir(parents=True)
-    text = b'Result := 1;'
-    (staging / 'program.st').write_bytes(text)
-    proposal = service.create('accept_local', project['id'], {
-        'target_mode': 'st', 'plc_model': 'FX3U', 'staging_dir': str(staging),
-        'artifacts': {'st': {'path': 'program.st', 'sha256': hashlib.sha256(text).hexdigest()}},
-        'metadata': {'summary': 'candidate commit boundary'}}, base_version_id=base['id'])
+    payload = gxw_delivery.fallback(
+        staging, 'st', project['plc_model'],
+        {'st_text': 'D0 := 1;', 'declarations': []}, 'Source-only persistence fixture',
+    )
+    payload['metadata']['summary'] = 'candidate commit boundary'
+    proposal = service.create('accept_local', project['id'], payload, base_version_id=base['id'])
     before = _bytes(store.base_dir)
     write, writes, version_paths = store._write_json, [], []
 

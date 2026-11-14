@@ -1,9 +1,10 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """A rejected native check must reach the caller as devices, not as raw repetition."""
 import sys
 from pathlib import Path
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -159,6 +160,64 @@ def test_a_rejected_native_check_reaches_the_operator_with_a_repair_baseline(tmp
     assert kept["rungs"] == submitted["rungs"]
 
 
+@pytest.mark.parametrize(('case', 'deliverable'), [
+    ('warning', True), ('SET', True), ('RST', True), ('OUT', False),
+    ('unbound_step', False), ('other_error', False), ('compile_failed', False),
+])
+def test_native_check_advisories_do_not_block_gxw_delivery(tmp_path, monkeypatch, case, deliverable):
+    import json
+    import application.gxw_delivery as delivery
+    from gxworks2.workspace_adapter import NativeWorkspaceSourceSave, WorkspaceSaveError
+
+    opcode = case if case in {'SET', 'RST', 'OUT'} else 'SET'
+    submitted = ladder((1, opcode, 'M0'), (2, opcode, 'M0'))
+    for step, rung in zip((10, 20), submitted['rungs']):
+        rung['ordered_instructions'][0].update(kind='instruction', step=step)
+    (tmp_path / 'ladder.json').write_text(json.dumps(submitted), encoding='utf-8')
+    (tmp_path / 'program.gxw').write_bytes(b'candidate')
+    metadata = {'target_mode': 'ladder', 'plc_model': 'Q02/Q02H', 'program_name': 'MAIN.Program.pou',
+                'delivery_requested': True, 'artifacts': {'json': 'ladder.json', 'gxw': 'program.gxw'},
+                'validation': {'compile_state': 'stale'}}
+
+    steps = (10, 99) if case == 'unbound_step' else (10, 20)
+    kind = 3 if case in {'warning', 'compile_failed'} else 2
+    reports = [{**report(0x050C9300, 'M0', step=step, kind=kind), 'name': {'text': 'MAIN'}} for step in steps]
+    backend = [*reports, report(0x500C2020, step=30)] if case == 'other_error' else reports
+    native = {'compilation': {'completed': True, 'acceptance': 'rejected' if case == 'compile_failed' else 'accepted'},
+              'public_check': {'completed': True, 'status': 'rejected'},
+              'selection': {'status': 'verified', 'source_bytes_current': True, 'selected_sources': ['MAIN']},
+              'diagnostic_projection': {'public_diagnostics': reports, 'backend_diagnostics': backend}}
+
+    def compile_project(self, raw):
+        error = WorkspaceSaveError('Public check rejected')
+        error.validation = native
+        raise error
+
+    monkeypatch.setattr(delivery, 'installation', lambda: Path('E:/gppw2/GD2.exe'))
+    monkeypatch.setattr(NativeWorkspaceSourceSave, 'compile_project', compile_project)
+    delivery.finalize_saved(tmp_path, metadata)
+    assert (tmp_path / 'program.gxw').read_bytes() == b'candidate'
+    diagnostics = json.loads((tmp_path / 'native_diagnostics.json').read_bytes())
+    assert diagnostics['validation'] == native
+    assert bool(metadata.get('activation_blocked')) is not deliverable
+    if deliverable:
+        validation = metadata['validation']
+        assert validation['native_check_advisory'] is True
+        assert validation['gx_compile'] == validation['native_compile'] == 'passed'
+        assert validation['public_check'] == 'completed-rejected'
+        assert validation['native_save'] == validation['cold_reopen'] == 'not_run'
+        assert validation['compile_state'] == 'stale'
+        assert 'repair_candidate' not in metadata['artifacts']
+        finding = validation['native_compile_findings'][0]
+        assert finding['severity'] == 'warning' and finding['fixable'] is False
+        if case in {'SET', 'RST'}:
+            assert finding['category'] == 'repeated_latch_write'
+            assert diagnostics['findings'][0]['severity'] == 'error'
+    else:
+        assert metadata['validation']['gx_compile'] == 'failed'
+        assert metadata['artifacts']['repair_candidate'] == 'repair_candidate.json'
+
+
 def test_a_native_diagnostic_version_can_be_repaired_from_its_saved_ladder(tmp_path):
     import json
     import threading
@@ -172,7 +231,7 @@ def test_a_native_diagnostic_version_can_be_repaired_from_its_saved_ladder(tmp_p
         {"rung_id": 7, "ordered_instructions": [{"op": "SET", "args": ["M42"]}]}]}
     baseline_path = tmp_path / "repair_candidate.json"
     baseline_path.write_text(json.dumps(baseline, ensure_ascii=False), encoding="utf-8")
-    record = {"kind": "direct_generation", "status": "completed",
+    record = {"id": job_id, "kind": "direct_generation", "status": "completed",
               "result": {"status": "saved_native_diagnostic", "version_id": "v0001"},
               "snapshot": {"project_id": "p", "version_id": "v0001", "raw_requirement": "分拣",
                            "response_language": "zh-CN",

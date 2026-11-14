@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Derive bit predicates from confirmed bindings, never from proposal prose.
 
 These are level tests, not a circuit design, edge detector or acceptance gate.

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Confirmed behavior relations, separate from Core implementation choices."""
 from __future__ import annotations
 

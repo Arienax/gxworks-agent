@@ -569,6 +569,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/spec-document": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Spec Document */
+        get: operations["spec_document_api_projects__project_id__spec_document_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Spec Document */
+        patch: operations["update_spec_document_api_projects__project_id__spec_document_patch"];
+        trace?: never;
+    };
+    "/api/projects/{project_id}/spec-document/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Spec Document */
+        post: operations["confirm_spec_document_api_projects__project_id__spec_document_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/versions/{version_id}": {
         parameters: {
             query?: never;
@@ -629,6 +664,23 @@ export interface paths {
         };
         /** Diagnostics */
         get: operations["diagnostics_api_projects__project_id__versions__version_id__diagnostics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/versions/{version_id}/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Version Diff */
+        get: operations["version_diff_api_projects__project_id__versions__version_id__diff_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1050,24 +1102,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/session": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Session */
-        get: operations["session_api_session_get"];
-        put?: never;
-        /** Login */
-        post: operations["login_api_session_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/settings": {
         parameters: {
             query?: never;
@@ -1343,6 +1377,135 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workspace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Workspace State */
+        get: operations["workspace_state_api_workspace_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspace/browse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Browse Workspace */
+        get: operations["browse_workspace_api_workspace_browse_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspace/directory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Workspace Directory */
+        post: operations["create_workspace_directory_api_workspace_directory_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Workspaces
+         * @description Every workspace this workbench serves, each with the projects it owns.
+         */
+        get: operations["list_workspaces_api_workspaces_get"];
+        put?: never;
+        /** Add Workspace */
+        post: operations["add_workspace_api_workspaces_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/pick": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pick Workspace
+         * @description Open the system folder chooser, then add and activate that workspace.
+         */
+        post: operations["pick_workspace_api_workspaces_pick_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id_value}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Forget Workspace
+         * @description Remove one workspace from the list; its folder and projects stay on disk.
+         */
+        delete: operations["forget_workspace_api_workspaces__workspace_id_value__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id_value}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate Workspace */
+        post: operations["activate_workspace_api_workspaces__workspace_id_value__activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1511,7 +1674,7 @@ export interface components {
         /** CatalogEnvelope */
         CatalogEnvelope: {
             /** Data */
-            data?: components["schemas"]["PagedReadData"] | components["schemas"]["FBDCatalog"] | null;
+            data?: components["schemas"]["ResolvedReadData"] | components["schemas"]["PagedReadData"] | components["schemas"]["FBDCatalog"] | null;
             error?: components["schemas"]["NativeToolError"] | null;
             /** Ok */
             ok: boolean;
@@ -1665,6 +1828,10 @@ export interface components {
             decision_receipt_id?: string | null;
             /** Decision Receipt Status */
             decision_receipt_status?: string | null;
+            /** Delivery */
+            delivery?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
             /** Device Io */
             device_io: {
                 [key: string]: components["schemas"]["DeviceRecord"];
@@ -1820,7 +1987,7 @@ export interface components {
              * Program
              * @default null
              */
-            program: components["schemas"]["PLCProgram"] | components["schemas"]["FBDModel"] | components["schemas"]["SFCModel"] | components["schemas"]["LadderDocument"] | null;
+            program: components["schemas"]["PLCProgram"] | components["schemas"]["FBDModel"] | components["schemas"]["SFCModel"] | components["schemas"]["LadderDocument"] | components["schemas"]["SourceCandidateDocument"] | null;
             /**
              * Values
              * @default null
@@ -1859,7 +2026,7 @@ export interface components {
                 [key: string]: components["schemas"]["JsonValue"];
             } | null;
             /** Program */
-            program: components["schemas"]["PLCProgram"] | components["schemas"]["FBDModel"] | components["schemas"]["SFCModel"] | components["schemas"]["LadderDocument"] | null;
+            program: components["schemas"]["PLCProgram"] | components["schemas"]["FBDModel"] | components["schemas"]["SFCModel"] | components["schemas"]["LadderDocument"] | components["schemas"]["SourceCandidateDocument"] | null;
             /** St */
             st: string | null;
             /** Svg */
@@ -1892,6 +2059,11 @@ export interface components {
             plan_id?: string | null;
             /** Project Id */
             project_id: string;
+            /**
+             * Project Path
+             * @description CSV 导入时当前 GX Works2 打开的 .gxw 完整绝对路径；标题被截断或只有文件名时须提供并核对文件占用，不会打开或切换工程。
+             */
+            project_path?: string | null;
             /** Request Id */
             request_id: string;
             /** Version Id */
@@ -3016,7 +3188,7 @@ export interface components {
         /** GenerationContextEnvelope */
         GenerationContextEnvelope: {
             /** Data */
-            data?: components["schemas"]["PagedReadData"] | components["schemas"]["GenerationContextToolData"] | null;
+            data?: components["schemas"]["ResolvedReadData"] | components["schemas"]["PagedReadData"] | components["schemas"]["GenerationContextToolData"] | null;
             error?: components["schemas"]["NativeToolError"] | null;
             /** Ok */
             ok: boolean;
@@ -3206,6 +3378,29 @@ export interface components {
              */
             target_mode: "st";
         };
+        /** GenerationStructuredSourcePreview */
+        GenerationStructuredSourcePreview: {
+            /** Diff */
+            diff: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /** Job Id */
+            job_id: string;
+            program: components["schemas"]["SourceCandidateDocument"];
+            /** Proposal Id */
+            proposal_id?: string | null;
+            /** Read Only */
+            read_only: boolean;
+            /**
+             * Target Mode
+             * @enum {string}
+             */
+            target_mode: "fbd" | "sfc";
+            /** Validation */
+            validation: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -3308,8 +3503,6 @@ export interface components {
             expires_at: number | null;
             /** Id */
             id: string;
-            /** Owned By Current Operator */
-            owned_by_current_operator: boolean;
             /** Project Id */
             project_id: string;
             /** Read Count */
@@ -3376,6 +3569,8 @@ export interface components {
             address?: string | null;
             /** Comment */
             comment?: string | null;
+            /** Id */
+            id?: string | null;
             /** Kind */
             kind?: string | null;
             /** Label */
@@ -3519,6 +3714,8 @@ export interface components {
         Job: {
             /** Cancel Requested */
             cancel_requested?: boolean | null;
+            /** Conversation Id */
+            conversation_id?: string | null;
             /** Created At */
             created_at: string;
             /** Error Code */
@@ -3544,6 +3741,8 @@ export interface components {
             revision?: number | null;
             /** Status */
             status: string;
+            /** Title */
+            title?: string | null;
             /** Updated At */
             updated_at?: string | null;
             /** Version Id */
@@ -3566,6 +3765,8 @@ export interface components {
             } | null;
             /** Clarification Job Id */
             clarification_job_id?: string | null;
+            /** Conversation Id */
+            conversation_id?: string | null;
             /**
              * Deep
              * @default true
@@ -3592,6 +3793,11 @@ export interface components {
             response_language: "zh-CN" | "en" | "ja";
             /** Run Id */
             run_id?: string | null;
+            /**
+             * Start Conversation
+             * @default false
+             */
+            start_conversation: boolean;
             /**
              * Text
              * @default
@@ -3667,12 +3873,16 @@ export interface components {
             }[] | {
                 [key: string]: components["schemas"]["JsonValue"];
             } | null;
+            /** Base Program */
+            base_program?: string | null;
             /** Base Version Id */
             base_version_id?: string | null;
             /** Clarification Job Id */
             clarification_job_id?: string | null;
             /** Content */
             content?: string | null;
+            /** Edit Text */
+            edit_text?: string | null;
             /** Generation */
             generation?: {
                 [key: string]: components["schemas"]["JsonValue"];
@@ -3842,11 +4052,6 @@ export interface components {
         } & {
             [key: string]: components["schemas"]["JsonValue"];
         };
-        /** Login */
-        Login: {
-            /** Token */
-            token: string;
-        };
         /** MCPIntegrationCommand */
         MCPIntegrationCommand: {
             /** Project Id */
@@ -3903,7 +4108,8 @@ export interface components {
         };
         /** ManualSearchEnvelope */
         ManualSearchEnvelope: {
-            data?: components["schemas"]["PagedReadData"] | null;
+            /** Data */
+            data?: components["schemas"]["ResolvedReadData"] | components["schemas"]["PagedReadData"] | null;
             error?: components["schemas"]["NativeToolError"] | null;
             /** Ok */
             ok: boolean;
@@ -5360,10 +5566,7 @@ export interface components {
              */
             context_schema_version: 3;
             delivery: components["schemas"]["ReadDelivery"];
-            /** Document */
-            document: {
-                [key: string]: components["schemas"]["JsonValue"];
-            };
+            document: components["schemas"]["ReadObjectReference"];
             /** Objects */
             objects: {
                 [key: string]: components["schemas"]["JsonValue"];
@@ -6105,7 +6308,7 @@ export interface components {
              * @default ladder
              * @enum {string}
              */
-            target_mode: "ladder" | "st" | "fbd";
+            target_mode: "ladder" | "st" | "fbd" | "sfc";
             /** Use Labels */
             use_labels?: boolean | null;
         };
@@ -6160,7 +6363,7 @@ export interface components {
             /** Plc Model */
             plc_model?: string | null;
             /** Target Mode */
-            target_mode?: ("ladder" | "st" | "fbd") | null;
+            target_mode?: ("ladder" | "st" | "fbd" | "sfc") | null;
             /** Use Labels */
             use_labels?: boolean | null;
         };
@@ -6260,7 +6463,7 @@ export interface components {
              * Tool
              * @enum {string}
              */
-            tool: "search_plc_manual" | "get_generation_context" | "get_fbd_catalog";
+            tool: "search_plc_manual" | "get_generation_context" | "get_fbd_catalog" | "get_design_context";
         };
         /** ReadDelivery */
         ReadDelivery: {
@@ -6320,6 +6523,11 @@ export interface components {
             }[] | null;
         } & {
             [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** ReadObjectReference */
+        ReadObjectReference: {
+            /** $Ref */
+            $ref: string;
         };
         /** ReplayAssertion */
         ReplayAssertion: {
@@ -6446,6 +6654,51 @@ export interface components {
             plan_id: string;
             /** Test Name */
             test_name: string;
+        };
+        /** ResolvedReadData */
+        ResolvedReadData: {
+            /**
+             * Context Schema Version
+             * @constant
+             */
+            context_schema_version: 4;
+            delivery: components["schemas"]["ResolvedReadDelivery"];
+            /** Document */
+            document: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+        };
+        /** ResolvedReadDelivery */
+        ResolvedReadDelivery: {
+            /** Assembly */
+            assembly?: string | null;
+            /** Complete */
+            complete: boolean;
+            /** Coverage */
+            coverage?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Document Id */
+            document_id: string;
+            /** Fact Version */
+            fact_version: string;
+            /** Limits */
+            limits: {
+                [key: string]: number;
+            };
+            next: components["schemas"]["ReadContinuation"] | null;
+            /** Page */
+            page: number;
+            /**
+             * Scope
+             * @constant
+             */
+            scope: "read_sequence";
+            /**
+             * Version
+             * @constant
+             */
+            version: 1;
         };
         /** ResponseViolation */
         ResponseViolation: {
@@ -7202,15 +7455,6 @@ export interface components {
         } & {
             [key: string]: components["schemas"]["JsonValue"];
         };
-        /** Session */
-        Session: {
-            /** Authenticated */
-            authenticated: boolean;
-            /** Csrf */
-            csrf?: string | null;
-            /** Read Only */
-            read_only?: boolean | null;
-        };
         /** SettingsUpdate */
         SettingsUpdate: {
             /** Active Profile Id */
@@ -7635,6 +7879,23 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** SourceCandidateDocument */
+        SourceCandidateDocument: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "source_candidate";
+            /** Source */
+            source: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /**
+             * Target Mode
+             * @enum {string}
+             */
+            target_mode: "fbd" | "sfc";
+        };
         /** SourceDefinition */
         SourceDefinition: {
             /** Declarations */
@@ -7745,6 +8006,77 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** SpecDocument */
+        SpecDocument: {
+            /** Base Revision */
+            base_revision?: string | null;
+            confirmed_spec?: components["schemas"]["Specification"] | null;
+            /** Differences */
+            differences?: components["schemas"]["SpecificationDifference"][];
+            draft?: components["schemas"]["Specification"] | null;
+            /** Draft Revision */
+            draft_revision: string;
+            issues?: components["schemas"]["SpecDocumentIssues"] | null;
+            /** Path */
+            path: string;
+            /** Plc Model */
+            plc_model: string;
+            /** Project Id */
+            project_id: string;
+            /** Target Mode */
+            target_mode: string;
+            version_spec?: components["schemas"]["Specification"] | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SpecDocumentChange */
+        SpecDocumentChange: {
+            /** Id */
+            id?: string | null;
+            /**
+             * Remove
+             * @default false
+             */
+            remove: boolean;
+            /** Section */
+            section: string;
+            /** Value */
+            value?: unknown;
+        };
+        /** SpecDocumentConfirm */
+        SpecDocumentConfirm: {
+            /** Expected Revision */
+            expected_revision: string;
+            /** Version Id */
+            version_id?: string | null;
+        };
+        /** SpecDocumentIssue */
+        SpecDocumentIssue: {
+            /** Code */
+            code?: string | null;
+            /** Message */
+            message: string;
+            /** Path */
+            path?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SpecDocumentIssues */
+        SpecDocumentIssues: {
+            /** Errors */
+            errors?: components["schemas"]["SpecDocumentIssue"][];
+            /** Warnings */
+            warnings?: components["schemas"]["SpecDocumentIssue"][];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SpecDocumentUpdate */
+        SpecDocumentUpdate: {
+            /** Changes */
+            changes: components["schemas"]["SpecDocumentChange"][];
+            /** Expected Revision */
+            expected_revision: string;
+        };
         /** SpecIORowEdit */
         SpecIORowEdit: {
             /** Address */
@@ -7805,18 +8137,24 @@ export interface components {
             extensions?: {
                 [key: string]: components["schemas"]["JsonValue"];
             } | null;
+            /** Implementation Items */
+            implementation_items?: components["schemas"]["SpecificationImplementationItem"][] | null;
             /** Io Table */
             io_table?: components["schemas"]["IORow"][] | null;
             /** Metadata */
             metadata?: {
                 [key: string]: components["schemas"]["JsonValue"];
             } | null;
+            /** Open Questions */
+            open_questions?: components["schemas"]["SpecificationOpenQuestion"][] | null;
             /** Operation Intents */
             operation_intents?: components["schemas"]["SpecificationOperationIntent"][] | null;
             /** Parameters */
             parameters?: components["schemas"]["SpecificationParameter"][] | null;
             /** Plc Model */
             plc_model?: string | null;
+            /** Requirements */
+            requirements?: components["schemas"]["SpecificationRequirement"][] | null;
             /** Schema Version */
             schema_version?: number | null;
             selected_approach?: components["schemas"]["SpecificationApproach"] | null;
@@ -7901,6 +8239,15 @@ export interface components {
         } & {
             [key: string]: components["schemas"]["JsonValue"];
         };
+        /** SpecificationDifference */
+        SpecificationDifference: {
+            after?: components["schemas"]["JsonValue"];
+            before?: components["schemas"]["JsonValue"];
+            /** Path */
+            path: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
         /** SpecificationExecutionContext */
         SpecificationExecutionContext: {
             /** Cpu Version */
@@ -7924,6 +8271,42 @@ export interface components {
             overflow?: string | null;
             type: components["schemas"]["ExpressionValueType"];
             value?: components["schemas"]["JsonValue"];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SpecificationImplementationItem */
+        SpecificationImplementationItem: {
+            /** Id */
+            id: string;
+            instances?: components["schemas"]["JsonValue"];
+            /** Language */
+            language: string;
+            /** Location */
+            location: string;
+            /** Method */
+            method: string;
+            /** Rationale */
+            rationale?: string | null;
+            /** Requirement Ids */
+            requirement_ids?: string[];
+            /** Source */
+            source?: string | null;
+            /** State Owner */
+            state_owner: string;
+            template?: components["schemas"]["JsonValue"];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** SpecificationOpenQuestion */
+        SpecificationOpenQuestion: {
+            /** Id */
+            id: string;
+            /** Required */
+            required?: boolean | null;
+            /** Source */
+            source?: string | null;
+            /** Text */
+            text: string;
         } & {
             [key: string]: components["schemas"]["JsonValue"];
         };
@@ -7981,6 +8364,19 @@ export interface components {
         } & {
             [key: string]: components["schemas"]["JsonValue"];
         };
+        /** SpecificationRequirement */
+        SpecificationRequirement: {
+            /** Id */
+            id: string;
+            /** Source */
+            source?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Text */
+            text: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
         /** StructureArrayAddresses */
         StructureArrayAddresses: {
             /** Bit Address */
@@ -7996,6 +8392,23 @@ export interface components {
              * @enum {integer}
              */
             word_use_bit: 0 | 1;
+        };
+        /** StructuredSourcePreview */
+        StructuredSourcePreview: {
+            /** Diff */
+            diff: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            program: components["schemas"]["SourceCandidateDocument"];
+            /**
+             * Target Mode
+             * @enum {string}
+             */
+            target_mode: "fbd" | "sfc";
+            /** Validation */
+            validation: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
         };
         /** TaskProgram */
         TaskProgram: {
@@ -8253,6 +8666,10 @@ export interface components {
             debug_attempts?: {
                 [key: string]: components["schemas"]["JsonValue"];
             }[] | null;
+            /** Delivery */
+            delivery?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
             /** Generation Handoff */
             generation_handoff?: {
                 [key: string]: components["schemas"]["JsonValue"];
@@ -8308,6 +8725,136 @@ export interface components {
             target_mode: "ladder";
             /** Version Id */
             version_id: string;
+        };
+        /** WorkspaceBreadcrumb */
+        WorkspaceBreadcrumb: {
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** WorkspaceDirectory */
+        WorkspaceDirectory: {
+            /** Path */
+            path: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** WorkspaceDirectoryCreate */
+        WorkspaceDirectoryCreate: {
+            /** Name */
+            name: string;
+            /** Parent */
+            parent: string;
+        };
+        /** WorkspaceEntry */
+        WorkspaceEntry: {
+            /**
+             * Hidden
+             * @default false
+             */
+            hidden: boolean;
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /** WorkspaceIndex */
+        WorkspaceIndex: {
+            /** Active */
+            active?: string | null;
+            /** Workspaces */
+            workspaces?: components["schemas"]["WorkspaceSummary"][];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /**
+         * WorkspaceListing
+         * @description One directory level an operator can navigate and pick from.
+         */
+        WorkspaceListing: {
+            /** Crumbs */
+            crumbs?: components["schemas"]["WorkspaceBreadcrumb"][];
+            /** Entries */
+            entries?: components["schemas"]["WorkspaceEntry"][];
+            /** Home */
+            home: string;
+            /** Path */
+            path: string;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /**
+         * WorkspaceProject
+         * @description One project owned by a workspace, listed without binding that workspace.
+         */
+        WorkspaceProject: {
+            /** Id */
+            id?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Plc Model */
+            plc_model?: string | null;
+            /** Target Mode */
+            target_mode?: string | null;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /**
+         * WorkspaceSelection
+         * @description A fully qualified workspace directory chosen in the browser.
+         */
+        WorkspaceSelection: {
+            /** Path */
+            path: string;
+        };
+        /**
+         * WorkspaceState
+         * @description The workspace the workbench currently serves, or that none is bound yet.
+         */
+        WorkspaceState: {
+            /** Home */
+            home?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Path */
+            path?: string | null;
+            /** Read Only */
+            read_only: boolean;
+            /** Selected */
+            selected: boolean;
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
+        };
+        /**
+         * WorkspaceSummary
+         * @description One workspace row: its folder, label and the projects inside it.
+         */
+        WorkspaceSummary: {
+            /**
+             * Active
+             * @default false
+             */
+            active: boolean;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Path */
+            path: string;
+            /** Projects */
+            projects?: components["schemas"]["WorkspaceProject"][];
+        } & {
+            [key: string]: components["schemas"]["JsonValue"];
         };
     };
     responses: never;
@@ -9098,7 +9645,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["GenerationLadderPreview"] | components["schemas"]["GenerationFBDPreview"] | components["schemas"]["GenerationSFCPreview"] | components["schemas"]["GenerationSTPreview"];
+                    "application/json": components["schemas"]["GenerationLadderPreview"] | components["schemas"]["GenerationFBDPreview"] | components["schemas"]["GenerationSFCPreview"] | components["schemas"]["GenerationSTPreview"] | components["schemas"]["GenerationStructuredSourcePreview"];
                 };
             };
             /** @description Validation Error */
@@ -9454,6 +10001,109 @@ export interface operations {
             };
         };
     };
+    spec_document_api_projects__project_id__spec_document_get: {
+        parameters: {
+            query?: {
+                version_id?: string | null;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpecDocument"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_spec_document_api_projects__project_id__spec_document_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpecDocumentUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpecDocument"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_spec_document_api_projects__project_id__spec_document_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpecDocumentConfirm"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpecDocument"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     version_api_projects__project_id__versions__version_id__get: {
         parameters: {
             query?: never;
@@ -9573,6 +10223,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DiagnosticsEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    version_diff_api_projects__project_id__versions__version_id__diff_get: {
+        parameters: {
+            query: {
+                base_version_id: string;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LadderProgramDiff"] | components["schemas"]["STTextDiff"] | components["schemas"]["FBDDiff"] | components["schemas"]["SFCDiff"] | null;
                 };
             };
             /** @description Validation Error */
@@ -10050,7 +10734,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PLCProgram"] | components["schemas"]["FBDModel"] | components["schemas"]["SFCModel"] | components["schemas"]["LadderDocument"] | null;
+                    "application/json": components["schemas"]["PLCProgram"] | components["schemas"]["FBDModel"] | components["schemas"]["SFCModel"] | components["schemas"]["LadderDocument"] | components["schemas"]["SourceCandidateDocument"] | null;
                 };
             };
             /** @description Validation Error */
@@ -10451,60 +11135,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LadderPreview"] | components["schemas"]["STPreview"] | components["schemas"]["FBDPreviewResource"] | components["schemas"]["SFCPreviewResource"] | components["schemas"]["ExecutionPreview"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    session_api_session_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Session"];
-                };
-            };
-        };
-    };
-    login_api_session_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Login"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Session"];
+                    "application/json": components["schemas"]["LadderPreview"] | components["schemas"]["STPreview"] | components["schemas"]["FBDPreviewResource"] | components["schemas"]["SFCPreviewResource"] | components["schemas"]["StructuredSourcePreview"] | components["schemas"]["ExecutionPreview"];
                 };
             };
             /** @description Validation Error */
@@ -11109,6 +11740,225 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SpecPresentationResource"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    workspace_state_api_workspace_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceState"];
+                };
+            };
+        };
+    };
+    browse_workspace_api_workspace_browse_get: {
+        parameters: {
+            query?: {
+                path?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceListing"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_workspace_directory_api_workspace_directory_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceDirectoryCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDirectory"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_workspaces_api_workspaces_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceIndex"];
+                };
+            };
+        };
+    };
+    add_workspace_api_workspaces_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceSelection"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceIndex"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pick_workspace_api_workspaces_pick_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceIndex"];
+                };
+            };
+        };
+    };
+    forget_workspace_api_workspaces__workspace_id_value__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id_value: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceIndex"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activate_workspace_api_workspaces__workspace_id_value__activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id_value: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceIndex"];
                 };
             };
             /** @description Validation Error */

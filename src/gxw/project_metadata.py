@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Lossless updates of observed GXW metadata (no XML reserialization)."""
 from __future__ import annotations
@@ -687,6 +687,37 @@ def read_project_compile_options(raw: bytes) -> dict:
         if value & 0xffff0000 == 0x10010000:
             hiding = bool(value & 1)
     return dict(count_offset=offset, values=values, global_variable_hiding=hiding)
+
+
+def native_project_compile_option_initialization(before: bytes, after: bytes, observation: dict):
+    """Recognize the original Workspace open-time project profile insertion.
+
+    In 1.635.0.1, Workspace FUN_61de745f selects 0x10070000 for original
+    project attributes (1, 2) and appends it before the option terminator.
+    The native getters must show that same value before and after creation.
+    Unknown option words, ranges, the prefix and the entire suffix stay exact.
+    This records native initialization; it does not grant instruction support.
+    """
+    creation = observation.get('creation') or {}
+    attributes = creation.get('project_attributes') or {}
+    if (observation.get('native_version') != '1.635.0.1'
+            or type(attributes.get('attribute')) is not int or attributes['attribute'] != 1
+            or type(attributes.get('mode')) is not int or attributes['mode'] != 2):
+        return None
+    old, new = read_project_compile_options(before), read_project_compile_options(after)
+    values, offset = old['values'], old['count_offset']
+    if (len(values) >= 32 or any(value & 0xffff0000 == 0x10070000 for value in values[:-1])):
+        return None
+    expected = (*values[:-1], 0x10070000, 0xffffffff)
+    if (new['count_offset'] != offset or new['values'] != expected
+            or creation.get('compile_options_before') != list(expected)
+            or creation.get('compile_options_after') != list(expected)
+            or before[:offset] != after[:offset]
+            or before[offset + 4 + 4 * len(values):] != after[offset + 4 + 4 * len(expected):]):
+        return None
+    return {'change':'native_open_compile_profile_initialization', 'count_offset':offset,
+            'before':list(values), 'after':list(expected), 'native_getters':'matched',
+            'other_options_prefix_and_suffix':'exact'}
 
 
 @dataclass

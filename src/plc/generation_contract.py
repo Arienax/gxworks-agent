@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Model-free ladder_v1 generation contract and safe specification projection.
 
 This describes the generation subset of the historical ladder interchange
@@ -13,6 +16,7 @@ from typing import Any, Mapping
 
 from plc.instructions import (GENERATION_TYPED_OUTPUT_OPCODES, generation_app_instr_mnemonics,
                               LITERAL_ARITHMETIC_MNEMONIC_PATTERN)
+from plc.specification.decision_basis import DECISION_BASIS_FIELDS
 
 
 MAX_LABEL_LEN = 64
@@ -22,7 +26,7 @@ APP_INSTR_OPCODE_PATTERN = rf"^(?:[A-Z0-9_.$@+\-]+|{LITERAL_ARITHMETIC_MNEMONIC_
 # Shared execution semantics; wire representations add only their own syntax.
 CYCLIC_ASSIGNMENT_PROMPT = """区分执行条件、作用范围、数据源与目标；范围不构成触点。
 确定完整条件及撤销值；停止/故障优先级含首次扫描。AND/OR/NOT 是同时/任一/取反；有效电平不等于触点类型。
-逐扫描按序赋值，后写覆盖前写；SET/RST 保持与边沿脉冲不替代普通赋值。
+逐扫描按序执行，后续触点与比较读本扫描已写入的新值。共用使能只共享布尔条件，不冻结分支读取的状态。要求一次事件只选择一个目标时，前一分支的写入不得令同一事件再次通过后续分支。SET/RST 保持与边沿脉冲不替代普通赋值。
 """
 
 
@@ -312,6 +316,7 @@ ENGINEERING_CONTEXT_FIELDS = {
 
 
 from plc.specification.implementation import ROW_FIELDS
+from plc.specification.output_logic import OUTPUT_LOGIC_FIELDS
 
 _SPEC_FIELDS = {
     **{section: [fields] for section, fields in ROW_FIELDS.items()},
@@ -321,6 +326,9 @@ _SPEC_FIELDS = {
     **dict.fromkeys(("schema_version", "summary", "user_notes", "scan_budget_ms", "scan_warning_ms")),
     "selected_approach": {
         **dict.fromkeys(("id", "approach_id", "name", "description", "generation_guide")),
+        "instruction_choices": [dict.fromkeys(("opcode", "role"))],
+        "output_logic": [dict.fromkeys(OUTPUT_LOGIC_FIELDS)],
+        "decision_basis": DECISION_BASIS_FIELDS,
         "implementation_semantics": [_IMPLEMENTATION_SEMANTIC_FIELDS],
         "explicit_user_constraints": _EXPLICIT_USER_CONSTRAINT_FIELDS,
         "generation_contract": _CONTRACT_FIELDS,

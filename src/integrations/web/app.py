@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Local HTTP/SSE transport. Domain operations belong to application services."""
 from __future__ import annotations
@@ -7,10 +7,10 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import os
 import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
+from threading import RLock
 from typing import Literal
 from urllib.parse import quote
 
@@ -19,11 +19,13 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from application.project_commands import SpecConfirmationError
 from application.projects import media_type, public
 from application.workbench import WorkbenchService, sfc_requirement, ChangeScopeError
 from application.fbd import FBDValidationError
 from application.execution import ExecutionUnavailableError
-from application.workspace import ConflictError, WorkspaceBusyError, default_state_dir
+from application.workspace import ConflictError, default_state_dir
+from shared.paths import local_data_dir
 from application.settings import ModelConfigurationRequiredError
 from .security import LocalSecurity
 from .mcp_routes import register_mcp_routes
@@ -32,8 +34,10 @@ from .workspaces import (ServiceHolder, WorkspaceNotSelected, WorkspacePathError
                          pick_native_directory, summarize_workspace, workspace_id,
                          workspace_snapshot)
 from . import responses as dto
-from .schemas import (Login, ProjectCreate, ProjectUpdate, ActivateVersion, SpecUpdate, SpecIORowEdit, SpecPresentation,
-                      JobCreate, GenerationRepair, ProposalDecision, ExecutionProposal, AgentCall,
+from .spec_contracts import SpecDocument
+from .schemas import SpecDocumentUpdate, SpecDocumentConfirm
+from .schemas import (ProjectCreate, ProjectUpdate, ActivateVersion, SpecUpdate, SpecIORowEdit, SpecPresentation,
+                      JobCreate, GenerationRepair, ProposalDecision, ExecutionProposal, AgentCall, AgentReadDelivery,
                       SettingsUpdate, ApprovalSettingsUpdate, ModelProfileCreate, ModelKeyUpdate, ModelConnectionTest, ModelDiscoveryRequest, ModelVerificationRequest,
                       AttachmentUpload, GXWInspectionCommand, GXWImportCommand, GXWEditCommand,
                       SFCInput, SFCProposal, SFCPreview, FBDProposal, ModelRequestPreview,
@@ -42,20 +46,19 @@ from .schemas import (Login, ProjectCreate, ProjectUpdate, ActivateVersion, Spec
 
 def _default_registry_root() -> Path:
     """Where the workspace list lives when no state directory was configured."""
-    base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
-    return Path(base) / "GXWorks Agent"
+    return local_data_dir()
 
 
 def create_app(workspace=None, *, state_dir=None, read_only=False, origin="http://127.0.0.1:8765",
-               operator_token=None, agent_token=None, service=None, static_dir=None):
-    # No operator credential means the loopback page opens its own session; the
-    # Agent credential stays separate for MCP clients.
-    security = LocalSecurity(origin, operator_token, agent_token)
+               agent_token=None, service=None, static_dir=None):
+    security = LocalSecurity(origin, agent_token)
     # The workspace can be chosen or replaced from the browser, so every route
     # keeps one indirection instead of closing over a single bound service.
     holder = ServiceHolder(read_only=read_only)
+    binding_changes = RLock()
     registry_root = Path(state_dir) if state_dir is not None else _default_registry_root()
-    workspaces = WorkspaceRegistry(registry_root / "workspaces.json")
+    legacy_registry = local_data_dir("GXWorks Agent") / "workspaces.json" if state_dir is None else None
+    workspaces = WorkspaceRegistry(registry_root / "workspaces.json", legacy_path=legacy_registry)
     provided_service = service
     if provided_service is not None:
         holder.bind(provided_service)
@@ -72,47 +75,51 @@ def create_app(workspace=None, *, state_dir=None, read_only=False, origin="http:
         if registry is not None:
             registry.public_read_validator = dto.validate_public_read_document
 
-    def bind_workspace(target: Path) -> dict:
-        """Bind or replace the active workspace, releasing the previous lock first."""
-        resolved = Path(target).expanduser().resolve()
-        previous = holder.current()
-        if previous is not None:
-            current = str(previous.store.base_dir)
-            if Path(current).resolve() == resolved:
-                return workspace_snapshot(current)
-        if resolved.exists() and not resolved.is_dir():
-            raise ValueError("工作区必须是文件夹。")
-        if (resolved / "project.json").is_file():
-            raise ValueError("选中的是单个工程目录；请选择包含 index.json 和 projects 的工作区外层目录。")
-        resolved.mkdir(parents=True, exist_ok=True)
-        if previous is not None:
-            previous.close()
-        bound = WorkbenchService(resolved, _workspace_state(resolved), read_only=read_only)
-        holder.bind(bound)
-        bound.start()
-        _attach_public_read_validator(bound)
-        return workspace_snapshot(str(resolved))
+    def bind_workspace(target: Path, *, remember: bool = False) -> None:
+        """Open the target successfully before replacing the current binding."""
+        with binding_changes:
+            resolved = Path(target).expanduser().resolve()
+            previous = holder.current()
+            if previous is not None and previous.store.base_dir.resolve() == resolved:
+                if remember:
+                    workspaces.remember(resolved)
+                return
+            if resolved.exists() and not resolved.is_dir():
+                raise ValueError("工作区必须是文件夹。")
+            if (resolved / "project.json").is_file():
+                raise ValueError("选中的是单个工程目录；请选择包含 index.json 和 projects 的工作区外层目录。")
+            resolved.mkdir(parents=True, exist_ok=True)
+            bound = WorkbenchService(resolved, _workspace_state(resolved), read_only=read_only)
+            try:
+                bound.start()
+                _attach_public_read_validator(bound)
+                if remember:
+                    workspaces.remember(resolved)
+            except BaseException:
+                bound.close()
+                raise
+            holder.bind(bound)
+            if previous is not None:
+                previous.close()
+
+    def bound_workspace_id() -> str | None:
+        bound = holder.current()
+        return workspace_id(bound.store.base_dir) if bound is not None else None
 
     def workspace_index() -> dict:
-        active = holder.current()
-        active_path = str(active.store.base_dir) if active is not None else None
-        rows = [summarize_workspace(row, active=bool(active_path) and
-                                    Path(row["path"]).resolve() == Path(active_path).resolve())
-                for row in workspaces.entries()]
-        return {"active": workspaces.active(), "workspaces": rows}
+        active = bound_workspace_id()
+        rows = [summarize_workspace(row, active=row["id"] == active) for row in workspaces.entries()]
+        return {"active": active, "workspaces": rows}
 
     def activate_registered(identifier: str) -> dict:
         row = workspaces.find(identifier)
         if row is None:
             raise KeyError(identifier)
-        bind_workspace(Path(row["path"]))
-        workspaces.set_active(identifier)
+        bind_workspace(Path(row["path"]), remember=True)
         return workspace_index()
 
     def register_and_activate(path: str | Path) -> dict:
-        row = workspaces.add(path)
-        bind_workspace(Path(row["path"]))
-        workspaces.set_active(row["id"])
+        bind_workspace(Path(path), remember=True)
         return workspace_index()
 
     # Restore the workspace this workbench last served, so the page opens on it.
@@ -143,7 +150,7 @@ def create_app(workspace=None, *, state_dir=None, read_only=False, origin="http:
 
     app = FastAPI(title="GXWorks Agent Local Workbench", version="1.0.0", lifespan=lifespan,
                   docs_url=None, redoc_url=None, openapi_url=None)
-    app.state.service, app.state.security = service, security
+    app.state.service = service
     app.middleware("http")(security.middleware)
     register_mcp_routes(app, service, security)
 
@@ -171,6 +178,10 @@ def create_app(workspace=None, *, state_dir=None, read_only=False, origin="http:
     async def invalid(_request, _error):
         return JSONResponse({"error": {"code": "invalid_request", "message": "输入或工程状态无效，请检查所选版本及设置。"}}, status_code=400)
 
+    @app.exception_handler(SpecConfirmationError)
+    async def invalid_spec_confirmation(_request, error):
+        return JSONResponse({"error": {"code": "invalid_spec_confirmation", "message": public(str(error))}}, status_code=400)
+
     @app.exception_handler(ModelConfigurationRequiredError)
     async def model_configuration_required(_request, _error):
         return JSONResponse({"error": {"code": "model_configuration_required", "message": "尚未配置模型，请在模型 API 设置中新建配置。"}}, status_code=400)
@@ -188,8 +199,14 @@ def create_app(workspace=None, *, state_dir=None, read_only=False, origin="http:
         return JSONResponse({"error": {"code": "conflict", "message": "工程或提案状态已变化，请刷新后重新检查。"}}, status_code=409)
 
     @app.exception_handler(PermissionError)
-    async def forbidden(_request, _error):
-        return JSONResponse({"error": {"code": "forbidden", "message": "此操作需要有效的操作员权限及可写工作区。"}}, status_code=403)
+    async def forbidden(_request, error):
+        if service.read_only:
+            code, message = "read_only_workspace", "工作台以只读模式打开。"
+        else:
+            code = "forbidden"
+            message = ("无法访问所需文件，请检查工作区目录的读写权限。"
+                       if error.errno is not None else public(str(error)))
+        return JSONResponse({"error": {"code": code, "message": message}}, status_code=403)
 
     @app.exception_handler(WorkspaceNotSelected)
     async def workspace_required(_request, error):
@@ -206,7 +223,8 @@ def create_app(workspace=None, *, state_dir=None, read_only=False, origin="http:
     @app.get("/api/workspace", response_model=dto.WorkspaceState)
     def workspace_state():
         bound = holder.current()
-        return workspace_snapshot(str(bound.store.base_dir) if bound is not None else None)
+        return {**workspace_snapshot(str(bound.store.base_dir) if bound is not None else None),
+                "read_only": holder.read_only}
 
     @app.get("/api/workspaces", response_model=dto.WorkspaceIndex)
     def list_workspaces():
@@ -232,18 +250,18 @@ def create_app(workspace=None, *, state_dir=None, read_only=False, origin="http:
     @app.delete("/api/workspaces/{workspace_id_value}", response_model=dto.WorkspaceIndex)
     def forget_workspace(workspace_id_value: str):
         """Remove one workspace from the list; its folder and projects stay on disk."""
-        if workspaces.find(workspace_id_value) is None:
-            raise KeyError(workspace_id_value)
-        was_active = workspaces.active() == workspace_id_value
-        workspaces.remove(workspace_id_value)
-        if was_active:
-            remaining = workspaces.entries()
-            if remaining:
-                activate_registered(remaining[0]["id"])
-            else:
-                holder.release()
-                workspaces.set_active(None)
-        return workspace_index()
+        with binding_changes:
+            rows = workspaces.entries()
+            remaining = [row for row in rows if row["id"] != workspace_id_value]
+            if len(remaining) == len(rows):
+                raise KeyError(workspace_id_value)
+            if bound_workspace_id() == workspace_id_value:
+                if remaining:
+                    bind_workspace(Path(remaining[0]["path"]), remember=True)
+                else:
+                    holder.release()
+            workspaces.remove(workspace_id_value)
+            return workspace_index()
 
     @app.get("/api/workspace/browse", response_model=dto.WorkspaceListing)
     def browse_workspace(path: str | None = Query(default=None, max_length=4096)):
@@ -252,27 +270,6 @@ def create_app(workspace=None, *, state_dir=None, read_only=False, origin="http:
     @app.post("/api/workspace/directory", response_model=dto.WorkspaceDirectory)
     def create_workspace_directory(command: WorkspaceDirectoryCreate):
         return {"path": create_directory(command.parent, command.name)}
-
-    @app.post("/api/session", response_model=dto.Session)
-    def login(command: Login):
-        key, csrf = security.login(command.token)
-        response = JSONResponse({"authenticated": True, "csrf": csrf, "read_only": service.read_only})
-        response.set_cookie("gx_operator", key, httponly=True, samesite="strict", max_age=12 * 3600, path="/")
-        return response
-
-    @app.get("/api/session", response_model=dto.Session)
-    def session(request: Request):
-        active = security.session(request)
-        if not active and security.auto_session:
-            # No operator credential is configured: this loopback page opens its
-            # own session instead of asking the operator for a token.
-            key, csrf = security.open_session()
-            response = JSONResponse({"authenticated": True, "csrf": csrf, "read_only": service.read_only})
-            response.set_cookie("gx_operator", key, httponly=True, samesite="strict", max_age=12 * 3600, path="/")
-            return response
-        if not active:
-            return JSONResponse({"authenticated": False}, status_code=401)
-        return {"authenticated": True, "csrf": active.csrf, "read_only": service.read_only}
 
     @app.get("/api/openapi.json")
     def schema():
@@ -352,6 +349,21 @@ def create_app(workspace=None, *, state_dir=None, read_only=False, origin="http:
     def activate(project_id: str, command: ActivateVersion):
         return service.activate_version(project_id, **command.model_dump())
 
+    @app.get("/api/projects/{project_id}/spec-document", response_model=SpecDocument, response_model_exclude_unset=True)
+    def spec_document(project_id: str, version_id: str | None = None):
+        return service.project_commands.get_spec_document(project_id, version_id=version_id)
+
+    @app.patch("/api/projects/{project_id}/spec-document", response_model=SpecDocument, response_model_exclude_unset=True)
+    def update_spec_document(project_id: str, command: SpecDocumentUpdate):
+        return service.project_commands.update_spec_document(project_id,
+            changes=[change.model_dump(exclude_unset=True) for change in command.changes],
+            expected_revision=command.expected_revision)
+
+    @app.post("/api/projects/{project_id}/spec-document/confirm", response_model=SpecDocument, response_model_exclude_unset=True)
+    def confirm_spec_document(project_id: str, command: SpecDocumentConfirm):
+        return service.project_commands.confirm_spec_document(
+            project_id, expected_revision=command.expected_revision, version_id=command.version_id, allow_selected_approach=True)
+
     @app.put("/api/projects/{project_id}/spec", response_model=dto.SpecResult, response_model_exclude_unset=True)
     def specification(project_id: str, command: SpecUpdate):
         return service.set_spec(project_id, **command.model_dump())
@@ -363,6 +375,12 @@ def create_app(workspace=None, *, state_dir=None, read_only=False, origin="http:
     @app.get("/api/projects/{project_id}/versions/{version_id}", response_model=dto.Version, response_model_exclude_unset=True)
     def version(project_id: str, version_id: str):
         return service.projects.version(project_id, version_id)
+
+    @app.get("/api/projects/{project_id}/versions/{version_id}/diff",
+             response_model=dto.LadderProgramDiff | dto.STTextDiff | dto.FBDDiff | dto.SFCDiff | None,
+             response_model_exclude_unset=True)
+    def version_diff(project_id: str, version_id: str, base_version_id: str):
+        return service.projects.version_diff(project_id, version_id, base_version_id)
 
     @app.get("/api/projects/{project_id}/versions/{version_id}/program", response_model=dto.ProgramDocument | None, response_model_exclude_unset=True)
     def program(project_id: str, version_id: str):
@@ -404,6 +422,12 @@ def create_app(workspace=None, *, state_dir=None, read_only=False, origin="http:
     @app.post("/api/jobs", status_code=202, response_model=dto.Job, response_model_exclude_unset=True)
     def submit(command: JobCreate, request: Request):
         payload = command.model_dump()
+        if command.clarification_job_id:
+            # Omission means resume the parent's binding, not the schema's
+            # default mode/version or the currently selected UI program.
+            for field in ('version_id', 'program', 'change_scope', 'analysis_mode', 'generation_action'):
+                if field not in command.model_fields_set:
+                    payload.pop(field, None)
         if command.kind in {"generation", "direct_generation"}:
             experiment_headers = {
                 "construction_examples": request.headers.get("X-GX-Construction-Examples"),
@@ -441,10 +465,7 @@ def create_app(workspace=None, *, state_dir=None, read_only=False, origin="http:
         return service.repair_generation(job_id, command.request_id)
 
     @app.get("/api/jobs/{job_id}/diagnostics")
-    def job_diagnostics(job_id: str, request: Request):
-        # Diagnostic exports are operator-only, not an Agent data-reading tool.
-        if not security.session(request):
-            raise PermissionError("Operator session required")
+    def job_diagnostics(job_id: str):
         if not service.jobs:
             raise KeyError(job_id)
         job = service.jobs.get(job_id)
@@ -457,21 +478,25 @@ def create_app(workspace=None, *, state_dir=None, read_only=False, origin="http:
 
     @app.get("/api/jobs/{job_id}/events")
     async def events(job_id: str, request: Request, after: int = Query(0, ge=0)):
-        if not service.jobs:
+        jobs = service.jobs
+        if not jobs:
             raise KeyError(job_id)
-        service.jobs.get(job_id)
+        jobs.get(job_id)
         header = request.headers.get("last-event-id")
         if header:
             after = max(after, int(header))
         async def stream():
             cursor = after
             while not await request.is_disconnected():
-                batch = await asyncio.to_thread(service.jobs.events, job_id, cursor)
+                try:
+                    batch = await asyncio.to_thread(jobs.events, job_id, cursor)
+                    current = await asyncio.to_thread(jobs.get, job_id)
+                except KeyError:
+                    break
                 for event in batch:
                     cursor = event["sequence"]
                     dto.JobEvent.model_validate(event)
                     yield f"id: {cursor}\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
-                current = await asyncio.to_thread(service.jobs.get, job_id)
                 if current["status"] in ("completed", "failed", "cancelled", "interrupted") and cursor >= current["last_sequence"]:
                     break
                 if not batch:
@@ -594,8 +619,15 @@ def create_app(workspace=None, *, state_dir=None, read_only=False, origin="http:
         return {"tools": service.projects.runtime.list_tools()}
 
     @app.post("/api/agent/tools/call", response_model=dto.AgentToolResult, response_model_exclude_unset=True)
-    def agent_call(command: AgentCall):
-        return service.agent_call(command.model_dump())
+    def agent_call(command: AgentCall, request: Request):
+        options = command.model_dump()
+        if request.headers.get('x-gxworks-deferred-read') == '1':
+            options['defer_read'] = True
+        return service.agent_call(options)
+
+    @app.post("/api/agent/read-delivery", include_in_schema=False)
+    def finish_agent_read(command: AgentReadDelivery):
+        return {"ok": service.finish_host_read(**command.model_dump())}
 
     from .exploration_routes import register as register_exploration
     register_exploration(app, service)

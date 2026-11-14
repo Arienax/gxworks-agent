@@ -1,20 +1,26 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Analysis results."""
 import copy
 import json
 import re
+from jsonschema import Draft202012Validator
 from shared.i18n import tr
 from plc.specification.approach import (
+    INSTRUCTION_CHOICES_SCHEMA,
     IMPLEMENTATION_SEMANTIC_STATUSES,
     SUPPORTED_STRUCTURES,
     normalize_approach,
     normalize_implementation_semantics,
 )
+from plc.specification.decision_basis import DecisionSources, review_decision_basis
 from plc.validation import PLCJsonValidationError, parse_device_address
 from plc.device_identity import canonical_device
 from plc.hardware_profiles import ensure_hardware_questions
+from plc.specification.implementation import (
+    PLAN_ROW_SCHEMAS, normalize_implementation_instances, normalize_open_questions, normalize_review_questions,
+)
 
 _ANALYSIS_IO_KINDS = {"X", "Y", "M", "D", "T", "C", "S", "V", "Z", "SM", "SD"}
 _FLAT_IO_ADDRESS_RE = re.compile(r"(SM|SD|[XYMDTCSVZ])\d+", re.IGNORECASE)
@@ -48,6 +54,8 @@ _CURRENT_SEMANTIC_FORBIDDEN_FIELDS = frozenset({
     "instruction_instance",
 })
 _CURRENT_ROOT_FORBIDDEN_FIELDS = frozenset({"execution_semantics"})
+_PLAN_ROWS_VALIDATOR = Draft202012Validator({"type": "object", "properties": PLAN_ROW_SCHEMAS})
+_INSTRUCTION_CHOICES_VALIDATOR = Draft202012Validator(INSTRUCTION_CHOICES_SCHEMA)
 
 
 class AnalysisProtocolError(ValueError):
@@ -69,6 +77,11 @@ def prepare_analysis_payload(result, *, contract_stage="bound", user_text="", co
         return result
     prepared = copy.deepcopy(result)
     prepared.pop("_deferred_execution_claims", None)
+    if "implementation_items" in prepared:
+        prepared["implementation_items"] = normalize_implementation_instances(prepared["implementation_items"])
+    if "open_questions" in prepared:
+        prepared["open_questions"] = normalize_open_questions(prepared["open_questions"])
+    normalize_review_questions(prepared)
     claims = prepared.get("execution_intent_claims")
     if not isinstance(claims, list):
         return prepared
@@ -105,6 +118,13 @@ def current_analysis_protocol_violations(result):
 
     approaches = result.get("approaches")
     violations = []
+    for error in _PLAN_ROWS_VALIDATOR.iter_errors(result):
+        if error.validator == "required":
+            violations.extend(f"{error.json_path}.{key}: required field is missing"
+                              for key in error.validator_value if key not in error.instance)
+        else:
+            violations.append(f"{error.json_path}: {error.message}")
+    violations = list(dict.fromkeys(violations))
     if not isinstance(approaches, list):
         violations.append("$.approaches: current protocol requires an array")
         approaches = []
@@ -146,6 +166,8 @@ def current_analysis_protocol_violations(result):
             violations.append(
                 path + ": model must not emit " + ", ".join(forbidden)
             )
+        if "instruction_choices" in approach and not _INSTRUCTION_CHOICES_VALIDATOR.is_valid(approach["instruction_choices"]):
+            violations.append(path + ".instruction_choices: expected an array of opcode and role pairs")
 
         if "implementation_semantics" not in approach:
             violations.append(
@@ -253,13 +275,30 @@ def current_analysis_protocol_details(result):
     return details
 
 
-def analysis_grounding_details(result, user_text, *, plc_model="FX3U", confirmed_spec=None, contract_stage="bound"):
+def analysis_grounding_details(result, user_text, *, plc_model="FX3U", confirmed_spec=None,
+                               contract_stage="bound", decision_sources=None):
     """Inspect each claim independently so one malformed frame cannot mask others."""
     from plc.execution_intent import compile_execution_intent_claims, execution_intent_claim_violations
     from plc.specification.explicit_constraint_claims import compile_explicit_constraint_claims, explicit_constraint_claim_violations
-    if not isinstance(result, dict) or not str(user_text or "").strip():
+    if not isinstance(result, dict):
         return []
     details = []
+    approaches = result.get("approaches")
+    if isinstance(approaches, list):
+        sources = decision_sources or DecisionSources(user_text, confirmed_spec)
+        for index, approach in enumerate(approaches):
+            if not isinstance(approach, dict):
+                continue
+            path = f"$.approaches[{index}].decision_basis"
+            if "decision_basis" in approach:
+                _, issues = review_decision_basis(approach["decision_basis"], path=path,
+                                                  resolve_reference=sources.resolve)
+                details.extend(issues)
+            elif decision_sources is not None:
+                details.append({"path": path, "code": "invalid_decision_basis",
+                                "message": "current analysis requires decision_basis (use [] when no premises affect selection)"})
+    if not str(user_text or "").strip():
+        return details
     for name, check, compile_claim in (
         ("explicit_constraint_claims", explicit_constraint_claim_violations,
          lambda claims: compile_explicit_constraint_claims(claims, user_text, plc_model)),
@@ -273,6 +312,8 @@ def analysis_grounding_details(result, user_text, *, plc_model="FX3U", confirmed
             if check([claim]):
                 continue
             for rejected in compile_claim([claim]).get("rejected", []):
+                if rejected["reason"] == "inferred_claim_not_grounded":
+                    continue  # Inferred claims are retained in the receipt without binding requirements.
                 rows = rejected.get("details") or [{"path": f"$.{name}[0]", "code": rejected["reason"],
                     "message": "claim must bind to exact current-request evidence and its reported devices",
                     "actual": copy.deepcopy(claim)}]
@@ -424,6 +465,25 @@ def _apply_explicit_user_constraints(result, user_text, plc_model, confirmed_spe
     return result
 
 
+def model_analysis_fields(result):
+    """Keep the model's answer separate from Core-authored provenance."""
+    owned = {
+        "hardware_intent", "engineering_context", "intent_context", "decision_receipt",
+        "explicit_constraint_receipt", "analysis_repair_receipt", "declared_io_bindings",
+        "control_type", "flowchart_steps",
+    }
+    projected = {key: value for key, value in result.items() if key not in owned}
+    if isinstance(projected.get("approaches"), list):
+        projected["approaches"] = [
+            {key: value for key, value in item.items()
+             if key not in {"implementation_preferences", "explicit_user_constraints"}
+             and not (key == "generation_contract" and "implementation_semantics" in item)}
+            if isinstance(item, dict) else item
+            for item in projected["approaches"]
+        ]
+    return projected
+
+
 def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed_spec=None):
     """Normalize phase-one AI JSON before the specification editor sees it.
 
@@ -438,27 +498,9 @@ def _normalize_analysis_result(result, plc_model="FX3U", user_text="", confirmed
         isinstance(item, dict) and "implementation_semantics" in item
         for item in (result.get("approaches") or [])
     )
-    normalized = dict(result)
-    # Only the application can attach user-derived hardware evidence. A model
-    # cannot authenticate its own questions by emitting this metadata field.
-    normalized.pop("hardware_intent", None)
-    normalized.pop("engineering_context", None)
-    normalized.pop("intent_context", None)
-    normalized.pop("decision_receipt", None)
-    normalized.pop("explicit_constraint_receipt", None)
-    normalized.pop("analysis_repair_receipt", None)
-    normalized.pop("declared_io_bindings", None)
-    # Legacy UI/classification fields are not part of the current model contract.
-    # Do not replay them into later model requests or migrate saved revisions.
-    normalized.pop("control_type", None)
-    normalized.pop("flowchart_steps", None)
+    normalized = model_analysis_fields(result)
     normalized["approaches"] = [
-        normalize_approach({
-            key: value
-            for key, value in item.items()
-            if key not in {"implementation_preferences", "explicit_user_constraints"}
-            and not (key == "generation_contract" and "implementation_semantics" in item)
-        })
+        normalize_approach(item)
         for item in (normalized.get("approaches") or [])
         if isinstance(item, dict)
     ]

@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Task-scoped FBD generation context.
 
@@ -407,6 +407,8 @@ def _discovery_names(discovery, *, limit=DISCOVERY_CALLABLE_LIMIT):
         if ('included_candidates' in discovery
                 and candidate.get('id') not in discovery['included_candidates']):
             continue
+        if not (set(candidate.get('functions') or ()) - {'project_catalog'}):
+            continue
         name = str(candidate.get("name") or "").strip()
         if name and name not in names:
             names.append(name)
@@ -486,7 +488,7 @@ def _structure_closure(required, available):
 
 
 def select_task_catalog(catalog, *, scope=DEFAULT_CATALOG_SCOPE, templates=None, request="",
-                        previous=None, discovery=None, declarations=None):
+                        previous=None, discovery=None, declarations=None, confirmed_spec=None):
     """Select the catalog this task actually needs, with its dependency closure."""
     if scope not in CATALOG_SCOPES:
         raise FBDContextError(f"未知的 catalog_scope：{scope}")
@@ -555,6 +557,26 @@ def select_task_catalog(catalog, *, scope=DEFAULT_CATALOG_SCOPE, templates=None,
         add(node, "common_operator")
     for name in _discovery_names(discovery):
         add(_resolve(name, by_key, by_template), "capability_discovery")
+    from knowledge.capability_discovery import functional_queries, _matches_purpose, process_behavior_preferences
+    preferences = process_behavior_preferences(request)
+    functions = {query['function'] for query in functional_queries(request)} | set(preferences)
+    preferred = set()
+    for node in nodes:
+        matched = functions.intersection(node.get('semantic_functions') or ())
+        if not matched and node.get('description_source'):
+            matched = {name for name in functions if _matches_purpose(name, node.get('description'))}
+        behaviors = set(node.get('semantic_behaviors') or ())
+        if not behaviors and node.get('description_source'):
+            behaviors = set().union(*process_behavior_preferences(node.get('description')).values(), set())
+        matched = {name for name in matched if not preferences.get('timer' if name == 'off_delay' else name)
+                   or preferences['timer' if name == 'off_delay' else name].intersection(behaviors)}
+        if matched:
+            add(node, 'process_semantics')
+            if any(set(wanted).intersection(behaviors) for wanted in preferences.values()):
+                preferred.add(str(node.get('template')))
+    for item in (confirmed_spec or {}).get('implementation_items') or ():
+        if isinstance(item, Mapping) and item.get('language') == 'fbd' and item.get('template'):
+            add(_resolve(item['template'], by_key, by_template), 'confirmed_implementation')
     for template in _referenced_templates(previous):
         node = _resolve(template, by_key, by_template)
         if node is None:
@@ -582,13 +604,17 @@ def select_task_catalog(catalog, *, scope=DEFAULT_CATALOG_SCOPE, templates=None,
         elif template in dependencies and reasons[template] in {'common_operator', 'capability_discovery'}:
             reasons[template] = "required_port_type_dependency"
     ordering = {str(node.get("template")): index for index, node in enumerate(nodes)}
-    ordered = sorted(selected.values(), key=lambda item: ordering.get(str(item.get("template")), 10 ** 6))
+    ordered = sorted(selected.values(), key=lambda item: (
+        str(item.get('template')) not in preferred, ordering.get(str(item.get("template")), 10 ** 6)))
+    ordered = [{**node, 'selection_priority': 'behavior_match'} if str(node.get('template')) in preferred else node
+               for node in ordered]
     required, structure_gaps = _required_structures(ordered, available_structures)
     required = _structure_closure(required, available_structures)
     return {
         "catalog_scope": scope,
         "nodes": ordered,
         "selected": reasons,
+        "preferred_templates": [node['template'] for node in ordered if node['template'] in preferred],
         "optional_templates": [template for template, reason in reasons.items()
                                if reason in {'common_operator', 'capability_discovery'}],
         "requested_templates": [],
@@ -1049,7 +1075,7 @@ def _supported_paths(catalog, source):
     }
 
 
-def _unknown_boundaries(catalog, rules):
+def _use_limits(catalog, rules):
     options = (catalog or {}).get("compile_options") or {}
     boundaries = []
     if not options.get("values"):
@@ -1059,8 +1085,6 @@ def _unknown_boundaries(catalog, rules):
         boundaries.append({"code": "compile_option_words_unverified",
                            "message": "编译选项字仅解释 global_variable_hiding，其余位未解码"})
     boundaries.extend([
-        {"code": "fb_option_bits_unverified",
-         "message": "FB 宏代码/MC·MCR 位影响实例状态，当前未解码为字段"},
         {"code": "native_compilation_not_run",
          "message": "本次生成未做原生编译，编译与保存结果需单独验证"},
         {"code": "plc_execution_not_run",
@@ -1101,6 +1125,8 @@ def _scope_paragraph(selection, rules, paths=None):
         "`get_fbd_catalog` 的 `templates` 补取（MCP），Web 端请在答复中报告缺少的模板，"
         "不要凭记忆补写模板或假设全目录可用。",
         "- 引用数据与输入输出的连线端口一律以随附接口为准；嵌套 FB/复合类型依赖已按端口类型展开。",
+        "- `selection_priority=behavior_match` 标明与本次明确行为匹配的优选项：按接通/断开延时、"
+        "沿方向、计数方向、置/复位优先、具体比较关系和逻辑操作选块；随后核对已确认方案与既有绑定。",
         f"- 必需语言规则：{', '.join(rules.get('required_targets') or ())}（已读取）。",
         "- `call_interface`、`structures`、`source_context`、`project_options` 与 `call_bindings` "
         "是必需单元：被选函数的完整接口、所需类型（含嵌套成员）、受影响 ST 正文与 FBD 调用者、"
@@ -1108,6 +1134,9 @@ def _scope_paragraph(selection, rules, paths=None):
         "不是截断。",
         "- `call_bindings` 给出既有实例的载体（`node` 或 `call`）、实例名、实参与真实接口；"
         "改动实例必须与随附接口一致。",
+        "- 既有工程中，优先复用与确认方案一致且已绑定来源的厂商库/项目块，保留实例名与未请求修改的实参；"
+        "`origin` 标明标准 IEC、语言内建、已绑定库、项目自定义或未知来源。名称相同不能证明行为等价，"
+        "未知块缺少接口或行为依据时明确报告缺项，不自行替换为猜测实现。",
     ]
     joint = (paths.get("joint_multi_source_transaction") or {})
     if joint.get("supported"):
@@ -1159,7 +1188,7 @@ def compose_fbd_context(*, request, plc_model, catalog, confirmed_spec=None, pre
     selection = select_task_catalog(
         catalog, scope=scope, templates=templates, request=request,
         previous=_graph_view(previous, instances_model, *source_graphs), discovery=discovery,
-        declarations=(source or {}).get("declarations"))
+        declarations=(source or {}).get("declarations"), confirmed_spec=confirmed_spec)
     if source.get("status") == "available":
         # The selection can add a project callable the first pass could not know
         # about; its interface, body and callers then join the same closure.
@@ -1177,12 +1206,12 @@ def compose_fbd_context(*, request, plc_model, catalog, confirmed_spec=None, pre
             source_graphs = [row.get('parameter_model') for row in source.get('fbd_callers', ())]
             selection = select_task_catalog(catalog, scope=scope, templates=templates, request=request,
                 previous=_graph_view(previous, instances_model, *source_graphs), discovery=discovery,
-                declarations=source.get('declarations'))
+                declarations=source.get('declarations'), confirmed_spec=confirmed_spec)
     rules = language_rule_report(
         plc_model, selected_templates=[str(node.get("template")) for node in selection["nodes"]])
     menu = menu_identity(plc_model)
     from plc.device_profiles import device_address_rules
-    from shared.model_context import technical_value
+    from shared.model_context import model_knowledge_value, technical_value
     address_rules = technical_value(device_address_rules(plc_model))
     if address_rules['status'] != 'available':
         raise FBDContextRuleError(f'缺少 {plc_model} 的地址编号规则，无法生成 FBD')
@@ -1194,8 +1223,10 @@ def compose_fbd_context(*, request, plc_model, catalog, confirmed_spec=None, pre
         (source or {}).get("declarations") or {}) if source.get("status") == "available" else {}
 
     supported_paths = _supported_paths(catalog, source)
+    from plc.instruction_knowledge import programming_system_prompt
     instructions = "\n\n".join(part for part in (
         FBD_GENERATION_PROMPT,
+        programming_system_prompt(),
         _scope_paragraph(selection, rules, supported_paths)) if part)
 
     common = {
@@ -1211,7 +1242,7 @@ def compose_fbd_context(*, request, plc_model, catalog, confirmed_spec=None, pre
             "program_mode": (catalog.get("selected_source") or {}).get("unit_kind"),
             "programs": catalog.get("programs"),
         },
-        "language_rules": rules,
+        "language_rules": model_knowledge_value(rules),
         "catalog_scope": selection["catalog_scope"],
         "catalog": catalog_nodes,
         "catalog_contract": selection.get("expansion"),
@@ -1249,7 +1280,7 @@ def compose_fbd_context(*, request, plc_model, catalog, confirmed_spec=None, pre
             ),
         },
         "context_gaps": _context_gaps(catalog, source, selection),
-        "unknown_boundaries": _unknown_boundaries(catalog, rules),
+        "use_limits": _use_limits(catalog, rules),
         "request": str(request or ""),
         "confirmed_spec": copy.deepcopy(confirmed_spec),
         "call_bindings": call_bindings(instances_model if has_graph(instances_model) else current, catalog),
@@ -1271,8 +1302,8 @@ def compose_fbd_context(*, request, plc_model, catalog, confirmed_spec=None, pre
         FBDUnit("task_scopes", "task_scopes", "task_scopes", common["task_scopes"]),
         FBDUnit("declaration_tables", "declarations", "declaration_tables",
                 common["declaration_tables"]),
-        FBDUnit("unknown_boundaries", "boundaries", "unknown_boundaries",
-                common["unknown_boundaries"]),
+        FBDUnit("use_limits", "boundaries", "use_limits",
+                common["use_limits"]),
         FBDUnit("context_gaps", "gaps", "context_gaps", common["context_gaps"]),
         FBDUnit("catalog", "catalog", "catalog", []),
         FBDUnit("parameter_schema", "schema", "parameter_schema", common["parameter_schema"]),

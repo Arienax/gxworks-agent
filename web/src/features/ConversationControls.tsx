@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import { SelectMenu } from "../components/SelectMenu";
 import { AnalysisModePicker } from "./AnalysisModePicker";
@@ -36,6 +36,12 @@ export function ConversationControls({ task, onTask, workflow, onWorkflow, editA
         ...(targetMode === "ladder"
           ? [{ value: "regenerate" as GenerationAction, label: t("按需求重新生成") }]
           : []),
+      ]} />}
+    {task === "edit" && editAction === "edit" && <SelectMenu className="composer-select"
+      label={t("需求确认")} value={workflow} disabled={disabled}
+      onChange={(value) => onWorkflow(value)} options={[
+        { value: "review", label: t("先确认变更") },
+        { value: "direct", label: t("直接修改程序") },
       ]} />}
     {analyzing && <AnalysisModePicker compact locale={locale} value={analysisMode} onChange={onAnalysisMode} disabled={disabled} />}
     {confirmed && task !== "question" && (task === "create" || editAction === "regenerate") &&

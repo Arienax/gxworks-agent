@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Technical context presented to models; audit/debug records stay elsewhere.
 
 This is a data projection only. It never admits an instruction, changes a PLC
@@ -8,13 +11,15 @@ engineering references; document/source identities are removed.
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import re
 from collections.abc import Mapping
 
 
 _DEBUG_FIELDS = frozenset({
-    'sources', 'source_id', 'source_ids', 'source_evidence', 'source_references',
+    'sources', 'source_id', 'source_ids', 'source_evidence', 'source_references', 'fact_citations',
+    'citation_origin', 'citation_sources', 'source_excerpts', 'source_claims', 'source_text_status',
     'source_chunk_id', 'source_section_id', 'source_address_locations',
     'document_id', 'manual_id', 'manual_number', 'manual_title', 'pdf_page', 'pdf_pages', 'pdf_page_end',
     'content_sha256', 'text_sha256', 'proof_sha256', 'source_sha256',
@@ -51,6 +56,41 @@ _REVIEW_STATES = frozenset({
     'source_verified', 'source_checked', 'candidate_evidence',
     'declared_unverified', 'partially_source_verified', 'not_performed',
 })
+
+# Records that already state operand slots and their purpose are presented as
+# that contract alone. Review vocabulary, missing-prerequisite markers and
+# unresolved-aspect lists stay in the audit record; they are not content.
+_OPERAND_DIMENSIONS = ('parameters.', 'constraints.operand_', 'constraints.device_models')
+_HEDGE_KEYS = frozenset({'unresolved_aspects', 'unresolved_operands', 'missing_prerequisites'})
+_HEDGE_CONDITIONS = frozenset({'not_established', 'not_established_by_source'})
+
+
+def _has_operand_purpose_contract(groups):
+    """True when the fact list carries operand slots together with their purpose."""
+    dimensions = [str(fact.get('dimension') or '') for fact in groups
+                  if isinstance(fact, Mapping)]
+    if not any(d.startswith(_OPERAND_DIMENSIONS) for d in dimensions):
+        return False
+    return any('purpose' in d or d.startswith('effects.') or 'operation' in d
+               for d in dimensions)
+
+
+def _positive_contract(value):
+    """Remove hedge scaffolding while keeping every stated operand and purpose."""
+    if isinstance(value, Mapping):
+        result = {}
+        for key, item in value.items():
+            if key in _HEDGE_KEYS:
+                continue
+            if key == 'additional_conditions' and item in _HEDGE_CONDITIONS:
+                continue
+            if key == 'knowledge_status' and item != 'source_verified':
+                continue
+            result[key] = _positive_contract(item)
+        return result
+    if isinstance(value, (list, tuple)):
+        return [_positive_contract(item) for item in value]
+    return value
 
 
 def _technical_facts(groups):
@@ -148,6 +188,9 @@ def technical_fact_packet(packet):
             ('language', 'project_mode', 'version', 'aspects', 'partial_projection', 'whole_instruction_complete') if key in selection}
         if selection.get('gaps'):
             result['selection']['unresolved_reasons'] = list(dict.fromkeys(g.get('reason', 'unknown') for g in selection['gaps']))
+    groups = raw.get('facts') if isinstance(raw, Mapping) else None
+    if isinstance(groups, list) and _has_operand_purpose_contract(groups):
+        result = _positive_contract(result)
     return result
 
 
@@ -156,10 +199,36 @@ def technical_block(value):
         separators=(',', ':'), sort_keys=True) + '\n[/PLC KNOWLEDGE]'
 
 
-def technical_context_units(context):
+_KNOWLEDGE_BODY = re.compile(r'(?s)\[PLC KNOWLEDGE\]\s*(.*?)\s*\[/PLC KNOWLEDGE\]')
+
+
+def knowledge_unit_key(unit):
+    content = {key: value for key, value in unit.items() if key != 'citation_id'}
+    return hashlib.sha256(json.dumps(content, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def _add_origins(index, key, records):
+    for record in records:
+        sources = index.setdefault(key, [])
+        if record not in sources:
+            sources.append(record)
+
+
+def knowledge_origins(context):
+    """Private index keyed by the exact technical input to the projection."""
+    manifest = getattr(context, 'manifest', {})
+    index = {key: list(rows) for key, rows in (manifest.get('citation_sources') or {}).items()}
+    for record in manifest.get('records', []):
+        if record.get('citation_origin'):
+            for body in _KNOWLEDGE_BODY.findall(record.get('model_text') or ''):
+                _add_origins(index, knowledge_unit_key(json.loads(body)), [record['citation_origin']])
+    return index
+
+
+def technical_context_units(context, *, origins=None, source_index=None):
     """Structured complete knowledge units, without repeating instruction prose."""
     units, seen = [], set()
-    for body in re.findall(r'(?s)\[PLC KNOWLEDGE\]\s*(.*?)\s*\[/PLC KNOWLEDGE\]', str(context or '')):
+    for body in _KNOWLEDGE_BODY.findall(str(context or '')):
         value = json.loads(body)
         marker = json.dumps(value, sort_keys=True, ensure_ascii=False)
         if marker not in seen:
@@ -168,22 +237,49 @@ def technical_context_units(context):
     if not units and str(context or '').strip():
         units.append({'text': str(context).strip()})
     from knowledge.instruction_presentation import merge_instruction_units, SHARED_INSTRUCTION_KINDS
-    projected = [projected_unit for unit in merge_instruction_units(units)
+    if origins is not None and source_index is None:
+        source_index = knowledge_origins(context)
+    lineage = {} if origins is not None and source_index else None
+    projected = [(unit, projected_unit) for unit in merge_instruction_units(units, origins=lineage)
                  if unit.get('kind') not in SHARED_INSTRUCTION_KINDS
                  and (projected_unit := model_knowledge_value(unit)) not in (None, {}, [])]
-    described = {form['opcode'] for unit in projected if unit.get('kind') == 'instruction'
+    described = {form['opcode'] for _, unit in projected if unit.get('kind') == 'instruction'
                  for form in unit.get('value', {}).get('forms', [])}
-    families = {(unit['value']['family'], model) for unit in projected if unit.get('kind') == 'instruction'
+    families = {(unit['value']['family'], model) for _, unit in projected if unit.get('kind') == 'instruction'
                 for model in unit.get('scope', {}).get('models', [])}
-    def redundant_capability(unit):
+    def compact_capability(unit):
         if unit.get('kind') != 'instruction_capability':
-            return False
-        if unit.get('name') in described:
-            return True
-        from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
-        return any((resolution := DEFAULT_INSTRUCTION_REGISTRY.resolve_catalog_form(unit.get('name', ''), cpu=model))
-                   and resolution.base_mnemonic == family for family, model in families)
-    return [unit for unit in projected if not redundant_capability(unit)]
+            return unit
+        redundant = unit.get('name') in described
+        if not redundant:
+            from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+            redundant = any((resolution := DEFAULT_INSTRUCTION_REGISTRY.resolve_catalog_form(unit.get('name', ''), cpu=model))
+                            and resolution.base_mnemonic == family for family, model in families)
+        if not redundant:
+            return unit
+        # Keep the task-to-instruction link used by MCP research, without
+        # repeating a Core signature beside the complete manual semantics.
+        return ({key: unit[key] for key in ('kind', 'name', 'functions')}
+                if unit.get('functions') else None)
+    result = []
+    for original, unit in projected:
+        value = compact_capability(unit)
+        if value is None:
+            continue
+        result.append(value)
+        if lineage:
+            # Technical wrappers also remove debug keys before being rendered.
+            from shared.cpu_version_projection import without_cpu_versions
+            content = technical_value(value)
+            key = knowledge_unit_key(content)
+            clean = without_cpu_versions(content)
+            clean_key = knowledge_unit_key(clean) if clean is not None else key
+            for index in lineage.get(id(original), []):
+                records = source_index.get(knowledge_unit_key(units[index]), [])
+                _add_origins(origins, key, records)
+                if clean_key != key:
+                    _add_origins(origins, clean_key, records)
+    return result
 
 
 _DELIVERY_AUDIT_FIELDS = frozenset({
@@ -221,6 +317,17 @@ def model_knowledge_value(value):
                 if item not in (None, {}, [])]
     if not isinstance(value, Mapping):
         return None if _absent_knowledge(value) else copy.deepcopy(value)
+    if value.get('kind') == 'plc_program_ir':
+        # Retrieved examples carry the same full IR as previews. Present their
+        # ordered program once; derived reports are not programming facts.
+        value = {key: item for key, item in value.items()
+                 if key not in {'analysis', 'timing', 'devices', 'source'}}
+        if isinstance(value.get('networks'), list):
+            value['networks'] = [
+                {key: item for key, item in network.items() if key != 'ladder'}
+                if isinstance(network, Mapping) and isinstance(network.get('instructions'), list)
+                and network['instructions'] else network
+                for network in value['networks']]
     if value.get('kind') in {'instruction_modifiers', 'instruction_execution'}:
         return None
     if value.get('status') == 'conflict' or value.get('knowledge_status') == 'conflict':
@@ -321,10 +428,18 @@ def model_knowledge_value(value):
     return result
 
 
-def technical_knowledge_results(records):
+def technical_knowledge_results(records, *, origins=None):
     """Use the same batch composition for a manual-tool response as a prompt."""
     records = list(records)
-    units = technical_context_units('\n'.join(technical_knowledge_text(row) for row in records))
+    blocks = [technical_knowledge_text(row) for row in records]
+    source_index = {}
+    if origins is not None:
+        from knowledge.evidence import citation_origin
+        for row, block in zip(records, blocks):
+            if block and (origin := citation_origin(row)):
+                for body in _KNOWLEDGE_BODY.findall(block):
+                    _add_origins(source_index, knowledge_unit_key(json.loads(body)), [origin])
+    units = technical_context_units('\n'.join(blocks), origins=origins, source_index=source_index)
     results = []
     for unit in units:
         original = next((row for row in records if row.get('fact_target') == unit.get('target')
@@ -426,7 +541,7 @@ def _device_definition(definition):
     return value
 
 
-def technical_context_text(text):
+def technical_context_text(text, *, origins=None):
     """Project complete injected JSON blocks, including custom knowledge builders."""
     value = str(text or '')
     pattern = re.compile(r'(?ms)^\[(?:KNOWLEDGE [^\n]*|PLC KNOWLEDGE)\]\n(.*?)\n\[/(?:KNOWLEDGE|PLC KNOWLEDGE)\]')
@@ -442,7 +557,8 @@ def technical_context_text(text):
         return technical_block(data)
     value = pattern.sub(project, value)
     if '[PLC KNOWLEDGE]' in value:
-        units = technical_context_units(value)
+        units = technical_context_units(value, origins=origins,
+                                        source_index=knowledge_origins(text) if origins is not None else None)
         rendered = '\n\n'.join(technical_block(unit) for unit in units)
         blocks = re.compile(r'(?ms)^\[PLC KNOWLEDGE\]\n.*?\n\[/PLC KNOWLEDGE\]')
         first = True
@@ -459,3 +575,18 @@ def technical_context_text(text):
     except ValueError:
         return value
     return json.dumps(model_knowledge_value(technical_value(data)), ensure_ascii=False, separators=(',', ':'))
+
+
+def project_knowledge_context(context, *, cpu_version=None):
+    """Project the model text and carry its exact source associations privately."""
+    from knowledge.evidence import KnowledgeContext
+
+    origins = {}
+    text = technical_context_text(context, origins=origins)
+    if cpu_version is not None:
+        from shared.cpu_version_projection import project_cpu_version_text
+        text = project_cpu_version_text(text, requested=cpu_version)
+    manifest = dict(getattr(context, 'manifest', {}))
+    if origins or 'citation_sources' in manifest:
+        manifest['citation_sources'] = origins
+    return KnowledgeContext(text, manifest)

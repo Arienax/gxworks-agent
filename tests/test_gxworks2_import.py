@@ -1145,10 +1145,11 @@ def test_new_project_waits_for_current_source_tree_after_mdi_title(monkeypatch,b
             automation._wait_created_program(_session(),SimpleNamespace(program_supported=True),SimpleNamespace())
 
 
+@pytest.mark.parametrize("source_visible", [True, False])
 @settings(max_examples=48, deadline=None)
 @given(order=st.permutations(("source", "task", "disabled", "function_block")),
        comment=st.booleans())
-def test_native_navigation_selects_exact_source_despite_tree_order_and_decoys(order, comment):
+def test_native_navigation_selects_exact_source_despite_tree_order_and_decoys(source_visible, order, comment):
     # Paths frozen from the native navigation probe. A task also has a MAIN
     # leaf, and another pane can expose a disabled project tree.
     expected = ("全局软元件注释",) if comment else ("程序部件", "程序", "MAIN")
@@ -1163,7 +1164,7 @@ def test_native_navigation_selects_exact_source_despite_tree_order_and_decoys(or
             return 12051 if self.name == "source" else 12050
 
         def is_visible(self):
-            return True
+            return self.name != "source" or source_visible
 
         def is_enabled(self):
             return self.name != "disabled"

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Implementation details excluded from both public application transports.
 
 Core retains native observations for binding bytes, source and compiler phases.

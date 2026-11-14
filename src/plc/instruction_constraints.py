@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Shared, source-scoped constraints for retrieval, static checks and execution.
 
 Only reviewed formal predicates are executable. Missing values, scope context,
@@ -114,6 +117,8 @@ def version_condition_bounds(condition, *, model=None):
 def _condition(condition, values, context):
     if not isinstance(condition, Mapping):
         raise UnknownInstructionSemantics('condition_not_formalized')
+    if condition.get('context') == 'cpu_version' and context.get('$CHECK_CPU_VERSION') is False:
+        return True
     if set(condition) == {'any_of'}:
         alternatives = condition['any_of']
         if not isinstance(alternatives, (list, tuple)) or not alternatives:
@@ -645,6 +650,88 @@ def _conditional_cpu_availability(group, by_id, model):
     return 'passed', ''
 
 
+def _documented_operand_relations(rule, values, context, model):
+    """Interpret shared, source-checked operand relations, never opcode names.
+
+    Unrecognised clauses stay unknown: recognising one clause does not certify
+    the rest of a source packet. Address roles come from the bound signature.
+    """
+    def numeric(name):
+        value = values.get(str(name).upper(), UNKNOWN)
+        if type(value) is not int:
+            raise UnknownInstructionSemantics('constraint_input_unknown:' + str(name))
+        return value
+
+    def token(name):
+        roles = context.get('$OPERAND_ROLES')
+        operands = values.get('$OPERANDS')
+        key = str(name).upper()
+        if roles is None or key not in roles or operands is None:
+            raise UnknownInstructionSemantics('operand_device_binding_required:' + key)
+        index = roles.index(key)
+        if index >= len(operands) or not isinstance(operands[index], str):
+            raise UnknownInstructionSemantics('operand_device_binding_required:' + key)
+        return re.sub(r'\s+', '', operands[index]).upper()
+
+    if set(rule) == {'ordered_bounds'} and isinstance(rule['ordered_bounds'], list) and rule['ordered_bounds']:
+        for bound in rule['ordered_bounds']:
+            if (not isinstance(bound, Mapping) or 'parameter' not in bound
+                    or set(bound) - {'parameter', 'minimum', 'maximum', 'minimum_operand', 'maximum_operand'}
+                    or len(bound) < 2):
+                raise UnknownInstructionSemantics('ordered_bounds_not_formalized')
+            actual = numeric(bound['parameter'])
+            for field in ('minimum', 'maximum', 'minimum_operand', 'maximum_operand'):
+                if field not in bound:
+                    continue
+                limit = numeric(bound[field]) if field.endswith('_operand') else bound[field]
+                if type(limit) is not int:
+                    raise UnknownInstructionSemantics('ordered_bound_not_integer')
+                if actual < limit if field.startswith('minimum') else actual > limit:
+                    return 'failed', 'operand_bound_violated:' + str(bound['parameter'])
+        return 'passed', ''
+    if set(rule) != {'rules'} or not isinstance(rule['rules'], list) or not rule['rules']:
+        return None
+    for clause in rule['rules']:
+        if not isinstance(clause, Mapping):
+            raise UnknownInstructionSemantics('operand_relation_not_formalized')
+        if clause.get('kind') == 'same_head':
+            if (set(clause) - {'kind', 'operands', 'models', 'result', 'code', 'operation_error'}
+                    or len(clause.get('operands', [])) != 2):
+                raise UnknownInstructionSemantics('same_head_rule_not_formalized')
+            if 'models' in clause and model not in clause['models']:
+                continue
+            # A documented no-error case grants no alias execution semantics.
+            if clause.get('operation_error') is False:
+                continue
+            if clause.get('result') != 'operation_error':
+                raise UnknownInstructionSemantics('same_head_result_not_formalized')
+            from plc.device_identity import canonical_reference_device, REFERENCE_DEVICE_TOKEN_RE
+            heads = [token(name) for name in clause['operands']]
+            heads = [re.sub(r'^K[1-8](?=[A-Z])', '', head) for head in heads]
+            if not all(REFERENCE_DEVICE_TOKEN_RE.fullmatch(head) for head in heads):
+                raise UnknownInstructionSemantics('resolved_operand_address_required')
+            if canonical_reference_device(heads[0]) == canonical_reference_device(heads[1]):
+                return 'failed', 'source_destination_same_head'
+        elif clause.get('kind') == 'word_bit_operand':
+            if (set(clause) - {'kind', 'operand', 'models', 'index_modification'}
+                    or 'operand' not in clause or 'models' not in clause):
+                raise UnknownInstructionSemantics('word_bit_rule_not_formalized')
+            head = token(clause['operand'])
+            # This qualification applies only to word.bit syntax, not M/X bits.
+            if '.' not in head:
+                continue
+            match = re.fullmatch(r'([A-Z]+[0-9A-F]+\.[0-9A-F]+)([VZ]\d+)?', head)
+            if match is None:
+                raise UnknownInstructionSemantics('word_bit_address_binding_required')
+            if model not in clause['models']:
+                return 'failed', 'word_bit_operand_model_unsupported'
+            if match[2] and clause.get('index_modification') is False:
+                return 'failed', 'word_bit_index_modification_forbidden'
+        else:
+            raise UnknownInstructionSemantics('operand_relation_not_formalized')
+    return 'passed', ''
+
+
 def _additional_constraint(dimension, rule, values, context, model, *, target=None, registry=None):
     """Evaluate source-bound configuration/memory rules without parsing prose."""
     if dimension == 'constraints.context_domain':
@@ -684,6 +771,26 @@ def _additional_constraint(dimension, rule, values, context, model, *, target=No
     def overlaps(left, right):
         return left[0] == right[0] and left[1] < right[2] and right[1] < left[2]
     try:
+        if dimension in {'constraints.documented_restriction', 'constraints.operand_relation'}:
+            return _documented_operand_relations(rule, values, context, model)
+        if dimension == 'constraints.operand_alias':
+            if (set(rule) != {'operands', 'when_same_head', 'digit_specification_requires_same_digit_count'}
+                    or not isinstance(rule['when_same_head'], Mapping)
+                    or set(rule['when_same_head']) - {'kind', 'error_code'}
+                    or rule['when_same_head'].get('kind') != 'operation_error'):
+                raise UnknownInstructionSemantics('operand_alias_rule_not_formalized')
+            relation = _documented_operand_relations({'rules': [{'kind': 'same_head',
+                'operands': rule['operands'], 'result': 'operation_error'}]}, values, context, model)
+            if relation[0] != 'passed':
+                return relation
+            if rule['digit_specification_requires_same_digit_count'] is not True:
+                raise UnknownInstructionSemantics('digit_count_relation_not_formalized')
+            roles = context.get('$OPERAND_ROLES', ())
+            digits = [re.match(r'^K([1-8])(?=[A-Z])', str(tokens[roles.index(name.upper())]).upper())
+                      for name in rule['operands']]
+            if len({digit[1] for digit in digits if digit}) > 1:
+                return 'failed', 'digit_specification_count_mismatch'
+            return 'passed', ''
         if dimension == 'constraints.documented_requirements' and rule.get('kind') == 'pulse_output_path':
             return _documented_pulse_output_path(rule, values, context, model)
         if (dimension == 'constraints.documented_requirements'
@@ -969,10 +1076,13 @@ def _additional_constraint(dimension, rule, values, context, model, *, target=No
     return None
 
 
-def bind_operand_signature(groups, *, target, plc_model, language=None, version=None, context=None):
+def bind_operand_signature(groups, *, target, plc_model, language=None, version=None, context=None,
+                           signature_cache=None):
     """Bind names from a source-checked, applicable signature and its closure.
 
     This is structural binding, not evaluation of operand values or memory.
+    An optional replay cache keeps closures for immutable fact groups. Context
+    conditions are still evaluated for each binding.
     Retrieval and constraint checking share it; internal caller keys cannot
     manufacture a documented signature.
     """
@@ -985,6 +1095,8 @@ def bind_operand_signature(groups, *, target, plc_model, language=None, version=
     bound_context.pop('$OPERAND_ROLES', None)
     bound_context['$PLC_MODEL'] = plc_model
     bound_context['$LANGUAGE'] = language
+    bound_context['$CHECK_CPU_VERSION'] = (bool(bound_context.get('check_cpu_version'))
+                                          or bound_context.get('cpu_version') is not None)
     def available(group):
         if (_scope(group, target=target, model=plc_model, language=language, version=version) != 'passed'
                 or any(source.get('conditions') or source.get('applicability') for source in group.sources)):
@@ -1002,14 +1114,25 @@ def bind_operand_signature(groups, *, target, plc_model, language=None, version=
             except (DefinitionError, TypeError, ValueError, KeyError):
                 return False
         return True
+    dependencies = {}
+    if signature_cache is not None:
+        key = (target, plc_model, language, version)
+        cached = signature_cache.get(key)
+        if cached is not None and cached[0] is groups:
+            dependencies = cached[1]
+        else:
+            signature_cache[key] = (groups, dependencies)
     signatures = set()
     for group in parsed:
         if group.dimension != 'parameters.typed_operands' or not available(group):
             continue
-        closure = select_fact_dependencies(parsed, [group.id], opcode=target, model=plc_model,
-                                           language=language, version=version)
-        if (not closure['source_verification_complete'] or closure['gaps']
-                or not all(available(by_id[fact['id']]) for fact in closure['groups'])):
+        if group.id not in dependencies:
+            closure = select_fact_dependencies(parsed, [group.id], opcode=target, model=plc_model,
+                                               language=language, version=version)
+            dependencies[group.id] = (tuple(by_id[fact['id']] for fact in closure['groups'])
+                                      if closure['source_verification_complete'] and not closure['gaps'] else ())
+        required = dependencies[group.id]
+        if not required or not all(available(dependency) for dependency in required):
             continue
         operands = group.value.get('operands')
         if isinstance(operands, list) and (operands or group.value.get('operand_count') == 0) and all(
@@ -1021,7 +1144,8 @@ def bind_operand_signature(groups, *, target, plc_model, language=None, version=
 
 
 def check_fact_constraints(groups, values, *, target, plc_model, language=None, version=None,
-                           context=None, phase='input', root_ids=None, registry=None):
+                           context=None, phase='input', root_ids=None, registry=None,
+                           signature_cache=None):
     """Evaluate applicable constraint roots with their complete fact closure."""
     target, plc_model = str(target).strip().upper(), str(plc_model).strip().upper()
     language = (str(language).strip().casefold() or None) if language is not None else None
@@ -1041,8 +1165,11 @@ def check_fact_constraints(groups, values, *, target, plc_model, language=None, 
     context.pop('$OPERAND_ROLES', None)
     context['$PLC_MODEL'] = plc_model
     context['$LANGUAGE'] = language
-    signature = bind_operand_signature(list(by_id.values()), target=target, plc_model=plc_model,
-        language=language, version=version, context=context)
+    context['$CHECK_CPU_VERSION'] = (bool(context.get('check_cpu_version'))
+                                    or context.get('cpu_version') is not None)
+    signature = bind_operand_signature(groups if signature_cache is not None else list(by_id.values()),
+        target=target, plc_model=plc_model, language=language, version=version, context=context,
+        signature_cache=signature_cache)
     if signature is not None:
         context['$OPERAND_ROLES'] = signature
         for index, name in enumerate(signature):
@@ -1093,6 +1220,18 @@ def check_fact_constraints(groups, values, *, target, plc_model, language=None, 
             return outcome(group, status, 'scope_context_missing' if status == 'unverified' else '')
         visiting.add(identity)
         try:
+            # Version qualification is opt-in. Do not turn an old-version
+            # exclusion into an unconditional model exclusion when its guard
+            # is not being evaluated. Other operand and model rules still run.
+            version_guarded = any(c.get('context') == 'cpu_version' for c in group.conditions
+                                  if isinstance(c, Mapping))
+            version_availability = (group.dimension == 'constraints.cpu_availability'
+                and (version_guarded or any(identity in by_id
+                     and by_id[identity].dimension == 'constraints.cpu_version'
+                     for identity in group.depends_on)))
+            if (not context['$CHECK_CPU_VERSION']
+                    and (group.dimension == 'constraints.cpu_version' or version_availability)):
+                return outcome(group, 'not_checked', 'cpu_version_check_not_requested')
             conditional_cpu = None
             if group.dimension == 'constraints.cpu_availability':
                 conditional_cpu = _conditional_cpu_availability(group, by_id, plc_model)
@@ -1141,7 +1280,7 @@ def check_fact_constraints(groups, values, *, target, plc_model, language=None, 
                     if any(visit(dependency) != 'passed' for dependency in witness.depends_on):
                         return outcome(group, 'unverified', 'source_witness_dependency_unresolved')
             dependencies = [visit(dependency) for dependency in group.depends_on]
-            if any(status != 'passed' for status in dependencies):
+            if any(status not in {'passed', 'not_checked'} for status in dependencies):
                 return outcome(group, 'unverified', 'constraint_dependency_unresolved')
             value = group.value
             if not group.dimension.startswith('constraints.'):
@@ -1341,11 +1480,13 @@ def check_fact_constraints(groups, values, *, target, plc_model, language=None, 
     return {'root_selection': roots, 'coverage': 'all_constraint_roots' if root_ids is None else 'selected_roots_only',
             'execution_coverage': 'unverified' if execution_qualifications else 'not_assessed',
             'execution_qualifications': execution_qualifications, 'status': 'failed' if 'failed' in statuses else 'unverified' if 'unverified' in statuses else 'passed',
-            'checks': checks, 'findings': findings, 'phase': phase, 'target': target}
+            'checks': checks, 'findings': findings, 'phase': phase, 'target': target,
+            'cpu_version_check': 'enabled' if context['$CHECK_CPU_VERSION'] else 'not_requested'}
 
 
 def check_instruction_constraints(opcode, values, *, plc_model, language=None, version=None,
-                                  context=None, phase='input', registry=None, root_dimensions=None):
+                                  context=None, phase='input', registry=None, root_dimensions=None,
+                                  signature_cache=None):
     if registry is None:
         from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
         registry = DEFAULT_INSTRUCTION_REGISTRY
@@ -1354,26 +1495,47 @@ def check_instruction_constraints(opcode, values, *, plc_model, language=None, v
     if len(members) > 1:
         return _combined_reports([check_instruction_constraints(opcode, values, plc_model=model, language=language,
             version=version, context=context, phase=phase, registry=registry,
-            root_dimensions=root_dimensions) for model in members], target=opcode, model=plc_model)
+            root_dimensions=root_dimensions, signature_cache=signature_cache)
+            for model in members], target=opcode, model=plc_model)
     if not registry.fact_bundle_current():
         return _stale_report(opcode)
-    entry = registry.definition_entry(opcode, cpu=plc_model)
-    if entry is None:
-        return {'status': 'unverified', 'target': opcode, 'checks': [], 'findings': [
-            {'code': 'PLC_RULE_COVERAGE', 'severity': 'unverified', 'message': 'instruction_facts_missing:' + opcode}]}
-    facts = entry.get('facts', [])
-    if getattr(registry, '_family_knowledge', ()):
-        from plc.instruction_knowledge import compose_programming_facts
-        facts, _ = compose_programming_facts(registry, opcode, cpu=plc_model, existing=facts)
+    store = getattr(registry, '_definition_owner_store', None)
+    cache = None
+    if store is not None:
+        # Loaded owners and family tuples are immutable. Check freshness above
+        # before reusing facts, including the expensive hydrated owner packet.
+        cache = getattr(registry, '_constraint_fact_cache', None)
+        if (cache is None or cache[0] is not store
+                or cache[1] is not registry._family_knowledge
+                or cache[2] is not registry._knowledge_profiles):
+            cache = (store, registry._family_knowledge, registry._knowledge_profiles, {})
+            registry._constraint_fact_cache = cache
+    key = (opcode, plc_model)
+    if cache is not None and key in cache[3]:
+        facts = cache[3][key]
+    else:
+        entry = registry.definition_entry(opcode, cpu=plc_model)
+        if entry is None:
+            return {'status': 'unverified', 'target': opcode, 'checks': [], 'findings': [
+                {'code': 'PLC_RULE_COVERAGE', 'severity': 'unverified', 'message': 'instruction_facts_missing:' + opcode}]}
+        facts = entry.get('facts', [])
+        if getattr(registry, '_family_knowledge', ()):
+            from plc.instruction_knowledge import compose_programming_facts
+            facts, _ = compose_programming_facts(registry, opcode, cpu=plc_model, existing=facts)
+        facts = tuple(fact if isinstance(fact, InstructionFactGroup) else InstructionFactGroup.from_mapping(fact)
+                      for fact in facts)
+        if cache is not None:
+            cache[3][key] = facts
     roots = None
     if root_dimensions is not None:
-        roots = [f['id'] for f in facts if f['dimension'] in root_dimensions
-                 and f['value'].get('phase', 'input') in {phase, 'both'}]
+        roots = [f.id for f in facts if f.dimension in root_dimensions
+                 and f.value.get('phase', 'input') in {phase, 'both'}]
         if not roots:
             return {'status': 'passed', 'target': opcode, 'checks': [], 'findings': []}
     return check_fact_constraints(facts, values, target=opcode, plc_model=plc_model,
                                   language=language, version=version, context=context, phase=phase,
-                                  registry=registry, root_ids=roots)
+                                  registry=registry, root_ids=roots,
+                                  signature_cache=signature_cache if cache is not None else None)
 
 
 def check_language_constraints(target, values, *, plc_model, version=None, context=None,
@@ -1587,16 +1749,18 @@ def instruction_program_accesses(ladder, *, plc_model):
     """Reuse the canonical IR's reads/writes and instruction identities."""
     from plc.ir import lower_rung_instructions, analyze_instruction_access, analyze_instruction_access_regions
     rows = []
+    configured_positions = {}
     from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
     for index, rung in enumerate(ladder.get('rungs', [])):
         for instruction in lower_rung_instructions(rung):
             reads, writes = analyze_instruction_access(instruction['op'], instruction['args'], plc_model=plc_model)
-            configured = []
-            entry = DEFAULT_INSTRUCTION_REGISTRY.definition_entry(instruction['op'], cpu=plc_model) or {}
-            for fact in entry.get('facts', []):
-                if fact['dimension'] == 'constraints.reserved_regions':
-                    configured.extend(instruction['args'][r['operand_index']] for r in fact['value']['regions']
-                                      if r.get('access') == 'all' and r['operand_index'] < len(instruction['args']))
+            opcode = instruction['op']
+            if opcode not in configured_positions:
+                entry = DEFAULT_INSTRUCTION_REGISTRY.definition_entry(opcode, cpu=plc_model) or {}
+                configured_positions[opcode] = [region['operand_index'] for fact in entry.get('facts', [])
+                    if fact['dimension'] == 'constraints.reserved_regions' for region in fact['value']['regions']
+                    if region.get('access') == 'all']
+            configured = [instruction['args'][pos] for pos in configured_positions[opcode] if pos < len(instruction['args'])]
             row = {'id': (index, instruction.get('path')), 'opcode': instruction['op'],
                    'operands': list(instruction['args']), 'reads': reads, 'writes': writes,
                    'configured_uses': configured}

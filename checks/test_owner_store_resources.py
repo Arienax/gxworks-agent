@@ -3,7 +3,7 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
-from test_instruction_owner_store import fixture
+from checks.test_instruction_owner_store import fixture
 from knowledge.runtime_fact_publication import OwnerStoreWriter
 
 spec=importlib.util.spec_from_file_location('owner_resource_collector',Path(__file__).resolve().parents[1]/'scripts/runtime_knowledge_resources.py')
@@ -24,6 +24,10 @@ class ResourceTests(unittest.TestCase):
             self.assertIn(manifest.name,names);self.assertIn('facts.sqlite',names)
             self.assertNotIn('instruction_definitions.json.gz',names)
             self.assertIn('common.json',names)
+            self.assertIn('pwm_contract.generated.json',names)
+            self.assertNotIn('pwm_reviewed_facts.json',names)
+            self.assertNotIn('instruction_behavior_facts.json',names)
+            self.assertNotIn('operand_semantic_coverage_summary.json',names)
             manifest.write_text('{}')
             with self.assertRaises(ValueError):collector.runtime_instruction_data(root)
 

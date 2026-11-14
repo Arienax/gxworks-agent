@@ -1,4 +1,7 @@
-"""Vendor-neutral model messages and the OpenAI-compatible transport."""
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
+"""Vendor-neutral model messages and OpenAI-compatible transports."""
 
 from __future__ import annotations
 
@@ -21,8 +24,10 @@ from model_runtime.responses import (
     recover_json_object_tail,
 )
 from agent_runtime.messages import ToolCall, ToolResult
-from model_runtime.contract import scoped_contract
+from model_runtime.catalog import endpoint_id
+from model_runtime.contract import RESPONSE_CONTROLS, scoped_contract
 from model_runtime.request_policy import resolve_request, contract_capability_available
+from model_runtime.responses_wire import OUTPUT_LIMITS, encode_options, wire_response_format
 from model_runtime.runtime_profile import materialize_runtime_profile
 from model_runtime.legacy_migration import detection_profile
 from model_runtime.transport_policy import (
@@ -367,84 +372,135 @@ def _wire_arguments(arguments: Any) -> str:
     return json.dumps(arguments, ensure_ascii=False, separators=(",", ":"))
 
 
-def _wire_message(message: ModelMessage, origin=None) -> Dict[str, Any]:
+def _chat_message(message: ModelMessage, origin):
     if isinstance(message, SystemMessage):
         return {"role": "system", "content": message.content}
     if isinstance(message, UserMessage):
         if not message.images:
             return {"role": "user", "content": message.content}
-        content = []
-        if message.content not in (None, ""):
-            content.append({"type": "text", "text": str(message.content)})
+        content = message.content
+        if isinstance(content, list):
+            content = copy.deepcopy(content)
+        else:
+            content = [{"type": "text", "text": str(content)}] if content not in (None, "") else []
         for attachment in message.images:
             encoded = base64.b64encode(attachment.data).decode("ascii")
-            content.append(
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:{attachment.media_type};base64,{encoded}"
-                    },
-                }
-            )
+            content.append({"type": "image_url", "image_url": {
+                "url": f"data:{attachment.media_type};base64,{encoded}",
+            }})
         return {"role": "user", "content": content}
     if isinstance(message, ToolResult):
-        return {
-            "role": "tool",
-            "tool_call_id": message.call_id,
-            "content": message.content,
-        }
-    payload: Dict[str, Any] = {
-        "role": "assistant",
-        "content": message.content or None,
-    }
+        return {"role": "tool", "tool_call_id": message.call_id, "content": message.content}
+
+    payload = {"role": "assistant", "content": message.content or None}
     state = message._provider_fields
-    replay_allowed = not state or state.get("origin") == origin
-    replay_reasoning = (message._provider_reasoning or message.reasoning) if replay_allowed else ""
-    if replay_reasoning:
-        # Both supported OpenAI-compatible providers require this replay during
-        # an interleaved thinking/tool turn.  It never leaves this adapter.
-        payload["reasoning_content"] = replay_reasoning
+    replay = state if state.get("origin") == origin else {}
+    payload.update(copy.deepcopy(replay.get("message") or {}))
     if message.tool_calls:
+        extensions = replay.get("tools") or {}
         payload["tool_calls"] = [
-            {
-                "id": item.id,
-                "type": "function",
-                "function": {
-                    "name": item.name,
-                    "arguments": _wire_arguments(item.arguments),
-                },
-            }
-            for item in message.tool_calls
+            {"id": call.id, "type": "function", "function": {
+                "name": call.name, "arguments": _wire_arguments(call.arguments),
+            }, **copy.deepcopy(extensions.get(call.id, {}))}
+            for call in message.tool_calls
         ]
-    if state and replay_allowed:
-        payload.update(copy.deepcopy(state.get("message") or {}))
-        for call in payload.get("tool_calls", []):
-            call.update(copy.deepcopy((state.get("tools") or {}).get(call["id"], {})))
     return payload
 
 
-def _replay_fields(value):
-    # Only backend responses can populate these fields. Do not forward response
-    # metadata, URLs, headers, credentials, or arbitrary SDK object attributes.
+_CHAT_REASONING_FIELDS = ("reasoning_content", "reasoning", "reasoning_text")
+_OPENAI_RESPONSES_ENDPOINT = "https://api.openai.com/v1"
+
+
+def _chat_replay(value):
     return {name: copy.deepcopy(_value(value, name))
-            for name in ("reasoning_content", "reasoning", "reasoning_details", "extra_content")
+            for name in (*_CHAT_REASONING_FIELDS, "reasoning_details", "extra_content")
             if _value(value, name, None) is not None}
 
 
-def _merge_replay(base, addition):
+def _merge_chat_replay(base, addition):
     result = copy.deepcopy(base)
     for name, value in addition.items():
-        if isinstance(value, Mapping) and isinstance(result.get(name), Mapping):
-            result[name] = _merge_replay(result[name], value)
-        elif isinstance(value, str) and isinstance(result.get(name), str):
-            # Opaque signatures are whole values, not text deltas. Never append
-            # repeated signatures; only concatenate explicitly textual channels.
-            result[name] = result[name] + value if name in {"reasoning_content", "reasoning"} else value
-        elif isinstance(value, list) and isinstance(result.get(name), list):
-            result[name] = result[name] + copy.deepcopy(value)
-        else:
-            result[name] = copy.deepcopy(value)
+        previous = result.get(name)
+        if isinstance(value, Mapping) and isinstance(previous, Mapping):
+            value = _merge_chat_replay(previous, value)
+        elif isinstance(value, str) and isinstance(previous, str) and name in _CHAT_REASONING_FIELDS:
+            value = previous + value
+        elif isinstance(value, list) and isinstance(previous, list):
+            value = previous + value
+        result[name] = copy.deepcopy(value)
     return result
+
+
+def _chat_text_events(message):
+    reasoning = next((_value(message, name) for name in _CHAT_REASONING_FIELDS
+                      if isinstance(_value(message, name), str) and _value(message, name)), "")
+    if reasoning:
+        yield ReasoningDelta(reasoning)
+    content = _value(message, "content")
+    if content:
+        yield TextDelta(str(content))
+
+
+def _output_parts(items, item_type, field, part_type):
+    return "".join(
+        _value(part, "text", "") or ""
+        for item in items if _value(item, "type") == item_type
+        for part in _value(item, field, ()) or ()
+        if _value(part, "type") == part_type
+    )
+
+
+def _response_call(item):
+    return ToolCall(_value(item, "call_id", ""), _value(item, "name", ""),
+                    _value(item, "arguments", "{}"))
+
+
+def _response_text(items):
+    return _output_parts((item for item in items if _value(item, "phase") != "commentary"),
+                         "message", "content", "output_text")
+
+
+def _configuration_update(effort):
+    return {"type": "configuration_update", "reasoning": {"effort": effort}}
+
+
+def _response_input(message: ModelMessage, origin=None, *, configure_effort=False, system_role="system"):
+    if isinstance(message, SystemMessage):
+        return [{"role": system_role, "content": message.content}]
+    if isinstance(message, UserMessage):
+        content = message.content
+        if not isinstance(content, list):
+            content = [{"type": "input_text", "text": str(content)}] if content not in (None, "") else []
+        else:
+            parts = content
+            content = []
+            for part in parts:
+                if part.get("type") == "text":
+                    content.append({"type": "input_text", "text": part["text"]})
+                elif part.get("type") == "image_url":
+                    image = part["image_url"]
+                    content.append({"type": "input_image", "image_url": image["url"],
+                                    "detail": image.get("detail", "auto")})
+                else:
+                    content.append(copy.deepcopy(part))
+        for attachment in message.images:
+            encoded = base64.b64encode(attachment.data).decode("ascii")
+            content.append({"type": "input_image", "detail": "auto",
+                            "image_url": f"data:{attachment.media_type};base64,{encoded}"})
+        return [{"role": "user", "content": content or ""}]
+    if isinstance(message, ToolResult):
+        return [{"type": "function_call_output", "call_id": message.call_id, "output": message.content}]
+    state = message._provider_fields
+    replay = state.get("responses_items")
+    if (replay and state.get("origin") == origin
+            and _response_text(replay) == message.content
+            and tuple(_response_call(item) for item in replay if item.get("type") == "function_call") == message.tool_calls):
+        prefix = [_configuration_update(state["effort_update"])] if configure_effort and state.get("effort_update") else []
+        return prefix + copy.deepcopy(replay)
+    items = [{"role": "assistant", "content": message.content}] if message.content else []
+    items.extend({"type": "function_call", "call_id": call.id, "name": call.name,
+                  "arguments": _wire_arguments(call.arguments)} for call in message.tool_calls)
+    return items
 
 
 def _normalize_error(error: Exception) -> ModelProviderError:
@@ -480,6 +536,7 @@ def _normalize_error(error: Exception) -> ModelProviderError:
         "invalid_request": "模型服务拒绝了请求，请检查模型配置和输入。",
         "unavailable": "模型服务暂时不可用，请检查连接或稍后重试。",
         "protocol": "模型未返回有效候选结果，请重试或更换模型。",
+        "responses_unavailable": "模型服务地址的 Responses 接口不可用，请检查 API URL 是否支持 /responses。",
         "image_not_supported": "当前模型不支持图片输入，请切换到带视觉能力的模型。",
         "image_payload_too_large": "图片编码后的请求体过大，请减少图片数量或压缩图片。",
         "context_budget_exceeded": "最终模型请求超过输入预算；请缩小本次范围或选择更大窗口的模型。内容未发送或截断。",
@@ -530,8 +587,13 @@ def _usage_event(value: Any) -> Optional[Usage]:
         raw_usage = value.model_dump(mode="json")
     else:
         raw_usage = {name: copy.deepcopy(_value(value, name)) for name in (
-            "prompt_tokens", "completion_tokens", "input_tokens", "output_tokens", "total_tokens")
+            "prompt_tokens", "completion_tokens", "input_tokens", "output_tokens", "total_tokens",
+            "prompt_cache_hit_tokens")
             if _value(value, name, None) is not None}
+        for name in ("prompt_tokens_details", "input_tokens_details"):
+            cached = _value(_value(value, name, None), "cached_tokens", None)
+            if cached is not None:
+                raw_usage[name] = {"cached_tokens": cached}
         if reasoning_tokens is not None:
             raw_usage["completion_tokens_details"] = {"reasoning_tokens": reasoning_tokens}
     return Usage(input_tokens, output_tokens, total_tokens, reasoning_tokens, raw_usage)
@@ -613,13 +675,9 @@ class OpenAICompatibleProvider:
 
         # Protocol ownership stays with the application/provider. Capability and
         # parameter semantics come only from the materialized v3 contract.
-        reserved = {"model", "messages", "tools", "tool_choice", "stream", "response_format"}
+        reserved = {"model", "messages", "tools", "tool_choice", "stream", "response_format"} | RESPONSE_CONTROLS
         protocol = {
             "model": selected_model,
-            "messages": [
-                _wire_message(item, self._origin(selected_model))
-                for item in request.messages
-            ],
             "stream": bool(request.stream),
         }
         if request.tools:
@@ -635,46 +693,29 @@ class OpenAICompatibleProvider:
                 request.options["response_format"]
             )
 
-        transport_defaults = {}
-        if contract_capability_available(
-            runtime.contract, "thinking_required", options=protocol
-        ):
-            transport_defaults.setdefault("extra_body", {})["thinking"] = {
-                "type": "enabled"
-            }
-        if (
-            request.stream
-            and request.tools
-            and contract_capability_available(
-                runtime.contract, "tool_stream", options=protocol
-            )
-        ):
-            transport_defaults.setdefault("extra_body", {})["tool_stream"] = True
-
         try:
+            use_responses = endpoint_id(runtime.endpoint) == _OPENAI_RESPONSES_ENDPOINT
+            transport_defaults = {}
+            if not use_responses:
+                if request.stream:
+                    transport_defaults["stream_options"] = {"include_usage": True}
+                if contract_capability_available(runtime.contract, "thinking_required", options=protocol):
+                    transport_defaults.setdefault("extra_body", {})["thinking"] = {"type": "enabled"}
+                if request.stream and request.tools and contract_capability_available(
+                    runtime.contract, "tool_stream", options=protocol
+                ):
+                    transport_defaults.setdefault("extra_body", {})["tool_stream"] = True
             effective = resolve_request(
-                    runtime,
-                    request.options,
-                    protocol=protocol,
-                    model=selected_model,
-                    api_key=self.api_key,
-                    transport_defaults=transport_defaults,
-                )
-            resolved = dict(effective.options)
-            if reserved.intersection(resolved.get("extra_body") or {}):
-                raise ValueError("extra_body cannot override protocol fields")
-
-            thinking = (resolved.get("extra_body") or {}).get("thinking") or {}
-            if (
-                request.tools
-                and str(thinking.get("type") or "").lower() == "enabled"
-                and contract_capability_available(
-                    runtime.contract,
-                    "disable_tool_choice_with_thinking",
-                    options=resolved,
-                )
-            ):
-                resolved.pop("tool_choice", None)
+                runtime,
+                request.options,
+                protocol=protocol,
+                model=selected_model,
+                api_key=self.api_key,
+                transport_defaults=transport_defaults,
+            )
+            resolved = effective.options
+            if reserved.intersection(resolved.get("extra_body") or {}) or RESPONSE_CONTROLS.intersection(resolved):
+                raise ValueError("Model options cannot override conversation or protocol fields")
 
             if image_attachments and not contract_capability_available(
                 runtime.contract, "vision", options=resolved
@@ -683,8 +724,14 @@ class OpenAICompatibleProvider:
                     "当前模型或参数组合不支持图片输入。",
                     code="image_not_supported",
                 )
+            if use_responses:
+                params, reasoning_tokens = self._responses_params(runtime, request.messages, resolved)
+            else:
+                params = self._chat_params(runtime, request.messages, resolved)
+                reasoning_tokens = 0
             from model_runtime.context_budget import final_request_budget
-            report = final_request_budget({**self.profile, 'capabilityContract': runtime.contract.to_dict()}, resolved)
+            report = final_request_budget({**self.profile, 'capabilityContract': runtime.contract.to_dict()},
+                                          params, replayed_reasoning_tokens=reasoning_tokens)
             if report['fits'] is False:
                 raise ModelProviderError(
                     f"最终模型请求超过输入预算：{report['estimated_input_tokens']} > "
@@ -692,11 +739,61 @@ class OpenAICompatibleProvider:
                     code='context_budget_exceeded')
             if on_resolved is not None:
                 from model_runtime.usage import request_summary
-                on_resolved(request_summary(runtime, effective, options=resolved,
+                on_resolved(request_summary(runtime, effective, options=params,
                     profile_name=str(self.profile.get("name") or ""), api_key=self.api_key))
-            return resolved
-        except ValueError as error:
+            return params
+        except (KeyError, TypeError, ValueError) as error:
             raise ModelProviderError(str(error), code="invalid_request") from error
+
+    def _chat_params(self, runtime, messages, resolved):
+        params = copy.deepcopy(dict(resolved))
+        params.update(params.pop("extra_body", {}) or {})
+        if not params["stream"]:
+            params.pop("stream_options", None)
+        limit = params.pop("max_output_tokens", None)
+        if limit is not None and "max_completion_tokens" not in params:
+            params.setdefault("max_tokens", limit)
+        thinking = params.get("thinking")
+        if (params.get("tools") and isinstance(thinking, Mapping) and thinking.get("type") == "enabled"
+                and contract_capability_available(runtime.contract, "disable_tool_choice_with_thinking",
+                                                  options=resolved)):
+            params.pop("tool_choice", None)
+        origin = self._origin(runtime.model)
+        params["messages"] = [_chat_message(message, origin) for message in messages]
+        return params
+
+    def _responses_params(self, runtime, messages, resolved):
+        effort_descriptor = runtime.contract.parameters.get("reasoning_effort")
+        params = encode_options(resolved, reasoning_levels=(
+            effort_descriptor.ui_hint.get("reasoning_levels") if effort_descriptor else None
+        ))
+        reasoning = params.get("reasoning") or {}
+        effort = reasoning.get("effort")
+        configure_effort = (
+            bool(effort and effort != "none") and reasoning.get("mode", "standard") == "standard"
+            and (not self.api_key or self.api_key.startswith("sk-"))
+            and contract_capability_available(runtime.contract, "mid_convo_effort", options=resolved)
+        )
+        origin = self._origin(runtime.model)
+        native_reasoning = contract_capability_available(runtime.contract, "reasoning", options=resolved)
+        inputs, reasoning_tokens = [], 0
+        for message in messages:
+            items = _response_input(message, origin, configure_effort=configure_effort,
+                                    system_role="developer" if native_reasoning else "system")
+            inputs.extend(items)
+            if isinstance(message, AssistantMessage) and any(item.get("type") == "reasoning" for item in items):
+                reasoning_tokens += message._provider_fields.get("reasoning_tokens") or 0
+        if configure_effort:
+            reasoning["effort"] = "medium"
+            inputs.append(_configuration_update(effort))
+        params["input"] = inputs
+        if native_reasoning and effort != "none":
+            include = list(params.get("include") or ())
+            if "reasoning.encrypted_content" not in include:
+                params["include"] = [*include, "reasoning.encrypted_content"]
+            if effort:
+                reasoning.setdefault("summary", "auto")
+        return params, reasoning_tokens
 
     def _origin(self, model=None):
         return (str(self.profile.get("baseUrl") or "").rstrip("/"),
@@ -717,10 +814,10 @@ class OpenAICompatibleProvider:
         if any(p.kind == p.VAR_KEYWORD for p in signature.parameters.values()):
             return params
         params = copy.deepcopy(params)
-        extra = dict(params.get("extra_body") or {})
+        extra = {}
         for name in list(params):
-            if name not in signature.parameters:
-                extra.setdefault(name, params.pop(name))
+            if name == "extra_body" or name not in signature.parameters:
+                extra[name] = params.pop(name)
         if extra:
             params["extra_body"] = extra
         return params
@@ -732,40 +829,49 @@ class OpenAICompatibleProvider:
         profile = detection_profile(self.profile, declared)
         return OpenAICompatibleProvider(profile, self.api_key, client=self._client)
 
+    def _create_response(self, client, params):
+        if "messages" in params:
+            create = client.chat.completions.create
+            return create(**self._sdk_params(create, params))
+        create = client.responses.create
+        try:
+            return create(**self._sdk_params(create, params))
+        except Exception as error:
+            status = getattr(error, "status_code", None)
+            if status in {404, 405, 501} and getattr(error, "code", None) != "model_not_found":
+                raise ModelProviderError("Responses endpoint unavailable", code="responses_unavailable",
+                                         status_code=status) from error
+            raise
+
     def probe_parameter(self, model, name=None, value=None, *, timeout=15.0, context=None):
-        """Bounded raw validation probe; provider error text never crosses this API."""
-        options = {"response_format": None, getattr(self, "_probe_token_key", "max_completion_tokens"): 128, **(context or {})}
+        """One bounded request over the profile's generation protocol."""
+        use_responses = endpoint_id(self.profile["baseUrl"]) == _OPENAI_RESPONSES_ENDPOINT
+        options = {"response_format": None, **(context or {})}
         if name is not None:
             options[name] = value
-        request = ModelRequest((UserMessage("Reply with OK."),), model=model,
-                               stream=False, options=options, timeout=timeout, max_retries=0)
+        if not any(key in options or key in (options.get("extra_body") or {}) for key in OUTPUT_LIMITS):
+            options["max_completion_tokens" if use_responses else "max_tokens"] = 128
+        request = ModelRequest((UserMessage("Reply with OK."),), model=model, stream=False,
+                               options=options, timeout=timeout, max_retries=0, _synthetic_probe=True)
         params = self._request_params(request)
         client = self._client.with_options(timeout=timeout, max_retries=0)
-        started = time.monotonic()
-        for attempt in range(2):
-            try:
-                response = client.chat.completions.create(**self._sdk_params(client.chat.completions.create, params))
-                if not _value(response, "choices", None):
-                    raise ModelProviderError("Empty probe response", code="protocol")
+        try:
+            response = self._create_response(client, params)
+            if use_responses and (_value(response, "status") == "completed" or self._output_limited(response)):
                 return "accepted"
-            except Exception as error:
-                # A few compatible APIs accept only the older output-limit key.
-                # Retry that *named* schema rejection, never authentication, rate
-                # limits, billing errors, arbitrary 400s, or completed generations.
-                if attempt == 0 and "max_completion_tokens" in params and parameter_error(error, "max_completion_tokens") in {"unsupported", "rejected"}:
-                    remaining = timeout - (time.monotonic() - started)
-                    if remaining <= 0:
-                        return "unknown"
-                    params["max_tokens"] = params.pop("max_completion_tokens")
-                    self._probe_token_key = "max_tokens"
-                    client = self._client.with_options(timeout=remaining, max_retries=0)
-                    continue
-                if name is not None:
-                    outcome = parameter_error(error, name)
-                    if outcome != "unknown":
-                        return outcome
-                raise _normalize_error(error) from error
-        return "unknown"
+            if not use_responses and _value(response, "choices"):
+                return "accepted"
+            raise ModelProviderError("Probe response did not complete", code="protocol")
+        except Exception as error:
+            if name is not None:
+                if name in OUTPUT_LIMITS:
+                    target = next((key for key in OUTPUT_LIMITS if key in params), name)
+                else:
+                    target = "effort" if use_responses and name == "reasoning_effort" else name
+                outcome = parameter_error(error, target)
+                if outcome != "unknown":
+                    return outcome
+            raise _normalize_error(error) from error
 
     def list_model_metadata(self, *, timeout=15.0):
         try:
@@ -790,13 +896,21 @@ class OpenAICompatibleProvider:
         try:
             from model_runtime.usage import emit_usage
             params = self._request_params(request, on_resolved=emit_usage)
-            response_format = params.get("response_format")
             diagnostics.emit("provider_request", stage="provider_transport", stream=request.stream,
-                model=params.get("model"), response_format=(response_format.get("type")
-                    if isinstance(response_format, Mapping) else "unspecified"),
-                max_tokens=params.get("max_tokens"), max_completion_tokens=params.get("max_completion_tokens"))
-            response = client.chat.completions.create(**self._sdk_params(client.chat.completions.create, params))
-            events = self._streaming_events(response, origin=self._origin(params["model"])) if request.stream else self._complete_events(response, origin=self._origin(params["model"]))
+                model=params.get("model"), response_format=wire_response_format(params) or "unspecified",
+                max_output_tokens=next((params[key] for key in OUTPUT_LIMITS if key in params), None))
+            response = self._create_response(client, params)
+            origin = self._origin(params["model"])
+            if "messages" in params:
+                parse = self._chat_streaming_events if request.stream else self._chat_complete_events
+                events = parse(response, origin=origin, allow_incomplete=request._synthetic_probe)
+            else:
+                last_input = params["input"][-1] if params["input"] else {}
+                effort_update = (last_input["reasoning"]["effort"]
+                                 if last_input.get("type") == "configuration_update" else None)
+                parse = self._streaming_events if request.stream else self._complete_events
+                events = parse(response, origin=origin, effort_update=effort_update,
+                               allow_incomplete=request._synthetic_probe)
             observed, size = [], 0
             try:
                 for event in events:
@@ -811,9 +925,7 @@ class OpenAICompatibleProvider:
                 observed = []
             self._observe(params, observed)
         except Exception as error:
-            if "response" in locals():
-                self._observe(params, [], error)
-            elif "params" in locals():
+            if "params" in locals():
                 self._observe(params, [], error)
             raise _normalize_error(error) from error
 
@@ -825,131 +937,182 @@ class OpenAICompatibleProvider:
                 # Observation storage is best-effort, never a retry trigger.
                 pass
 
-    def _complete_events(self, response: Any, *, origin=None) -> Iterator[ModelEvent]:
-        choices = list(_value(response, "choices", []) or [])
+    def _chat_complete_events(self, response, *, origin, allow_incomplete=False):
+        choices = _value(response, "choices") or ()
         choice = choices[0] if choices else None
-        payload = _value(choice, "message", None)
-        finish = _value(choice, "finish_reason", None)
-        usage_data = _value(response, "usage", None)
+        message = _value(choice, "message")
+        finish = _value(choice, "finish_reason")
+        refusal = bool(_value(message, "refusal"))
+        usage = _usage_event(_value(response, "usage"))
         diagnostics.emit("provider_result", stage="provider_transport", stream=False,
-            model=_value(response, "model", None), finish_reason=finish, finish_seen=finish is not None,
-            choice_count=len(choices), content_type=type(_value(payload, "content", None)).__name__,
-            reasoning_type=type(_value(payload, "reasoning_content", None)).__name__,
-            refusal_present=bool(_value(payload, "refusal", None)),
-            reasoning_tokens=_value(_value(usage_data, "completion_tokens_details", None), "reasoning_tokens", None))
-        if not choices:
-            raise ModelProviderError("AI 未返回任何候选结果。", code="protocol")
-        message = _value(choices[0], "message")
-        if message is None:
-            raise ModelProviderError("AI 返回结果缺少 message。", code="protocol")
-        reasoning = str(_value(message, "reasoning_content", "") or _value(message, "reasoning", "") or "")
-        content = str(_value(message, "content", "") or "")
-        if reasoning:
-            yield ReasoningDelta(reasoning)
-        if content:
-            yield TextDelta(content)
-        for index, raw_call in enumerate(_value(message, "tool_calls", []) or []):
+            model=_value(response, "model"), finish_reason=finish, finish_seen=finish is not None,
+            choice_count=len(choices), refusal_present=refusal,
+            reasoning_tokens=usage.reasoning_tokens if usage else None)
+        if usage:
+            yield usage
+        calls = _value(message, "tool_calls") or ()
+        if refusal or finish == "content_filter":
+            raise ModelProviderError("Chat Completions returned no usable candidate", code="protocol")
+        yield from _chat_text_events(message)
+        if not (_value(message, "content") or calls or (allow_incomplete and finish == "length")):
+            raise ModelProviderError("Chat Completions returned no usable candidate", code="protocol")
+        state = {"origin": origin, "message": _chat_replay(message), "tools": {},
+                 "reasoning_tokens": usage.reasoning_tokens if usage else None}
+        for index, raw_call in enumerate(calls):
             call = _tool_call_from_value(raw_call)
             if not call.id:
                 call = replace(call, id=f"tool_call_{index}")
+            extension = _value(raw_call, "extra_content")
+            if extension is not None:
+                state["tools"][call.id] = {"extra_content": copy.deepcopy(extension)}
             yield ToolCallStart(call.id, call.name)
             yield ToolCallEnd(call)
-        state = {"origin": origin or self._origin(), "message": _replay_fields(message), "tools": {}}
-        for index, raw_call in enumerate(_value(message, "tool_calls", []) or []):
-            extension = _value(raw_call, "extra_content", None)
-            if extension is not None:
-                state["tools"][str(_value(raw_call, "id") or f"tool_call_{index}")] = {"extra_content": copy.deepcopy(extension)}
         if state["message"] or state["tools"]:
             yield _ProviderState(state)
-        usage = _usage_event(_value(response, "usage", None))
-        if usage is not None:
-            yield usage
 
-    def _streaming_events(self, response: Iterable[Any], *, origin=None) -> Iterator[ModelEvent]:
-        fragments: Dict[int, Dict[str, Any]] = {}
-        latest_usage = None
-        state = {"origin": origin or self._origin(), "message": {}, "tools": {}}
-        chunk_count, choice_count = 0, 0
-        finish_reason, response_model, reasoning_tokens = None, None, None
-        content_type, reasoning_type, refusal_present = "NoneType", "NoneType", False
+    def _chat_streaming_events(self, response, *, origin, allow_incomplete=False):
+        fragments = {}
+        state = {"origin": origin, "message": {}, "tools": {}}
+        usage = finish = model = None
+        chunk_count = 0
+        content_seen = refused = False
         try:
             for chunk in response:
                 chunk_count += 1
-                response_model = _value(chunk, "model", response_model)
-                usage = _usage_event(_value(chunk, "usage", None))
-                if usage is not None:
-                    latest_usage = usage
-                    if usage.reasoning_tokens is not None:
-                        reasoning_tokens = usage.reasoning_tokens
-                choices = list(_value(chunk, "choices", []) or [])
+                model = _value(chunk, "model", model)
+                usage = _usage_event(_value(chunk, "usage")) or usage
+                choices = _value(chunk, "choices") or ()
                 if not choices:
                     continue
-                finish = _value(choices[0], "finish_reason", None)
-                if finish is not None:
-                    finish_reason = finish
-                choice_count = max(choice_count, len(choices))
+                finish = _value(choices[0], "finish_reason") or finish
                 delta = _value(choices[0], "delta")
                 if delta is None:
                     continue
-                state["message"] = _merge_replay(state["message"], _replay_fields(delta))
-                content_value = _value(delta, "content", None)
-                reasoning_value = _value(delta, "reasoning_content", None)
-                if content_value is not None:
-                    content_type = type(content_value).__name__
-                if reasoning_value is not None:
-                    reasoning_type = type(reasoning_value).__name__
-                refusal_present |= bool(_value(delta, "refusal", None))
-                reasoning = str(_value(delta, "reasoning_content", "") or _value(delta, "reasoning", "") or "")
-                content = str(_value(delta, "content", "") or "")
-                if reasoning:
-                    yield ReasoningDelta(reasoning)
-                if content:
-                    yield TextDelta(content)
-                for fallback_index, raw_call in enumerate(
-                    _value(delta, "tool_calls", []) or []
-                ):
-                    raw_index = _value(raw_call, "index", fallback_index)
-                    try:
-                        index = int(raw_index)
-                    except (TypeError, ValueError):
+                refused |= bool(_value(delta, "refusal"))
+                state["message"] = _merge_chat_replay(state["message"], _chat_replay(delta))
+                for event in _chat_text_events(delta):
+                    content_seen |= isinstance(event, TextDelta)
+                    yield event
+                for fallback_index, raw_call in enumerate(_value(delta, "tool_calls") or ()):
+                    index = _value(raw_call, "index")
+                    if type(index) is not int:
                         index = fallback_index
-                    fragment = fragments.setdefault(
-                        index,
-                        {"id": "", "name": "", "arguments": ""},
-                    )
-                    extension = _value(raw_call, "extra_content", None)
-                    if isinstance(extension, Mapping):
-                        fragment["extra_content"] = _merge_replay(fragment.get("extra_content", {}), extension)
-                    fragment["id"] += str(_value(raw_call, "id", "") or "")
-                    function = _value(raw_call, "function", {})
-                    fragment["name"] += str(_value(function, "name", "") or "")
-                    arguments = _value(function, "arguments", "")
+                    fragment = fragments.setdefault(index, {"id": "", "name": "", "arguments": ""})
+                    function = _value(raw_call, "function")
+                    fragment["id"] += _value(raw_call, "id") or ""
+                    fragment["name"] += _value(function, "name") or ""
+                    arguments = _value(function, "arguments")
                     if arguments not in (None, ""):
                         fragment["arguments"] += _wire_arguments(arguments)
+                    extension = _value(raw_call, "extra_content")
+                    if isinstance(extension, Mapping):
+                        fragment["extra_content"] = _merge_chat_replay(fragment.get("extra_content", {}), extension)
         finally:
             close = getattr(response, "close", None)
             if callable(close):
                 close()
             diagnostics.emit("provider_result", stage="provider_transport", stream=True,
-                model=response_model, chunk_count=chunk_count, choice_count=choice_count,
-                finish_reason=finish_reason, finish_seen=finish_reason is not None,
-                content_type=content_type, reasoning_type=reasoning_type,
-                refusal_present=refusal_present, reasoning_tokens=reasoning_tokens)
-        for index in sorted(fragments):
-            fragment = fragments[index]
-            call = ToolCall(
-                fragment["id"] or f"tool_call_{index}",
-                fragment["name"],
-                fragment["arguments"] or "{}",
-            )
-            yield ToolCallStart(call.id, call.name)
-            yield ToolCallEnd(call)
+                model=model, chunk_count=chunk_count, finish_reason=finish, finish_seen=finish is not None,
+                refusal_present=refused, reasoning_tokens=usage.reasoning_tokens if usage else None)
+        if usage:
+            yield usage
+            state["reasoning_tokens"] = usage.reasoning_tokens
+        if refused or finish == "content_filter" or not (content_seen or fragments or (allow_incomplete and finish == "length")):
+            raise ModelProviderError("Chat Completions returned no usable candidate", code="protocol")
+        for index, fragment in sorted(fragments.items()):
+            call = ToolCall(fragment["id"] or f"tool_call_{index}", fragment["name"], fragment["arguments"] or "{}")
             if "extra_content" in fragment:
                 state["tools"][call.id] = {"extra_content": fragment["extra_content"]}
+            yield ToolCallStart(call.id, call.name)
+            yield ToolCallEnd(call)
         if state["message"] or state["tools"]:
             yield _ProviderState(state)
-        if latest_usage is not None:
-            yield latest_usage
+
+    @staticmethod
+    def _output_limited(response):
+        return (_value(response, "status") == "incomplete"
+                and _value(_value(response, "incomplete_details"), "reason") == "max_output_tokens")
+
+    def _complete_events(self, response, *, origin=None, effort_update=None,
+                         allow_incomplete=False, streamed_text="", streamed_summary="", chunk_count=0):
+        status = _value(response, "status")
+        items = list(_value(response, "output", ()) or ())
+        usage = _usage_event(_value(response, "usage"))
+        refusal = any(_value(part, "type") == "refusal" for item in items
+                      if _value(item, "type") == "message" for part in _value(item, "content", ()) or ())
+        diagnostics.emit("provider_result", stage="provider_transport", stream=bool(chunk_count),
+            model=_value(response, "model"), finish_reason=status, finish_seen=status is not None,
+            chunk_count=chunk_count, output_item_count=len(items), refusal_present=refusal,
+            reasoning_tokens=usage.reasoning_tokens if usage else None)
+        if usage:
+            yield usage
+        if refusal or status not in {"completed", "incomplete"}:
+            code = _value(_value(response, "error"), "code")
+            raise ModelProviderError("Responses request did not complete",
+                code={"rate_limit_exceeded": "rate_limit", "server_error": "unavailable"}.get(code, "protocol"))
+        content = _response_text(items)
+        summary = _output_parts(items, "reasoning", "summary", "summary_text")
+        if not content.startswith(streamed_text) or not summary.startswith(streamed_summary):
+            raise ModelProviderError("Responses stream and terminal output differ", code="protocol")
+        if summary[len(streamed_summary):]:
+            yield ReasoningDelta(summary[len(streamed_summary):])
+        if content[len(streamed_text):]:
+            yield TextDelta(content[len(streamed_text):])
+        if status == "incomplete" and not (allow_incomplete and self._output_limited(response)):
+            raise ModelProviderError("Responses output was incomplete", code="protocol")
+        calls = [_response_call(item) for item in items if _value(item, "type") == "function_call"]
+        if not (content or calls or allow_incomplete):
+            raise ModelProviderError("Responses returned no text or function call", code="protocol")
+        for call in calls:
+            if not call.id or not call.name:
+                raise ModelProviderError("Responses function call has no ID or name", code="protocol")
+            yield ToolCallStart(call.id, call.name)
+            yield ToolCallEnd(call)
+        if items:
+            yield _ProviderState({
+                "origin": origin or self._origin(),
+                "responses_items": [copy.deepcopy(dict(item)) if isinstance(item, Mapping)
+                                    else item.model_dump(mode="json", exclude_none=True) for item in items],
+                "reasoning_tokens": usage.reasoning_tokens if usage else None,
+                "effort_update": effort_update,
+            })
+
+    def _streaming_events(self, response: Iterable[Any], **options) -> Iterator[ModelEvent]:
+        text, summary = [], []
+        commentary = set()
+        chunk_count = 0
+        terminal = False
+        try:
+            for event in response:
+                chunk_count += 1
+                kind = _value(event, "type")
+                delta = _value(event, "delta")
+                if kind in {"response.output_item.added", "response.output_item.done"}:
+                    item = _value(event, "item")
+                    if _value(item, "phase") == "commentary":
+                        commentary.add(_value(item, "id"))
+                elif (kind == "response.output_text.delta" and isinstance(delta, str)
+                      and _value(event, "item_id") not in commentary):
+                    text.append(delta)
+                    yield TextDelta(delta)
+                elif kind == "response.reasoning_summary_text.delta" and isinstance(delta, str):
+                    summary.append(delta)
+                    yield ReasoningDelta(delta)
+                elif kind in {"response.completed", "response.incomplete", "response.failed"}:
+                    terminal = True
+                    yield from self._complete_events(_value(event, "response"), **options,
+                        streamed_text="".join(text), streamed_summary="".join(summary), chunk_count=chunk_count)
+                    return
+                elif kind == "error":
+                    raise ModelProviderError("Responses stream reported an error", code="protocol")
+            raise ModelProviderError("Responses stream ended before a terminal event", code="protocol")
+        finally:
+            close = getattr(response, "close", None)
+            if callable(close):
+                close()
+            if not terminal:
+                diagnostics.emit("provider_result", stage="provider_transport", stream=True,
+                                 chunk_count=chunk_count, finish_seen=False)
 
     def list_models(self, *, timeout: Optional[float] = None) -> Sequence[str]:
         try:
@@ -975,6 +1138,7 @@ def collect_response(
     on_event: Optional[Callable[[ModelEvent], None]] = None,
     fallback_to_non_stream: bool = False,
     on_fallback: Optional[Callable[[ModelProviderError], None]] = None,
+    allow_intermediate_tool_content: bool = False,
 ) -> CollectedResponse:
     """Collect atomically, accept once, then publish callbacks and tool events.
 
@@ -982,6 +1146,8 @@ def collect_response(
     delivered as accepted content, even when the transport falls back. Language
     failure never triggers transport fallback or automatic PLC regeneration.
     """
+    from model_runtime.usage import emit_token_usage
+
     if (fallback_to_non_stream and request.stream and not preferred_streaming(
         getattr(provider, "profile", None), model=request.model,
         api_key=getattr(provider, "api_key", None),
@@ -1058,6 +1224,8 @@ def collect_response(
             if safe_error is error:
                 raise
             raise safe_error from error
+        finally:
+            emit_token_usage(usage)
         raw = snapshot()
         diagnostics.response_received(raw, current)
         diagnostics.emit("attempt_finished", stage="response_acceptance",
@@ -1099,7 +1267,8 @@ def collect_response(
         if request.response_contract.format == "json" else (raw.message.content, False))
     if tail_recovered:
         diagnostics.emit("local_json_tail_recovered", stage="response_framing")
-    violations = [] if raw.message.tool_calls and not content.strip() else list(inspect_response(
+    tool_turn = bool(raw.message.tool_calls) and (not content.strip() or allow_intermediate_tool_content)
+    violations = [] if tool_turn else list(inspect_response(
         content, request.response_language, request.response_contract,
         source_texts=sources, annotations=annotations,
     ))
@@ -1134,7 +1303,8 @@ def collect_response(
     # Reasoning is optional display material. A mismatch hides that entire
     # channel; it never relaxes content/tool acceptance, modifies their bytes,
     # or triggers another request. Raw attempts remain backend-only evidence.
-    accepted_message = replace(raw.message, content=content)
+    accepted_message = replace(raw.message, content=content,
+                               _provider_fields=raw.message._provider_fields if content == raw.message.content else {})
     if reasoning_violations:
         accepted_message = replace(accepted_message, reasoning="", _provider_reasoning=raw.message.reasoning)
     accepted_events = []
@@ -1236,7 +1406,8 @@ def sdk_runtime_self_test() -> bool:
             },
             "sk-offline-package-self-test",
         )
-        return bool(provider and jiter and pydantic and pydantic_core)
+        return bool(callable(provider._client.chat.completions.create)
+                    and callable(provider._client.responses.create) and jiter and pydantic and pydantic_core)
     except Exception:
         return False
 

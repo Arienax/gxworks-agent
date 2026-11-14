@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 using System;
 using System.Collections.Generic;
@@ -90,8 +90,8 @@ namespace PlcAi.NativeAdapter
             if (value.ContainsKey("language")) { value["program_kind"] = Language(String(value["language"])); value.Remove("language"); }
             if (value.ContainsKey("kind")) {
                 string kind = String(value["kind"]);
-                if (kind != "program" && kind != "function_block") throw new ArgumentException("unsupported_workspace_unit_kind");
-                value["pou_type"] = kind == "program" ? 0x01000000 : 0x01000002; value.Remove("kind");
+                if (kind != "program" && kind != "function_block" && kind != "function") throw new ArgumentException("unsupported_workspace_unit_kind");
+                value["pou_type"] = kind == "program" ? 0x01000000 : kind == "function_block" ? 0x01000002 : 0x01000003; value.Remove("kind");
             }
             foreach (string key in new[] {"before_children", "after_children", "children"}) {
                 if (!value.ContainsKey(key)) continue;

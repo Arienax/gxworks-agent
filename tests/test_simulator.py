@@ -780,7 +780,7 @@ def test_native_simulator_profiles_use_independent_sdk_cpu_codes(cpu,native_code
 
 def test_native_simulator_scope_does_not_admit_other_models_or_special_devices():
     from plc.device_policy import native_simulator_profile, native_simulator_read_plan
-    for cpu in ('Q04UDV','L02S','FX1N','FX5U','unknown'):
+    for cpu in ('FX0','FX1','FX5U','unknown'):
         with pytest.raises(ValueError): native_simulator_profile(cpu)
     for address in ('SD1','SM1','SD203.0','SD0-D9','SM0;D0'):
         with pytest.raises(ValueError): native_simulator_read_plan([address],'Q06UDEH')

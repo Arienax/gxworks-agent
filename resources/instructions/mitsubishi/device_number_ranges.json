@@ -1,6 +1,5 @@
 {
   "schema_version": 1,
-  "description": "Reviewed device-number ranges and timing bases. These are manual-reference ranges; they do not certify that the current Core executes every address as a timer.",
   "source": {
     "manual_id": "fx3_programming_r",
     "manual_number": "JY997D16601",

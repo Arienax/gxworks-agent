@@ -46,13 +46,14 @@ def validate_family_knowledge(definitions, *, vendor):
     from plc.instruction_definition import InstructionFactGroup
     if not isinstance(definitions, list):
         raise ValueError('instruction_families must be an array')
-    definitions = copy.deepcopy(definitions)
+    definitions = [copy.deepcopy(definition) for definition in definitions]
     families = {d.get('base_opcode'): d for d in definitions if isinstance(d, Mapping)}
     if len(families) != len(definitions):
         raise ValueError('Instruction families need unique bases')
     if any(not isinstance(d.get('shared_values', {}), Mapping) for d in definitions):
         raise ValueError('Family shared values must be an object')
-    shared_sources = {name: copy.deepcopy(d.get('shared_values', {})) for name, d in families.items()}
+    # Keep the original name bindings while resolving references in each copy.
+    shared_sources = {name: dict(d.get('shared_values', {})) for name, d in families.items()}
     for definition in definitions:
         for name, value in list(definition.get('shared_values', {}).items()):
             if not isinstance(value, Mapping) or 'shared_ref' not in value:
@@ -84,9 +85,10 @@ def validate_family_knowledge(definitions, *, vendor):
             if parsed.value.get('parameter_aliases') and 'signature' not in parsed.value:
                 raise ValueError('Shared aliases require a source-bound interface')
             if 'definition_ref' in parsed.value:
-                _definition_value(definition, parsed.value)
                 if 'signature' in parsed.value:
                     _bind_shared_definition(definition, fact, ())
+                else:
+                    _definition_value(definition, parsed.value)
             if parsed.id in ids:
                 raise ValueError('Duplicate family fact identity')
             ids.add(parsed.id)
@@ -105,7 +107,7 @@ def validate_family_knowledge(definitions, *, vendor):
                         raise ValueError('Invalid documented instruction modifier binding')
         if any(set(fact.get('depends_on', [])) - ids for fact in definition['facts']):
             raise ValueError('Missing family fact dependency')
-        result.append(dict(copy.deepcopy(definition), vendor=vendor))
+        result.append(dict(definition, vendor=vendor))
     return result
 
 
@@ -341,6 +343,24 @@ def _resolve_parameters(value, replacements):
     return copy.deepcopy(replacements.get(value, value)) if isinstance(value, str) else value
 
 
+def _variant_fact_index(registry):
+    """Index immutable family definitions once instead of scanning every fact per operand."""
+    definitions = registry._family_knowledge
+    cached = getattr(registry, '_variant_fact_index', None)
+    if cached is not None and cached[0] is definitions:
+        return cached[1]
+    indexed = {}
+    for definition in definitions:
+        for fact in definition['facts']:
+            if fact.get('dimension') != 'parameters.variant_family':
+                continue
+            row = (definition['base_opcode'], definition['vendor'], fact, definition['facts'])
+            for form in fact.get('scope', {}).get('forms', []):
+                indexed.setdefault(form, []).append(row)
+    registry._variant_fact_index = (definitions, indexed)
+    return indexed
+
+
 def _knowledge_form(registry, mnemonic, *, cpu, language=None, facts=None, context=None):
     """Resolve identities separately from source-proven interface semantics."""
     from plc.instruction_definition import DefinitionError, select_fact_dependencies
@@ -350,8 +370,7 @@ def _knowledge_form(registry, mnemonic, *, cpu, language=None, facts=None, conte
     # A registered spelling may return a contract for a different CPU. Keep
     # that catalogue identity, but do not use it to interpret this CPU's source.
     proof_catalogue = catalogue if catalogue is not None and catalogue.spec.supports_cpu(cpu) else None
-    candidates = [(definition['base_opcode'], definition['vendor'], fact, definition['facts'])
-                  for definition in registry._family_knowledge for fact in definition['facts']]
+    candidates = list(_variant_fact_index(registry).get(token, ()))
     if facts:
         candidates.extend((fact.get('value', {}).get('base_opcode') or
                            (proof_catalogue.base_mnemonic if proof_catalogue else token), 'mitsubishi', fact, facts)

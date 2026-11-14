@@ -8,7 +8,7 @@ from application.workbench import WorkbenchService
 from application.events import append_event, _public_context_audit
 from application.workspace import public_payload
 from shared.context_audit import ContextAudit, audit_section, context_audit_scope
-from test_web_api import ORIGIN, _Provider, _app, _complete, _login
+from test_web_api import ORIGIN, _Provider, _app, _complete
 
 
 def test_actual_backend_audit_autosave_and_refresh(tmp_path, monkeypatch):
@@ -21,7 +21,7 @@ def test_actual_backend_audit_autosave_and_refresh(tmp_path, monkeypatch):
         model_factory=lambda: (provider, {"model": "offline-audit-check"}),
     )
     with TestClient(_app(service.store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         pid = client.post("/api/projects", json={"name": "Audit"}, headers=headers).json()["id"]
         service.store.set_confirmed_spec(pid, {"summary": "X0 controls Y0", "io_table": [], "parameters": []})
         jid, output = _complete(client, service, client.post("/api/jobs", headers=headers, json={

@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Operator-triggered local MCP onboarding.
 
@@ -211,8 +211,12 @@ def test_connection(project_id: str, service_url: str) -> dict[str, Any]:
 def connect_codex(project_id: str, service_url: str) -> dict[str, Any]:
     """Check the service and save MCP config without claiming client activity."""
     check = test_connection(project_id, service_url)
+    invocation = [*launcher_invocation(), "--service"]
+    read_budget = os.environ.get("GXWORKS_MCP_READ_BUDGET_TOKENS", "").strip()
+    if read_budget:
+        invocation.extend(("--read-budget-tokens", read_budget))
     try:
-        replaced = _write_codex_config([*launcher_invocation(), "--service"])
+        replaced = _write_codex_config(invocation)
     except OSError as error:
         raise MCPIntegrationError("Codex 连接配置未完成。请检查配置目录的写入权限后重试连接。") from error
     return {
@@ -224,7 +228,7 @@ def connect_codex(project_id: str, service_url: str) -> dict[str, Any]:
     }
 
 
-def install_local_codex(session) -> dict[str, Any]:
+def install_local_codex(session, *, read_budget_tokens=None) -> dict[str, Any]:
     """Explicit operator CLI setup; never a tool exposed to an Agent."""
     diagnostics = session.check()
     invocation = [*launcher_invocation(), "--local", "--workspace", str(session.workspace)]
@@ -233,6 +237,8 @@ def install_local_codex(session) -> dict[str, Any]:
     if session.version_id:
         invocation.extend(("--version", session.version_id))
     invocation.extend(("--state-dir", str(session.service.state_dir)))
+    if read_budget_tokens is not None:
+        invocation.extend(("--read-budget-tokens", str(read_budget_tokens)))
     if session.approval_mode:
         invocation.extend(("--approval-mode", session.approval_mode))
     if session.confirm_full_access:

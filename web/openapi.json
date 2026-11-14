@@ -554,6 +554,9 @@
           "data": {
             "anyOf": [
               {
+                "$ref": "#/components/schemas/ResolvedReadData"
+              },
+              {
                 "$ref": "#/components/schemas/PagedReadData"
               },
               {
@@ -1111,6 +1114,20 @@
             ],
             "title": "Decision Receipt Status"
           },
+          "delivery": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery"
+          },
           "device_io": {
             "additionalProperties": {
               "$ref": "#/components/schemas/DeviceRecord"
@@ -1649,6 +1666,9 @@
                 "$ref": "#/components/schemas/LadderDocument"
               },
               {
+                "$ref": "#/components/schemas/SourceCandidateDocument"
+              },
+              {
                 "type": "null"
               }
             ],
@@ -1796,6 +1816,9 @@
                 "$ref": "#/components/schemas/LadderDocument"
               },
               {
+                "$ref": "#/components/schemas/SourceCandidateDocument"
+              },
+              {
                 "type": "null"
               }
             ],
@@ -1893,6 +1916,20 @@
           "project_id": {
             "title": "Project Id",
             "type": "string"
+          },
+          "project_path": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "CSV 导入时当前 GX Works2 打开的 .gxw 完整绝对路径；标题被截断或只有文件名时须提供并核对文件占用，不会打开或切换工程。",
+            "title": "Project Path"
           },
           "request_id": {
             "maxLength": 128,
@@ -5821,6 +5858,9 @@
           "data": {
             "anyOf": [
               {
+                "$ref": "#/components/schemas/ResolvedReadData"
+              },
+              {
                 "$ref": "#/components/schemas/PagedReadData"
               },
               {
@@ -6563,6 +6603,65 @@
         "title": "GenerationSTPreview",
         "type": "object"
       },
+      "GenerationStructuredSourcePreview": {
+        "additionalProperties": false,
+        "properties": {
+          "diff": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Diff",
+            "type": "object"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "program": {
+            "$ref": "#/components/schemas/SourceCandidateDocument"
+          },
+          "proposal_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal Id"
+          },
+          "read_only": {
+            "title": "Read Only",
+            "type": "boolean"
+          },
+          "target_mode": {
+            "enum": [
+              "fbd",
+              "sfc"
+            ],
+            "title": "Target Mode",
+            "type": "string"
+          },
+          "validation": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Validation",
+            "type": "object"
+          }
+        },
+        "required": [
+          "target_mode",
+          "program",
+          "validation",
+          "diff",
+          "job_id",
+          "read_only"
+        ],
+        "title": "GenerationStructuredSourcePreview",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -6866,10 +6965,6 @@
             "title": "Id",
             "type": "string"
           },
-          "owned_by_current_operator": {
-            "title": "Owned By Current Operator",
-            "type": "boolean"
-          },
           "project_id": {
             "title": "Project Id",
             "type": "string"
@@ -6905,7 +7000,6 @@
           "approved_at",
           "expires_at",
           "remaining_seconds",
-          "owned_by_current_operator",
           "target",
           "project_id",
           "version_id",
@@ -7061,6 +7155,17 @@
               }
             ],
             "title": "Comment"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
           },
           "kind": {
             "anyOf": [
@@ -7580,6 +7685,17 @@
             ],
             "title": "Cancel Requested"
           },
+          "conversation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          },
           "created_at": {
             "title": "Created At",
             "type": "string"
@@ -7665,6 +7781,17 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
           },
           "updated_at": {
             "anyOf": [
@@ -7754,6 +7881,19 @@
             ],
             "title": "Clarification Job Id"
           },
+          "conversation_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          },
           "deep": {
             "default": true,
             "title": "Deep",
@@ -7832,6 +7972,11 @@
               }
             ],
             "title": "Run Id"
+          },
+          "start_conversation": {
+            "default": false,
+            "title": "Start Conversation",
+            "type": "boolean"
           },
           "text": {
             "default": "",
@@ -8084,6 +8229,17 @@
             ],
             "title": "Audit"
           },
+          "base_program": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Program"
+          },
           "base_version_id": {
             "anyOf": [
               {
@@ -8116,6 +8272,17 @@
               }
             ],
             "title": "Content"
+          },
+          "edit_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edit Text"
           },
           "generation": {
             "anyOf": [
@@ -8773,22 +8940,6 @@
         "title": "LadderRung",
         "type": "object"
       },
-      "Login": {
-        "additionalProperties": false,
-        "properties": {
-          "token": {
-            "maxLength": 1024,
-            "minLength": 1,
-            "title": "Token",
-            "type": "string"
-          }
-        },
-        "required": [
-          "token"
-        ],
-        "title": "Login",
-        "type": "object"
-      },
       "MCPIntegrationCommand": {
         "additionalProperties": false,
         "properties": {
@@ -8994,12 +9145,16 @@
           "data": {
             "anyOf": [
               {
+                "$ref": "#/components/schemas/ResolvedReadData"
+              },
+              {
                 "$ref": "#/components/schemas/PagedReadData"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Data"
           },
           "error": {
             "anyOf": [
@@ -14616,11 +14771,7 @@
             "$ref": "#/components/schemas/ReadDelivery"
           },
           "document": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/JsonValue"
-            },
-            "title": "Document",
-            "type": "object"
+            "$ref": "#/components/schemas/ReadObjectReference"
           },
           "objects": {
             "additionalProperties": {
@@ -17157,7 +17308,8 @@
             "enum": [
               "ladder",
               "st",
-              "fbd"
+              "fbd",
+              "sfc"
             ],
             "title": "Target Mode",
             "type": "string"
@@ -17383,7 +17535,8 @@
                 "enum": [
                   "ladder",
                   "st",
-                  "fbd"
+                  "fbd",
+                  "sfc"
                 ],
                 "type": "string"
               },
@@ -17735,7 +17888,8 @@
             "enum": [
               "search_plc_manual",
               "get_generation_context",
-              "get_fbd_catalog"
+              "get_fbd_catalog",
+              "get_design_context"
             ],
             "title": "Tool",
             "type": "string"
@@ -17927,6 +18081,21 @@
           "id"
         ],
         "title": "ReadNetworkSnapshot",
+        "type": "object"
+      },
+      "ReadObjectReference": {
+        "additionalProperties": false,
+        "properties": {
+          "$ref": {
+            "pattern": "^#/objects/unit-[1-9][0-9]*$",
+            "title": "$Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "$ref"
+        ],
+        "title": "ReadObjectReference",
         "type": "object"
       },
       "ReplayAssertion": {
@@ -18442,6 +18611,119 @@
           "latest_run"
         ],
         "title": "RequirementTest",
+        "type": "object"
+      },
+      "ResolvedReadData": {
+        "additionalProperties": false,
+        "properties": {
+          "context_schema_version": {
+            "const": 4,
+            "title": "Context Schema Version",
+            "type": "integer"
+          },
+          "delivery": {
+            "$ref": "#/components/schemas/ResolvedReadDelivery"
+          },
+          "document": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Document",
+            "type": "object"
+          }
+        },
+        "required": [
+          "context_schema_version",
+          "document",
+          "delivery"
+        ],
+        "title": "ResolvedReadData",
+        "type": "object"
+      },
+      "ResolvedReadDelivery": {
+        "additionalProperties": false,
+        "properties": {
+          "assembly": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assembly"
+          },
+          "complete": {
+            "title": "Complete",
+            "type": "boolean"
+          },
+          "coverage": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage"
+          },
+          "document_id": {
+            "title": "Document Id",
+            "type": "string"
+          },
+          "fact_version": {
+            "title": "Fact Version",
+            "type": "string"
+          },
+          "limits": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Limits",
+            "type": "object"
+          },
+          "next": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadContinuation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "page": {
+            "minimum": 0.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "scope": {
+            "const": "read_sequence",
+            "title": "Scope",
+            "type": "string"
+          },
+          "version": {
+            "const": 1,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "document_id",
+          "page",
+          "complete",
+          "scope",
+          "limits",
+          "next",
+          "fact_version"
+        ],
+        "title": "ResolvedReadDelivery",
         "type": "object"
       },
       "ResponseViolation": {
@@ -21132,42 +21414,6 @@
         "title": "ScanMonitorDevices",
         "type": "object"
       },
-      "Session": {
-        "additionalProperties": false,
-        "properties": {
-          "authenticated": {
-            "title": "Authenticated",
-            "type": "boolean"
-          },
-          "csrf": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Csrf"
-          },
-          "read_only": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Read Only"
-          }
-        },
-        "required": [
-          "authenticated"
-        ],
-        "title": "Session",
-        "type": "object"
-      },
       "SettingsUpdate": {
         "additionalProperties": false,
         "properties": {
@@ -22729,6 +22975,38 @@
         "title": "SimulatorPlanSave",
         "type": "object"
       },
+      "SourceCandidateDocument": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "source_candidate",
+            "title": "Kind",
+            "type": "string"
+          },
+          "source": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Source",
+            "type": "object"
+          },
+          "target_mode": {
+            "enum": [
+              "fbd",
+              "sfc"
+            ],
+            "title": "Target Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "target_mode",
+          "source"
+        ],
+        "title": "SourceCandidateDocument",
+        "type": "object"
+      },
       "SourceDefinition": {
         "additionalProperties": {
           "$ref": "#/components/schemas/JsonValue"
@@ -23169,6 +23447,242 @@
         "title": "SourceTextRecord",
         "type": "object"
       },
+      "SpecDocument": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        },
+        "properties": {
+          "base_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Revision"
+          },
+          "confirmed_spec": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Specification"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "differences": {
+            "items": {
+              "$ref": "#/components/schemas/SpecificationDifference"
+            },
+            "title": "Differences",
+            "type": "array"
+          },
+          "draft": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Specification"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "draft_revision": {
+            "title": "Draft Revision",
+            "type": "string"
+          },
+          "issues": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpecDocumentIssues"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "plc_model": {
+            "title": "Plc Model",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "target_mode": {
+            "title": "Target Mode",
+            "type": "string"
+          },
+          "version_spec": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Specification"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "project_id",
+          "plc_model",
+          "target_mode",
+          "path",
+          "draft_revision"
+        ],
+        "title": "SpecDocument",
+        "type": "object"
+      },
+      "SpecDocumentChange": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "remove": {
+            "default": false,
+            "title": "Remove",
+            "type": "boolean"
+          },
+          "section": {
+            "minLength": 1,
+            "title": "Section",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value"
+          }
+        },
+        "required": [
+          "section"
+        ],
+        "title": "SpecDocumentChange",
+        "type": "object"
+      },
+      "SpecDocumentConfirm": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_revision": {
+            "title": "Expected Revision",
+            "type": "string"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          }
+        },
+        "required": [
+          "expected_revision"
+        ],
+        "title": "SpecDocumentConfirm",
+        "type": "object"
+      },
+      "SpecDocumentIssue": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        },
+        "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "SpecDocumentIssue",
+        "type": "object"
+      },
+      "SpecDocumentIssues": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        },
+        "properties": {
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/SpecDocumentIssue"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/SpecDocumentIssue"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "title": "SpecDocumentIssues",
+        "type": "object"
+      },
+      "SpecDocumentUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/SpecDocumentChange"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "expected_revision": {
+            "title": "Expected Revision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "changes",
+          "expected_revision"
+        ],
+        "title": "SpecDocumentUpdate",
+        "type": "object"
+      },
       "SpecIORowEdit": {
         "additionalProperties": false,
         "properties": {
@@ -23393,6 +23907,20 @@
             ],
             "title": "Extensions"
           },
+          "implementation_items": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SpecificationImplementationItem"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Implementation Items"
+          },
           "io_table": {
             "anyOf": [
               {
@@ -23420,6 +23948,20 @@
               }
             ],
             "title": "Metadata"
+          },
+          "open_questions": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SpecificationOpenQuestion"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Questions"
           },
           "operation_intents": {
             "anyOf": [
@@ -23459,6 +24001,20 @@
               }
             ],
             "title": "Plc Model"
+          },
+          "requirements": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SpecificationRequirement"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requirements"
           },
           "schema_version": {
             "anyOf": [
@@ -23876,6 +24432,28 @@
         "title": "SpecificationConstructionPlan",
         "type": "object"
       },
+      "SpecificationDifference": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        },
+        "properties": {
+          "after": {
+            "$ref": "#/components/schemas/JsonValue"
+          },
+          "before": {
+            "$ref": "#/components/schemas/JsonValue"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "SpecificationDifference",
+        "type": "object"
+      },
       "SpecificationExecutionContext": {
         "additionalProperties": {
           "$ref": "#/components/schemas/JsonValue"
@@ -23968,6 +24546,120 @@
           "type"
         ],
         "title": "SpecificationExpression",
+        "type": "object"
+      },
+      "SpecificationImplementationItem": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        },
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "instances": {
+            "$ref": "#/components/schemas/JsonValue"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string"
+          },
+          "location": {
+            "title": "Location",
+            "type": "string"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          },
+          "requirement_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Requirement Ids",
+            "type": "array"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "state_owner": {
+            "title": "State Owner",
+            "type": "string"
+          },
+          "template": {
+            "$ref": "#/components/schemas/JsonValue"
+          }
+        },
+        "required": [
+          "id",
+          "language",
+          "location",
+          "method",
+          "state_owner"
+        ],
+        "title": "SpecificationImplementationItem",
+        "type": "object"
+      },
+      "SpecificationOpenQuestion": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        },
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "required": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text"
+        ],
+        "title": "SpecificationOpenQuestion",
         "type": "object"
       },
       "SpecificationOperationIntent": {
@@ -24217,6 +24909,49 @@
         "title": "SpecificationParameter",
         "type": "object"
       },
+      "SpecificationRequirement": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        },
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text"
+        ],
+        "title": "SpecificationRequirement",
+        "type": "object"
+      },
       "StructureArrayAddresses": {
         "additionalProperties": false,
         "properties": {
@@ -24253,6 +24988,44 @@
           "bit_offset"
         ],
         "title": "StructureArrayAddresses",
+        "type": "object"
+      },
+      "StructuredSourcePreview": {
+        "additionalProperties": false,
+        "properties": {
+          "diff": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Diff",
+            "type": "object"
+          },
+          "program": {
+            "$ref": "#/components/schemas/SourceCandidateDocument"
+          },
+          "target_mode": {
+            "enum": [
+              "fbd",
+              "sfc"
+            ],
+            "title": "Target Mode",
+            "type": "string"
+          },
+          "validation": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Validation",
+            "type": "object"
+          }
+        },
+        "required": [
+          "target_mode",
+          "program",
+          "validation",
+          "diff"
+        ],
+        "title": "StructuredSourcePreview",
         "type": "object"
       },
       "TaskProgram": {
@@ -25181,6 +25954,20 @@
             ],
             "title": "Debug Attempts"
           },
+          "delivery": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery"
+          },
           "generation_handoff": {
             "anyOf": [
               {
@@ -25397,6 +26184,325 @@
           "st"
         ],
         "title": "VersionPreview",
+        "type": "object"
+      },
+      "WorkspaceBreadcrumb": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        },
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "path"
+        ],
+        "title": "WorkspaceBreadcrumb",
+        "type": "object"
+      },
+      "WorkspaceDirectory": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        },
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "WorkspaceDirectory",
+        "type": "object"
+      },
+      "WorkspaceDirectoryCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "parent": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Parent",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parent",
+          "name"
+        ],
+        "title": "WorkspaceDirectoryCreate",
+        "type": "object"
+      },
+      "WorkspaceEntry": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        },
+        "properties": {
+          "hidden": {
+            "default": false,
+            "title": "Hidden",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "path"
+        ],
+        "title": "WorkspaceEntry",
+        "type": "object"
+      },
+      "WorkspaceIndex": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        },
+        "properties": {
+          "active": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active"
+          },
+          "workspaces": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceSummary"
+            },
+            "title": "Workspaces",
+            "type": "array"
+          }
+        },
+        "title": "WorkspaceIndex",
+        "type": "object"
+      },
+      "WorkspaceListing": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        },
+        "description": "One directory level an operator can navigate and pick from.",
+        "properties": {
+          "crumbs": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceBreadcrumb"
+            },
+            "title": "Crumbs",
+            "type": "array"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "home": {
+            "title": "Home",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "truncated": {
+            "default": false,
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path",
+          "home"
+        ],
+        "title": "WorkspaceListing",
+        "type": "object"
+      },
+      "WorkspaceProject": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        },
+        "description": "One project owned by a workspace, listed without binding that workspace.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "plc_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plc Model"
+          },
+          "target_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Mode"
+          }
+        },
+        "title": "WorkspaceProject",
+        "type": "object"
+      },
+      "WorkspaceSelection": {
+        "additionalProperties": false,
+        "description": "A fully qualified workspace directory chosen in the browser.",
+        "properties": {
+          "path": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "WorkspaceSelection",
+        "type": "object"
+      },
+      "WorkspaceState": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        },
+        "description": "The workspace the workbench currently serves, or that none is bound yet.",
+        "properties": {
+          "home": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "read_only": {
+            "title": "Read Only",
+            "type": "boolean"
+          },
+          "selected": {
+            "title": "Selected",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "selected",
+          "read_only"
+        ],
+        "title": "WorkspaceState",
+        "type": "object"
+      },
+      "WorkspaceSummary": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        },
+        "description": "One workspace row: its folder, label and the projects inside it.",
+        "properties": {
+          "active": {
+            "default": false,
+            "title": "Active",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "projects": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceProject"
+            },
+            "title": "Projects",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "path",
+          "label"
+        ],
+        "title": "WorkspaceSummary",
         "type": "object"
       }
     }
@@ -26433,6 +27539,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/GenerationSTPreview"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GenerationStructuredSourcePreview"
                     }
                   ],
                   "title": "Response Generation Preview Api Jobs  Job Id  Preview Get"
@@ -26892,6 +28001,157 @@
         "summary": "Specification"
       }
     },
+    "/api/projects/{project_id}/spec-document": {
+      "get": {
+        "operationId": "spec_document_api_projects__project_id__spec_document_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "version_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Version Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecDocument"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Spec Document"
+      },
+      "patch": {
+        "operationId": "update_spec_document_api_projects__project_id__spec_document_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpecDocumentUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecDocument"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Spec Document"
+      }
+    },
+    "/api/projects/{project_id}/spec-document/confirm": {
+      "post": {
+        "operationId": "confirm_spec_document_api_projects__project_id__spec_document_confirm_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpecDocumentConfirm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecDocument"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm Spec Document"
+      }
+    },
     "/api/projects/{project_id}/versions/{version_id}": {
       "get": {
         "operationId": "version_api_projects__project_id__versions__version_id__get",
@@ -27119,6 +28379,80 @@
           }
         },
         "summary": "Diagnostics"
+      }
+    },
+    "/api/projects/{project_id}/versions/{version_id}/diff": {
+      "get": {
+        "operationId": "version_diff_api_projects__project_id__versions__version_id__diff_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "base_version_id",
+            "required": true,
+            "schema": {
+              "title": "Base Version Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/LadderProgramDiff"
+                    },
+                    {
+                      "$ref": "#/components/schemas/STTextDiff"
+                    },
+                    {
+                      "$ref": "#/components/schemas/FBDDiff"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SFCDiff"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Version Diff Api Projects  Project Id  Versions  Version Id  Diff Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Version Diff"
       }
     },
     "/api/projects/{project_id}/versions/{version_id}/explorer": {
@@ -27918,6 +29252,9 @@
                       "$ref": "#/components/schemas/LadderDocument"
                     },
                     {
+                      "$ref": "#/components/schemas/SourceCandidateDocument"
+                    },
+                    {
                       "type": "null"
                     }
                   ],
@@ -28561,6 +29898,9 @@
                       "$ref": "#/components/schemas/SFCPreviewResource"
                     },
                     {
+                      "$ref": "#/components/schemas/StructuredSourcePreview"
+                    },
+                    {
                       "$ref": "#/components/schemas/ExecutionPreview"
                     }
                   ],
@@ -28582,60 +29922,6 @@
           }
         },
         "summary": "Preview"
-      }
-    },
-    "/api/session": {
-      "get": {
-        "operationId": "session_api_session_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Session"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Session"
-      },
-      "post": {
-        "operationId": "login_api_session_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Login"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Session"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Login"
       }
     },
     "/api/settings": {
@@ -29374,6 +30660,262 @@
           }
         },
         "summary": "Spec Presentation"
+      }
+    },
+    "/api/workspace": {
+      "get": {
+        "operationId": "workspace_state_api_workspace_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Workspace State"
+      }
+    },
+    "/api/workspace/browse": {
+      "get": {
+        "operationId": "browse_workspace_api_workspace_browse_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "path",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceListing"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Browse Workspace"
+      }
+    },
+    "/api/workspace/directory": {
+      "post": {
+        "operationId": "create_workspace_directory_api_workspace_directory_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceDirectoryCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceDirectory"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Workspace Directory"
+      }
+    },
+    "/api/workspaces": {
+      "get": {
+        "description": "Every workspace this workbench serves, each with the projects it owns.",
+        "operationId": "list_workspaces_api_workspaces_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceIndex"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Workspaces"
+      },
+      "post": {
+        "operationId": "add_workspace_api_workspaces_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceSelection"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceIndex"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Workspace"
+      }
+    },
+    "/api/workspaces/pick": {
+      "post": {
+        "description": "Open the system folder chooser, then add and activate that workspace.",
+        "operationId": "pick_workspace_api_workspaces_pick_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceIndex"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Pick Workspace"
+      }
+    },
+    "/api/workspaces/{workspace_id_value}": {
+      "delete": {
+        "description": "Remove one workspace from the list; its folder and projects stay on disk.",
+        "operationId": "forget_workspace_api_workspaces__workspace_id_value__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id_value",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id Value",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceIndex"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Forget Workspace"
+      }
+    },
+    "/api/workspaces/{workspace_id_value}/activate": {
+      "post": {
+        "operationId": "activate_workspace_api_workspaces__workspace_id_value__activate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id_value",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id Value",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceIndex"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Activate Workspace"
       }
     }
   }

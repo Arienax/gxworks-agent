@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import {
   Activity,
@@ -7,6 +7,8 @@ import {
   Bot,
   ChevronDown,
   ChevronRight,
+  FileCode2,
+  FilePlus2,
   FolderOpen,
   FolderPlus,
   Github,
@@ -29,7 +31,7 @@ import { Badge } from "../components/ui";
 import { Popover } from "../components/Popover";
 import type { Locale } from "../i18n";
 import { statusText, statusTone } from "../i18n";
-import { conversationTitle, filterConversations, orderByProject } from "./conversationRows";
+import { conversationTitle, filterConversations, orderByProject, workspaceRows } from "./conversationRows";
 import { jobKindLabel, listedJobStatus } from "./jobLabels";
 import type { WorkbenchModel } from "./useWorkbenchController";
 
@@ -37,13 +39,17 @@ const VISIBLE = 12;
 
 export const projectSidebarFields = [
   "busy",
+  "canWrite",
+  "conversationId",
   "displayedJobStatus",
+  "draftingConversation",
   "environment",
   "jobId",
   "locale",
   "newTask",
   "pid",
-  "session",
+  "projects",
+  "connection",
   "setLeftOpen",
   "setLocale",
   "setModal",
@@ -63,8 +69,9 @@ type WorkspaceGroup = {
 };
 
 type Props = Pick<WorkbenchModel, typeof projectSidebarFields[number]> & {
-  /** Every conversation in the served workspace, newest first. */
+  /** Jobs in the served workspace, newest first. */
   conversations?: Job[];
+  onOpenProject: (id: string) => void;
   onOpenConversation?: (job: Job) => void;
   /** Every registered workspace, so several folders stay one click apart. */
   workspaces?: WorkspaceGroup[];
@@ -75,22 +82,21 @@ type Props = Pick<WorkbenchModel, typeof projectSidebarFields[number]> & {
   onForgetWorkspace?: (identifier: string) => void;
 };
 
-/**
- * One workspace list, and beneath the active one its conversations.
- *
- * A conversation is one job, so the list answers "what did I ask for" instead of
- * nesting a project tree above the work itself.
- */
+/** The active workspace lists conversations and projects without one yet. */
 export function ProjectSidebar(props: Props) {
   const {
     busy,
+    canWrite,
+    conversationId,
     displayedJobStatus,
+    draftingConversation,
     environment,
     jobId,
     locale,
     newTask,
     pid,
-    session,
+    projects,
+    connection,
     setLeftOpen,
     setLocale,
     setModal,
@@ -99,6 +105,7 @@ export function ProjectSidebar(props: Props) {
     theme,
     toggleTheme,
     conversations,
+    onOpenProject,
     onOpenConversation,
     workspaces,
     workspaceError,
@@ -121,7 +128,7 @@ export function ProjectSidebar(props: Props) {
       const key = event.key.toLowerCase();
       if (key === "o") {
         event.preventDefault();
-        onAddWorkspace?.();
+        if (!workspacesBusy) onAddWorkspace?.();
       } else if (key === "n") {
         event.preventDefault();
         if (pid) newTask();
@@ -130,10 +137,12 @@ export function ProjectSidebar(props: Props) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onAddWorkspace, newTask, pid, setModal]);
+  }, [onAddWorkspace, newTask, pid, setModal, workspacesBusy]);
 
   const closeOnNarrow = () => { if (window.innerWidth <= 1100) setLeftOpen(false); };
-  const titleOf = (job: Job) => conversationTitle(job, (kind) => t(jobKindLabel(kind)));
+  const projectNames = new Map(projects.map((project) => [project.id, project.name]));
+  const titleOf = (job: Job) => conversationTitle(job, projectNames, (kind) => t(jobKindLabel(kind)));
+  const draftTitle = projectNames.get(pid) || t("新建对话");
   const when = (job: Job) => {
     const date = new Date(job.created_at);
     const today = new Date().toDateString() === date.toDateString();
@@ -142,7 +151,9 @@ export function ProjectSidebar(props: Props) {
       : { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
   };
 
-  const matched = filterConversations(conversations ?? [], query, titleOf);
+  const rows = workspaceRows(conversations ?? [], projects);
+  const showDraft = draftingConversation && rows.some((row) => "kind" in row && row.project_id === pid);
+  const matched = filterConversations(rows, query, (row) => "kind" in row ? titleOf(row) : row.name);
   const ordered = byProject ? orderByProject(matched) : matched;
   const visible = showAll ? ordered : ordered.slice(0, VISIBLE);
   const capped = ordered.length > VISIBLE;
@@ -158,7 +169,7 @@ export function ProjectSidebar(props: Props) {
           <PanelLeftClose size={17} />
         </button>
       </div>
-      {session?.read_only && <div className="sidebar-notice"><Badge tone="warn">{t("只读恢复")}</Badge></div>}
+      {connection?.read_only && <div className="sidebar-notice"><Badge tone="warn">{t("只读恢复")}</Badge></div>}
 
       <div className="sidebar-heading">
         <span>{t("工作区")}</span>
@@ -210,10 +221,10 @@ export function ProjectSidebar(props: Props) {
                   )}
                 </button>
                 {group.active && (
-                  <button type="button" className="icon-button workspace-new-chat"
-                    aria-label={t("新建对话")} title={`${t("新建对话")} · Ctrl+N`}
-                    onClick={() => (pid ? newTask() : setModal("new"))}>
-                    <MessageSquarePlus size={13} />
+                  <button type="button" className="icon-button workspace-new-project"
+                    aria-label={t("新建工程")} title={t("新建工程")}
+                    disabled={!canWrite || !!workspacesBusy} onClick={() => setModal("new")}>
+                    <FilePlus2 size={13} />
                   </button>
                 )}
                 <button type="button" className="icon-button workspace-group-forget"
@@ -223,32 +234,48 @@ export function ProjectSidebar(props: Props) {
                 </button>
               </div>
 
-              {/* The active workspace lists its conversations; others list their
+              {/* The active workspace also lists conversations; others list their
                   projects, so a folder is still one click away without switching. */}
-              {group.active && open && !jobId && !!pid && (
+              {group.active && open && showDraft && (
                 <div className="conversation-node">
                   <button type="button" className="conversation-item selected"
-                    aria-current="true" title={t("新建对话")}>
+                    aria-current="true" title={draftTitle}>
                     <span className="conversation-icon"><MessageSquarePlus size={13} /></span>
-                    <span className="conversation-title">{t("新建对话")}</span>
+                    <span className="conversation-title">{draftTitle}</span>
                   </button>
                 </div>
               )}
-              {group.active && open && visible.map((job) => {
+              {group.active && open && visible.map((row) => {
+                if (!("kind" in row)) {
+                  const selected = row.id === pid;
+                  return (
+                    <div key={`project:${row.id}`} className="conversation-node">
+                      <button type="button" className={`conversation-item ${selected ? "selected" : ""}`}
+                        aria-current={selected ? "true" : undefined} title={row.name} disabled={busy}
+                        onClick={() => { if (!selected) onOpenProject(row.id); closeOnNarrow(); }}>
+                        <span className="conversation-icon"><FileCode2 size={13} /></span>
+                        <span className="conversation-title">{row.name}</span>
+                      </button>
+                    </div>
+                  );
+                }
+                const job = row;
                 const state = listedJobStatus(job, jobId, displayedJobStatus);
+                const selected = job.project_id === pid && job.conversation_id === conversationId;
+                const title = titleOf(job);
                 return (
-                  <div key={job.id} className="conversation-node">
+                  <div key={job.conversation_id} className="conversation-node">
                     <button type="button"
-                      className={`conversation-item ${job.id === jobId ? "selected" : ""}`}
-                      aria-current={job.id === jobId ? "true" : undefined}
-                      title={titleOf(job)}
+                      className={`conversation-item ${selected ? "selected" : ""}`}
+                      aria-current={selected ? "true" : undefined}
+                      title={title}
                       onClick={() => { onOpenConversation?.(job); closeOnNarrow(); }}>
                       <span className="conversation-icon">
                         {activeJob(job)
                           ? <LoaderCircle size={13} className="spin" />
                           : <MessageSquare size={13} />}
                       </span>
-                      <span className="conversation-title">{titleOf(job)}</span>
+                      <span className="conversation-title">{title}</span>
                       <small>{when(job)}</small>
                       <span className={`status-dot ${statusTone(state)}`}
                         aria-label={statusText(locale, state)} />
@@ -271,7 +298,7 @@ export function ProjectSidebar(props: Props) {
                   <button type="button" className="project-item project-item-remote"
                     disabled={!!workspacesBusy} title={t("切换到该工作区并打开此工程")}
                     onClick={() => onActivateWorkspace?.(group.id, project.id || undefined)}>
-                    <FolderOpen size={13} />
+                    <FileCode2 size={13} />
                     <span>{project.name}
                       <small>{String(project.target_mode || "").toUpperCase()}</small>
                     </span>

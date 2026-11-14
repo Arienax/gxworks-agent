@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Shared instruction facts, finite-width expressions and dependency views.
 
 The instruction registry owns these definitions. Source compilation belongs to
@@ -358,7 +361,7 @@ class InstructionFactGroup:
     note: str | None = None
 
     @classmethod
-    def from_mapping(cls, raw):
+    def from_mapping(cls, raw, *, copy_content=True):
         if not isinstance(raw, Mapping):
             raise DefinitionError("Fact group must be an object")
         identity, dimension, status = raw.get("id"), raw.get("dimension"), raw.get("status", "unknown")
@@ -399,10 +402,11 @@ class InstructionFactGroup:
             raise DefinitionError("Invalid fact authority decision")
         if decision is not None and str(decision.get("fact_id") or "") not in {"", identity}:
             raise DefinitionError("Authority decision belongs to another fact")
-        return cls(identity, dimension, copy.deepcopy(dict(value)), status, tuple(copy.deepcopy(sources)),
-                   tuple(dependencies), tuple(members), copy.deepcopy(dict(scope)), verification,
-                   tuple(copy.deepcopy(conditions)),
-                   copy.deepcopy(dict(decision)) if decision is not None else None,
+        detach = copy.deepcopy if copy_content else lambda item: item
+        return cls(identity, dimension, detach(dict(value)), status, tuple(detach(sources)),
+                   tuple(dependencies), tuple(members), detach(dict(scope)), verification,
+                   tuple(detach(conditions)),
+                   detach(dict(decision)) if decision is not None else None,
                    note.strip() if isinstance(note, str) else None)
 
     def as_mapping(self):
@@ -431,7 +435,9 @@ def select_fact_dependencies(groups, requested_ids, *, opcode, model, language="
     """Return complete dependency closures and explicit gaps, without a budget cut."""
     by_id = {}
     for raw in groups:
-        group = raw if isinstance(raw, InstructionFactGroup) else InstructionFactGroup.from_mapping(raw)
+        # Selection only reads these temporary groups; as_mapping below detaches
+        # the selected closures. Do not copy every unselected fact first.
+        group = raw if isinstance(raw, InstructionFactGroup) else InstructionFactGroup.from_mapping(raw, copy_content=False)
         if group.id in by_id:
             raise DefinitionError("Duplicate fact group identity")
         by_id[group.id] = group

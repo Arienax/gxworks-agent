@@ -8,7 +8,7 @@
             "adapter": "openai_compatible",
             "baseUrl": "https://api.deepseek.com",
             "model": "deepseek-v4-pro",
-            "credentialTarget": "PLC-AI-Studio/model-profile/deepseek-default"
+            "credentialTarget": "gxworks-agent/model-profile/deepseek-default"
         },
         {
             "id": "deepseek-v4-flash",
@@ -16,7 +16,7 @@
             "adapter": "openai_compatible",
             "baseUrl": "https://api.deepseek.com",
             "model": "deepseek-v4-flash",
-            "credentialTarget": "PLC-AI-Studio/model-profile/deepseek-v4-flash"
+            "credentialTarget": "gxworks-agent/model-profile/deepseek-v4-flash"
         },
         {
             "id": "deepseek-v4-flash-vision-exp",
@@ -24,7 +24,7 @@
             "adapter": "openai_compatible",
             "baseUrl": "https://api.deepseek.com",
             "model": "deepseek-v4-flash-vision-exp",
-            "credentialTarget": "PLC-AI-Studio/model-profile/deepseek-v4-flash-vision-exp"
+            "credentialTarget": "gxworks-agent/model-profile/deepseek-v4-flash-vision-exp"
         },
         {
             "id": "zhipu-glm-5.3-flash",
@@ -32,7 +32,7 @@
             "adapter": "openai_compatible",
             "baseUrl": "https://open.bigmodel.cn/api/paas/v4/",
             "model": "glm-5.3-flash",
-            "credentialTarget": "PLC-AI-Studio/model-profile/zhipu-glm-5.3-flash"
+            "credentialTarget": "gxworks-agent/model-profile/zhipu-glm-5.3-flash"
         },
         {
             "id": "zhipu-glm-5.3",
@@ -40,7 +40,7 @@
             "adapter": "openai_compatible",
             "baseUrl": "https://open.bigmodel.cn/api/paas/v4/",
             "model": "glm-5.3",
-            "credentialTarget": "PLC-AI-Studio/model-profile/zhipu-glm-5.3"
+            "credentialTarget": "gxworks-agent/model-profile/zhipu-glm-5.3"
         },
         {
             "id": "zhipu-glm-5.2",
@@ -48,7 +48,7 @@
             "adapter": "openai_compatible",
             "baseUrl": "https://open.bigmodel.cn/api/paas/v4/",
             "model": "glm-5.2",
-            "credentialTarget": "PLC-AI-Studio/model-profile/zhipu-glm-5.2"
+            "credentialTarget": "gxworks-agent/model-profile/zhipu-glm-5.2"
         }
     ],
     "plc_model": "FX3U"

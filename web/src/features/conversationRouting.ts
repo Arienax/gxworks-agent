@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import type { components } from "../api/generated";
 
@@ -14,12 +14,17 @@ export function conversationRoute(input: {
   targetMode: string;
   hasVersions: boolean;
   hasSpec: boolean;
+  hasImplementationPlan?: boolean;
   reviewRequested: boolean;
   continuingDirect: boolean;
 }) {
   if (input.task === "question") return {
     kind: "agent" as const, available: true, requiresText: true,
     generationAction: undefined, submitLabel: "提问", placeholder: "输入你的问题…",
+  };
+  if (input.task === "edit" && input.editAction === "edit" && (!input.hasSpec || input.reviewRequested || (input.hasImplementationPlan && input.workflow !== "direct"))) return {
+    kind: "analysis" as const, available: input.hasVersions, requiresText: true,
+    generationAction: undefined, submitLabel: "整理并确认需求", placeholder: "描述当前工程的需求与修改目标…",
   };
   if (input.task === "edit" && input.editAction === "edit") return {
     kind: "generation" as const, available: input.hasVersions, requiresText: true,
@@ -33,7 +38,7 @@ export function conversationRoute(input: {
     submitLabel: input.continuingDirect ? "补充并继续" : "生成程序",
     placeholder: input.continuingDirect ? "补充上面的问题…" : "描述你希望设备如何工作…",
   };
-  if (!input.hasSpec || input.reviewRequested) return {
+  if (!input.hasSpec || input.reviewRequested || (input.hasImplementationPlan && input.workflow !== "direct")) return {
     kind: "analysis" as const, available, requiresText: true,
     generationAction: undefined, submitLabel: "整理并确认需求", placeholder: "描述你希望设备如何工作…",
   };

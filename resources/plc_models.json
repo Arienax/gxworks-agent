@@ -3700,7 +3700,13 @@
         "SD": 2047,
         "Z": 19,
         "R": 32767,
-        "ZR": 65535
+        "ZR": 65535,
+        "TC": 25471,
+        "TS": 25471,
+        "CC": 25471,
+        "CS": 25471,
+        "TN": 25471,
+        "CN": 25471
       },
       "radices": {
         "X": 16,
@@ -3723,7 +3729,11 @@
         "T",
         "ST",
         "C",
-        "SM"
+        "SM",
+        "TC",
+        "TS",
+        "CC",
+        "CS"
       ],
       "word_bit_prefixes": [
         "D",
@@ -3933,6 +3943,42 @@
             "file_register_allocation",
             "available_storage"
           ]
+        },
+        "TC": {
+          "kind": "structured_device_view",
+          "device_family": "T",
+          "view": "coil",
+          "shares_allocation_with": "T"
+        },
+        "TS": {
+          "kind": "structured_device_view",
+          "device_family": "T",
+          "view": "contact",
+          "shares_allocation_with": "T"
+        },
+        "CC": {
+          "kind": "structured_device_view",
+          "device_family": "C",
+          "view": "coil",
+          "shares_allocation_with": "C"
+        },
+        "CS": {
+          "kind": "structured_device_view",
+          "device_family": "C",
+          "view": "contact",
+          "shares_allocation_with": "C"
+        },
+        "TN": {
+          "kind": "structured_device_view",
+          "device_family": "T",
+          "view": "current_value",
+          "shares_allocation_with": "T"
+        },
+        "CN": {
+          "kind": "structured_device_view",
+          "device_family": "C",
+          "view": "current_value",
+          "shares_allocation_with": "C"
         }
       },
       "allocation_constraints": {

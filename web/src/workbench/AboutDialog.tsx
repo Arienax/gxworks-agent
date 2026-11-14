@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 import { Github } from "lucide-react";
 import { Modal } from "../components/ui";
 
@@ -7,7 +7,7 @@ export const AUTHOR_NAME = "Arienax";
 export const AUTHOR_URL = "https://github.com/Arienax";
 export const PROJECT_URL = "https://github.com/Arienax/gxworks-agent";
 export const COPYRIGHT_NOTICE = "© 2026 Arienax";
-export const LICENSE_NAME = "Apache-2.0";
+export const LICENSE_NAME = "AGPL-3.0";
 
 export function AboutDialog({
   open,

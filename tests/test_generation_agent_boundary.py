@@ -176,6 +176,26 @@ class OneShotProvider:
         yield TextDelta(json.dumps({"r": [{"b": [{"i": ["NO X0"], "o": ["COIL Y0"]}]}]}, ensure_ascii=False))
 
 
+@pytest.mark.parametrize(('cpu', 'aliases', 'native'), [
+    ('Q02/Q02H', ['ADD', 'SUBP', 'MUL', 'DIV', 'DADDP', 'DMULP', '*P'],
+     ['+', '-P', '*', '/', 'D+P', 'D*P', '*P']),
+    ('FX3U', ['ADD', 'SUBP', 'MUL', 'DIV'], ['ADD', 'SUBP', 'MUL', 'DIV']),
+])
+def test_fresh_candidate_uses_target_native_integer_arithmetic(cpu, aliases, native):
+    from application.compact_protocol import expand_compact_ladder
+    from plc.generation import prepare_ladder_candidate
+    from plc.ir import lower_rung_instructions
+
+    args = [["D0", "K10", f"D{100 + 10 * index}"] for index in range(len(aliases))]
+    candidate = expand_compact_ladder({"r": [{"c": ["NO X0"], "b": [{"i": [], "o": [
+        ' '.join([opcode, *operands]) for opcode, operands in zip(aliases, args)
+    ]}]}], "device_comments": []})
+    prepared = prepare_ladder_candidate(candidate, plc_model=cpu, confirmed_spec={})
+    instructions = lower_rung_instructions(prepared['ladder']['rungs'][0])
+    assert [(item['op'], item['args']) for item in instructions if item['op'] != 'LD'] == list(zip(native, args))
+    assert [item['opcode'] for item in candidate['rungs'][0]['branches'][0]['outputs']] == aliases
+
+
 def test_raw_direct_generates_once_without_analysis_or_model_compaction(monkeypatch, tmp_path):
     import application.model_api as api
     import application.context_compactor as compactor
@@ -270,8 +290,9 @@ def test_direct_missing_fact_never_delivers_program(monkeypatch, tmp_path, mixed
     assert not list(tmp_path.glob("*.ir.json"))
 
 
-@pytest.mark.parametrize("program", [{}, {"r": []}, {"r": [{"b": [{"i": [], "o": ["COIL <output>"]}]}]}])
-def test_direct_invalid_program_is_not_replaced_or_retried(monkeypatch, tmp_path, program):
+@pytest.mark.parametrize("program,calls", [({}, 1), ({"r": []}, 1),
+    ({"r": [{"b": [{"i": [], "o": ["COIL <output>"]}]}]}, 2)])
+def test_direct_invalid_program_does_not_accept_unscoped_replacement(monkeypatch, tmp_path, program, calls):
     import application.generation_agent as agent
     from plc.candidate_repair import GenerationValidationError
     monkeypatch.setattr(agent, "_build_knowledge_context", lambda *a, **k: "")
@@ -284,7 +305,7 @@ def test_direct_invalid_program_is_not_replaced_or_retried(monkeypatch, tmp_path
         GenerationWorkflow(GenerationRequest("X0控制Y0", direct_generation=True,
             model_name=provider.profile["model"]), tmp_path,
             dependencies=GenerationDependencies(provider=provider)).run()
-    assert len(provider.requests) == 1 and not list(tmp_path.glob("*.csv"))
+    assert len(provider.requests) == calls and not list(tmp_path.glob("*.csv"))
 
 
 def test_confirmed_generation_uses_one_isolated_agent_call(tmp_path):
@@ -617,10 +638,18 @@ def test_direct_delivers_header_contract_in_prompt_and_supported_wire_schema(mon
     monkeypatch.setattr(agent, "_build_knowledge_context", lambda *a, **k: "")
     provider = OneShotProvider()
     provider.profile = _profile_declaring_structured_output(modes)
+    requirement = "X0 控制 Y0。暂停期间保留已登记事件，X1 触发后从原状态继续。"
     with api.provider_scope(provider):
-        agent.generate_direct_ladder("X0 控制 Y0", model_name=provider.profile["model"])
+        agent.generate_direct_ladder(requirement, model_name=provider.profile["model"])
     request = provider.requests[0]
     prompt = request.messages[0].content
+    assert "先比较可行的控制结构，再生成程序" in prompt
+    assert "以原文和确认规格中的工艺约束筛选候选并核对生成的程序" in prompt
+    assert "停机立即撤销现场输出" not in prompt
+    assert "暂停期间保留已登记事件" not in prompt
+    assert "同一逻辑仅地址、索引或常数不同" in prompt
+    assert "按处理规则分组" in prompt and "未知参数不构成逐项展开的理由" in prompt
+    assert "按 decisions、program、open_items 的顺序" in prompt
     assert 'c 是所有输出分支共用的串联条件列表' in prompt
     example = canonical_compact_example()
     Draft202012Validator(compact_response_schema()).validate(example)
@@ -629,15 +658,18 @@ def test_direct_delivers_header_contract_in_prompt_and_supported_wire_schema(mon
     assert wire["type"] == modes[0]
     from application.generation_wire import expand_context_document
     payload = expand_context_document(json.loads(request.messages[-1].content))
+    assert payload['request'] == requirement
     assert ('output_schema' in payload) == (modes != ['json_schema'])
     if modes == ["json_schema"]:
         schema = wire["json_schema"]["schema"]
         assert schema["type"] == "object" and "anyOf" not in schema
         result = schema["properties"]["result"]
         assert set(result["required"]) == {"program", "decisions", "open_items"}
+        assert next(iter(result["properties"])) == "decisions"
+        assert "decision_basis" in result["properties"]["decisions"]["properties"]["candidates"]["items"]["required"]
         assert "needs_input" not in json.dumps(schema) and "blocked" not in json.dumps(schema)
         program = result["properties"]["program"]
-        assert program == compact_response_schema()
+        assert program == compact_response_schema(bindings=False)
         assert program["properties"]["r"]["items"]["properties"]["c"]["type"] == "array"
         assert set(program["required"]) == set(program["properties"])
         annotation = program["properties"]["device_comments"]["items"]
@@ -660,13 +692,16 @@ def test_construction_reference_uses_one_generation_schema(monkeypatch, direct, 
             {'id': 'boot_instance', 'requirement_id': 'boot', 'method': 'first_scan_isolation'}]}}}
     program = {'r': [{'construct': 'boot_instance'},
         {'c': ['NO X0'], 'b': [{'i': [], 'o': ['COIL Y0']}]}], 'device_comments': []}
-    answer = {'result': {'program': program, 'decisions': [], 'open_items': []}} if direct else program
+    answer = {'result': {'decisions': {'candidates': [{'method': '确认方案', 'tradeoff': '沿用首扫初始化',
+                                                      'instruction_choices': [], 'decision_basis': []}],
+                                      'selected': 0, 'rationale': '按确认规格实现'},
+                         'program': program, 'open_items': []}} if direct else program
     captured = []
     def request(messages, **kwargs):
         captured.append((messages, kwargs))
         payload = expand_context_document(json.loads(messages[-1]['content']))
         assert 'boot_instance' in payload['construction_bindings']
-        expected = agent._generation_schema(spec, direct=direct)
+        expected = agent._generation_schema(spec, direct=direct, bindings=False)
         if strict:
             assert 'output_schema' not in payload
             assert kwargs['options']['response_format']['json_schema']['schema'] == expected
@@ -790,6 +825,9 @@ def _assert_wire_csv_instructions(tmp_path, ladder, expected):
     ('PLF M10', 'PLF M10'),
     ('TIMER T0 K10', 'OUT T0 K10'),
     ('COUNTER C0 K3', 'OUT C0 K3'),
+    ('OUT M10', 'OUT M10'),
+    ('OUT T0 K10', 'OUT T0 K10'),
+    ('OUT C0 K3', 'OUT C0 K3'),
 ])
 def test_compact_operand_forms_survive_ir_and_csv(tmp_path, partial, output, expected):
     ladder = _expand_wire_case({'c': ['NO M0'], 'b': [{'i': [], 'o': [output]}]}, partial)
@@ -821,9 +859,16 @@ def test_compact_operand_forms_survive_ir_and_csv(tmp_path, partial, output, exp
         ['LDP M0', 'PLS M100', 'LDF M1', 'PLF M101'], id='independent-edge-branches'),
     pytest.param({'c': [], 'b': [{'i': [{'or': [['P M0'], ['F M1'], ['>= D0 K5']]}], 'o': ['COUNTER C0 K3']}]},
         ['LDP M0', 'ORF M1', 'OR>= D0 K5', 'OUT C0 K3'], id='edge-and-compare-parallel'),
+    pytest.param({'c': ['NC M10'], 'b': [{'i': [{'or': [['M1'], ['M0']]}], 'o': ['COIL M100']}]},
+        ['LDI M10', 'LD M1', 'OR M0', 'ANB', 'OUT M100'], id='bare-bit-contacts-in-or'),
 ])
 def test_compact_parallel_topologies_preserve_instruction_order_and_csv(tmp_path, partial, row, expected):
     _assert_wire_csv_instructions(tmp_path, _expand_wire_case(row, partial), expected)
+
+
+def test_bare_word_is_not_an_implicit_boolean_comparison():
+    with pytest.raises(CompactProtocolError):
+        _expand_wire_case({'c': ['D0'], 'b': [{'i': [], 'o': ['COIL Y0']}]}, partial=False)
 
 
 def test_compact_parallel_boolean_paths_preserve_csv_roundtrip_behavior():
@@ -899,7 +944,13 @@ def test_direct_strict_envelope_produces_program_with_nonblocking_notes(monkeypa
     from application.compact_protocol import canonical_compact_example
     from jsonschema import Draft202012Validator
     monkeypatch.setattr(agent, "_build_knowledge_context", lambda *a, **k: "")
-    payload = {"result": {"program": canonical_compact_example(), "decisions": notes, "open_items": notes}}
+    selection = {"candidates": [{"method": "触点驱动", "tradeoff": "按扫描跟随输入",
+                                "instruction_choices": [], "decision_basis": []},
+                               {"method": "独立状态位", "tradeoff": "占用内部位",
+                                "instruction_choices": [{"opcode": "SET", "role": "锁存状态"},
+                                                        {"opcode": "RST", "role": "清除状态"}], "decision_basis": []}],
+                 "selected": 0, "rationale": "输出只需跟随输入"}
+    payload = {"result": {"decisions": selection, "program": canonical_compact_example(), "open_items": notes}}
     class Provider(OneShotProvider):
         def stream(self, request):
             self.requests.append(request)
@@ -914,10 +965,13 @@ def test_direct_strict_envelope_produces_program_with_nonblocking_notes(monkeypa
     assert len(provider.requests) == 1
     assert result["generation_handoff"]["output_contract"]["transport"] == "json_schema"
     assert (tmp_path / result["artifacts"]["program_csv"]).is_file()
-    assert result["generator_notes"] == {"source": "generator", "decisions": notes, "open_items": notes}
+    assert result["generator_notes"] == {"source": "generator", "open_items": notes,
+        "selection": selection,
+        "decisions": ["触点驱动 (按扫描跟随输入)", "独立状态位 (占用内部位)", "触点驱动 (输出只需跟随输入)"]}
     assert result["generation_handoff"]["generator_notes"] == result["generator_notes"]
     assert result["validation"]["status"] == "candidate_ready"
-    assert {"result.decisions.*", "result.open_items.*"} <= set(provider.requests[0].response_contract.human_paths)
+    assert {"result.decisions.candidates.*.tradeoff", "result.decisions.rationale", "result.open_items.*"} <= set(
+        provider.requests[0].response_contract.human_paths)
 
 
 @pytest.mark.parametrize("header", ["NO M0", ["NO M0"]])
@@ -1080,7 +1134,8 @@ def test_wire_renderer_changes_only_the_example_block_and_freezes_flag(monkeypat
     off_block = examples.prepare_construction_examples("FX3U", False, spec)
     on_block = examples.prepare_construction_examples("FX3U", True, spec)
     off = _compact_wire_renderer("FX3U", example_block=off_block)
-    expected = (_COMPACT_PROTOCOL + SOURCE_PRECEDENCE
+    from plc.instruction_knowledge import programming_system_prompt
+    expected = (_COMPACT_PROTOCOL + "\n\n" + programming_system_prompt() + "\n\n" + SOURCE_PRECEDENCE
                 + generation_execution_prompt(spec, evidence_text=evidence, task_type="generate"))
     assert off(*args)['messages'][0]['content'] == context_system_prompt(expected)
     on = _compact_wire_renderer("FX3U", example_block=on_block)
@@ -1231,3 +1286,178 @@ def test_generation_request_rejects_non_boolean_construction_example_arm(value):
 def test_generation_request_rejects_non_boolean_fresh_confirmed_mode(value):
     with pytest.raises(TypeError, match="fresh_confirmed_generation"):
         GenerationRequest("Generate", fresh_confirmed_generation=value)
+
+
+def test_direct_instruction_lookup_preserves_tool_and_cache_prefix(monkeypatch, tmp_path):
+    import application.generation_agent as agent
+    import application.model_api as api
+    from agent_runtime.messages import ToolCall, ToolResult
+    from application.conversation_model import ModelTurn, model_turn_scope
+    from model_runtime.provider import ToolCallEnd, _ProviderState, _chat_message
+
+    monkeypatch.setattr(agent, "_build_knowledge_context", lambda *args, **kwargs: "")
+    profile = _profile_declaring_structured_output(["json_object"])
+    profile["capabilityContract"]["capabilities"]["tools"] = {"status": "supported", "source": "manual"}
+
+    origin = (profile["baseUrl"], profile["model"], "test")
+    reasoning = "Provider-native reasoning for the instruction lookup."
+
+    class LookupProvider:
+        def __init__(self):
+            self.profile = profile
+            self.requests = []
+
+        def stream(self, request):
+            self.requests.append(request)
+            if len(self.requests) == 1:
+                yield _ProviderState({"origin": origin, "message": {"reasoning_content": reasoning}})
+                yield TextDelta("先查证加法指令。")
+                yield ToolCallEnd(ToolCall("lookup1", "lookup_plc_instructions", '{"opcodes":["ADD","UNKNOWN_FORM"]}'))
+                return
+            tool = request.messages[-1]
+            assert isinstance(tool, ToolResult)
+            assert tool.call_id == "lookup1"
+            assert tool.data["missing_operand_tables"] == ["UNKNOWN_FORM"]
+            add = next(item for item in tool.data["knowledge"] if item.get("target") == "ADD")
+            assert add["scope"]["models"] == ["FX3U"]
+            parameters = add["value"]["parameter_tables"][0]["parameters"]
+            assert [item["name"] for item in parameters] == ["S1", "S2", "D"]
+            yield TextDelta(json.dumps({"result": {"decisions": [], "open_items": [],
+                "program": {"r": [{"c": ["NO X0"], "b": [{"i": [], "o": ["ADD D0 D1 D2"]}]}],
+                            "device_comments": []}}}))
+
+    provider = LookupProvider()
+    model = {"model": profile["model"]}
+    turn = ModelTurn(tmp_path, (), model, profile, "zh-CN")
+    with api.provider_scope(provider), model_turn_scope(turn):
+        result = agent.generate_direct_ladder("X0 接通时把 D0 与 D1 相加写入 D2。", model_name=profile["model"])
+    assert result["model_calls"] == 2
+    assert result["generation_handoff"]["instruction_lookup"][0]["requested"] == ["ADD", "UNKNOWN_FORM"]
+    initial, continued = provider.requests
+    assert initial.tools == continued.tools and initial.options == continued.options
+    assert continued.messages[:len(initial.messages)] == initial.messages
+    turn.save("job_lookup")
+    restored = ModelTurn(tmp_path, ("job_lookup",), model, profile, "zh-CN")
+    assert restored.history[-3].tool_calls[0].id == "lookup1"
+    assert _chat_message(restored.history[-3], origin)["reasoning_content"] == reasoning
+    assert restored.history[-2].content == continued.messages[-1].content
+
+
+def test_compact_references_bind_confirmed_levels_and_named_group_operands():
+    from application.generation_agent import prepare_model_candidate
+
+    spec = {"io_bindings": [{"binding_id": "stop", "kind": "X", "role": "stop",
+                            "address": "X3", "active_level": 0}]}
+    program = {"r": [{"c": [{"condition_ref": "stop", "when": "run_permit"}],
+                     "b": [{"i": [], "o": [
+                         {"form_ref": "FX3U:BMOV:3", "parameters": [
+                             {"name": "N", "value": "K4"}, {"name": "D", "value": "D20"},
+                             {"name": "S", "value": "D0"}]}]}]},
+                    {"c": [{"condition_ref": "stop", "when": "active"}],
+                     "b": [{"i": [], "o": ["RST M1"]}]}]}
+    rungs = prepare_model_candidate(program, spec, "FX3U")["ladder"]["rungs"]
+    assert rungs[0]["shared_inputs"] == [{"type": "NO", "address": "X3"}]
+    assert rungs[0]["branches"][0]["outputs"] == [
+        {"type": "APP_INSTR", "opcode": "BMOV", "operands": ["D0", "D20", "K4"]}]
+    assert rungs[1]["shared_inputs"] == [{"type": "NC", "address": "X3"}]
+
+
+@pytest.mark.parametrize("form_ref,value,reason", [
+    ("Q02/Q02H:D+:2", "K70000", None),
+    ("Q02/Q02H:D+:2", {"duration_ms": 7000, "tick_ms": 0.1}, None),
+    ("Q02/Q02H:+:2", "K70000", "invalid_instruction_parameters"),
+    ("Q02/Q02H:+:2", {"duration_ms": 7000, "tick_ms": 0.1}, "invalid_instruction_parameters"),
+    ("Q02/Q02H:+:2", {"duration_ms": 7, "tick_ms": 2}, "invalid_instruction_parameters"),
+    ("FX3U:DADD:2", "K1", "instruction_form_unresolved"),
+    ("Q02/Q02H:UNKNOWN:2", "K1", "instruction_form_unresolved"),
+])
+def test_compact_instruction_reference_uses_only_target_width(form_ref, value, reason):
+    from application.compact_bindings import CompactBindingError
+    from application.compact_protocol import expand_compact_ladder
+
+    program = {"r": [{"c": ["NO X0"], "b": [{"i": [], "o": [
+        {"form_ref": form_ref, "parameters": [{"name": "S", "value": value}, {"name": "D", "value": "D0"}]}
+    ]}]}]}
+    if reason:
+        with pytest.raises(CompactBindingError) as exc:
+            expand_compact_ladder(program, plc_model="Q02/Q02H")
+        assert exc.value.reason == reason
+        if reason == 'invalid_instruction_parameters':
+            assert exc.value.binding_diagnostic['actual']['parameter'] == 'S'
+    else:
+        outputs = expand_compact_ladder(program, plc_model="Q02/Q02H")["rungs"][0]["branches"][0]["outputs"]
+        assert outputs == [{"type": "APP_INSTR", "opcode": "D+", "operands": ["K70000", "D0"]}]
+
+
+def test_compact_condition_reference_cannot_resolve_unconfirmed_level_or_role():
+    from application.compact_bindings import CompactBindingError
+    from application.compact_protocol import expand_compact_ladder
+
+    spec = {"io_bindings": [{"binding_id": "guard", "address": "X3", "kind": "X", "label": "停止按钮"}]}
+    program = {"r": [{"c": [{"condition_ref": "guard", "when": "run_permit"}],
+                     "b": [{"i": [], "o": ["COIL Y0"]}]}]}
+    with pytest.raises(CompactBindingError) as exc:
+        expand_compact_ladder(program, spec)
+    assert exc.value.reason == "input_condition_unresolved"
+
+
+def test_ordered_instructions_use_shared_literal_width_and_edit_location():
+    from application.compact_bindings import CompactBindingError, CompactBindings, positional_form_issues
+    from plc.ordered_source import validate_ordered_rung
+    from plc.validation import PLCJsonValidationError
+
+    cpu = 'Q02/Q02H'
+    path = 'instruction_edits[2].instructions[1]'
+    bindings = CompactBindings(cpu)
+    parameters = [{'name': 'D', 'value': 'D0'}, {'name': 'S', 'value': 'K70000'}]
+    with pytest.raises(CompactBindingError) as error:
+        bindings.ordered_record({'form_ref': f'{cpu}:+:2', 'parameters': parameters}, path)
+    diagnostic = error.value.binding_diagnostic
+    assert diagnostic['path'] == 'content.instruction_edits.2.instructions.1'
+    assert diagnostic['actual']['parameter'] == 'S' and diagnostic['actual']['operand_index'] == 0
+    assert '16 bits' in diagnostic['actual']['detail']
+
+    record = bindings.ordered_record({'form_ref': f'{cpu}:D+:2', 'parameters': parameters}, path)
+    rung = {'rung_id': 1, 'ordered_instructions': [{'op': 'LD', 'args': ['X0']}, record]}
+    validate_ordered_rung(rung, plc_model=cpu)
+    with pytest.raises(PLCJsonValidationError) as ordered_error:
+        validate_ordered_rung({**rung, 'ordered_instructions': [
+            rung['ordered_instructions'][0], {**record, 'op': '+'}]}, plc_model=cpu)
+    assert ordered_error.value.path == 'ordered_instructions[1].operands[0]'
+    issue, = positional_form_issues({'rungs': [{'rung_id': 4, 'branches': [{'outputs': [
+        {'type': 'APP_INSTR', 'opcode': '+', 'operands': record['args']},
+    ]}]}]}, {}, bindings)
+    assert issue['path'] == '$.rungs[0].branches[0].outputs[0].operands[0]'
+    assert issue['rung_ids'] == [4]
+
+    with pytest.raises(CompactBindingError) as address_error:
+        CompactBindings('FX3U').ordered_record({'timer': 'T999', 'duration_ms': 600, 'tick_ms': 100}, path)
+    assert address_error.value.reason == 'invalid_timer_address'
+    assert address_error.value.binding_diagnostic['path'] == diagnostic['path']
+
+
+def test_partial_ladder_resolves_conditions_and_exact_timer_durations():
+    from application.compact_bindings import CompactBindingError, CompactBindings
+    from application.compact_protocol import expand_compact_partial
+
+    spec = {'io_bindings': [{'binding_id': 'stop', 'kind': 'X', 'role': 'stop',
+                            'address': 'X3', 'active_level': 0}]}
+    timer = {'timer': 'T0', 'duration_ms': 600, 'tick_ms': 100}
+    program = {'mode': 'partial', 'r': [{'rung_id': 40, 'c': [{'condition_ref': 'stop', 'when': 'run_permit'}],
+                                         'b': [{'i': [], 'o': [timer]}]}],
+               'device_comments': [], 'delete_rung_ids': []}
+    rung, = expand_compact_partial(program, spec)['rungs']
+    assert rung['rung_id'] == 40
+    assert rung['shared_inputs'] == [{'type': 'NO', 'address': 'X3'}]
+    assert rung['branches'][0]['outputs'] == [{'type': 'TIMER', 'address': 'T0', 'value': 'K6'}]
+    assert CompactBindings('FX3U', spec).ordered_record(
+        {'op': 'AND', 'condition_ref': 'stop', 'when': 'active'}, 'source[0]') == {'op': 'ANI', 'args': ['X3']}
+    timer['duration_ms'] = 650
+    with pytest.raises(CompactBindingError) as inexact:
+        expand_compact_partial(program, spec)
+    assert inexact.value.reason == 'invalid_timer_duration'
+    timer['tick_ms'] = 10
+    with pytest.raises(CompactBindingError) as mismatch:
+        expand_compact_partial(program, spec)
+    assert mismatch.value.reason == 'timer_timebase_mismatch'
+    assert mismatch.value.binding_diagnostic['expected']['tick_ms'] == 100

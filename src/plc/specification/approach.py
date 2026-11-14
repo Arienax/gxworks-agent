@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Deterministic contracts that bind a selected implementation approach.
 
 The requirement-analysis model may propose different implementation methods,
@@ -179,6 +182,67 @@ def normalize_instruction_instances(values):
         seen.add(marker)
         result.append({"opcode": opcode, "operands": normalized_operands})
     return result
+
+
+INSTRUCTION_CHOICES_SCHEMA = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "opcode": {"type": "string", "maxLength": 64, "pattern": r"^\S+$"},
+            "role": {"type": "string", "pattern": r"\S"},
+        },
+        "required": ["opcode", "role"],
+        "additionalProperties": False,
+    },
+}
+
+
+def normalize_instruction_choices(values):
+    """Keep proposed implementation symbols and their roles in the wire format."""
+    if not isinstance(values, list):
+        return []
+    choices = []
+    seen = set()
+    for item in values:
+        if not isinstance(item, Mapping):
+            continue
+        opcode, role = item.get("opcode"), item.get("role")
+        if not isinstance(opcode, str) or not isinstance(role, str):
+            continue
+        opcode, role = opcode.strip().upper(), role.strip()
+        if not re.fullmatch(r"\S{1,64}", opcode) or not role or (opcode, role) in seen:
+            continue
+        choices.append({"opcode": opcode, "role": role})
+        seen.add((opcode, role))
+    return choices
+
+
+def selected_implementation_targets(approach):
+    """Distinguish device references from mnemonics in the selected implementation."""
+    from plc.device_identity import REFERENCE_DEVICE_TOKEN_RE, canonical_reference_device
+
+    if not isinstance(approach, Mapping):
+        return []
+    targets = []
+    for choice in normalize_instruction_choices(approach.get("instruction_choices")):
+        symbol = choice["opcode"]
+        device = REFERENCE_DEVICE_TOKEN_RE.fullmatch(symbol) is not None
+        targets.append({
+            "kind": "device" if device else "opcode",
+            "value": canonical_reference_device(symbol) if device else symbol,
+            "role": choice["role"],
+        })
+    return targets
+
+
+def selected_implementation_text(approach):
+    """Search the chosen implementation, including its individual operations."""
+    parts = [approach.get(key) for key in ("name", "description", "generation_guide")]
+    parts.extend(value for row in (approach.get("output_logic") or []) if isinstance(row, Mapping)
+                 for key, value in row.items() if key != "selection" and isinstance(value, str))
+    parts.extend(choice["role"] for choice in normalize_instruction_choices(approach.get("instruction_choices")))
+    return "\n".join(dict.fromkeys(part.strip() for part in parts if isinstance(part, str) and part.strip()))
 
 
 IMPLEMENTATION_SEMANTIC_KINDS = frozenset({"structure"})
@@ -554,6 +618,11 @@ def normalize_approach(approach):
     normalized["pros"] = str(normalized.get("pros") or "").strip()
     normalized["cons"] = str(normalized.get("cons") or "").strip()
     normalized["generation_guide"] = guide
+    if "instruction_choices" in normalized:
+        normalized["instruction_choices"] = normalize_instruction_choices(normalized["instruction_choices"])
+    if "decision_basis" in normalized:
+        from plc.specification.decision_basis import review_decision_basis
+        normalized["decision_basis"], _ = review_decision_basis(normalized["decision_basis"], path="decision_basis")
     approach_id = str(
         normalized.get("approach_id") or normalized.get("id") or ""
     ).strip()

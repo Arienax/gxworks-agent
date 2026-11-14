@@ -1,4 +1,5 @@
 """Synthetic random-access storage, not a claim of native PLC support."""
+from contextlib import closing
 import copy
 import hashlib
 import json
@@ -41,6 +42,7 @@ class OwnerStoreTests(unittest.TestCase):
         for marker in ('absent', None, False, True):
             raw=fixture()
             if marker != 'absent':raw['entries'][0]['call_available']=marker
+            raw['entries'][0]['support_status']='reviewed_native_signature'
             raw['entries'][0]['call_admission_details']={'declared_scope':'explicit'}
             with tempfile.TemporaryDirectory() as tmp:
                 pooled=intern_runtime_sources(raw,intern_values=True)
@@ -51,11 +53,36 @@ class OwnerStoreTests(unittest.TestCase):
                     header=store.get_owner_header(('mitsubishi','PWM','FX5U'))
                     if marker == 'absent':self.assertNotIn('call_available',header)
                     else:self.assertIs(header['call_available'],marker)
+                    self.assertEqual(header['support_status'],'reviewed_native_signature')
                     self.assertEqual(header['call_admission_details'],{'declared_scope':'explicit'})
                     header['call_admission_details']['declared_scope']='changed'
                     self.assertEqual(store.get_owner_header(('mitsubishi','PWM','FX5U'))['call_admission_details']['declared_scope'],'explicit')
                     self.assertEqual(store.stats()['hydrated_owner_count'],0)
                 finally:store.close()
+
+    def test_expression_alias_lookup_reads_only_admitted_exact_model_headers(self):
+        raw=fixture()
+        for entry in raw['entries']:
+            entry['call_available']=True
+            entry['call_admission_details']={'interfaces':['st'], 'structured_expression':{
+                'available':True, 'call_kind':'expression', 'operator':'**', 'owner_opcode':'PWM'}}
+        extra=copy.deepcopy(raw['entries'][0]);extra['opcode']='PWR_ALIAS'
+        extra['call_admission_details']['structured_expression']['owner_opcode']='PWR_ALIAS'
+        for fact in extra['facts']:fact['scope']['forms']=['PWR_ALIAS']
+        raw['entries'].append(extra)
+        raw['entries'][1]['call_available']=False
+        with tempfile.TemporaryDirectory() as tmp:
+            pooled=intern_runtime_sources(raw,intern_values=True)
+            db=Path(tmp)/'facts.sqlite';manifest=Path(tmp)/'instruction_definitions.manifest.json'
+            write_runtime_sqlite(pooled,db,field_pooling=True);write_owner_manifest(pooled,db,manifest)
+            store=OwnerDefinitionStore(manifest)
+            try:
+                keys=store.expression_owner_keys('**',cpu='FX5U')
+                self.assertEqual(set(keys),{('mitsubishi','PWM','FX5U'),('mitsubishi','PWR_ALIAS','FX5U')})
+                self.assertEqual(store.expression_owner_keys('**',cpu='FX5UC'),[])
+                self.assertEqual(store.expression_owner_keys('MOD',cpu='FX5U'),[])
+                self.assertEqual(store.stats()['hydrated_owner_count'],0)
+            finally:store.close()
 
     def test_no_owner_hydration_until_requested_and_no_aliases(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -77,14 +104,14 @@ class OwnerStoreTests(unittest.TestCase):
             _,db,manifest=build(tmp);original=json.loads(manifest.read_text())
             for name in ('../plc_facts.sqlite','/tmp/plc_facts.sqlite','C:\\facts.sqlite','https://bad/facts.sqlite'):
                 bad=copy.deepcopy(original);bad['database']['filename']=name;manifest.write_text(json.dumps(bad))
-                with self.assertRaises(ValueError):OwnerDefinitionStore(manifest)
+                with self.assertRaises(ValueError):OwnerDefinitionStore(manifest, verify_integrity=True)
             bad=copy.deepcopy(original);bad['database']['sha256']='0'*64;manifest.write_text(json.dumps(bad))
-            with self.assertRaises(ValueError):OwnerDefinitionStore(manifest)
+            with self.assertRaises(ValueError):OwnerDefinitionStore(manifest, verify_integrity=True)
 
     def test_source_withdrawal_and_changed_resource_fail_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             _,db,manifest=build(tmp);store=OwnerDefinitionStore(manifest)
-            with sqlite3.connect(db) as edit:edit.execute('DELETE FROM runtime_sources')
+            with closing(sqlite3.connect(db)) as edit, edit:edit.execute('DELETE FROM runtime_sources')
             self.assertFalse(store.current())
             with self.assertRaises(ValueError):store.get_entry('PWM',cpu='FX5U')
             store.close();refresh_manifest(db,manifest)
@@ -95,7 +122,7 @@ class OwnerStoreTests(unittest.TestCase):
     def test_dangling_dependency_rejected_even_with_new_packet_receipt(self):
         with tempfile.TemporaryDirectory() as tmp:
             _,db,manifest=build(tmp)
-            with sqlite3.connect(db) as edit:
+            with closing(sqlite3.connect(db)) as edit, edit:
                 owner,text=edit.execute('SELECT owner,payload_json FROM runtime_definitions LIMIT 1').fetchone()
                 packet=json.loads(text);packet['value']['facts'][0]['depends_on']=['missing'];text=json.dumps(packet)
                 edit.execute('UPDATE runtime_definitions SET payload_json=? WHERE owner=?',(text,owner))
@@ -105,3 +132,15 @@ class OwnerStoreTests(unittest.TestCase):
             store.close()
 
 if __name__=='__main__':unittest.main()
+
+
+def test_runtime_open_does_not_hash_the_database(tmp_path, monkeypatch):
+    _, database, manifest = build(tmp_path)
+    def forbidden(_):
+        raise AssertionError('runtime attempted a full database digest')
+    monkeypatch.setattr('plc.instruction_owner_store._digest', forbidden)
+    store = OwnerDefinitionStore(manifest)
+    try:
+        assert store.get_entry('PWM', cpu='FX5U')['opcode'] == 'PWM'
+    finally:
+        store.close()

@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 // Loaded with the settings panel so diagnostic copy does not enlarge startup.
 import type { Locale } from "../i18n";
@@ -63,6 +63,7 @@ const words: Record<string, [string, string]> = {
   "工具任务 · 流式": ["Tools · Streaming", "ツール · ストリーミング"],
   "程序格式 · JSON": ["Program format · JSON", "プログラム形式 · JSON"],
   "生成预览（无模型请求）": ["Build preview (no model request)", "プレビュー作成（モデルへの送信なし）"],
+  "OpenAI 官方地址使用 Responses API，第三方地址使用 Chat Completions。": ["The official OpenAI endpoint uses Responses API. Third-party endpoints use Chat Completions.", "OpenAI 公式エンドポイントは Responses API、サードパーティのエンドポイントは Chat Completions を使用します。"],
   "兼容性详情": ["Compatibility details", "互換性の詳細"],
   "仅验证会发送模型请求并可能计费。参数已发送或接口接受，均不代表已证明效果。": ["Only verification sends a model request and may incur charges. Sending or acceptance does not prove parameter effects.", "検証時のみモデルに送信し、課金される場合があります。送信や受理は効果の証明ではありません。"],
   "格式：parameters / capabilities / constraints。修改后自动解析。不能覆盖消息、工具定义、密钥或服务地址。": ["Format: parameters / capabilities / constraints. Changes are parsed automatically. Messages, tool definitions, keys and service URLs cannot be overridden.", "形式: parameters / capabilities / constraints。変更後に自動解析。メッセージ、ツール定義、キー、URLの上書きはできません。"],
@@ -117,6 +118,25 @@ const words: Record<string, [string, string]> = {
   "手动声明": ["Manual declaration", "手動設定"],
   "主动检测": ["Active probe", "能動検出"],
   "推理强度": ["Reasoning effort", "推論強度"],
+  "推理档位": ["Reasoning levels", "推論レベル"],
+  "自定义请求参数": ["Custom request parameters", "カスタムリクエストパラメーター"],
+  "参数名": ["Parameter name", "パラメーター名"],
+  "参数值": ["Parameter value", "パラメーター値"],
+  "添加参数": ["Add parameter", "パラメーターを追加"],
+  "删除参数": ["Remove parameter", "パラメーターを削除"],
+  "请填写有效的参数名。": ["Enter a valid parameter name.", "有効なパラメーター名を入力してください。"],
+  "请在模型名旁选择推理档位。": ["Select the reasoning level next to the model name.", "モデル名の横で推論レベルを選択してください。"],
+  "请求参数名不能重复。": ["Request parameter names must be unique.", "リクエストパラメーター名は重複できません。"],
+  "请填写参数值。": ["Enter a parameter value.", "パラメーター値を入力してください。"],
+  "请检查参数值的 JSON 格式。": ["Check the parameter value's JSON format.", "パラメーター値の JSON 形式を確認してください。"],
+  "参数值不符合当前模型的要求。": ["The parameter value is incompatible with the selected model.", "パラメーター値が選択したモデルに対応していません。"],
+  "参数值支持 JSON，普通文本会作为字符串发送。": ["Values can be JSON. Plain text is sent as a string.", "値に JSON を使用できます。プレーンテキストは文字列として送信されます。"],
+  "档位": ["Level", "レベル"],
+  "API 参数值": ["API value", "API パラメーター値"],
+  "留空时省略": ["Leave blank to omit", "空欄で省略"],
+  "添加档位": ["Add level", "レベルを追加"],
+  "删除档位": ["Remove level", "レベルを削除"],
+  "保存后在模型名旁选档。Off 留空时省略推理参数。": ["After saving, choose a level beside the model name. A blank Off value omits the reasoning parameter.", "保存後、モデル名の横でレベルを選択します。Off の値が空欄の場合、推論パラメーターを省略します。"],
   "温度": ["Temperature", "温度"],
   "固定值": ["Fixed value", "固定値"],
   "推理设置已改变，请重新检测温度支持。": ["Reasoning settings changed. Detect temperature support again.", "推論設定が変更されました。温度の対応状況を再検出してください。"],

@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Typed, bounded behavior primitives owned by instruction definitions.
 
 This is a reference for the explicitly described subset, not a PLC simulator.

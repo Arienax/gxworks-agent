@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Approval, conflict checks and execution proposal creation."""
 from __future__ import annotations
@@ -21,6 +21,7 @@ class ProposalWorkflow:
                  previews,
                  require_writable,
                  complete_native,
+                 project_commands=None,
                  ):
         self.projects = projects
         self.state_dir = state_dir
@@ -32,6 +33,7 @@ class ProposalWorkflow:
         self.previews = previews
         self.require_writable = require_writable
         self.complete_native = complete_native
+        self.project_commands = project_commands
         self.store = projects.store
 
     def save_local(self, proposal):
@@ -58,6 +60,15 @@ class ProposalWorkflow:
 
     def pending_proposal(self, pending, request_id, *, base_version_id=None, consent=None, direct_request=False,
                           change_scope=None):
+        if pending.get('type') in {'update_project_spec', 'confirm_project_spec'}:
+            action = 'spec_update' if pending['type'] == 'update_project_spec' else 'spec_confirm'
+            proposal = self.proposals.create(action, pending['project_id'], dict(pending),
+                public_summary={'summary': '更新规格草稿' if action == 'spec_update' else '确认工程规格'},
+                request_id=request_id)
+            current = self.approval.read()
+            if direct_request or (current['mode'] in {'auto', 'full'} and (consent is None or consent == current)):
+                return self._accept_spec(proposal, approved_by='local_autosave')
+            return proposal
         if '_prepared_candidate' in pending or pending.get('type') in ('accept_fbd_candidate', 'accept_sfc_candidate', 'accept_st_candidate', 'accept_gxw_candidate'):
             from application.fbd import unpack_candidate
             mode = pending['target_mode']
@@ -178,11 +189,33 @@ class ProposalWorkflow:
                 base_version_id=version_id, request_id=command["request_id"])
             return proposal if prior else self.apply_execution_policy(proposal)
 
+    def _accept_spec(self, proposal, *, approved_by='user'):
+        self.require_writable()
+        if proposal.get('status') != 'pending':
+            return proposal
+        if self.project_commands is None:
+            raise PermissionError('Specification writes require the shared project service')
+        payload = self.proposals.read_private(proposal['id'])
+        current = self.project_commands.get_spec_document(payload['project_id'])
+        if current['draft_revision'] != payload['expected_revision']:
+            raise ConflictError('Specification draft changed; reload and review the differences')
+        def execute(payload, _approved_id):
+            if proposal['action'] == 'spec_update':
+                document = self.project_commands.update_spec_document(payload['project_id'],
+                    payload['changes'], payload['expected_revision'])
+            else:
+                document = self.project_commands.confirm_spec_document(payload['project_id'],
+                    payload['expected_revision'], version_id=payload.get('version_id'))
+            return {'status': 'completed', 'project_id': document['project_id']}
+        return self.proposals.accept(proposal['id'], executor=execute, approved_by=approved_by)
+
     def decide(self, proposal_id, decision, *, policy=None):
         self.require_writable()
         proposal = self.proposals.get(proposal_id)
         if decision == "reject":
             return {"proposal": self.proposals.reject(proposal_id)}
+        if proposal["action"] in {"spec_update", "spec_confirm"}:
+            return {"proposal": self._accept_spec(proposal)}
         if proposal["action"] == "accept_local":
             return {"proposal": self.proposals.accept(proposal_id)}
         def worker(ctx):

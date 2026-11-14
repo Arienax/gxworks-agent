@@ -6,10 +6,24 @@ from types import SimpleNamespace
 
 import pytest
 
+from responses_fixture import chat_body, chat_stream
+
 from tests.test_context_compiler import wire_context
 
 from plc.specification.confirmed import build_review_draft, canonicalize_confirmed_spec, validate_spec_draft
 from test_confirmed_compatibility import operator_spec, profile_for
+
+
+def _save_and_confirm_spec(client, url, headers, document, changes, *, version_id=None):
+    saved = client.patch(url, headers=headers, json={
+        "changes": changes, "expected_revision": document["draft_revision"],
+    })
+    assert saved.status_code == 200, saved.text
+    confirmed = client.post(url + "/confirm", headers=headers, json={
+        "expected_revision": saved.json()["draft_revision"], "version_id": version_id,
+    })
+    assert confirmed.status_code == 200, confirmed.text
+    return confirmed.json()
 
 
 @pytest.mark.parametrize("contact,active", [("常开", 1), ("常闭", 0)])
@@ -21,7 +35,7 @@ def test_http_unbound_analysis_split_confirmation_save_and_regeneration(tmp_path
     from application.confirmed_generation_context import project_confirmed_specification
     from plc.specification.conditions import generation_input_conditions
     from model_runtime.provider import TextDelta, SystemMessage
-    from test_web_api import ORIGIN, OPERATOR, _login, _complete, offline_runtime_profile
+    from test_web_api import ORIGIN, _complete, offline_runtime_profile
     from test_spec_choice_metadata import ENTRY_FIXTURE
     from plc.ir import ir_to_ladder
 
@@ -67,27 +81,37 @@ def test_http_unbound_analysis_split_confirmation_save_and_regeneration(tmp_path
 
     provider = Provider()
     service = WorkbenchService(tmp_path / "workspace", tmp_path / "state", model_factory=lambda: (provider, provider.profile))
-    app = create_app(service.store.base_dir, state_dir=service.state_dir, service=service, origin=ORIGIN, operator_token=OPERATOR)
+    app = create_app(service.store.base_dir, state_dir=service.state_dir, service=service, origin=ORIGIN)
     with TestClient(app, base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         pid = client.post("/api/projects", headers=headers, json={"name": "split input entry", "plc_model": "FX3U"}).json()["id"]
-        _, output = _complete(client, service, client.post("/api/jobs", headers=headers, json={
+        _complete(client, service, client.post("/api/jobs", headers=headers, json={
             "kind": "analysis", "project_id": pid, "request_id": "entry-analysis", "analysis_mode": "direct", "text": ENTRY_FIXTURE["request"]}))
         assert len(provider.requests) == 1
-        draft = output["spec_draft"]
+        url = f"/api/projects/{pid}/spec-document"
+        response = client.get(url, headers=headers)
+        assert response.status_code == 200, response.text
+        document = response.json()
+        draft = document["draft"]
         assert draft["io_table"] == [] and not draft.get("io_bindings")
-        for p in draft["parameters"]:
-            p.update(value=contact if p["id"] == "stop_button_polarity" else ENTRY_FIXTURE["answers"][p["id"]], source="user")
+        parameters = [
+            {**p, "value": contact if p["id"] == "stop_button_polarity" else ENTRY_FIXTURE["answers"][p["id"]],
+             "source": "user"}
+            for p in draft["parameters"]
+        ]
         if reverse:
-            draft["parameters"].reverse()
-        saved = client.put(f"/api/projects/{pid}/spec", headers=headers, json={"spec": draft, "expected_hash": None}).json()
-        assert saved["valid"] and len(provider.requests) == 1
-        assert service.projects.raw_project(pid)["confirmed_spec"] == saved["spec"]
+            parameters.reverse()
+        saved = _save_and_confirm_spec(client, url, headers, document, [
+            {"section": "parameters", "value": parameters},
+        ])
+        assert len(provider.requests) == 1
+        assert service.projects.raw_project(pid)["confirmed_spec"] == saved["confirmed_spec"]
         for repeat in range(2):
             if repeat:
-                next(r for r in saved["spec"]["io_table"] if r["binding_id"] == "stop_button")["address"] = "X2"
-                saved = client.put(f"/api/projects/{pid}/spec", headers=headers, json={"spec": saved["spec"], "expected_hash": saved["hash"]}).json()
-                assert saved["valid"]
+                stop_row = next(r for r in saved["draft"]["io_table"] if r["binding_id"] == "stop_button")
+                saved = _save_and_confirm_spec(client, url, headers, saved, [
+                    {"section": "io_table", "id": stop_row["id"], "value": {"address": "X2"}},
+                ], version_id=generation["version_id"])
                 provider.stop_address = "X2"
             _, generation = _complete(client, service, client.post("/api/jobs", headers=headers, json={
                 "kind": "generation", "project_id": pid, "request_id": f"entry-generate-{repeat}",
@@ -96,9 +120,10 @@ def test_http_unbound_analysis_split_confirmation_save_and_regeneration(tmp_path
             ladder = ir_to_ladder(service.projects.program(pid, generation["version_id"]))
             _truth_table(ladder, "NO" if active else "NC", addresses=("X1", provider.stop_address, "Y0"))
         assert len(provider.requests) == 3
-        saved["spec"]["io_table"] = [r for r in saved["spec"]["io_table"] if r["binding_id"] != "stop_button"]
-        removed = client.put(f"/api/projects/{pid}/spec", headers=headers, json={"spec": saved["spec"], "expected_hash": saved["hash"]}).json()
-        assert removed["valid"]
+        stop_row = next(r for r in saved["draft"]["io_table"] if r["binding_id"] == "stop_button")
+        _save_and_confirm_spec(client, url, headers, saved, [
+            {"section": "io_table", "id": stop_row["id"], "remove": True},
+        ], version_id=generation["version_id"])
         projected = project_confirmed_specification(service.projects.raw_project(pid)["confirmed_spec"])
         assert all(b.get("role") != "stop" for b in projected["io_bindings"])
         assert all(p.get("role") != "stop" for p in generation_input_conditions(projected["io_bindings"])["level_predicates"])
@@ -372,7 +397,7 @@ def test_http_reconfirmation_after_address_edit_outputs_the_new_wiring(tmp_path,
     from integrations.web.app import create_app
     from application.workbench import WorkbenchService
     from model_runtime.provider import OpenAICompatibleProvider
-    from test_web_api import ORIGIN, OPERATOR, _login, _complete, offline_runtime_profile
+    from test_web_api import ORIGIN, _complete, offline_runtime_profile
     from test_spec_choice_metadata import _analysis
     from plc.ir import ir_to_ladder
     calls = []
@@ -395,18 +420,17 @@ def test_http_reconfirmation_after_address_edit_outputs_the_new_wiring(tmp_path,
             raw = json.dumps({"r": [{"s": None, "b": [{"i": [stop_term,
                          {"or": [["NO X0"], ["NO Y0"]]}], "o": ["COIL Y0"]}]}]})
             if params["stream"]:
-                return iter([SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=raw[i:i+1]), finish_reason=None)])
-                             for i in range(len(raw))])
-            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=raw), finish_reason="stop")])
+                return chat_stream(chat_body(raw), *({"content": char} for char in raw))
+            return chat_body(raw)
 
     profile = profile_for("json_object", streaming=streaming)
     provider = OpenAICompatibleProvider(profile, "offline-fixture-key", client=Endpoint())
     service = WorkbenchService(tmp_path / "workspace", tmp_path / "state",
                                model_factory=lambda: (provider, {"model": profile["model"]}))
     app = create_app(service.store.base_dir, state_dir=service.state_dir, service=service,
-                     origin=ORIGIN, operator_token=OPERATOR)
+                     origin=ORIGIN)
     with TestClient(app, base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         pid = client.post("/api/projects", headers=headers, json={"name": "reconfirmation fixture"}).json()["id"]
         spec = build_review_draft(_analysis())
         for p, value in zip(spec["parameters"], ["X0", f"X1，{contact}", "Y0"]):
@@ -469,7 +493,7 @@ def test_http_known_address_polarity_survives_save_edit_and_generation(tmp_path)
     from integrations.web.app import create_app
     from application.workbench import WorkbenchService
     from model_runtime.provider import TextDelta, SystemMessage
-    from test_web_api import ORIGIN, OPERATOR, _login, _complete, offline_runtime_profile
+    from test_web_api import ORIGIN, _complete, offline_runtime_profile
     from plc.ir import ir_to_ladder
 
     declarations = """FX3U。这里只验证启停输入与保持输出的绑定，其他行是已声明接口。
@@ -501,7 +525,17 @@ Y010：Sorter 3 belt
             if request.response_contract.name == "analysis":
                 assert len(self.requests) == 1
                 payload = {
-                    "summary": "确认输入极性，启动保持输出，停止释放输出。", "approaches": [],
+                    "summary": "确认输入极性，启动保持输出，停止释放输出。",
+                    "approaches": [{
+                        "approach_id": "self_hold", "name": "直接自保持",
+                        "description": "使用已确认的启停输入控制入口输送带。",
+                        "pros": "", "cons": "", "generation_guide": "",
+                        "decision_basis": [],
+                        "implementation_semantics": [
+                            {"kind": "structure", "status": "required", "value": "direct_logic"},
+                            {"kind": "structure", "status": "required", "value": "self_hold"},
+                        ],
+                    }],
                     "missing_info": [
                         {"id": key, "question": f"{address} {label}的触点极性是？", "required": True,
                          "options": ["常开（按下为 ON）", "常闭（按下为 OFF）"],
@@ -537,25 +571,30 @@ Y010：Sorter 3 belt
     service = WorkbenchService(tmp_path / "workspace", tmp_path / "state",
                                model_factory=lambda: (provider, provider.profile))
     app = create_app(service.store.base_dir, state_dir=service.state_dir, service=service,
-                     origin=ORIGIN, operator_token=OPERATOR)
+                     origin=ORIGIN)
     with TestClient(app, base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         pid = client.post("/api/projects", headers=headers, json={"name": "极性绑定回归"}).json()["id"]
-        _, analysis = _complete(client, service, client.post("/api/jobs", headers=headers, json={
+        _complete(client, service, client.post("/api/jobs", headers=headers, json={
             "kind": "analysis", "project_id": pid, "request_id": "analyze-polarities",
             "text": declarations, "response_language": "zh-CN"}))
-        draft = analysis["spec_draft"]
+        url = f"/api/projects/{pid}/spec-document"
+        response = client.get(url, headers=headers)
+        assert response.status_code == 200, response.text
+        document = response.json()
+        draft = document["draft"]
         assert len(draft["io_table"]) == 11
         assert all(p["value"] == "" for p in draft["parameters"])
-        for p in draft["parameters"]:
-            p.update(value=answers[p["id"]], source="user")
-        first = client.put(f"/api/projects/{pid}/spec", headers=headers,
-                           json={"spec": draft, "expected_hash": None}).json()
-        assert first["valid"] and len(provider.requests) == 1
-        next(r for r in first["spec"]["io_table"] if r["address"] == "X3").update(address="X005", label="停机输入")
-        second = client.put(f"/api/projects/{pid}/spec", headers=headers,
-                            json={"spec": first["spec"], "expected_hash": first["hash"]}).json()
-        assert second["valid"] and len(provider.requests) == 1
+        first = _save_and_confirm_spec(client, url, headers, document, [
+            {"section": "parameters", "id": p["id"], "value": {"value": answers[p["id"]], "source": "user"}}
+            for p in draft["parameters"]
+        ])
+        assert len(provider.requests) == 1
+        stop_row = next(r for r in first["draft"]["io_table"] if r["address"] == "X3")
+        _save_and_confirm_spec(client, url, headers, first, [
+            {"section": "io_table", "id": stop_row["id"], "value": {"address": "X005", "label": "停机输入"}},
+        ])
+        assert len(provider.requests) == 1
         _, output = _complete(client, service, client.post("/api/jobs", headers=headers, json={
             "kind": "generation", "project_id": pid, "request_id": "generate-polarities",
             "text": "按确认规格生成", "response_language": "zh-CN"}))
@@ -651,18 +690,18 @@ def test_confirmation_rejects_unfinished_choice_before_saving_or_calling_model(t
     from fastapi.testclient import TestClient
     from application.workbench import WorkbenchService
     from integrations.web.app import create_app
-    from test_web_api import ORIGIN, OPERATOR, _login
+    from test_web_api import ORIGIN
     def no_models():
         pytest.fail("confirmation must not resolve a provider")
     service = WorkbenchService(tmp_path/"workspace", tmp_path/"state", model_factory=no_models)
     app = create_app(service.store.base_dir, state_dir=service.state_dir, service=service,
-                     origin=ORIGIN, operator_token=OPERATOR)
+                     origin=ORIGIN)
     draft = _sensor_identity_spec()
     choice = "由独立复位按钮输入 X 复位（请一并给出地址与极性）"
     draft["parameters"].append({"id": "servo.alarm_reset", "name": "报警复位方式",
         "required": True, "value": choice, "options": [choice, "驱动器面板复位"], "source": "user"})
     with TestClient(app, base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         pid = client.post("/api/projects", headers=headers, json={"name":"synthetic servo identity"}).json()["id"]
         before = service.projects.raw_project(pid)
         response = client.put(f"/api/projects/{pid}/spec", headers=headers,

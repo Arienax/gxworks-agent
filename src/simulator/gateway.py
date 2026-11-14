@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """GX Simulator2 gateway discovery and loopback HTTP client."""
 
 from __future__ import annotations
@@ -380,6 +383,13 @@ class GXSimulatorGatewayClient:
             self.disconnect()
             raise GatewayOperationError('Simulator CPU or route differs from the selected target',
                                         code='SIMULATOR_TARGET_MISMATCH')
+        if bound:
+            from plc.device_policy import native_simulator_model, DevicePolicyError
+            try:
+                native_simulator_model(result)
+            except DevicePolicyError as error:
+                self.disconnect()
+                raise GatewayOperationError(str(error), code=error.code) from error
         return result
 
     def disconnect(self) -> None:
@@ -427,7 +437,7 @@ class GXSimulatorGatewayClient:
     def write_many(self, values: Mapping[str, Any]) -> None:
         if not self.connected:
             raise RuntimeError("GX Simulator2 gateway is not connected")
-        plan = native_write_plan(values, self.plc_model)
+        plan = native_write_plan(values, self.plc_model, simulator=True)
         self._request("POST", "/devices/write",
             {"protocol_version": GATEWAY_PROTOCOL_VERSION, "devices": plan})
 
@@ -439,7 +449,7 @@ class GXSimulatorGatewayClient:
         if not self.connected:
             raise RuntimeError("GX Simulator2 gateway is not connected")
         # Validate ALL addresses/values before any remote STOP or other mutation.
-        plan = native_reset_plan(list(devices), initial_values if initial_values is not None else {}, self.plc_model)
+        plan = native_reset_plan(list(devices), initial_values if initial_values is not None else {}, self.plc_model, simulator=True)
         profile = native_simulator_profile(self.plc_model)
         # Legacy FX gateways retain their measured ordering. Other reset
         # orders require the explicit adapter capability before any STOP.

@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import type { Job } from "../api/client";
 
@@ -27,7 +27,7 @@ export function listedJobStatus(job: Job, selectedId: string, selectedStatus?: s
   if (job.status !== "completed") return job.status;
   if (job.kind === "execution" && ["failed", "interrupted", "conflict"].includes(String(result))) return "failed";
   if (job.kind === "generation" || job.kind === "direct_generation") {
-    if (result === "needs_input" || result === "contract_mismatch") return result;
+    if (result === "needs_input" || result === "contract_mismatch" || result === "behavior_mismatch") return result;
     if (job.result?.version_id) return "saved";
     if (job.result?.proposal_id) return "candidate_ready";
   }

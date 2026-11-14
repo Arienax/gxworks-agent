@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from application.workbench import WorkbenchService
 from application.workspace import ConflictError
 from model_runtime.provider import TextDelta
-from test_web_api import ORIGIN, _Provider, _app, _complete, _login, offline, _ladder, offline_runtime_profile
+from test_web_api import ORIGIN, _Provider, _app, _complete, offline, _ladder, offline_runtime_profile
 
 
 def prepared(tmp_path, blocked=False):
@@ -19,7 +19,7 @@ def prepared(tmp_path, blocked=False):
 
 
 def generate(client, service, *, blocked=False):
-    headers = _login(client)
+    headers = {"Origin": ORIGIN}
     project = client.post('/api/projects', json={'name': 'Delivery fixture'}, headers=headers).json()['id']
     # Frozen fixtures represent already-confirmed projects, including legacy specs.
     spec = {'summary': 'X0 controls Y0', 'io_table': [], 'parameters': []}
@@ -132,15 +132,13 @@ def test_manual_version_redraw_recovers_missing_svg_without_writes(offline, tmp_
         assert client.get(f'/api/projects/{pid}/versions/{vid}/preview').status_code in (400, 409)
 
 
-def test_version_redraw_in_readonly_session_does_not_migrate(offline, tmp_path):
+def test_version_redraw_in_readonly_workspace_does_not_migrate(offline, tmp_path):
     from test_web_api import _legacy_workspace
     store, pid, vid, _ = _legacy_workspace(tmp_path / 'workspace')
     service = WorkbenchService(store.base_dir, tmp_path / 'state', read_only=True,
         model_factory=lambda: pytest.fail('Redraw may not request a model'))
     before = {str(p): p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()}
     with TestClient(_app(store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as client:
-        assert client.get(f'/api/projects/{pid}/versions/{vid}/preview').status_code == 401
-        _login(client)
         result = client.get(f'/api/projects/{pid}/versions/{vid}/preview')
         assert result.status_code == 200, result.text
         assert '<svg' in result.json()['svg']
@@ -161,14 +159,14 @@ class BrokenCompactProvider:
         yield TextDelta('{"r":[{"b":[{"i":["NO X0","> D220 D106],"o":["COIL Y0"]}]}]}')
 
 
-def test_preserved_invalid_candidate_can_be_repaired_and_immediately_rendered(offline, tmp_path):
+def test_missing_quote_is_repaired_and_immediately_rendered(offline, tmp_path):
     provider = BrokenCompactProvider()
     service = WorkbenchService(
         tmp_path / "workspace", tmp_path / "state",
         model_factory=lambda: (provider, {"model": "offline"}),
     )
     with TestClient(_app(service.store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         project = client.post("/api/projects", json={"name": "repair-render"}, headers=headers).json()["id"]
         service.store.set_confirmed_spec(project, {
             "summary": "X0 controls Y0 after the tracked position passes D106",
@@ -184,34 +182,16 @@ def test_preserved_invalid_candidate_can_be_repaired_and_immediately_rendered(of
             "response_language": "zh-CN",
         })
         assert created.status_code == 202, created.text
-        bad_job = created.json()["id"]
-        service.jobs._futures[bad_job].result(timeout=15)
+        job = created.json()["id"]
+        service.jobs._futures[job].result(timeout=15)
 
-        preserved = client.get(f"/api/jobs/{bad_job}").json()
-        assert preserved["status"] == "completed", preserved
-        assert preserved["result"]["status"] == "saved_invalid"
-        bad_version = preserved["result"]["version_id"]
-        bad_preview = client.get(f"/api/projects/{project}/versions/{bad_version}/preview")
-        assert bad_preview.status_code == 200, bad_preview.text
-        assert "<svg" in bad_preview.json()["svg"]
-
-        response = client.post(
-            f"/api/jobs/{bad_job}/repair",
-            headers=headers,
-            json={"request_id": "repair-broken-compact"},
-        )
-        assert response.status_code == 202, response.text
-        repair_job = response.json()["id"]
-        service.jobs._futures[repair_job].result(timeout=15)
-
-        repaired = client.get(f"/api/jobs/{repair_job}").json()
+        repaired = client.get(f"/api/jobs/{job}").json()
         assert repaired["status"] == "completed", repaired
         assert repaired["result"]["status"] == "saved"
         repaired_version = repaired["result"]["version_id"]
-        assert repaired_version != bad_version
         assert len(provider.requests) == 1, "deterministic format repair must not call model"
 
-        job_preview = client.get(f"/api/jobs/{repair_job}/preview")
+        job_preview = client.get(f"/api/jobs/{job}/preview")
         assert job_preview.status_code == 200, job_preview.text
         assert "<svg" in job_preview.json()["svg"]
 

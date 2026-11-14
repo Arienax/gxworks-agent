@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Core-owned project modes and client presentation metadata."""
 from __future__ import annotations
 
@@ -10,7 +13,7 @@ STARTER_REQUIREMENT = (
 )
 
 
-_MODES = {"ladder": "LADDER / 梯形图", "st": "ST", "fbd": "FBD / 结构化梯形图"}
+_MODES = {"ladder": "LADDER / 梯形图", "st": "ST", "fbd": "FBD / 结构化梯形图", "sfc": "SFC"}
 
 # Observed New-dialog selections, GX Works2 1.635.0.1. Enabling labels
 # changes these Simple targets to FX3U/FX3UC; FX1 is also absent from the
@@ -34,16 +37,17 @@ def project_creation_options():
         if not target["program_supported"]:
             types = [("parameter", "参数工程", [])]
         elif target["menu_cpu"] == "FX1":
-            types = [("simple", "简单工程", ["ladder"])]
+            types = [("simple", "简单工程", ["ladder", "sfc"])]
         elif target["family"] == "FX":
-            types = [("simple", "简单工程", ["ladder"]),
+            types = [("simple", "简单工程", ["ladder", "sfc"]),
                      ("structured", "结构化工程", ["st", "fbd"])]
         else:
-            types = [("simple", "简单工程", ["ladder", "st"]),
+            types = [("simple", "简单工程", ["ladder", "st", "sfc"]),
                      ("structured", "结构化工程", ["ladder", "st", "fbd"])]
         target["project_types"] = [{"value": value, "label": label,
                                     "target_modes": [{"value": mode, "label": _MODES[mode],
-                                                      "labels_required": value == "structured" or mode == "st"}
+                                                      "labels_required": value == "structured" or mode == "st",
+                                                      "labels_supported": not (target['family'] == 'FX' and mode == 'sfc')}
                                                      for mode in modes],
                                     "labels_required": value == "structured",
                                     "labels_supported": value != "parameter" and not (
@@ -62,7 +66,7 @@ def normalize_project_selection(plc_model, target_mode="ladder", native_project_
         raise ValueError("CPU is not a GX Works2 native New-dialog target")
     target = next(row for row in project_creation_options()["native_targets"] if row["menu_cpu"] == profile.cpu)
     project_type = native_project_type or ("parameter" if not profile.program_supported else
-                                          "simple" if target_mode == "ladder" else "structured")
+                                          "simple" if target_mode in ("ladder", "sfc") else "structured")
     option = next((row for row in target["project_types"] if row["value"] == project_type), None)
     if option is None:
         raise ValueError("Project type is unavailable for the selected CPU")
@@ -71,7 +75,8 @@ def normalize_project_selection(plc_model, target_mode="ladder", native_project_
     if not profile.program_supported and (target_mode != "ladder" or use_labels is True):
         raise ValueError("Parameter-only targets have no program language or labels")
     labels_required = option["labels_required"] or target_mode == "st"
-    if use_labels is True and not option["labels_supported"]:
+    mode_option = next((row for row in option['target_modes'] if row['value'] == target_mode), {})
+    if use_labels is True and (not option["labels_supported"] or not mode_option.get('labels_supported', True)):
         raise ValueError("Labels are unavailable for the selected CPU and project type")
     if use_labels is False and labels_required:
         raise ValueError("This project type/language requires labels")
@@ -89,7 +94,7 @@ def project_capabilities(version=None):
     target = DEFAULT_TARGET_SUPPORT.target((version or {}).get("plc_model") or DEFAULT_PLC_MODEL)
     result = {"project_type": target.get("family", "unknown").lower(), "body_form": mode,
             "representations": ["ladder_svg", "st", "ir"] if ladder else ["fbd", "svg", "gxw"] if fbd else ["sfc", "gxw"] if sfc else ["st"],
-            "operations": {"view": True, "generate": mode in ("ladder", "st", "fbd") or sfc and bool((version or {}).get('artifacts')),
+            "operations": {"view": True, "generate": mode in ("ladder", "st", "fbd", "sfc"),
                            "diagnose": ladder, "patch": ladder, "gx_import": ladder or fbd,
                            "simulation": ladder, "gx_compile": False, "fbd_edit": fbd, "gx_inspect": not fbd,
                            "fbd_convert": ladder, "sfc_edit": sfc},

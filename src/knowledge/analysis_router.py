@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Route PLC facts; analysis mode is an explicit caller choice, never inferred."""
 from __future__ import annotations
 
@@ -35,7 +38,9 @@ def instruction_reference_tokens(text, *, resolve_opcode):
 
 _DEVICE = DEVICE_TOKEN_RE
 _NEGATED = re.compile(
-    r"(?:不要|不用|不能|不得|不添加|不增加|不使用|不采用|不进行|不修改|不改变|不刷新|不读取|不写入|不复位|不清零|没有(?!(?:[^，,。；;\n]{0,24})(?:型号|参数|地址|信息))|无需|不需要|不涉及|不包含|不是|不比较|不讨论|禁止|without\b|do not\b|don't\b|no\b)"
+    r"(?:不要|不用|不能|不得|不添加|不增加|不使用|不采用|不进行|不修改|不改变|不刷新|不读取|不写入|不复位|不清零|"
+    r"不自保持|不锁存|不移位|不入队|不出队|没有(?!(?:[^，,。；;\n]{0,24})(?:型号|参数|地址|信息))|"
+    r"无需|不需要|不涉及|不包含|不是|不比较|不讨论|禁止|without\b|do not\b|don't\b|no\b)"
     r"(?:(?!改用|改为|改成|而是|但是|\bbut\b|\binstead\b)[^，,。；;\n])*", re.I,
 )
 

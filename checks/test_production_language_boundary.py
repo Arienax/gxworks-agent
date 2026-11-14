@@ -87,4 +87,51 @@ class ProductionLanguageBoundaryTests(unittest.TestCase):
             if old.get('references'):
                 current=next(f for f in features if f['target']==old['target'])
                 self.assertEqual(current['references'],old['references'])
+@unittest.skipUnless(ROOT, 'Actual private language producer is required')
+class ProductionRetentionLanguageScopeTests(unittest.TestCase):
+    def setUp(self):
+        source=(Path(ROOT)/'build_fact_knowledge.py').read_text(encoding='utf-8')
+        tree=ast.parse(source)
+        fn=next(node for node in tree.body if isinstance(node,ast.FunctionDef)
+                and node.name=='_merge_structured_language_review')
+        namespace={'copy':copy}
+        exec(compile(ast.Module(body=[fn],type_ignores=[]),'<actual private language producer>','exec'),namespace)
+        self.merge=namespace[fn.name]
+
+    def receipt(self,identity,value):
+        return {'language_reference':[],'tool_bindings':[{'id':identity,
+            'dimension':'constraints.function_bit_output_retention','value':value,
+            'status':'source_verified','verification':'source_checked',
+            'sources':[{'manual_id':'gxworks2_structured_ag','revision':'AG','pdf_pages':[189]}],
+            'scope':{'models':['FX3U'],'forms':['*EN_ENO_FUNCTION_CALL'],'languages':['fbd']},
+            'publishable':False,'owner_hint':'existing language owner'}]}
+
+    def test_retention_only_refines_existing_FBD_owner_and_never_generates_ST_claim(self):
+        from tools.fact_structured_behavior_review import BIT_OUTPUT_RETENTION_CONTRACT
+        features=[{'target':'ST.CALL.ENENO','language':'st','models':['FX3U'],'aliases':[],
+                   'facts':[{'id':'independent.st.rule','value':{'unrelated':True}}]},
+                  {'target':'FBD.EXECUTION','language':'fbd','models':['FX3U'],'aliases':[],
+                   'facts':[{'id':'independent.fbd.rule','value':{'unrelated':True}}]}]
+        before=copy.deepcopy(features)
+        receipt=self.receipt('gxworks2:bit_output_retention',
+                             {'function_bit_output_retention':copy.deepcopy(BIT_OUTPUT_RETENTION_CONTRACT)})
+        unchanged=copy.deepcopy(receipt)
+        self.merge(features,receipt)
+        self.assertEqual(features[0],before[0])
+        self.assertEqual(features[1]['facts'][0],before[1]['facts'][0])
+        self.assertEqual(len(features[1]['facts']),2)
+        self.assertEqual(features[1]['facts'][1]['id'],'gxworks2:bit_output_retention:FBD.EXECUTION')
+        self.assertEqual(features[1]['facts'][1]['scope']['languages'],['fbd'])
+        self.assertEqual(features[1]['facts'][1]['value'],receipt['tool_bindings'][0]['value'])
+        self.assertEqual(receipt,unchanged)
+        self.assertEqual({f['target'] for f in features},{'ST.CALL.ENENO','FBD.EXECUTION'})
+
+    def test_other_tool_source_keeps_its_existing_ST_and_FBD_routes(self):
+        features=[]
+        self.merge(features,self.receipt('gxworks2:enable_output_assignment',{'existing_rule':True}))
+        self.assertEqual({f['target'] for f in features},{'ST.CALL.ENENO','FBD.EXECUTION'})
+        for feature in features:
+            self.assertEqual(feature['facts'][0]['value'],{'existing_rule':True})
+            self.assertEqual(feature['facts'][0]['scope']['languages'],[feature['language']])
+
 if __name__=='__main__':unittest.main()

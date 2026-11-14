@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Single-worker local service launcher. Never start GX on page load."""
 import argparse
@@ -10,18 +10,49 @@ import threading
 from pathlib import Path
 
 
-def _open_when_started(server, login_url, stopped):
-    """Open only after this server bound its port, never an unrelated listener."""
-    import webbrowser
-
+def _wait_for_server(server, stopped):
     while not stopped.wait(0.1):
         if server.started:
-            try:
-                if not webbrowser.open(login_url, new=2):
-                    print("Browser did not open; use the Workbench link above.", file=sys.stderr)
-            except Exception:
-                print("Browser could not open; use the Workbench link above.", file=sys.stderr)
-            return
+            return True
+    return False
+
+
+def _open_when_started(server, url, stopped):
+    """Open only after this server bound its port, never an unrelated listener."""
+    if not _wait_for_server(server, stopped):
+        return
+    import webbrowser
+
+    try:
+        if not webbrowser.open(url, new=2):
+            print("Browser did not open; use the Workbench link above.", file=sys.stderr)
+    except Exception:
+        print("Browser could not open; use the Workbench link above.", file=sys.stderr)
+
+
+def _report_knowledge_when_started(server, stopped):
+    if not _wait_for_server(server, stopped):
+        return
+    from application.execution import knowledge_runtime_status
+
+    knowledge = knowledge_runtime_status()
+    if knowledge["status"] != "available" and not stopped.is_set():
+        import json
+        print("PLC knowledge unavailable in this Web runtime: " + json.dumps(knowledge, ensure_ascii=True), file=sys.stderr)
+        print("Manual-backed RAG requires a local index built from authorized source materials. Runtime: " + sys.executable, file=sys.stderr)
+
+
+def _watch_launcher_stop(server, name, stopped):
+    import win32event
+
+    event = win32event.CreateEvent(None, True, False, name)
+    try:
+        while not stopped.is_set():
+            if win32event.WaitForSingleObject(event, 200) == win32event.WAIT_OBJECT_0:
+                server.should_exit = True
+                return
+    finally:
+        event.Close()
 
 
 def main(argv=None):
@@ -34,27 +65,36 @@ def main(argv=None):
     parser.add_argument("--static-dir", type=Path, help="Serve a separately built frontend directory.")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--read-only", action="store_true")
-    parser.add_argument("--open-browser", action="store_true", help="Open the operator login page once this service is ready.")
+    parser.add_argument("--open-browser", action="store_true", help="Open the workbench page once this service is ready.")
     parser.add_argument("--no-service-discovery", action="store_true", help="Do not replace the local MCP service credential (isolated validation).")
+    parser.add_argument("--launcher-event", help=argparse.SUPPRESS)
+    parser.add_argument("--launcher-log", type=Path, help=argparse.SUPPRESS)
+    parser.add_argument("--gxworks2-directory", action="store_true", help="Print the detected GX Works2 executable directory and exit.")
     args = parser.parse_args(argv)
+    if args.gxworks2_directory:
+        from gxworks2.finder import GXWorks2Finder
+
+        executable = GXWorks2Finder().find_executable()
+        print(executable.parent if executable is not None else "")
+        return 0
     if not 1024 <= args.port <= 65535:
         parser.error("Use a port from 1024 to 65535")
     if args.static_dir and not (args.static_dir / "index.html").is_file():
         parser.error("--static-dir must contain a built index.html")
+    if args.launcher_log is not None:
+        from contextlib import redirect_stderr, redirect_stdout
+        with args.launcher_log.open("w", encoding="utf-8", buffering=1) as log, redirect_stdout(log), redirect_stderr(log):
+            return _serve(args)
+    return _serve(args)
+
+
+def _serve(args):
     from .app import create_app
     import uvicorn
-    from application.execution import knowledge_runtime_status
-    knowledge = knowledge_runtime_status()
-    if knowledge["status"] != "available":
-        import json
-        print("PLC knowledge unavailable in this Web runtime: " + json.dumps(knowledge, ensure_ascii=True), file=sys.stderr)
-        print("Manual-backed RAG requires a local index built from authorized source materials. Runtime: " + sys.executable, file=sys.stderr)
-    # The loopback page opens its own operator session: no operator token is read,
-    # printed or pasted. The Agent credential stays separate for MCP clients.
     agent_token = os.environ.get("PLC_WEB_AGENT_TOKEN") or secrets.token_urlsafe(32)
     origin = "http://127.0.0.1:" + str(args.port)
     app = create_app(args.workspace, state_dir=args.state_dir, read_only=args.read_only,
-        origin=origin, operator_token=None, agent_token=agent_token, static_dir=args.static_dir)
+        origin=origin, agent_token=agent_token, static_dir=args.static_dir)
     print("Workbench link: " + origin, file=sys.stderr)
 
     credential_published = False
@@ -85,6 +125,10 @@ def main(argv=None):
 
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=args.port, workers=1, access_log=False))
     stopped = threading.Event()
+    # The catalog check can load the SQLite registry. Keep it off the listening path.
+    threading.Thread(target=_report_knowledge_when_started, args=(server, stopped), daemon=True, name="web-knowledge-check").start()
+    if args.launcher_event:
+        threading.Thread(target=_watch_launcher_stop, args=(server, args.launcher_event, stopped), daemon=True).start()
     if args.open_browser:
         threading.Thread(target=_open_when_started, args=(server, origin, stopped), daemon=True, name="web-login-launcher").start()
     try:

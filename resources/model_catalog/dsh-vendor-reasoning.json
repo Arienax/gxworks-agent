@@ -1,0 +1,1404 @@
+[
+  {
+    "schema_version": 1,
+    "id": "dsh-dashscope-1",
+    "extends": "dashscope-qwen-hybrid",
+    "match": {
+      "endpoints": [
+        "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+        "https://dashscope.aliyuncs.com/compatible-mode/v1"
+      ],
+      "models": [
+        "qwen3.8-flash",
+        "qwen3.8-max"
+      ]
+    },
+    "parameters": {
+      "enable_thinking": {
+        "type": "boolean",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [true]
+        }
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "low",
+            "medium",
+            "xhigh"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/qwen-token-plan.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-moonshotai-1",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://api.moonshot.ai/v1"
+      ],
+      "models": [
+        "kimi-k2.6"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "enabled",
+            "disabled"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "thinking",
+          "type"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "unsupported",
+        "source": "catalog"
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/moonshotai.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-moonshotai-2",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://api.moonshot.ai/v1"
+      ],
+      "models": [
+        "kimi-k3"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "low",
+            "high",
+            "max"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/moonshotai.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-moonshotai-cn-1",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://api.moonshot.cn/v1"
+      ],
+      "models": [
+        "kimi-k2.6"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "enabled",
+            "disabled"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "thinking",
+          "type"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "unsupported",
+        "source": "catalog"
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/moonshotai-cn.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-moonshotai-cn-2",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://api.moonshot.cn/v1"
+      ],
+      "models": [
+        "kimi-k3"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "low",
+            "high",
+            "max"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/moonshotai-cn.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-qwen-token-plan-1",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+      ],
+      "models": [
+        "MiniMax-M2.5",
+        "deepseek-v3.2",
+        "kimi-k2.5",
+        "kimi-k2.6",
+        "kimi-k2.7-code",
+        "qwen3.6-plus"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "boolean",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            true,
+            false
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "enable_thinking"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "unsupported",
+        "source": "catalog"
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/qwen-token-plan.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-qwen-token-plan-2",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+      ],
+      "models": [
+        "deepseek-v4-flash"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "boolean",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            true
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "enable_thinking"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "high",
+            "max"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/qwen-token-plan.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-qwen-token-plan-3",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+      ],
+      "models": [
+        "deepseek-v4.1-flash",
+        "glm-5.3"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "boolean",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            true
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "enable_thinking"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "low",
+            "high",
+            "max"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/qwen-token-plan.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-qwen-token-plan-4",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+      ],
+      "models": [
+        "glm-5",
+        "glm-5.1"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "boolean",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            true,
+            false
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "enable_thinking"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "high",
+            "max"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/qwen-token-plan.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-qwen-token-plan-cn-1",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+      ],
+      "models": [
+        "MiniMax-M2.5",
+        "deepseek-v3.2",
+        "kimi-k2.5",
+        "kimi-k2.6",
+        "kimi-k2.7-code",
+        "qwen3.6-flash",
+        "qwen3.6-plus",
+        "qwen3.7-max",
+        "qwen3.7-plus"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "boolean",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            true,
+            false
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "enable_thinking"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "unsupported",
+        "source": "catalog"
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/qwen-token-plan-cn.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-qwen-token-plan-cn-2",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+      ],
+      "models": [
+        "deepseek-v4-flash",
+        "deepseek-v4-flash-0731",
+        "deepseek-v4-pro",
+        "deepseek-v4-pro-0813",
+        "glm-5.2"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "boolean",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            true
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "enable_thinking"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "high",
+            "max"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/qwen-token-plan-cn.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-qwen-token-plan-cn-3",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+      ],
+      "models": [
+        "deepseek-v4.1-flash",
+        "glm-5.3"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "boolean",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            true
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "enable_thinking"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "low",
+            "high",
+            "max"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/qwen-token-plan-cn.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-qwen-token-plan-cn-4",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+      ],
+      "models": [
+        "glm-5",
+        "glm-5.1"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "boolean",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            true,
+            false
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "enable_thinking"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "high",
+            "max"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/qwen-token-plan-cn.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-qwen-token-plan-cn-5",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+      ],
+      "models": [
+        "qwen3.8-flash",
+        "qwen3.8-max"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "boolean",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            true
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "enable_thinking"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "low",
+            "medium",
+            "xhigh"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/qwen-token-plan-cn.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-qwen-token-plan-individual-1",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+      ],
+      "models": [
+        "deepseek-v4-flash-0731",
+        "deepseek-v4-pro",
+        "deepseek-v4-pro-0813",
+        "glm-5.2"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "boolean",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            true
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "enable_thinking"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "high",
+            "max"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/qwen-token-plan-individual.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-qwen-token-plan-individual-2",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+      ],
+      "models": [
+        "qwen3.6-flash",
+        "qwen3.7-max",
+        "qwen3.7-plus"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "boolean",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            true,
+            false
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "enable_thinking"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "unsupported",
+        "source": "catalog"
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/qwen-token-plan-individual.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-qwen-token-plan-individual-3",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+      ],
+      "models": [
+        "qwen3.8-flash",
+        "qwen3.8-max"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "boolean",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            true
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "enable_thinking"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "low",
+            "medium",
+            "xhigh"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/qwen-token-plan-individual.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-xiaomi-1",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://api.xiaomimimo.com/v1"
+      ],
+      "models": [
+        "mimo-v2.5",
+        "mimo-v2.5-pro",
+        "mimo-v2.5-pro-ultraspeed",
+        "mimo-v2.6-flash",
+        "mimo-v2.6-pro",
+        "mimo-v2.6-pro-ultraspeed"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "enabled",
+            "disabled"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "thinking",
+          "type"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "unsupported",
+        "source": "catalog"
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/xiaomi.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-xiaomi-token-plan-ams-1",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://token-plan-ams.xiaomimimo.com/v1"
+      ],
+      "models": [
+        "mimo-v2.5",
+        "mimo-v2.5-pro",
+        "mimo-v2.6-flash",
+        "mimo-v2.6-pro"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "enabled",
+            "disabled"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "thinking",
+          "type"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "unsupported",
+        "source": "catalog"
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/xiaomi-token-plan-ams.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-xiaomi-token-plan-cn-1",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://token-plan-cn.xiaomimimo.com/v1"
+      ],
+      "models": [
+        "mimo-v2.5",
+        "mimo-v2.5-pro",
+        "mimo-v2.6-flash",
+        "mimo-v2.6-pro"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "enabled",
+            "disabled"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "thinking",
+          "type"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "unsupported",
+        "source": "catalog"
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/xiaomi-token-plan-cn.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-xiaomi-token-plan-sgp-1",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://token-plan-sgp.xiaomimimo.com/v1"
+      ],
+      "models": [
+        "mimo-v2.5",
+        "mimo-v2.5-pro",
+        "mimo-v2.6-flash",
+        "mimo-v2.6-pro"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "enabled",
+            "disabled"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "thinking",
+          "type"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "unsupported",
+        "source": "catalog"
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/xiaomi-token-plan-sgp.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-zai-1",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://api.z.ai/api/coding/paas/v4"
+      ],
+      "models": [
+        "glm-4.7",
+        "glm-5-turbo"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "enabled",
+            "disabled"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "thinking",
+          "type"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "unsupported",
+        "source": "catalog"
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      },
+      "preserve_thinking": {
+        "status": "supported",
+        "source": "catalog"
+      },
+      "tool_stream": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/zai.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-zai-2",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://api.z.ai/api/coding/paas/v4"
+      ],
+      "models": [
+        "glm-5.2",
+        "glm-5.2-highspeed"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "enabled",
+            "disabled"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "thinking",
+          "type"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "high",
+            "max"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      },
+      "preserve_thinking": {
+        "status": "supported",
+        "source": "catalog"
+      },
+      "tool_stream": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/zai.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-zai-3",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://api.z.ai/api/coding/paas/v4"
+      ],
+      "models": [
+        "glm-5.3",
+        "glm-5.3-flash",
+        "glm-5.3-highspeed"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "enabled"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "thinking",
+          "type"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "low",
+            "high",
+            "max"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      },
+      "preserve_thinking": {
+        "status": "supported",
+        "source": "catalog"
+      },
+      "tool_stream": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/zai.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-zai-coding-cn-1",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://open.bigmodel.cn/api/coding/paas/v4"
+      ],
+      "models": [
+        "glm-4.6v"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "enabled",
+            "disabled"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "thinking",
+          "type"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "unsupported",
+        "source": "catalog"
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      },
+      "preserve_thinking": {
+        "status": "supported",
+        "source": "catalog"
+      },
+      "tool_stream": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/zai-coding-cn.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-zai-coding-cn-2",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://open.bigmodel.cn/api/coding/paas/v4"
+      ],
+      "models": [
+        "glm-5.3",
+        "glm-5.3-flash",
+        "glm-5.3-highspeed"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "enabled"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "thinking",
+          "type"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "low",
+            "high",
+            "max"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      },
+      "preserve_thinking": {
+        "status": "supported",
+        "source": "catalog"
+      },
+      "tool_stream": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/zai-coding-cn.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  }
+]

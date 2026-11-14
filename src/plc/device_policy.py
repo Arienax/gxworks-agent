@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Authoritative device I/O policy and native request planning.
 
 Adapters receive fully prepared, bounded requests. They never decide PLC
@@ -28,19 +31,23 @@ _STIMULUS_PREFIXES = frozenset({"X", "M", "D"})
 
 
 def device_address(value: Any, plc_model: str = "FX3U", *, access: Access = "read",
-                   native: bool = False) -> str:
-    """Apply the selected model's I/O policy; retain the supplied address spelling."""
+                   native: bool = False, simulator: bool = False) -> str:
+    """Apply the selected model's I/O policy; retain the supplied address spelling.
+
+    Simulator2's documented common devices use the model's numbering envelope.
+    Other native operations retain their separately registered access ranges.
+    """
     if access not in {"read", "stimulus", "reset", "feedback"}:
         raise ValueError("Unknown device access policy")
     model = normalize_plc_model(plc_model)
     address = str(value or "").strip().upper()
     parsed = parse_device_address(address, model)
     profile = SOURCE_DEVICE_PROFILES.get(model, {})
-    native_prefixes = frozenset(profile.get("native_read_prefixes", _NATIVE_PREFIXES))
+    native_prefixes = _NATIVE_PREFIXES if simulator else frozenset(profile.get("native_read_prefixes", _NATIVE_PREFIXES))
     if parsed is None or (native and (parsed[0] not in native_prefixes or "." in address)):
         raise DevicePolicyError(f"invalid {model} device address {value!r}")
     prefix, index = parsed
-    if native:
+    if native and not simulator:
         limits = profile.get('native_device_limits')
         regions = profile.get('native_device_regions', {}).get(prefix)
         if (limits is not None and (prefix not in limits or limits[prefix] is not None and index > limits[prefix])
@@ -69,7 +76,7 @@ def stimulus_value(address: str, value: Any, plc_model: str = "FX3U") -> int:
     """Only explicit integer bit/word values may cross the stimulus boundary."""
     address = device_address(address, plc_model, access="stimulus")
     prefix, _ = parse_device_address(address, plc_model)
-    return _integer_input_value(value, bit=prefix in {"X", "M"}, word_label="D")
+    return _integer_input_value(value, bit=is_bit_device(address, plc_model), word_label="D")
 
 
 def _integer_input_value(value: Any, *, bit: bool, word_label: str) -> int:
@@ -113,14 +120,14 @@ def normalize_read_addresses(addresses, plc_model):
 
 
 def _addresses(values: Sequence[str], plc_model: str, *, access: Access,
-               maximum: int, allow_empty: bool = False) -> list[str]:
+               maximum: int, allow_empty: bool = False, simulator: bool = False) -> list[str]:
     if (not isinstance(values, (list, tuple))
             or not (0 if allow_empty else 1) <= len(values) <= maximum):
         raise DevicePolicyError(f"request requires {0 if allow_empty else 1} to {maximum} devices",
                                 code="INVALID_ADDRESS_LIST")
     result = []
     for value in values:
-        address = device_address(value, plc_model, access=access, native=True)
+        address = device_address(value, plc_model, access=access, native=True, simulator=simulator)
         result.append(address)
     return result
 
@@ -135,25 +142,25 @@ def _native_name(address: str) -> str:
 
 
 def native_read_plan(addresses: Sequence[str], plc_model: str = "FX3U", *,
-                     maximum: int = 256) -> list[dict[str, Any]]:
-    normalized = _addresses(addresses, plc_model, access="read", maximum=maximum)
+                     maximum: int = 256, simulator: bool = False) -> list[dict[str, Any]]:
+    normalized = _addresses(addresses, plc_model, access="read", maximum=maximum, simulator=simulator)
     return [{"key": address, "device": _native_name(address)} for address in normalized]
 
 
-def native_read_value_kind(address: str, plc_model: str = "FX3U") -> str:
+def native_read_value_kind(address: str, plc_model: str = "FX3U", *, simulator: bool = False) -> str:
     """Classify the value actually read by the native plan, including T/C counts."""
-    address = device_address(address, plc_model, native=True)
+    address = device_address(address, plc_model, native=True, simulator=simulator)
     if _native_name(address) != address:
         return "integer"
     return "bit" if is_bit_device(address, plc_model) else "word"
 
 
 def native_write_plan(values: Mapping[str, Any], plc_model: str = "FX3U", *,
-                      allow_empty: bool = False) -> list[dict[str, Any]]:
+                      allow_empty: bool = False, simulator: bool = False) -> list[dict[str, Any]]:
     if not isinstance(values, Mapping):
         raise DevicePolicyError("write values must be a device mapping", code="INVALID_DEVICE_VALUES")
     addresses = _addresses(list(values), plc_model, access="stimulus", maximum=256,
-                           allow_empty=allow_empty)
+                           allow_empty=allow_empty, simulator=simulator)
     return [{"key": address, "device": address,
              "value": stimulus_value(address, value, plc_model)}
             for address, value in zip(addresses, values.values())]
@@ -180,10 +187,10 @@ def native_feedback_plan(values: Mapping[str, Any], plc_model: str, *,
 
 
 def native_reset_plan(devices: Sequence[str], initial_values: Mapping[str, Any],
-                      plc_model: str = "FX3U") -> dict[str, Any]:
+                      plc_model: str = "FX3U", *, simulator: bool = False) -> dict[str, Any]:
     """Preflight the ENTIRE plan before an adapter is allowed to STOP the CPU."""
-    normalized = _addresses(devices, plc_model, access="reset", maximum=256, allow_empty=True)
-    initial = native_write_plan(initial_values, plc_model, allow_empty=True)
+    normalized = _addresses(devices, plc_model, access="reset", maximum=256, allow_empty=True, simulator=simulator)
+    initial = native_write_plan(initial_values, plc_model, allow_empty=True, simulator=simulator)
     return {"clear": [{"key": address, "device": _native_name(address), "value": 0}
                       for address in normalized], "initial": initial}
 
@@ -214,8 +221,36 @@ def native_simulator_read_plan(addresses, plc_model="FX3U", *, maximum=256):
         if address in profile['read_devices']:
             result.append({'key': address, 'device': address})
         else:
-            result.extend(native_read_plan([value], plc_model))
+            result.extend(native_read_plan([value], plc_model, simulator=True))
     return result
+
+
+def native_simulator_model(connection: Mapping[str, Any]) -> str:
+    """Resolve the connected CPU from both MX identifiers, never from a label."""
+    from plc.runtime_semantics import _control_facts
+    cpu_type = connection.get('cpu_type')
+    model_code = connection.get('observed_cpu_type')
+    if cpu_type is None and model_code is None:
+        capabilities = connection.get('capabilities', {})
+        # Original gateways had a fixed FX3U route and no CPU identity fields.
+        if 'target_cpu_binding' not in capabilities:
+            return 'FX3U'
+        raise DevicePolicyError('网关未返回已连接 CPU 的型号，请重新构建仿真网关。',
+                                code='SIMULATOR_CPU_IDENTITY_MISSING')
+    targets = _control_facts()['native_simulator']['targets']
+    for model, target in targets.items():
+        if (type(cpu_type) is int and type(model_code) is int
+                and cpu_type == target['cpu_type'] and model_code == target['model_code']):
+            if sum(item['model_code'] == model_code for item in targets.values()) > 1:
+                # Several distinct Q CPUs share the returned code. ActCpuType
+                # is our request, so it cannot disambiguate the observed CPU.
+                observed = str(connection.get('observed_cpu_name') or '').strip().upper().replace('CPU', '')
+                if observed not in model.upper().split('/'):
+                    raise DevicePolicyError(f'模拟 CPU 名称 {observed!r} 与请求型号 {model} 不一致或无法确认',
+                                            code='SIMULATOR_TARGET_MISMATCH')
+            return model.split('/')[0]
+    raise DevicePolicyError(f'没有与已连接 CPU 匹配的 Simulator2 配置：{cpu_type!r}/{model_code!r}',
+                            code='SIMULATOR_TARGET_MISMATCH')
 
 
 def simulator_run_monitor(plc_model: str = "FX3U") -> tuple[str, int]:

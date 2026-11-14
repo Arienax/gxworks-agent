@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Build lean MCP and combined Web/MCP (Full) Windows distributions."""
 from __future__ import annotations
@@ -33,6 +33,8 @@ def main():
     parser.add_argument('--component', choices=('full', 'web', 'mcp', 'both'), default='both',
                         help='web is a compatibility alias for full; both builds mcp and full')
     parser.add_argument('--skip-frontend', action='store_true')
+    parser.add_argument('--dsh-source', type=Path,
+                        help='DSH SDK source or prebuilt runtime root (also GXWORKS_DSH_SOURCE); required for Full')
     parser.add_argument('--version', default='0.4.0')
     args = parser.parse_args()
     output = args.output.resolve()
@@ -92,6 +94,12 @@ def main():
         else:
             shutil.copyfile(source, target)
     runtime_knowledge_data(inputs)
+    if args.component != 'mcp':
+        from stage_dsh_runtime import stage_dsh_runtime
+        stage_dsh_runtime(inputs / 'dsh-runtime', source=args.dsh_source)
+    run('compile-instruction-catalog', [sys.executable, '-m', 'plc.instruction_catalog_store',
+                                       str(inputs / 'resources/instructions/mitsubishi')],
+        env={**os.environ, 'PYTHONPATH': str(ROOT / 'src')})
     helpers = output / 'helpers'
     for label, script, directory in (
         ('workspace-helper', 'build_workspace_adapter.ps1', 'workspace-adapter'),
@@ -115,11 +123,15 @@ def main():
             str(ROOT / 'packaging/pyinstaller/release.spec')], env=env)
         name = 'GXWorks-Agent-' + ('Full' if component == 'full' else 'MCP')
         package = output / 'dist' / name
+        if component == 'full':
+            run('build-web-launcher', [sys.executable, str(ROOT / 'scripts/build_web_launcher.py'),
+                                       str(package / 'GXWorks-Agent-Launcher.exe')])
         stage_notices(package, component)
         (package / 'release.json').write_text(json.dumps({'version': args.version,
-            'source_commit': commit, 'component': component, 'license': 'Apache-2.0',
-            'entrypoints': ['gxworks-agent-mcp.exe'] + (['GXWorks-Agent-Web.exe'] if component == 'full' else []),
-            'runtime_corpus': 'authored_plc_facts_v1'}, indent=2) + '\n', encoding='utf-8')
+            'source_commit': commit, 'component': component, 'license': 'AGPL-3.0',
+            'entrypoints': ['gxworks-agent-mcp.exe'] + (['GXWorks-Agent-Web.exe', 'GXWorks-Agent-Launcher.exe'] if component == 'full' else []),
+            'runtime_corpus': 'authored_plc_facts_v1',
+            **({'generation_runtime': 'bundled-dsh'} if component == 'full' else {})}, indent=2) + '\n', encoding='utf-8')
         run('smoke-' + component, [sys.executable, str(ROOT / 'scripts/release_smoke.py'), component, str(package)])
         archive = artifacts / (name + '-windows-x64.zip')
         with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED, compresslevel=6) as bundle:

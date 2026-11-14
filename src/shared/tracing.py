@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Detailed local runtime trace support for operator diagnostics."""
 from __future__ import annotations
 
@@ -7,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import re
+from tempfile import NamedTemporaryFile
 import threading
 
 from shared.records import valid_record_id as _safe_id
@@ -202,6 +206,42 @@ def record_operator_action(state_dir, action, *, project_id=None, job_id=None, p
         "payload": sanitize(payload),
         "result": sanitize(result),
     })
+
+
+def remove_project_actions(state_dir, project_id, job_ids):
+    """Drop one project's entries without changing the remaining JSONL records."""
+    if not (Path(state_dir) / "diagnostics" / "operator-actions.jsonl").exists():
+        return
+    path = _actions_path(state_dir)
+    job_ids = set(job_ids)
+
+    def belongs_to_project(line):
+        try:
+            row = json.loads(line)
+        except (ValueError, RecursionError):
+            return False
+        if not isinstance(row, dict):
+            return False
+        job_id = row.get("job_id")
+        return row.get("project_id") == project_id or (isinstance(job_id, str) and job_id in job_ids)
+
+    with _LOCK:
+        original = path.read_bytes().splitlines(keepends=True)
+        retained = [line for line in original if not belongs_to_project(line)]
+        if len(retained) == len(original):
+            return
+        if not retained:
+            path.unlink()
+            return
+        temporary = None
+        try:
+            with NamedTemporaryFile(dir=path.parent, delete=False) as stream:
+                temporary = Path(stream.name)
+                stream.writelines(retained)
+            os.replace(temporary, path)
+        finally:
+            if temporary:
+                temporary.unlink(missing_ok=True)
 
 
 def _read_jsonl(path, predicate=None):

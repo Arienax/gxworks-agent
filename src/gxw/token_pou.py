@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Lossless token framing, with lexical decoding limited to observed FX code.
 
@@ -30,6 +30,7 @@ _NATIVE_ENCODINGS = native_token_encodings()
 _SOURCE_ENCODINGS = {**json.loads(template_bytes('fx-token-encoder-forms.json')).get(
     'additional_source_forms', {}).get('headers', {}),
     '0202': ('NOP', 0), '042c0304': ('MC', 2), '04300204': ('MCR', 1),
+    '0553072105': ('ANR', 0), '065307210206': ('ANRP', 0),
     '056a010105': ('NEXT', 0)}
 _NATIVE_ENCODINGS = {**_NATIVE_ENCODINGS, **_SOURCE_ENCODINGS}
 

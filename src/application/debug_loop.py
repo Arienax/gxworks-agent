@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Evidence-bound Debug/Patch/regression loop for PLC IR versions.
 
@@ -36,7 +36,7 @@ from plc.ir import (
 )
 from plc.st_renderer import (
     ST_RENDERER_SCHEMA_VERSION,
-    render_plc_ir_to_st,
+    render_optional_plc_ir_to_st,
     validate_st_traceability,
 )
 from plc.static_analysis import STATIC_ANALYSIS_SCHEMA_VERSION, trace_upstream
@@ -630,7 +630,7 @@ def _version_metadata(
     base_version_id: str,
     source_run_id: str,
 ) -> Dict[str, Any]:
-    st_text = render_plc_ir_to_st(program)
+    st_text = render_optional_plc_ir_to_st(program) if artifacts.get("st_from_ir") else None
     timing = (program.get("timing") or {}).get("performance") or {}
     logic = program.get("logic") or {}
     analysis = program.get("analysis") or {}
@@ -643,7 +643,8 @@ def _version_metadata(
         "ir_schema_version": program.get("schema_version"),
         "ir_sha256": canonical_sha256(program),
         "ladder_sha256": (program.get("source") or {}).get("ladder_sha256"),
-        "st_from_ir_sha256": hashlib.sha256(st_text.encode("utf-8")).hexdigest(),
+        **({"st_from_ir_sha256": hashlib.sha256(st_text.encode("utf-8")).hexdigest()} if st_text is not None else
+           {"st_translation": "disabled"}),
         "st_renderer_schema_version": ST_RENDERER_SCHEMA_VERSION,
         "semantic_schema_version": SEMANTICS_SCHEMA_VERSION,
         "semantic_summary": {

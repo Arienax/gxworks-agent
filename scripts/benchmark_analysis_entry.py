@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Interleaved Direct entry measurements over isolated loopback HTTP services.
 
@@ -179,9 +179,8 @@ def run_http_path(directory, provider, *, analysis_content=None, generation_requ
     listener = socket.socket()
     listener.bind(("127.0.0.1", 0))
     origin = "http://127.0.0.1:" + str(listener.getsockname()[1])
-    operator = uuid.uuid4().hex
     app = create_app(service.store.base_dir, state_dir=service.state_dir, service=service,
-                     origin=origin, operator_token=operator)
+                     origin=origin)
     server = uvicorn.Server(uvicorn.Config(app, log_level="error", access_log=False))
     current = None
     emit = diagnostics.emit
@@ -210,9 +209,7 @@ def run_http_path(directory, provider, *, analysis_content=None, generation_requ
                 if time.monotonic() >= deadline:
                     raise TimeoutError("isolated_http_startup")
                 time.sleep(0.05)
-            session = client.post("/api/session", headers={"Origin": origin}, json={"token": operator})
-            session.raise_for_status()
-            headers = {"Origin": origin, "X-CSRF-Token": session.json()["csrf"]}
+            headers = {"Origin": origin}
             created = client.post("/api/projects", headers=headers,
                                   json={"name": "analysis entry benchmark", "plc_model": "FX3U"})
             created.raise_for_status()
@@ -372,7 +369,7 @@ def export_evidence(directory, destination):
                         "runs/: original live observations, including harness failures.\n"
                         "confirmation-replays/: literal accepted analysis replay followed by HTTP confirmation and live generation.\n"
                         "Replay analysis timings are offline and excluded from live comparisons.\n"
-                        "No API keys, runtime configs, operator sessions, native writes or fresh analysis calls in replay.\n")
+                        "No API keys, runtime configs, native writes or fresh analysis calls in replay.\n")
 
 
 def entry_main(args, directory):

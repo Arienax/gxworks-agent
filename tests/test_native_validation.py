@@ -22,7 +22,7 @@ from gxworks2.project_profiles import NATIVE_PROJECT_PROFILES
 from plc.target_identity import Q_CPUS, PARAMETER_ONLY
 from tests.test_gxw_object_model import two_timers
 from tests.test_web_fbd import service, generate, accept
-from tests.test_web_api import _app, _login, ORIGIN
+from tests.test_web_api import _app, ORIGIN
 from tests.test_gxw_compiler import archived_native_requests, native_request_semantics
 from tests.native_fixtures import load_frozen_native_json
 
@@ -523,8 +523,20 @@ def test_built_workspace_boundary_rejects_vendor_plans_before_native_io(tmp_path
     assert list(tmp_path.iterdir()) == []
 
 
-def test_workspace_transport_sends_business_protocol_and_preserves_private_evidence(tmp_path, monkeypatch):
+@pytest.mark.parametrize('common_files', ['inherited', 'missing', 'invalid', 'unavailable'])
+def test_workspace_transport_sends_business_protocol_and_preserves_private_evidence(tmp_path, monkeypatch, common_files):
     import gxworks2.workspace_adapter as adapter
+    if adapter.os.name != 'nt' and common_files != 'inherited':
+        pytest.skip('Common Files lookup is Windows-only')
+    key = 'COMMONPROGRAMFILES(X86)'
+    folder = tmp_path / 'Common Files'
+    folder.mkdir()
+    configured = str(folder) if common_files == 'inherited' else 'invalid-relative-path' if common_files == 'invalid' else None
+    if configured is None:
+        monkeypatch.delenv(key, raising=False)
+    else:
+        monkeypatch.setenv(key, configured)
+    monkeypatch.setattr(adapter, '_windows_common_files_x86', lambda: None if common_files == 'unavailable' else folder)
     requests = []
     class Process:
         pid = 987654
@@ -534,12 +546,25 @@ def test_workspace_transport_sends_business_protocol_and_preserves_private_evide
             return json.dumps({'protocol_version': 4, 'status': 'observed',
                 'calls': [{'operation': 'PrivateNativeRead', 'hresult': 0, 'code': 0}]}), ''
         def poll(self): return 0
-    monkeypatch.setattr(adapter.subprocess, 'Popen', lambda *a, **k: Process())
+    def start(*args, env, **kwargs):
+        assert common_files != 'unavailable'
+        if common_files == 'inherited':
+            assert env is None
+        else:
+            assert env[key] == str(folder)
+        return Process()
+
+    monkeypatch.setattr(adapter.subprocess, 'Popen', start)
     monkeypatch.setattr(adapter, '_clean_native_temp', lambda pid, token: None)
     request = {'operation': 'read_sfc_graph', 'protocol_version': 1, 'installation': 'installed',
         'directory': str(tmp_path), 'owner_token': 'owned',
         'source': {'cpu': 'Q03UDV', 'codepage': 936, 'program_kind': 240, 'graph_profile': {'family': 'q-l'}}}
+    if common_files == 'unavailable':
+        with pytest.raises(adapter.WorkspaceSaveError, match='CommonProgramFiles'):
+            adapter._run_native_adapter('isolated-adapter', request, tmp_path, 10, adapter.WorkspaceSaveError)
+        return
     code, evidence = adapter._run_native_adapter('isolated-adapter', request, tmp_path, 10, adapter.WorkspaceSaveError)
+    assert adapter.os.environ.get(key) == configured
     assert code == 0 and evidence['protocol_version'] == 1
     assert evidence['calls'][0]['operation'] == 'PrivateNativeRead'
     assert len(requests) == 1 and requests[0]['schema_version'] == 4
@@ -852,7 +877,7 @@ def test_each_q_sfc_web_and_mcp_share_two_edits_download_and_reimport(tmp_path, 
     raw = q_native_sfc_programs()[cpu]
     app = _app(workspace, tmp_path / 'state')
     with TestClient(app, base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         imported = client.post('/api/gxw/import', headers=headers, json=dict(
             request_id='q-sfc-import', filename='q-sfc.gxw', data_base64=base64.b64encode(raw).decode()))
         assert imported.status_code == 201, imported.text
@@ -976,7 +1001,7 @@ def test_sfc_fx_measured_edit_profile_reaches_shared_preview_and_candidate(tmp_p
     assert calls == ['save', 'save']
     calls.clear()
     with TestClient(_app(tmp_path / 'workspace', tmp_path / 'state'), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         pid = client.post('/api/projects', headers=headers, json=dict(name='FX references', plc_model=menu, target_mode='ladder')).json()['id']
         imported = client.post('/api/sfc/proposals', headers=headers, json=dict(operation='import', project_id=pid,
             request_id='fx-import', data_base64=base64.b64encode(raw).decode()))
@@ -1050,7 +1075,7 @@ def test_sfc_ql_web_and_mcp_swaps_publish_the_saved_cold_grid(tmp_path, monkeypa
     app = _app(workspace, tmp_path / 'state')
     edit = dict(kind='swap_steps', left_step_reference=1, right_step_reference=2)
     with TestClient(app, base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         pid = client.post('/api/projects', headers=headers,
             json=dict(name='Q/L graph swap', plc_model='Q00J', target_mode='ladder')).json()['id']
         imported = client.post('/api/sfc/proposals', headers=headers, json=dict(operation='import', project_id=pid,
@@ -1265,7 +1290,7 @@ def test_sfc_native_name_normalization_keeps_shared_candidate_and_current_graph_
     calls.clear()
     app = _app(tmp_path / 'workspace', tmp_path / 'state')
     with TestClient(app, base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         pid = client.post('/api/projects', headers=headers, json={
             'name': 'SFC normalized source', 'plc_model': 'FX3U', 'target_mode': 'ladder'}).json()['id']
         imported = client.post('/api/sfc/proposals', headers=headers, json={'operation': 'import', 'project_id': pid,
@@ -1290,7 +1315,7 @@ def test_sfc_native_name_normalization_keeps_shared_candidate_and_current_graph_
         assert not read.is_error and read.structured_content['data']['model'] == current.json()['model']
     cold = _app(tmp_path / 'workspace', tmp_path / 'cold-state')
     with TestClient(cold, base_url=ORIGIN) as client:
-        reread = client.get('/api/sfc/source', headers=_login(client), params={'project_id': pid, 'version_id': vid})
+        reread = client.get('/api/sfc/source', headers={"Origin": ORIGIN}, params={'project_id': pid, 'version_id': vid})
         assert reread.status_code == 200 and reread.json()['model'] == current.json()['model']
     assert not calls
 
@@ -1354,7 +1379,7 @@ def test_sfc_referenced_error_reaches_shared_web_mcp_instruction_and_graph_proje
     monkeypatch.setattr(adapter.NativeWorkspaceSourceSave, 'read_sfc_graph', graph)
     app = _app(tmp_path / 'workspace', tmp_path / 'state')
     with TestClient(app, base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         pid = client.post('/api/projects', headers=headers, json={'name': 'SFC referenced error',
             'plc_model': 'FX3U', 'target_mode': 'ladder'}).json()['id']
         imported = client.post('/api/sfc/proposals', headers=headers, json={'operation': 'import',
@@ -1508,7 +1533,7 @@ def test_sfc_native_source_scope_reaches_web_and_mcp_without_promoting_missing_c
     raw, _, calls = native_replay('sfc-' + case if case.startswith('loader-') else 'sfc-scope-' + case)
     app = _app(tmp_path / 'workspace', tmp_path / 'state')
     with TestClient(app, base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         project = client.post('/api/projects', headers=headers, json={
             'name': 'SFC source scope', 'target_mode': 'ladder', 'plc_model': 'FX3U'}).json()
         pid = project['id']
@@ -1697,7 +1722,7 @@ def test_current_declaration_and_library_compile_locations_reach_web_and_standal
     monkeypatch.setattr(native, '_run_native_adapter', collect)
     app = _app(tmp_path / 'workspace', tmp_path / 'state')
     with TestClient(app, base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         project = client.post('/api/projects', headers=headers, json={
             'name': cpu + ' compile locations', 'target_mode': 'fbd', 'plc_model': cpu}).json()
         pid = project['id']
@@ -1791,7 +1816,7 @@ def test_sfc_graph_web_preview_and_mcp_candidate_use_the_shared_current_source(t
     monkeypatch.setattr(adapter.NativeWorkspaceSourceSave, 'read_sfc_graph', read_graph)
     app = _app(tmp_path/'sfc-workspace', tmp_path/'sfc-state')
     with TestClient(app, base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         pid = client.post('/api/projects', headers=headers, json={'name':'SFC graph', 'target_mode':'ladder'}).json()['id']
         imported = client.post('/api/sfc/proposals', headers=headers, json=dict(operation='import',project_id=pid,request_id='sfc-import',data_base64=base64.b64encode(raw).decode()))
         assert imported.status_code == 201
@@ -1887,13 +1912,13 @@ def test_imported_sfc_web_and_mcp_check_the_saved_current_child_source(tmp_path,
     raw, _, calls = native_replay(case)
     app = _app(tmp_path / 'sfc-workspace', tmp_path / 'sfc-state')
     with TestClient(app, base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         project = client.post('/api/projects', headers=headers, json={'name': 'SFC current source',
             'plc_model': 'FX3U', 'target_mode': 'ladder'}).json()
         pid = project['id']
         command = {'operation': 'import', 'project_id': pid, 'request_id': 'sfc-import',
                    'data_base64': base64.b64encode(raw).decode()}
-        assert client.post('/api/sfc/proposals', json=command).status_code == 403
+        assert client.post('/api/sfc/proposals', json=command, headers={'Origin': 'https://other.example'}).status_code == 403
         response = client.post('/api/sfc/proposals', headers=headers, json=command)
         assert response.status_code == 201, response.text
         proposal = response.json()
@@ -2371,17 +2396,17 @@ def test_copied_report_cannot_bind_to_another_version_with_identical_gxw(service
         native.record(project["id"], vid, command(native.list(project["id"], vid)["source_gxw_sha256"], native_gxw=upload))
 
 
-def test_http_routes_require_operator_csrf_and_explicit_attestation(tmp_path):
+def test_http_routes_require_local_origin_and_explicit_attestation(tmp_path):
     app = _app(tmp_path / "workspace", tmp_path / "state")
     with TestClient(app, base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         project, _, proposal = generate(app.state.service)
         vid = accept(app.state.service, proposal)
         route = f'/api/projects/{project["id"]}/versions/{vid}/native-validation'
         current = client.get(route)
         assert current.status_code == 200, current.text
         payload = command(current.json()["source_gxw_sha256"])
-        assert client.post(route, json=payload).status_code == 403
+        assert client.post(route, json=payload, headers={"Origin": "https://other.example"}).status_code == 403
         assert client.post(route, json={**payload, "attested": False}, headers=headers).status_code == 422
         response = client.post(route, json=payload, headers=headers)
         assert response.status_code == 201, response.text
@@ -2639,7 +2664,7 @@ def test_http_and_standalone_mcp_return_same_task_scope_for_a_requested_fb(tmp_p
     raw, _, calls = native_replay('FX3U-FX3UC')
     app = _app(tmp_path / 'workspace', tmp_path / 'state')
     with TestClient(app, base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         pid, vid = import_native_case(app.state.service, raw)
         payload = {'project_id': pid, 'version_id': vid, 'name': 'validate_project',
             'arguments': {'native': True, 'program': 'MODULE_FB.Program.pou'}, 'call_id': 'operator-check'}
@@ -2647,7 +2672,7 @@ def test_http_and_standalone_mcp_return_same_task_scope_for_a_requested_fb(tmp_p
         assert client.post('/api/agent/tools/call', headers=headers, json=payload).status_code == 403
         route = f'/api/projects/{pid}/versions/{vid}/native-validation/check'
         command = {'request_id': 'operator-check', 'program': 'MODULE_FB.Program.pou'}
-        assert client.post(route, json=command).status_code == 403
+        assert client.post(route, json=command, headers={'Origin': 'https://other.example'}).status_code == 403
         activity = app.state.service.mcp_activity(pid)
         response = client.post(route, headers=headers, json=command)
         assert response.status_code == 200, response.text
@@ -2682,7 +2707,7 @@ def test_complete_public_conversion_reaches_web_and_standalone_mcp_without_promo
     raw, witness, calls = native_replay(case)
     app = _app(tmp_path / 'public-conversion-workspace', tmp_path / 'public-conversion-state')
     with TestClient(app, base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         project = client.post('/api/projects', headers=headers, json={
             'name': 'Public conversion', 'plc_model': witness['cpu'], 'target_mode': 'fbd'}).json()
         imported = client.post('/api/fbd/proposals', headers=headers, json=dict(operation='import',
@@ -2723,7 +2748,7 @@ def test_original_public_conversion_layout_is_shared_by_web_and_mcp(tmp_path, na
     workspace = tmp_path / 'original-public-workspace'
     app = _app(workspace, tmp_path / 'original-public-state')
     with TestClient(app, base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         project = client.post('/api/projects', headers=headers, json={
             'name': 'Original public layout', 'plc_model': witness['cpu'], 'target_mode': 'ladder'}).json()
         imported = client.post('/api/sfc/proposals', headers=headers, json=dict(operation='import',

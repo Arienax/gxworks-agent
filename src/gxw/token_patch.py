@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Source-bound replacement of ordinary Ladder instructions, preserving context.
 
@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
+import json
 import re
 import struct
 
@@ -58,9 +59,17 @@ def _terminal_end_index(records, message):
     return ends[0]
 
 
+def _record_edit_error(location, message, identity, operation, *, check_expected=False):
+    old = json.dumps(identity, ensure_ascii=False)
+    new_records = (' Put new records in instructions, for example [{"op":"LD","args":["M0"]}].'
+                   if operation in {'insert_before', 'replace'} else '')
+    hint = 'Use the actual old record as expected' if check_expected else 'Original record'
+    return GXWFormatError(f'{location}: {message}.{new_records} {hint}: {old}')
+
+
 def edit_token_records(listing, edits, *, text_encoding, plc_model=None,
                        storage_context=None, allow_end_boundary=False,
-                       allow_draft=False) -> PreparedTokenRecords:
+                       allow_draft=False, source_bound=False) -> PreparedTokenRecords:
     """Apply one batch in original coordinates without a semantic/native check.
 
     Ladder POU bodies and SFC internal subprograms share the same record
@@ -74,51 +83,66 @@ def edit_token_records(listing, edits, *, text_encoding, plc_model=None,
     can_append = allow_end_boundary and not any(
         isinstance(record, TokenInstruction) and record.mnemonic == 'END' for record in listing.records)
     plans, moves = {}, {}
-    for edit in edits:
+    for edit_index, edit in enumerate(edits):
+        location = f'instruction_edits[{edit_index}]'
         if (not isinstance(edit, Mapping) or set(edit) - {'operation', 'record_index', 'expected', 'instructions', 'target_record_index'}
                 or edit.get('operation') not in {'replace', 'insert_before', 'delete', 'move_before'}
                 or type(edit.get('record_index')) is not int):
-            raise GXWFormatError('instruction edit requires operation and original record_index')
+            raise GXWFormatError(f'{location}: instruction edit requires operation and original record_index')
         index = edit['record_index']
-        boundary = edit['operation'] == 'insert_before' and can_append and index == len(listing.records)
-        if index in plans or not (0 <= index < len(listing.records) or boundary):
-            raise GXWFormatError('duplicate or out-of-range instruction edit')
+        operation = edit['operation']
+        location += f' ({operation}, record_index={index})'
+        boundary = operation == 'insert_before' and can_append and index == len(listing.records)
+        if not (0 <= index < len(listing.records) or boundary):
+            raise GXWFormatError(f'{location}: out-of-range instruction edit; '
+                                 f'original source has {len(listing.records)} records')
         source = None if boundary else listing.records[index]
-        if not boundary and (not isinstance(source, (TokenInstruction, TokenLabel, TokenText)) or (
-                isinstance(source, TokenInstruction) and source.mnemonic == 'END' and edit['operation'] != 'insert_before')):
-            raise GXWFormatError('source edit cannot replace opaque records or END')
+        if not boundary and not isinstance(source, (TokenInstruction, TokenLabel, TokenText)):
+            raise GXWFormatError(f'{location}: the actual old record is opaque and cannot be edited')
         identity = ({'op': source.text, 'args': []} if isinstance(source, TokenLabel) else
                     {'kind': source.role, 'text': source.text} if isinstance(source, TokenText) else
                     {'kind': 'end_boundary'} if boundary else
                     {'op': source.mnemonic, 'args': list(source.args)})
+        if index in plans:
+            raise _record_edit_error(location, 'duplicate instruction edit; use each original record_index once',
+                                     identity, operation)
+        if isinstance(source, TokenInstruction) and source.mnemonic == 'END' and operation != 'insert_before':
+            raise GXWFormatError(f'{location}: the actual old record is {{"op":"END","args":[]}}; '
+                                 'use insert_before with new records in instructions')
         expected = edit.get('expected')
-        fields = dict(expected) if isinstance(expected, Mapping) else None
+        fields = (identity if source_bound and 'expected' not in edit else
+                  dict(expected) if isinstance(expected, Mapping) else None)
         if fields is not None and 'raw_hex' in fields:
             original = '' if boundary else b''.join(token.raw for token in source.tokens).hex()
             if fields.pop('raw_hex') != original:
-                raise GXWFormatError('source edit raw_hex does not match the original record')
+                raise _record_edit_error(location, 'expected.raw_hex does not match the original record; '
+                    'omit it or copy the exact raw_hex from the current source', identity, operation, check_expected=True)
         if fields != identity:
-            raise GXWFormatError('instruction edit must match the complete current opcode and operands')
+            raise _record_edit_error(location, 'expected must match the complete current record',
+                                     identity, operation, check_expected=True)
         rows = edit.get('instructions', [])
-        if edit['operation'] == 'move_before':
+        if operation == 'move_before':
             target = edit.get('target_record_index')
             if (type(target) is not int or not (0 <= target < len(listing.records) or can_append and target == len(listing.records))
                     or target == index or rows):
-                raise GXWFormatError('source move requires a distinct original target_record_index and no instructions')
+                raise _record_edit_error(location, 'source move requires a distinct original target_record_index '
+                                         'and no instructions', identity, operation)
             moves.setdefault(target, []).append(index)
             plans[index] = ('move_before', ())
             continue
         if 'target_record_index' in edit:
-            raise GXWFormatError('target_record_index is only valid for move_before')
-        if (not isinstance(rows, list) or edit['operation'] != 'delete' and not rows
-                or edit['operation'] == 'delete' and rows):
-            raise GXWFormatError('instruction edit has invalid replacement sequence')
+            raise _record_edit_error(location, 'target_record_index is only valid for move_before', identity, operation)
+        if not isinstance(rows, list) or operation != 'delete' and not rows or operation == 'delete' and rows:
+            message = ('delete requires no instructions' if operation == 'delete' else
+                       f'{operation} requires a nonempty instructions array')
+            raise _record_edit_error(location, message, identity, operation)
         chunks = []
-        for row in rows:
+        for row_index, row in enumerate(rows):
             # A replacement sequence can retain the old instruction among
             # newly added records. Bind every compatible row to that source
             # so an unchanged float/string never travels through its display.
-            bound = source if edit['operation'] == 'replace' else None
+            bound = source if operation == 'replace' else None
+            row_location = f'{location}, instructions[{row_index}]'
             if isinstance(row, Mapping) and set(row) == {'raw_hex'}:
                 # A record the reader cannot decode travels as its own bytes. It is only
                 # accepted when the caller carries it from a bound source program, and the
@@ -126,26 +150,34 @@ def edit_token_records(listing, edits, *, text_encoding, plc_model=None,
                 try:
                     chunk = bytes.fromhex(row['raw_hex'])
                 except (TypeError, ValueError) as exc:
-                    raise GXWFormatError('carried record requires hexadecimal bytes') from exc
+                    raise _record_edit_error(row_location, 'carried record requires hexadecimal bytes',
+                                             identity, operation) from exc
                 if not chunk:
-                    raise GXWFormatError('carried record cannot be empty')
+                    raise _record_edit_error(row_location, 'carried record cannot be empty', identity, operation)
                 chunks.append(chunk)
             elif (isinstance(row, Mapping) and {'kind', 'text'} <= set(row)
                     and set(row) <= {'kind', 'text', 'flag'}):
-                chunks.append(encode_text_record(row['kind'], row['text'], text_encoding=text_encoding,
-                    profile=listing.profile,
-                    source_record=bound if isinstance(bound, TokenText) else None,
-                    storage_flag=row.get('flag')))
+                try:
+                    chunks.append(encode_text_record(row['kind'], row['text'], text_encoding=text_encoding,
+                        profile=listing.profile,
+                        source_record=bound if isinstance(bound, TokenText) else None,
+                        storage_flag=row.get('flag')))
+                except GXWFormatError as exc:
+                    raise _record_edit_error(row_location, str(exc), identity, operation) from exc
             else:
                 if not isinstance(row, Mapping) or set(row) != {'op', 'args'} or row['op'] == 'END':
-                    raise GXWFormatError('replacement instruction requires op/args and cannot contain END')
-                chunks.append(encode_instruction(row['op'], row['args'], profile=listing.profile,
-                    text_encoding=text_encoding, plc_model=plc_model, storage_context=storage_context,
-                    allow_draft=allow_draft,
-                    source_instruction=bound if isinstance(bound, TokenInstruction) or (
-                        isinstance(bound, TokenLabel) and isinstance(row['op'], str)
-                        and re.fullmatch(r'[PI][0-9]+', row['op'])) else None))
-        plans[index] = (edit['operation'], tuple(chunks))
+                    raise _record_edit_error(row_location, 'replacement instruction requires op/args and cannot contain END',
+                                             identity, operation)
+                try:
+                    chunks.append(encode_instruction(row['op'], row['args'], profile=listing.profile,
+                        text_encoding=text_encoding, plc_model=plc_model, storage_context=storage_context,
+                        allow_draft=allow_draft,
+                        source_instruction=bound if isinstance(bound, TokenInstruction) or (
+                            isinstance(bound, TokenLabel) and isinstance(row['op'], str)
+                            and re.fullmatch(r'[PI][0-9]+', row['op'])) else None))
+                except GXWFormatError as exc:
+                    raise _record_edit_error(row_location, str(exc), identity, operation) from exc
+        plans[index] = (operation, tuple(chunks))
     if any(target in plans and plans[target][0] != 'insert_before' for target in moves):
         raise GXWFormatError('source move target is also deleted, replaced or moved')
     chunks = []

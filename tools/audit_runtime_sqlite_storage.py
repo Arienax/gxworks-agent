@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Read-only physical SQLite attribution, not expanded JSON or runtime loading.
 
 No owner hydration, rebuild, extension loading, or original data is emitted.

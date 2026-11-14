@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Candidate-local, deterministic repair assembly; never activates a project.
 
 A rejected generated program is NOT the saved project baseline and cannot yet
@@ -22,8 +25,9 @@ class GenerationError(RuntimeError):
 
 
 class RepairAssemblyError(PLCJsonValidationError):
-    def __init__(self, path, reason):
+    def __init__(self, path, reason, **details):
         self.path, self.reason = path, reason
+        self.details = details
         super().__init__(f"{path}: {reason}")
 
 
@@ -138,10 +142,19 @@ _SEGMENTS = frozenset({"rungs", "rung_id", "branches", "branch_id", "y_offset_le
     "selected_approach", "networks", "plc_model"})
 REPAIR_REASONS = frozenset({"invalid_shared_input", "invalid_ladder_structure", "field_too_long",
     "repair_base_invalid", "repair_identity_invalid", "repair_shape_invalid", "repair_scope_violation",
-    "repair_no_progress", "validation_profile_unavailable"})
+    "repair_no_progress", "repair_requires_replan", "validation_profile_unavailable", "instruction_form_unresolved",
+    "input_condition_unresolved", "instruction_parameters_mismatch", "invalid_instruction_parameters",
+    "gxworks2_lowering"})
 
 
 def validation_diagnostic(error):
+    reason = getattr(error, "reason", None)
+    path = getattr(error, "path", None)
+    if isinstance(path, str) and path.startswith("content.") and reason in REPAIR_REASONS:
+        row = {"path": path, "reason": reason}
+        if opcode := getattr(error, "observed_opcode", None):
+            row["observed_opcode"] = opcode
+        return row
     text = str(error)
     path = getattr(error, "path", None) if isinstance(error, RepairAssemblyError) else None
     if path is None:

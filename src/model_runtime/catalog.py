@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Local capability catalog. Endpoint matching is exact; no network or SDK here.
 
 Inheritance is single-parent, bounded and cycle checked. Whole descriptors are
@@ -8,6 +11,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
@@ -49,27 +53,34 @@ class ModelCatalog:
                 raise ValueError("Catalog entry too large")
             data = path.read_bytes()
             digest.update(data)
-            item = json.loads(data)
-            if not isinstance(item, dict) or set(item) - {'id', 'schema_version', 'extends', 'match', 'parameters', 'capabilities', 'constraints', 'references', 'reviewed_at'}:
-                raise ValueError("Unexpected catalog fields")
-            name = item.get('id')
-            if not isinstance(name, str) or name in self.entries or len(name) > 128 or item.get('schema_version') != 1:
-                raise ValueError("Invalid or duplicate catalog entry")
-            match = item.get('match', {})
-            if not isinstance(match, dict) or set(match) - {'endpoints', 'models'}:
-                raise ValueError("Invalid catalog match")
-            for field in ('endpoints','models'):
-                values = match.get(field, [])
-                if not isinstance(values, list) or len(values)>128 or not all(isinstance(v,str) and 0<len(v)<=2048 for v in values):
-                    raise ValueError("Catalog match must be a bounded exact list")
-            for endpoint in match.get('endpoints', []):
-                endpoint_id(endpoint)
-            if 'extends' in item and not isinstance(item['extends'],str):
-                raise ValueError("Catalog supports one explicit parent")
-            self.entries[name] = item
+            document = json.loads(data)
+            items = document if isinstance(document, list) else [document]
+            if len(self.entries) + len(items) > 256:
+                raise ValueError("Catalog contains too many entries")
+            for item in items:
+                self._add_entry(item)
         self.revision = digest.hexdigest()[:16]
         for name in self.entries:
             self.expand(name)
+
+    def _add_entry(self, item):
+        if not isinstance(item, dict) or set(item) - {'id', 'schema_version', 'extends', 'match', 'parameters', 'capabilities', 'constraints', 'references', 'reviewed_at'}:
+            raise ValueError("Unexpected catalog fields")
+        name = item.get('id')
+        if not isinstance(name, str) or name in self.entries or len(name) > 128 or item.get('schema_version') != 1:
+            raise ValueError("Invalid or duplicate catalog entry")
+        match = item.get('match', {})
+        if not isinstance(match, dict) or set(match) - {'endpoints', 'models'}:
+            raise ValueError("Invalid catalog match")
+        for field in ('endpoints', 'models'):
+            values = match.get(field, [])
+            if not isinstance(values, list) or len(values) > 128 or not all(isinstance(v, str) and 0 < len(v) <= 2048 for v in values):
+                raise ValueError("Catalog match must be a bounded exact list")
+        for endpoint in match.get('endpoints', []):
+            endpoint_id(endpoint)
+        if 'extends' in item and not isinstance(item['extends'], str):
+            raise ValueError("Catalog supports one explicit parent")
+        self.entries[name] = item
 
     def expand(self, name, seen=()):
         if name in seen or len(seen) >= 8 or name not in self.entries:
@@ -95,7 +106,7 @@ class ModelCatalog:
         matches = []
         for name, item in self.entries.items():
             match = item.get('match', {})
-            if endpoint in {endpoint_id(url) for url in match.get('endpoints', [])} and model in match.get('models', []):
+            if model in match.get('models', []) and endpoint in {endpoint_id(url) for url in match.get('endpoints', [])}:
                 matches.append(name)
         if len(matches) > 1:
             raise ValueError("Ambiguous catalog model match")
@@ -103,10 +114,15 @@ class ModelCatalog:
         return selected, self.expand(selected)
 
 
+@lru_cache(maxsize=1)
+def _bundled_catalog(directory):
+    return ModelCatalog(directory)
+
+
 def resolve_capabilities(profile, *, api_key=None, metadata=None, catalog=None, observations=None):
     """Return a new scoped v3 contract without touching defaults or generating."""
     profile = copy.deepcopy(profile)
-    catalog = catalog or ModelCatalog()
+    catalog = catalog or _bundled_catalog(catalog_directory())
     model = str(profile.get('model') or '').strip()
     if not model or model == '__discover__':
         raise ValueError("Select a model before resolving capabilities")

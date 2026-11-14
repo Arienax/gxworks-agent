@@ -1,7 +1,7 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
-"""Operator-only product onboarding routes for local MCP clients.
+"""Workbench onboarding routes for local MCP clients.
 
 This module also hosts the small deterministic saved-IR export endpoint because
 it is registered from the same application bootstrap hook and requires no new

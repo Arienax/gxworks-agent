@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Bounded response-acceptance diagnostics without response text or credentials."""
 from __future__ import annotations
@@ -24,7 +24,7 @@ def _schema_segments():
     from model_runtime.responses import ResponseContract
     import application.response_contracts as workflow_response_contracts
     result = {"ladder", "patch", "arguments", "comment", "shared_inputs", "header_element", "inputs", "outputs", "branches", "type", "rung_id", "branch_id", "y_offset_level", "address", "expression", "opcode", "operands", "value", "mode", "delete_rung_ids", "confirmed_spec", "selected_approach", "networks"}
-    result.update({"r", "h", "s", "b", "i", "o", "or"})
+    result.update({"r", "h", "s", "b", "i", "o", "or", "instruction_edits", "instructions"})
     for contract in vars(workflow_response_contracts).values():
         if isinstance(contract, ResponseContract):
             for selector in contract.human_paths + contract.st_paths + contract.annotation_paths + contract.structured_paths:
@@ -164,7 +164,7 @@ def workflow_error_code(error):
         if isinstance(error, ModelProviderError):
             code = error.code
             allowed = {"authentication", "rate_limit", "timeout", "invalid_request", "unavailable",
-                       "protocol", "image_not_supported", "image_payload_too_large", "provider_error"}
+                       "protocol", "responses_unavailable", "image_not_supported", "image_payload_too_large", "provider_error"}
             return "model_" + (code if isinstance(code, str) and code in allowed else "provider_error")
         error = error.__cause__ or error.__context__
     return "generation_failed" if generation else None

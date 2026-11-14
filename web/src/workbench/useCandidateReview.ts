@@ -1,8 +1,8 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import { useEffect, useRef, useState } from "react";
-import type { Job, Proposal, Session, PreviewDocument, ApiSchema, GenerationPreview, ProposalPreview } from "../api/client";
+import type { Job, Proposal, WorkbenchConnection, PreviewDocument, ApiSchema, GenerationPreview, ProposalPreview } from "../api/client";
 import { activeJob, api, key } from "../api/client";
 import type { useGenerationResult } from "../features/GenerationResult";
 import type { Navigation, Setter, Translate } from "./types";
@@ -11,7 +11,7 @@ import type { ProjectWorkspace } from "./useProjectWorkspace";
 
 type Options = Navigation & {
   workspace: ProjectWorkspace; feed: ReturnType<typeof useJobFeed>;
-  generationResult: ReturnType<typeof useGenerationResult>; currentJob?: Job; session: Session | null;
+  generationResult: ReturnType<typeof useGenerationResult>; currentJob?: Job; connection: WorkbenchConnection | null;
   theme: string; specIsDirty: boolean; busy: boolean; guarded: (action: () => Promise<void>) => Promise<void>;
   setRefresh: Setter<number>; setOutputRetry: Setter<number>; setError: (message: string) => void;
   setNotice: (message: string) => void; t: Translate
@@ -19,7 +19,7 @@ type Options = Navigation & {
 };
 
 export function useCandidateReview(options: Options) {
-  const { workspace, feed, generationResult, currentJob, session, theme, specIsDirty, busy,
+  const { workspace, feed, generationResult, currentJob, connection, theme, specIsDirty, busy,
     guarded, setTab, setPanel, setModal, setRefresh, setOutputRetry, setError, setNotice, t, onShowResult } = options;
   const { pid, vid, version, loading, setVid, reloadProjectSilently } = workspace;
   const { jobs, jobId, setJobId, setJobs, setProposals, jobsPolling } = feed;
@@ -40,7 +40,7 @@ export function useCandidateReview(options: Options) {
   useEffect(() => {
     clearPreview(); setVersionDrawing(null); shownCandidates.current.clear();
     failedPreviews.current.clear(); terminalJobs.current.clear();
-  }, [pid]);
+  }, [pid, connection?.path]);
   async function openSavedVersion(versionId: string, previewTheme = theme) {
     const epoch = workspace.capture();
     const fresh = await reloadProjectSilently(pid);
@@ -82,7 +82,7 @@ export function useCandidateReview(options: Options) {
 
   useEffect(() => {
     if (
-      !session ||
+      !connection ||
       busy ||
       loading ||
       specIsDirty ||
@@ -102,7 +102,7 @@ export function useCandidateReview(options: Options) {
     generationResult.blocked,
     jobs,
     jobId,
-    session,
+    connection,
     busy,
     loading,
   ]);
@@ -112,7 +112,7 @@ export function useCandidateReview(options: Options) {
     if (
       currentJob?.status !== "completed" ||
       typeof saved !== "string" ||
-      !session ||
+      !connection ||
       busy ||
       loading ||
       specIsDirty ||
@@ -130,7 +130,7 @@ export function useCandidateReview(options: Options) {
         throw e;
       }
     });
-  }, [currentJob, session, busy, loading, jobs, jobId, pid]);
+  }, [currentJob, connection, busy, loading, jobs, jobId, pid]);
 
   async function openGenerationResult(previewTheme = theme, reread = false) {
     const epoch = workspace.capture();
@@ -295,11 +295,11 @@ export function useCandidateReview(options: Options) {
       setJobId(result.job.id);
       setJobs((old) => [result.job!, ...old]);
     }
-    if (result.proposal?.result?.version_id) setVid(String(result.proposal.result.version_id));
-    setSelectedProposal(null);
-    setPreview(null);
-    setNotice(t("操作完成"));
     await reloadProjectSilently(pid);
+    if (!workspace.isCurrent(epoch)) return;
+    if (result.proposal?.result?.version_id) setVid(String(result.proposal.result.version_id));
+    clearPreview();
+    setNotice(t("操作完成"));
   }
 
   async function proposeExecution(action: string, planId?: string, versionId = vid) {

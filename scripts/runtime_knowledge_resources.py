@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Explicit runtime knowledge allowlist, shared by all package collectors."""
 from pathlib import Path
 from contextlib import closing
@@ -15,13 +18,15 @@ FILES = (
     ("resources/knowledge/runtime/diagnostic_facts.json", "knowledge/runtime"),
     ("resources/knowledge/THIRD_PARTY_NOTICES.md", "knowledge"),
     ("resources/knowledge/function_relations.json", "knowledge"),
+    ("resources/knowledge/retrieval_vocabulary.json", "knowledge"),
+    ("skills/gxworks-mcp-router/SKILL.md", "skills/gxworks-mcp-router"),
 )
 INSTRUCTION_FILES = (
     'common.json', 'device_definitions.json', 'fx3u_contract_promotions.json', 'fx3u_instruction_quarantine.json',
     'fx3u_operand_semantic_promotions.json', 'fx3u_verified_opcodes.json', 'fx3u.json', 'fx5u.json',
-    'instruction_behavior_facts.json', 'instruction_capabilities.json', 'instruction_definitions.json.gz',
-    'instruction_source_authority.json', 'modifier_rules.json', 'operand_semantic_coverage_summary.json',
-    'fx3u_step_widths.json',
+    'instruction_families.json', 'instruction_capabilities.json', 'instruction_definitions.json.gz',
+    'instruction_source_authority.json', 'modifier_rules.json',
+    'fx3u_step_widths.json', 'fbd_language_rules.json', 'st_language_rules.json', 'pwm_contract.generated.json',
 )
 
 
@@ -65,7 +70,7 @@ def _inspect_public_value(value):
             _inspect_public_value(child)
 
 
-def runtime_instruction_data(root, *, native_encoding_source=None):
+def runtime_instruction_data(root, *, native_encoding_source=None, include_compiled_catalog=False):
     root = Path(root)
     directory = root / 'resources/instructions/mitsubishi'
     manifest = root / 'resources/knowledge/runtime/instruction_definitions.manifest.json'
@@ -74,13 +79,17 @@ def runtime_instruction_data(root, *, native_encoding_source=None):
         manifest = local_manifest
     use_store = manifest.exists() or manifest.is_symlink()
     names = [name for name in INSTRUCTION_FILES if not (use_store and name == 'instruction_definitions.json.gz')]
+    if include_compiled_catalog:
+        from plc.instruction_catalog_store import CATALOG_FILENAME
+
+        names.append(CATALOG_FILENAME)
     result = [(str(Path(native_encoding_source) if native_encoding_source is not None and name == 'fx3u_step_widths.json' else directory / name), 'resources/instructions/mitsubishi') for name in names]
     for source, _ in result:
         if not Path(source).is_file():
             raise FileNotFoundError(source)
     if use_store:
         from plc.instruction_owner_store import OwnerDefinitionStore
-        store = OwnerDefinitionStore(manifest)
+        store = OwnerDefinitionStore(manifest, verify_integrity=True)
         try:
             metadata = store.metadata
             if metadata.get('corpus_kind') != 'authored_plc_facts_v1' or metadata.get('documents'):
@@ -95,6 +104,12 @@ def runtime_instruction_data(root, *, native_encoding_source=None):
             store.close()
         destination = 'resources/instructions/mitsubishi' if manifest == local_manifest else 'knowledge/runtime'
         result.extend([(str(manifest), destination), (str(store.database_path), destination)])
+        artifact = metadata.get('vector_artifact')
+        if artifact:
+            sidecar = store.database_path.parent / artifact
+            if not sidecar.is_file():
+                raise FileNotFoundError(sidecar)
+            result.append((str(sidecar), destination))
         return result
     with gzip.open(directory / 'instruction_definitions.json.gz', 'rt', encoding='utf-8') as stream:
         payload = json.load(stream)
@@ -151,8 +166,23 @@ def audit_packaged_knowledge(package):
         from plc.instruction_owner_store import OwnerDefinitionStore
         store = OwnerDefinitionStore(package / 'knowledge/runtime/instruction_definitions.manifest.json')
         allowed.add('knowledge/runtime/' + store.database_path.name)
+        if store.metadata.get('vector_artifact'):
+            allowed.add('knowledge/runtime/' + store.metadata['vector_artifact'])
         store.close()
     actual = {p.relative_to(package).as_posix() for p in (package / "knowledge").rglob("*") if p.is_file()}
     if actual != allowed:
         raise ValueError("Knowledge package differs from allowlist: " + repr(sorted(actual ^ allowed)))
     assert_fact_database(package / "knowledge/runtime/plc_facts.sqlite")
+
+
+def unique_runtime_data(items):
+    """Resolve duplicate collectors while rejecting different inputs for one destination."""
+    by_destination = {}
+    for source, directory in items:
+        key = (Path(directory) / Path(source).name).as_posix().casefold()
+        resolved = Path(source).resolve()
+        previous = by_destination.get(key)
+        if previous is not None and previous[0] != resolved:
+            raise ValueError('Conflicting runtime package destination: ' + key)
+        by_destination[key] = (resolved, directory)
+    return [(str(source), directory) for source, directory in by_destination.values()]

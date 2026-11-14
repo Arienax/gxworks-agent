@@ -74,8 +74,9 @@ def test_analysis_uses_technical_values_without_proofs_or_source_identities():
         knowledge_builder=lambda *a, **k: KnowledgeContext(block, manifest),
         resolve_opcode=lambda op: DEFAULT_INSTRUCTION_REGISTRY.resolve_form(op, cpu='FX3U'))
     assert 'SENTINEL' not in context.system_prompt
-    assert '"knowledge_status":"source_verified"' in context.system_prompt
-    assert '1024' in context.system_prompt and 'instruction_facts' in context.system_prompt
+    assert '"knowledge_status"' not in context.system_prompt
+    assert '"memory.limit":{"maximum":1024}' in context.system_prompt
+    assert 'instruction_facts' in context.system_prompt
     assert context.knowledge_context.manifest == manifest
 
 

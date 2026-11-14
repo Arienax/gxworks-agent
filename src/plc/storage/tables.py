@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """The native token tables and CPU storage profiles, loaded once for every consumer.
 
 Files are read from the shipped template directory; the location is unchanged and both

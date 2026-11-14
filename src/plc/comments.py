@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """PLC/GX device-comment policy.
 
 Device comments are compact human-facing names, not a second copy of the

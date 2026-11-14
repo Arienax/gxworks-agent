@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import type { Job } from "../api/client";
 import { Button } from "../components/ui";
@@ -28,10 +28,12 @@ const errorMessages: Record<string, string> = {
   model_authentication: "模型服务认证失败，请检查 API Key 和访问权限。",
   model_rate_limit: "模型服务请求过于频繁，请稍后重试。",
   model_invalid_request: "模型服务拒绝了请求，请检查模型配置和输入。",
+  model_responses_unavailable: "模型服务地址的 Responses 接口不可用，请检查 API URL 是否支持 /responses。",
   model_unavailable: "模型服务暂时不可用，请检查连接或稍后重试。",
   model_protocol: "模型回复不完整，请重试或更换模型。",
   model_provider_error: "模型服务调用失败，请检查配置或稍后重试。",
   generation_failed: "生成失败，请重试。",
+  input_conflict: "当前任务无法继续使用原工程或资料，请检查当前版本后重新运行。",
 };
 
 function FailureMessage({ job, t }: { job: Job; t: (key: string) => string }) {

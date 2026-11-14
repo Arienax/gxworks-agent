@@ -1,8 +1,12 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Public tool declarations grouped by their stable capabilities."""
 from __future__ import annotations
 from itertools import chain
 from agent_runtime.tool_policy import SAFE_TOOL_NAMES
 from agent_runtime.tool_registry import ToolDefinition
+from simulator.io_example import IO_EXAMPLE_SCHEMA
 from agent_runtime.engineering_schema import (
     _engineering_object,
     _engineering_native_schema,
@@ -98,7 +102,7 @@ def program_definitions(generation):
     )
     yield ToolDefinition(
         "search_plc_manual",
-        "检索当前 PLC 型号的指令、语言及软元件事实。指令按已登记的族关系组装参数表、行为和适用条件，保留实际请求的助记符；共享修饰知识只返回一次。精确地址规则区分编号范围、默认分配和参数条件，不表示当前已分配或原生访问许可；来源记录仅供显式 debug 查询。",
+        "检索当前 PLC 型号的指令、语言及软元件事实。指令按已登记的族关系组装参数表、行为和适用条件，保留实际请求的助记符；共享修饰知识只返回一次。Ladder 的已知具名指令形式在 instruction_forms 中交付。精确地址规则区分编号范围、默认分配和参数条件，不表示当前已分配或原生访问许可；来源记录仅供显式 debug 查询。",
         {
             "type": "object",
             "properties": {
@@ -118,8 +122,8 @@ def program_definitions(generation):
                     "type": "boolean", "default": False,
                     "description": "仅显式调试时设为 true，通过 fact_packet 返回完整结构化事实、来源和核验记录。普通生成与分析保持 false。",
                 },
-                "language": {'type': 'string', 'enum': ['ladder', 'st', 'fbd'],
-                    'description': '目标语言；省略时从问题识别，不以语言替代行为/时序问题。'},
+                "language": {'type': 'string', 'enum': ['ladder', 'st', 'fbd', 'sfc'],
+                    'description': '默认使用当前保存版本或工程语言，可显式查询另一种语言。无工程时从问题识别。coverage.language 给出本地匹配手册与缺项。'},
                 "aspects": {'type': 'array', 'items': {'type': 'string', 'enum': [
                     'arity', 'order', 'roles', 'purpose', 'unit', 'encoding', 'devices', 'types',
                     'effects', 'execution', 'constraints', 'st_call', 'fbd_call', 'operand_range', 'operand_condition',
@@ -140,9 +144,9 @@ def program_definitions(generation):
     yield ToolDefinition(
         "validate_project",
         (
-            '默认校验当前程序；native=true 在隔离工作区检查当前版本已绑定的 GXW 快照，分别返回编译、公开检查、底层重检、诊断和当前源码对应状态。仅有源码或 '
-            'CSV 不能启动原生检查；简单 Ladder 必须有明确原生 CPU，并完整回读源码词法、与当前候选的指令逐项匹配，覆盖外保留为未验证。program 仅标识请'
-            '求的 POU 上下文，实际检查范围以 selection 和 targets 为准。不会操作 GX 界面、PLC 或写入项目版本。'
+            '默认运行当前语言的本地检查；native=true 在隔离后台工作区编译和检查当前保存版本的 Ladder/ST/FBD/SFC GXW。'
+            '返回 compilation、public_check、诊断及源码对应状态；program 指定请求的 POU，实际范围见 selection/targets。'
+            '本工具用于检查，保留当前工程版本。候选确认保存发现可用 GX Works2 后会自动编译；需单独编译保存为新版本时用 execute_native_engineering 的 background 模式。'
         ),
         {"type": "object", "properties": {
             "native": {"type": "boolean", "description": "显式启动已保存 GXW 的离线原生检查；默认 false。"},
@@ -153,13 +157,13 @@ def program_definitions(generation):
     )
     yield ToolDefinition(
         "compile_project",
-        "从当前 PLC IR 临时生成并校验 JSON、SVG、ST、程序 CSV 和注释 CSV；不会写入项目版本或操作 GX Works2。",
+        "运行 Core 本地管线：Ladder IR 可生成 JSON、SVG、衍生 ST 和 CSV 等临时产物，其他源码形式按当前实现返回静态检查或未编译状态。以 compiled/status/validation 为准；此工具不保存版本。GXW 交付和自动原生编译由候选确认保存流程完成。",
         _EMPTY_OBJECT_SCHEMA,
         _compile_project,
     )
     yield ToolDefinition(
         "validate_current_program",
-        "对当前所选梯形图运行确定性的本地结构校验与评审规则，不调用 AI 修改程序。",
+        "按当前语言运行本地检查：Ladder 校验网络或有序指令；ST 结合声明、类型与调用上下文检查正文；FBD/SFC 返回结构、接口及 issues。返回静态检查与语义覆盖状态，原生编译结果由保存流程或 validate_project(native=true) 提供。",
         _EMPTY_OBJECT_SCHEMA,
         _validate_current_program,
     )
@@ -168,16 +172,21 @@ def program_definitions(generation):
 def generation_definitions(generation):
     yield ToolDefinition(
         "get_generation_context",
-        "读取与内置 API 共用的生成提示、工程、规格和本地事实。FBD 必须从本工具取得 device_address_rules、language_rules、完整接口和受影响源码；按 output_contract 选择单图候选或 ST/FBD 联合事务。无版本时也可用，不调用模型。",
+        (
+            "读取 Ladder/ST/FBD/SFC 的生成或离线编辑上下文，按 output_contract 提交候选或联合事务。无 GXW 的 ST/SFC 返回 operation=generate；FBD 返回语言、地址规则、完整接口及关联源码。"
+            "候选确认保存优先交付 GXW；可用 GX Works2 自动编译、保存及冷重开。无安装时保留可生成的离线 GXW 并标注未原生编译；无法生成 GXW 时才按语言降级。"
+            "编译失败仍保留 GXW 与诊断，失败版本不激活。结果的 delivery 含 preferred_format/actual_format/primary_artifact/degraded/reason，validation 返回验证状态。上下文读取只读。"
+        ),
         {
             "type": "object",
             "properties": {
                 "user_requirement": {
                     "type": "string", "maxLength": 64000,
-                    "description": "本次生成或修改需求；省略时仍返回当前工程上下文。",
+                    "description": "新 Direct 任务传用户原文，编辑只传本轮用户修改。确认后的 Design 直接沿用保存的规格和选中方案。不得加入模型提出的方案、容量、地址或检索词。",
                 },
+                "instruction_details": {"type": "boolean", "description": "新建程序时随上下文一次读取当前型号和工程语言的候选指令事实与缺项。读完后在同一次生成中比较和提交。"},
                 "workflow": {"type": "string", "enum": ["direct_generation", "detailed", "plan_review"],
-                             "description": "新工程默认先规划；变更工艺、参数或实现分工先用 plan_review 更新规格，再确认和生成。明确直接生成可选择 direct_generation。"},
+                             "description": "新程序直接生成（含跨品牌代码移植转写与已给定完整规格）使用 direct_generation；Ladder/ST/FBD/SFC 处于未确认 Design 会话时，均可显式传 direct_generation 配合 user_requirement 退出 Design 切换为直接生成；已确认 Design 规格按 detailed 实施（确认后的 Design 工程省略此项时也默认返回 compact_ladder），已保存的 canonical Ladder 返回 compact 局部编辑合同，只需传入本次修改；原生有序源码沿用来源补丁入口。"},
                 "program": {"type": "string", "minLength": 1, "description": "已有 GXW 中要规划或修改的完整逻辑程序名。"},
                 "execution_mode": {"type": "string", "enum": ["background", "live"],
                     "description": "选择保存版本的后台上下文或持续原生会话当前确认的源码。省略时优先使用已启动的原生会话。"},
@@ -192,7 +201,7 @@ def generation_definitions(generation):
     )
     yield ToolDefinition(
         "create_program_candidate",
-        "提交完整或局部 ladder JSON，复用 API 的兼容整理、结构检查和临时编译，返回待确认候选；device_comments 只写最多16字符的软元件用途短名称，不写动作过程；不再次调用模型或导入 GX Works2。",
+        "提交完整或局部 ladder JSON，经共享解析、结构检查和本地编译生成待确认候选。可用 generation_context_id 或 implementation_review 引用本次上下文；多个任务并行时明确引用。确认保存优先通过本机 GX Works2 与 v4 后台组件按所选 CPU 无基底创建并编译保存 GXW（型号是否支持 Program 工程见 output_contract.gxw_delivery；仅参数型号或未安装 GX Works2 时返回程序与注释 CSV 及降级原因）。device_comments 填最多16字符的软元件用途短名称。",
         {
             "type": "object",
             "properties": {
@@ -202,13 +211,14 @@ def generation_definitions(generation):
                 },
                 "ladder": {
                     "type": "object",
-                    "description": "Full or partial ladder JSON from get_generation_context; the shared API parser validates and normalizes compatible encodings.",
+                    "description": "按 output_schema 直接将程序对象传入此字段。Direct 使用 result 对象，先在 decisions 记录候选及指令选择，再输出 program 和 open_items。已确认的 Design 使用 {r:[...]}，旧版上下文兼容 ladder_v1 {rungs:[...]}。device_comments 兼容 [{address,comment}] 与 {address:comment}。不要外包 {ladder:...} 或 {networks:...}，不要用示例或空工程试格式。",
                 },
+                "io_example": IO_EXAMPLE_SCHEMA,
                 "workflow": {"type": "string", "enum": ["direct_generation", "detailed"],
                     "description": "新工程默认先确认规格；仅用户明确要求直接生成时选择 direct_generation。已有保存版本的维护入口保持兼容。"},
                 "generation_context_id": {
                     "type": "string", "maxLength": 128,
-                    "description": "Copy the ID returned by get_generation_context to preserve source lineage. Optional; absence or expiry is recorded as a trace gap, not a validation failure.",
+                    "description": "Optional task reference. Supply it only to select among concurrent generation tasks.",
                 },
             },
             "required": ["ladder"],
@@ -219,17 +229,21 @@ def generation_definitions(generation):
     )
     yield ToolDefinition(
         "patch_program",
-        "在当前保存版本上修改 Network 或来源绑定的 GXW 指令，生成差异及候选。已有 GXW 使用 instruction_edits 的原始 record_index 和完整 expected；P/I 标签用 op=P0 或 I0、args=[]，来源标签 expected 同形。declaration_edits 使用既有表名及 upserts/renames/remove；指令、标签、声明、注释联合离线写回，原文件保留。不会调用原生编译或同步设备。",
+        "在当前保存版本上修改 Network 或来源绑定的 GXW 指令，生成差异及候选。GXW 补丁使用 patch.instruction_edits 的原始 record_index；已绑定的源码由后端读取旧记录，省略 expected。新增记录写在 instructions，P/I 标签用 op=P0 或 I0、args=[]。declaration_edits 使用既有表名及 upserts/renames/remove；指令、标签、声明、注释联合离线写回。确认后保存新版本，发现可用 GX Works2 后自动编译、保存及冷重开，原文件保留。",
         {
             "type": "object",
             "properties": {
                 "generation_context_id": {
                     "type": "string", "maxLength": 128,
-                    "description": "Optional context receipt from get_generation_context; preserves edit discovery evidence without adding a model call.",
+                    "description": "Optional task reference to select among concurrent reads of this source version.",
+                },
+                "save_policy": {
+                    "type": "string", "enum": ["draft", "checked"],
+                    "description": "兼容写法，等同 patch.save_policy。两处都提供时必须相同。",
                 },
                 "patch": {
                     "type": "object",
-                    "description": "基于当前 revision/sha256 的 Network 补丁；有序 GXW 源码改用 instruction_edits，保留真实执行顺序。",
+                    "description": "基于当前版本的补丁。图形 IR 使用 operations；有序 GXW Ladder 使用原始 record_index 提交 instruction_edits，可与 device_comments、declaration_edits 联合提交。",
                     "properties": {
                         "base_revision": {"type": "integer"},
                         "base_ir_sha256": {"type": "string"},
@@ -265,8 +279,9 @@ def generation_definitions(generation):
                         },
                         'comment_table': {'type': 'string', 'maxLength': 512},
                         'declaration_edits': _engineering_declaration_edits(),
-                        'instruction_edits': {'type': 'array', 'maxItems': 512, 'items': _source_instruction_edit_schema()},
-                        'save_policy': {'enum': ['draft', 'checked']},
+                        'instruction_edits': {'type': 'array', 'maxItems': 512, 'items': _source_instruction_edit_schema(bound=True)},
+                        'save_policy': {'type': 'string', 'enum': ['draft', 'checked'],
+                            'description': '已有 GXW 的离线保存策略，直接调用默认 checked。'},
                     },
                     'anyOf': [{'required': ['operations']}, {'required': ['instruction_edits']},
                               {'required': ['device_comments']}, {'required': ['declaration_edits']}],
@@ -284,22 +299,28 @@ def native_definitions(generation):
     yield ToolDefinition(
         "import_current_program_to_gxworks2",
         "请求把当前所选梯形图版本导入已打开的 GX Works2 工程。该工具只生成确认请求；用户明确确认后才会由既有高层导入服务执行。",
-        _EMPTY_OBJECT_SCHEMA,
+        {"type": "object", "properties": {
+            "project_path": {"type": "string", "minLength": 1, "maxLength": 4096,
+                "description": "当前 GX Works2 打开的 .gxw 完整绝对路径。标题被截断或只有文件名时必须提供，并核对该进程的文件占用；不会打开或切换工程。"},
+        }, "additionalProperties": False},
         _request_gxworks2_import,
         confirmation_required=True,
     )
     yield ToolDefinition('execute_native_engineering',
     (
-        '请求在独立 GX Works2 进程和托管工程副本中执行显式工程方案。持续会话接受原生 FX/Q/L 可编程 CPU 菜单，实际操作按具体 CPU、软件版本和中'
-        '英日界面的已验证能力执行；仅参数型号不能执行程序操作。后台批次仍限已验证 FX3U。标签、ST FB、普通 ST Program、FBD 调用与改接、分配、编译'
+        '对已保存的 Ladder/ST/FBD/SFC GXW，优先使用 plan.mode="background"，commands 依次为 compile、save、reopen。'
+        '在隔离后台原生工作区编译、保存并重开核对，成功后交付同语言的新版本；不打开可见编辑会话，不写 PLC。'
+        '需要可见编辑时才使用旧批次或 mode="live"，两者仅支持 FBD/ST。持续会话接受原生 FX/Q/L 可编程 CPU 菜单，实际操作按具体 CPU、软件版本和中'
+        '英日界面的已验证能力执行；仅参数型号不能执行程序操作。旧可见批次仍限已验证 FX3U。标签、ST FB、普通 ST Program、FBD 调用与改接、分配、编译'
         '、当前地址、保存和重开共用现有审批；新 Program 需明确已有资源和任务。图形动作使用当前源码节点和连线标识，连接显式给出端口及正交路径。不接受路径、PID'
         ' 或原生驱动参数。'
     ),
     _engineering_native_schema(),
     _request_native_engineering, confirmation_required=True)
     yield ToolDefinition('get_fbd_catalog',
-    '读取当前 CPU 的 FBD 模板、源码端口、声明和 parameter_schema；默认 full，task 或 templates 可收窄目录，精确缺项不替换。生成前仍须 get_generation_context 的语言及地址规则。模板按实际 CPU 菜单绑定，当前 FBD 流程不支持 FX1。',
+    '读取当前 CPU 与工程的 FBD 对象目录、源码端口、声明和 parameter_schema；默认 full，task 或 templates 可选取接口及依赖闭包，缺项见 missing_templates。生成前通过 get_generation_context 取得语言、地址规则及可用路径；目录中的模板表示可调用对象及其接口。',
     {'type': 'object', 'properties': {'program': {'type': 'string'},
+        'user_requirement': {'type': 'string', 'description': '用于 task 目录裁剪的用户需求。'},
         'catalog_scope': {'type': 'string', 'enum': ['task', 'full'], 'default': 'full',
             'description': 'task 只返回当前程序依赖闭包，full 返回完整模板表。'},
         'templates': {'type': 'array', 'items': {'type': 'string', 'minLength': 1},
@@ -321,17 +342,19 @@ def native_definitions(generation):
      'additionalProperties': False}, _read_fbd_definition)
     yield ToolDefinition('create_fbd_candidate',
     (
+        '复杂工程用职责清晰的 ST 功能块组装，独立状态用独立实例；缺少实现时先 create_st_fb，再读取接口并连接，避免将完整工序展开为大量逻辑门。'
+        '尚无保存版本的 FBD 工程可先 create_st_fb，后台工厂按所选 CPU 无基底新建并写入首个定义；后续定义及主图使用该实际版本。'
         '先读取 get_generation_context，按其中 FBD 语言、地址和接口规则编写工程副本。ST 接口/正文与受影响 FBD 调用者联合修改用 edit_gxw_project。generate/edit 的 model 可只填 networks：calls 用 id/type/instance/argum'
         'ents，组合逻辑用 nodes 和 from/to 端口连接。Core 从当前定义生成接口、IN_OUT、分块和布线，不需要坐标；参数 schema 见 ge'
         't_fbd_catalog.parameter_schema。原有 v2 对象编辑仍支持。create_structure 用 source_name/memb'
         'ers 新建类型；create_st_fb 用 source_name/declarations/st_text 编写完整 ST FB；edit_st_fb 省'
         '略 declarations 时保留接口；edit_st_function/edit_st_source 编辑既有 FUNCTION 或明确选中的 ST 正文。已有图形、ST 和声明编辑使用离线事务；'
-        '当前调用显式 native_save=true 才执行原生保存，历史版本的选择不授权后续原生调用。edit_global_labels/edit_pou_labels 可用 remove_declarations 删除本表已有行。create_global_labels/edit_global_labels 用表名和 declarations 新'
+        '确认保存后优先交付 GXW，发现 GX Works2 自动编译、保存及冷重开；native_save=true 也可要求准备阶段原生保存。edit_global_labels/edit_pou_labels 可用 remove_declarations 删除本表已有行。create_global_labels/edit_global_labels 用表名和 declarations 新'
         '建或更新全局表，结构设备映射用 member_devices；edit_pou_labels 用 POU 名和 declarations 更新局部表。confi'
         'gure_project 用目录 project_configuration 的 source_name 和 options 修改 system_variabl'
         'e_ranges，program_capacity 当前仅支持已验证 FX3U/FX3UC 的 16000/64000。create_fb 新建空 FBD FB'
-        ' 后用 edit 编写图形。定义和配置操作需基础版本。import_library 转移已覆盖的 ST 库实现，不能转移 FBD 库正文；create_program 需资源和任务。compile '
-        '在当前基础版本上原生编译、完整检查、保存并冷重开比较三个代码通道，不接受源码修改参数；运行验证另行执行。'
+        ' 后用 edit 编写图形。除首个 create_st_fb 外，定义和配置操作需基础版本。import_library 转移已覆盖的 ST 库实现，不能转移 FBD 库正文；create_program 需资源和任务。compile '
+        '在当前基础版本上原生编译、完整检查、保存并冷重开比较三个代码通道，不接受源码修改参数。无法生成 GXW 时交付结构化候选及已有预览；编译失败保留 GXW 与诊断，失败版本不激活。'
     ),
     _engineering_fbd_schema(),
     generation.fbd, confirmation_required=True)
@@ -341,11 +364,11 @@ def native_definitions(generation):
      'additionalProperties': False}, _read_st_project)
     yield ToolDefinition('create_st_candidate',
     (
-        '普通 ST Program 工程候选。generate 接受完整 st_code，可为没有 GXW 的新工程或源码版本保存静态检查后的 UTF-8 ST；此路径不生成 GXW 或执行原生操作。'
-        'from_candidate 接受 candidate v2（schema_version=2、language=st、p'
-        'rogram、declaration_edits.upserts、task_binding），绑定当前 GXW 的实际任务、声明及 CPU，检查后冻结原生创建/'
-        '编辑、编译、保存与冷重开方案。也兼容 create_st_program 和 import；edit_st_program/edit_st_fb/edit_st_function 或通用 edit_st_source 联合离线写入既有正文和声明表，保留对象身份及 FUNCTION 返回类型。declarations 是完整列表，省略保留。新建对象继续使用隔离原生路径及 Core '
-        '回读。语法、语义、原生编译和行为状态分别记录；方案获准后沿共享原生事务交付，失败不激活版本。'
+        'ST 候选：新工程用 generate 提交 st_text 与 declarations；create_st_program 向已有工程添加 Program，使用该工程实际 resource/task。'
+        'edit_st_program/edit_st_fb/edit_st_function/edit_st_source 联合离线写入正文与声明，保留源码身份及 FUNCTION 返回类型；declarations 给出完整列表则替换，省略则保留。'
+        'import 导入 GXW；from_candidate 接受 v2 的 program、declaration_edits.upserts 和 task_binding。'
+        '确认保存优先交付 GXW，新工程由 GX Works2 1.635.0.1 与 v4 后台组件按实际 CPU 无基底创建，正文和声明绑定实际 Program/任务，自动编译、保存及冷重开。'
+        '无法生成 GXW 时返回代码 TXT、全局标签 CSV 与原因；编译失败保留 GXW 和诊断，失败版本不激活。'
     ),
     _engineering_st_schema(),
     _create_st_candidate, confirmation_required=True)
@@ -355,17 +378,20 @@ def native_definitions(generation):
      'additionalProperties': False}, _read_sfc_project)
     sfc_definition = ToolDefinition('create_sfc_candidate',
     (
-        '离线编辑已有 SFC。child_edits 按 kind/name 定位内部 action/zoom/transition，可 create/edit/delete/rename/renumber；'
-        '正文用 instructions、来源绑定 instruction_edits 或原有 records_hex，action 用 number/registrations。'
+        'generate 新建 SFC：graph_edits 中的 rebuild 提交完整 symbols，child_edits 写子程序与注册；block 默认 Block/0/SFC，用户可指定 data_name/title/number。'
+        '确认保存由 GX Works2 1.635.0.1 与 v4 后台组件按实际 CPU 无基底创建、编译、保存及冷重开。无法生成 GXW 时返回结构化候选及已有预览；编译失败保留 GXW 与诊断。'
+        'import 导入 GXW；edit 离线编辑既有 SFC。child_edits 按 kind/name 定位内部 action/zoom/transition，可 create/edit/delete/rename/renumber；'
+        'zoom/transition 正文用 instructions、来源绑定 instruction_edits 或原有 records_hex，action 用 number/registrations 绑定 zoom。'
         'graph_edits 的 rebuild 用完整 symbols 增删步骤/条件/分支/汇合/跳转并联合维护内部注册；FX步骤可显式 action_number。'
         'renumber 用 steps/transitions/actions 的 before/after 列表联合编号；swap_steps 保留旧契约。'
         'declaration_edits 按既有局部或全局表名联合增删声明，使用 upserts/renames/remove。'
-        '当前源码、CPU和具体对象能力决定可编辑范围；原生编译与运行分别验证，不新建工程级 SFC POU 或任务。'
+        'edit 作用于既有 POU 的内部对象、声明和注册，具体范围见当前源码与 CPU 的对象能力。'
     ),
-    {'type': 'object', 'properties': {'operation': {'type': 'string', 'enum': ['import', 'edit']},
+    {'type': 'object', 'properties': {'operation': {'type': 'string', 'enum': ['import', 'edit', 'generate']},
      'data_base64': {'type': 'string'}, 'program': {'type': 'string'}, 'summary': {'type': 'string'},
      'device_comments': {'type': 'object', 'additionalProperties': {'oneOf': [{'type': 'string'}, {'type': 'null'}]}},
      'comment_table': {'type': 'string'},
+     'block': _engineering_object({'data_name': {'type': 'string', 'minLength': 1, 'maxLength': 32}, 'title': {'type': 'string', 'maxLength': 128}, 'number': {'type': 'integer', 'minimum': 0, 'maximum': 319}}),
      'save_policy': {'enum': ['draft', 'checked']},
      'declaration_edits': _engineering_declaration_edits(),
      'child_edits': {'type': 'array', 'minItems': 1, 'maxItems': 8192, 'items': _sfc_child_edit_schema()},
@@ -411,7 +437,7 @@ def native_definitions(generation):
         'edits 的 source_name 使用检查返回的逻辑身份，command 复用该语言的已有编辑契约；'
         '同时修改 ST 接口/正文和 FBD 调用者时在一次事务提交；从 get_generation_context.output_contract 取得版本和可编辑源码。'
         'save_policy 默认 draft，保留诊断；checked 拒绝新增已知源码错误，两种策略均拒绝新增非法 FBD 字面量。旧错误保留不表示编译通过。'
-        '返回统一差异和候选，确认后保存新版本；全程离线，编译和实际运行另行验证。',
+        '返回联合离线写回的差异和候选；确认后保存新版本，发现可用 GX Works2 后自动编译、保存及冷重开。编译失败保留可下载 GXW 与诊断，当前有效版本保持不变。',
         _gxw_edit_schema(graph_edits=sfc_definition.parameters['properties']['graph_edits']),
         transaction_candidate, confirmation_required=True)
 

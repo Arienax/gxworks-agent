@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Independent MCP launcher, with explicit Web bridge and saved-snapshot modes."""
 
@@ -58,6 +58,9 @@ def main(argv=None) -> int:
     parser = _StderrParser(description="GXWorks Agent MCP server (Python 3.10+).",
                            epilog=f"GitHub project: {PROJECT_URL}")
     parser.add_argument("--stdio", action="store_true", help="Use stdio (the current MCP transport and default).")
+    parser.add_argument("--read-budget-tokens", type=int,
+        default=os.environ.get("GXWORKS_MCP_READ_BUDGET_TOKENS", "").strip() or None,
+        help="Estimated tokens the host can receive in one assembled engineering read (1000–128000).")
     parser.add_argument("--check", action="store_true", help="Check the selected runtime and print a small JSON result instead of starting MCP stdio.")
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--local", action="store_true", help="Independent engineering runtime (default); local edits save without workbench review.")
@@ -85,6 +88,8 @@ def main(argv=None) -> int:
         help="Optional environment variable containing the Agent token. Normal Windows use reads Credential Manager instead.",
     )
     args = parser.parse_args(raw_args)
+    if args.read_budget_tokens is not None and not 1000 <= args.read_budget_tokens <= 128000:
+        parser.error("--read-budget-tokens must be between 1000 and 128000")
     explicit_workspace = _has_option(raw_args, "--workspace")
     service_mode = bool(args.service or args.service_url or _has_option(raw_args, "--service-token-env"))
     standalone = bool(args.standalone or (explicit_workspace and not args.local and not service_mode and not args.install_codex))
@@ -154,7 +159,7 @@ def main(argv=None) -> int:
                     confirm_full_access=args.confirm_full_access)
                 if args.install_codex:
                     from application.mcp_integrations import install_local_codex
-                    check_result = install_local_codex(session)
+                    check_result = install_local_codex(session, read_budget_tokens=args.read_budget_tokens)
                     runner = runner_args = None
                 elif args.check:
                     check_result = session.check()
@@ -173,6 +178,8 @@ def main(argv=None) -> int:
         print(json.dumps(check_result, ensure_ascii=False))
         return 0
     try:
+        if args.read_budget_tokens is not None:
+            runner_args += (args.read_budget_tokens,)
         anyio.run(runner, *runner_args)
     except KeyboardInterrupt:
         pass

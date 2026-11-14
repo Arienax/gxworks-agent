@@ -1,4 +1,5 @@
 """Small synthetic SQLite fixtures; no real fact or source material."""
+from contextlib import closing
 import hashlib
 import importlib.util
 import json
@@ -16,7 +17,7 @@ audit=importlib.util.module_from_spec(spec);spec.loader.exec_module(audit)
 
 
 def fixture(path):
-    with sqlite3.connect(path) as db:
+    with closing(sqlite3.connect(path)) as db, db:
         db.executescript('CREATE TABLE runtime_definitions(owner TEXT PRIMARY KEY,payload_json TEXT);'
             'CREATE TABLE runtime_fact_fields(id INTEGER PRIMARY KEY,payload_json TEXT,sha256 TEXT UNIQUE);'
             'CREATE TABLE chunks(id TEXT PRIMARY KEY,text TEXT,metadata_json TEXT);'
@@ -69,8 +70,16 @@ class StorageAuditTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             path=fixture(Path(temp)/'facts.sqlite');sidecar=Path(str(path)+'-wal');sidecar.write_bytes(b'candidate active')
             with self.assertRaises(ValueError):audit.audit_storage(path)
-            sidecar.unlink();link=Path(temp)/'link.sqlite';link.symlink_to(path)
-            with self.assertRaises(ValueError):audit.audit_storage(link)
+            sidecar.unlink();link=Path(temp)/'link.sqlite'
+            try:
+                link.symlink_to(path)
+            except OSError as error:
+                if getattr(error, 'winerror', None) != 1314:
+                    raise
+                with patch.object(Path, 'is_symlink', lambda value: value == link):
+                    with self.assertRaisesRegex(ValueError, 'regular candidate'):audit.audit_storage(link)
+            else:
+                with self.assertRaisesRegex(ValueError, 'regular candidate'):audit.audit_storage(link)
 
     def test_json_functions_missing_have_bounded_honest_fallback(self):
         with tempfile.TemporaryDirectory() as temp:

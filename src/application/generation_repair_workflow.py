@@ -1,13 +1,13 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Prepare one bounded repair from an immutable rejected generation snapshot."""
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
-from application.jobs import JobManager
+from application.jobs import JobManager, job_conversation_id
 from application.projects import ProjectService
-from application.workspace import WorkspaceWriterLock
+from application.workspace import WorkspaceTransactions
 
 import copy
 import json
@@ -20,7 +20,7 @@ from application.generation_repair_prompts import generation_repair_prompt
 @dataclass(frozen=True)
 class RepairServices:
     writable: Callable[[], None]
-    lock: WorkspaceWriterLock
+    lock: WorkspaceTransactions
     jobs: JobManager
     projects: ProjectService
     state_dir: Path
@@ -182,7 +182,9 @@ def repair_generation(service: RepairServices, job_id, request_id):
             current = service.projects.raw_project(project_id)
             frozen = snapshot.get("project") or {}
             preserved_id = record["result"]["version_id"]
-            if current.get("active_version_id") != preserved_id or any(
+            expected_active = (frozen.get("active_version_id") if record["result"]["status"] == "saved_native_diagnostic"
+                               else preserved_id)
+            if current.get("active_version_id") not in {preserved_id, expected_active} or any(
                 current.get(key) != frozen.get(key)
                 for key in ("confirmed_spec", "target_mode", "plc_model")
             ):
@@ -251,6 +253,7 @@ def repair_generation(service: RepairServices, job_id, request_id):
         "attachment_ids": [],
         "change_scope": snapshot.get("change_scope"),
         "repair_origin_job_id": job_id,
+        "conversation_id": job_conversation_id(record),
         "repair_mode": local_repair,
         "format_repair": not local_repair,
         "task_type": "contract_repair",

@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import ctypes
 import json
@@ -9,7 +9,7 @@ from pathlib import Path
 import subprocess
 
 from storage.session import SessionStore
-from storage.user_data import user_data_dir
+from storage.user_data import legacy_user_data_dir, user_data_dir
 from .models import GXWorks2Session
 
 
@@ -27,10 +27,13 @@ class GXWorks2Finder:
             return Path(configured).resolve()
         cache_file = user_data_dir() / "gxworks2-installation.json"
         cached = self._cached_executable(cache_file)
+        legacy_cached = None
+        if cached is None and (legacy_dir := legacy_user_data_dir()) is not None:
+            legacy_cached = self._cached_executable(legacy_dir / cache_file.name)
         if sessions is None:
             sessions = self.list_running()
         running = (Path(session.executable) for session in sessions if session.executable)
-        candidates = chain(running, [cached] if cached else [], self._installation_candidates())
+        candidates = chain(running, filter(None, (cached, legacy_cached)), self._installation_candidates())
         seen = set()
         for candidate in candidates:
             key = str(candidate).casefold()

@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Explicit HTTP commands; candidates and credentials never occur in read DTOs."""
 from typing import Any, Literal
@@ -9,10 +9,6 @@ from .program_contracts import DeclarationEdit
 
 class Command(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
-
-class Login(Command):
-    token: str = Field(min_length=1, max_length=1024)
 
 
 class ProjectCreate(Command):
@@ -51,6 +47,23 @@ class SpecUpdate(Command):
     expected_hash: str | None
 
 
+class SpecDocumentChange(Command):
+    section: str = Field(min_length=1)
+    id: str | None = None
+    value: Any = None
+    remove: bool = False
+
+
+class SpecDocumentUpdate(Command):
+    changes: list[SpecDocumentChange]
+    expected_revision: str
+
+
+class SpecDocumentConfirm(Command):
+    expected_revision: str
+    version_id: str | None = None
+
+
 class ChangeScope(Command):
     network_ids: list[str] | None = Field(default=None, min_length=1, max_length=4096)
     addresses: list[str] | None = Field(default=None, min_length=1, max_length=4096)
@@ -60,6 +73,8 @@ class JobCreate(Command):
     kind: Literal["analysis", "generation", "direct_generation", "agent", "review", "test_plan", "debug_plan", "gx_read", "gx_inspect"]
     project_id: str
     version_id: str | None = None
+    conversation_id: str | None = Field(default=None, min_length=1, max_length=128)
+    start_conversation: bool = False
     program: str | None = Field(default=None, min_length=1, max_length=512)
     clarification_job_id: str | None = None
     clarification_answers: dict[str, str] | None = None
@@ -102,6 +117,13 @@ class AgentCall(Command):
     arguments: dict[str, Any] = Field(default_factory=dict)
     call_id: str = Field(min_length=1, max_length=128)
     change_scope: ChangeScope | None = None
+
+
+class AgentReadDelivery(Command):
+    project_id: str
+    tool: Literal["get_generation_context", "search_plc_manual", "get_design_context"]
+    document_id: str = Field(pattern=r"^read-[a-f0-9]{32}$")
+    accepted: bool = Field(strict=True)
 
 
 class ModelProfileUpdate(Command):

@@ -1,7 +1,30 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Resolve read-only application resources in source and PyInstaller builds."""
 
+import os
 from pathlib import Path
 import sys
+
+APP_DIR = 'gxworks-agent'
+LEGACY_LOCAL_APP_DIR = 'PLC AI Studio'
+
+
+def local_data_dir(name: str = APP_DIR) -> Path:
+    value = os.environ.get('LOCALAPPDATA', '').strip()
+    base = Path(value) if value and Path(value).is_absolute() else Path.home() / 'AppData' / 'Local'
+    return base / name
+
+
+def local_helper_candidates(directory: str, name: str):
+    yield local_data_dir() / directory / name
+    yield local_data_dir(LEGACY_LOCAL_APP_DIR) / directory / name
+
+
+def cached_executable(directory: str, name: str) -> Path:
+    preferred, legacy = local_helper_candidates(directory, name)
+    return legacy if not preferred.is_file() and legacy.is_file() else preferred
 
 
 def bundled_executable(directory: str, name: str) -> Path | None:

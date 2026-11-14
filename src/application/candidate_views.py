@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Candidate and saved-version presentation over bounded application queries."""
 from __future__ import annotations
@@ -38,7 +38,6 @@ class CandidateViews:
     ):
         """Deterministic, in-memory view. Never trust an old rendered-file cache."""
         from plc.ir import ir_to_ladder, validate_plc_ir
-        from plc.st_renderer import render_plc_ir_to_st
         from rendering.ladder_svg import AdvancedSVGLadder
 
         validate_plc_ir(
@@ -47,10 +46,9 @@ class CandidateViews:
         )
         ladder = ir_to_ladder(program)
         svg = AdvancedSVGLadder().generate_ladder(json.dumps(ladder, ensure_ascii=False))
-        from plc.ordered_source import is_ordered_ladder
         return {"target_mode": "ladder", "ladder": ladder, "program": public(program, document="program"),
                 "svg": self.projects.themed_svg(svg, theme),
-                "st": '' if is_ordered_ladder(ladder) else render_plc_ir_to_st(program)}
+                "st": ""}
 
     def version_preview(self, project_id, version_id, *, theme=None):
         """Re-render a saved ladder from its verified IR without changing a version.

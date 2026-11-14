@@ -1,14 +1,17 @@
 """Actual shared manual-tool and MCP entry points select a manifest without path patches."""
+from contextlib import closing
 import json
 import importlib.util
 import importlib.metadata
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sqlite3
 import sys
 import tempfile
 import unittest
+from contextlib import closing
 from knowledge.runtime_fact_projection import intern_runtime_sources
 from knowledge.runtime_fact_publication import write_runtime_sqlite, write_owner_manifest
 
@@ -87,16 +90,23 @@ class ProductionWiringTests(unittest.TestCase):
         legacy,_=build(root/'bundle/knowledge/runtime','LEGACY_MARKER',('MOV','ADD'),search_pooling=False)
         candidate,manifest=build(root/'candidate','CANDIDATE_MARKER')
         if collision:
-            with sqlite3.connect(candidate) as conn:
+            with closing(sqlite3.connect(candidate)) as conn, conn:
                 identity=conn.execute("SELECT chunk_id FROM facts WHERE kind='instruction' AND target='MOV'").fetchone()[0]
-            with sqlite3.connect(legacy) as conn:
+            with closing(sqlite3.connect(legacy)) as conn, conn:
                 conn.execute('DELETE FROM facts WHERE chunk_id=?',(identity,));conn.execute('DELETE FROM chunks WHERE id=?',(identity,))
                 packet={'kind':'device','target':'D','scope':{'models':['FX3U']},'value':{'marker':'PLC CANDIDATE_MARKER DEVICE_MARKER'}}
                 meta={'content_origin':'authored_fact','distribution_status':'fact_representation_reviewed','fact_kind':'device','fact_target':'D','source_lane':'fact'}
                 conn.execute('INSERT INTO chunks VALUES (?,?,?,?,?,?,?,?)',(identity,json.dumps(packet),json.dumps(meta),'["FX3U"]','','device','authored_fact','fact_representation_reviewed'))
                 conn.execute('INSERT INTO facts VALUES (?,?,?,?,?,?)',('synthetic:device','device','D','FX3U',identity,'{}'))
                 conn.execute("INSERT INTO chunks_fts(chunks_fts) VALUES ('rebuild')")
-        env=dict(os.environ);env['PYTHONPATH']=os.pathsep.join([str(ROOT/'src'),env.get('PYTHONPATH','')]);env['GXW2_INSTRUCTION_CATALOG']=str(ROOT/'resources/instructions/mitsubishi')
+        # Isolate the catalogue from any locally activated production owner
+        # manifest. The test selects its own candidate or legacy resource.
+        catalog=root/'catalog';catalog.mkdir()
+        for name in ('common.json','fx3u.json','fx5u.json','fx3u_verified_opcodes.json',
+                     'modifier_rules.json','instruction_families.json','instruction_capabilities.json'):
+            source=ROOT/'resources/instructions/mitsubishi'/name
+            if source.is_file():shutil.copyfile(source,catalog/name)
+        env=dict(os.environ);env['PYTHONPATH']=os.pathsep.join([str(ROOT/'src'),env.get('PYTHONPATH','')]);env['GXW2_INSTRUCTION_CATALOG']=str(catalog)
         env['HAYSTACK_TELEMETRY_ENABLED']='false'
         env.pop('GXW2_INSTRUCTION_OWNER_MANIFEST',None)
         if selected:env['GXW2_INSTRUCTION_OWNER_MANIFEST']=str(manifest)
@@ -118,6 +128,7 @@ class ProductionWiringTests(unittest.TestCase):
     def test_startup_env_exact_real_entry_without_any_path_patch(self):
         child=r"""
 import json,sys,sqlite3
+from contextlib import closing
 from pathlib import Path
 sys._MEIPASS=sys.argv[1]
 from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY as registry
@@ -129,7 +140,7 @@ with patch('plc.instruction_owner_store._digest',side_effect=AssertionError('no 
     missing=resolve('instruction',['ADD'],plc_model='FX3U')
     wrong=resolve('instruction',['MOV'],plc_model='Q03UDV')
 legacy=Path(sys.argv[1])/'knowledge/runtime/plc_facts.sqlite'
-with sqlite3.connect('file:'+legacy.as_posix()+'?mode=ro',uri=True) as conn:
+with closing(sqlite3.connect('file:'+legacy.as_posix()+'?mode=ro',uri=True)) as conn, conn:
     conn.row_factory=sqlite3.Row
     explicit=resolve('instruction',['MOV'],plc_model='FX3U',connection=conn)
 from knowledge.core import retrieve_broad_knowledge
@@ -176,6 +187,274 @@ print(json.dumps({'rows':rows,'language':language,'missing':missing,'wrong':wron
         self.assertIn('LEGACY_MARKER',json.dumps(result['manual']))
         self.assertNotIn('CANDIDATE_MARKER',json.dumps(result['manual']))
         self.assertEqual(result['selected'],str(legacy))
+
+
+class SeededOwnerStoreTests(unittest.TestCase):
+    @staticmethod
+    def entry(opcode, marker, extra=False):
+        def fact(identity):
+            return {'id':identity,'dimension':'effects.synthetic','value':{'marker':marker},
+                'scope':{'models':['FX3U'],'forms':[opcode]},'status':'source_verified',
+                'verification':'source_checked','sources':[{'manual_id':'synthetic','revision':'A'}]}
+        return {'vendor':'mitsubishi','opcode':opcode,'target_model':'FX3U',
+                'facts':[fact('shared:fact')]+([fact('extra:fact')] if extra else [])}
+
+    @staticmethod
+    def search(connection, token):
+        return [row[0] for row in connection.execute(
+            "SELECT c.instruction_opcode FROM chunks_fts f JOIN chunks c ON c.rowid=f.rowid "
+            "WHERE chunks_fts MATCH ? AND c.chunk_type='instruction' ORDER BY c.instruction_opcode",(token,))]
+
+    def test_seeded_replacement_preserves_shared_pools_unselected_rows_and_legacy_transport(self):
+        from knowledge.runtime_fact_publication import OwnerStoreWriter, owner_key
+        from plc.instruction_owner_store import OwnerDefinitionStore
+        for fields, rows, search in ((False,False,False),(True,False,True),(True,True,True)):
+            with self.subTest(fields=fields,rows=rows,search=search),tempfile.TemporaryDirectory() as temporary:
+                root=Path(temporary);source=root/'source.sqlite';output=root/'output.sqlite'
+                metadata={'schema_version':1,'method':'instruction-material-compiler-v1',
+                    'corpus_kind':'authored_plc_facts_v1','fact_bundle_version':'synthetic:before','context_marker':'retained'}
+                entries=[self.entry('SYN_A','OLDTOKEN'),self.entry('SYN_B','OLDTOKEN')]
+                language={'target':'FBD.SYNTH','language':'fbd','models':['FX3U'],'aliases':['SYNTHBLOCK'],
+                    'facts':[{'id':'language:fact','dimension':'effects.synthetic','value':{'marker':'LANGTOKEN'},
+                        'scope':{'models':['FX3U'],'forms':['FBD.SYNTH'],'languages':['fbd']},
+                        'status':'source_verified','verification':'source_checked',
+                        'sources':[{'manual_id':'synthetic','revision':'A'}]}]}
+                writer=OwnerStoreWriter(source,metadata,field_pooling=fields,fact_rows=rows,search_pooling=search)
+                for entry in entries:writer.add_entry(entry)
+                writer.add_language_feature(language)
+                writer.finalize(root/'source.manifest.json')
+                untouched=owner_key(entries[1])
+                with closing(sqlite3.connect(source)) as connection:
+                    # Exercise an existing seed created before chunk deletion
+                    # indexes were introduced, as well as fresh-store schemas.
+                    connection.execute('DROP INDEX facts_chunk_id')
+                    connection.execute('DROP INDEX entity_index_chunk_id')
+                    connection.commit()
+                    before=connection.execute('SELECT payload_json FROM runtime_definitions WHERE owner=?',(untouched,)).fetchone()
+                    index=connection.execute('SELECT * FROM runtime_owner_index WHERE owner=?',(untouched,)).fetchone()
+                    chunk=connection.execute("SELECT rowid,* FROM chunks WHERE instruction_opcode='SYN_B'").fetchone()
+                    language_rows=connection.execute("SELECT rowid,* FROM chunks WHERE chunk_type='language'").fetchall()
+                    pools={table:connection.execute('SELECT * FROM '+table).fetchall() for table in
+                           ('runtime_sources','runtime_values','runtime_fact_fields')}
+                writer=OwnerStoreWriter(output,{**metadata,'fact_bundle_version':'synthetic:after'},seed_database=source)
+                writer.replace_entry(self.entry('SYN_A','NEWTOKEN',extra=True))
+                writer.replace_entry(self.entry('SYN_C','ADDEDTOKEN'))
+                result=writer.finalize(root/'output.manifest.json')
+                self.assertEqual((result['sqlite']['owners'],result['sqlite']['stored_facts']),(3,4))
+                with closing(sqlite3.connect(output)) as connection:
+                    for table in ('facts', 'entity_index'):
+                        plan = connection.execute('EXPLAIN QUERY PLAN DELETE FROM ' + table + ' WHERE chunk_id=?',
+                                                  ('unused',)).fetchall()
+                        self.assertTrue(any('SEARCH ' + table in row[3] and 'chunk_id' in row[3]
+                                            for row in plan), plan)
+                    self.assertEqual(connection.execute('SELECT payload_json FROM runtime_definitions WHERE owner=?',(untouched,)).fetchone(),before)
+                    self.assertEqual(connection.execute('SELECT * FROM runtime_owner_index WHERE owner=?',(untouched,)).fetchone(),index)
+                    self.assertEqual(connection.execute("SELECT rowid,* FROM chunks WHERE instruction_opcode='SYN_B'").fetchone(),chunk)
+                    self.assertEqual(connection.execute("SELECT rowid,* FROM chunks WHERE chunk_type='language'").fetchall(),language_rows)
+                    for table, original in pools.items():
+                        self.assertTrue(set(original)<=set(connection.execute('SELECT * FROM '+table)))
+                    self.assertEqual(self.search(connection,'OLDTOKEN'),['SYN_B'])
+                    self.assertEqual(self.search(connection,'NEWTOKEN'),['SYN_A'])
+                    self.assertEqual(self.search(connection,'ADDEDTOKEN'),['SYN_C'])
+                    self.assertEqual(connection.execute("SELECT value FROM meta WHERE key='stored_facts'").fetchone(),('4',))
+                    self.assertEqual(json.loads(connection.execute("SELECT value FROM meta WHERE key='definition_metadata'").fetchone()[0])['context_marker'],'retained')
+                with closing(OwnerDefinitionStore(root/'output.manifest.json')) as store:
+                    self.assertEqual([f['value']['marker'] for f in store.get_entry('SYN_A',cpu='FX3U')['facts']],['NEWTOKEN','NEWTOKEN'])
+                    self.assertEqual(store.get_entry('SYN_B',cpu='FX3U')['facts'][0]['value'],{'marker':'OLDTOKEN'})
+                    self.assertEqual(store.get_entry('SYN_C',cpu='FX3U')['facts'][0]['value'],{'marker':'ADDEDTOKEN'})
+                with closing(sqlite3.connect(source)) as connection:
+                    self.assertEqual(self.search(connection,'OLDTOKEN'),['SYN_A','SYN_B'])
+                    self.assertEqual(self.search(connection,'NEWTOKEN'),[])
+
+    def test_instruction_only_compile_preserves_unselected_language_and_its_validation(self):
+        import hashlib
+        from scripts.compile_instruction_semantics import compile_semantics
+        from knowledge.runtime_fact_publication import write_owner_manifest
+        from plc.instruction_owner_store import OwnerDefinitionStore
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, manifest = build(root / 'input', 'OLDTOKEN', ('SYN_A', 'SYN_B'))
+            with closing(sqlite3.connect(source)) as connection:
+                feature = json.loads(connection.execute('SELECT payload_json FROM runtime_language_features').fetchone()[0])
+                feature['facts'][0]['value'] = {'condition': 'unclassified language condition'}
+                encoded = json.dumps(feature, ensure_ascii=True, sort_keys=True, separators=(',', ':'))
+                connection.execute('UPDATE runtime_language_features SET payload_json=?,sha256=?',
+                                   (encoded, hashlib.sha256(encoded.encode()).hexdigest()))
+                connection.commit()
+                before = connection.execute('SELECT * FROM runtime_language_features').fetchall()
+            manifest.unlink()
+            write_owner_manifest({'method': 'instruction-material-compiler-v1', 'fact_bundle_version': 'synthetic:wiring'},
+                                 source, manifest, owner_count=2)
+            replacement = self.entry('SYN_A', 'NEWTOKEN')['facts'][0]
+            replacement['id'] = 'sample:SYN_A'
+            result = compile_semantics(manifest, root / 'output',
+                source_batches={('FX3U', 'SYN_A'): [replacement]},
+                replace_source_prefixes=['sample:'], source_owners_only=True, version='synthetic:instructions-only')
+            with closing(sqlite3.connect(root / 'output/plc_facts.sqlite')) as connection:
+                self.assertEqual(connection.execute('SELECT * FROM runtime_language_features').fetchall(), before)
+                self.assertEqual(self.search(connection, 'NEWTOKEN'), ['SYN_A'])
+                self.assertEqual(self.search(connection, 'OLDTOKEN'), ['SYN_B'])
+            with closing(OwnerDefinitionStore(result['manifest'])) as store:
+                with self.assertRaises(ValueError):
+                    store.language_feature(feature['target'])
+                with self.assertRaises(ValueError):
+                    store.metadata
+
+    def test_mixed_source_namespaces_do_not_clear_other_selected_owners(self):
+        from scripts.compile_instruction_semantics import compile_semantics
+        from plc.instruction_owner_store import OwnerDefinitionStore
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _, manifest = build(root / 'input', 'OLDTOKEN', ('SYN_A', 'SYN_B'))
+            alpha = self.entry('SYN_A', 'NEW_A')['facts'][0]
+            alpha['id'] = 'sample:SYN_A'
+            beta = self.entry('SYN_B', 'NEW_B')['facts'][0]
+            beta['id'] = 'beta:new'
+            result = compile_semantics(manifest, root / 'output', source_batches={
+                ('FX3U', 'SYN_A'): [alpha], ('FX3U', 'SYN_B'): [beta]},
+                replace_source_prefixes=['sample:', 'beta:'], source_owners_only=True,
+                version='synthetic:mixed-namespaces')
+            with closing(OwnerDefinitionStore(result['manifest'])) as store:
+                first = {f['id']: f for f in store.get_entry('SYN_A', cpu='FX3U')['facts']}
+                second = {f['id']: f for f in store.get_entry('SYN_B', cpu='FX3U')['facts']}
+                self.assertEqual(first['sample:SYN_A']['value'], {'marker': 'NEW_A'})
+                self.assertEqual(second['sample:SYN_B']['value'], {'marker': 'OLDTOKEN'})
+                self.assertEqual(second['beta:new']['value'], {'marker': 'NEW_B'})
+
+    def test_empty_source_replacement_clears_only_declared_owner_and_retains_history(self):
+        from scripts.compile_instruction_semantics import compile_semantics
+        from knowledge.runtime_fact_publication import OwnerStoreWriter
+        from plc.instruction_owner_store import OwnerDefinitionStore
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / 'input.sqlite'
+            manifest = root / 'input.manifest.json'
+            prefix = 'source:cpu_availability:'
+
+            def entry(model):
+                old = {'id': prefix + 'legacy:6359', 'dimension': 'constraints.cpu_availability',
+                    'value': {'rule': 'CPU_INSTRUCTION_SUPPORT', 'available': True,
+                              'model_states': {model: 'supported'}},
+                    'scope': {'models': [model], 'forms': ['A']}, 'status': 'source_verified',
+                    'verification': 'source_checked',
+                    'sources': [{'manual_id': 'synthetic', 'revision': 'A', 'pdf_pages': [94]}]}
+                return {'vendor': 'mitsubishi', 'opcode': 'A', 'target_model': model,
+                        'call_available': False, 'support_status': 'definition_only', 'facts': [old]}
+
+            metadata = {'schema_version': 1, 'method': 'instruction-material-compiler-v1',
+                       'corpus_kind': 'authored_plc_facts_v1', 'fact_bundle_version': 'synthetic:before'}
+            writer = OwnerStoreWriter(source, metadata)
+            writer.add_entry(entry('FX1N'))
+            writer.add_entry(entry('FX1S'))
+            writer.finalize(manifest)
+
+            owner = ('FX1N', 'A')
+            result = compile_semantics(manifest, root / 'output', source_batches={owner: []},
+                empty_source_replacements={(owner[0], owner[1], prefix)}, source_owners_only=True,
+                version='synthetic:empty-source-replacement')
+            with closing(OwnerDefinitionStore(result['manifest'])) as store:
+                replaced = store.get_entry('A', cpu='FX1N')
+                untouched = store.get_entry('A', cpu='FX1S')
+                self.assertEqual(replaced['facts'], [])
+                self.assertEqual([fact['id'] for fact in replaced['superseded_facts']],
+                                 [prefix + 'legacy:6359'])
+                self.assertIs(replaced['call_available'], False)
+                self.assertEqual([fact['id'] for fact in untouched['facts']],
+                                 [prefix + 'legacy:6359'])
+
+    def test_selected_language_rebuild_restores_a_legacy_partial_model_index(self):
+        import copy,hashlib
+        from scripts.compile_instruction_semantics import compile_semantics
+        from knowledge.runtime_fact_publication import write_owner_manifest
+        from plc.instruction_owner_store import OwnerDefinitionStore
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);source,manifest=build(root/'input','OLDTOKEN',('SYN_A','SYN_B'))
+            with closing(sqlite3.connect(source)) as connection:
+                row=connection.execute('SELECT target,payload_json FROM runtime_language_features').fetchone()
+                expanded=json.loads(row[1]);expanded['models'].append('Q03UDV')
+                for fact in expanded['facts']:fact['scope']['models'].append('Q03UDV')
+                encoded=json.dumps(expanded,sort_keys=True,separators=(',',':'))
+                connection.execute('UPDATE runtime_language_features SET payload_json=?,sha256=? WHERE target=?',
+                    (encoded,hashlib.sha256(encoded.encode()).hexdigest(),row[0]));connection.commit()
+                before=connection.execute('SELECT * FROM runtime_definitions').fetchall()
+                self.assertEqual(connection.execute("SELECT count(*) FROM facts WHERE kind='language' AND target=?",(row[0],)).fetchone()[0],1)
+            manifest.unlink();write_owner_manifest({'method':'instruction-material-compiler-v1','fact_bundle_version':'synthetic:wiring'},source,manifest,owner_count=2)
+            result=compile_semantics(manifest,root/'output',source_batches={},language_batches=[expanded],source_owners_only=True,version='synthetic:reindex')
+            self.assertEqual((result['changed_owners'],result['unchanged_owners_retained']),(0,2))
+            with closing(sqlite3.connect(root/'output/plc_facts.sqlite')) as connection:
+                self.assertEqual(connection.execute('SELECT * FROM runtime_definitions').fetchall(),before)
+                self.assertEqual({r[0] for r in connection.execute("SELECT plc_model FROM facts WHERE kind='language' AND target=?",(row[0],))},{'FX3U','Q03UDV'})
+                self.assertEqual(connection.execute("SELECT count(*) FROM chunks_fts WHERE chunks_fts MATCH 'OLDTOKEN'").fetchone()[0],4)
+            with closing(OwnerDefinitionStore(result['manifest'])) as store:self.assertEqual(store.language_feature(row[0]),expanded)
+
+    def test_selected_language_rebuild_repairs_invalid_payload_without_loading_instruction_owners(self):
+        import copy,hashlib
+        from scripts.compile_instruction_semantics import compile_semantics
+        from knowledge.runtime_fact_publication import write_owner_manifest
+        from plc.instruction_owner_store import OwnerDefinitionStore
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary)
+            source,manifest=build(root/'input','OLDTOKEN',('SYN_A','SYN_B'))
+            with closing(sqlite3.connect(source)) as connection:
+                row=connection.execute('SELECT target,payload_json FROM runtime_language_features').fetchone()
+                original=json.loads(row[1]);broken=copy.deepcopy(original)
+                broken['facts'][0]['value']={'condition':'unclassified language condition'}
+                encoded=json.dumps(broken,sort_keys=True,separators=(',',':'))
+                connection.execute('UPDATE runtime_language_features SET payload_json=?,sha256=? WHERE target=?',
+                                   (encoded,hashlib.sha256(encoded.encode()).hexdigest(),row[0]))
+                connection.commit()
+                before=connection.execute('SELECT * FROM runtime_definitions').fetchall()
+            manifest.unlink()
+            write_owner_manifest({'method':'instruction-material-compiler-v1','fact_bundle_version':'synthetic:wiring'},
+                                 source,manifest,owner_count=2)
+            with closing(OwnerDefinitionStore(manifest)) as store:
+                with self.assertRaises(ValueError):store.language_feature(row[0])
+            result=compile_semantics(manifest,root/'output',source_batches={},language_batches=[original],
+                replace_source_prefixes=['sample:'],source_owners_only=True,version='synthetic:language-repair')
+            self.assertEqual((result['changed_owners'],result['unchanged_owners_retained']),(0,2))
+            self.assertEqual(result['owner_access']['hydrated_owner_count'],0)
+            with closing(OwnerDefinitionStore(result['manifest'])) as store:
+                self.assertEqual(store.language_feature(row[0]),original)
+            with closing(sqlite3.connect(root/'output/plc_facts.sqlite')) as connection:
+                self.assertEqual(connection.execute('SELECT * FROM runtime_definitions').fetchall(),before)
+            with self.assertRaises(ValueError):
+                compile_semantics(manifest,root/'invalid',source_batches={},language_batches=[broken],
+                    replace_source_prefixes=['sample:'],source_owners_only=True,version='synthetic:still-invalid')
+
+    def test_source_owner_compile_hydrates_only_batch_keys_and_counts_added_owner(self):
+        from unittest.mock import patch
+        from scripts.compile_instruction_semantics import compile_semantics
+        from plc.instruction_owner_store import OwnerDefinitionStore
+        from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY  # Initialize metadata before guarding this compile.
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);source,manifest=build(root/'input','OLDTOKEN',('SYN_A','SYN_B'))
+            replacement=self.entry('SYN_A','NEWTOKEN')['facts'][0];replacement['id']='sample:SYN_A'
+            addition=self.entry('SYN_C','ADDEDTOKEN')['facts'][0];addition['id']='sample:SYN_C'
+            with closing(sqlite3.connect(source)) as connection:
+                before=connection.execute("SELECT rowid,* FROM chunks WHERE instruction_opcode='SYN_B'").fetchone()
+                language=connection.execute('SELECT * FROM runtime_language_features').fetchall()
+                language_rowid=connection.execute("SELECT rowid FROM chunks WHERE chunk_type='language'").fetchone()[0]
+                self.assertIsNone(connection.execute("SELECT value FROM meta WHERE key='stored_facts'").fetchone())
+            revised_language=json.loads(language[0][1]);revised_language['aliases']=['NEWLANGALIAS']
+            revised_language['facts'][0]['value']={'marker':'LANGNEWTOKEN'}
+            with patch.object(OwnerDefinitionStore,'iter_owner_headers',side_effect=AssertionError('No full owner iteration')):
+                result=compile_semantics(manifest,root/'output',source_batches={('FX3U','SYN_A'):[replacement],
+                    ('FX3U','SYN_C'):[addition]},replace_source_prefixes=['sample:'],source_owners_only=True,
+                    language_batches=[revised_language],version='synthetic:delta')
+            self.assertEqual((result['owners'],result['changed_owners'],result['stored_facts']),(3,2,3))
+            self.assertEqual(result['unchanged_owners_retained'],1)
+            self.assertEqual((result['owner_access']['owner_lookup_count'],result['owner_access']['hydrated_owner_count']),(2,1))
+            with closing(sqlite3.connect(root/'output/plc_facts.sqlite')) as connection:
+                self.assertEqual(connection.execute("SELECT rowid,* FROM chunks WHERE instruction_opcode='SYN_B'").fetchone(),before)
+                published=json.loads(connection.execute('SELECT payload_json FROM runtime_language_features').fetchone()[0])
+                self.assertEqual(published['facts'][0]['value'],{'marker':'LANGNEWTOKEN'})
+                self.assertEqual(connection.execute("SELECT rowid FROM chunks WHERE chunk_type='language'").fetchone()[0],language_rowid)
+                self.assertEqual(connection.execute("SELECT count(*) FROM entity_index WHERE entity='**'").fetchone()[0],1)
+                self.assertEqual(connection.execute("SELECT count(*) FROM entity_index WHERE entity='NEWLANGALIAS'").fetchone()[0],1)
+                self.assertEqual(connection.execute("SELECT count(*) FROM chunks_fts WHERE chunks_fts MATCH 'LANGNEWTOKEN'").fetchone()[0],1)
+                self.assertEqual(self.search(connection,'OLDTOKEN'),['SYN_B'])
+                self.assertEqual(self.search(connection,'NEWTOKEN'),['SYN_A'])
+                self.assertEqual(self.search(connection,'ADDEDTOKEN'),['SYN_C'])
 
 
 class ReleaseMainStagingTests(unittest.TestCase):

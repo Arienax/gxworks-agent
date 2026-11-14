@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Model-free facade over the existing deterministic PLC implementation."""
 
 from __future__ import annotations
@@ -270,7 +273,7 @@ class PLCCore:
             "diff": _program_diff(program, candidate),
             "diagnostics": validation,
             "behavior_check": behavior_check,
-            "maintainability_review": review_maintainability(candidate),
+            "maintainability_review": review_maintainability(candidate, confirmed_spec=confirmed_spec),
         }
 
     def create_program_candidate(
@@ -337,7 +340,8 @@ class PLCCore:
                 program, target, validation_profile=validation_profile,
             )
             # Preserve the public Core manifest; Web also uses renderer metadata.
-            return {"artifacts": rendered["artifacts"], "hashes": rendered["hashes"]}
+            return {"artifacts": rendered["artifacts"], "hashes": rendered["hashes"],
+                    **({"program_size": rendered["program_size"]} if "program_size" in rendered else {})}
 
         if output_dir is not None:
             return render(Path(output_dir))
@@ -422,6 +426,13 @@ def accept_candidate_patch(store: Any, action: Mapping[str, Any]) -> Mapping[str
         )
         if action.get('_construction_binding'):
             metadata.setdefault('generation_metadata', {})['construction_binding'] = copy.deepcopy(action['_construction_binding'])
+        if 'program_size' in compiled:
+            metadata['program_size'] = compiled['program_size']
+        for key in ('behavior_result', 'io_example_result', 'fragment_review'):
+            if '_' + key in action:
+                metadata[key] = copy.deepcopy(action['_' + key])
+        if (metadata.get('behavior_result') or {}).get('status') == 'mismatch':
+            metadata.update(activation_blocked=True, lifecycle_status='diagnostic')
         return store.complete_version(project_id, version_id, metadata, activate=True)
     except Exception:
         if version_id is not None and store.get_version(project_id, version_id) is None:

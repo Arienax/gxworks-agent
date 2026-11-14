@@ -147,9 +147,8 @@ def test_http_job_and_sse_deliver_same_safe_diagnostic(manager, tmp_path):
     origin = "http://127.0.0.1:8765"
     service = WorkbenchService(manager.lock.workspace, tmp_path / "unused-state", read_only=True)
     service.jobs = manager
-    app = create_app(manager.lock.workspace, service=service, origin=origin, operator_token="operator-test")
+    app = create_app(manager.lock.workspace, service=service, origin=origin)
     with TestClient(app, base_url=origin) as client:
-        client.post("/api/session", json={"token": "operator-test"}, headers={"Origin": origin})
         result = client.get("/api/jobs/" + job["id"])
         assert result.status_code == 200
         parsed = Job.model_validate(result.json())
@@ -183,9 +182,7 @@ def test_generation_failure_details_survive_job_http_and_sse(manager, tmp_path):
     origin = "http://127.0.0.1:8765"
     service = WorkbenchService(manager.lock.workspace, tmp_path / "read-state", read_only=True)
     service.jobs = manager
-    with TestClient(create_app(manager.lock.workspace, service=service, origin=origin,
-                    operator_token="test-operator"), base_url=origin) as client:
-        client.post("/api/session", json={"token": "test-operator"}, headers={"Origin": origin})
+    with TestClient(create_app(manager.lock.workspace, service=service, origin=origin), base_url=origin) as client:
         resource = Job.model_validate(client.get("/api/jobs/" + job["id"]).json())
         stream = client.get("/api/jobs/" + job["id"] + "/events?after=2")
         event = JobEvent.model_validate(json.loads(next(line[6:] for line in stream.text.splitlines() if line.startswith("data: "))))

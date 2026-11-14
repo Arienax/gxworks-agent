@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Deterministic scan-time estimation and monitor profiles.
 
 The estimator is deliberately separate from the LLM.  FX3U figures are based
@@ -12,6 +15,7 @@ from __future__ import annotations
 
 import copy
 import re
+from fractions import Fraction
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 
@@ -19,21 +23,39 @@ TIMING_ANALYSIS_SCHEMA_VERSION = 1
 FX3U_TIMING_PROFILE_VERSION = "JY997D16601-Rev.R-Appendix-B-v1"
 
 
-def scan_timing_guidance(plc_model):
+def exact_duration_ticks(duration_ms, tick_ms):
+    """Convert an explicit duration at an already selected time base."""
+    if type(duration_ms) not in (int, float) or type(tick_ms) not in (int, float):
+        raise ValueError("duration_ms and tick_ms must be numbers")
+    duration, period = Fraction(str(duration_ms)), Fraction(str(tick_ms))
+    if duration < 0 or period <= 0:
+        raise ValueError("duration_ms must be nonnegative and tick_ms must be positive")
+    count = duration / period
+    if count.denominator != 1:
+        raise ValueError("duration_ms is not an exact multiple of tick_ms")
+    return count.numerator
+
+
+def scan_timing_guidance(plc_model, *, include_periodic_patterns=True):
     """Shared scan-order guidance, not a timing certificate or algorithm mandate."""
     common = """# Scan order and relative timing
 同一扫描按梯级顺序执行：先处理启动/停止/初始化，再更新计时与当前状态、计算显示值，最后写现场输出。先输出后更新会让边界及显示滞后一拍；内部状态写入会立即影响后续条件。
-需求若以启动时刻为起点，每段时长须从该起点或确定的相位边界累计。自由运行时钟的初始相位未知；它不能保证启动后的第一个完整间隔。自复位定时器的 OFF/重新使能扫描会累计延迟，不能把这些脉冲直接当成精确的每秒或每半秒。
-相对计时可用一个持续累计的时间参考，根据当前值比较各相位边界或推导显示值。连续循环须检查周期末端复位与下一周期首态在同扫描的顺序，避免空白扫描或每周期追加重启延迟。具体算法仍服从用户明确的指令与结构要求。"""
-    common += """
-工艺未指定特定计时结构时，阶段、显示与闪烁优先共用同一个持续时间基准。闪烁亮灭直接比较该基准的时间窗口，不另用互相复位的亮/灭子定时器；这些子定时器仍会把复位和重新启动的扫描累加进每个闪烁周期。"""
+需求若以事件或启动时刻为起点，每段时长从该起点或确定的相位边界计算。自由运行时钟的初始相位未知，自复位定时器的 OFF 和重新使能扫描会引入延迟。核对所选结构的时基、相位、量化误差和同一扫描内的更新顺序。"""
+    if include_periodic_patterns:
+        common += """
+相对计时可用一个持续累计的时间参考，根据当前值比较各相位边界或推导显示值。连续循环须检查周期末端复位与下一周期首态在同扫描的顺序，避免空白扫描或每周期追加重启延迟。具体算法仍服从用户明确的指令与结构要求。
+工艺未指定计时结构时，按已知精度、暂停恢复及并发要求比较完整实现，不预设共享累计时间基准。分别核对所选方式的相位误差、状态存储、程序重复量和扫描工作量。"""
     if str(plc_model or "").strip().upper() == "FX3U":
         common += """
-FX3U 普通 T 定时器使能 OFF 会清当前值及触点；RST 也清当前值及触点。运行中的定时器若在 OUT 后被 RST，该扫描后面的比较读取复位值；先完成周期边界处理，再据当前时间写新周期输出。"""
-        common += """
+FX3U 普通 T 定时器使能 OFF 会清当前值及触点；RST 也清当前值及触点。运行中的定时器若在 OUT 后被 RST，该扫描后面的比较读取复位值。"""
+        if include_periodic_patterns:
+            common += """
 连续循环的时间基准应由独立、稳定的运行条件使能，不要把该定时器自身的常闭完成触点串入其 OUT 条件。自身触点断开再恢复会增加 OFF 和重新启动扫描，并在周期末留下旧相位或空白输出；应在时间基准本扫描已经执行后处理边界复位，再复制当前值、比较相位并写输出。若工艺明确指定这种自复位结构，则须保留要求并说明其计时限制。"""
         common += """
-梯形图 APP_INSTR 必须使用本型号指令资料确认的原生助记符，不要凭通用语言经验把 MOD 等运算符名称写成指令。少量、次数明确的闪烁优先列出各亮时间窗口的 OR 条件，直接比较累计时间；需要算术计算时必须核对原生指令及完整结果字布局。"""
+梯形图 APP_INSTR 使用本型号确认的原生助记符；算术计算须核对原生指令及完整结果字布局。"""
+        if include_periodic_patterns:
+            common += """
+重复过程应比较可复用的状态推进与逐项展开的实际代价，不预设时间窗口逐项 OR 的实现。"""
     return common
 
 _K_RE = re.compile(r"^K(-?\d+)$", re.I)

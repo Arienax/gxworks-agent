@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Recorded native diagnostic scopes and identity normalization."""
 from __future__ import annotations
@@ -277,3 +277,60 @@ def native_check_findings(validation, ladder=None, *, limit=32):
     reports = projection.get('public_diagnostics') or ()
     writes = device_write_rungs(ladder) if ladder else {}
     return summarize_check_reports(reports, writes=writes, limit=limit)
+
+
+def check_rejection_is_advisory(validation, ladder, *, plc_model, program_name):
+    """Delivery policy for a completed check after an accepted compilation.
+
+    The vendor reports stay intact. Classify the full report lists rather than
+    the grouped UI findings, which may omit positions or diagnostic codes.
+    """
+    validation = validation or {}
+    compilation = validation.get('compilation') or {}
+    check = validation.get('public_check') or {}
+    if (compilation.get('acceptance') != 'accepted' or compilation.get('completed') is not True
+            or check.get('status') != 'rejected' or check.get('completed') is not True):
+        return False
+    projection = validation.get('diagnostic_projection') or {}
+    public = projection.get('public_diagnostics') or ()
+    backend = projection.get('backend_diagnostics') or ()
+    if not isinstance(public, (list, tuple)) or not public or not isinstance(backend, (list, tuple)):
+        return False
+    reports = [*public, *backend]
+    if any(not isinstance(row, dict) or row.get('kind') not in (2, 3)
+           or type(row.get('code')) is not int for row in reports):
+        return False
+    errors = [row for row in reports if row['kind'] == 2]
+    if not errors:
+        return True
+
+    # GXW metadata stores the logical stream name; the checker names its POU.
+    program_name = (program_name or '').removesuffix('.Program.pou')
+    selection = validation.get('selection') or {}
+    if (not isinstance(ladder, dict) or not program_name
+            or selection.get('status') != 'verified' or selection.get('source_bytes_current') is not True
+            or selection.get('selected_sources') != [program_name]):
+        return False
+    from plc.device_identity import canonical_reference_device
+    from plc.validation import is_bit_device
+
+    steps = {}
+    for rung in ladder.get('rungs', ()):
+        for row in rung.get('ordered_instructions', ()):
+            if row.get('kind') == 'instruction' and type(row.get('step')) is int:
+                steps.setdefault(row['step'], []).append(row)
+    for report in errors:
+        name = report.get('name')
+        arguments = report.get('arguments')
+        step = report.get('step')
+        if (report['code'] != 0x050C9300 or not isinstance(name, dict) or name.get('text') != program_name
+                or not isinstance(arguments, list) or len(arguments) != 1 or not isinstance(arguments[0], dict)
+                or type(step) is not int or len(steps.get(step, ())) != 1):
+            return False
+        instruction = steps[step][0]
+        device = canonical_reference_device(arguments[0].get('text'))
+        if (instruction.get('op') not in {'SET', 'SETP', 'RST', 'RSTP'} or not device
+                or [canonical_reference_device(arg) for arg in instruction.get('args', ())] != [device]
+                or not is_bit_device(device, plc_model)):
+            return False
+    return True

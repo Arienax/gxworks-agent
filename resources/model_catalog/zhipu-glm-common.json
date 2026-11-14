@@ -7,6 +7,10 @@
       "status": "supported",
       "source": "catalog"
     },
+    "preserve_thinking": {
+      "status": "supported",
+      "source": "catalog"
+    },
     "tools": {
       "status": "supported",
       "source": "catalog"

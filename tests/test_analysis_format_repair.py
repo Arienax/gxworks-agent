@@ -15,6 +15,148 @@ from model_runtime.provider import (
 )
 from application.response_contracts import ANALYSIS_RESPONSE
 from application.response_contracts import ANALYSIS_REPAIR_RESPONSE
+from design_output_examples import batch_output, latch_output
+
+
+@pytest.mark.parametrize("section, row, path, replacement", [
+    ("requirements", {"id": "R1"}, "/requirements/0/text", "X0 controls Y0"),
+    ("implementation_items", {"id": "I1", "language": "ladder", "location": "MAIN", "method": "Latch",
+                              "state_owner": "M0", "requirement_ids": "R1"}, "/implementation_items/0/requirement_ids", ["R1"]),
+    ("implementation_items", {"id": "I1", "language": "st", "location": "MAIN", "method": "Delay",
+                              "state_owner": "MAIN", "instances": [{"delay_ms": 150}]},
+     "/implementation_items/0/instances/0", "DelayA"),
+    ("open_questions", {"id": "Q1", "question": "What delay is needed?", "required": "yes"},
+     "/open_questions/0/required", True),
+])
+def test_planning_row_shape_is_checked_and_repaired_at_the_failing_path(section, row, path, replacement):
+    from jsonschema import Draft202012Validator
+    from application.analysis_repair import apply_analysis_repair, design_submission_schema, plan_analysis_repair
+    from application.analysis_results import current_analysis_protocol_violations, prepare_analysis_payload
+
+    result = {"summary": "Control plan", "approaches": [], section: [row]}
+    plan = plan_analysis_repair(result, "")
+    [target] = plan["targets"]
+    assert target["path"] == path
+    assert not Draft202012Validator(target["value_schema"]).is_valid(target["current_value"])
+    section_schema = design_submission_schema()["properties"][section]
+    assert not Draft202012Validator(section_schema).is_valid(result[section])
+    repaired, _ = apply_analysis_repair(plan, {"repairs": [{"path": path, "value": replacement}]}, "")
+    assert current_analysis_protocol_violations(prepare_analysis_payload(repaired)) == []
+
+
+def test_instruction_choices_use_local_analysis_repair():
+    from application.analysis_repair import apply_analysis_repair, plan_analysis_repair
+
+    approach = {"approach_id": "copy", "name": "批量归档", "description": "保留同一批采样",
+                "generation_guide": "每批完成后保存记录", "implementation_semantics": [],
+                "instruction_choices": [{"opcode": "BMOV"}]}
+    payload = {"summary": "按批次保存采样", "approaches": [approach]}
+    plan = plan_analysis_repair(payload, "")
+    [target] = plan["targets"]
+    assert target["path"] == "/approaches/0/instruction_choices"
+    choices = [{"opcode": "BMOV", "role": "复制本批数据"}]
+    repaired, _ = apply_analysis_repair(plan, {"repairs": [{"path": target["path"], "value": choices}]}, "")
+    assert repaired == {**payload, "approaches": [{**approach, "instruction_choices": choices}]}
+    assert not plan_analysis_repair(repaired, "")["targets"]
+
+
+@pytest.mark.parametrize("mode", ["direct", "design"])
+def test_decision_basis_repair_preserves_original_turn_and_delivered_facts(monkeypatch, tmp_path, mode):
+    from application.conversation_model import ModelTurn, model_turn_scope
+
+    text = "每批采样完成后把连续寄存器归档。"
+    knowledge = "批量复制可处理连续字区。"
+    monkeypatch.setattr(api, "_build_knowledge_context", lambda *args, **kwargs: knowledge)
+    valid = {"variant": "成组复制", "premise": "指令支持连续字区", "status": "known",
+             "conclusion": "applicable", "references": [
+                 {"source": "model_fact", "ref": "knowledge", "quote": knowledge}]}
+    invalid = {"variant": "成组复制", "premise": "每批字数不固定", "status": "known",
+               "conclusion": "excluded", "references": [
+                   {"source": "request", "ref": "", "quote": "每批字数不固定"}]}
+    changes = {"status": "unknown", "conclusion": "conditional", "references": []}
+    condition = {**invalid, **changes}
+    payload = json.loads(CURRENT_EMPTY)
+    approach = payload["approaches"][0]
+    approach.update(name="批量归档", generation_guide="每批完成时归档。",
+                    output_logic=batch_output(),
+                    instruction_choices=[{"opcode": "BMOV", "role": "复制整批数据"}],
+                    decision_basis=[valid, invalid])
+    patch = {"repairs": [{"path": "/approaches/0/decision_basis/1", "value": changes}]}
+    provider = Provider(*(json.dumps(item, ensure_ascii=False) for item in (payload, patch)))
+    turn = ModelTurn(tmp_path, (), {"model": "fixture"}, {}, "zh-CN")
+
+    with api.provider_scope(provider), model_turn_scope(turn):
+        result = api.analyze_requirement_streaming(text, analysis_mode=mode)
+
+    assert len(provider.requests) == 2
+    first, repair = provider.requests
+    assert knowledge in first.messages[0].content
+    assert repair.response_contract == ANALYSIS_REPAIR_RESPONSE
+    assert repair.messages[:len(first.messages)] == first.messages
+    assert knowledge not in repair.messages[-1].content
+    [target] = json.loads(repair.messages[-1].content)["targets"]
+    assert target["path"] == "/approaches/0/decision_basis/1"
+    assert target["mode"] == "decision_citation"
+    assert target["supported_references"] == []
+    saved = result["approaches"][0]
+    assert saved["decision_basis"] == [valid, condition]
+    assert saved["instruction_choices"] == approach["instruction_choices"]
+    assert saved["generation_guide"] == approach["generation_guide"]
+    assert knowledge in turn.pending["messages"][0]["content"]
+    assert json.loads(turn.pending["messages"][-1]["content"]) == patch
+    assert turn.pending["analysis_result"]["approaches"][0]["decision_basis"] == [valid, condition]
+
+
+def test_named_instance_records_are_preserved_without_another_model_request(monkeypatch):
+    monkeypatch.setattr(api, "_build_knowledge_context", lambda *args, **kwargs: "")
+    details = {"name": "DelayA", "delay_ms": 150, "outputs": ["Y1"]}
+    row = {"id": "I1", "language": "ladder", "location": "MAIN", "method": "分别计时",
+           "state_owner": "各通道", "requirement_ids": ["R1"], "instances": [details, "DelayB"]}
+    payload = {"summary": "两路输出独立计时。", "approaches": [],
+               "requirements": [{"id": "R1", "text": "两路输出独立计时。"}], "implementation_items": [row]}
+    provider = Provider(json.dumps(payload, ensure_ascii=False))
+
+    with api.provider_scope(provider):
+        result = api.analyze_requirement("两路输出独立计时。")
+
+    assert len(provider.requests) == 1
+    [item] = result["implementation_items"]
+    assert item["instances"] == ["DelayA", "DelayB"]
+    method, instance_details = item["method"].split("\n实例明细 ", 1)
+    assert method == row["method"] and json.loads(instance_details) == [details]
+
+
+def test_plan_choices_are_separate_from_concrete_process_answers():
+    from application.analysis_repair import plan_analysis_repair
+
+    approaches = [
+        {"approach_id": "queue", "name": "队列", "implementation_semantics": []},
+        {"approach_id": "shared", "name": "共享记录", "implementation_semantics": []},
+    ]
+    payload = {
+        "summary": "控制方案",
+        "approaches": approaches,
+        "missing_info": [
+            {"id": "pick", "question": "采用哪种方案？", "required": True,
+             "options": ["queue：队列", "shared:共享记录"]},
+            {"id": "period", "question": "周期是多少？", "required": True,
+             "options": ["填写周期", "提供周期范围，并说明取值依据"]},
+            {"id": "fault", "question": "故障时采用哪种输出策略？", "required": True,
+             "options": ["保持输出", "立即撤销", "其他，请说明"]},
+            {"id": "mode", "question": "选择运行模式。", "required": True,
+             "options": ["连续运行", "其他，请说明"]},
+            {"id": "custom_mode", "question": "说明自定义运行模式。", "required": True, "options": [],
+             "required_when": {"parameter": "mode", "equals": "其他，请说明"}},
+        ],
+    }
+    plan = plan_analysis_repair(payload, "")
+
+    assert not plan["targets"]
+    assert plan["base"]["approaches"] == approaches
+    assert [(row["id"], row["options"], row["required"]) for row in plan["base"]["missing_info"]] == [
+        ("period", [], True), ("fault", ["保持输出", "立即撤销"], True),
+        ("mode", ["连续运行", "其他，请说明"], True), ("custom_mode", [], True),
+    ]
 
 
 @pytest.mark.parametrize("stream", [False, True])
@@ -74,7 +216,7 @@ def test_explicit_bound_rising_requirement_is_preserved_and_never_deferred(monke
 BROKEN = '{"summary":"起保停控制","approaches":[],"flowchart_steps":[{"type":"transition":"X0启动"}]}'
 FIXED = '{"summary":"起保停控制","approaches":[],"flowchart_steps":[{"type":"transition","label":"X0启动"}]}'
 LEGACY_PROTOCOL = '{"summary":"起保停控制","approaches":[{"name":"旧协议","generation_contract":{"required_structures":["self_hold"]}}]}'
-CURRENT_EMPTY = '{"summary":"起保停控制","approaches":[{"name":"当前协议","implementation_semantics":[]}],"execution_intent_claims":[],"explicit_constraint_claims":[]}'
+CURRENT_EMPTY = '{"summary":"起保停控制","approaches":[{"name":"当前协议","implementation_semantics":[],"decision_basis":[]}],"execution_intent_claims":[],"explicit_constraint_claims":[]}'
 MIXED_PROTOCOL = '{"summary":"起保停控制","approaches":[{"name":"新","implementation_semantics":[]},{"name":"旧","generation_contract":{"required_structures":["self_hold"]}}]}'
 LOW_LEVEL_SEMANTIC = '{"summary":"起保停控制","approaches":[{"name":"错误","implementation_semantics":[{"kind":"opcode","status":"required","value":"SFTL"}]}]}'
 
@@ -93,6 +235,104 @@ class Provider:
         yield TextDelta(response)
 
 
+def test_design_repairs_missing_approaches_and_requirement_links_together(monkeypatch):
+    from jsonschema import Draft202012Validator
+
+    monkeypatch.setattr(api, "_build_knowledge_context", lambda *args, **kwargs: "")
+    item = {"id": "main", "language": "ladder", "location": "MAIN", "method": "风机启停自保持",
+            "state_owner": "M0", "requirement_ids": ["start"]}
+    initial = {"requirements": [{"id": "start", "text": "按下启动后保持运行。"},
+                                {"id": "stop", "text": "按下停止后关闭风机。"}],
+               "implementation_items": [item], "open_questions": []}
+    approach = {"approach_id": "latch", "name": "自保持", "description": "用运行允许位控制风机。", "decision_basis": [],
+                "output_logic": latch_output(),
+                "implementation_semantics": [{"kind": "structure", "status": "required", "value": "self_hold"}]}
+    patch = {"repairs": [
+        {"path": "/approaches", "value": [approach]},
+        {"path": "/summary", "value": "风机启停控制。"},
+        {"path": "/implementation_items", "value": {"main": ["stop"]}},
+    ]}
+    provider = Provider(json.dumps(initial, ensure_ascii=False), json.dumps(patch, ensure_ascii=False))
+    context = {"plc_model": "FX3U", "target_mode": "ladder"}
+    with api.provider_scope(provider):
+        result = api.analyze_requirement_streaming("生成风机启停程序。", analysis_mode="design",
+                                                   planning_context={**context, "working_draft": context})
+
+    assert len(provider.requests) == 2
+    assert "including summary and approaches" in provider.requests[0].messages[0].content
+    targets = {t["path"]: t for t in json.loads(provider.requests[1].messages[-1].content)["targets"]}
+    assert set(targets) == {"/approaches", "/summary", "/implementation_items"}
+    validator = Draft202012Validator(targets["/approaches"]["value_schema"])
+    assert validator.is_valid([approach])
+    assert not validator.is_valid([{**approach, "implementation_semantics": "生成风机启停程序。"}])
+    assert result["summary"] == "风机启停控制。"
+    assert result["approaches"][0]["approach_id"] == "latch"
+    assert result["requirements"] == initial["requirements"]
+    assert result["implementation_items"] == [{**item, "requirement_ids": ["start", "stop"]}]
+
+
+@pytest.mark.parametrize(("turn", "links", "saved"), [
+    ("initial", {"main-network": ["indicator", "stop"]}, True),
+    ("followup", {"main-network": ["indicator", "stop"]}, True),
+    ("followup", {"main-network": ["indicator"]}, False),
+    ("followup", {"unknown-network": ["indicator", "stop"]}, False),
+    ("complete", None, True),
+])
+def test_design_coverage_repair_runs_before_draft_is_saved(monkeypatch, tmp_path, turn, links, saved):
+    from application.workbench import WorkbenchService
+
+    monkeypatch.setattr(api, "_build_knowledge_context", lambda *args, **kwargs: "")
+    enable = {"id": "enable", "text": "启动后保持运行。"}
+    missing = [{"id": "indicator", "text": "运行时点亮指示灯。"},
+               {"id": "stop", "text": "停止时撤销运行输出。"}]
+    item = {"id": "main-network", "language": "ladder", "location": "MAIN", "method": "启停及运行指示",
+            "state_owner": "M0", "requirement_ids": ["enable"]}
+    analysis = json.loads(CURRENT_EMPTY)
+    analysis["approaches"][0]["output_logic"] = latch_output()
+    analysis["requirements"] = missing if links is not None else [enable]
+    if turn == "initial":
+        analysis["requirements"] = [enable, *missing]
+        analysis["implementation_items"] = [item]
+    responses = [json.dumps(analysis, ensure_ascii=False)]
+    if links is not None:
+        responses.append(json.dumps({"repairs": [{"path": "/implementation_items", "value": links}]}))
+    provider = Provider(*responses)
+    service = WorkbenchService(tmp_path / "workspace", tmp_path / "state",
+                               model_factory=lambda: (provider, {"model": "unit-fake"})).start()
+    try:
+        project_id = service.create_project(name="Coverage", plc_model="FX3U")["id"]
+        commands = service.project_commands
+        before = commands.get_spec_document(project_id)
+        if turn != "initial":
+            before = commands.update_spec_document(project_id, [
+                {"section": "requirements", "id": enable["id"], "value": enable},
+                {"section": "implementation_items", "id": item["id"], "value": item},
+            ], before["draft_revision"])
+        job = service.submit({"kind": "analysis", "project_id": project_id, "request_id": "coverage",
+                              "text": "补充控制需求。", "analysis_mode": "design", "response_language": "zh-CN",
+                              "start_conversation": True})
+        finished = service.jobs.wait(job["id"], timeout=10)
+        after = commands.get_spec_document(project_id)
+        assert len(provider.requests) == len(responses), finished
+        if links is not None:
+            request = provider.requests[1]
+            assert request.response_contract == ANALYSIS_REPAIR_RESPONSE
+            [target] = json.loads(request.messages[-1].content)["targets"]
+            assert target["missing_requirements"] == missing
+            assert target["current_value"] == [item]
+        if saved:
+            assert finished["status"] == "completed", finished
+            expected_refs = ["enable", "indicator", "stop"] if links is not None else ["enable"]
+            assert after["draft"]["implementation_items"] == [{**item, "requirement_ids": expected_refs}]
+            assert after["draft"]["requirements"] == ([enable, *missing] if links is not None else [enable])
+            assert not [issue for issue in after["issues"]["errors"] if issue["code"] == "invalid_project_plan"]
+        else:
+            assert finished["status"] == "failed", finished
+            assert after["draft_revision"] == before["draft_revision"]
+    finally:
+        service.close()
+
+
 @pytest.mark.parametrize("content", [BROKEN, LOW_LEVEL_SEMANTIC])
 def test_primary_comparison_disables_syntax_and_claim_repair(content):
     from application.analysis_results import AnalysisProtocolError
@@ -108,7 +348,11 @@ def test_primary_comparison_disables_syntax_and_claim_repair(content):
 
 
 @pytest.mark.parametrize("stream", [False, True])
-def test_real_analysis_path_corrects_syntax_once_before_publishing(stream, monkeypatch):
+def test_real_analysis_path_corrects_syntax_once_before_publishing(stream, monkeypatch, tmp_path):
+    from dataclasses import replace
+    from application.conversation_model import ModelTurn, model_turn_scope
+    from model_runtime.provider import with_response_language
+
     monkeypatch.setattr(api, "_build_knowledge_context", lambda *a, **kw: "")
     provider = Provider(BROKEN, FIXED)
     events = []
@@ -117,7 +361,9 @@ def test_real_analysis_path_corrects_syntax_once_before_publishing(stream, monke
     if stream:
         options["on_content_chunk"] = lambda text: events.append(text)
     function = api.analyze_requirement_streaming if stream else api.analyze_requirement
-    with api.provider_scope(provider, model_name="captured-profile"):
+    model = {"model": "captured-profile"}
+    turn = ModelTurn(tmp_path, (), model, {}, "zh-CN")
+    with api.provider_scope(provider, model_name="captured-profile"), model_turn_scope(turn):
         result = function("起保停", **options)
     assert result["summary"] == "起保停控制"
     assert "flowchart_steps" not in result  # Old replies remain parseable, not new model work.
@@ -127,11 +373,20 @@ def test_real_analysis_path_corrects_syntax_once_before_publishing(stream, monke
     assert first.response_contract == second.response_contract == ANALYSIS_RESPONSE
     assert first.response_language == second.response_language == "zh-CN"
     assert first.options == second.options
-    assert len(second.messages) == 2
-    assert json.loads(second.messages[-1].content)["rejected_draft"] == BROKEN
+    assert second.messages[:len(first.messages)] == first.messages
+    assert second.messages[-2].content == BROKEN
+    assert "rejected_draft" not in json.loads(second.messages[-1].content)
     assert "line 1, column" in second.messages[-1].content
     assert not first.tools and not second.tools
     assert events == (["repair", FIXED] if stream else ["repair"])
+    turn.save("job_analysis")
+    continued = ModelTurn(tmp_path, ("job_analysis",), model, {}, "zh-CN")
+    restored = with_response_language(replace(first, messages=continued.history[:-1]))
+    # The fixture has display reasoning only. Real provider replay fields
+    # are persisted independently of the UI reasoning string.
+    expected = (*second.messages[:-2], replace(second.messages[-2], reasoning=""), second.messages[-1])
+    assert restored.messages == expected
+    assert json.loads(continued.history[-1].content)["summary"] == result["summary"]
 
 
 def test_corrected_analysis_keeps_both_attempts_private_and_history_unchanged():
@@ -446,13 +701,25 @@ SFTL_FIXTURE = json.loads((private_path('tests/fixtures/analysis_sftl_repair.jso
 
 
 @pytest.mark.parametrize("stream", [False, True])
-def test_real_sftl_draft_repairs_claims_and_freezes_every_other_field(stream):
+@pytest.mark.parametrize("responses", [False, True])
+def test_real_sftl_draft_repairs_claims_and_freezes_every_other_field(stream, responses):
     from application.analysis_results import _normalize_analysis_result
     from application.analysis_repair import plan_analysis_repair
+    from model_runtime.provider import _ProviderState, _chat_message, _response_input
+    from responses_fixture import response_body
+
     text = SFTL_FIXTURE["request"]
     raw = SFTL_FIXTURE["first_response"]
     patch = json.dumps(SFTL_FIXTURE["repair_response"], ensure_ascii=False)
-    provider = Provider(raw, patch)
+    origin = ("offline", "captured-profile", "test-scope")
+    class ReplayProvider(Provider):
+        def stream(self, request):
+            stage = request.response_contract.name
+            replay = {"responses_items": response_body(self.responses[0], encrypted=stage)["output"]} if responses else {
+                "message": {"reasoning_content": stage}}
+            yield _ProviderState({"origin": origin, **replay})
+            yield from super().stream(request)
+    provider = ReplayProvider(raw, patch)
     content, reasoning, repairs = [], [], []
     messages = [{"role": "system", "content": "FULL_MANUAL_SENTINEL " * 3000}, UserMessage(text)]
     before = copy.deepcopy(messages)
@@ -466,6 +733,12 @@ def test_real_sftl_draft_repairs_claims_and_freezes_every_other_field(stream):
     assert sum(len(m.content) for m in provider.requests[1].messages) < 8000
     assert content == [response.message.content] and patch not in content
     assert [a.message.content for a in response.raw_attempts] == [raw, patch]
+    assistant = {"role": "assistant", "content": response.message.content}
+    if responses:
+        assert not response.message._provider_fields
+        assert _response_input(response.message, origin) == [assistant]
+    else:
+        assert _chat_message(response.message, origin) == {**assistant, "reasoning_content": "analysis"}
     base, result = json.loads(raw), json.loads(response.message.content)
     assert {k: v for k, v in result.items() if k not in {"execution_intent_claims", "explicit_constraint_claims"}} == {
         k: v for k, v in base.items() if k not in {"execution_intent_claims", "explicit_constraint_claims"}}
@@ -632,6 +905,7 @@ def test_sftl_first_analysis_with_grounded_targets_finishes_in_one_call(monkeypa
         ("M10", "M100"), ("M11", "M300"), ("M12", "M500"),
     ]
     first = {"summary": "三路物料位置跟踪", "approaches": [{"approach_id": "direct", "name": "同步移位跟踪",
+        "decision_basis": [],
         "description": "运行保持及编码器同步移位。逐件登记方式等待工艺事实确认。", "pros": "", "cons": "", "generation_guide": "",
         "implementation_semantics": [{"kind": "structure", "status": "required", "value": name} for name in ["self_hold", "edge_trigger"]]}],
         "explicit_constraint_claims": [{"operation": "require", "scope": "global", "target": {

@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Paired Agent-B experiments through the real application path.
 
@@ -395,9 +395,20 @@ def manual_text_context(context):
     return KnowledgeContext(text, manifest)
 
 
+def _wire_items(params):
+    return params.get("input", params.get("messages", []))
+
+
+def _wire_text(item):
+    content = item.get("content", "")
+    if isinstance(content, list):
+        return "".join(part.get("text", "") for part in content if isinstance(part, dict))
+    return str(content)
+
+
 def _wire_without_usage(params):
     value = copy.deepcopy(params)
-    for message in value.get("messages", []):
+    for message in _wire_items(value):
         if isinstance(message.get("content"), str):
             message["content"] = without_candidate_usage(message["content"])
     return value
@@ -499,7 +510,7 @@ def without_relation_context(context):
 
 def _wire_without_factors(params):
     value = _wire_without_usage(params)
-    for message in value.get("messages", []):
+    for message in _wire_items(value):
         if isinstance(message.get("content"), str): message["content"] = without_relation_evidence(message["content"])
     return value
 
@@ -533,21 +544,22 @@ def preflight_factorial(cases, *, provider, model=None, evidence_cache=None):
 
 def _candidate_count(params):
     count = 0
-    for message in params.get("messages", []):
-        count += sum(_usage_group(group) for _target, group in technical_fact_groups(message.get('content', '')))
-        for match in re.finditer(r'(?m)^\[INSTRUCTION FACTS [^\n]+\]\n(\{[^\n]+\})', str(message.get('content', ''))):
+    for message in _wire_items(params):
+        content = _wire_text(message)
+        count += sum(_usage_group(group) for _target, group in technical_fact_groups(content))
+        for match in re.finditer(r'(?m)^\[INSTRUCTION FACTS [^\n]+\]\n(\{[^\n]+\})', content):
             count += sum(g.get('status') == 'candidate_evidence' and bool(g.get('value', {}).get('facet'))
                          for g in json.loads(match[1])['groups'])
-        for match in re.finditer(r"(?m)^OPERAND_SEMANTICS: (\{[^\r\n]+\})", str(message.get("content", ""))):
+        for match in re.finditer(r"(?m)^OPERAND_SEMANTICS: (\{[^\r\n]+\})", content):
             count += sum(fact.get("status") == "candidate_evidence"
                          for slot in json.loads(match[1])["slots"] for fact in slot.get("usage_facts", []))
     return count
 
 
 def _relation_count(params):
-    return sum(str(message.get('content', '')).count('[RELATION EVIDENCE ')
-               + sum(_relation_group(group) for _target, group in technical_fact_groups(message.get('content', '')))
-               for message in params.get('messages', []))
+    return sum(text.count('[RELATION EVIDENCE ')
+               + sum(_relation_group(group) for _target, group in technical_fact_groups(text))
+               for text in map(_wire_text, _wire_items(params)))
 
 
 class PreviewProvider:
@@ -589,8 +601,9 @@ def preflight_binding(cases, *, provider, model=None, evidence_cache=None):
     pairs = []
     def common(request):
         result = copy.deepcopy(request)
-        for message in result['messages']:
-            message['content'] = re.sub(r'\n# Confirmed operation effects\n[^\n]*\n', '', message['content'])
+        for message in _wire_items(result):
+            if isinstance(message.get('content'), str):
+                message['content'] = re.sub(r'\n# Confirmed operation effects\n[^\n]*\n', '', message['content'])
         return result
     for case in cases:
         rows = [run_case(case, arm, provider=PreviewProvider(provider), model=model, evidence_cache=evidence_cache)
@@ -614,7 +627,7 @@ def preflight_composition(cases, *, provider, model=None, evidence_cache=None):
                          evidence_cache=evidence_cache) for arm in COMPOSITION_ARMS]
         if any(len(row["actual_requests"]) != 1 for row in rows):
             raise ValueError(case["case_id"] + ": composition preflight needs one final request per arm")
-        options = [{k: v for k, v in row["actual_requests"][0].items() if k != "messages"} for row in rows]
+        options = [{k: v for k, v in row["actual_requests"][0].items() if k not in {"input", "messages"}} for row in rows]
         if any(option != options[0] for option in options[1:]):
             raise ValueError(case["case_id"] + ": composition changed saved model options")
         if any(row["confirmed_spec"] != rows[0]["confirmed_spec"] for row in rows[1:]):

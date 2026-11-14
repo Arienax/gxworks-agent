@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Real HTTP + browser generation delivery acceptance in disposable workspaces.
 
@@ -85,12 +85,11 @@ class Server:
         self.socket = socket.socket()
         self.socket.bind(('127.0.0.1', 0))
         self.origin = 'http://127.0.0.1:' + str(self.socket.getsockname()[1])
-        self.token = secrets.token_urlsafe(32)
         model = 'deepseek-v4-flash' if provider.live else 'deterministic-delivery-fixture'
         self.service = WorkbenchService(root / 'workspace', root / 'state', settings=IsolatedSettings(model),
             model_factory=lambda: (provider, provider.profile))
         self.app = create_app(self.service.store.base_dir, state_dir=self.service.state_dir,
-            service=self.service, operator_token=self.token, origin=self.origin, static_dir=web_dist)
+            service=self.service, origin=self.origin, static_dir=web_dist)
         self.preview_attempts = 0
         self.api_errors = []
         self.executions = []

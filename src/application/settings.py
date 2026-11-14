@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Operator model settings, with read-only legacy projection and private keys."""
 from __future__ import annotations
@@ -96,6 +96,11 @@ class SettingsService:
         config = json.loads(path.read_text(encoding="utf-8-sig"))
         config["language"] = normalize_language(config.get("language"))
         return _normalize_profile_selection(config)
+
+    def _read_config_for_write(self):
+        from storage.config import _migrate_profile_credential_targets
+
+        return _migrate_profile_credential_targets(self.read_config())
 
     @staticmethod
     def _legacy_credential(config):
@@ -231,7 +236,7 @@ class SettingsService:
         from storage.config import get_model_profile
         from storage.credentials import write_api_key
         with _SETTINGS_LOCK:
-            config = self.read_config()
+            config = self._read_config_for_write()
             legacy = self._legacy_credential(config)
             if language is not None:
                 if language not in ("zh-CN", "en", "ja"):
@@ -263,7 +268,7 @@ class SettingsService:
         from storage.config import _normalize_profile
         from storage.credentials import credential_target_for_profile, write_api_key
         with _SETTINGS_LOCK:
-            config = self.read_config()
+            config = self._read_config_for_write()
             legacy = self._legacy_credential(config)
             profile_id = _profile_id(id or "custom_" + uuid.uuid4().hex)
             if any(p["id"] == profile_id for p in config["modelProfiles"]):
@@ -286,7 +291,7 @@ class SettingsService:
         from storage.config import get_model_profile
         from storage.credentials import delete_api_key
         with _SETTINGS_LOCK:
-            config = self.read_config()
+            config = self._read_config_for_write()
             legacy = self._legacy_credential(config)
             profile = get_model_profile(config, _profile_id(profile_id))
             config["modelProfiles"] = [p for p in config["modelProfiles"] if p["id"] != profile_id]
@@ -303,7 +308,7 @@ class SettingsService:
         from storage.config import get_model_profile
         from storage.credentials import delete_api_key
         with _SETTINGS_LOCK:
-            config = self.read_config()
+            config = self._read_config_for_write()
             legacy = self._legacy_credential(config)
             profile = get_model_profile(config, _profile_id(profile_id))
             clear_legacy_detection(profile)

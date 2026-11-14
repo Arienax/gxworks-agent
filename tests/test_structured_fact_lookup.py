@@ -4,6 +4,7 @@ import ast
 import inspect
 import json
 import sqlite3
+import subprocess
 
 import pytest
 from hypothesis import given, settings, strategies as st

@@ -153,7 +153,7 @@ def test_http_analysis_confirmation_delivery_keeps_comments_without_bogus_vfd(tm
     from application.workbench import WorkbenchService
     from integrations.web.app import create_app
     from model_runtime.provider import SystemMessage, TextDelta
-    from test_web_api import ORIGIN, OPERATOR, _login, _complete
+    from test_web_api import ORIGIN, _complete
     from test_hardware_intent_boundary import hallucinated_analysis
     monkeypatch.setattr(api, "_build_knowledge_context", lambda *a, **k: "")
     monkeypatch.setattr(api, "_build_model_context", lambda *a, **k: "")
@@ -180,6 +180,7 @@ def test_http_analysis_confirmation_delivery_keeps_comments_without_bogus_vfd(tm
                 # This is a fresh provider response, not a legacy saved snapshot.
                 for approach in payload["approaches"]:
                     contract = approach.pop("generation_contract")
+                    approach["decision_basis"] = []
                     approach["implementation_semantics"] = [
                         {"kind": "structure", "status": status, "value": value}
                         for status in ("required", "forbidden")
@@ -204,9 +205,9 @@ def test_http_analysis_confirmation_delivery_keeps_comments_without_bogus_vfd(tm
 
     provider = Provider()
     service = WorkbenchService(tmp_path / "workspace", tmp_path / "state", model_factory=lambda: (provider, provider.profile))
-    app = create_app(service.store.base_dir, state_dir=service.state_dir, service=service, origin=ORIGIN, operator_token=OPERATOR)
+    app = create_app(service.store.base_dir, state_dir=service.state_dir, service=service, origin=ORIGIN)
     with TestClient(app, base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         project = client.post("/api/projects", headers=headers, json={"name": "alias regression", "plc_model": "FX3U"}).json()["id"]
         _, analysis = _complete(client, service, client.post("/api/jobs", headers=headers, json={
             "kind": "analysis", "project_id": project, "request_id": "analyze", "text": "起保停", "response_language": "zh-CN"}))

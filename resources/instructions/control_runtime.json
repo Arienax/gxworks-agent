@@ -1,30 +1,95 @@
 {
   "schema_version": 1,
   "scope": "Source-checked control subset; no native execution certification. Entries enable only the named CPU and execution conditions.",
+  "cpu_version_domain": {
+    "FX3S": {"first_release": "1.00", "status": "source_verified", "verification": "source_checked",
+      "sources": [{"manual_id": "fx3_programming_r", "manual_number": "JY997D16601", "revision": "R", "section": "A-3-3", "pdf_pages": [918], "printed_pages": [916]}]},
+    "FX3G": {"first_release": "1.00", "status": "source_verified", "verification": "source_checked",
+      "sources": [{"manual_id": "fx3_programming_r", "manual_number": "JY997D16601", "revision": "R", "section": "A-3-4", "pdf_pages": [918], "printed_pages": [916]}]},
+    "FX3GC": {"first_release": "1.40", "status": "source_verified", "verification": "source_checked",
+      "sources": [{"manual_id": "fx3_programming_r", "manual_number": "JY997D16601", "revision": "R", "section": "A-3-5", "pdf_pages": [919], "printed_pages": [917]}]},
+    "FX3U": {"first_release": "2.20", "status": "source_verified", "verification": "source_checked",
+      "sources": [{"manual_id": "fx3_programming_r", "manual_number": "JY997D16601", "revision": "R", "section": "A-3-6", "pdf_pages": [919], "printed_pages": [917]}]},
+    "FX3UC": {"first_release": "1.00", "status": "source_verified", "verification": "source_checked",
+      "sources": [{"manual_id": "fx3_programming_r", "manual_number": "JY997D16601", "revision": "R", "section": "A-3-7", "pdf_pages": [920], "printed_pages": [918]}]}
+  },
   "native_simulator": {
-    "sources": [{"manual_number": "SH082395ENG", "revision": "J", "sections": ["9.2", "10.11", "GetCpuType"], "sdk": "MX Component ACT/Include/ActDefine.cs"},
-      {"manual_number": "SH080008", "revision": "AB", "section": "11.1 Model name read", "pdf_page": 169},
-      {"manual_number": "JY997D45801", "revision": "H", "section": "7.6.3", "pdf_page": 90}],
+    "sources": [
+      {"manual_number": "SH082395ENG", "revision": "J", "sections": ["8.1", "9.2", "10.11", "11.3 GetCpuType", "Appendix 12"], "sdk": "MX Component ACT/Include/ActDefine.cs"},
+      {"manual_number": "SH080008", "revision": "AB", "section": "11.1 Model name and model code", "printed_pages": [166, 167, 168]},
+      {"manual_number": "JY997D45801", "revision": "H", "section": "7.6.3", "printed_pages": [90]},
+      {"manual_number": "JY997D16901", "revision": "R", "section": "7.11.1 PLC model name (CPU) and read contents"},
+      {"manual_number": "SH081085ENG", "revision": "T", "section": "3.2 ActCpuType"}
+    ],
     "unit_type": 48,
     "target_simulator": 0,
     "targets": {
-      "FX3U/FX3UC": {"cpu_type": 520, "model_code": 243, "monitor": "fx_run"},
-      "FX3G/FX3GC": {"cpu_type": 521, "model_code": 244, "monitor": "fx_run"},
+      "FX0N": {"cpu_type": 514, "model_code": 142, "monitor": "fx_run"},
+      "FX1S": {"cpu_type": 518, "model_code": 242, "monitor": "fx_run"},
+      "FX1N/FX1NC": {"cpu_type": 519, "model_code": 158, "monitor": "fx_run"},
+      "FXU/FX2C": {"cpu_type": 516, "model_code": 141, "monitor": "fx_run"},
+      "FX2N/FX2NC": {"cpu_type": 517, "model_code": 157, "monitor": "fx_run"},
       "FX3S": {"cpu_type": 522, "model_code": 245, "monitor": "fx_run"},
+      "FX3G/FX3GC": {"cpu_type": 521, "model_code": 244, "monitor": "fx_run"},
+      "FX3U/FX3UC": {"cpu_type": 520, "model_code": 243, "monitor": "fx_run"},
+      "Q00J": {"cpu_type": 48, "model_code": 592, "monitor": "ql_run"},
+      "Q00UJ": {"cpu_type": 128, "model_code": 608, "monitor": "ql_run"},
+      "Q00": {"cpu_type": 49, "model_code": 593, "monitor": "ql_run"},
       "Q00U": {"cpu_type": 129, "model_code": 609, "monitor": "ql_run"},
+      "Q01": {"cpu_type": 50, "model_code": 594, "monitor": "ql_run"},
+      "Q01U": {"cpu_type": 130, "model_code": 610, "monitor": "ql_run"},
+      "Q02/Q02H": {"cpu_type": 34, "model_code": 65, "monitor": "ql_run"},
+      "Q02PH": {"cpu_type": 69, "model_code": 65, "monitor": "ql_run"},
+      "Q02U": {"cpu_type": 131, "model_code": 611, "monitor": "ql_run"},
+      "Q03UD": {"cpu_type": 112, "model_code": 616, "monitor": "ql_run"},
+      "Q03UDE": {"cpu_type": 144, "model_code": 616, "monitor": "ql_run"},
       "Q03UDV": {"cpu_type": 209, "model_code": 870, "monitor": "ql_run"},
+      "Q04UDH": {"cpu_type": 113, "model_code": 617, "monitor": "ql_run"},
+      "Q04UDEH": {"cpu_type": 145, "model_code": 617, "monitor": "ql_run"},
+      "Q04UDV": {"cpu_type": 210, "model_code": 871, "monitor": "ql_run"},
+      "Q04UDPV": {"cpu_type": 71, "model_code": 871, "monitor": "ql_run"},
+      "Q06H": {"cpu_type": 35, "model_code": 66, "monitor": "ql_run"},
+      "Q06PH": {"cpu_type": 70, "model_code": 66, "monitor": "ql_run"},
+      "Q06UDH": {"cpu_type": 114, "model_code": 618, "monitor": "ql_run"},
       "Q06UDEH": {"cpu_type": 146, "model_code": 618, "monitor": "ql_run"},
+      "Q06UDV": {"cpu_type": 211, "model_code": 872, "monitor": "ql_run"},
+      "Q06UDPV": {"cpu_type": 72, "model_code": 872, "monitor": "ql_run"},
+      "Q10UDH": {"cpu_type": 117, "model_code": 614, "monitor": "ql_run"},
+      "Q10UDEH": {"cpu_type": 149, "model_code": 614, "monitor": "ql_run"},
+      "Q12H": {"cpu_type": 36, "model_code": 67, "monitor": "ql_run"},
+      "Q12PH": {"cpu_type": 65, "model_code": 67, "monitor": "ql_run"},
+      "Q12PRH": {"cpu_type": 67, "model_code": 75, "monitor": "ql_run"},
+      "Q13UDH": {"cpu_type": 115, "model_code": 619, "monitor": "ql_run"},
+      "Q13UDEH": {"cpu_type": 147, "model_code": 619, "monitor": "ql_run"},
+      "Q13UDV": {"cpu_type": 212, "model_code": 874, "monitor": "ql_run"},
+      "Q13UDPV": {"cpu_type": 73, "model_code": 874, "monitor": "ql_run"},
+      "Q20UDH": {"cpu_type": 118, "model_code": 615, "monitor": "ql_run"},
+      "Q20UDEH": {"cpu_type": 150, "model_code": 615, "monitor": "ql_run"},
+      "Q25H": {"cpu_type": 37, "model_code": 68, "monitor": "ql_run"},
+      "Q25PH": {"cpu_type": 66, "model_code": 68, "monitor": "ql_run"},
+      "Q25PRH": {"cpu_type": 68, "model_code": 76, "monitor": "ql_run"},
+      "Q26UDH": {"cpu_type": 116, "model_code": 620, "monitor": "ql_run"},
+      "Q26UDEH": {"cpu_type": 148, "model_code": 620, "monitor": "ql_run"},
+      "Q26UDV": {"cpu_type": 213, "model_code": 876, "monitor": "ql_run"},
+      "Q26UDPV": {"cpu_type": 74, "model_code": 876, "monitor": "ql_run"},
+      "Q50UDEH": {"cpu_type": 152, "model_code": 621, "monitor": "ql_run"},
+      "Q100UDEH": {"cpu_type": 154, "model_code": 622, "monitor": "ql_run"},
+      "L02S/L02S-P": {"cpu_type": 163, "model_code": 1347, "monitor": "ql_run"},
       "L02/L02-P": {"cpu_type": 161, "model_code": 1345, "monitor": "ql_run"},
       "L06/L06-P": {"cpu_type": 165, "model_code": 1348, "monitor": "ql_run"},
-      "L26/L26-P": {"cpu_type": 164, "model_code": 1349, "monitor": "ql_run"}
+      "L26/L26-P": {"cpu_type": 164, "model_code": 1349, "monitor": "ql_run"},
+      "L26-BT/L26-PBT": {"cpu_type": 162, "model_code": 1346, "monitor": "ql_run"}
     },
     "monitors": {
       "fx_run": {"device": "M8000", "mask": 1, "value": 1, "reset_initial_phase": "before_reset",
         "read_devices": {"M8000": "bit", "M8067": "bit", "D8067": "word"},
-        "sources": [{"manual_number": "JY997D16601", "revision": "R", "section": "Special auxiliary relays and special data registers"}]},
+        "sources": [{"manual_number": "JY997D16601", "revision": "R", "section": "Special auxiliary relays and special data registers"},
+                    {"manual_number": "JY997D26001", "revision": "L", "sections": ["4.2.1", "5.2.1", "5.3.1"]},
+                    {"manual_number": "SH080779ENG", "revision": "AS", "section": "Appendix 2.2 Supported devices", "printed_pages": ["App-34", "App-39"]}]},
       "ql_run": {"device": "SD203", "mask": 15, "value": 0, "reset_initial_phase": "after_reset",
         "read_devices": {"SD203": "word", "SM0": "bit", "SD0": "word"},
-        "sources": [{"manual_number": "SH080483ENG", "revision": "BC", "pdf_page": 546}, {"manual_number": "SH080890ENG", "revision": "AJ", "pdf_page": 372}]}
+        "sources": [{"manual_number": "SH080483ENG", "revision": "BC", "pdf_page": 546}, {"manual_number": "SH080890ENG", "revision": "AJ", "pdf_page": 372},
+                    {"manual_number": "SH080779ENG", "revision": "AS", "section": "Appendix 2.2 Supported devices", "printed_pages": ["App-30", "App-36", "App-37", "App-38"]}]}
     }
   },
   "reviewed_groups": [
@@ -106,6 +171,19 @@
       }
     },
     {
+      "models": ["FX3U", "FX3UC", "FX3U/FX3UC"],
+      "facts": {
+        "timers": {
+          "OUT": [
+            {"first": 0, "last": 199, "unit_ms": 100, "reset_on_disable": true},
+            {"first": 200, "last": 245, "unit_ms": 10, "reset_on_disable": true},
+            {"first": 256, "last": 511, "unit_ms": 1, "reset_on_disable": true}
+          ],
+          "source": {"manual_number": "JY997D16601", "revision": "R", "pdf_page": 100}
+        }
+      }
+    },
+    {
       "models": ["Q03UDE", "Q03UDV", "Q12PH", "Q12PRH", "L02", "L26-BT"],
       "facts": {
         "scope": "Reviewed Boolean control and direct-word transfers only; no startup, timer, counter, hardware I/O or native runtime certification.",
@@ -122,8 +200,10 @@
     "always_on_source": {"manual_number": "JY997D16601", "revision": "R", "pdf_page": 867,
       "section": "37.2.1 RUN monitor and initial pulse [M8000 to M8003]",
       "condition": "always ON while the PLC is in RUN mode"},
+    "clock_relays": {"M8011": {"off_ms": 5, "on_ms": 5}, "M8012": {"off_ms": 50, "on_ms": 50},
+      "M8013": {"off_ms": 500, "on_ms": 500}, "M8014": {"off_ms": 30000, "on_ms": 30000}},
+    "clock_relays_source": {"resource": "plc_models.json", "field": "FX3U.special_m_reference.clock"},
     "control": {"forms": ["LD", "LDI", "AND", "ANI", "OR", "ORI", "ORB", "ANB", "MPS", "MRD", "MPP", "OUT", "SET", "RST", "MOV", "ZRST"], "immediate_memory_writes": true, "disabled_coil": false, "disabled_set_reset": "retain", "shared_condition": "saved_accumulator", "sources": [{"manual_number": "JY997D16601", "revision": "R", "pdf_pages": [172, 184, 192, 204, 205, 216, 218, 251, 318, 319]}]},
-    "timers": {"OUT": [{"first": 0, "last": 199, "unit_ms": 100, "reset_on_disable": true}, {"first": 200, "last": 245, "unit_ms": 10, "reset_on_disable": true}, {"first": 256, "last": 511, "unit_ms": 1, "reset_on_disable": true}], "source": {"manual_number": "JY997D16601", "revision": "R", "pdf_page": 100}},
     "counter": {"first": 0, "last": 99, "bits": 16, "trigger": "rising", "holds_on_disable": true, "stops_at_preset": true, "source": {"manual_number": "JY997D16601", "revision": "R", "pdf_pages": [105, 106]}}
   },
   "FX5U": {

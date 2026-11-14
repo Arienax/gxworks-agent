@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Project GXW source objects into the shared, storage-independent FBD rules."""
 from __future__ import annotations
@@ -13,8 +13,61 @@ from .connectivity import build_connectivity_graph
 from .models import NodeKind, GRAPH_CONTACT_NODE_KINDS, COIL_NODE_KINDS, GXWFormatError
 
 
+def inout_constant_allowed(rules, callee_language, data_type, used):
+    """AG197: a structured caller may bind a constant only while the callee
+    does not use the IN_OUT formal as an output target.  ``None`` means the
+    current callee cannot decide the output-use condition."""
+    family = 'BOOL' if data_type == 'BOOL' else 'other'
+    condition = rules['FBD.CALL.BINDING'].get('inout_input_constant', {}).get(callee_language, {}).get(family, {})
+    if used is not None:
+        return condition.get('written' if used else 'unused')
+    return True if condition.get('written') is True and condition.get('unused') is True else None
+
+
+def _operation_value_iec_type(value_type):
+    """Map only explicit source value identities to IEC domains.
+
+    The graphics library may expose an ANY32 pin while an instruction's own
+    source relation narrows the operation value. Unknown or unit-bearing
+    identities stay unresolved; device names are not used to infer a type.
+    """
+    if not isinstance(value_type, dict) or value_type.get('unit') not in (None, ''):
+        return None
+    kind, bits = value_type.get('kind'), value_type.get('bits')
+    if kind == 'int' and bits == 32 and type(value_type.get('signed')) is bool:
+        return 'DINT' if value_type['signed'] else 'DWORD'
+    if kind == 'real' and value_type.get('signed', False) is False:
+        if bits == 32:
+            return 'REAL'
+        if bits == 64:
+            return 'LREAL'
+    return None
+
+
+def _source_label_device(value, pin, word_count):
+    """Use only a whole scalar label's explicit word-device binding."""
+    if value.get('kind') != 'label' or value.get('member_path') or value.get('shape'):
+        return None
+    device = (value.get('storage') or {}).get('device')
+    if not device:
+        return None
+    declared = str(value.get('data_type') or '').upper()
+    if declared in {'WORD', 'INT'} and word_count == 1:
+        return device
+    capacity = value.get('string_capacity')
+    required = pin.get('declared_capacity')
+    size = re.fullmatch(r'STRING\s*\[\s*(\d+)\s*\]', declared)
+    if (str(pin.get('type')).upper() == 'STRING' and size and type(capacity) is int
+            and int(size[1]) == capacity
+            and type(required) is int and capacity >= required
+            and capacity * 8 >= word_count * 16):
+        return device
+    return None
+
+
 def inspect_graph(program, sources):
     findings, contracts, endpoints, calls, actuals = [], {}, {}, {}, {}
+    source_device_views = []
     memberships = {n.offset: index for index, view in enumerate(program.block_views()) for n in view.nodes}
     nodes = {node.offset: node for node in program.nodes}
     rules = {}
@@ -59,6 +112,13 @@ def inspect_graph(program, sources):
         actuals[node.offset] = value
         return value
 
+    def source_block_pin(binding, formal_name):
+        if not binding or binding.get('binding') != 'source_instruction_block':
+            return None
+        wanted = str(formal_name or '').casefold()
+        return next((pin for pin in binding.get('source_contract', {}).get('pins', ())
+                     if str(pin.get('name', '')).casefold() == wanted), None)
+
     for node in program.nodes:
         ports = []
         if node.kind in (NodeKind.FUNCTION, NodeKind.FUNCTION_BLOCK):
@@ -67,6 +127,14 @@ def inspect_graph(program, sources):
                 ports = binding['ports']
                 contracts[node.offset] = [(p['name'], p['data_type'], p['side'], p['class_code']) for p in ports]
                 calls[node.offset] = binding
+                if binding.get('binding') == 'source_instruction_block':
+                    contract = binding['source_contract']
+                    if contract.get('conditions_status') == 'unresolved':
+                        add('fbd_instruction_block_condition_unverified',
+                            'The source applicability conditions for this FBD instruction block are unresolved.',
+                            node=node, severity='unverified', rule='FBD.CALL.BINDING',
+                            source_fact_ids=contract.get('fact_ids', []),
+                            conditions=contract.get('conditions', []))
             except GXWFormatError as error:
                 add('fbd_call_binding', str(error), node=node)
                 # Geometry still tells us direction even if the formal is lost.
@@ -105,6 +173,24 @@ def inspect_graph(program, sources):
                     add('fbd_type_not_supported', 'The declared value type is unavailable for the selected CPU members',
                         node=node, port=port['name'], actual_types=list(types), plc_model=sources.cpu)
                 endpoints[key]['types'] = filtered
+            source_pin = source_block_pin(calls.get(node.offset),
+                                          port.get('formal_name') or port.get('name'))
+            if source_pin and 'operation_value_type' in source_pin:
+                source_type = _operation_value_iec_type(source_pin.get('operation_value_type'))
+                if source_type is None:
+                    add('fbd_operation_value_type_unverified',
+                        'The source operation value type cannot be mapped to a concrete FBD value domain.',
+                        node=node, severity='unverified', formal=source_pin.get('name'),
+                        operation_value_type=source_pin.get('operation_value_type'))
+                elif not endpoints[key].get('types') or source_type not in endpoints[key]['types']:
+                    add('fbd_operation_value_type_conflict',
+                        'The source operation value type conflicts with the graphic pin domain.',
+                        node=node, formal=source_pin.get('name'), operation_value_type=source_pin.get('operation_value_type'),
+                        pin_types=endpoints[key].get('types'))
+                    endpoints[key]['types'] = []
+                else:
+                    endpoints[key]['types'] = [source_type]
+                    endpoints[key]['source_operation_value_type'] = source_type
 
     relations = []
     for offset, binding in calls.items():
@@ -115,7 +201,9 @@ def inspect_graph(program, sources):
             operator = re.sub(r'-\d+$', '', node.symbol.upper().lstrip('@'))
             conflict = rules['FBD.OPERATORS'].get('source_conflicts', {}).get(operator)
             if conflict and set(_cpu_members(sources.cpu)).intersection(conflict['models']):
-                add('fbd_operator_source_conflict', conflict['reason'], node=node, severity='unverified', rule='FBD.OPERATORS')
+                add('fbd_operator_source_conflict', 'Operator typing has an unresolved source difference',
+                    node=node, severity='unverified', rule='FBD.OPERATORS',
+                    source_difference=conflict['reason'])
                 continue
             groups, overrides = call_type_groups(node.symbol, selected, rules['FBD.OPERATORS'])
             for key, value in overrides.items():
@@ -177,35 +265,171 @@ def inspect_graph(program, sources):
             add('fbd_net_coverage', 'Net contains a port whose role is not yet resolved', severity='unverified',
                 net=net.index, block=net.block_index)
         relations.append(dict(kind='net', members=known, net=net.index, block=net.block_index))
-        # A MELSEC instruction can address a multiword device span. That is a
-        # source-owned storage view, not an implicit cast of an INT label or an
-        # IEC function's typed value. Reuse the current instruction width.
+        # A MELSEC instruction or source FBD block can address a multiword
+        # device span. Source block layouts are checked from their own pin
+        # facts; an independent-element layout must not be reinterpreted as a
+        # wider scalar value.
         for call_key in known:
             call_node, formal = nodes[call_key[0]], endpoints[call_key]
             if call_node.kind != NodeKind.FUNCTION or formal.get('formal_name') in ('EN', 'ENO'):
                 continue
+            binding = calls.get(call_node.offset)
+            source_pin = source_block_pin(binding, formal.get('formal_name'))
+            source_operation_type = (_operation_value_iec_type(source_pin.get('operation_value_type'))
+                                     if source_pin and 'operation_value_type' in source_pin else None)
+            layout = source_pin.get('word_device_layout') if source_pin else None
+            independent_layout = isinstance(layout, dict) and (
+                layout.get('single_scalar') is False or layout.get('kind') == 'independent_elements')
+            source_word_count = layout.get('word_count') if isinstance(layout, dict) else None
+            source_unit_bits = layout.get('device_unit_bits') if isinstance(layout, dict) else None
             try:
-                width = sources.call_storage_bits(call_node, formal)
+                if isinstance(layout, dict):
+                    read_layout = source_pin.get('read_layout')
+                    string_layout = source_pin.get('string_layout') or {}
+                    packed_string = (source_pin.get('type') == 'STRING'
+                        and layout.get('element_bits') == 8
+                        and type(layout.get('element_count')) is int
+                        and layout['element_count'] > 0
+                        and (layout['element_count'] + 1) // 2 == source_word_count
+                        and string_layout.get('encoding') == 'ASCII'
+                        and string_layout.get('data_character_count') == layout['element_count']
+                        and string_layout.get('data_word_count') == source_word_count)
+                    valid_layout = (type(source_word_count) is int and source_word_count > 0
+                                    and source_unit_bits == 16
+                                    and (layout.get('element_bits', 16) == 16 or packed_string))
+                    if isinstance(read_layout, dict):
+                        element_count = read_layout.get('element_count')
+                        stride_words = read_layout.get('stride_words')
+                        fields = read_layout.get('field_order')
+                        referents = source_pin.get('referent_fields')
+                        referent_roles = ([row.get('role') for row in referents]
+                                          if isinstance(referents, list)
+                                          and all(isinstance(row, dict) for row in referents) else None)
+                        referent_offsets = ([row.get('offset') for row in referents]
+                                            if isinstance(referents, list)
+                                            and all(isinstance(row, dict) for row in referents) else None)
+                        valid_layout = (valid_layout and type(element_count) is int and element_count > 0
+                                        and type(stride_words) is int and stride_words > 0
+                                        and element_count * stride_words == source_word_count
+                                        and isinstance(fields, list) and len(fields) == element_count
+                                        and referent_roles == fields
+                                        and referent_offsets == [index * stride_words
+                                                                 for index in range(element_count)])
+                    if not valid_layout:
+                        add('fbd_source_device_layout_unverified',
+                            'The source device layout is incomplete or inconsistent.', node=call_node,
+                            severity='unverified', formal=formal.get('formal_name'), source_pin=source_pin)
+                        continue
+                    tail = layout.get('conditional_tail_word_offset')
+                    if tail is not None:
+                        if not packed_string or type(tail) is not int or tail != source_word_count:
+                            add('fbd_source_device_layout_unverified',
+                                'The conditional string tail does not have a verified contiguous offset.',
+                                node=call_node, severity='unverified', formal=formal.get('formal_name'))
+                            continue
+                        # Reserve the possible tail without asserting that this
+                        # call writes it in every selector state.
+                        source_word_count += 1
+                    width = source_word_count * source_unit_bits
+                else:
+                    if source_operation_type in {'DINT', 'DWORD', 'REAL', 'LREAL'}:
+                        width = {'DINT': 32, 'DWORD': 32, 'REAL': 32, 'LREAL': 64}[source_operation_type]
+                    else:
+                        width = sources.call_storage_bits(call_node, formal)
                 if width is None:
                     continue
                 for terminal_key in known:
-                    value = endpoints[terminal_key].get('actual') or {}
-                    if value.get('kind') != 'device':
+                    if terminal_key == call_key:
                         continue
-                    from plc.validation import parse_device_address, _validate_device_address, device_address_radix
-                    prefix, index = parse_device_address(value['text'], sources.cpu)
+                    value = endpoints[terminal_key].get('actual') or {}
+                    label_device = (_source_label_device(value, source_pin, source_word_count)
+                                    if isinstance(layout, dict) else None)
+                    if value.get('kind') != 'device' and not label_device:
+                        if isinstance(layout, dict):
+                            add('fbd_source_device_layout_unverified',
+                                'The source device layout needs a directly bound word-device reference.',
+                                node=call_node, severity='unverified', formal=formal.get('formal_name'),
+                                expression=value.get('text'))
+                        continue
+                    from plc.validation import (parse_device_address, _validate_device_address, _validate_writable_device,
+                                                device_address_radix, is_bit_device)
+                    device = label_device or value['text']
+                    prefix, index = parse_device_address(device, sources.cpu)
+                    if label_device and prefix in ('T', 'C'):
+                        add('fbd_device_value_view_coverage',
+                            'Timer/counter label storage needs the selected device contract.',
+                            node=nodes[terminal_key[0]], severity='unverified', port=formal['name'])
+                        continue
+                    if isinstance(layout, dict):
+                        storage_bits = 16 if label_device else (value.get('storage') or {}).get('bits')
+                        if storage_bits != source_unit_bits or is_bit_device(device, sources.cpu):
+                            add('fbd_source_device_layout_mismatch',
+                                'The actual device does not have the source-required word width.',
+                                node=call_node, formal=formal.get('formal_name'), expression=value['text'],
+                                expected_device_unit_bits=source_unit_bits, actual_storage_bits=storage_bits)
+                            continue
+                        radix = device_address_radix(prefix, sources.cpu)
+                        addresses = []
+                        for word_offset in range(source_word_count):
+                            current = index + word_offset
+                            suffix = format(current, 'X') if radix == 16 else format(current, 'o') if radix == 8 else str(current)
+                            address = prefix + suffix
+                            _validate_device_address(address, '$.fbd.source_device_layout', sources.cpu,
+                                                     expected_prefixes={prefix})
+                            if source_pin.get('direction') in {'output', 'in_out'}:
+                                _validate_writable_device(address, '$.fbd.source_device_layout', sources.cpu)
+                            addresses.append(address)
+                        source_domain = type_domain(source_pin.get('type'), rules['FBD.TYPES'])
+                        actual_domain = set(value.get('types') or ())
+                        if not source_domain or not actual_domain:
+                            add('fbd_source_device_type_coverage',
+                                'The source generic or actual device type domain is unresolved.',
+                                node=call_node, severity='unverified', formal=formal.get('formal_name'),
+                                expression=value['text'], source_types=sorted(source_domain or ()),
+                                actual_types=sorted(actual_domain))
+                            continue
+                        if not actual_domain.issubset(source_domain):
+                            add('fbd_source_device_type_conflict',
+                                'The actual device type domain is not covered by the source generic pin.',
+                                node=call_node, formal=formal.get('formal_name'), expression=value['text'],
+                                source_types=sorted(source_domain), actual_types=sorted(actual_domain))
+                            continue
+                        formal['source_device_layout_verified'] = True
+                        formal['source_generic_domain'] = sorted(source_domain)
+                        source_device_views.append({
+                            'node_offset': call_node.offset,
+                            'formal': formal.get('formal_name'),
+                            'start_device': addresses[0],
+                            'end_device': addresses[-1],
+                            'word_count': source_word_count,
+                            'device_unit_bits': source_unit_bits,
+                            'source_types': sorted(source_domain),
+                            'actual_types': sorted(actual_domain),
+                        })
+                        # Three independent date words are not one 48-bit scalar.
+                        if independent_layout or label_device or packed_string:
+                            continue
+                        width = source_unit_bits
                     if prefix in ('T', 'C'):
                         add('fbd_device_value_view_coverage', 'Timer/counter contact and current-value width need the selected device contract',
                             node=nodes[terminal_key[0]], severity='unverified', port=formal['name'])
                         endpoints[terminal_key]['types'] = None
                         continue
                     if (value.get('storage') or {}).get('bits') != 16:
+                        if source_operation_type in {'DINT', 'DWORD', 'REAL', 'LREAL'}:
+                            add('fbd_operation_value_type_device_mismatch',
+                                f'The source operation value requires a {width}-bit word-device view.',
+                                node=call_node, formal=formal.get('formal_name'), expression=value['text'],
+                                operation_value_type=source_pin.get('operation_value_type'),
+                                actual_storage_bits=(value.get('storage') or {}).get('bits'))
                         continue
                     last = index + width // 16 - 1
                     radix = device_address_radix(prefix, sources.cpu)
                     suffix = format(last, 'X') if radix == 16 else format(last, 'o') if radix == 8 else str(last)
                     _validate_device_address(prefix + suffix, '$.fbd.device_span', sources.cpu)
-                    endpoints[terminal_key]['types'] = ['INT','WORD'] if width == 16 else ['DINT','DWORD','REAL']
+                    endpoints[terminal_key]['types'] = (
+                        [source_operation_type] if source_operation_type in {'DINT', 'DWORD', 'REAL', 'LREAL'}
+                        else ['INT','WORD'] if width == 16 else ['DINT','DWORD','REAL'])
                     endpoints[terminal_key]['storage_view_bits'] = width
             except (ValueError, AttributeError) as error:
                 add('fbd_device_span', str(error), node=call_node, formal=formal.get('formal_name'))
@@ -240,10 +464,7 @@ def inspect_graph(program, sources):
                         used, language = sources.inout_output_usage(node, port['formal_name'])
                     except (ValueError, AttributeError):
                         used, language = None, None
-                    family = 'BOOL' if port.get('data_type') == 'BOOL' else 'other'
-                    condition = rules['FBD.CALL.BINDING'].get('inout_input_constant', {}).get(language, {}).get(family, {})
-                    allowed = condition.get('written' if used else 'unused') if used is not None else (
-                        True if condition.get('written') is True and condition.get('unused') is True else None)
+                    allowed = inout_constant_allowed(rules, language, port.get('data_type'), used)
                     if allowed is False:
                         add('fbd_inout_constant', 'IN_OUT constant violates the current callee output-use contract',
                             node=node, port=port['name'], expression=value['text'], callee_language=language,
@@ -261,6 +482,9 @@ def inspect_graph(program, sources):
                     if not rules['FBD.TIMERS'] and node.type_name.upper() in ('TON', 'TON_E', 'TON_10', 'TON_10_E'):
                         add('fbd_timer_resolution_coverage', 'Timer resolution has no rule for the selected CPU members',
                             node=node, port=port['name'], severity='unverified', rule='FBD.TIMERS')
+                    if not values and node.type_name.upper() in rules['FBD.TIMERS'].get('unavailable_timer_forms', []):
+                        add('fbd_timer_form_unavailable', 'Timer form is excluded by the source CPU table',
+                            node=node, port=port['name'], rule='FBD.TIMERS')
                     for value in values:
                         issue = check_timer_resolution(node.type_name, value, rules['FBD.TIMERS'])
                         if issue:
@@ -276,7 +500,10 @@ def inspect_graph(program, sources):
             # Native interface records do not currently encode an optional/default
             # marker. Never invent one or silently treat omission as validated.
             add('fbd_unbound_formal_coverage', 'Unconnected input requires a current optional/default-input contract',
-                node=node, severity='unverified', port=port['name'], formal=port.get('formal_name'))
+                node=nodes[key[0]], severity='unverified', port=port['name'], formal=port.get('formal_name'),
+                rule='FBD.CALL.BINDING', omission_behavior='unknown',
+                **({'declared_initial_value_raw': port['declared_initial_value_raw']}
+                   if 'declared_initial_value_raw' in port else {}))
         elif (
             node.kind in (COIL_NODE_KINDS | {NodeKind.OUTPUT, NodeKind.JUMP, NodeKind.RETURN, NodeKind.INOUT})
             and port.get('side') == 'in'
@@ -350,6 +577,11 @@ def inspect_graph(program, sources):
             add('fbd_terminal_type_unverified', 'Port value type remains unresolved', node=nodes[key[0]],
                 severity='unverified', port=endpoints[key].get('name'))
         elif len(domain) > 1 and str(endpoints[key].get('data_type') or '').startswith('ANY'):
+            if (endpoints[key].get('source_device_layout_verified') is True
+                    and set(domain).issubset(set(endpoints[key].get('source_generic_domain') or ()))):
+                # A complete actual domain covered by the source-generic pin is
+                # sufficient here; the signature has no overload-selection rule.
+                continue
             add('fbd_generic_type_coverage', 'Generic remains a constrained domain; no concrete overload was selected',
                 node=nodes[key[0]], severity='unverified', port=endpoints[key].get('name'), possible_types=sorted(domain))
 
@@ -406,6 +638,7 @@ def inspect_graph(program, sources):
     return dict(contracts=contracts, findings=findings,
                 execution=dict(order=ordered, dependencies=dependencies, instances=instances,
                                status='static_dependencies_only'),
+                source_device_views=source_device_views,
                 resolved_types={f'{key[0]}:{key[1]}': sorted(value) if value is not None else None for key, value in domains.items()})
 
 

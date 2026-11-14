@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """One analysis prompt assembler shared by streaming and non-streaming calls."""
 from __future__ import annotations
@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from knowledge.analysis_router import AnalysisRoute, route_analysis_request
 from application.prompts import (
     ANALYSIS_SYSTEM_PROMPT, ANALYSIS_DIRECT_PROMPT, ANALYSIS_PINNED_PROMPT, ANALYSIS_DESIGN_PROMPT,
+    ANALYSIS_IMPLEMENTATION_PROMPT, IMPLEMENTATION_COMPARISON_PROMPT, ANALYSIS_OUTPUT_LOGIC_PROMPT,
     ANALYSIS_BOUND_PROMPT, ANALYSIS_REQUIREMENTS_PROMPT,
     ANALYSIS_VFD_PROMPT, ANALYSIS_MOTION_PROMPT, ANALYSIS_MOTION_FAMILY_PROMPTS,
 )
@@ -20,9 +21,9 @@ _DEVICE = re.compile(r"(?<![A-Za-z0-9_])(?:SM|SD|[XYMDTCSVZ])\d+(?![A-Za-z0-9_])
 
 # Transport metadata for the shared Core binding, not an inferred PLC rule.
 _IO_BINDING_PROMPT = """# I/O purpose metadata
-地址、极性分题用同一 io_binding.binding_id；kind 为地址类别，已有 row_id 沿用。极性答案不必重复地址。寄存器数值含义不是地址选择。
-role 是控制语义身份（如 start/stop/output/interlock），明确才写，后续沿用；未知 role 不猜测。label 只是人类可读用途/注释，不含问题、选项、极性或解释。用户编辑用途优先，不为注释新增问题。
-稳定 id；question 只问缺失事实。参数可带 semantic_key、value_kind（text/choice/number/boolean）、unit；硬件 id 用 hardware.<Core参数ID>。suggested_io 只写用途。"""
+地址和极性分题共用 io_binding.binding_id，kind 为地址类别，沿用已有 row_id。极性答案无需重复地址，寄存器数值含义不是地址选择。
+role 是控制语义身份（start/stop/output/interlock），明确才写并沿用，未知 role 不猜测。label 只是人类可读用途/注释，不含问题、选项、极性或解释。用户编辑优先，不为注释提问。
+参数可带 semantic_key、value_kind（text/choice/number/boolean）、unit。硬件 id 用 hardware.<Core参数ID>。"""
 
 
 def _address_notes(value, requested, result):
@@ -89,6 +90,9 @@ class AnalysisPrompt:
     knowledge_context: object
     route: AnalysisRoute
     contract_stage: str = "bound"
+    model_facts: str = ""
+    decision_spec: dict | None = None
+    fact_citations: dict | None = None
 
 
 def analysis_contract_stage(user_request, confirmed_context=None):
@@ -114,7 +118,7 @@ def analysis_contract_stage(user_request, confirmed_context=None):
 
 def assemble_analysis_prompt(user_request, *, plc_model, confirmed_context=None,
                              model_loader, knowledge_builder, resolve_opcode=None, audit=None,
-                             analysis_mode="direct"):
+                             analysis_mode="direct", target_mode="ladder"):
     """Compose first; a route is not a label added after broad prompt assembly."""
     route = route_analysis_request(
         user_request, confirmed_context, analysis_mode=analysis_mode, resolve_opcode=resolve_opcode,
@@ -142,8 +146,16 @@ def assemble_analysis_prompt(user_request, *, plc_model, confirmed_context=None,
         profile["instruction_facts"] = instruction_facts
     targets = [*route.opcodes, *profile.get("special_devices", {})]
     fact_query = "\n".join([plc_model, " ".join(targets)]) if targets else route.query_text
+    from knowledge.evidence import KnowledgeContext, KnowledgeQuery
+    # The exact lookup can be narrowed to addresses/opcodes. Discovery still
+    # needs the whole process description before a representation is chosen.
+    query_metadata = {"target_mode": target_mode}
+    if route.mode != "pinned":
+        query_metadata["capability_requirement"] = route.query_text
+    query = KnowledgeQuery(fact_query, precompiled=True, metadata=query_metadata)
     knowledge = knowledge_builder(
-        fact_query, plc_model=plc_model, task_type="analysis",
+        query, plc_model=plc_model, task_type="analysis",
+        confirmed_context=confirmed_context if isinstance(confirmed_context, Mapping) else None,
         include_design=route.include_design,
         design_query=route.query_text if route.include_design else None,
     )
@@ -157,9 +169,20 @@ def assemble_analysis_prompt(user_request, *, plc_model, confirmed_context=None,
     mode_prompt = ANALYSIS_DESIGN_PROMPT if route.include_design else ANALYSIS_DIRECT_PROMPT
     if route.mode == "pinned":
         mode_prompt += "\n\n" + ANALYSIS_PINNED_PROMPT
-    from shared.model_context import technical_value, technical_context_text
-    from knowledge.evidence import KnowledgeContext
-    knowledge = KnowledgeContext(technical_context_text(knowledge), getattr(knowledge, 'manifest', {}))
+    else:
+        mode_prompt += "\n\n" + IMPLEMENTATION_COMPARISON_PROMPT
+    mode_prompt += "\n\n" + ANALYSIS_IMPLEMENTATION_PROMPT
+    if route.mode != "pinned":
+        mode_prompt += "\n\n" + ANALYSIS_OUTPUT_LOGIC_PROMPT
+    from shared.model_context import technical_value, project_knowledge_context, technical_context_units, technical_block
+    from plc.specification.fact_citations import cite_units, fact_version
+    knowledge = project_knowledge_context(knowledge)
+    origins = {}
+    projected = technical_context_units(knowledge, origins=origins)
+    units, citations = cite_units(projected, model=plc_model,
+                                 language=target_mode, version=fact_version(), origins=origins)
+    if units:
+        knowledge = KnowledgeContext("\n".join(technical_block(unit) for unit in units), knowledge.manifest)
     model_context = "# Relevant PLC model facts\n" + json.dumps(technical_value(profile), ensure_ascii=False, separators=(",", ":"))
     baseline = _baseline_for_analysis(confirmed_context)
     stage = analysis_contract_stage(user_request, confirmed_context)
@@ -179,4 +202,5 @@ def assemble_analysis_prompt(user_request, *, plc_model, confirmed_context=None,
         audit("model_profile", model_context, reason="analysis_targeted", source="model_registry")
         audit("workflow_prompt", status="excluded", reason="analysis_routed_before_assembly", source="analysis_router")
         audit("system_prompt", system_prompt, reason="analysis_" + route.mode, source="analysis_assembler")
-    return AnalysisPrompt(system_prompt, knowledge, route, stage)
+    decision_spec = json.loads(baseline) if isinstance(confirmed_context, Mapping) else None
+    return AnalysisPrompt(system_prompt, knowledge, route, stage, model_context, decision_spec, citations)

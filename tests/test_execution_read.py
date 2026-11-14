@@ -2,6 +2,7 @@
 
 import threading
 import csv
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -178,7 +179,7 @@ def test_unverified_native_instruction_is_explicitly_unsupported_not_loosened(fi
     assert _files(store.base_dir) == before
 
 
-def test_native_read_accepts_an_ordered_export_the_drawing_model_cannot_hold(fixture):
+def test_native_read_accepts_an_ordered_export_the_drawing_model_cannot_hold(fixture, tmp_path, monkeypatch):
     """A condition restarting after an output is still a strict CSV import."""
     from gxworks2.csv_manager import GXWORKS2_COMMENT_HEADER, GXWORKS2_HEADER
     store, project_id, version, desktop, sync, coordinator, events = fixture
@@ -212,6 +213,52 @@ def test_native_read_accepts_an_ordered_export_the_drawing_model_cannot_hold(fix
     assert metadata["coverage"]["graph_preview_status"] == "partial"
     assert desktop.saved == 0
     assert _files(store.base_dir) == before
+
+    from fastapi.testclient import TestClient
+    from application.workbench import WorkbenchService
+    from integrations.web.app import create_app
+
+    def no_model():
+        pytest.fail("GX read must not open a model")
+
+    service = WorkbenchService(store.base_dir, tmp_path / "state", model_factory=no_model)
+    origin = "http://127.0.0.1:8765"
+    with TestClient(create_app(service=service, state_dir=service.state_dir, origin=origin), base_url=origin) as client:
+        monkeypatch.setattr(service.execution, "_dependencies_factory", lambda _: {"reader": sync.read_current_snapshot})
+        monkeypatch.setattr(service.execution, "_com_factory", coordinator._com_factory)
+        monkeypatch.setattr(service.execution, "resource_lock_path", tmp_path / "gx.lock")
+        submitted = client.post("/api/jobs", headers={"Origin": origin}, json={
+            "kind": "gx_read", "project_id": project_id, "version_id": version["id"], "request_id": "ordered-read",
+        })
+        assert submitted.status_code == 202, submitted.text
+        job_id = submitted.json()["id"]
+        service.jobs.wait(job_id, timeout=15)
+        job = client.get(f"/api/jobs/{job_id}").json()
+        assert job["status"] == "completed" and job["result"]["status"] == "read", job
+        saved_id = job["result"]["version_id"]
+        assert saved_id == store.get_project(project_id)["active_version_id"]
+        saved = store.get_version(project_id, saved_id)
+        assert saved["delivery"]["actual_format"] == "csv"
+        saved_dir = store.version_dir(project_id, saved_id)
+        for key, name in (("program_csv", "program.csv"), ("comment_csv", "comments.csv")):
+            assert (saved_dir / saved["artifacts"][key]).read_bytes() == (desktop.directory / name).read_bytes()
+        preview = client.get(f"/api/projects/{project_id}/versions/{saved_id}/preview")
+        assert preview.status_code == 200 and "<svg" in preview.json()["svg"]
+        assert desktop.saved == 0
+
+        from application import model_api
+        from application.generation_wire import expand_context_document
+
+        monkeypatch.setattr(model_api, "_build_knowledge_context", lambda *args, **kwargs: "")
+        monkeypatch.setattr(model_api, "bound_provider_profile", lambda: {})
+        baseline = service.projects.tool_context(project_id, saved_id).ladder
+        messages, _, _ = model_api._prepare_api_call(
+            "修改 X0 的启动条件", "offline", None, "ladder", plc_model="FX3U", is_edit_mode=True,
+            confirmed_spec={"summary": "X0 启动输送带"}, current_version_json=baseline, compact_edit=True,
+        )
+        context = expand_context_document(json.loads(messages[1]["content"]))
+        assert context["current_program"]["rungs"] == ir_to_ladder(candidate)["rungs"]
+        assert context["current_program"]["device_comments"] == baseline["device_comments"]
 
 
 def test_read_gx_takes_the_cpu_from_the_export_when_the_project_states_none(fixture):

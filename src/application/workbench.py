@@ -1,11 +1,12 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Application commands shared by the HTTP operator and connected MCP agents."""
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,6 +14,7 @@ from pathlib import Path
 from application.candidate_views import CandidateViews
 from application.projects import ProjectService, record_id
 from application.workspace import (
+    WorkspaceTransactions,
     WorkspaceWriterLock,
     ConflictError,
     atomic_json,
@@ -37,22 +39,34 @@ __all__ = ["WorkbenchService", "sfc_requirement", "ChangeScopeError", "public_sp
 
 
 class WorkbenchService:
-    def __init__(self, workspace, state_dir, *, read_only=False, settings=None, model_factory=None):
-        self.projects = ProjectService(workspace)
-        self.store = self.projects.store
+    def __init__(self, workspace, state_dir, *, read_only=False, exclusive_workspace=False,
+                 settings=None, model_factory=None, generation_runtime=None, dsh_runtime_factory=None):
         self.state_dir = Path(state_dir).resolve()
+        from application.generation_receipts import ToolReceiptStore
+        self.receipt_store = None if read_only else ToolReceiptStore(self.state_dir / "tool_receipts")
+        self.projects = ProjectService(workspace, receipt_store=self.receipt_store)
+        self.store = self.projects.store
         self.read_only = read_only
+        self.exclusive_workspace = exclusive_workspace
         if settings is None:
             from application.settings import SettingsService
             settings = SettingsService()
         self.settings = settings
         self.model_factory = model_factory or self.settings.model_snapshot
+        # Injected model factories retain their existing offline/test contract.
+        self.generation_runtime = generation_runtime or (
+            'legacy' if model_factory is not None else os.environ.get('GXWORKS_GENERATION_RUNTIME', 'dsh'))
+        if self.generation_runtime not in {'dsh', 'legacy'}:
+            raise ValueError('GXWORKS_GENERATION_RUNTIME must be dsh or legacy')
+        self._dsh_jobs = None
+        self._dsh_runtime_factory = dsh_runtime_factory
         self.lock = None
         self.jobs = None
         self.proposals = None
         self.execution = None
         self._lifecycle_lock = threading.RLock()
         self._started = False
+        self._closing = False
         self._mcp_activity = {}
         from application.approval import ApprovalPolicy
         self.approval = ApprovalPolicy(self.state_dir)
@@ -96,11 +110,13 @@ class WorkbenchService:
             read_gx=self._read_gx,
             validate_snapshot=self._check_snapshot,
             require_writable=self.writable,
+            generation_runtime=self.generation_runtime,
         )
 
     @property
     def job_execution(self):
         return JobExecution(
+            project_commands=self.project_commands,
             projects=self.projects,
             state_dir=self.state_dir,
             lock=self.lock,
@@ -124,6 +140,7 @@ class WorkbenchService:
             previews=self.previews,
             require_writable=self.writable,
             complete_native=self._complete_native_engineering,
+            project_commands=self.project_commands,
         )
 
     @property
@@ -148,18 +165,21 @@ class WorkbenchService:
 
     def start(self):
         with self._lifecycle_lock:
+            if self._closing:
+                raise RuntimeError('Workbench service is closing')
             if self._started:
                 return self
             if not self.read_only:
                 from application.jobs import JobManager
                 from application.proposals import ProposalService
                 from application.execution import GXExecutionCoordinator
-                self.lock = WorkspaceWriterLock(self.store.base_dir).acquire()
+                self.lock = (WorkspaceWriterLock(self.store.base_dir).acquire() if self.exclusive_workspace
+                             else WorkspaceTransactions(self.store.base_dir))
                 try:
                     with self.lock.thread_lock:
                         self.spec_migration = self.store.migrate_confirmed_specs()
-                    self.jobs = JobManager(self.state_dir, self.lock)
-                    self.proposals = ProposalService(self.store, self.state_dir, self.lock)
+                        self.jobs = JobManager(self.state_dir, self.lock)
+                        self.proposals = ProposalService(self.store, self.state_dir, self.lock)
                     self.execution = GXExecutionCoordinator(self.store)
                 except Exception:
                     self.close()
@@ -169,7 +189,12 @@ class WorkbenchService:
 
     def close(self):
         with self._lifecycle_lock:
-            # Keep ownership until outstanding workers reach their checkpoints.
+            self._closing = True
+        # Workers can need the lifecycle lock to finish/decline startup. Never
+        # hold it while waiting for them or for their native operation.
+        try:
+            if self._dsh_jobs:
+                self._dsh_jobs.close()
             try:
                 if getattr(self, 'hardware', None):
                     hardware, self.hardware = self.hardware, None
@@ -184,14 +209,20 @@ class WorkbenchService:
                             self.execution.close(wait=True)
                     finally:
                         if self.lock:
-                            self.lock.release()
+                            self.lock.close()
                         self.jobs = self.proposals = self.execution = self.lock = None
+                        self._dsh_jobs = None
                         self._started = False
+        finally:
+            with self._lifecycle_lock:
+                self._closing = False
 
     def writable(self):
-        if self.read_only or not self.lock:
+        if self.read_only:
             raise PermissionError("工作台以只读模式打开。")
-        self.lock.require_acquired()
+        if not self.lock:
+            raise RuntimeError("Workspace service is not running")
+        self.lock.require_open()
 
     def approval_settings(self):
         return {**self.approval.read(), "local_autosave": True, "read_only": self.read_only}
@@ -289,6 +320,14 @@ class WorkbenchService:
         return self.job_execution.read_gx(ctx, snapshot)
 
     def _run_job(self, ctx, snapshot, context, images, provider):
+        if snapshot.get('generation_runtime') == 'dsh':
+            with self._lifecycle_lock:
+                if self._closing:
+                    raise RuntimeError('Workbench service is closing')
+                if self._dsh_jobs is None:
+                    from application.dsh_jobs import DshJobs
+                    self._dsh_jobs = DshJobs(self, self._dsh_runtime_factory)
+            return self._dsh_jobs.run(ctx, snapshot, context, images, provider)
         return self.job_execution.run(ctx, snapshot, context, images, provider)
 
     def _plan_or_review(self, ctx, snapshot, provider):
@@ -322,7 +361,7 @@ class WorkbenchService:
             current["candidate_proposal_id"] = response["proposal_id"]
         self._mcp_activity[project_id] = current
 
-    def agent_call(self, command, *, observe_client=True, direct_request=False):
+    def agent_call(self, command, *, observe_client=True, direct_request=False, before_write=None, direct_input=None):
         self.writable()
         if command.get('name') in {'get_operation_status', 'get_native_engineering_session', 'pause_native_engineering_session'}:
             # Execution workers may hold the workspace writer lock while GX
@@ -341,8 +380,12 @@ class WorkbenchService:
         request_key = hashlib.sha256((command["project_id"] + ":" + command["call_id"]).encode()).hexdigest()
         path = self.state_dir / "agent_calls" / (request_key + ".json")
         # This is an application invocation option, never an Agent argument.
-        digest = canonical_hash({"command": command, "direct_request": True} if direct_request else command)
+        digest = canonical_hash({"command": command, "direct_request": direct_request,
+                                 **({'direct_input': direct_input} if direct_input is not None else {})}
+                                if direct_request or direct_input is not None else command)
         with self.lock.thread_lock:
+            if before_write:
+                before_write()
             if path.exists():
                 saved = read_json(path)
                 if saved["input_hash"] != digest:
@@ -351,17 +394,23 @@ class WorkbenchService:
                     self._observe_mcp_call(command, saved["response"])
                 return saved["response"]
             context = self.projects.invocation_context(command["project_id"], command.get("version_id"), command["name"])
+            if command.get('program') and context.native_snapshot is not None:
+                from application.gxw_files import source_context
+                context = source_context(context, command['program'])
             from dataclasses import replace
             context = replace(context, operation_status=self.operation_status,
                               native_session_status=self.native_session_status,
-                              native_session_pause=self.native_session_pause)
+                              native_session_pause=self.native_session_pause, direct_input=direct_input)
             scope = self._command_scope(command, context)
-            result = self.projects.runtime.invoke(ToolCall(command["call_id"], command["name"], command.get("arguments", {})), context)
+            result = self.projects.runtime.invoke(ToolCall(command["call_id"], command["name"], command.get("arguments", {}),
+                defer_read=command.get('defer_read') is True), context)
             envelope = public_tool_result_data(result)
             response = {"data": envelope, "content": json.dumps(envelope, ensure_ascii=False), "is_error": result.is_error,
                         "call_id": command["call_id"], "name": command["name"]}
             pending = (result.data.get("data") or {}).get("pending_action")
             if not result.is_error and result.data.get("status") == "confirmation_required" and pending:
+                if before_write:
+                    before_write()
                 proposal = self._pending_proposal(pending, request_key, base_version_id=context.version_id or None,
                                                   change_scope=scope, direct_request=direct_request)
                 response["proposal_id"] = proposal["id"]
@@ -373,6 +422,12 @@ class WorkbenchService:
             if observe_client:
                 self._observe_mcp_call(command, response)
             return response
+
+    def finish_host_read(self, project_id, tool, document_id, accepted):
+        self.projects.raw_project(project_id)
+        with self.lock.thread_lock:
+            store = self.projects.runtime.registry._read_delivery
+            return store is not None and store.finish_host_read(tool, document_id, project_id, accepted=accepted) is not None
 
     def native_session_status(self, project_id, session_id=None):
         project_id = record_id(project_id)

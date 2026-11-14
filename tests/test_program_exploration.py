@@ -56,13 +56,12 @@ def test_explorer_http_is_read_only_and_report_cannot_cross_versions(tmp_path):
     pytest.importorskip("fastapi")
     from fastapi.testclient import TestClient
     from integrations.web.app import create_app
-    from test_web_api import ORIGIN, _legacy_workspace, _login
+    from test_web_api import ORIGIN, _legacy_workspace
     store, pid, vid, _ = _legacy_workspace(tmp_path / "workspace")
     report = store.create_report(pid, {"report_id": "review-fixture", "base_version_id": "another-version", "findings": []})
     before = {str(p): p.read_bytes() for p in store.base_dir.rglob("*") if p.is_file()}
-    app = create_app(store.base_dir, state_dir=tmp_path / "state", read_only=True, origin=ORIGIN, operator_token="operator-test")
+    app = create_app(store.base_dir, state_dir=tmp_path / "state", read_only=True, origin=ORIGIN)
     with TestClient(app, base_url=ORIGIN) as client:
-        _login(client)
         result = client.get(f"/api/projects/{pid}/versions/{vid}/explorer")
         assert result.status_code == 200, result.text
         assert result.json()["networks"][0]["id"]

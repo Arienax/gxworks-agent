@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Deterministic navigation projections from the canonical program and renderer."""
 from __future__ import annotations
@@ -69,11 +69,23 @@ def issue_cards(program, findings, *, source="static", report_id=None):
         refs.extend(rungs[str(r)] for r in finding.get("rung_ids", []) if str(r) in rungs)
         identity = str(finding.get("finding_id") or hashlib.sha256(json.dumps(
             finding, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:20])
+        evidence = list(finding.get('evidence') or [])
+        if finding.get('code') in {'BREAK_PROGRAM_CONTEXT', 'CHK_PROGRAM_CONTEXT', 'CJ_PROGRAM_CONTEXT'}:
+            # Use the existing rendered evidence channel. The full structured
+            # checks remain in diagnostics; cards must retain their record
+            # identity and the static/dynamic boundary without a parallel API.
+            evidence.append('Program source record: ' + str(finding.get('record_index')))
+            if finding.get('source_offset') is not None:
+                evidence.append('Program source offset: ' + str(finding['source_offset']))
+            for name, state in (finding.get('context_checks') or {}).items():
+                evidence.append(name + ': ' + str(state))
+            evidence.append('Dynamic control flow verified: ' + str(finding.get('control_flow_context_verified', False)))
+            evidence.append('Core execution established: ' + str(finding.get('core_execution_established', False)))
         cards.append({"id": f"{report_id or source}:{identity}", "source": finding.get("source", source),
                       "report_id": report_id, "severity": finding.get("severity", "info"),
                       "title": finding.get("title") or finding.get("code") or "程序问题",
                       "message": finding.get("message", ""), "suggestion": finding.get("suggestion", ""),
-                      "evidence": finding.get("evidence") or [], "addresses": finding.get("addresses") or [],
+                      "evidence": evidence, "addresses": finding.get("addresses") or [],
                       "networks": sorted(set(refs) & known),
                       "unresolved_networks": sorted(set(refs) - known),
                       "confidence": finding.get("confidence", "unknown")})

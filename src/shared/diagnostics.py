@@ -1,4 +1,7 @@
-"""Bounded diagnostic metadata plus operator-only detailed trace sidecars.
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
+"""Bounded diagnostic metadata plus detailed trace sidecars.
 
 Structured metadata remains small and sanitized. Detailed job inputs, model I/O
 and operator actions are stored separately under private application state with
@@ -34,7 +37,7 @@ _ALLOWED_EVENTS = {'job_started', 'job_finished', 'model_request', 'provider_req
 _NUMBERS = {'request_index', 'attempt_index', 'message_count', 'message_chars', 'tool_count',
             'content_chars', 'reasoning_chars', 'chunk_count', 'choice_count', 'input_tokens',
             'output_tokens', 'total_tokens', 'reasoning_tokens', 'max_tokens',
-            'max_completion_tokens', 'elapsed_ms', 'status_code', 'line', 'column',
+            'max_completion_tokens', 'max_output_tokens', 'output_item_count', 'elapsed_ms', 'status_code', 'line', 'column',
             'position', 'original_line', 'original_column', 'original_position',
             'exception_count', 'event_count', 'system_messages', 'user_messages',
             'assistant_messages', 'tool_messages', 'system_chars', 'user_chars',
@@ -60,7 +63,8 @@ _ENUMS = {
     'content_type': {'str', 'list', 'dict', 'NoneType', 'int', 'bool'},
     'reasoning_type': {'str', 'list', 'dict', 'NoneType', 'int', 'bool'},
     'finish_reason': {'stop', 'length', 'content_filter', 'tool_calls', 'function_call',
-                      'insufficient_system_resource', 'end_turn', 'max_tokens'},
+                      'insufficient_system_resource', 'end_turn', 'max_tokens',
+                      'completed', 'incomplete', 'failed', 'cancelled'},
     'root_type': {'dict', 'list', 'str', 'int', 'float', 'bool', 'NoneType'},
     'envelope': {'empty', 'object', 'array', 'fenced', 'bom', 'markup', 'other_text'},
     'json_status': {'valid_object', 'non_object', 'syntax_error', 'too_deep', 'not_checked', 'empty'},
@@ -575,7 +579,7 @@ def export_diagnostics(state_dir, job):
                 pass
     text = json.dumps(meta, ensure_ascii=False, indent=2) + '\n'
     guide = ('GXWorks task diagnostics\n\n'
-             'This operator-only archive contains the job timeline and model I/O needed to reproduce failures.\n'
+             'This local workbench archive contains the job timeline and model I/O needed to reproduce failures.\n'
              'summary.json: compact failure summary and capture status.\n'
              'diagnostics.jsonl: sanitized structured metadata in chronological order.\n'
              'job.json: persisted job snapshot, status, result and event timeline, with credentials/binaries redacted.\n'
@@ -584,7 +588,7 @@ def export_diagnostics(state_dir, job):
              'decision_receipt.json: when available, the historical analysis/confirmation audit bound to this job.\n'
              'offline_replay.json: optional offline replay result added later by scripts/context_replay.py --archive.\n'
              'API credentials, Authorization values and image/binary bodies are not included.\n'
-             'Model/user text is included because this export is explicitly operator-only and downloaded on demand.\n'
+             'Model/user text is included in this on-demand diagnostic export.\n'
              'Output is not uploaded automatically. Inspect before sharing.\n')
     target = io.BytesIO()
     with zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED) as archive:

@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Business objects at the isolated workspace boundary, never vendor call plans.
 
@@ -23,7 +23,8 @@ _ACTIONS = {
     'compile_save_project': 'build_and_save_project',
 }
 _LANGUAGES = {1: 'ladder', 193: 'st', 208: 'fbd', 240: 'sfc'}
-_POU_KINDS = {0x01000000: 'program', 0x01000002: 'function_block'}
+_POU_KINDS = {0x01000000: 'program', 0x01000002: 'function_block',
+              0x01000003: 'function'}
 
 
 def _program(value):

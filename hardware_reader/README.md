@@ -19,7 +19,7 @@ powershell -ExecutionPolicy Bypass -File tools\build_hardware_reader.ps1
 ```
 
 - **架构适配：** 默认编译为 x86 目标，对应 32 位 COM 组件 `ActUtlType.ActUtlType`。若使用 64 位 MX Component，可指定 `-Platform x64` 构建参数，对应 `ActUtlType64.ActUtlType64`。
-- **输出路径：** 产物默认生成在用户本地应用数据目录的 `PLC AI Studio\hardware-reader`，不向源码仓库提交二进制产物。
+- **输出路径：** 产物默认生成在用户本地应用数据目录的 `gxworks-agent\hardware-reader`，不向源码仓库提交二进制产物。
 - **环境变量：** 可通过设置 `GX_HARDWARE_READER_EXE` 指向由系统管理员统一部署的独立可执行文件。构建脚本不会自动安装 MX Component，亦不会影响现有的 GX Simulator2 配置。
 
 ### 支持软元件与并发语义

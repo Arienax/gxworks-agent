@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Bounded, local, best-effort transport observations. Never initiates requests.
 
 No messages, response text, tool arguments, raw errors, URLs or credentials are
@@ -13,15 +16,21 @@ from contextlib import closing
 from dataclasses import replace
 from pathlib import Path
 from model_runtime.contract import CapabilityContract, scoped_contract
-from model_runtime.request_policy import parameter_value
+from model_runtime.responses_wire import OUTPUT_LIMITS, wire_parameter, wire_response_format
 from model_runtime.contract import MISSING
 
 MAX_ROWS = 4096
 MAX_AGE = 30 * 86400
+REJECTION_CODES = {'unsupported_parameter', 'invalid_parameter', 'invalid_value',
+                   'unsupported_value', 'unknown_parameter'}
 
 
 def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=True, allow_nan=False).encode()).hexdigest()
+
+
+def _scope_key(scope):
+    return digest({"transport": "responses", "profile": scope})
 
 
 def safe_scalar(value):
@@ -38,7 +47,7 @@ class ObservationStore:
     def record(self, scope, target, outcome, value=None, *, context='', source='observation', code=''):
         if (outcome not in {'accepted', 'rejected', 'observed'} or not safe_scalar(value)
                 or source not in {'probe','observation'} or not re.fullmatch(r'[a-f0-9]{64}', context)
-                or code not in {'','unsupported_parameter','invalid_parameter','invalid_value','unknown_parameter'}):
+                or code and code not in REJECTION_CODES):
             return
         from model_runtime.contract import identifier
         try:
@@ -49,7 +58,7 @@ class ObservationStore:
                 db.execute('CREATE TABLE IF NOT EXISTS observations (scope TEXT, target TEXT, outcome TEXT, value TEXT, context TEXT, source TEXT, code TEXT, at REAL, PRIMARY KEY(scope,target,outcome,value,context,source))')
                 now = time.time()
                 db.execute('INSERT OR REPLACE INTO observations VALUES (?,?,?,?,?,?,?,?)',
-                    (digest(scope), target, outcome, payload, context, source, code, now))
+                    (_scope_key(scope), target, outcome, payload, context, source, code, now))
                 db.execute('DELETE FROM observations WHERE at < ?', (now-MAX_AGE,))
                 db.execute('DELETE FROM observations WHERE rowid IN (SELECT rowid FROM observations ORDER BY at DESC LIMIT -1 OFFSET ?)', (MAX_ROWS,))
         except (OSError, sqlite3.Error, ValueError, TypeError, OverflowError):
@@ -63,7 +72,7 @@ class ObservationStore:
             # A read never creates a database or migrates a user's profile.
             with closing(sqlite3.connect(self.path.as_uri()+'?mode=ro', uri=True, timeout=.1)) as db, db:
                 rows = db.execute('SELECT target,outcome,value,context,source,code,at FROM observations WHERE scope=? AND at>? ORDER BY at DESC LIMIT 128',
-                    (digest(contract.scope), time.time()-MAX_AGE)).fetchall()
+                    (_scope_key(contract.scope), time.time()-MAX_AGE)).fetchall()
         except (OSError, sqlite3.Error, ValueError):
             return contract
         try:
@@ -94,7 +103,7 @@ class ObservationStore:
             with closing(sqlite3.connect(self.path.as_uri()+'?mode=ro', uri=True, timeout=.1)) as db, db:
                 return [{'target':t, 'value':json.loads(v), 'context':c, 'at':at} for t,v,c,at in db.execute(
                     "SELECT target,value,context,at FROM observations WHERE scope=? AND outcome='observed' AND at>? ORDER BY at DESC LIMIT 16",
-                    (digest(scope),time.time()-MAX_AGE))]
+                    (_scope_key(scope),time.time()-MAX_AGE))]
         except (OSError, sqlite3.Error, ValueError):
             return []
 
@@ -102,7 +111,7 @@ class ObservationStore:
         if self.path.is_file():
             try:
                 with closing(sqlite3.connect(self.path, timeout=.1)) as db, db:
-                    db.execute('DELETE FROM observations WHERE scope=?', (digest(scope),))
+                    db.execute('DELETE FROM observations WHERE scope IN (?,?)', (_scope_key(scope), digest(scope)))
             except (OSError, sqlite3.Error, ValueError):
                 return
 
@@ -115,7 +124,7 @@ def request_observer(provider, store, *, source='observation'):
             return
         values = {}
         for name, desc in contract.parameters.items():
-            v = parameter_value(params, name, desc)
+            v = wire_parameter(params, name, desc)
             if v is not MISSING and v is not None and safe_scalar(v):
                 if isinstance(v, str):
                     from model_runtime.contract import member
@@ -124,8 +133,9 @@ def request_observer(provider, store, *, source='observation'):
                     if v == provider.api_key or not member(v, desc.values or desc.ui_hint.get('suggestions', ())):
                         continue
                 values[name] = v
+        fmt = wire_response_format(params)
         context = digest({'parameters':values, 'stream':bool(params.get('stream')),
-            'tools':bool(params.get('tools')), 'response_format':(params.get('response_format') or {}).get('type')})
+            'tools':bool(params.get('tools')), 'response_format':fmt})
         if error is not None:
             # Do not mine arbitrary provider prose or guess which of several
             # fields caused an error. Only named, structured schema rejections.
@@ -138,16 +148,21 @@ def request_observer(provider, store, *, source='observation'):
             if not isinstance(body, dict):
                 return
             code, target = body.get('code'), body.get('param')
-            if code not in {'unsupported_parameter','invalid_parameter','invalid_value','unknown_parameter'}:
+            if code not in REJECTION_CODES:
                 return
             for name, desc in contract.parameters.items():
-                if name in values and target in {name,'.'.join(desc.wire_path)}:
+                fields = {name, '.'.join(desc.wire_path)}
+                if name == 'reasoning_effort':
+                    fields.add('reasoning.effort')
+                if name in OUTPUT_LIMITS:
+                    fields.update(OUTPUT_LIMITS)
+                if name in values and target in fields:
                     store.record(contract.scope,name,'rejected',values[name],context=context,source=source,code=code)
             return
         for name,v in values.items():
             store.record(contract.scope,name,'accepted',v,context=context,source=source)
         from model_runtime.provider import ToolCallEnd, TextDelta
-        allowed = {t.get('function',{}).get('name') for t in params.get('tools',[])}
+        allowed = {t.get('name') for t in params.get('tools',[]) if t.get('type') == 'function'}
         calls = [e.tool_call for e in events if isinstance(e,ToolCallEnd)]
         if calls and all(c.name in allowed for c in calls):
             try:
@@ -155,7 +170,6 @@ def request_observer(provider, store, *, source='observation'):
                     store.record(contract.scope,'tools','observed',True,context=context,source=source)
             except (ValueError,TypeError):
                 pass
-        fmt = (params.get('response_format') or {}).get('type')
         if fmt in {'json_object','json_schema'}:
             try:
                 text = ''.join(e.text for e in events if isinstance(e,TextDelta))

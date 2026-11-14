@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Shared GXW file import and offline-source candidates for Web and MCP."""
 from __future__ import annotations
@@ -208,7 +208,7 @@ def prepare_candidate(output, *, raw, program=None, summary='导入 GXW 工程',
         from .session import ProjectSession
         metadata = ProjectSession._ir_metadata(ir)
         metadata.update(target_mode='ladder', plc_model=current['plc_model'], program_name=logical,
-                        summary=summary, validation=validation)
+                        summary=summary, validation=validation, program_size=current['program_size'])
         return {'target_mode': 'ladder', 'plc_model': current['plc_model'], 'staging_dir': str(output),
                 'artifacts': artifacts, 'metadata': metadata}
     else:
@@ -228,6 +228,21 @@ def prepare_candidate(output, *, raw, program=None, summary='导入 GXW 工程',
     return payload
 
 
+def _check_ladder_edit(payload, directory, context, spec):
+    from application.spec_document import project_acceptance_cases, project_behavior_cpu
+    from plc.ir import ir_to_ladder
+    from simulator.io_example import check_independent_acceptance
+
+    ir = json.loads((Path(directory) / payload['artifacts']['ir']['path']).read_bytes())
+    behavior = check_independent_acceptance(ir_to_ladder(ir), project_behavior_cpu(context.project, context.plc_model),
+        project_id=context.project_id, confirmed_spec=spec,
+        loaded_cases=project_acceptance_cases(context.project, context.plc_model))
+    payload['metadata']['behavior_result'] = behavior
+    if behavior['status'] == 'mismatch':
+        payload['metadata']['activation_blocked'] = True
+    return ir
+
+
 def transaction_candidate(context, arguments):
     """Shared Web/MCP proposal from one version and several existing sources."""
     from gxw.offline_edit import edit_offline_project
@@ -241,31 +256,51 @@ def transaction_candidate(context, arguments):
         device_comments=arguments.get('device_comments'), comment_table=arguments.get('comment_table'),
         save_policy=arguments.get('save_policy', 'draft'))
     program = arguments.get('program') or (context.version or {}).get('program_name')
+    from agent_runtime.tool_context import _generation_spec
+    spec = _generation_spec(context)
+    validation = {}
+    if any(row.get('language') == 'fbd' for row in (spec or {}).get('implementation_items', [])):
+        from application.fbd import attach_plan_check
+        from gxw.object_model import read_project_context
+        sources = read_offline_project(result.data).sources()
+        models = {row['source_name']: read_project_context(result.data, row['source_name']).object_model()
+                  for row in sources if row.get('language') == 'fbd' and any(
+                      item.get('location', '').casefold().removesuffix('.pou') ==
+                      row['source_name'].casefold().removesuffix('.pou')
+                      for item in spec['implementation_items'] if item.get('language') == 'fbd')}
+        attach_plan_check(validation, spec, models)
     with tempfile.TemporaryDirectory(prefix='gxw-edit-candidate-') as directory:
         payload = prepare_candidate(directory, raw=result.data, program=program,
             revision=(context.program_ir or {}).get('revision', 0) + 1,
             summary=arguments.get('summary') or '编辑 GXW 工程', write_report=result.report)
+        payload['metadata']['validation'].update(validation)
+        if payload['target_mode'] == 'ladder':
+            _check_ladder_edit(payload, directory, context, spec)
         snapshot = pack_candidate(payload, directory)
-    from agent_runtime.tool_context import _confirmed_spec
     return {'requires_confirmation': True, 'validation': payload['metadata']['validation'],
         'edited_sources': result.report['edited_sources'],
         'pending_action': {'type': 'accept_gxw_candidate', 'project_id': context.project_id,
             'base_version_id': context.version_id, 'target_mode': payload['target_mode'],
-            'summary': payload['metadata']['summary'], '_confirmed_spec': copy.deepcopy(_confirmed_spec(context)),
+            'summary': payload['metadata']['summary'], '_confirmed_spec': copy.deepcopy(_generation_spec(context)),
             '_gxw_candidate': snapshot}}
 
 
-def ladder_patch_candidate(context, patch):
-    from agent_runtime.tool_context import _confirmed_spec
+def ladder_patch_candidate(context, patch, *, generation_handoff=None):
+    from agent_runtime.tool_errors import ToolPreconditionError
+    from agent_runtime.tool_context import _generation_spec, _ladder_user_facts
+    from application.compact_bindings import CompactBindings
+    from application.confirmed_generation_context import direct_history_fields
     from gxw.offline_project import edit_ladder_project
     from plc.ir import canonical_sha256
     if context.native_snapshot is None or not context.version_id:
         raise ValueError('instruction edits require a saved GXW version')
-    if patch.get('base_revision') not in (None, context.program_ir['revision']):
+    revision = context.program_ir['revision']
+    if patch.get('base_revision') not in (None, revision):
         raise ValueError('stale source revision')
-    if patch.get('base_ir_sha256') not in (None, canonical_sha256(context.program_ir)):
+    source_hash = patch.get('base_ir_sha256')
+    if source_hash is not None and source_hash != canonical_sha256(context.program_ir):
         raise ValueError('stale source IR binding')
-    if patch.get('target_revision') not in (None, context.program_ir['revision'] + 1):
+    if patch.get('target_revision') not in (None, revision + 1):
         raise ValueError('instruction patch target_revision must be the next source revision')
     if patch.get('operations'):
         if patch.get('instruction_edits'):
@@ -276,28 +311,45 @@ def ladder_patch_candidate(context, patch):
             "saved GXW ladder versions use ordered source instructions (cannot be mixed with graphical network "
             "replacements in 'operations'); call get_generation_context first to read raw_networks record_index "
             "values, then submit patch.instruction_edits")
+    spec = _generation_spec(context)
+    bindings = CompactBindings(context.plc_model, _ladder_user_facts(context))
+    edits = copy.deepcopy(patch.get('instruction_edits', []))
+    source_bound = bool((generation_handoff or {}).get('external_context_id')
+                        or (patch.get('base_revision') == revision and source_hash is not None))
+    if not source_bound and any('expected' not in edit for edit in edits):
+        raise ToolPreconditionError('PATCH_SOURCE_REQUIRED',
+            '本地没有与本次修改匹配的源码版本，请选择原工程版本后继续。')
+    for index, edit in enumerate(edits):
+        if 'instructions' in edit:
+            edit['instructions'] = [bindings.ordered_record(record, f'instruction_edits[{index}].instructions[{position}]')
+                                    for position, record in enumerate(edit['instructions'])]
     result = edit_ladder_project(context.native_snapshot, context.program_ir['program_name'],
-        patch.get('instruction_edits', []), device_comments=patch.get('device_comments'),
+        edits, device_comments=patch.get('device_comments'),
         comment_table=patch.get('comment_table'), declaration_edits=patch.get('declaration_edits'),
-        save_policy=patch.get('save_policy', 'checked'))
+        save_policy=patch.get('save_policy', 'checked'), source_bound=source_bound)
     with tempfile.TemporaryDirectory(prefix='gxw-offline-candidate-') as directory:
         payload = prepare_candidate(directory, raw=result.data, program=context.program_ir['program_name'],
             revision=context.program_ir['revision'] + 1, summary='离线修改 GXW 指令、声明或注释', write_report=result.report)
+        after = _check_ladder_edit(payload, directory, context, spec)
+        handoff = direct_history_fields((context.version or {}).get('generation_handoff'))
+        handoff.update(copy.deepcopy(generation_handoff or {}))
+        if handoff:
+            payload['metadata']['generation_handoff'] = handoff
         snapshot = pack_candidate(payload, directory)
     from plc.core import PLCCore
-    after = read_ordered_program(read_offline_project(result.data), context.program_ir['program_name'],
-                                revision=context.program_ir['revision'] + 1)['program_ir']
     diff = PLCCore().diff_programs(context.program_ir, after)
     return {'requires_confirmation': True, 'diff': diff, 'validation': payload['metadata']['validation'],
+        'behavior_result': payload['metadata']['behavior_result'],
+        'program_size': payload['metadata']['program_size'],
         'pending_action': {'type': 'accept_gxw_candidate', 'project_id': context.project_id,
             'base_version_id': context.version_id, 'target_mode': 'ladder', 'summary': payload['metadata']['summary'],
-            '_confirmed_spec': copy.deepcopy(_confirmed_spec(context)),
+            '_confirmed_spec': copy.deepcopy(spec),
             '_gxw_candidate': snapshot, 'diff': diff}}
 
 
 def definition_candidate(context, command, *, device_comments=None, comment_table=None, save_policy='checked'):
     """Keep the selected source view while editing an existing table or FB."""
-    from agent_runtime.tool_context import _confirmed_spec
+    from agent_runtime.tool_context import _generation_spec
     from gxw.offline_authoring import write_existing_definition
     if not context.version_id or context.native_snapshot is None:
         raise ValueError('existing definition edits require a saved GXW version')
@@ -316,7 +368,7 @@ def definition_candidate(context, command, *, device_comments=None, comment_tabl
         'verification': payload['metadata']['validation'],
         'pending_action': {'type': 'accept_gxw_candidate', 'project_id': context.project_id,
             'base_version_id': context.version_id, 'target_mode': payload['target_mode'],
-            'summary': payload['metadata']['summary'], '_confirmed_spec': copy.deepcopy(_confirmed_spec(context)),
+            'summary': payload['metadata']['summary'], '_confirmed_spec': copy.deepcopy(_generation_spec(context)),
             '_gxw_candidate': snapshot}}
 
 
@@ -324,7 +376,7 @@ def generate_candidate(output, snapshot, context, images, job):
     """Use the existing tool contracts for one model-assisted offline edit."""
     from agent_runtime.generation_tools import _get_generation_context
     from agent_runtime.plc_tools import build_default_tool_registry
-    from application.model_api import _request_model, _user_message_with_images
+    from application.model_api import _request_model, _user_message_with_images, bound_provider_profile, current_provider
     from model_runtime.responses import ResponseContract
     from .fbd import unpack_candidate
     if snapshot.get('program'):
@@ -334,16 +386,15 @@ def generate_candidate(output, snapshot, context, images, job):
         'catalog_scope': snapshot.get('catalog_scope') or 'task',
         'templates': snapshot.get('catalog_templates')})
     source_project = read_offline_project(context.native_snapshot)
+    tool = generation['output_contract']['tool']
+    ladder_target = tool == 'patch_program'
     fbd_target = (context.version or {}).get('target_mode') == 'fbd'
-    generation['project_comments'], generation['comment_tables'], _ = source_project.comments()
-    if not fbd_target:
-        # An FBD context already carries these engineering facts from the shared
-        # builder; re-adding them here would duplicate the same tables.
+    if not (ladder_target or fbd_target):
+        generation['project_comments'], generation['comment_tables'], _ = source_project.comments()
         generation['declaration_tables'] = source_project.declaration_tables()
         generation['project_sources'] = source_project.sources()
         generation['selected_source'] = read_source(context.native_snapshot,
                                                     (context.version or {}).get('program_name'))
-    tool = generation['output_contract']['tool']
     if fbd_target:
         tool = 'edit_gxw_project'
     if tool not in {'patch_program', 'create_st_candidate', 'create_sfc_candidate', 'create_fbd_candidate', 'edit_gxw_project'}:
@@ -356,14 +407,15 @@ def generate_candidate(output, snapshot, context, images, job):
     transaction_tool = {'tool': 'edit_gxw_project', 'schema': schemas['edit_gxw_project'],
                         'version_id': context.version_id}
     instructions = generation.get('generation_instructions', '') + (
-        '\nReturn JSON {"summary":"...","arguments":{...}} using the supplied tool schema. '
+        '\n\n# Existing source edit response\nReturn JSON {"summary":"...","arguments":{...}} using the supplied tool schema. '
         'For an existing declaration-table edit, return '
         '{"summary":"...","tool":"create_fbd_candidate","arguments":{...}} with '
         'operation edit_global_labels or edit_pou_labels and its exact current source_name. '
         'declarations contains upserts, remove_declarations names explicit removals. '
         'For joint edits of several existing sources or interfaces return tool edit_gxw_project, '
         'with the exact current version_id, source names and language-specific commands. '
-        'Use save_policy=draft for offline editing; preserve diagnostics in the editable source artifact. '
+        'Use save_policy=draft for offline editing (patch.save_policy for patch_program); '
+        'preserve diagnostics in the editable source artifact. '
         'If the request cannot be expressed safely, return {"unsupported":"reason"}. '
         'Modify the selected existing source or its existing declaration tables. Internal instructions, '
         'graph objects and declarations may be added or removed using the supplied contracts. '
@@ -372,24 +424,65 @@ def generate_candidate(output, snapshot, context, images, job):
         'patch_program arguments must contain the nested patch object.')
     from application.fbd_context import compile_envelope, json_text
     from application.generation_wire import context_system_prompt
-    from application.model_api import bound_provider_profile
-    wire_generation = generation
-    if fbd_target:
+    envelope = {'tool_schema': schema, 'existing_declaration_tool': declaration_tool,
+                'project_transaction_tool': transaction_tool}
+    optional_paths = []
+    if ladder_target:
+        from application.compact_bindings import instruction_form_units
+        from shared.model_context import technical_value
+
+        # Share the generation packet's field paths so a continuation can
+        # inherit the confirmed spec and append only changes to this source.
+        current = generation['current_model']
+        record_fields = ('record_index', 'op', 'args', 'operand_forms', 'kind', 'text', 'reason')
+        networks = []
+        for network in current['networks']:
+            records = [{key: row[key] for key in record_fields if key in row}
+                       for row in network['raw_instructions']]
+            networks.append({**network, 'raw_instructions': records})
+        envelope.update({
+            'context_schema_version': 3,
+            'plc_model': generation['plc_model'],
+            'request': generation['generation_request'],
+            'confirmed_spec': technical_value(generation.get('confirmed_spec')),
+            'input_conditions': generation['input_conditions'],
+            **({'prior_user_input': generation['prior_user_input']} if 'prior_user_input' in generation else {}),
+            'knowledge': generation['knowledge'],
+            **({'knowledge_coverage': generation['knowledge_coverage']} if 'knowledge_coverage' in generation else {}),
+            'current_version_id': generation['current_version_id'],
+            'current_model': {**current, 'networks': networks},
+            'output_contract': generation['output_contract'],
+            'project_sources': source_project.sources(),
+        })
+        envelope['knowledge'] = [*envelope['knowledge'], *instruction_form_units(context.plc_model, envelope['knowledge'])]
+    elif fbd_target:
         # The MCP result retains its compatibility fields. The model needs the
         # shared engineering input only once, not duplicate catalogs, graphs,
         # prompts and internal delivery receipts surrounding the same input.
-        wire_generation = {key: generation[key] for key in (
+        envelope['context'] = {key: generation[key] for key in (
             'project_id', 'plc_model', 'target_mode', 'current_version_id', 'generation_input')}
-    envelope = {'context': wire_generation, 'tool_schema': schema,
-                'existing_declaration_tool': declaration_tool, 'project_transaction_tool': transaction_tool}
-    # Only the presentation-only sections of a Ladder edit are optional here. The
-    # FBD context is already measured and pruned by compose_fbd_context, where the
-    # ST bodies, callers, interfaces, type closure and project conditions are
-    # mandatory units. Only its already-classified auxiliary interfaces can be
-    # removed if the final tool-schema envelope needs additional space.
-    optional_paths = [] if fbd_target else [('context', 'selected_source', 'svg'),
-                                            ('context', 'selected_source', 'model'),
-                                            ('context', 'project_comments')]
+    else:
+        envelope['context'] = generation
+        optional_paths = [('context', 'selected_source', 'svg'),
+                          ('context', 'selected_source', 'model'),
+                          ('context', 'project_comments')]
+    tool_options = {}
+    if ladder_target and bound_provider_profile():
+        from application.ladder_instruction_tool import INSTRUCTION_LOOKUP_PROMPT, instruction_tool_for
+        from application.ladder_model_session import LadderModelSession, ladder_tools
+
+        tools = ladder_tools()
+        lookup = instruction_tool_for(
+            current_provider(), model_name=snapshot.get('model', {}).get('model'), plc_model=context.plc_model,
+            options={}, stream=True, tools=tools,
+            on_stage=lambda stage, message: job.emit('progress', {'stage': stage, 'message': message}))
+        if lookup is not None:
+            session = LadderModelSession(phase='source_edit', lookup=lookup)
+            session.remember(envelope['knowledge'])
+            tool_options = {'tools': tools, 'ladder_session': session}
+            instructions += INSTRUCTION_LOOKUP_PROMPT + (
+                '\n已有 GXW 的有序源码变更使用上面的 patch_program 参数。'
+                '可用 lookup_plc_instructions 查证，完成后返回原 record_index 和修改内容。')
     envelope, budget_report = compile_envelope(
         envelope, instructions=instructions, optional_paths=optional_paths,
         model_profile=bound_provider_profile(), image_count=len(images or ()),
@@ -402,7 +495,8 @@ def generate_candidate(output, snapshot, context, images, job):
         ], model_name=snapshot.get('model', {}).get('model'),
         effort=None, stream=True, on_reasoning_chunk=lambda value: job.emit('reasoning', {'text': value}),
         on_content_chunk=lambda value: job.emit('content', {'text': value}),
-        response_contract=ResponseContract('gxw_existing_edit', 'json', human_paths=('summary', 'unsupported')))
+        response_contract=ResponseContract('gxw_existing_edit', 'json', human_paths=('summary', 'unsupported')),
+        **tool_options)
     text = response.message.content.strip()
     if text.startswith('```') and text.endswith('```'):
         text = text.split('\n', 1)[1].rsplit('```', 1)[0]
@@ -435,7 +529,10 @@ def generate_candidate(output, snapshot, context, images, job):
     if tool == 'patch_program':
         if not isinstance(arguments.get('patch'), dict):
             raise GXWFormatError('offline Ladder editing requires its nested patch')
-        arguments['patch'].setdefault('save_policy', 'draft')
+        for key in ('base_revision', 'base_ir_sha256'):
+            arguments['patch'].setdefault(key, generation['output_contract'][key])
+        if 'save_policy' not in arguments:
+            arguments['patch'].setdefault('save_policy', 'draft')
     else:
         arguments.setdefault('save_policy', 'draft')
     if tool == 'create_st_candidate' and arguments.get('operation') not in {
@@ -454,8 +551,11 @@ def generate_candidate(output, snapshot, context, images, job):
     key = {'accept_gxw_candidate': '_gxw_candidate', 'accept_st_candidate': '_st_candidate',
            'accept_sfc_candidate': '_sfc_candidate'}[pending['type']]
     payload = unpack_candidate(pending[key], output)
+    from application.confirmed_generation_context import direct_history_fields
     payload['metadata'].update(summary=answer['summary'],
-        generation_handoff={'workflow': 'existing_gxw_offline', 'tool': tool,
+        generation_handoff={**direct_history_fields((context.version or {}).get('generation_handoff')),
+                            'workflow': 'existing_gxw_offline', 'tool': tool,
+                            **({'instruction_lookup': lookup.receipts} if tool_options and lookup.receipts else {}),
                             'budget_report': budget_report})
     return payload
 

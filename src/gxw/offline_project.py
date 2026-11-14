@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Source-bound GXW file inspection and existing-object editing, without an IDE."""
 from __future__ import annotations
@@ -250,15 +250,14 @@ def read_ordered_program(project, program=None, *, revision=1):
         source_records.append(item)
     networks = []
     for index, (note, rows, _leading) in enumerate(_split_networks(records), 1):
-        instructions = [{**row.as_ir(), 'step': row.step, 'source_row': row.source_row,
-            'source_offset': source_records[row.source_row - 1]['source_offset'],
-            'record_index': row.source_row - 1} for row in rows]
+        instructions = [{**copy.deepcopy(source_records[row.source_row - 1]),
+            **row.as_ir(), 'source_row': row.source_row} for row in rows]
         networks.append({'id': f'N{index:04d}', 'comment': note, 'raw_instructions': instructions,
                          'parse_status': 'ordered'})
     if networks and listing.instructions and listing.instructions[-1].mnemonic == 'END':
         networks[-1]['raw_instructions'].append(copy.deepcopy(next(
             row for row in reversed(source_records) if row.get('op') == 'END')))
-    if unknown or has_labels:
+    if source_records:
         # Network boundaries are a display projection. Partition *every* source
         # record in its original order, including labels and opaque barriers.
         # Never rebuild an editable source from the known-instruction subset.
@@ -276,9 +275,17 @@ def read_ordered_program(project, program=None, *, revision=1):
     model = normalize_target_cpu(project.context['cpu'])
     ir = build_instruction_ir(networks, plc_model=model,
         program_name=selected['source_name'], device_comments=comments, revision=revision)
+    instructions = listing.instructions
+    last = instructions[-1] if instructions else None
+    steps = (last.step + last.step_width if not unknown and last is not None
+             and last.mnemonic == 'END' and last.step is not None else None)
+    program_size = {'basis': 'gxw_instruction_widths', 'instruction_count': len(instructions),
+                    'steps': steps, 'unknown_width_count': len(unknown),
+                    'unknown_width_locations': [{'record_index': row['record_index'], 'reason': row['reason']}
+                                                for row in unknown[:16]]}
     return {'selected': selected, 'listing': listing, 'source_records': source_records,
         'raw_networks': networks, 'device_comments': comments, 'comment_tables': tables,
-        'issues': issues, 'program_ir': ir, 'plc_model': model,
+        'issues': issues, 'program_ir': ir, 'plc_model': model, 'program_size': program_size,
         'coverage': {'parse_status': 'partial' if unknown else 'complete', 'network_count': len(networks),
             'parsed_network_count': len(networks) if not unknown else 0, 'unknown_instructions': unknown,
             'semantic_status': 'unverified' if unknown or has_labels else 'static_only', 'runtime_verified': False}}
@@ -389,7 +396,7 @@ def project_comment_changes(before, after):
 
 def edit_ladder_project(raw, program, edits, *, device_comments=None, comment_table=None,
                         declaration_edits=None, expected_source=None, save_policy='checked',
-                        defer_checks=False):
+                        defer_checks=False, source_bound=False):
     """Apply source-record edits in original coordinates, then save once offline."""
     from .token_patch import edit_token_records
     from .token_listing import decode_token_listing
@@ -410,6 +417,7 @@ def edit_ladder_project(raw, program, edits, *, device_comments=None, comment_ta
         text_encoding=project.context['text_encoding'], plc_model=project.context['cpu'],
         storage_context=storage_context,
         allow_draft=save_policy == 'draft',
+        source_bound=source_bound,
         allow_end_boundary=selected['unit_kind'] in {'function_block', 'function'})
     body, chunks = prepared_records.body, prepared_records.records
     frame = frame_token_pou(before)
@@ -436,7 +444,7 @@ def edit_ladder_project(raw, program, edits, *, device_comments=None, comment_ta
     saved = write_project_replacements(raw, replacements,
         objects=prepared.objects if prepared is not None else None,
         device_comments=device_comments, comment_table=comment_table)
-    saved.report['source_checks'] = checks
+    saved.report.update(source_checks=checks, save_policy=save_policy)
     after = read_ordered_program(read_offline_project(saved.data), logical)
     if after['program_ir'] is not None and save_policy == 'checked' and not defer_checks:
         from plc.ir import validate_plc_ir

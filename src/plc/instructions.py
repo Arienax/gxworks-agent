@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Data-driven PLC instruction catalogue used across import, IR and validation.
 
 The public ladder JSON format intentionally remains unchanged. APP_INSTR nodes
@@ -20,10 +23,12 @@ import math
 import os
 import re
 import sys
+from threading import RLock
 from dataclasses import dataclass, field, replace
 from enum import Enum
+from functools import cached_property, lru_cache
 from pathlib import Path
-from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 from plc.instruction_definition import InstructionFactGroup
 
@@ -45,6 +50,34 @@ class InstructionCategory(str, Enum):
     ACTION = "action"
     BRANCH_CONTROL = "branch_control"
     PROGRAM_CONTROL = "program_control"
+
+
+def condition_connector(opcode):
+    """Accumulator connector of a stored contact/comparison, not execution support.
+
+    Q/L use the same LD/AND/OR modifiers for word, double-word, floating,
+    string and time comparisons. Catalogue completeness must not change the
+    boundaries of their original circuits.
+    """
+    name = str(opcode or '').strip().upper()
+    if name in {'ANI', 'ORI'}:
+        return 'AND' if name == 'ANI' else 'OR'
+    match = re.fullmatch(r'(LD|AND|OR)(?:I|P|F|PI|FI|PCHK|(?:ED|DT|TM|D|E|\$)?(?:<>|>=|<=|=|>|<))?', name)
+    return match[1] if match else None
+
+
+@lru_cache(maxsize=4096)
+def source_instruction_arities(opcode, cpu):
+    """Reuse the native storage catalogue when reading Q/L source signatures.
+
+    These facts fill source-reading gaps without promoting unreviewed entries
+    into the generation or execution catalogue.
+    """
+    from plc.target_identity import target_family, is_parameter_only
+    if target_family(cpu) not in {'Q', 'L'} or is_parameter_only(cpu):
+        return frozenset()
+    from plc.storage.q_encoder import source_instruction_arities as stored_arities
+    return stored_arities(opcode, cpu=cpu)
 
 
 class SemanticKind(str, Enum):
@@ -118,7 +151,7 @@ class OperandSpec:
     bit_count: int = 1
     integer_literal_widths: Tuple[Tuple[str, int], ...] = ()
     address_forms: Tuple[str, ...] = ()
-    address_form_limits: Tuple[Tuple[str, Tuple[Tuple[str, Any], ...]], ...] = ()
+    address_form_limits: Tuple[Tuple[str, Tuple[Tuple[str, int | Tuple[str, ...]], ...]], ...] = ()
 
     @property
     def device_point_count(self) -> int:
@@ -784,21 +817,29 @@ class InstructionRegistry:
 
     def __init__(self, specs: Iterable[InstructionSpec] = ()) -> None:
         self._specs: Dict[Tuple[str, str], InstructionSpec] = {}
-        self._cpu_contracts: Dict[Tuple[str, str, str], InstructionSpec] = {}
+        self._cpu_contracts: MutableMapping[Tuple[str, str, str], InstructionSpec] = {}
         self._source_forms: Dict[Tuple[str, str, int], InstructionSpec] = {}
         self._variant_index: Optional[
             Dict[Tuple[str, str], InstructionResolution]
         ] = None
         self.definition_inventory: Tuple[Mapping[str, Any], ...] = ()
         self._definition_owners: Dict[Tuple[str, str, str], Mapping[str, Any]] = {}
+        self._fact_owner_index = None
         self.definition_documents: Mapping[str, Mapping[str, Any]] = {}
         self._definition_owner_store = None
         self._loaded_definition_contracts = set()
         self._definition_contract_bases = {}
-        self._knowledge_profiles = ()
-        self._family_knowledge = ()
+        self._compiled_catalog = None
         for spec in specs:
             self.register(spec)
+
+    @cached_property
+    def _knowledge_profiles(self):
+        return self._compiled_catalog.knowledge("profile") if self._compiled_catalog is not None else ()
+
+    @cached_property
+    def _family_knowledge(self):
+        return self._compiled_catalog.knowledge("family") if self._compiled_catalog is not None else ()
 
     def register(self, spec: InstructionSpec) -> None:
         key = (spec.vendor.lower(), spec.mnemonic.upper())
@@ -947,6 +988,8 @@ class InstructionRegistry:
         spec = self._with_definition_facts(form.spec, form.opcode, cpu,
                                            str(vendor or "mitsubishi").strip().lower())
         spec = spec.for_operand_count(operand_count)
+        if form.opcode in {'PWM', 'DPWM'} and str(cpu).upper() in {'FX5U', 'FX5UC', 'FX5UJ', 'FX5S'} and len(spec.operands) == 3:
+            spec = replace(spec, operands=(*spec.operands[:2], replace(spec.operands[2], name='channel', role=OperandRole.READ)))
         return replace(form, spec=spec) if spec is not form.spec else form
 
     @property
@@ -1009,7 +1052,7 @@ class InstructionRegistry:
         source = self._source_forms.get((target_family(cpu), token, operand_count))
         if source is not None and operand_count in source_instruction_arities(token, cpu):
             return source
-        return self.resolve(token, cpu=cpu)
+        return self.resolve(token, cpu=cpu, operand_count=operand_count)
 
     def load_target_contracts(self, entries) -> None:
         """Build-time reviewed manual contracts, scoped to a literal CPU/form.
@@ -1034,13 +1077,17 @@ class InstructionRegistry:
                         or not isinstance(s.get("models"), list) or set(s["models"]) != set(models) for s in sources)):
                     raise ValueError("Grouped target contract sources need the same CPU scope")
                 for model in models:
-                    item = copy.deepcopy(dict(row))
+                    # Detach the fields rewritten here. Spec and evidence construction copy the retained values.
+                    item = dict(row)
                     item.pop("cpus")
                     item["cpu"] = model
-                    item["instruction"]["cpu_support"] = [model]
-                    for source in item["sources"]:
+                    item["instruction"] = {**row["instruction"], "cpu_support": [model]}
+                    item["sources"] = []
+                    for original in sources:
+                        source = dict(original)
                         source.pop("models")
                         source["target_model"] = model
+                        item["sources"].append(source)
                     expanded.append(item)
             else:
                 expanded.append(row)
@@ -1128,8 +1175,12 @@ class InstructionRegistry:
             payload = expand_definitions(payload)
         from knowledge.runtime_fact_projection import SOURCE_SERIALIZATION, VALUE_SERIALIZATION, VerifiedCatalog, resolve_fact_sources
         pooled = payload.get("source_serialization")
-        if ("source_serialization" in payload or "source_catalog" in payload) and pooled != SOURCE_SERIALIZATION:
+        # Legacy source bundles use a list bibliography under the same name;
+        # only a pooled mapping requires the exact pool serialization marker.
+        if ("source_serialization" in payload or isinstance(payload.get("source_catalog"), Mapping)) and pooled != SOURCE_SERIALIZATION:
             raise ValueError("Unsupported fact source serialization")
+        if "source_catalog" in payload and not isinstance(payload['source_catalog'], (Mapping, list)):
+            raise ValueError("Invalid fact source catalog")
         if pooled and not isinstance(payload.get("source_catalog"), Mapping):
             raise ValueError("Invalid fact source catalog")
         if ("value_catalog" in payload or "value_serialization" in payload) and (
@@ -1249,6 +1300,15 @@ class InstructionRegistry:
         return store.database_path
 
     def fact_bundle_current(self):
+        if self._compiled_catalog is not None and not self._compiled_catalog.current():
+            return False
+        for core in getattr(self, '_core_language_resources', ()):
+            try:
+                state = core[0].stat()
+                if (state.st_mtime_ns, state.st_size) != core[1:]:
+                    return False
+            except OSError:
+                return False
         if self._definition_owner_store is not None:
             return self._definition_owner_store.current()
         bound = getattr(self, '_fact_resource', None)
@@ -1298,8 +1358,16 @@ class InstructionRegistry:
             return form
         token = str(mnemonic or '').strip().upper()
         owners = getattr(self, '_definition_owners', {})
-        if any(opcode == token and (cpu is None or model == str(cpu).upper())
-               for (_, opcode, model) in owners):
+        # Loaders replace this immutable-by-convention mapping. Index identities
+        # once; unknown prose tokens must not scan every CPU/instruction owner.
+        indexed = self._fact_owner_index
+        if indexed is None or indexed[0] is not owners:
+            models_by_opcode = {}
+            for _, opcode, model in owners:
+                models_by_opcode.setdefault(opcode, set()).add(model)
+            indexed = self._fact_owner_index = (owners, models_by_opcode)
+        models = indexed[1].get(token, ())
+        if models and (cpu is None or str(cpu).upper() in models):
             from types import SimpleNamespace
             return SimpleNamespace(opcode=token, base_mnemonic=token)
         return None
@@ -1360,7 +1428,7 @@ class InstructionRegistry:
             return None
         return self.definition_entry(key[1], cpu=model, vendor=vendor)
 
-    def load_contract_promotions(self, path: Path) -> None:
+    def load_contract_promotions(self, path: Path, *, preserve_contracts=()) -> None:
         """Load build-time corroborated facts; never discover/promote at runtime.
 
         Overrides apply only to the exact CPU and literal form in the ledger.
@@ -1416,6 +1484,8 @@ class InstructionRegistry:
                     raise ValueError("Invalid promotion opcode")
                 base = self.resolve(opcode)
                 key = ("mitsubishi", opcode, "FX3U")
+                if key in preserve_contracts:
+                    continue
                 if base is None or not base.supports_cpu("FX3U") or key in pending or key in self._cpu_contracts:
                     raise ValueError("Unknown/duplicate promotion target: " + opcode)
                 if not base.accepts_arity(count):
@@ -1437,7 +1507,7 @@ class InstructionRegistry:
                     execution_form=execution, instruction_width=width, contract_sources=tuple(evidence))
         self._cpu_contracts.update(pending)
 
-    def load_operand_semantic_promotions(self, path: Path) -> None:
+    def load_operand_semantic_promotions(self, path: Path, *, preserve_contracts=()) -> None:
         """Overlay source-verified operand roles/types for one exact CPU/form.
 
         The signature promotion must already have verified arity/order. This
@@ -1477,6 +1547,8 @@ class InstructionRegistry:
                 raise ValueError("Invalid operand-semantic promotion entry")
             opcode = str(row.get("form") or "").strip().upper()
             key = ("mitsubishi", opcode, "FX3U")
+            if key in preserve_contracts:
+                continue
             if key in pending:
                 raise ValueError("Duplicate operand-semantic promotion: " + opcode)
             current = self._cpu_contracts.get(key)
@@ -2157,10 +2229,10 @@ class InstructionRegistry:
                     f"{path}: unsupported instruction catalogue schema {schema_version}"
                 )
             vendor = str(payload.get("vendor") or "mitsubishi").strip().lower()
+            source_forms.extend(payload.get('source_forms', []))
             from plc.instruction_knowledge import validate_knowledge_profiles, validate_family_knowledge
             knowledge_profiles.extend(validate_knowledge_profiles(payload.get('knowledge_profiles', []), vendor=vendor))
             family_knowledge.extend(validate_family_knowledge(payload.get('instruction_families', []), vendor=vendor))
-            source_forms.extend(payload.get('source_forms', []))
             contracts = payload.get("cpu_contracts", [])
             if not isinstance(contracts, list):
                 raise ValueError(f"{path}: cpu_contracts must be an array")
@@ -2211,8 +2283,6 @@ class InstructionRegistry:
                 f"modifier rule targets unknown instruction {vendor}:{mnemonic}"
             )
         registry = cls(specs)
-        registry._knowledge_profiles = tuple(knowledge_profiles)
-        registry._family_knowledge = tuple(family_knowledge)
         for form in source_forms:
             for family in form.get('families', [form['family']]):
                 operands = form['operands']
@@ -2227,6 +2297,8 @@ class InstructionRegistry:
                     registry._source_forms[key] = replace(spec, verified_fields=tuple(
                         ['arity', 'operand_order', 'operand_roles'] +
                         (['operand_types'] if form.get('operand_types_verified') else [])))
+        registry._knowledge_profiles = tuple(knowledge_profiles)
+        registry._family_knowledge = tuple(family_knowledge)
         registry.load_target_contracts(target_contracts)
         return registry
 
@@ -2265,58 +2337,99 @@ def _candidate_catalog_directories() -> Tuple[Path, ...]:
     return tuple(unique)
 
 
+def _load_core_language_rules(registry, directory):
+    current = dict(getattr(registry, '_language_features', {}))
+    resources = []
+    for name in ('fbd_language_rules.json', 'st_language_rules.json'):
+        path = directory / name
+        if not path.is_file():
+            continue
+        payload = json.loads(path.read_text(encoding='utf-8'))
+        if payload.get('schema_version') != 1:
+            raise ValueError('Unsupported core language rules')
+        features = _validated_language_features(payload['language_facts'])
+        for target, feature in features.items():
+            if target not in current:
+                current[target] = feature
+        state = path.stat()
+        resources.append((path.resolve(), state.st_mtime_ns, state.st_size))
+    registry._language_features = current
+    registry.language_facts = tuple(current.values())
+    registry._core_language_resources = tuple(resources)
+    return registry
+
+
+CATALOG_REQUIRED_FILES = ("common.json", "fx3u.json", "fx5u.json")
+CATALOG_OPTIONAL_FILES = ("fx3u_verified_opcodes.json", "modifier_rules.json", "instruction_families.json")
+CATALOG_OVERLAY_FILES = ("fx3u_contract_promotions.json", "fx3u_operand_semantic_promotions.json",
+                         "instruction_capabilities.json")
+
+
+def load_catalog_sources(directory: Path) -> InstructionRegistry:
+    """Validate and expand the authored catalogue independently of the RAG owners."""
+    paths = tuple(directory / name for name in CATALOG_REQUIRED_FILES)
+    paths += tuple(directory / name for name in CATALOG_OPTIONAL_FILES if (directory / name).is_file())
+    registry = InstructionRegistry.from_files(paths)
+    # Reviewed CPU contracts supersede the older FX3U ledgers.
+    compiled_contracts = frozenset(registry._cpu_contracts)
+    promotions, operand_promotions, capabilities = (directory / name for name in CATALOG_OVERLAY_FILES)
+    if promotions.is_file():
+        registry.load_contract_promotions(promotions, preserve_contracts=compiled_contracts)
+    if operand_promotions.is_file():
+        registry.load_operand_semantic_promotions(operand_promotions, preserve_contracts=compiled_contracts)
+    if capabilities.is_file():
+        registry.load_capability_contract(capabilities)
+    return registry
+
+
 def load_default_instruction_registry() -> InstructionRegistry:
-    required = ("common.json", "fx3u.json", "fx5u.json")
+    from plc.instruction_catalog_store import read_compiled_catalog
+
     for directory in _candidate_catalog_directories():
-        paths = tuple(directory / name for name in required)
-        if all(path.is_file() for path in paths):
-            verified = directory / "fx3u_verified_opcodes.json"
-            if verified.is_file():
-                paths = paths + (verified,)
-            modifier_rules = directory / "modifier_rules.json"
-            if modifier_rules.is_file():
-                paths = paths + (modifier_rules,)
-            family_knowledge = directory / 'instruction_families.json'
-            if family_knowledge.is_file():
-                paths = paths + (family_knowledge,)
-            registry = InstructionRegistry.from_files(paths)
-            promotions = directory / "fx3u_contract_promotions.json"
-            if promotions.is_file():
-                registry.load_contract_promotions(promotions)
-            operand_promotions = directory / "fx3u_operand_semantic_promotions.json"
-            if operand_promotions.is_file():
-                registry.load_operand_semantic_promotions(operand_promotions)
-            capabilities = directory / "instruction_capabilities.json"
-            if capabilities.is_file():
-                registry.load_capability_contract(capabilities)
-            # Opt in to a candidate owner store without replacing the catalogue
-            # that supplies opcode registration and CPU capability contracts.
-            if "GXW2_INSTRUCTION_OWNER_MANIFEST" in os.environ:
-                configured_manifest = os.environ["GXW2_INSTRUCTION_OWNER_MANIFEST"].strip()
-                if not configured_manifest:
-                    raise ValueError("GXW2_INSTRUCTION_OWNER_MANIFEST must name a manifest")
-                registry.load_instruction_owner_store(Path(configured_manifest).expanduser())
-                return registry
-            manifest = directory / "instruction_definitions.manifest.json"
-            if not (manifest.exists() or manifest.is_symlink()):
-                from shared.paths import resource_path
-                manifest = resource_path("knowledge/runtime/instruction_definitions.manifest.json")
-            if manifest.exists() or manifest.is_symlink():
-                registry.load_instruction_owner_store(manifest)
-                return registry
-            definitions = directory / "instruction_definitions.json.gz"
-            if not definitions.exists():
-                definitions = directory / "instruction_definitions.json"
-            if definitions.is_file():
-                registry.load_instruction_definitions(definitions)
-            return registry
+        if not all((directory / name).is_file() for name in CATALOG_REQUIRED_FILES):
+            continue
+        registry = read_compiled_catalog(directory) or load_catalog_sources(directory)
+        # Opt in to an owner store independently of the base catalogue.
+        if "GXW2_INSTRUCTION_OWNER_MANIFEST" in os.environ:
+            configured_manifest = os.environ["GXW2_INSTRUCTION_OWNER_MANIFEST"].strip()
+            if not configured_manifest:
+                raise ValueError("GXW2_INSTRUCTION_OWNER_MANIFEST must name a manifest")
+            registry.load_instruction_owner_store(Path(configured_manifest).expanduser())
+            return _load_core_language_rules(registry, directory)
+        manifest = directory / "instruction_definitions.manifest.json"
+        if not (manifest.exists() or manifest.is_symlink()):
+            from shared.paths import resource_path
+            manifest = resource_path("knowledge/runtime/instruction_definitions.manifest.json")
+        if manifest.exists() or manifest.is_symlink():
+            registry.load_instruction_owner_store(manifest)
+            return _load_core_language_rules(registry, directory)
+        definitions = directory / "instruction_definitions.json.gz"
+        if not definitions.exists():
+            definitions = directory / "instruction_definitions.json"
+        if definitions.is_file():
+            registry.load_instruction_definitions(definitions)
+        return _load_core_language_rules(registry, directory)
     searched = "\n - ".join(str(item) for item in _candidate_catalog_directories())
     raise RuntimeError(
         "Mitsubishi instruction catalogue not found. Searched:\n - " + searched
     )
 
 
-DEFAULT_INSTRUCTION_REGISTRY = load_default_instruction_registry()
+_DEFAULT_REGISTRY_LOCK = RLock()
+
+
+def __getattr__(name):
+    if name != "DEFAULT_INSTRUCTION_REGISTRY":
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    # Builders import the catalogue types without opening the installed RAG store.
+    with _DEFAULT_REGISTRY_LOCK:
+        if name not in globals():
+            globals()[name] = load_default_instruction_registry()
+        return globals()[name]
+
+
+def _default_registry():
+    return getattr(sys.modules[__name__], "DEFAULT_INSTRUCTION_REGISTRY")
 
 
 GENERATION_TYPED_OUTPUT_OPCODES = frozenset({"OUT", "PLS", "PLF", "END"})
@@ -2327,6 +2440,7 @@ GENERATION_FORBIDDEN_APP_INSTR_CATEGORIES = frozenset(
 
 def generation_app_instr_mnemonics(cpu=None):
     """Opcodes the model may emit as APP_INSTR for the selected CPU."""
+    registry = _default_registry()
     model = str(cpu or "").strip().upper() or None
     availability = {}
     members = []
@@ -2335,7 +2449,7 @@ def generation_app_instr_mnemonics(cpu=None):
         from plc.instruction_constraints import check_fact_constraints
         members, reason = target_identity_state(model)
         members = members if members and reason is None else [model]
-        for definition in DEFAULT_INSTRUCTION_REGISTRY._family_knowledge:
+        for definition in registry._family_knowledge:
             for fact in definition['facts']:
                 if (fact['dimension'] == 'constraints.cpu_availability'
                         and set(fact['scope']['models']) & set(members)):
@@ -2343,8 +2457,8 @@ def generation_app_instr_mnemonics(cpu=None):
                         availability.setdefault(opcode, {}).setdefault(definition['base_opcode'],
                             [definition['facts'], []])[1].append(fact['id'])
     result = []
-    for mnemonic in DEFAULT_INSTRUCTION_REGISTRY.known_mnemonics():
-        form = DEFAULT_INSTRUCTION_REGISTRY.resolve_catalog_form(mnemonic, cpu=model)
+    for mnemonic in registry.known_mnemonics():
+        form = registry.resolve_catalog_form(mnemonic, cpu=model)
         if form is None:
             continue
         spec = form.spec
@@ -2358,10 +2472,10 @@ def generation_app_instr_mnemonics(cpu=None):
             # A form the compiled build did not admit as a call must not be offered
             # to the generator either; the shared spec cannot answer this, because
             # an empty CPU scope there means "not narrowed", not "admitted".
-            owners = [DEFAULT_INSTRUCTION_REGISTRY.definition_header(mnemonic, cpu=member)
+            owners = [registry.definition_header(mnemonic, cpu=member)
                       for member in members]
             if not owners:
-                owners = [DEFAULT_INSTRUCTION_REGISTRY.definition_header(mnemonic, cpu=model)]
+                owners = [registry.definition_header(mnemonic, cpu=model)]
             if any(isinstance(owner, Mapping) and "call_available" in owner and not owner["call_available"]
                    for owner in owners):
                 continue
@@ -2383,15 +2497,15 @@ def get_instruction_spec(
     *,
     vendor: str = "mitsubishi",
 ) -> Optional[InstructionSpec]:
-    return DEFAULT_INSTRUCTION_REGISTRY.resolve(mnemonic, vendor=vendor)
+    return _default_registry().resolve(mnemonic, vendor=vendor)
 
 
 def catalogued_write_indexes(mnemonic: Any) -> Tuple[int, ...]:
-    return DEFAULT_INSTRUCTION_REGISTRY.write_indexes(mnemonic)
+    return _default_registry().write_indexes(mnemonic)
 
 
 def catalogued_read_write_indexes(mnemonic: Any) -> Tuple[int, ...]:
-    return DEFAULT_INSTRUCTION_REGISTRY.read_write_indexes(mnemonic)
+    return _default_registry().read_write_indexes(mnemonic)
 
 
 __all__ = [
@@ -2416,32 +2530,3 @@ __all__ = [
     "get_instruction_spec",
     "load_default_instruction_registry",
 ]
-
-
-def source_instruction_arities(opcode, cpu):
-    """Reuse the native storage catalogue when reading Q/L source signatures.
-
-    These facts fill source-reading gaps without promoting unreviewed entries
-    into the generation or execution catalogue.
-    """
-    from plc.target_identity import target_family, is_parameter_only
-    if target_family(cpu) not in {'Q', 'L'} or is_parameter_only(cpu):
-        return frozenset()
-    from plc.storage.q_encoder import source_instruction_arities as stored_arities
-    return stored_arities(opcode, cpu=cpu)
-
-def condition_connector(opcode):
-    """Accumulator connector of a stored contact or comparison, not execution support.
-
-    Q/L use the same LD/AND/OR modifiers for word, double-word, floating, string
-    and time comparisons, so catalogue completeness must not change the boundaries
-    of their original circuits.
-    """
-    name = str(opcode or '').strip().upper()
-    if name in {'ANI', 'ORI'}:
-        return 'AND' if name == 'ANI' else 'OR'
-    match = re.fullmatch(
-        r'(LD|AND|OR)(?:I|P|F|PI|FI|PCHK|(?:ED|DT|TM|D|E|\$)?(?:<>|>=|<=|=|>|<))?',
-        name,
-    )
-    return match[1] if match else None

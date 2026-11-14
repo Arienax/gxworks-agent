@@ -8,6 +8,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from responses_fixture import chat_body, chat_stream
+
 from plc.specification.confirmed import canonicalize_confirmed_spec, validate_spec_draft, build_review_draft
 from application.compact_protocol import (
     CompactProtocolError, compact_response_schema, decode_compact,
@@ -179,12 +181,42 @@ def test_strict_schema_has_required_fields_and_disjoint_anyof(direct):
                     walk(child)
     walk(schema)
     candidate = canonical_compact_example()
-    jsonschema.validate({"result": {"program": candidate, "decisions": [], "open_items": []}} if direct else candidate, schema)
+    selection = {"candidates": [{"method": "触点驱动", "tradeoff": "按扫描更新",
+                                 "instruction_choices": [], "decision_basis": []}],
+                 "selected": 0, "rationale": "跟随输入"}
+    jsonschema.validate({"result": {"decisions": selection, "program": candidate, "open_items": []}} if direct else candidate, schema)
     if direct:
         with pytest.raises(jsonschema.ValidationError):
             jsonschema.validate({"result": {"status": "needs_input", "missing_info": [
                 {"id": "level", "question": "电平？", "required": True, "options": [], "default": ""}
             ]}}, schema)
+
+
+def test_direct_strict_decision_schema_reaches_request_without_changing_legacy_reader():
+    import jsonschema
+    from application.generation_agent import direct_response_schema
+    from plc.specification.decision_basis import DECISION_BASIS_SCHEMA, review_decision_basis
+
+    before = copy.deepcopy(DECISION_BASIS_SCHEMA)
+    schema = direct_response_schema()
+    profile = profile_for("json_schema")
+    options, streaming = response_plan(profile, schema, api_key="offline-fixture-key")
+    request = resolve_request(profile, protocol={**options, "stream": streaming}, api_key="offline-fixture-key")
+    wire = request.options["response_format"]["json_schema"]
+    assert wire["strict"] is True and wire["schema"] == schema
+    row_schema = wire["schema"]["properties"]["result"]["properties"]["decisions"]["properties"][
+        "candidates"]["items"]["properties"]["decision_basis"]["items"]
+    decision = {"variant": "批量复制", "premise": "批量大小尚未给定", "status": "unknown",
+                "conclusion": "conditional", "references": []}
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(decision, row_schema)
+    jsonschema.validate({**decision, "applicability_conditions": []}, row_schema)
+    jsonschema.validate({**decision, "applicability_conditions": [
+        {"premise": "连续存储", "status": "unknown", "references": []}]}, row_schema)
+    # Tightening the wire contract must not rewrite old stored decisions.
+    assert DECISION_BASIS_SCHEMA == before
+    jsonschema.validate([decision], DECISION_BASIS_SCHEMA)
+    assert review_decision_basis([decision], path="decision_basis") == ([decision], [])
 
 
 def profile_for(mode, streaming=True, model="synthetic-model"):
@@ -249,7 +281,7 @@ class SDKFixture:
         assert len(self.calls) == 1, "no hidden model regeneration"
         assert params["temperature"] == .733
         from application.generation_wire import expand_context_document
-        documents = [json.loads(m["content"]) for m in params["messages"] if m["role"] == "user"]
+        documents = [json.loads(m["content"]) for m in params["messages"] if m.get("role") == "user"]
         document, = [item for item in documents if item.get('context_schema_version') == 3]
         spec = expand_context_document(document)['confirmed_spec']
         assert {b["role"]: b["address"] for b in spec["io_bindings"]} == {"start": "X0", "stop": "X1", "output": "Y0"}
@@ -265,9 +297,8 @@ class SDKFixture:
         raw = json.dumps(content, ensure_ascii=False)
         if params["stream"]:
             # Deliberately split inside tokens/arrays, not just whole objects.
-            return iter([SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=raw[i:i+3]), finish_reason=None)])
-                         for i in range(0, len(raw), 3)])
-        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=raw), finish_reason="stop")])
+            return chat_stream(chat_body(raw), *({"content": raw[i:i+3]} for i in range(0, len(raw), 3)))
+        return chat_body(raw)
 
 
 @pytest.mark.parametrize("mode", ["json_object", None])
@@ -291,8 +322,8 @@ def test_direct_compatibility_omits_notes_without_another_provider_request(monke
                 {"result": candidate} if representation == "legacy_envelope" else expand_compact_ladder(candidate))
             raw = json.dumps(payload)
             if params["stream"]:
-                return iter([SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=raw), finish_reason="stop")])])
-            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=raw), finish_reason="stop")])
+                return chat_stream(chat_body(raw))
+            return chat_body(raw)
     profile = profile_for(mode, streaming=mode is not None)
     provider = OpenAICompatibleProvider(profile, "offline-fixture-key", client=SDK())
     with api.provider_scope(provider, model_name=profile["model"]):
@@ -310,7 +341,7 @@ def test_http_confirmation_to_saved_ladder_svg_and_csv(tmp_path, mode, shared, p
     from integrations.web.app import create_app
     from application.workbench import WorkbenchService
     from model_runtime.provider import OpenAICompatibleProvider
-    from test_web_api import ORIGIN, OPERATOR, _login, _complete
+    from test_web_api import ORIGIN, _complete
     from plc.ir import ir_to_ladder
     sdk = SDKFixture(shared, polarity, representation=representation)
     # The no-schema case also exercises a declared non-streaming endpoint.
@@ -319,9 +350,9 @@ def test_http_confirmation_to_saved_ladder_svg_and_csv(tmp_path, mode, shared, p
     service = WorkbenchService(tmp_path / "workspace", tmp_path / "state",
         model_factory=lambda: (provider, {"model": profile["model"]}))
     app = create_app(service.store.base_dir, state_dir=service.state_dir, service=service,
-                     origin=ORIGIN, operator_token=OPERATOR)
+                     origin=ORIGIN)
     with TestClient(app, base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         response = client.post("/api/projects", headers=headers, json={"name": "synthetic compatibility", "target_mode": "ladder", "plc_model": "FX3U"})
         assert response.status_code == 201, response.text
         pid = response.json()["id"]

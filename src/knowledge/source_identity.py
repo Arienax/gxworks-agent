@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Source identity for compiled instruction definitions.
 
 A compiled definition records two different things and they must not be confused:

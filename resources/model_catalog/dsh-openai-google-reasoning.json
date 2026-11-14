@@ -1,0 +1,375 @@
+[
+  {
+    "schema_version": 1,
+    "id": "dsh-google-1",
+    "extends": "google-gemini25",
+    "match": {
+      "endpoints": [
+        "https://generativelanguage.googleapis.com/v1beta/openai"
+      ],
+      "models": [
+        "gemini-3-flash-preview",
+        "gemini-3.1-flash-lite",
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3.6-flash"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "minimal",
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/google.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-google-2",
+    "extends": "google-gemini25",
+    "match": {
+      "endpoints": [
+        "https://generativelanguage.googleapis.com/v1beta/openai"
+      ],
+      "models": [
+        "gemini-3.1-pro-preview",
+        "gemini-3.7-flash",
+        "gemini-3.8-flash",
+        "gemini-4-argon"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/google.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openai-1",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://api.openai.com/v1"
+      ],
+      "models": [
+        "gpt-5",
+        "gpt-5-mini",
+        "gpt-5-nano"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "minimal",
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openai.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openai-2",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://api.openai.com/v1"
+      ],
+      "models": [
+        "gpt-5.1"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openai.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openai-3",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://api.openai.com/v1"
+      ],
+      "models": [
+        "gpt-5.2",
+        "gpt-5.4",
+        "gpt-5.4-mini",
+        "gpt-5.4-nano",
+        "gpt-5.5"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openai.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openai-4",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://api.openai.com/v1"
+      ],
+      "models": [
+        "gpt-5.6-luna",
+        "gpt-5.6-sol",
+        "gpt-5.6-terra"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openai.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openai-5",
+    "extends": "openai-responses-gpt6",
+    "match": {
+      "endpoints": [
+        "https://api.openai.com/v1"
+      ],
+      "models": [
+        "gpt-6-astra",
+        "gpt-6.1-sol"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        }
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openai.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openai-6",
+    "extends": "openai-responses-gpt6",
+    "match": {
+      "endpoints": [
+        "https://api.openai.com/v1"
+      ],
+      "models": [
+        "gpt-6-luna",
+        "gpt-6-sol"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        }
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openai.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-openai-7",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://api.openai.com/v1"
+      ],
+      "models": [
+        "o1",
+        "o3",
+        "o3-mini",
+        "o4-mini"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openai.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  }
+]

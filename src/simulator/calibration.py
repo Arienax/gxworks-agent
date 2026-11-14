@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Offline replay and accounting for independently frozen known-error cases.
 
 Uses the existing Core bounded checker. Literal observations come from the case,

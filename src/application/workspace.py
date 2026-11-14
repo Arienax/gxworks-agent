@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Workspace ownership and small durable storage primitives (no desktop imports)."""
 
@@ -205,18 +205,33 @@ def public_payload(value: Any, *, native_live: bool = False) -> Any:
     return None
 
 
-class WorkspaceWriterLock:
-    """Lifetime cross-process writer lock, plus a shared in-process transaction lock.
+class WorkspaceTransactions:
+    """Serialize workspace transactions across services only while they run."""
 
-    The lock file is outside the workspace so opening an old workspace does not
-    touch its bytes. The OS releases ownership on process death; files may remain.
-    """
+    def __init__(self, workspace: Path):
+        from filelock import FileLock
 
-    def __init__(self, workspace: Path, lock_dir: Path | None = None):
         self.workspace = Path(workspace).expanduser().resolve()
         self.key = os.path.normcase(str(self.workspace))
+        self._closed = False
+        root = private_state_dir(Path(tempfile.gettempdir()) / "gxworks-agent-locks", self.workspace)
+        digest = hashlib.sha256(self.key.encode("utf-8")).hexdigest()
         with _guard:
-            self.thread_lock = _locks.setdefault(self.key, threading.RLock())
+            self.thread_lock = _locks.setdefault(self.key, FileLock(root / (digest + ".transaction.lock")))
+
+    def require_open(self) -> None:
+        if self._closed:
+            raise RuntimeError("Workspace service is closed")
+
+    def close(self) -> None:
+        self._closed = True
+
+
+class WorkspaceWriterLock(WorkspaceTransactions):
+    """Exclusive workspace ownership for an independent local MCP session."""
+
+    def __init__(self, workspace: Path, lock_dir: Path | None = None):
+        super().__init__(workspace)
         root = Path(lock_dir) if lock_dir is not None else Path(tempfile.gettempdir()) / "gxworks-agent-locks"
         self.lock_dir = private_state_dir(root, self.workspace)
         self.lock_path = self.lock_dir / (hashlib.sha256(self.key.encode("utf-8")).hexdigest() + ".lock")
@@ -254,6 +269,12 @@ class WorkspaceWriterLock:
     def require_acquired(self) -> None:
         if not self.acquired:
             raise WorkspaceBusyError("Workspace writer ownership is required")
+
+    def require_open(self) -> None:
+        self.require_acquired()
+
+    def close(self) -> None:
+        self.release()
 
     def release(self):
         with _guard:

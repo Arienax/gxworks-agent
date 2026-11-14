@@ -304,10 +304,9 @@ def test_http_confirmation_of_unknown_structure_is_local_and_preserves_semantics
 
     origin = "http://127.0.0.1:8765"
     service = WorkbenchService(tmp_path / "workspace", tmp_path / "state", model_factory=no_model)
-    app = create_app(service.store.base_dir, service=service, origin=origin, operator_token="operator")
+    app = create_app(service.store.base_dir, service=service, origin=origin)
     with TestClient(app, base_url=origin) as client:
-        login = client.post("/api/session", json={"token": "operator"}, headers={"Origin": origin}).json()
-        headers = {"Origin": origin, "X-CSRF-Token": login["csrf"]}
+        headers = {"Origin": origin}
         pid = client.post("/api/projects", headers=headers, json={"name": "legacy-gate"}).json()["id"]
         path = f"/api/projects/{pid}/spec"
         result = client.put(path, headers=headers, json={"spec": _gate_spec({"required_structures": [_OPAQUE]}), "expected_hash": None}).json()

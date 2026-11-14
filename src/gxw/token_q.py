@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Observed Q02/Q02H and Q03UDV spellings, with separate CPU descriptor tables.
 
@@ -204,7 +204,11 @@ def q_operand_groups(tokens: tuple[LadderToken, ...], *, text_encoding: str | No
             # Native 3E577 formats every F8..FF prefix before the base.
             # FD/FE/FF have the same displayed spelling, so their original
             # bytes must be retained; the text encoder cannot select one.
-            prefix += text + "\\"
+            # An index before this token belongs to the module/network
+            # prefix; one after it belongs to the base device. Preserve that
+            # distinction so a prefix-indexed word-bit can be re-encoded.
+            prefix += text + (index or "") + "\\"
+            index = None
         elif 0x90 <= code <= 0xef:
             groups.append((tokens[start:end + 1], prefix + text + (index or "") + (bit or "")))
             start, prefix, index, bit = end + 1, "", None, None

@@ -7,7 +7,9 @@ import copy
 import json
 import unittest
 
-from knowledge.runtime_fact_projection import project_runtime_definitions
+from knowledge.runtime_fact_projection import (
+    project_runtime_definitions, project_runtime_owner, restore_runtime_research,
+)
 from plc.instruction_definition import select_fact_dependencies
 
 
@@ -43,6 +45,47 @@ def payload(entries):
 
 def project(facts):
     return project_runtime_definitions(payload([entry(facts)]))[0]['entries'][0]['facts']
+
+
+class BusinessConditionPresentationTests(unittest.TestCase):
+    def test_business_strings_and_context_conditions_keep_their_distinct_meaning(self):
+        from knowledge.instruction_presentation import model_instruction_view
+        conditions = ['divisor_is_zero', 'result_exceeds_2147483647',
+            {'context': 'cpu_version', 'minimum': '1.20'},
+            {'context': 'project_mode', 'equals': 'structured_ladder_block'}]
+        value = {'kind': 'instruction', 'target': 'DIV_E', 'scope': {'models': ['FX3U']},
+            'context': {'languages': ['ladder'], 'project_mode': 'structured_ladder_block'},
+            'value': {'family': 'DIV', 'forms': [{'opcode': 'DIV_E', 'modifiers': {'pulse': True},
+                'execution': {'trigger': 'rising_edge'}}], 'additional_knowledge': [{
+                'conditions': [{'context': 'project_mode', 'equals': 'structured_ladder_block'},
+                               {'context': 'cpu_version', 'minimum': '1.20'}],
+                'semantics': {'resources.operation_error': {'conditions': conditions},
+                              'execution.disabled': {'when': 'EN_false', 'result': 'undefined'}}}]}}
+        before = copy.deepcopy(value)
+        result = model_instruction_view(value)
+        text = json.dumps(result, sort_keys=True)
+        self.assertIn('divisor_is_zero', text)
+        self.assertIn('result_exceeds_2147483647', text)
+        self.assertIn('1.20', text)
+        self.assertIn('rising_edge', text)
+        self.assertIn('"pulse": true', text)
+        self.assertIn('EN_false', text)
+        self.assertIn('undefined', text)
+        error_claim = next(group['semantics']['resources.operation_error']
+            for group in result['value']['additional_knowledge'] if 'resources.operation_error' in group['semantics'])
+        self.assertEqual(error_claim['conditions'], conditions[:3])
+        self.assertEqual(value, before)
+
+    def test_matching_context_is_omitted_but_other_context_and_business_conditions_remain(self):
+        from knowledge.instruction_presentation import model_instruction_view
+        value = {'kind': 'instruction', 'value': {'family': 'TEST', 'forms': [{'opcode': 'TEST'}],
+            'additional_knowledge': [{'semantics': {'constraints.rule': {
+                'conditions': ['range_exceeded', {'context': 'project_mode', 'equals': 'native_ladder_instruction'},
+                               {'context': 'device_state', 'device': 'M0', 'equals': True}]}}}]}}
+        result = model_instruction_view(value)
+        claim = result['value']['additional_knowledge'][0]['semantics']['constraints.rule']
+        self.assertEqual(claim['conditions'], ['range_exceeded',
+            {'context': 'device_state', 'device': 'M0', 'equals': True}])
 
 
 class ProjectionAdversarialTests(unittest.TestCase):
@@ -260,6 +303,312 @@ class ProjectionAdversarialTests(unittest.TestCase):
         shuffled, _, _ = project_runtime_definitions(payload([entry(list(reversed(facts)))]))
         self.assertEqual(canonical(first), canonical(second))
         self.assertEqual(canonical(first), canonical(shuffled))
+
+    def test_owner_sidecar_restores_merged_facts_and_private_research_fields(self):
+        conditions = [{'context': 'project_mode', 'equals': 'structured',
+                       'current_physical_direction_routing_verified': False}]
+        value = {'behavior': 'pulse_output_path', 'available': False,
+                 'source_verified': True, 'source_checked': True,
+                 'hardware_precondition': {'relay_required': True,
+                     'current_hardware_and_wiring_verified': False,
+                     'current_axis_busy_verified': False},
+                 'native_execution_verified': False,
+                 'source_materials': [{'manual_id': 'research-only'}]}
+        first = fact('a', value=copy.deepcopy(value), conditions=copy.deepcopy(conditions),
+                     scope={'models': ['FX5U', 'FX5U'], 'forms': ['PWM', 'PWM'],
+                            'languages': ['ladder']},
+                     authority_decision={'fact_id': 'a', 'decision': 'reviewed'})
+        second = fact('b', value=copy.deepcopy(value), conditions=copy.deepcopy(conditions),
+                      scope={'models': ['FX5U', 'FX5U'], 'forms': ['PWM', 'PWM'],
+                             'languages': ['ladder']},
+                      depends_on=[], sources=[{'manual_id': 'second', 'revision': 'B'}],
+                      authority_decision={'fact_id': 'b', 'decision': 'reviewed'})
+        original = entry([first, second], call_available=False,
+                         source_materials=[{'manual_id': 'owner-source'}],
+                         uninterpreted_content=[{'unit_count': 3}],
+                         semantic_completeness='not_established',
+                         gaps=['source_review_pending'], conflicts=[{'kind': 'research'}])
+        before = copy.deepcopy(original)
+
+        runtime, sidecar, receipt = project_runtime_owner(original)
+        self.assertEqual(original, before)
+        self.assertFalse(runtime['call_available'])
+        self.assertNotIn('source_materials', runtime)
+        self.assertNotIn('uninterpreted_content', runtime)
+        self.assertNotIn('gaps', runtime)
+        self.assertEqual(len(runtime['facts']), 1)
+        retained = runtime['facts'][0]
+        self.assertFalse(retained['value']['available'])
+        self.assertTrue(retained['value']['source_verified'])
+        self.assertTrue(retained['value']['source_checked'])
+        self.assertEqual(retained['status'], 'source_verified')
+        self.assertEqual(retained['verification'], 'source_checked')
+        self.assertEqual(retained['conditions'], conditions)
+        self.assertEqual(retained['scope'], first['scope'])
+        self.assertNotIn('current_hardware_and_wiring_verified', retained['value']['hardware_precondition'])
+        self.assertNotIn('native_execution_verified', retained['value'])
+        self.assertIn('source_materials', sidecar['private_metadata'])
+        self.assertEqual(receipt['withheld_facts'], 0)
+        self.assertEqual(restore_runtime_research(runtime, sidecar), original)
+
+    def test_unresolved_relation_and_dependency_stay_private_without_losing_negatives(self):
+        relation = fact('relation', dimension='effects.bound_relation',
+                        value={'behavior': 'range_copy', 'full_source_relation_complete': False,
+                               'unresolved_items': ['destination_span']})
+        dependent = fact('dependent', dimension='effects.bound_relation', depends_on=['relation'],
+                         value={'output': 'D0', 'known': True})
+        unestablished = fact('unestablished', dimension='parameters.1.range',
+                             value={'minimum': 0, 'maximum': 10,
+                                    'operand_range_established': False})
+        negative = fact('known-negative', dimension='execution.outcome',
+                        value={'available': False, 'disabled_ENO': 'undefined',
+                               'OFF_error_code': 4100, 'negative_range': [-1, -1]},
+                        conditions=[{'context': 'enabled', 'equals': False}],
+                        scope={'models': ['FX5U'], 'forms': ['PWM'], 'languages': ['ladder']})
+        original = entry([relation, dependent, unestablished, negative], call_available=False,
+                         core_unresolved_aspects=['relation_source_incomplete'])
+        runtime, sidecar, receipt = project_runtime_owner(original)
+        self.assertEqual([f['id'] for f in runtime['facts']], ['known-negative', 'unestablished'])
+        self.assertFalse(runtime['call_available'])
+        self.assertFalse(runtime['facts'][0]['value']['available'])
+        self.assertEqual(runtime['facts'][0]['value']['disabled_ENO'], 'undefined')
+        self.assertEqual(runtime['facts'][0]['value']['OFF_error_code'], 4100)
+        self.assertEqual(runtime['facts'][0]['value']['negative_range'], [-1, -1])
+        self.assertEqual(runtime['facts'][0]['conditions'], negative['conditions'])
+        self.assertNotIn('operand_range_established', runtime['facts'][1]['value'])
+        self.assertEqual({item['fact']['id'] for item in sidecar['private_facts']},
+                         {'relation', 'dependent'})
+        self.assertTrue(any('depends_on_private_fact' in item['reasons']
+                            for item in sidecar['private_facts']))
+        self.assertEqual({item['fact_id'] for item in receipt['admission_blockers']
+                          if item['fact_id'] is not None},
+                         {'relation', 'dependent'})
+        self.assertEqual(restore_runtime_research(runtime, sidecar), original)
+
+    def test_documented_hardware_requirements_keep_real_context_limitations(self):
+        target_consistency = fact(
+            'target-consistency', dimension='constraints.documented_requirements',
+            value={'predicate': {'op': 'eq', 'field': 'selected_cpu_shared_memory_target',
+                                 'value': True},
+                   'required_context': [{'field': 'selected_cpu_shared_memory_target',
+                                         'type': 'BOOL'}],
+                   'selection_domain_not_module_existence_proof': True,
+                   'unresolved_items': ['target_type_when_context_or_n1_unknown']},
+            conditions=[{'context': 'project_mode', 'equals': 'native_ladder_instruction'}],
+            scope={'models': ['Q03UDV'], 'forms': ['DFRO'], 'languages': ['ladder']})
+        hardware_requirement = fact(
+            'hardware-requirement', dimension='constraints.documented_requirements',
+            value={'predicate': {'op': 'eq', 'field': 'selected_target_module_and_memory_configuration_valid',
+                                 'value': True},
+                   'required_context': [
+                       {'field': 'selected_target_module_and_memory_configuration_valid', 'type': 'BOOL'},
+                       {'field': 'selected_cpu_shared_memory_target', 'type': 'BOOL'}],
+                   'actual_module_and_memory_configuration_verified': False,
+                   'branch_selection_is_not_hardware_validation': True,
+                   'unresolved_items': ['actual_module_presence_and_configuration',
+                                        'physical_module_or_CPU_memory_range']},
+            conditions=[{'context': 'project_mode', 'equals': 'structured_ladder_block'}],
+            scope={'models': ['Q03UDV'], 'forms': ['DFRO'],
+                   'languages': ['st', 'fbd', 'ladder']})
+        incomplete_relation = fact(
+            'incomplete-requirement', dimension='constraints.documented_requirements',
+            value={**copy.deepcopy(hardware_requirement['value']),
+                   'full_source_relation_complete': False})
+        dependent = fact('depends-on-incomplete-requirement',
+                         depends_on=['incomplete-requirement'])
+        original = entry([target_consistency, hardware_requirement, incomplete_relation, dependent],
+                         opcode='DFRO', target_model='Q03UDV', call_available=False)
+        before = copy.deepcopy(original)
+
+        runtime, sidecar, receipt = project_runtime_owner(original)
+
+        retained = {item['id']: item for item in runtime['facts']}
+        self.assertEqual(set(retained), {'target-consistency', 'hardware-requirement'})
+        self.assertEqual(retained['target-consistency']['value']['unresolved_items'],
+                         ['target_type_when_context_or_n1_unknown'])
+        self.assertEqual(retained['hardware-requirement']['value']['unresolved_items'],
+                         ['actual_module_presence_and_configuration',
+                          'physical_module_or_CPU_memory_range'])
+        self.assertNotIn('actual_module_and_memory_configuration_verified',
+                         retained['hardware-requirement']['value'])
+        self.assertEqual(retained['hardware-requirement']['value']['required_context'],
+                         hardware_requirement['value']['required_context'])
+        self.assertEqual(retained['target-consistency']['conditions'],
+                         target_consistency['conditions'])
+        self.assertEqual(retained['hardware-requirement']['scope'],
+                         hardware_requirement['scope'])
+        self.assertEqual({item['fact']['id'] for item in sidecar['private_facts']},
+                         {'incomplete-requirement', 'depends-on-incomplete-requirement'})
+        self.assertEqual({item['fact_id'] for item in receipt['admission_blockers']},
+                         {'incomplete-requirement', 'depends-on-incomplete-requirement'})
+        self.assertEqual(original, before)
+        self.assertEqual(restore_runtime_research(runtime, sidecar), original)
+
+    def test_partial_positioning_path_keeps_known_limits_without_certifying_hardware(self):
+        signature = fact(
+            'st-signature', dimension='parameters.st_signature',
+            value={'call_kind': 'statement', 'parameters': ['EN', 's1', 's2', 'd1', 'd2'],
+                   'available': True},
+            scope={'models': ['FX3U'], 'forms': ['DDRVI'], 'languages': ['st']})
+        path_value = {
+            'kind': 'structured_positioning_output_path',
+            'representation': 'st_function_call',
+            'bindings': {
+                'pulse_output': {'kind': 'parameter', 'name': 'd1'},
+                'direction_signal': {'kind': 'parameter', 'name': 'd2'},
+                'frequency': {'kind': 'parameter', 'name': 's2'},
+            },
+            'path_selection_required': True,
+            'full_source_relation_complete': False,
+            'executor_capability': 'not_established',
+            'hardware_validation_complete': False,
+            'current_hardware_profile_verified': False,
+            'current_physical_direction_routing_verified': False,
+            'paths': [
+                {'path': 'basic_unit_transistor_output', 'output_type': 'transistor',
+                 'frequency_Hz': {'minimum': 10, 'maximum': 100000},
+                 'pulse_output_devices': ['Y0', 'Y1', 'Y2'],
+                 'direction_signal_output_requirement': 'use_transistor_output'},
+                {'path': 'fx3u_high_speed_output_special_adapter',
+                 'output_type': 'differential_line_driver',
+                 'frequency_Hz': {'minimum': 10, 'maximum': 200000},
+                 'pulse_output_devices': ['Y0', 'Y1', 'Y2', 'Y3'],
+                 'direction_output_pairs': {'Y0': 'Y4', 'Y1': 'Y5', 'Y2': 'Y6', 'Y3': 'Y7'},
+                 'adapter_count_required': {'Y0': 1, 'Y1': 1, 'Y2': 2, 'Y3': 2},
+                 'required_when_basic_unit_output_type': ['relay', 'triac']},
+            ],
+        }
+        path_requirement = fact(
+            'positioning-path', dimension='constraints.documented_requirements',
+            value=copy.deepcopy(path_value), depends_on=['st-signature'],
+            conditions=[{'context': 'cpu_version', 'minimum_by_model': {'FX3U': '2.20'}}],
+            scope={'models': ['FX3U'], 'forms': ['DDRVI'], 'languages': ['st']})
+        incomplete = fact(
+            'incomplete-path-research', dimension='constraints.documented_requirements',
+            value={**copy.deepcopy(path_value), 'unresolved_items': ['unreviewed_relation']})
+        unbound = fact(
+            'unbound-positioning-path', dimension='constraints.documented_requirements',
+            value=copy.deepcopy(path_value),
+            scope={'models': ['FX3U'], 'forms': ['DDRVI'], 'languages': ['st']})
+        dependent = fact('depends-on-incomplete-path', depends_on=['incomplete-path-research'])
+        negative = fact(
+            'off-state', dimension='execution.disabled_state',
+            value={'available': False, 'when': 'drive_condition_OFF_during_positioning',
+                   'operation_stop': 'decelerates_then_stops'})
+        original = entry([signature, path_requirement, incomplete, unbound, dependent, negative],
+                         opcode='DDRVI', target_model='FX3U', call_available=False)
+        before = copy.deepcopy(original)
+
+        runtime, sidecar, receipt = project_runtime_owner(original)
+
+        retained = {item['id']: item for item in runtime['facts']}
+        self.assertIn('positioning-path', retained)
+        self.assertIn('st-signature', retained)
+        self.assertEqual(retained['positioning-path']['depends_on'], ['st-signature'])
+        projected_path = retained['positioning-path']
+        expected_path_value = copy.deepcopy(path_value)
+        for key in ('full_source_relation_complete', 'current_hardware_profile_verified',
+                    'current_physical_direction_routing_verified'):
+            expected_path_value.pop(key)
+        self.assertEqual(projected_path['value'], expected_path_value)
+        self.assertEqual(projected_path['conditions'], path_requirement['conditions'])
+        self.assertEqual(projected_path['scope'], path_requirement['scope'])
+        self.assertFalse(projected_path['value']['hardware_validation_complete'])
+        self.assertEqual(projected_path['value']['executor_capability'], 'not_established')
+        self.assertFalse(retained['off-state']['value']['available'])
+        self.assertEqual(retained['off-state']['value']['operation_stop'], 'decelerates_then_stops')
+        self.assertNotIn('incomplete-path-research', retained)
+        self.assertNotIn('depends-on-incomplete-path', retained)
+        private_ids = {item['fact']['id'] for item in sidecar['private_facts']}
+        self.assertEqual(private_ids, {'incomplete-path-research', 'unbound-positioning-path',
+                                       'depends-on-incomplete-path'})
+        self.assertEqual(original, before)
+        self.assertEqual(restore_runtime_research(runtime, sidecar), original)
+        self.assertNotIn('positioning-path', {item['fact_id'] for item in receipt['admission_blockers']})
+
+    def test_core_execution_not_run_marker_does_not_negate_a_source_verified_rule(self):
+        rule = fact('manual-effect', dimension='effects.documented_processing',
+                    value={'behavior': 'source_documented_relation',
+                           'core_execution_established': False,
+                           'hardware_precondition': {
+                               'relay_required': True,
+                               'current_hardware_and_wiring_verified': False}},
+                    conditions=[{'context': 'project_mode', 'equals': 'structured'}])
+        original = entry([rule], call_available=False)
+
+        runtime, sidecar, receipt = project_runtime_owner(original)
+
+        self.assertEqual([item['id'] for item in runtime['facts']], ['manual-effect'])
+        retained = runtime['facts'][0]
+        self.assertEqual(retained['status'], 'source_verified')
+        self.assertEqual(retained['verification'], 'source_checked')
+        self.assertEqual(retained['conditions'], rule['conditions'])
+        self.assertTrue(retained['value']['hardware_precondition']['relay_required'])
+        self.assertNotIn('core_execution_established', retained['value'])
+        self.assertNotIn('current_hardware_and_wiring_verified',
+                         retained['value']['hardware_precondition'])
+        self.assertEqual(receipt['withheld_facts'], 0)
+        self.assertEqual(restore_runtime_research(runtime, sidecar), original)
+
+    def test_strict_owner_quarantines_unreviewed_facts_and_dependencies(self):
+        declared = fact('declared', status='declared_unverified')
+        not_performed = fact('not-performed', verification='not_performed')
+        candidate = fact('candidate', status='candidate_evidence')
+        capability = fact('capability', dimension='execution.source_qualifications',
+                          value={'capability': 'not_established'})
+        dependent = fact('dependent-candidate', depends_on=['candidate'])
+        known_negative = fact('negative', dimension='execution.outcome',
+                              value={'available': False, 'disabled_ENO': 'undefined',
+                                     'OFF_error_code': 4100})
+        known_typed_operands = fact('typed', dimension='parameters.typed_operands',
+                                    value={'operands': [{'name': 'EN', 'type': 'BOOL'}],
+                                           'executor_capability': 'not_established'})
+        original = entry([declared, not_performed, candidate, capability, dependent,
+                          known_negative, known_typed_operands], call_available=False)
+        before = copy.deepcopy(original)
+
+        runtime, sidecar, receipt = project_runtime_owner(original)
+
+        self.assertEqual(original, before)
+        self.assertEqual({item['id'] for item in runtime['facts']}, {'negative', 'typed'})
+        negative = next(item for item in runtime['facts'] if item['id'] == 'negative')
+        self.assertFalse(negative['value']['available'])
+        self.assertEqual(negative['value']['disabled_ENO'], 'undefined')
+        self.assertEqual(negative['value']['OFF_error_code'], 4100)
+        self.assertEqual({item['fact']['id'] for item in sidecar['private_facts']},
+                         {'declared', 'not-performed', 'candidate', 'capability',
+                          'dependent-candidate'})
+        reasons = {item['fact']['id']: set(item['reasons']) for item in sidecar['private_facts']}
+        self.assertIn('status_not_source_verified', reasons['declared'])
+        self.assertIn('verification_not_performed', reasons['not-performed'])
+        self.assertIn('candidate_evidence', reasons['candidate'])
+        self.assertIn('capability_not_established', reasons['capability'])
+        self.assertIn('depends_on_private_fact', reasons['dependent-candidate'])
+        self.assertFalse(runtime['call_available'])
+        self.assertEqual(restore_runtime_research(runtime, sidecar), original)
+        self.assertEqual({item['fact_id'] for item in receipt['admission_blockers']},
+                         {'declared', 'not-performed', 'candidate', 'capability',
+                          'dependent-candidate'})
+
+    def test_whole_payload_api_explicitly_keeps_legacy_status_compatibility(self):
+        unreviewed = fact('candidate', status='candidate_evidence')
+        capability = fact('capability', value={'capability': 'not_established'})
+
+        runtime, private, receipt = project_runtime_definitions(payload([entry([unreviewed, capability])]))
+
+        self.assertEqual(receipt['publication_policy'], 'compatibility_semantic_deduplication-v1')
+        self.assertEqual(private['publication_policy'], 'compatibility_semantic_deduplication-v1')
+        self.assertEqual({item['id'] for item in runtime['entries'][0]['facts']},
+                         {'candidate', 'capability'})
+        self.assertEqual(restore_runtime_research(runtime['entries'][0], private['entries'][0]),
+                         entry([unreviewed, capability]))
+
+    def test_restore_rejects_sidecar_for_another_owner(self):
+        runtime, sidecar, _ = project_runtime_owner(entry([fact('a')]))
+        altered = copy.deepcopy(runtime)
+        altered['target_model'] = 'FX5UC'
+        with self.assertRaises(ValueError):
+            restore_runtime_research(altered, sidecar)
 
 
     def test_numeric_checker_outcomes_preserve_fail_unknown_not_applicable(self):

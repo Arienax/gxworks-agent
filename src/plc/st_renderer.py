@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Deterministic GX Works2 Structured Text rendering from canonical PLC IR.
 
 The renderer follows the FXCPU Structured Programming Manual convention that

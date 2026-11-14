@@ -65,7 +65,8 @@ def resolve_form_value(value, form):
                 result[key] = resolved
         return result
     if isinstance(value, list):
-        return [resolve_form_value(child, form) for child in value]
+        return [resolved for child in value
+                if (resolved := resolve_form_value(child, form)) is not _MISSING]
     return copy.deepcopy(value)
 
 
@@ -308,14 +309,12 @@ def _groups(facts, project, *, scope, parameter_bindings=None, relation_bindings
             context.pop('selection_applicability')
         if context.get('scope', {}).get('forms'):
             context['forms'] = context['scope'].pop('forms')
-        if context.get('scope', {}).get('models') == (scope or {}).get('models'):
-            context['scope'].pop('models')
+        if (fact_scope := context.get('scope')) and fact_scope.get('models') == (scope or {}).get('models'):
+            fact_scope.pop('models', None)
         if language and language in context.get('scope', {}).get('languages', []) and fact.get('selection_applicability') != 'not_applicable':
             context['scope'].pop('languages')
-        if not context.get('scope'):
+        if not context.get('scope') or context.get('scope') == scope:
             context.pop('scope', None)
-        if context.get('scope') == scope:
-            context.pop('scope')
         if binding and fact.get('id') not in referenced and not fact.get('depends_on'):
             table = next(table for table in tables if table['id'] == binding)
             table_context = {key: table[key] for key in
@@ -422,7 +421,8 @@ def _parameter_tables(facts, project):
             facets.append((int(match[1]), match[2], fact))
     enrichment_fields = {'purpose', 'operation_value_type', 'write_layout', 'result_value_type', 'word_device_layout',
                          'semantic_role', 'semantic_access', 'value_semantics', 'occupied_bits_operand', 'occupied_bit_count', 'range', 'unit', 'encoding', 'components', 'condition', 'numeric_input_gate'}
-    signatures = sorted(facts, key=lambda f: (f.get('dimension') != 'parameters.typed_operands',
+    signatures = sorted((f for f in facts if isinstance(f.get('value'), Mapping)),
+        key=lambda f: (f.get('dimension') != 'parameters.typed_operands',
         -sum(sum(key in p for key in enrichment_fields)
              for p in (f.get('value', {}).get('operands') or []) if isinstance(p, Mapping)),
         -sum(len(p['purpose'].get('uses', [])) for p in (f.get('value', {}).get('operands') or [])
@@ -799,10 +799,10 @@ def _share_semantic_values(unit):
     return unit
 
 
-def merge_instruction_units(units):
+def merge_instruction_units(units, *, origins=None):
     """Deduplicate modules and families for a complete response/message."""
     output, modules, families = [], {}, {}
-    for original in units:
+    for index, original in enumerate(units):
         if not isinstance(original, Mapping):
             output.append(original)
             continue
@@ -812,6 +812,8 @@ def merge_instruction_units(units):
             continue
         for module in unit.pop('knowledge_modules', []):
             modules.setdefault(_key(module), module)
+        if origins is not None:
+            origins[id(unit)] = [index]
         value = unit.get('value') or {}
         if unit.get('kind') != 'instruction' or not isinstance(value, Mapping) or 'family' not in value:
             output.append(unit)
@@ -834,6 +836,8 @@ def merge_instruction_units(units):
             # not different D/P forms. Keep both instead of choosing a status.
             output.append(unit)
             continue
+        if origins is not None:
+            origins[id(prior)].extend(origins.pop(id(unit)))
         previous['forms'] = _unique([*previous.get('forms', []), *value.get('forms', [])])
         forms = list(dict.fromkeys(form['opcode'] for form in previous['forms']))
         for key in ('additional_knowledge', 'parameter_tables'):
@@ -866,7 +870,12 @@ def merge_instruction_units(units):
         targets = prior.setdefault('targets', [prior['target']])
         if unit.get('target') not in targets:
             targets.append(unit.get('target'))
-    return [*modules.values(), *(_share_semantic_values(unit) for unit in output)]
+    merged = [_share_semantic_values(unit) for unit in output]
+    if origins is not None:
+        lineage = {id(result): origins.get(id(unit), []) for unit, result in zip(output, merged)}
+        origins.clear()
+        origins.update(lineage)
+    return [*modules.values(), *merged]
 
 
 def model_instruction_view(unit):
@@ -939,10 +948,15 @@ def model_instruction_view(unit):
     parameters = [parameter for table in tables for parameter in table.get('parameters', [])]
     complete_table = bool(parameters) and all(parameter.get('purpose') and parameter.get('type') for parameter in parameters)
     def selected_group(group):
-        if any(str(condition.get('context', '')).endswith(('_not_resolved', '_unresolved')) for condition in group.get('conditions', [])):
+        conditions = group.get('conditions') or []
+        if isinstance(conditions, Mapping):
+            conditions = ([conditions] if 'context' in conditions else
+                          [{'context': key, 'equals': item} for key, item in conditions.items()])
+        conditions = [condition for condition in conditions if isinstance(condition, Mapping)]
+        if any(str(condition.get('context', '')).endswith(('_not_resolved', '_unresolved')) for condition in conditions):
             return False
         if mode and any(condition.get('context') == 'project_mode' and condition.get('equals') not in (None, mode)
-                        for condition in group.get('conditions', [])):
+                        for condition in conditions):
             return False
         return not group.get('scope', {}).get('languages') or bool(set(languages).intersection(group['scope']['languages']))
     has_outputs = any(rule.get('outputs') for group in value.get('additional_knowledge', [])

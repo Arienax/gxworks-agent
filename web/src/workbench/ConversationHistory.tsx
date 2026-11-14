@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import {
   ArrowLeft,
@@ -20,6 +20,7 @@ import { GenerationResult } from "../features/GenerationResult";
 import { JobFailure } from "../features/JobFailure";
 import { JobProgress } from "../features/JobProgress";
 import { AcceptedMessage } from "../workbench/ResultViews";
+import { jobKindLabel } from "./jobLabels";
 import type { WorkbenchModel } from "./useWorkbenchController";
 
 export const conversationHistoryFields = [
@@ -49,6 +50,7 @@ export const conversationHistoryFields = [
   "setDirectAnswers",
   "setDrafts",
   "setIgnoredClarification",
+  "setJobId",
   "setModal",
   "setPanel",
   "setReviewRequested",
@@ -90,6 +92,7 @@ export function ConversationHistory(props: Props) {
     setDirectAnswers,
     setDrafts,
     setIgnoredClarification,
+    setJobId,
     setModal,
     setPanel,
     setReviewRequested,
@@ -107,8 +110,22 @@ export function ConversationHistory(props: Props) {
 
   return (
     <div className="conversation">
-      {/* Keyed by task so switching fades the transcript in once, while
-          streaming updates inside a task never re-run the animation. */}
+      {jobs.length > 0 && (
+        <details className="project-job-history">
+          <summary>{t("工程任务记录")} · {jobs.length}</summary>
+          <ul>
+            {jobs.map(job => (
+              <li key={job.id}>
+                <button type="button" className="text-button" aria-current={currentJob?.id === job.id ? "true" : undefined}
+                  onClick={() => setJobId(job.id)}>
+                  {t(jobKindLabel(job.kind))}
+                  {job.title && <span className="muted"> · {job.title}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
       <div className="conversation-inner" key={currentJob?.id || "empty"}>
       {task === "create" &&
         loaded &&
@@ -238,9 +255,12 @@ export function ConversationHistory(props: Props) {
               disabled={!canWrite}
               onClick={() => {
                 setIgnoredClarification(currentJob.id);
-                setTask("create");
-                setWorkflow("direct");
-                setDrafts((before) => ({ ...before, create: "" }));
+                if (currentJob.kind === "direct_generation") {
+                  setTask("create");
+                  setWorkflow("direct");
+                }
+                const purpose = currentJob.kind === "direct_generation" ? "create" : task;
+                setDrafts((before) => ({ ...before, [purpose]: "" }));
               }}
             >
               {t("开始新需求")}
@@ -255,6 +275,7 @@ export function ConversationHistory(props: Props) {
           {!!analysisOutput?.spec_draft && (
             <div>
               <Button
+                variant="primary"
                 disabled={
                   !canWrite ||
                   (analysisOutput.spec_base_hash ?? null) !==

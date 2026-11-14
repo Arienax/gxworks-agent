@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Deterministic artifacts shared by PLC Core and debug workflows.
 
 No models, application orchestration, UI, or external execution is loaded here.
@@ -18,6 +21,7 @@ def render_candidate_artifacts(
     *,
     validate_ladder: bool = True,
     include_st_translation: bool = False,
+    program_size=None,
 ) -> Dict[str, str]:
     """Render user-facing/backend artifacts from a consistent IR.
 
@@ -50,7 +54,7 @@ def render_candidate_artifacts(
         st_path.write_text(st_text, encoding="utf-8")
     drawer = AdvancedSVGLadder()
     svg_path.write_text(drawer.generate_ladder(ladder_text), encoding="utf-8")
-    if not generate_gx_works2_csv(program, str(program_csv), str(comment_csv)):
+    if not generate_gx_works2_csv(program, str(program_csv), str(comment_csv), program_size=program_size):
         raise DebugLoopError("GX Works2 CSV 渲染失败。")
     if not program_csv.is_file() or not comment_csv.is_file():
         raise DebugLoopError("GX Works2 程序或注释 CSV 没有完整生成。")

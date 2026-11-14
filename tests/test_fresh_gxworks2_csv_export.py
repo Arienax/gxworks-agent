@@ -119,7 +119,7 @@ def test_saved_version_can_reexport_gxworks2_csv_without_model_or_mutation(tmp_p
     pytest.importorskip("httpx", reason="Web integration requires requirements-web.txt")
     from fastapi.testclient import TestClient
     from application.workbench import WorkbenchService
-    from tests.test_web_api import ORIGIN, _app, _files, _legacy_workspace, _login
+    from tests.test_web_api import ORIGIN, _app, _files, _legacy_workspace
     workspace = tmp_path / "workspace"
     _, project_id, version_id, _ = _legacy_workspace(workspace)
     before = _files(workspace)
@@ -131,7 +131,6 @@ def test_saved_version_can_reexport_gxworks2_csv_without_model_or_mutation(tmp_p
     )
 
     with TestClient(_app(workspace, tmp_path / "state", service=service), base_url=ORIGIN) as client:
-        _login(client)
         response = client.get(
             f"/api/projects/{project_id}/versions/{version_id}/exports/gxworks2-csv"
         )

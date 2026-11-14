@@ -270,3 +270,15 @@ class LazyDefinitionOwnersTests(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
+
+def test_legacy_bibliography_is_not_misread_as_a_runtime_source_pool(tmp_path):
+    raw=fixture();raw['source_catalog']=[{'manual_id':'synthetic'}]
+    path=tmp_path/'legacy.json';path.write_text(json.dumps(raw),encoding='utf-8')
+    registry=InstructionRegistry();registry.load_instruction_definitions(path)
+    assert registry.definition_entry('KNOWN',cpu='FX5U')['facts']==raw['entries'][0]['facts']
+    raw['source_catalog']={'undeclared-pool':{'manual_id':'synthetic'}}
+    path.write_text(json.dumps(raw),encoding='utf-8')
+    import pytest
+    with pytest.raises(ValueError,match='serialization'):
+        registry.load_instruction_definitions(path)

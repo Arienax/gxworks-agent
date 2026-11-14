@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Separate current engineering intent from immutable decision/evidence receipts.
 
 ConfirmedSpec v4 is a positive projection, not an archive. Receipt v1 is audit
@@ -53,7 +56,8 @@ def proposal_snapshot(approach):
     approach = approach if isinstance(approach, Mapping) else {}
     return {key: copy.deepcopy(approach[key]) for key in (
         "approach_id", "name", "description", "generation_guide", "implementation_semantics",
-        "explicit_user_constraints", "generation_contract", "implementation_preferences", "construction_plan",
+        "instruction_choices", "output_logic", "decision_basis", "explicit_user_constraints", "generation_contract",
+        "implementation_preferences", "construction_plan",
     ) if key in approach}
 
 
@@ -126,7 +130,18 @@ def confirmed_spec_fields(spec):
 
 def build_confirmed_spec(spec):
     from plc.specification.confirmed import canonicalize_confirmed_spec
-    return confirmed_spec_fields(canonicalize_confirmed_spec(spec))
+    canonical = canonicalize_confirmed_spec(spec)
+    selected = canonical.get("selected_approach") or {}
+    if "decision_basis" in selected:
+        from plc.specification.decision_basis import DecisionSources, review_decision_basis
+        sources = DecisionSources(confirmed_spec=canonical)
+        # A new answer or request may invalidate an earlier proposal's reference. Keep the
+        # original proposal in its receipt and refresh only the selected copy.
+        selected["decision_basis"], _ = review_decision_basis(
+            selected["decision_basis"], path="selected_approach.decision_basis",
+            reference_matches=lambda ref: ref["source"] == "model_fact" or sources.matches(ref),
+        )
+    return confirmed_spec_fields(canonical)
 
 
 def _sealed_receipt(body):
@@ -266,6 +281,10 @@ def mark_request_absorbed(spec, request_id, field_paths, *, superseded_by=None):
 SOURCE_PRECEDENCE = """# Engineering source boundaries
 已确认的结构化字段（I/O、参数、用户备注、implementation_semantics、explicit_user_constraints 及其 Core 投影 generation_contract）是当前决定；explicit_user_constraints 来自 Agent A 非权威 explicit_constraint_claims 经 Core 的 exact evidence、PLC lexical identity 与 global scope 校验，Core 不从自然语言关键词重建约束；instruction_instances 保存完整 opcode+operands，不得退化成仅 opcode。原始请求按时间顺序保留，后续明确修订优先，已确认字段覆盖旧地址/旧参数。
 intent_context.requests 是用户原话，不是模型概述；selected_approach 的名称、说明、generation_guide 是被选中的模型实现方案，必须保留其工程含义，不得因 required_opcodes 为空而忽略方案。
+decision_basis 记录选型前提和适用范围。按当前用户原话、明确答复、确认字段和本型号资料核对方案说明。inferred、unknown 和 conditional 条目继续作为实现推导或适用条件，确认方案不会把它们变成工艺要求。
+按已选方案的 instruction_choices 实现各项职责，保留选定的指令和系统软元件，并用输出协议的等价形式表达。只有已确认条件或本型号事实明确冲突时才调整冲突部分。资料暂缺时保留选定实现。将已确认的物理时长按选定时基换算为计数，确认值优先于方案草稿里的数值。
+output_logic 是该方案已确定的输出实现，与 generation_guide 一并实施，不能只沿用追踪或状态结构却重新选择输出计算。未变更时保留触发、更新顺序、合并、释放和恢复；其中未确认的工艺前提仍保持未知，不因确认方案升级为用户要求。
+提交前按实际梯级核对推进、输出计算和回收三项。只保留同名指令却改变职责、以逐项处理替换已选的共享状态、或改变扫描更新次序，都可能影响已确认的取舍。收到 selected_implementation_review 时核对指出的职责和实际指令；发现偏离时在当前候选上局部修正，必要的等价替代说明所保留的行为与开销。普通局部写法可按目标型号调整。
 implementation_preferences 保留模型提出的实现选项（enforce=false），不是用户原话，也不是额外的必用/禁用条件。
 generation_contract.unverified_constraints 保留未机检的方案语义；仍需结合原始要求实现，不代表验证通过，也不转成新的必用/禁用条件。
 硬生成约束仅来自已有结构化 generation_contract；不要从方案说明、检索命中或仅出现的指令名推导额外必用/禁用约束。

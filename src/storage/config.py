@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Configuration and model-profile persistence."""
 import os
@@ -10,6 +10,8 @@ import tempfile
 
 from storage.credentials import (
     CREDENTIAL_TARGET,
+    LEGACY_PROFILE_CREDENTIAL_PREFIX,
+    PROFILE_CREDENTIAL_PREFIX,
     credential_target_for_profile,
     read_api_key,
     write_api_key,
@@ -33,10 +35,16 @@ def get_config_path():
 
 def _legacy_config_paths():
     from pathlib import Path
+    from storage.user_data import RECEIPT, legacy_user_data_dir
+
+    previous = legacy_user_data_dir()
+    paths = [previous / "config.json"] if previous is not None else []
+    if previous is not None and (previous / RECEIPT).is_file():
+        return paths
     if getattr(sys, "frozen", False):
-        return [Path(sys.executable).parent / "config.json"]
+        return paths + [Path(sys.executable).parent / "config.json"]
     source = Path(__file__).resolve().parents[1]
-    return [source / "config.json", source.parent / "config.json"]
+    return paths + [source / "config.json", source.parent / "config.json"]
 
 
 def migrate_user_settings(*, create_default=False):
@@ -295,6 +303,21 @@ def _profile_from_legacy(config):
     return profile_id, [_normalize_profile(item) for item in profiles]
 
 
+def _migrate_profile_credential_targets(config):
+    """Copy keys before updating explicitly saved legacy profile targets."""
+    for profile in config.get("modelProfiles", ()):
+        target = profile.get("credentialTarget", "")
+        if not target.startswith(LEGACY_PROFILE_CREDENTIAL_PREFIX):
+            continue
+        current = PROFILE_CREDENTIAL_PREFIX + target[len(LEGACY_PROFILE_CREDENTIAL_PREFIX):]
+        if not read_api_key(current):
+            key = read_api_key(target)
+            if key:
+                write_api_key(key, current)
+        profile["credentialTarget"] = current
+    return config
+
+
 def _migrate_configuration(config_path, config):
     """Atomically migrate legacy API settings and copy, never delete, its key."""
 
@@ -304,6 +327,7 @@ def _migrate_configuration(config_path, config):
         key in config for key in ("api_key", "base_url", "default_model", "request_template")
     )
     _normalize_profile_selection(config)
+    _migrate_profile_credential_targets(config)
     legacy_key = config.get("api_key", "")
     # Once migrated, a global old key must not repopulate a deliberately
     # cleared/deleted profile or leak into a newly selected provider.
@@ -335,12 +359,13 @@ def _migrate_configuration(config_path, config):
 
 def load_full_config():
     """Load and, when necessary, atomically migrate the external config."""
+    from storage.user_data import settings_lock
+
     config_path = ensure_config_file()
-
-    with open(config_path, "r", encoding="utf-8-sig") as f:
-        config = json.load(f)
-
-    return _migrate_configuration(config_path, config)
+    with settings_lock(config_path):
+        with open(config_path, "r", encoding="utf-8-sig") as f:
+            config = json.load(f)
+        return _migrate_configuration(config_path, config)
 
 
 def save_config(config: dict):
@@ -360,6 +385,7 @@ def save_config(config: dict):
         raise ValueError("activeModelProfileId 未指向有效的模型 Profile。")
     sanitized["activeModelProfileId"] = active
     migrate_user_settings(create_default=True)
+    _migrate_profile_credential_targets(sanitized)
     _write_json_atomic(config_path, sanitized)
 
 

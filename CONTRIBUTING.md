@@ -157,6 +157,6 @@ Do not describe an implementation as complete simply because an AI assistant pro
 
 ## Security, Licensing, and Safety
 
-All contributions must comply with [Apache License 2.0](LICENSE), [LICENSE-SCOPE.md](LICENSE-SCOPE.md), [NOTICE](NOTICE), and applicable [third-party notices](THIRD_PARTY_NOTICES.md). Submit only materials you have the legal right to contribute. Do not commit proprietary vendor manuals, unauthorized vendor binaries, confidential customer PLC projects, secrets, or private links. Use minimal sanitized reproductions when reporting defects.
+All contributions must comply with [GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE), [LICENSE-SCOPE.md](LICENSE-SCOPE.md), [NOTICE](NOTICE), and applicable [third-party notices](THIRD_PARTY_NOTICES.md). Submit only materials you have the legal right to contribute. Do not commit proprietary vendor manuals, unauthorized vendor binaries, confidential customer PLC projects, secrets, or private links. Use minimal sanitized reproductions when reporting defects.
 
 GXWorks Agent does not replace the engineering review, safeguards, and commissioning procedures required for industrial machinery. Changes involving PLC outputs, interlocks, motion, or equipment control must not be represented as safe for deployment solely because they passed software-level checks.

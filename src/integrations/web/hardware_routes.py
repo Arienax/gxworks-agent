@@ -1,11 +1,9 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
-"""Operator-only physical read routes; never registered in the Agent runtime."""
-import hashlib
+"""Workbench physical read routes with version-bound authorization."""
 from typing import Literal
 
-from fastapi import Request
 from fastapi.responses import JSONResponse
 from pydantic import Field
 
@@ -41,11 +39,6 @@ def register(app, service):
             bound.hardware = value
         return value
 
-    def owner(request):
-        if getattr(request.state, "role", None) != "operator" or not app.state.security.session(request):
-            raise PermissionError("Hardware access requires an operator session")
-        return hashlib.sha256(request.cookies["gx_operator"].encode()).hexdigest()
-
     @app.exception_handler(HardwareError)
     async def hardware_error(_request, error):
         return JSONResponse({"error": {"code": "hardware_read_rejected", "message": public(str(error))}}, status_code=400)
@@ -53,21 +46,21 @@ def register(app, service):
     base = "/api/projects/{project_id}/versions/{version_id}/hardware"
 
     @app.get(base, response_model=HardwareState, response_model_exclude_unset=True)
-    def status(project_id: str, version_id: str, request: Request):
-        return hardware().list(project_id, version_id, owner(request))
+    def status(project_id: str, version_id: str):
+        return hardware().list(project_id, version_id)
 
     @app.post(base + "/sessions", status_code=201, response_model=HardwareSession, response_model_exclude_unset=True)
-    def propose(project_id: str, version_id: str, command: HardwareProposal, request: Request):
-        return hardware().propose(project_id, version_id, owner(request), command.model_dump())
+    def propose(project_id: str, version_id: str, command: HardwareProposal):
+        return hardware().propose(project_id, version_id, command.model_dump())
 
     @app.post(base + "/sessions/{session_id}/approve", response_model=HardwareSession, response_model_exclude_unset=True)
-    def approve(project_id: str, version_id: str, session_id: str, command: HardwareApproval, request: Request):
-        return hardware().approve(project_id, version_id, session_id, owner(request), command.model_dump())
+    def approve(project_id: str, version_id: str, session_id: str, command: HardwareApproval):
+        return hardware().approve(project_id, version_id, session_id, command.model_dump())
 
     @app.post(base + "/sessions/{session_id}/read", response_model=HardwareObservation, response_model_exclude_unset=True)
-    def read(project_id: str, version_id: str, session_id: str, command: HardwareRead, request: Request):
-        return hardware().read(project_id, version_id, session_id, owner(request), command.model_dump())
+    def read(project_id: str, version_id: str, session_id: str, command: HardwareRead):
+        return hardware().read(project_id, version_id, session_id, command.model_dump())
 
     @app.post(base + "/sessions/{session_id}/revoke", response_model=HardwareSession, response_model_exclude_unset=True)
-    def revoke(project_id: str, version_id: str, session_id: str, request: Request):
-        return hardware().revoke(project_id, version_id, session_id, owner(request))
+    def revoke(project_id: str, version_id: str, session_id: str):
+        return hardware().revoke(project_id, version_id, session_id)

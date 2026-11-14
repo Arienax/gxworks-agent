@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Haystack routing at the existing SQLite boundary, not a new agent stack.
 
 Routes are application-owned. Document text is never a Jinja template or a rule.
@@ -131,8 +134,13 @@ def source_sql(connection, schema, lanes=None, *, exclude_chunk_types=()):
     columns = table["columns"]
     expressions = [_quote_identifier(k) if k in columns else "''" for k in _SOURCE_PARTITION_FIELDS]
     expressions = [f"COALESCE({x}, '')" for x in expressions]
-    partitions = tuple(tuple(row) for row in connection.execute(
-        f"SELECT DISTINCT {', '.join(expressions)} FROM {_quote_identifier(table['name'])}").fetchall())
+    from knowledge.index_access import cached_value, cache_value
+    key = ('source_partitions', table['name'], tuple(expressions))
+    partitions = cached_value(connection, key)
+    if partitions is None:
+        partitions = tuple(tuple(row) for row in connection.execute(
+            f"SELECT DISTINCT {', '.join(expressions)} FROM {_quote_identifier(table['name'])}").fetchall())
+        cache_value(connection, key, partitions)
     accepted = (partitions if lanes is None
                 else _eligible_partitions(partitions, tuple(sorted(lanes))))
     excluded = {str(value).strip().casefold() for value in exclude_chunk_types or () if str(value).strip()}
@@ -170,7 +178,13 @@ def source_subquery(
         if requested is None or column is None:
             continue
         expression = f"COALESCE({_quote_identifier(column)}, '')"
-        partitions = connection.execute(f"SELECT DISTINCT {expression} FROM {_quote_identifier(table['name'])}")
+        from knowledge.index_access import cached_value, cache_value
+        key = ('scope_partitions', table['name'], column)
+        partitions = cached_value(connection, key)
+        if partitions is None:
+            partitions = tuple(tuple(row) for row in connection.execute(
+                f"SELECT DISTINCT {expression} FROM {_quote_identifier(table['name'])}"))
+            cache_value(connection, key, partitions)
         accepted = [row[0] for row in partitions if _scope_matches(row[0], requested)]
         if not accepted:
             predicate += " AND 0"

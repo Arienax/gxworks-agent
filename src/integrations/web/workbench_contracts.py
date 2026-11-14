@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Concrete workbench response resources, independent of engineering engines."""
 from __future__ import annotations
@@ -402,7 +402,6 @@ class HardwareSession(PublicResource):
     approved_at: str | None
     expires_at: float | None
     remaining_seconds: int
-    owned_by_current_operator: bool
     target: HardwareTarget
     project_id: str
     version_id: str

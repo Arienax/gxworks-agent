@@ -1,33 +1,50 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 export type ConversationLike = {
   id: string;
   kind: string;
-  title?: string | null;
   created_at?: string | null;
   project_id?: string | null;
+  conversation_id?: string | null;
 };
 
-/**
- * The row label for one conversation.
- *
- * The operator's own sentence is the title; a job that carries no text (an
- * inspection or an execution) falls back to the action it performed.
- *
- * @param job - job projection carrying the request text.
- * @param labelled - localizes one job kind, used only as the fallback.
- */
+/** Jobs arrive newest first. The latest job represents each conversation. */
+export function conversationRows<T extends ConversationLike>(jobs: readonly T[]): T[] {
+  const rows = new Map<string, T>();
+  for (const job of jobs) {
+    const id = job.conversation_id;
+    if (!id || rows.has(id)) continue;
+    rows.set(id, job);
+  }
+  return [...rows.values()];
+}
+
+type SidebarProject = { id: string; name: string; created_at?: string | null };
+
+/** Show saved projects until a conversation represents them in the sidebar. */
+export function workspaceRows<T extends ConversationLike>(jobs: readonly T[], projects: readonly SidebarProject[]) {
+  const projectIds = new Set(projects.map((project) => project.id));
+  const conversations = conversationRows(jobs.filter((job) => job.project_id && projectIds.has(job.project_id)));
+  const represented = new Set(conversations.map((job) => job.project_id));
+  const projectsWithoutConversations = projects
+    .filter((project) => !represented.has(project.id))
+    .map(({ id, name, created_at }) => ({ id, name, created_at, project_id: id }));
+  return [...projectsWithoutConversations, ...conversations]
+    .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+}
+
+/** Label each conversation with its project's saved name. */
 export function conversationTitle(
   job: ConversationLike,
+  projectNames: ReadonlyMap<string, string>,
   labelled: (kind: string) => string,
 ): string {
-  const title = (job.title || "").trim();
-  return title || labelled(job.kind);
+  return projectNames.get(job.project_id ?? "") || labelled(job.kind);
 }
 
 /** Keep the conversations whose title contains the query, ignoring case. */
-export function filterConversations<T extends ConversationLike>(
+export function filterConversations<T>(
   jobs: readonly T[],
   query: string,
   titleOf: (job: T) => string,
@@ -41,7 +58,7 @@ export function filterConversations<T extends ConversationLike>(
  * Group key for ordering by project: conversations stay together per project,
  * newest first inside each group, and projects keep their first-seen order.
  */
-export function orderByProject<T extends ConversationLike>(jobs: readonly T[]): T[] {
+export function orderByProject<T extends Pick<ConversationLike, "project_id" | "created_at">>(jobs: readonly T[]): T[] {
   const groups = new Map<string, T[]>();
   for (const job of jobs) {
     const key = String(job.project_id || "");

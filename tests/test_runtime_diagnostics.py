@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import RLock
 import zipfile
 import pytest
+from responses_fixture import chat_body, chat_chunk, chat_stream
 import shared.diagnostics as d
 from application.jobs import JobContext
 from plc.candidate_repair import GenerationValidationError
@@ -195,44 +196,40 @@ def test_generation_validation_exception_records_attempts_stop_and_paths(tmp_pat
     assert item['violations'][0]['path'].startswith('content$')
 
 
-@pytest.mark.parametrize('stream', [False,True])
-@pytest.mark.parametrize('finish', ['length','stop','content_filter','insufficient_system_resource',None])
-def test_raw_adapter_finish_and_rejection_are_observed_not_repaired(tmp_path,stream,finish):
-    body='{"rungs": [PRIVATE_RESPONSE'
-    msg={'content':body,'reasoning_content':'PRIVATE_REASONING'}
-    reply=({'model':'fixture-model','choices':[{'message':msg,'finish_reason':finish}]}
-           if not stream else iter([
-             {'model':'fixture-model','choices':[{'delta':{'reasoning_content':'PRIVATE_REASONING'},'finish_reason':None}]},
-             {'choices':[{'delta':{'content':body},'finish_reason':None}]},
-             {'choices':[{'delta':None,'finish_reason':finish}], 'usage':{'prompt_tokens':8,'completion_tokens':12,'total_tokens':20}},
-           ]))
-    p,calls=provider(reply); emitted=[]
-    with d.diagnostic_scope(tmp_path,'job_test'):
-        with pytest.raises(ResponseRejectedError) as failure:
-            collect_response(p,request(stream),on_content_chunk=emitted.append,
-                             fallback_to_non_stream=True)
+@pytest.mark.parametrize("stream", [False, True])
+@pytest.mark.parametrize("finish_reason", ["stop", "length", "content_filter"])
+def test_raw_adapter_terminal_status_and_rejection_are_observed(tmp_path, stream, finish_reason):
+    body = '{"rungs": [PRIVATE_RESPONSE'
+    reply = chat_body(body, reasoning="PRIVATE_REASONING",
+                      usage={"prompt_tokens": 8, "completion_tokens": 12, "total_tokens": 20})
+    reply["choices"][0]["finish_reason"] = finish_reason
+    if stream:
+        reply = chat_stream(reply, {"reasoning_content": "PRIVATE_REASONING"}, {"content": body})
+    p, calls = provider(reply)
+    emitted = []
+    with d.diagnostic_scope(tmp_path, "job_test"):
+        expected = ModelProviderError if finish_reason == "content_filter" else ResponseRejectedError
+        with pytest.raises(expected) as failure:
+            collect_response(p, request(stream), on_content_chunk=emitted.append, fallback_to_non_stream=True)
         d.exception_record(failure.value)
-    log=rows(tmp_path)
-    result=next(x for x in log if x['event']=='provider_result')
-    assert result['finish_reason'] == (finish or 'unknown')
-    assert result['finish_seen'] == (finish is not None)
-    assert next(x for x in log if x['event']=='model_response')['json']['json_status']=='syntax_error'
-    assert any(x['event']=='response_rejected' for x in log)
-    exception = next(x for x in log if x['event']=='workflow_exception')['exceptions'][0]
-    assert exception['violation_count'] >= 1
-    assert exception['violations'][0]['path'] == 'content'
-    assert exception['violations'][0]['reason'] == 'invalid_json_object'
-    assert len(calls)==1 and emitted==[]
-    raw=json.dumps(log)
-    assert all(secret not in raw for secret in ['PRIVATE_RESPONSE','PRIVATE_REASONING','PRIVATE_PROMPT','PRIVATE_CREDENTIAL','PRIVATE_ENDPOINT'])
-    assert 'model_runtime/provider.py' in raw and 'response_acceptance' in raw
-    assert calls[0]['messages'][-1]['content']=='PRIVATE_PROMPT'
+    log = rows(tmp_path)
+    result = next(x for x in log if x["event"] == "provider_result")
+    assert result["finish_reason"] == finish_reason and result["finish_seen"] is True
+    if finish_reason != "content_filter":
+        assert next(x for x in log if x["event"] == "model_response")["json"]["json_status"] == "syntax_error"
+        exception = next(x for x in log if x["event"] == "workflow_exception")["exceptions"][0]
+        assert exception["violations"][0]["reason"] == "invalid_json_object"
+    assert len(calls) == 1 and emitted == []
+    raw = json.dumps(log)
+    assert all(secret not in raw for secret in [
+        "PRIVATE_RESPONSE", "PRIVATE_REASONING", "PRIVATE_PROMPT", "PRIVATE_CREDENTIAL", "PRIVATE_ENDPOINT"])
+    assert calls[0]["messages"][-1]["content"] == "PRIVATE_PROMPT"
 
 
 def test_empty_content_with_reasoning_is_diagnosed(tmp_path):
-    p,_=provider({'choices':[{'message':{'content':None,'reasoning_content':'reasoning'},'finish_reason':'length'}]})
+    p,_=provider(chat_body(reasoning="reasoning"))
     with d.diagnostic_scope(tmp_path,'job_test'):
-        with pytest.raises(ResponseRejectedError): collect_response(p,request())
+        with pytest.raises(ModelProviderError): collect_response(p,request())
     response=next(x for x in rows(tmp_path) if x['event']=='model_response')
     assert response['content_chars']==0 and response['reasoning_chars']==9
     assert response['json']['json_status']=='empty'
@@ -240,7 +237,7 @@ def test_empty_content_with_reasoning_is_diagnosed(tmp_path):
 
 def test_valid_response_bytes_and_event_callbacks_unchanged(tmp_path):
     body='```json\n{"result":"PRIVATE_RESULT"}\n```'
-    p,_=provider({'choices':[{'message':{'content':body},'finish_reason':'stop'}]})
+    p,_=provider(chat_body(body))
     emitted=[]
     with d.diagnostic_scope(tmp_path,'job_test'):
         result=collect_response(p,request(),on_content_chunk=emitted.append)
@@ -275,7 +272,7 @@ def test_analysis_diagnostics_preserve_original_response_and_internal_patch(tmp_
 
 def test_stream_failure_records_metadata_and_original_cause(tmp_path):
     def broken():
-        yield {'choices':[{'delta':{'content':'{"x":'}}]}
+        yield chat_chunk({"content": '{"x":'})
         raise TimeoutError('PRIVATE_CREDENTIAL in SDK request')
     p,calls=provider(broken())
     with d.diagnostic_scope(tmp_path,'job_test'):

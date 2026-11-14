@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Legacy model-profile migration into the v3 capability runtime.
 
 Only this module should interpret the retired persisted fields:
@@ -16,6 +19,7 @@ from dataclasses import replace
 
 from model_runtime.contract import (
     MISSING,
+    REASONING_PARAMETERS,
     CapabilityContract,
     CapabilityDescriptor,
     ParameterDescriptor,
@@ -513,11 +517,14 @@ def runtime_option_layers(profile, contract, *, promote):
                 if selected is None or descriptor.status in {"fixed", "unsupported"}:
                     selections[name] = {"mode": "omit"}
                 else:
-                    descriptor.validate(selected)
-                    selections[name] = {
-                        "mode": "value",
-                        "value": copy.deepcopy(selected),
-                    }
+                    try:
+                        descriptor.validate(selected)
+                    except ValueError:
+                        if name not in REASONING_PARAMETERS or descriptor.source != "catalog":
+                            raise
+                        selections[name] = {"mode": "omit"}
+                    else:
+                        selections[name] = {"mode": "value", "value": copy.deepcopy(selected)}
     for name, descriptor in contract.parameters.items():
         descriptor.remove(defaults, name)
         descriptor.remove(overrides, name)
@@ -537,7 +544,7 @@ def detection_profile(profile, parameters=()):
     result.pop("userModelSettings", None)
     optional = {
         "temperature", "reasoning_effort", "top_p", "response_format",
-        "max_tokens", "max_completion_tokens", "stream_options",
+        "max_tokens", "max_completion_tokens", "max_output_tokens", "stream_options",
     }
     for group in ("generationDefaults", "requestOverrides"):
         options = result.setdefault(group, {})

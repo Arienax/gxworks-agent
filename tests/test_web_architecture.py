@@ -128,7 +128,8 @@ def test_web_runtime_has_its_own_manifest_without_qt():
 
 def test_root_build_and_packaging_layout_is_explicit():
     assert (ROOT / "build-web.bat").is_file()
-    assert (ROOT / "start-web.cmd").is_file()
+    assert (ROOT / "scripts/build_web_launcher.py").is_file()
+    assert not tuple(ROOT.glob("*.cmd"))
     assert not (ROOT / "start.bat").exists()
     assert not (SOURCE / "ui").exists()
     assert not (SOURCE / "main.py").exists()

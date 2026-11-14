@@ -360,7 +360,7 @@ def test_user_settings_location_does_not_follow_clone_cwd_or_executable(monkeypa
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     monkeypatch.setattr(data.Path, "home", classmethod(lambda cls: tmp_path / "home"))
     root = {"win32": tmp_path / "roaming", "linux": tmp_path / "xdg", "darwin": tmp_path / "home" / "Library" / "Application Support"}[platform]
-    expected = root / "PLC-AI-Studio" / "config.json"
+    expected = root / "gxworks-agent" / "config.json"
     assert data.config_path() == expected
     monkeypatch.setattr(data.sys, "frozen", True, raising=False)
     monkeypatch.setattr(data.sys, "executable", str(tmp_path / "new-clone" / "app.exe"))
@@ -538,12 +538,13 @@ def test_parallel_clones_publish_one_consistent_settings_pair(tmp_path):
 def test_settings_service_and_observation_reader_share_location_migration(tmp_path, monkeypatch):
     from storage import user_data as data
     from application.settings import SettingsService
-    source, db = _location_source(tmp_path)
+    source, db = _location_source(tmp_path, name="PLC-AI-Studio")
     db.close()
-    target = tmp_path / "user" / "config.json"
+    target = tmp_path / "gxworks-agent" / "config.json"
     monkeypatch.delenv("PLC_AI_CONFIG_PATH", raising=False)
-    monkeypatch.setenv("PLC_AI_DATA_DIR", str(target.parent))
-    monkeypatch.setattr(config_manager, "_legacy_config_paths", lambda: [source])
+    monkeypatch.delenv("PLC_AI_DATA_DIR", raising=False)
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    monkeypatch.setattr(data.sys, "platform", "win32")
     monkeypatch.setattr(config_manager, "read_api_key", lambda *a: pytest.fail("location read does not use credentials"))
     before = source.read_bytes()
     config = SettingsService().read_config()
@@ -567,6 +568,7 @@ def test_explicit_file_override_does_not_import_legacy_state_or_create_on_read(t
 
 def test_source_and_frozen_migration_candidates_never_follow_arbitrary_cwd(tmp_path, monkeypatch):
     from pathlib import Path
+    monkeypatch.setenv("PLC_AI_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(config_manager.sys, "frozen", False, raising=False)
     expected = Path(config_manager.__file__).resolve().parents[1]
@@ -603,13 +605,13 @@ def test_flat_legacy_config_never_inherits_preset_effort(model, template, expect
     profile = next(p for p in profiles if p["id"] == selected)
     provider = OpenAICompatibleProvider(profile, "synthetic-key", client=object())
     params = provider._request_params(ModelRequest((UserMessage("fixture"),)))
-    actual = params.get("extra_body", {}) if nested else params
-    assert actual.get("reasoning_effort") == expected
+    assert "reasoning" not in params
     if expected is None:
         assert "reasoning_effort" not in params
-        assert "reasoning_effort" not in params.get("extra_body", {})
+    else:
+        assert params["reasoning_effort"] == expected
     if nested:
-        assert params["extra_body"]["fixture"] is True
+        assert params["fixture"] is True
     assert config == before and config_manager._default_profiles() == defaults
 
 

@@ -347,6 +347,36 @@ def test_confirmed_semantic_findings_do_not_fail_candidate_preparation():
     assert any("未触发额外模型调用" in message for message in result["validation_messages"])
 
 
+def test_confirmed_implementation_checks_device_and_instruction_without_rewriting_user_constraints():
+    from application.compact_protocol import expand_compact_ladder
+    from plc.generation import prepare_ladder_candidate
+    from plc.specification.approach import normalize_approach
+    from plc.specification.semantic_validation import validate_confirmed_semantics
+
+    approach = normalize_approach({"name": "批次初始化", "implementation_semantics": [],
+        "instruction_choices": [
+            {"opcode": "M08002", "role": "检测首次扫描"},
+            {"opcode": "LDP", "role": "取初始化信号的边沿"},
+            {"opcode": "BMOV", "role": "批量复制初值"},
+            {"opcode": "UNKNOWN_FORM", "role": "留档时的诊断选择"},
+        ]})
+    spec = {"selected_approach": approach}
+    assert approach["generation_contract"]["required_opcodes"] == []
+    assert approach["generation_contract"]["required_devices"] == []
+
+    program = {"r": [{"c": ["NO M0", "P M8002"], "b": [{"i": [], "o": ["BMOV D0 D10 K2"]}]}]}
+    report = validate_confirmed_semantics(expand_compact_ladder(program), spec)
+    checks = {row["expected"]: row["status"] for row in report["checks"]}
+    assert checks == {"M8002": "verified", "LDP": "verified", "BMOV": "verified", "UNKNOWN_FORM": "unresolved"}
+
+    program["r"][0]["c"][1] = "P X0"
+    program["r"][0]["b"][0]["o"] = ["MOV D0 D10"]
+    candidate = prepare_ladder_candidate(expand_compact_ladder(program), plc_model="FX3U",
+                                         confirmed_spec=spec, candidate_origin="compact_agent")
+    assert {row["expected"] for row in candidate["semantic_validation"]["violations"]} == {"M8002", "BMOV"}
+    assert any("M8002" in message and "BMOV" in message for message in candidate["validation_messages"])
+
+
 def test_structure_binding_predicates_ignore_unrelated_program_scope():
     from plc.specification.semantic_validation import validate_confirmed_semantics
 

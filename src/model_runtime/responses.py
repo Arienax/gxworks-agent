@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Provider-neutral acceptance rules for *declared* model-authored prose.
 
 This is a conservative script check, not a universal language classifier. It

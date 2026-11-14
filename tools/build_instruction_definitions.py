@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Reusable semantic stage of the existing knowledge build pipeline."""
 from __future__ import annotations

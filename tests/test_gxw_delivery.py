@@ -146,14 +146,14 @@ def test_new_st_semantic_error_never_creates_a_saved_version(tmp_path, monkeypat
     from fastapi.testclient import TestClient
     from application.workbench import WorkbenchService
     import application.model_api as model_api
-    from tests.test_web_api import _app, _login, _Provider, ORIGIN
+    from tests.test_web_api import _app, _Provider, ORIGIN
     monkeypatch.setattr(model_api, '_request_model', lambda *a, **k: SimpleNamespace(
         message=SimpleNamespace(content=json.dumps(arguments))))
     workspace, state = tmp_path / 'workspace', tmp_path / 'state'
     provider = _Provider()
     service = WorkbenchService(workspace, state, model_factory=lambda: (provider, {'model': provider.profile['model']}))
     with TestClient(_app(workspace, state, service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         project = client.post('/api/projects', json={'name': 'Rejected', 'plc_model': 'FX3U', 'target_mode': 'st'}, headers=headers).json()
         service.store.set_confirmed_spec(project['id'], {'schema_version': 4, 'summary': 'test', 'io_table': [], 'parameters': []})
         response = client.post('/api/jobs', json={'kind': 'generation', 'project_id': project['id'],
@@ -222,22 +222,34 @@ def test_existing_gxw_is_compiled_when_found_and_never_replaced_with_csv(tmp_pat
 
 
 def test_mcp_failed_native_delivery_keeps_its_diagnostic_status_and_artifacts():
+    from agent_runtime.messages import ToolResult
+    from agent_runtime.runtime import public_tool_result_data
     from application.engineering_session import EngineeringSession
+    from integrations.mcp.tool_adapter import to_mcp_result
     session = EngineeringSession.__new__(EngineeringSession)
     session.project_id = 'project'
     proposal = {'action': 'accept_local', 'status': 'accepted',
                 'result': {'status': 'saved_native_diagnostic', 'version_id': 'v0001'}}
+    finding = {'code': '0x050c9300', 'category': 'duplicate_output', 'severity': 'error',
+               'device': 'Y0', 'occurrences': 2, 'steps': [4, 8], 'rung_ids': [1, 2]}
     session.service = SimpleNamespace(
         proposals=SimpleNamespace(get=lambda _id: proposal),
         projects=SimpleNamespace(raw_version=lambda *args: {
-            'delivery': {'primary_artifact': 'gxw'}, 'validation': {'gx_compile': 'failed'}}))
+            'delivery': {'preferred_format': 'gxw', 'primary_artifact': 'gxw'}, 'activation_blocked': True,
+            'validation': {'gx_compile': 'failed', 'native_compile_detail': 'adapter detail',
+                           'native_compile_findings': [{**finding, 'internal_notes': 'adapter detail'}]}}))
     session._version_artifacts = lambda *args: {'artifacts': [{'id': 'gxw', 'path': 'candidate.gxw'}]}
-    result = session._completed_response({'proposal_id': 'proposal', 'data': {'ok': True, 'data': {}}})
+    name = 'create_program_candidate'
+    result = session._completed_response({'proposal_id': 'proposal', 'data': {'ok': True, 'tool': name, 'data': {}}})
+    public = public_tool_result_data(ToolResult('candidate', name, '', result))
+    result = json.loads(to_mcp_result(ToolResult('candidate', name, '', public)).content[0].text)
     assert result['status'] == 'saved_native_diagnostic'
     assert result['data']['version_id'] == 'v0001'
     assert result['data']['validation']['gx_compile'] == 'failed'
+    assert result['data']['validation']['native_compile_findings'] == [finding]
+    assert 'native_compile_detail' not in result['data']['validation']
     assert result['data']['artifacts'] == [{'id': 'gxw', 'path': 'candidate.gxw'}]
-    assert 'not activated' in result['data']['message']
+    assert result['data']['activation_blocked'] is True
 
 
 @pytest.mark.parametrize('mode', ['st', 'sfc'])
@@ -340,11 +352,24 @@ def test_l02_st_timer_and_counter_views_do_not_become_invalid_devices():
     assert report['native_compile'] == 'unverified'
 
 
-def test_local_mcp_saves_the_prepared_ladder_once_and_reports_csv_fallback(tmp_path, monkeypatch):
+@pytest.mark.parametrize('adapter_failed', [False, True])
+def test_local_mcp_saves_the_prepared_ladder_once_and_reports_csv_fallback(tmp_path, monkeypatch, adapter_failed):
     from application.engineering_session import EngineeringSession
     from agent_runtime.messages import ToolCall
     from tests.test_generation_workflow import _ladder
     from plc.core import PLCCore
+    if adapter_failed:
+        from gxworks2.workspace_adapter import WorkspaceSaveError
+
+        observation = {'status': 'failed', 'compile': 'not_requested', 'calls': [
+            {'operation': 'CoCreateInstance:navigator', 'hresult': 0, 'code': 0}]}
+
+        def fail_creation(*args, **kwargs):
+            raise WorkspaceSaveError('外部组件发生异常。', observation)
+
+        monkeypatch.setattr(delivery, 'installation', lambda: Path('E:/GX/GPPW2/GD2.exe'))
+        monkeypatch.setattr('gxworks2.workspace_adapter.NativeWorkspaceSourceSave', lambda: SimpleNamespace(
+            executable=Path('E:/adapter.exe'), installation=Path('E:/GX'), create_project=fail_creation))
     calls = []
     original = PLCCore.compile_project
     def compile_once(self, *args, **kwargs):
@@ -357,7 +382,13 @@ def test_local_mcp_saves_the_prepared_ladder_once_and_reports_csv_fallback(tmp_p
         result = session.invoke(ToolCall('generate', 'create_program_candidate', {'ladder': _ladder()}))
         assert not result.is_error, result.content
         assert result.data['data']['delivery']['actual_format'] == 'csv'
-        assert result.data['data']['version_id']
+        version = result.data['data']['version_id']
+        assert version
+        if adapter_failed:
+            path = session.service.projects.artifact(session.project_id, version, 'native_diagnostics')
+            record = json.loads(path.read_bytes())
+            assert record['phase'] == 'create_project'
+            assert record['observation'] == observation
         repeated = session.invoke(ToolCall('generate', 'create_program_candidate', {'ladder': _ladder()}))
         assert repeated.data['data']['version_id'] == result.data['data']['version_id']
         assert len(calls) == 1
@@ -367,7 +398,7 @@ def test_local_mcp_saves_the_prepared_ladder_once_and_reports_csv_fallback(tmp_p
 def test_local_mcp_new_source_fallback_is_saved_and_downloadable(tmp_path, mode, cpu):
     from application.engineering_session import EngineeringSession
     from agent_runtime.messages import ToolCall
-    arguments = {'operation': 'generate', 'st_text': 'IF X0 AND NOT X1 THEN D0 := D1 + D2; END_IF;'} if mode == 'st' else {
+    arguments = {'operation': 'generate', 'st_text': 'IF X0 AND NOT(X1) THEN D0 := D1 + D2; END_IF;'} if mode == 'st' else {
         'operation': 'generate', 'graph_edits': [{'kind': 'rebuild', 'symbols': [
             {'kind': 'initial_step', 'x': 0, 'y': 0, 'number': 0},
             {'kind': 'transition', 'x': 0, 'y': 1, 'number': 0},
@@ -453,6 +484,29 @@ def test_finder_reuses_persisted_installation_and_recovers_after_move(tmp_path, 
     assert GXWorks2Finder().find_executable(sessions=[]) == new
     assert len(scans) == 2
     assert json.loads(cache.read_text(encoding='utf-8')) == {'gx_works2_executable': str(new)}
+
+
+def test_finder_promotes_the_legacy_app_cache_without_scanning(tmp_path, monkeypatch):
+    from gxworks2.finder import GXWorks2Finder
+    from storage import user_data
+
+    monkeypatch.delenv('PLC_AI_DATA_DIR', raising=False)
+    monkeypatch.delenv('GXWORKS2_EXE', raising=False)
+    monkeypatch.setenv('APPDATA', str(tmp_path))
+    monkeypatch.setattr(user_data.sys, 'platform', 'win32')
+    executable = tmp_path / 'GD2.exe'
+    executable.touch()
+    previous = tmp_path / 'PLC-AI-Studio' / 'gxworks2-installation.json'
+    previous.parent.mkdir()
+    record = {'gx_works2_executable': str(executable)}
+    previous.write_text(json.dumps(record), encoding='utf-8')
+    monkeypatch.setattr(GXWorks2Finder, '_registered_executables',
+                        staticmethod(lambda: pytest.fail('a valid legacy installation is already known')))
+
+    assert GXWorks2Finder().find_executable(sessions=[]) == executable
+    current = tmp_path / 'gxworks-agent' / previous.name
+    assert json.loads(current.read_text(encoding='utf-8')) == record
+    assert json.loads(previous.read_text(encoding='utf-8')) == record
 
 
 @pytest.mark.parametrize('found', [True, False])
@@ -613,7 +667,7 @@ def test_interrupted_delivery_retains_its_allocated_files_and_recovery_location(
 def test_web_structured_source_preview_and_saved_fallback_use_public_contract(tmp_path, mode):
     from fastapi.testclient import TestClient
     from application.workbench import WorkbenchService
-    from tests.test_web_api import _app, _login, ORIGIN
+    from tests.test_web_api import _app, ORIGIN
     workspace, state = tmp_path / 'workspace', tmp_path / 'state'
     service = WorkbenchService(workspace, state)
     if mode == 'fbd':
@@ -625,7 +679,7 @@ def test_web_structured_source_preview_and_saved_fallback_use_public_contract(tm
             {'kind': 'transition', 'x': 0, 'y': 1, 'number': 0},
             {'kind': 'jump', 'x': 0, 'y': 2, 'number': 0}]}]}
     with TestClient(_app(workspace, state, service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         project = client.post('/api/projects', json={'name': 'Source', 'plc_model': 'FX3U',
             'target_mode': mode}, headers=headers).json()
         result = service.agent_call({'project_id': project['id'], 'version_id': None,
@@ -652,7 +706,7 @@ def test_web_new_source_generation_saves_shared_delivery_without_native_install(
     from fastapi.testclient import TestClient
     from application.workbench import WorkbenchService
     import application.model_api as model_api
-    from tests.test_web_api import _app, _login, _complete, _Provider, ORIGIN
+    from tests.test_web_api import _app, _complete, _Provider, ORIGIN
     source = {'operation': 'generate', 'st_text': 'Y0 := X0;', 'declarations': [
         {'name': 'local_flag', 'data_type': 'BOOL', 'class_name': 'VAR'}]} if mode == 'st' else {
         'operation': 'generate', 'graph_edits': [{'kind': 'rebuild', 'symbols': [
@@ -671,7 +725,7 @@ def test_web_new_source_generation_saves_shared_delivery_without_native_install(
     provider = _Provider()
     service = WorkbenchService(workspace, state, model_factory=lambda: (provider, {'model': provider.profile['model']}))
     with TestClient(_app(workspace, state, service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         project = client.post('/api/projects', json={'name': 'Generate source', 'plc_model': 'FX3U',
             'target_mode': mode}, headers=headers).json()
         service.store.set_confirmed_spec(project['id'], {'schema_version': 4, 'summary': 'X0 drives Y0',

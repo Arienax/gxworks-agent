@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Step width result values, independent of any calculation source.
 
 A width answer says how many program steps a form occupies and why it is unresolved

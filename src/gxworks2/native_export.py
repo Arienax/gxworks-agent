@@ -1,12 +1,12 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """GX Works2-specific export lowering.
 
 GX Works2 simple-project ladder blocks are limited to 24 diagram rows. The
 canonical ladder/IR remains untouched. Legacy top-level OR lowering uses a
-conservative list-row count and collision-free internal M relays; the final
-structural guard also covers shared prefixes and multiple output branches.
+conservative list-row count and collision-free internal M relays. Oversized
+output groups with stable conditions can use several consecutive networks.
 """
 
 from __future__ import annotations
@@ -25,6 +25,11 @@ _M_DEVICE_RE = re.compile(r"(?<![A-Z0-9_])M(\d+)(?![A-Z0-9_])", re.IGNORECASE)
 
 class GXNativeLoweringError(ValueError):
     """Raised when a ladder network cannot be safely lowered for GX Works2."""
+
+    def __init__(self, message, *, rung_id=None, details=None):
+        super().__init__(message)
+        self.rung_id = rung_id
+        self.details = dict(details or {})
 
 
 def _collect_used_general_m_devices(payload: Any) -> set[int]:
@@ -227,7 +232,7 @@ def _lower_one_rung(
     original_branch, block = candidate
     source_branches = block.get("branches") or []
     outputs = original_branch.get("outputs") or []
-    if len(source_branches) < 2:
+    if len(source_branches) < 2 or len(outputs) >= max_rows:
         return None
 
     source_rows = _parallel_block_rows(
@@ -296,14 +301,47 @@ def _lower_one_rung(
     return replacement
 
 
+def _split_output_group(rung, plc_model, max_rows, synthetic_id, execution_context):
+    branches = rung.get("branches") or []
+    if len(branches) != 1 or not isinstance(branches[0], Mapping):
+        return None
+    branch = branches[0]
+    outputs = branch.get("outputs") or []
+    capacity = max_rows - parallel_ladder_rows(rung) + len(outputs)
+    if capacity < 1 or len(outputs) <= capacity:
+        return None
+    from plc.condition_analysis import ConditionAnalysis
+
+    analysis = ConditionAnalysis(plc_model, execution_context=execution_context)
+    conditions = ([rung["header_element"]] if rung.get("header_element") else [])
+    conditions += (rung.get("shared_inputs") or []) + (branch.get("inputs") or [])
+    writes = analysis.writes(branch)
+    if writes is None or analysis.repeat_condition_reason(conditions, writes):
+        return None
+
+    replacement = []
+    for offset in range(0, len(outputs), capacity):
+        part = copy.deepcopy({**rung, "branches": [{**branch, "outputs": outputs[offset:offset + capacity]}]})
+        if offset:
+            part.update(rung_id=synthetic_id[0], debug_note="")
+            synthetic_id[0] -= 1
+        replacement.append(part)
+    return replacement
+
+
 def lower_large_parallel_blocks_for_gxworks2(
     payload: Any,
     *,
     max_rows: int = GXWORKS2_MAX_LADDER_BLOCK_ROWS,
+    plc_model: str | None = None,
+    execution_context=None,
 ) -> Any:
-    """Return an export-only ladder with oversized GX Works2 OR blocks split."""
+    """Return an export-only ladder with oversized GX Works2 blocks split."""
     if max_rows < 2:
         raise GXNativeLoweringError("GX Works2 ladder block行数限制必须至少为2")
+    if plc_model is None and isinstance(payload, Mapping):
+        plc = payload.get("plc")
+        plc_model = (plc.get("cpu") if isinstance(plc, Mapping) else None) or payload.get("plc_model")
 
     source_was_list = isinstance(payload, list)
     if is_plc_ir(payload):
@@ -333,12 +371,15 @@ def lower_large_parallel_blocks_for_gxworks2(
         if not isinstance(raw_rung, Mapping):
             result.append(copy.deepcopy(raw_rung))
             continue
-        replacement = _lower_one_rung(
-            raw_rung,
-            allocator,
-            max_rows=max_rows,
-            synthetic_id=synthetic_id,
-        )
+        replacement = _split_output_group(raw_rung, plc_model or "FX3U", max_rows, synthetic_id,
+                                          execution_context if plc_model is not None else None)
+        if replacement is None:
+            replacement = _lower_one_rung(
+                raw_rung,
+                allocator,
+                max_rows=max_rows,
+                synthetic_id=synthetic_id,
+            )
         if replacement is None:
             result.append(copy.deepcopy(dict(raw_rung)))
         else:
@@ -351,10 +392,18 @@ def lower_large_parallel_blocks_for_gxworks2(
         # output branch; only a shared prefix connects them through MPS/MPP.
         networks = ([rung] if rung.get("header_element") or rung.get("shared_inputs") else
                     [{**rung, "branches": [branch]} for branch in rung.get("branches", [])])
-        if any(parallel_ladder_rows(network) > max_rows for network in networks):
+        oversized = next((network for network in networks if parallel_ladder_rows(network) > max_rows), None)
+        if oversized is not None:
+            height = parallel_ladder_rows(oversized)
             raise GXNativeLoweringError(
-                f"GX Works2梯级{rung.get('rung_id', '?')}的并联结构超过{max_rows}行，"
-                "请先安全拆分公共条件和输出分支后再导出"
+                f"GX Works2梯级{rung.get('rung_id', '?')}的并联结构为{height}行，超过{max_rows}行；"
+                "共享条件连接的所有分支合计高度，增加同一网络内的输出分支不能降低总高度。"
+                "调整分组时须保持条件求值次数、读写顺序和触发行为",
+                rung_id=rung.get("rung_id"),
+                details={"parallel_rows": height, "max_parallel_rows": max_rows,
+                         "branch_rows": [{"branch_id": branch.get("branch_id"),
+                                          "parallel_rows": parallel_ladder_rows({"branches": [branch]})}
+                                         for branch in oversized.get("branches", [])]},
             )
 
     if source_was_list:

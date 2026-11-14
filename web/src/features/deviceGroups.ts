@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 // Device comment grouping for the program explorer. A generated program can list
 // dozens of addresses, so the panel groups them by device family instead of one

@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """The workbench serves a list of workspaces, each owning its own projects."""
 import sys
@@ -21,16 +21,12 @@ ORIGIN = "http://127.0.0.1:8765"
 def open_page(app):
     page = TestClient(app, base_url=ORIGIN)
     page.__enter__()
-    session = page.get("/api/session")
-    assert session.status_code == 200
-    page.headers.update({"x-csrf-token": session.json()["csrf"], "origin": ORIGIN})
     return page
 
 
 @pytest.fixture()
 def client(tmp_path):
-    app = create_app(None, state_dir=tmp_path / "state", origin=ORIGIN,
-                     operator_token=None, agent_token="agent-token")
+    app = create_app(None, state_dir=tmp_path / "state", origin=ORIGIN, agent_token="agent-token")
     page = open_page(app)
     try:
         yield page
@@ -51,10 +47,68 @@ def test_work_that_needs_a_workspace_reports_the_missing_choice(client):
     assert response.json()["error"]["code"] == "workspace_required"
 
 
-def test_session_still_answers_before_a_workspace_exists(client):
-    response = client.get("/api/session")
+def test_workspace_status_answers_before_a_workspace_exists(client):
+    response = client.get("/api/workspace")
     assert response.status_code == 200
-    assert response.json()["authenticated"] is True
+    assert response.json()["selected"] is False
+    assert response.json()["read_only"] is False
+
+
+def test_read_only_workspace_reports_the_reason_for_rejecting_creation(tmp_path):
+    app = create_app(tmp_path / "workspace", state_dir=tmp_path / "state", origin=ORIGIN, read_only=True)
+    with TestClient(app, base_url=ORIGIN) as client:
+        assert client.get("/api/workspace").json()["read_only"] is True
+        response = client.post("/api/projects", json={"name": "Read only", "plc_model": "FX3U"})
+        assert response.status_code == 403
+        assert response.json()["error"]["code"] == "read_only_workspace"
+
+
+def test_another_workbench_process_can_write_without_interrupting_a_running_job(tmp_path):
+    import os
+    import subprocess
+    import threading
+
+    workspace, state = tmp_path / "workspace", tmp_path / "state"
+    app = create_app(workspace, state_dir=state, origin=ORIGIN)
+    started, finish = threading.Event(), threading.Event()
+
+    def worker(_ctx):
+        started.set()
+        assert finish.wait(45)
+        return {"status": "complete"}
+
+    script = """
+import sys
+from fastapi.testclient import TestClient
+from integrations.web.app import create_app
+
+origin = "http://127.0.0.1:8765"
+app = create_app(sys.argv[1], state_dir=sys.argv[2], origin=origin)
+with TestClient(app, base_url=origin) as client:
+    assert client.get("/api/jobs/" + sys.argv[3]).json()["status"] == "running"
+    response = client.post("/api/projects", json={"name": "Second workbench", "plc_model": "FX3U"})
+    assert response.status_code == 201, response.text
+"""
+    with TestClient(app, base_url=ORIGIN) as client:
+        first = client.post("/api/projects", json={"name": "First workbench", "plc_model": "FX3U"})
+        assert first.status_code == 201, first.text
+        manager = app.state.service.jobs
+        job = manager.submit("test", {}, worker)
+        try:
+            assert started.wait(5)
+            env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src")}
+            result = subprocess.run(
+                [sys.executable, "-c", script, str(workspace), str(state), job["id"]],
+                env=env, capture_output=True, timeout=35,
+            )
+            assert result.returncode == 0, result.stderr.decode(errors="replace")
+            assert manager.get(job["id"])["status"] == "running"
+        finally:
+            finish.set()
+        assert manager.wait(job["id"], timeout=5)["status"] == "completed"
+        assert {row["name"] for row in client.get("/api/projects").json()["projects"]} == {
+            "First workbench", "Second workbench",
+        }
 
 
 def test_adding_a_workspace_lists_it_with_its_projects_and_activates_it(client, tmp_path):
@@ -89,6 +143,42 @@ def test_activating_an_earlier_workspace_serves_it_again(client, tmp_path):
     assert switched.status_code == 200
     assert switched.json()["active"] == identifier
     assert client.get("/api/workspace").json()["name"] == "one"
+
+
+def test_failed_workspace_start_keeps_the_current_binding(client, tmp_path, monkeypatch):
+    from application.workbench import WorkbenchService
+
+    original = client.post("/api/workspaces", json={"path": str(tmp_path / "current")}).json()
+    unavailable = tmp_path / "unavailable"
+    start = WorkbenchService.start
+
+    def start_if_available(service):
+        if service.store.base_dir == unavailable:
+            raise ValueError("Cannot start the selected workspace")
+        return start(service)
+
+    monkeypatch.setattr(WorkbenchService, "start", start_if_available)
+    assert client.post("/api/workspaces", json={"path": str(unavailable)}).status_code == 400
+    assert client.get("/api/workspaces").json() == original
+    assert client.post("/api/projects", json={"name": "Current workspace", "plc_model": "FX3U"}).status_code == 201
+
+
+def test_other_workbench_keeps_its_binding_and_remembered_selection(tmp_path):
+    state = tmp_path / "state"
+    first = create_app(tmp_path / "first", state_dir=state, origin=ORIGIN)
+    with TestClient(first, base_url=ORIGIN) as a:
+        first_id = a.get("/api/workspaces").json()["active"]
+        unused_id = a.post("/api/workspaces", json={"path": str(tmp_path / "unused")}).json()["active"]
+        assert a.post(f"/api/workspaces/{first_id}/activate").status_code == 200
+        second = create_app(tmp_path / "second", state_dir=state, origin=ORIGIN)
+        with TestClient(second, base_url=ORIGIN) as b:
+            second_id = b.get("/api/workspaces").json()["active"]
+            assert second_id != first_id
+            assert a.delete(f"/api/workspaces/{unused_id}").json()["active"] == first_id
+            assert b.get("/api/workspace").json()["name"] == "second"
+            restarted = create_app(state_dir=state, origin=ORIGIN)
+            with TestClient(restarted, base_url=ORIGIN) as c:
+                assert c.get("/api/workspaces").json()["active"] == second_id
 
 
 def test_forgetting_a_workspace_keeps_its_folder_and_projects_on_disk(client, tmp_path):
@@ -171,28 +261,27 @@ def test_a_workspace_lists_every_project_it_owns(client, tmp_path):
     assert served == {"分拣线", "码垛"}
 
 
-def test_the_agent_credential_stays_separate_from_the_page_session(tmp_path):
-    app = create_app(tmp_path / "workspace", state_dir=tmp_path / "state", origin=ORIGIN,
-                     operator_token=None, agent_token="agent-token")
+def test_the_agent_api_still_requires_its_credential(tmp_path):
+    app = create_app(tmp_path / "workspace", state_dir=tmp_path / "state", origin=ORIGIN, agent_token="agent-token")
     page = open_page(app)
     try:
-        assert page.get("/api/agent/health").status_code == 403
-        assert page.get("/api/agent/health",
-                        headers={"authorization": "Bearer agent-token"}).status_code != 403
+        assert page.get("/api/agent/tools").status_code == 403
+        assert page.get("/api/agent/tools",
+                        headers={"authorization": "Bearer agent-token"}).status_code == 200
     finally:
         page.__exit__(None, None, None)
 
 
 def test_the_workspace_list_survives_a_restart(tmp_path):
     state = tmp_path / "state"
-    first_app = create_app(None, state_dir=state, origin=ORIGIN, operator_token=None, agent_token="a")
+    first_app = create_app(None, state_dir=state, origin=ORIGIN, agent_token="a")
     page = open_page(first_app)
     try:
         page.post("/api/workspaces", json={"path": str(tmp_path / "remembered")})
     finally:
         page.__exit__(None, None, None)
 
-    second_app = create_app(None, state_dir=state, origin=ORIGIN, operator_token=None, agent_token="a")
+    second_app = create_app(None, state_dir=state, origin=ORIGIN, agent_token="a")
     page = open_page(second_app)
     try:
         index = page.get("/api/workspaces").json()

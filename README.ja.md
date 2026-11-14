@@ -1,5 +1,9 @@
 ![GXWorks Agent：三菱 PLC 向け MCP ツールサービスと AI ワークベンチ](resources/assets/banner-ja.png)
 
+<p align="center"><strong>原作者: <a href="https://github.com/Arienax">Arienax</a></strong> · <a href="https://github.com/Arienax/gxworks-agent">github.com/Arienax/gxworks-agent</a></p>
+
+<p align="center">© 2026 Arienax · AGPL-3.0</p>
+
 <h3 align="center">三菱電機 PLC エンジニアリング向け MCP ツールサービスと AI ワークベンチ</h3>
 
 <p align="center"><strong>設計コンテキストの取得 · プログラムの生成とレビュー · GX Works2 ネイティブ編集と診断</strong></p>
@@ -8,16 +12,18 @@
   <a href="https://github.com/Arienax/gxworks-agent/releases/latest"><img src="https://img.shields.io/github/v/release/Arienax/gxworks-agent?style=flat-square&amp;color=2563eb" alt="Latest release"></a>
   <a href="#mcp"><img src="https://img.shields.io/badge/MCP-engineering_tools-7c3aed?style=flat-square" alt="MCP engineering tools"></a>
   <a href="#quick-start"><img src="https://img.shields.io/badge/Windows-10%2F11_x64-0078d4?style=flat-square" alt="Windows 10/11 x64"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache--2.0-f59e0b?style=flat-square" alt="License: Apache-2.0"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-f59e0b?style=flat-square" alt="License: AGPL-3.0"></a>
 </p>
 
 <p align="center"><strong><a href="https://github.com/Arienax/gxworks-agent/releases/latest">ダウンロード</a> · <a href="#mcp">MCP と Web</a> · <a href="https://github.com/Arienax/gxworks-agent/issues">問題の報告</a></strong></p>
 
-<p align="center"><a href="#quick-start">クイックスタート</a> · <a href="#offline-gxw">GXW オフライン編集</a> · <a href="#ladder">ラダー</a> · <a href="#st">ST</a> · <a href="#fbd">FBD</a> · <a href="#native-session">ネイティブセッション</a> · <a href="#web">Web ワークベンチ</a> · <a href="#diagnostics">診断・検証</a></p>
+<p align="center"><a href="#quick-start">クイックスタート</a> · <a href="#offline-gxw">GXW オフライン編集</a> · <a href="#ladder">ラダー</a> · <a href="#st">ST</a> · <a href="#fbd">FBD</a> · <a href="#rag">設計 RAG</a> · <a href="#native-session">ネイティブセッション</a> · <a href="#web">Web ワークベンチ</a> · <a href="#diagnostics">診断・検証</a></p>
 
 <p align="center"><a href="README.zh-CN.md">简体中文</a> · <a href="README.md">English</a> · <strong>日本語</strong></p>
 
-GXWorks Agent は、三菱電機 PLC のプロジェクト情報、CPU ごとに整理された命令知識、決定論的な静的検査、そして GX Works2 のネイティブ操作を統合したエンジニアリングツールチェーンです。**ラダー（Ladder）**、**構造化テキスト（ST）**、**ファンクションブロックダイアグラム（FBD）**のワークフローに加え、既存の **SFC** プロジェクトの編集・診断に対応しています。
+GXWorks Agent は、三菱電機 PLC のプロジェクト情報、CPU ごとに整理された命令知識、決定論的な静的検査、そして GX Works2 のネイティブ操作を統合したエンジニアリングツールチェーンです。**ラダー（Ladder）**、**構造化テキスト（ST）**、**ファンクションブロックダイアグラム（FBD）**のワークフローに加え、**SFC** プロジェクトの編集・診断に対応しています。画面を使わない新規作成は、選択した CPU のネイティブ設定に従います。
+
+GX Works2 **1.635.0.1** で、57 個のプログラマブル CPU メニュー（Q 42、L 5、FX 10、具体的な構成員は 69 型式）の **226 通りの既定の有効な言語組合せ**について、基となる GXW を使わないバックグラウンド作成、複雑な内容の書込み、既存ソースの編集、ネイティブコンパイル、完全な公開検査、保存、コールド再オープンを個別に完了しました。既定は Ladder/SFC がシンプル、ST/FBD が構造化プロジェクトです。FX1 はネイティブの構造化 CPU メニューに存在せず、この新規作成の制限は既存ソースの読込みを妨げません。4 言語とも GXW を優先し、インストールを検出すると自動コンパイルします。複雑な FBD は実際の ST ファンクションブロックで組み立てます。この結果は上記ソフトウェア版でのプロジェクト操作を対象とし、全構成員での実機動作や全命令・構文の対応を意味しません。
 
 Codex、Claude Desktop、DeepSeek Harness などの MCP クライアントを接続すれば、クライアント側のモデルを使ってエンジニアリングツールを呼び出し、プログラムの生成、継続的なネイティブ編集、検証、成果物のバージョン保存までを一貫して行えます。MCP サーバーは単独で動作し、必要に応じて **Web ワークベンチ**を併用すれば、ブラウザー上での Direct 生成、視覚的な差分レビュー、シミュレーション、承認に基づく GX Works2 への受け渡しも利用できます。
 
@@ -43,13 +49,15 @@ Codex、Claude Desktop、DeepSeek Harness などの MCP クライアントを接
 
 FX/Q/L のモデル一覧全体をファイル能力の判断に使用し、CPU、形式、オブジェクト、操作ごとに対応範囲を返します。未知レコードのバイト列を保持したまま解析済みオブジェクトの編集を行え、未解決の依存関係がある変更には対象と理由を返します。この経路は既存のソースオブジェクト、宣言、コメントのオフライン編集を対象としています。
 
-ソースや宣言を変更すると以前のコンパイル結果は期限切れ（`stale`）として扱われ、コンパイラーによる検証が必要な場合は明示的にネイティブコンパイル検査を実行します。
+ソースや宣言を変更すると以前のコンパイル結果は期限切れ（`stale`）になります。候補の保存時に GX Works2 があればコンパイル、保存、コールド再オープンを自動実行します。既存バージョンの検査を明示的に実行することもできます。
+
+`validate_project(native=true)` は分離したコピーをコンパイルして検査します。`compilation.acceptance=accepted` は、そのコピーをコンパイラが受理したことを示します。コンパイル成果物は書き戻さず、`save.completed` と `save.exported` はともに `false` のため、ダウンロードした工程が GX Works2 で未コンパイルと表示される場合があります。公開ツール `compile_project` もローカル Core コンパイルのみを行います。ネイティブのコンパイル成果物を保存するには、GX Works2 でコンパイルして保存するか、独立したワークスペース API `NativeWorkspaceSourceSave.compile_project` を使用し、保存とコールド再オープンの結果を確認してください。コンパイル、コード検査、保存、PLC 実行の結果は独立しています。
 
 <a name="ladder"></a>
 
 ## ラダー：設計コンテキストの取得から成果物の保存まで
 
-FX3U のコンベヤ制御を例に、対象 CPU における `WSFL`、`INC`、`T200` の命令知識とマニュアル根拠を取得し、ラダー候補を構築して MCP 経由で保存します。Python Core が構造・オペランド検査、共通条件の整理、保守性チェックを実行し、ラダー JSON、PLC IR、SVG 図、IR から変換した追跡可能な ST、GX Works2 インポート用 CSV（MAIN・デバイスコメント）を出力します。保存済みバージョンに対する部分修正には、`read_network` と `patch_program` によるネットワーク単位のパッチ適用も使えます。
+FX3U のコンベヤ制御を例に、対象 CPU における `WSFL`、`INC`、`T200` の命令知識とマニュアル根拠を取得し、ラダー候補を構築して MCP 経由で保存します。Python Core が構造・オペランド検査、共通条件の整理、保守性チェックを実行し、ラダー JSON、PLC IR、SVG 図、GX Works2 インポート用 CSV（MAIN・デバイスコメント）を出力します。保存済みバージョンに対する部分修正には、`read_network` と `patch_program` によるネットワーク単位のパッチ適用も使えます。
 
 <a name="st"></a>
 
@@ -57,25 +65,28 @@ FX3U のコンベヤ制御を例に、対象 CPU における `WSFL`、`INC`、`
 
 ST ワークフローは、単体テキストの生成と `.gxw` ネイティブプロジェクトの保守の両面に対応しています。
 
-- **Web での単体生成とレビュー**：ワークベンチで要求分析と仕様確認を行い、選択した CPU の命令コンテキストと ST シグネチャをもとに `program.st` を生成します。候補のプレビュー、バージョン間のテキスト差分確認、ST 成果物の保存が可能で、ラダーの PLC IR から追跡可能な ST を出力することもできます。
+- **Web での生成とレビュー**：要求分析と仕様確認を行い、選択した CPU の命令コンテキストと ST シグネチャをもとに本文と宣言を生成し、GXW の組立てと納品を優先します。工程を作成できない場合のみ理由を示して `program.txt` と GX Works2 に取り込めるグローバルラベル `global_labels.csv` に縮退します。CSV で表現できない初期値や宣言属性は TXT に明記され、取り込み後に設定できます。候補のプレビュー、バージョン間のテキスト差分確認に対応します。
 - **GXW ST プロジェクト編集**：`read_st_project` は既存 Program、FB、FUNCTION の本文、宣言、所属を読み取り、`create_st_candidate` は既存本文と宣言をオフライン編集します。通常 ST Program の新規作成は、明示したリソース・タスクとネイティブ操作の経路を引き続き使用します。継続ネイティブセッションでは FBD と連携した編集・コンパイルを別途行えます。
 
 ローカルの ST 検査器は対応範囲の構文・意味を素早く検証して確認が必要な記述を明示し、GX Works2 のネイティブコンパイルと組み合わせて段階的に検証を進められます。
 
 <a name="fbd"></a>
 
-## FBD：CPU 別空白テンプレートから既存 GXW の高度な編集まで
+## FBD：プロジェクトの新規作成と既存 GXW の編集
 
 例えば、三菱電機の [MotionControl JEC サンプル](https://eu-assets.contentstack.com/v3/assets/blt5412ff9af9aef77f/blt9206f69c182f67c3/634ea5238602a36d8e991e63/MotionControl_JEC_a.zip)の第 1 軸に、異常ラッチ保持、リセット、500 ms のイネーブル遅延を追加しています。既存の FB 実装や Axis の `IN_OUT` 接続を維持したまま SR/TON ロジックを組み込み、動作許可信号を既存のパワー制御ブロックへ接続します。
 
 上記の配線変更にとどまらず、FBD モジュールはプロジェクト構築から保守までを幅広くカバーします。
 
-- **テンプレートからの新規作成・既存 GXW のインポート**：CPU 別の空白 FBD テンプレートを 57 種類同梱しており、対象機種を選んで新規プロジェクトを始めることも、既存の `.gxw` をインポートして編集を続けることもできます。
+- **新規作成・既存 GXW のインポート**：GX Works2 1.635.0.1 と v4 ワークスペースアダプターは、選択した CPU のシリーズ情報をネイティブコンポーネントから取得し、既存 GXW を使わず FBD プロジェクトを作成します。CPU ごとのプロジェクト形式と言語の制限に従います。57 種類の CPU 別 FBD リソースはカタログと互換入力に使用します。既存の `.gxw` をインポートして、そのソースを編集することもできます。
 - **パラメーター単位と図形単位の 2 つの編集モード**：`get_fbd_catalog` が返すパラメータースキーマに沿って `calls` と `arguments` を送信し、Core に端子展開・`IN_OUT` ペアリング・配線を任せることも、ノード・端子・直交ワイヤ・複数ネットワークを明示的に追加・変更・削除することも可能です。
+- **モジュールの組み合わせ**：複雑な設備では、工程、タイマー・カウンター、警報、インターロックを ST ファンクションブロックに分け、FBD メイン図で名前付きポートと信号を使ってインスタンスを組み合わせます。未保存の FBD プロジェクトでは、最初の `create_st_fb` が選択 CPU のプロジェクトをバックグラウンドで新規作成し、以後の定義とメイン図編集はその保存バージョンを使用します。
 - **定義作成・ユーザーライブラリ取込・タスク登録**：構造体、ST/FBD ファンクションブロック、グローバル／ローカル宣言テーブルの読み書きに対応しています。呼び出し側プログラムを保持したまま別プロジェクトの `.gxw` からユーザーライブラリ定義を取り込む機能（`read_fbd_libraries` / `import_library`）や、ソースプロジェクトが対応する範囲での FB・Program の新規作成、既存／新規タスク・リソースへの登録、システムデバイス割付範囲の設定も行えます。
-- **成果物と各種検証の分離**：保存ごとに `program.gxw`、`fbd.json`、`fbd.svg`、書き込み検証レポートを生成します。ローカル読み戻し検証、ネイティブ保存、単体コンパイル、コードチェックは個別の操作として扱われ、結果が各バージョンに紐づきます。
+- **成果物と検証**：GXW の配布には `program.gxw`、`fbd.json`、`fbd.svg`、書き込みレポートが含まれます。GX Works2 があれば保存時にコンパイル、保存、コールド再オープンを自動実行します。作成できない場合は構造化候補とフォールバック理由を返します。検証結果は各バージョンに紐づきます。
 
 <a name="native-session"></a>
+
+保存済みの Ladder、ST、FBD、SFC GXW バージョンは、`execute_native_engineering` に `plan.mode="background"` と `compile`、`save`、`reopen` の順のコマンドを渡すことで、隔離されたバックグラウンドのネイティブワークスペースでコンパイル・保存・再オープン確認を行い、同じ言語の新バージョンとして保存できます。可視編集セッションの起動や PLC への書き込みは行いません。[バックグラウンド操作手順](skills/gxworks-mcp-router/references/workflows.md#后台原生编译与版本交付)を参照してください。
 
 ## 継続する GX Works2 ネイティブエンジニアリングセッション
 
@@ -93,7 +104,7 @@ ST ワークフローは、単体テキストの生成と `.gxw` ネイティブ
 
 ![Web ワークベンチ：プロジェクトサイドバー、対話エリア、保存済みラダーネットワークを表示するプログラムパネル](resources/assets/web-workbench-ja.png)
 
-ワークベンチでモデル API を設定すると、内蔵の **Direct 生成フロー**で要求分析、仕様確認、プログラム生成を実行し、ラダーのネットワーク、FBD/SFC のグラフ、デバイス使用状況、バージョン間差分、エクスポート可能な成果物をブラウザー上で確認できます。Direct は MCP と同じ設計コンテキスト・RAG パイプラインを共有しつつ外部エージェントのオーケストレーション負荷を抑えます。ワークベンチ内の質疑応答でも必要に応じて読み取り専用ツールが呼び出されます。
+ワークベンチでモデル API を設定すると、内蔵の **Direct 生成フロー**で入力済みの要求から直接生成し、別途の計画承認は挟みません。方案比較や仕様確認には **Design** を使用します。ラダーのネットワーク、FBD/SFC のグラフ、デバイス使用状況、バージョン間差分、エクスポート可能な成果物をブラウザー上で確認できます。Direct は MCP と同じ設計コンテキスト・RAG パイプラインを共有しつつ外部エージェントのオーケストレーション負荷を抑えます。ワークベンチ内の質疑応答でも必要に応じて読み取り専用ツールが呼び出されます。
 
 現場仕様の補足が必要な場合は、質問ごとに独立した入力欄が表示され、パネルの切り替えや再読み込みを行っても入力途中の内容が保持されます。生成時は接続先が対応していれば厳密な構造化出力を使用し、曖昧さのない形式差をローカルで正規化してから Core の検証に進みます。
 
@@ -117,7 +128,7 @@ GXW を作成できない場合は明示的に降格し、Ladder はプログラ
 
 - **ナレッジテキスト共有プールと BM25 統計量の保存性**：複数型式にまたがる重複記述を含む技術仕様や事例レコードに対し、[`exact_search_storage`](src/knowledge/exact_search_storage.py) は長文を SHA-256 去重プールに集約しつつ、論理バインディング層で型式ごとの独立した行と属性を保持し、ビュー経由で SQLite FTS5 に接続します。これにより物理ストレージを大幅に削減しながら、各型式コーパスの単語出現頻度と BM25 算出スコアを非圧縮時と完全に一致させています。また、SQL の `+rowid` 制約により型式絞り込み時の FTS 仮想テーブルのループ実行を抑制します。
 - **グラフ階層の知識プール化とオンデマンド水和**：トランスポート層には `owner-field-row-v3` 形式と [`fact_field_codec`](src/knowledge/fact_field_codec.py) を採用し、適用範囲、条件、依存関係、パラメータ仕様などの頻出構造化フィールドを整数参照としてプール化しています。実行時は `instruction_definitions.manifest.json` 経由で読み取り専用 SQLite をマウントし（[`OwnerDefinitionStore`](src/plc/instruction_owner_store.py)）、起動時は軽量なヘッダーのみを読み込んで CPU 適用判定を行い、検索確定後にのみ完全な事実グラフを水和（`hydrate_owner`）します。
-- **ドメインローカル順位融合（Domain-Local RRF）**：検索処理は [`knowledge.retriever`](src/knowledge/retriever.py) が統括し、完全一致ルーティング、BM25 全文検索、Dense/LSA ベクトル検索、および分かち書きカバレッジゲートを統合します。命令専用事実データベースと一般ナレッジデータベースをまたぐ検索では、ドメインローカル RRF（平滑化定数 $k=60.0$）と修飾子付き ID によりコーパス間の統計歪みを防止し、実体完全一致、ドメイン内相対スコア、クエリ網羅率、決定論的 ID の順で優先度を調停します。
+- **ドメインローカル順位融合（Domain-Local RRF）**：[`knowledge.retriever`](src/knowledge/retriever.py) が完全一致、BM25、Dense/LSA と語句カバレッジを統合します。各データベースは現在の内容に対応するベクトル索引を使い、ドメイン間では融合スコア、クエリ網羅率、修飾 ID で順位を決めます。明示した対象は正確な所有元から取得します。機能別名はハイブリッド検索を補完し、関連デバイス情報と命令で宣言された依存情報も生成コンテキストに渡します。事例の同義語は検索表現を広げるもので、実装方式や命令の意味を決定するものではありません。
 - **技術射影と決定論的 Core 検証**：検索でヒットした情報を直接実行可能な許可とはみなしません。LLM プロンプト生成時は [`model_context`](src/shared/model_context.py) により端子仕様やタイミング制約などのコンパクトな技術射影を渡してトークン消費を抑制し、生成されたコードは [`instruction_constraints`](src/plc/instruction_constraints.py) と Core ルールエンジンにより CPU 型式適合性、オペランド幅、排他関係の決定論的検査を受けます。
 
 ## ツールチェーンとアーキテクチャの役割分担
@@ -125,7 +136,7 @@ GXW を作成できない場合は明示的に降格し、Ladder はプログラ
 ![機能一覧：主な機能モジュールと対応する MCP ツール](resources/assets/feature-functions-ja.png)
 
 - **プロジェクトコンテキストと稼働中セッションの検出**：CPU とプログラム形式を指定してバージョン管理されたプロジェクトを作成・選択できるほか、Agent プロジェクトを作らずに `list_gxworks2_sessions` と `read_gxworks2_snapshot` を呼び出し、現在開いている GX Works2 ウィンドウから読み取り専用スナップショットを取得してネットワーク単位で解析できます。GX Works2 を開いていない場合も、`inspect_gxworks2_csv_files` にプログラム CSV、デバイスコメント CSV、明示的な CPU を渡すと同種の読み取り専用 `source_ref` を取得できます。
-- **CPU スコープの設計 RAG**：エンティティ検索、全文検索、dense/LSA ベクトル検索を組み合わせて順位を統合します。既知の命令には構造化知識から正確なオペランド・ステップ数・修飾ルールを渡し、追加検索でマニュアル根拠とプロジェクト独自の事例を重複なく補います。
+- **CPU スコープの設計 RAG**：エンティティ検索、全文検索、dense/LSA ベクトル検索を組み合わせて順位を統合します（詳細は[アーキテクチャとコンパクト知識実装](#rag)を参照）。既知の命令には構造化知識から正確なオペランド・ステップ数・修飾ルールを渡し、追加検索で技術的根拠とプロジェクト独自の事例を重複なく補います。
 - **決定論的な Core 検証とバージョン成果物**：Python Core が PLC ドメインの意味論を保持し、IR 構築、オペランド・タイミング検査、FBD トポロジー・宣言照合、バージョン成果物の生成を担い、ネイティブコンパイルやシミュレーション、実機モニターと連携します。
 - **承認に基づく GX Works2 への受け渡し**：操作員が設定した承認ポリシーのもとで、現在のラダーバージョンの MAIN とデバイスコメントのインポートや、FBD/ST のネイティブ保存・コンパイル・セッション操作を実行し、バージョンに紐づく実行結果を返します。
 
@@ -153,7 +164,7 @@ Windows 10/11 x64 で[リリースページ](https://github.com/Arienax/gxworks-
 | パッケージ | 主な用途 | 起動入口 |
 | --- | --- | --- |
 | `GXWorks-Agent-MCP-windows-x64.zip` | Codex、Claude Desktop、DeepSeek Harness などの MCP クライアントに接続し、クライアントのモデルを使用 | `gxworks-agent-mcp.exe --local` |
-| `GXWorks-Agent-Full-windows-x64.zip` | Web ワークベンチと MCP を同梱し、実行リソースを共有 | `start-web.cmd` / `gxworks-agent-mcp.exe --local` |
+| `GXWorks-Agent-Full-windows-x64.zip` | Web ワークベンチと MCP を同梱し、実行リソースを共有 | `GXWorks-Agent-Launcher.exe` / `gxworks-agent-mcp.exe --local` |
 
 スリム版の `MCP` パッケージは Web サーバー、モデル SDK、オフライン PDF 取り込み用依存関係を省いて軽量化しつつ、エンジニアリングツール、RAG 検索、テンプレート、ネイティブ補助プログラム、シミュレータータイムライン表示をすべて保持しています。`Full` パッケージは両方の起動入口を含み、同梱の MCP は `--local` で単独動作するほか、`--service` で起動中の Web ワークベンチに接続してプロジェクトとレビューフローを共有できます。
 
@@ -162,6 +173,8 @@ Windows 10/11 x64 で[リリースページ](https://github.com/Arienax/gxworks-
 ### 単独動作の MCP モード
 
 クライアントに stdio サーバーを追加し、コマンドに展開先の `gxworks-agent-mcp.exe` のフルパス、引数に `--local` を指定します。接続を更新したら、`list_projects` で既存プロジェクトを選択するか実際の CPU とプログラム形式を指定して新規作成します。保存済みファイルには [GXW オフラインインポート](#offline-gxw)を使用できます。すでに開いている GX Works2 ウィンドウを調べる場合は `list_gxworks2_sessions` から始められます。
+
+MCP ホストは `capabilities.extensions["io.github.arienax.gxworks-agent/read-delivery"].readBudgetTokens` または起動引数 `--read-budget-tokens N` で容量を指定できます。ホストの実際の出力容量に収まる 1,000 から 128,000 の整数を指定すると、GXWorks Agent がサーバー側で文書を組み立てます。両方を指定した場合は小さい方が適用されます。指定がないクライアントでは互換用のページ分割が引き続き使用されます。
 
 まずは次のような依頼から試せます。
 
@@ -173,9 +186,11 @@ Windows 10/11 x64 で[リリースページ](https://github.com/Arienax/gxworks-
 
 **同梱の MCP ルーター Skill**：ソースリポジトリと両リリースパッケージの [`skills/gxworks-mcp-router/`](skills/gxworks-mcp-router)（`SKILL.md` と `references/`）には、主要な PLC エンジニアリング作業に向けた MCP ツールの選び方、主要パラメーター、呼び出し順序をまとめた Agent Skill が同梱されています。読み取り専用スナップショットとバージョン編集、オフライン `.gxw` 編集と継続ネイティブセッション、ローカル成果物生成とバックグラウンドでのネイティブコンパイル検査、および `local` / `service` / `context` 各モードの応答処理をカバーしています。MCP 接続後、`gxworks-mcp-router/` ディレクトリ全体をクライアントのスキルフォルダーにコピーして有効化できます。
 
+MCP で新規工程の言語を指定しない場合は Ladder を使用します。初回生成は `get_project_spec` を読み、`update_project_spec` で要求、IO、パラメーター、`implementation_items`（対応する要求、言語、配置、実装方法、状態の管理主体）を項目単位で登録します。計画と差分を提示し、ユーザーの明示的な同意後に最新の文字列 `draft_revision` を指定して `confirm_project_spec(user_confirmed=true, expected_revision=...)` を呼び、生成コンテキストを取得します。ユーザーが明示したパラメーター変更は局所更新し、モデルによる実質的な計画変更は再確認します。仕様の保存は local の共通トランザクションと service の既存承認を使用し、固定 context モードは読み取りのみでファイルを作成しません。過去版の仕様は参照用です。明示的な `workflow=direct_generation` で従来の直接生成も利用できます。
+
 ### Web ワークベンチモード
 
-展開した `Full` ディレクトリ内の `start-web.cmd` を実行し、エンジニアリングワークスペース用のフォルダーを選択します。新しいプログラム用にプロジェクトを作成するか、[既存 GXW をインポート](#offline-gxw)します。AI による生成・変更には **Settings → Model → Model API** でモデルサービスを設定します。既存プロジェクトの閲覧、ファイルやグラフの確認、成果物のエクスポートにはモデル呼び出しは不要です。アップデート時は新しいディレクトリへ展開すれば、別保存のワークスペースと個人設定がそのまま引き継がれます。
+展開した `Full` ディレクトリ内の `GXWorks-Agent-Launcher.exe` をダブルクリックし、ポートを選んでワークベンチを起動します。ランチャーはポートを記憶し、同じ状態ディレクトリを使う処理中のタスクがないワークベンチを終了してからブラウザーを開きます。新しいプログラム用にプロジェクトを作成するか、[既存 GXW をインポート](#offline-gxw)します。AI による生成・変更には **Settings → Model → Model API** でモデルサービスを設定します。既存プロジェクトの閲覧、ファイルやグラフの確認、成果物のエクスポートにはモデル呼び出しは不要です。アップデート時は新しいディレクトリへ展開すれば、別保存のワークスペースと個人設定がそのまま引き継がれます。
 
 ### ソースから実行
 
@@ -185,10 +200,11 @@ Python 3.13 と Node.js 22.14 以降をインストールし、次を実行し�
 git clone https://github.com/Arienax/gxworks-agent.git
 cd gxworks-agent
 .\build-web.bat --no-pause
-.\start-web.cmd
 ```
 
-ソースから MCP のみを利用する場合は、`.venv-mcp` を作成して `requirements/mcp.txt` をインストールし、`gxworks-agent-mcp.cmd --local` で起動します。この場合 Node.js は不要です。
+ビルド後、リポジトリのルートにある `GXWorks-Agent-Launcher.exe` をダブルクリックします。
+
+ソースから MCP のみを利用する場合は、`.venv-mcp` を作成して `requirements/mcp.txt` をインストールし、`.\.venv-mcp\Scripts\python.exe .\scripts\mcp_entry.py --local` で起動します。この場合 Node.js は不要です。
 
 ### エンジニアリングテンプレートと知識リソース
 
@@ -198,6 +214,8 @@ cd gxworks-agent
 
 オフラインでの GXW ファイル操作に三菱電機ソフトウェアのインストールは不要です。ネイティブ保存、ネイティブコンパイル・コードチェック、GX Works2 への受け渡し、ネイティブシミュレーションには対応する三菱電機ソフトウェアがローカル環境に必要です。PLC の読み取り専用モニターには MX Component と論理局の設定が必要です。これらの三菱電機ソフトウェアはパッケージに同梱されていません。
 
+Windows のネイティブアダプターは x86 プロセスで GX Works2 のコンポーネントを読み込みます。Python ホストは 64 ビットでも使用できます。pywinauto のビット数に関する警告だけでは操作失敗と判断せず、実際のエラーを確認してください。スクリーンショットを取得できない場合も元の例外を保持し、画面取得の問題を別に報告します。
+
 ## 設備の試運転前に
 
 試運転前に、生成されたロジックを対象 CPU、実配線、機構の動作範囲、運転モードに照らして確認してください。インポート前に対象の GX プロジェクトをバックアップし、GX Works2 へプロジェクト更新を送信したあと、GX Works2 上でコンパイル・チェックおよび実機への書き込みを行ってください。
@@ -206,6 +224,6 @@ cd gxworks-agent
 
 ## 資料とライセンス
 
-[リリースの変更点](CHANGELOG.md) · [Issue](https://github.com/Arienax/gxworks-agent/issues)
+[リリースの変更点](CHANGELOG.md) · [貢献ガイド](CONTRIBUTING.md) · [Issue](https://github.com/Arienax/gxworks-agent/issues)
 
-プロジェクト貢献者が権利を持つ Core、Web、MCP、ネイティブアダプターのソースコードには [Apache License 2.0](LICENSE) を適用します。詳細は[ライセンス範囲](LICENSE-SCOPE.md)と[第三者の権利表記](THIRD_PARTY_NOTICES.md)を参照してください。各貢献者は自身の著作権を保持し、過去に配布されたリリースにはそれぞれの配布時点のライセンスが適用されます。
+プロジェクト貢献者が権利を持つ Core、Web、MCP、ネイティブアダプターのソースコードには [GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE) を適用します。詳細は[ライセンス範囲](LICENSE-SCOPE.md)と[第三者の権利表記](THIRD_PARTY_NOTICES.md)を参照してください。各貢献者は自身の著作権を保持し、過去に配布されたリリースにはそれぞれの配布時点のライセンスが適用されます。[NOTICE](NOTICE) にオリジナルプロジェクト、作者、リポジトリを記録しています。

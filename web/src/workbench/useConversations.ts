@@ -1,45 +1,28 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
-import { useEffect, useState } from "react";
-import type { Job, Session } from "../api/client";
+import { useState } from "react";
+import type { Job, WorkbenchConnection } from "../api/client";
 import { api } from "../api/client";
+import { usePolling } from "../lifecycle/usePolling";
+import { reconcileByRevision } from "../lifecycle/requests";
 
 /**
- * Every conversation in the served workspace, newest first.
+ * Jobs across the served workspace, newest first. The sidebar groups these
+ * by conversation while the selected project retains the full task history.
  *
- * A conversation is one job: the workbench runs one per request, so the sidebar
- * lists them like a harness lists sessions. The list is served unfiltered by
- * project, because the operator picks a conversation, not a project.
- *
- * @param session - open operator session; polling stops without one.
+ * @param connection - local workbench connection; polling stops before it is available.
  * @param workspaceKey - identity of the served workspace; a switch reloads the list.
  */
-export function useConversations(session: Session | null, workspaceKey: string | null) {
-  const [jobs, setJobs] = useState<Job[]>([]);
-
-  useEffect(() => {
-    if (!session) {
-      setJobs([]);
-      return;
-    }
-    let stopped = false;
-    const load = async () => {
-      try {
-        const value = await api<{ jobs: Job[] }>("/jobs", "GET");
-        if (stopped) return;
-        setJobs([...value.jobs].sort((a, b) => (a.created_at < b.created_at ? 1 : -1)));
-      } catch {
-        // Keep the previous list; the poll retries on the next tick.
-      }
-    };
-    void load();
-    const timer = setInterval(load, 4000);
-    return () => {
-      stopped = true;
-      clearInterval(timer);
-    };
-  }, [session, workspaceKey]);
-
-  return jobs;
+export function useConversations(connection: WorkbenchConnection | null, paused: boolean) {
+  const scope = connection?.selected ? connection.path || null : null;
+  const [snapshot, setSnapshot] = useState<{ scope: string | null; jobs: Job[] }>({ scope: null, jobs: [] });
+  usePolling(paused ? null : scope,
+    signal => api<{ jobs: Job[] }>("/jobs", "GET", undefined, { signal }),
+    value => setSnapshot(current => {
+      const jobs = reconcileByRevision(current.scope === scope ? current.jobs : [], value.jobs);
+      return current.scope === scope && jobs === current.jobs ? current : { scope, jobs };
+    }),
+    () => {}, 4000);
+  return snapshot.scope === scope ? snapshot.jobs : [];
 }

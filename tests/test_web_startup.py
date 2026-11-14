@@ -46,11 +46,32 @@ def test_browser_opens_only_after_this_server_is_ready(monkeypatch):
     assert not thread.is_alive()
 
 
-def test_stopped_or_failed_server_never_opens_login(monkeypatch):
+def test_stopped_or_failed_server_never_opens_the_workbench(monkeypatch):
     monkeypatch.setattr("webbrowser.open", lambda *args, **kwargs: pytest.fail("Unexpected browser launch"))
     stopped = threading.Event()
     stopped.set()
     launcher._open_when_started(SimpleNamespace(started=False), "http://127.0.0.1:8765/#token=local", stopped)
+
+
+def test_windows_launcher_signal_requests_graceful_shutdown():
+    import uuid
+
+    win32event = pytest.importorskip("win32event")
+    name = r"Local\GXWorksAgent-Web-" + uuid.uuid4().hex
+    event = win32event.CreateEvent(None, True, False, name)
+    server = SimpleNamespace(should_exit=False)
+    stopped = threading.Event()
+    thread = threading.Thread(target=launcher._watch_launcher_stop, args=(server, name, stopped))
+    thread.start()
+    try:
+        assert not server.should_exit
+        win32event.SetEvent(event)
+        thread.join(3)
+        assert not thread.is_alive() and server.should_exit
+    finally:
+        stopped.set()
+        thread.join(2)
+        event.Close()
 
 
 @pytest.mark.parametrize("started,expected", [(False, 1), (True, 0)])
@@ -61,7 +82,6 @@ def test_cli_exit_code_and_loopback_defaults(monkeypatch, tmp_path, started, exp
     app_calls = []
     monkeypatch.setattr(web_app, "create_app", lambda workspace, **kwargs: app_calls.append((workspace, kwargs)) or object())
     monkeypatch.setattr("webbrowser.open", lambda *args, **kwargs: pytest.fail("Browser is opt-in"))
-    monkeypatch.setenv("PLC_WEB_OPERATOR_TOKEN", "local-token")
     monkeypatch.delenv("PLC_WEB_AGENT_TOKEN", raising=False)
 
     class Server:
@@ -87,8 +107,6 @@ def test_browser_opens_the_workbench_without_any_credential(monkeypatch, tmp_pat
 
     opened = threading.Event()
     urls = []
-    # A leftover operator token must not reach the URL: the page opens its own session.
-    monkeypatch.setenv("PLC_WEB_OPERATOR_TOKEN", "test+/& token")
     monkeypatch.setattr(web_app, "create_app", lambda *args, **kwargs: object())
 
     def open_browser(url, new):
@@ -108,6 +126,33 @@ def test_browser_opens_the_workbench_without_any_credential(monkeypatch, tmp_pat
     monkeypatch.setitem(sys.modules, "uvicorn", SimpleNamespace(Config=lambda *args, **kwargs: None, Server=Server))
     assert launcher.main(["--workspace", str(tmp_path), "--open-browser"]) == 0
     assert urls == ["http://127.0.0.1:8765"]
+
+
+def test_knowledge_check_waits_until_the_server_is_ready(monkeypatch, tmp_path):
+    from application import execution
+    from integrations.web import app as web_app
+
+    ready = threading.Event()
+    checked = threading.Event()
+    monkeypatch.setattr(web_app, "create_app", lambda *args, **kwargs: object())
+
+    def knowledge_status():
+        assert ready.is_set()
+        checked.set()
+        return {"status": "available"}
+
+    class Server:
+        def __init__(self, config):
+            self.started = False
+
+        def run(self):
+            ready.set()
+            self.started = True
+            assert checked.wait(2)
+
+    monkeypatch.setattr(execution, "knowledge_runtime_status", knowledge_status)
+    monkeypatch.setitem(sys.modules, "uvicorn", SimpleNamespace(Config=lambda *args, **kwargs: None, Server=Server))
+    assert launcher.main(["--state-dir", str(tmp_path), "--no-service-discovery"]) == 0
 
 
 @pytest.fixture

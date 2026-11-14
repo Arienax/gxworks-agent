@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import { X } from "lucide-react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
@@ -18,7 +18,6 @@ import { usePanelTransition } from "./workbench/usePanelTransition";
 import { useWorkbenchController } from "./workbench/useWorkbenchController";
 import type { Job } from "./api/client";
 import { useConversations } from "./workbench/useConversations";
-import { useWorkspaceBinding } from "./workbench/useWorkspaceBinding";
 import { pickView } from "./workbench/viewProps";
 
 const WorkbenchDialogs = lazy(() => import("./workbench/WorkbenchDialogs").then((module) => ({ default: module.WorkbenchDialogs })));
@@ -30,26 +29,30 @@ const MIN_CONVERSATION = 360;
 export default function App() {
   const view = useWorkbenchController();
   // The service may start without a workspace; the picker then owns the screen.
-  const workspace = useWorkspaceBinding(view.session);
-  // The sidebar lists conversations of the served workspace, newest first.
-  const conversations = useConversations(view.session, workspace.activeId);
+  const workspace = view.workspaceBinding;
+  const conversations = useConversations(view.connection, workspace.busy);
   const pendingJob = useRef<Job | null>(null);
   const openConversation = (job: Job) => {
+    if (view.busy) return;
     if (job.project_id && job.project_id !== view.pid) {
-      // Switching projects wipes the selection, so hand it over once pid settles.
-      pendingJob.current = job;
-      view.setPid(job.project_id);
+      const projectId = job.project_id;
+      void view.guarded(async () => {
+        pendingJob.current = job;
+        let selected = false;
+        try { selected = await view.selectProject(projectId); }
+        finally { if (!selected && pendingJob.current === job) pendingJob.current = null; }
+      });
       return;
     }
-    view.setJobId(job.id);
+    view.selectConversation(job);
   };
   useEffect(() => {
     const pending = pendingJob.current;
     if (pending && pending.project_id === view.pid) {
       pendingJob.current = null;
-      view.setJobId(pending.id);
+      view.selectConversation(pending);
     }
-  }, [view.pid, view.setJobId]);
+  }, [view.pid, view.selectConversation]);
   const dialogsOpened = useRef(false);
   const root = useRef<HTMLDivElement>(null);
   const [resizing, setResizing] = useState(false);
@@ -92,9 +95,7 @@ export default function App() {
     return () => cancelAnimationFrame(frame);
   }, [view.leftOpen]);
 
-  if (!view.session) {
-    // The page authenticates itself on loopback, so this only means the service
-    // is not answering yet (or any more).
+  if (!view.connection) {
     return (
       <p className="panel-empty" role={view.connecting ? "status" : "alert"}>
         {view.t(view.connecting ? "正在连接本地服务" : "无法连接本地服务，请确认工作台仍在运行。")}
@@ -135,8 +136,9 @@ export default function App() {
       <div className="sidebar-host" inert={sidebarPhase === "closed" || undefined}>
         <ProjectSidebar {...pickView(view, projectSidebarFields)}
           conversations={conversations} onOpenConversation={openConversation}
+          onOpenProject={(id) => void view.guarded(async () => { await view.selectProject(id); })}
           workspaces={workspace.workspaces}
-          workspaceError={workspace.error} workspacesBusy={workspace.busy}
+          workspaceError={workspace.error} workspacesBusy={view.busy}
           onAddWorkspace={workspace.addViaPicker}
           onActivateWorkspace={workspace.activate}
           onForgetWorkspace={workspace.forget} />

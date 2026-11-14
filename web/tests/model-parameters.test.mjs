@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { adoptSelections, changeSelection, conditionsMatch, controlValues,
-  parameterEnabled, selectedValues, validValue, sliderRange, ENDPOINT_PRESETS, selectionFor, modifiedParameters } from '../src/features/modelParameters.ts';
+  parameterEnabled, selectedValues, validValue, sliderRange, ENDPOINT_PRESETS, selectionFor, modifiedParameters,
+  editableReasoningLevels, reasoningChoices, reasoningOverride, rebindReasoningSelection,
+  parseRequestParameterRows, requestParameterRows, withRequestParameters } from '../src/features/modelParameters.ts';
 
 const scope = { endpoint: 'https://test.invalid/v1', model: 'model-unknown', context: 'a'.repeat(64), binding: 'b'.repeat(64) };
 const spec = (extra = {}) => ({ type: 'number', status: 'supported', source: 'metadata', default_mode: 'omit', ...extra });
@@ -11,6 +13,35 @@ const contract = { schema_version: 2, scope, capabilities: {}, constraints: {}, 
   budget: spec({ type: 'integer', minimum: 0, maximum: 32768, step: 1024, wire_location: 'extra_body', wire_path: ['thinking', 'budget_tokens'] }),
   unseen_flag: spec({ type: 'boolean' }),
 }};
+
+test('custom request rows preserve JSON types and existing selections', () => {
+  const c = { ...contract, parameters: { ...contract.parameters,
+    reasoning_effort: spec({ type: 'enum', values: ['low', 'high'] }),
+  }};
+  const saved = { scope, parameters: {
+    temp: { mode: 'value', value: .5 }, reasoning_effort: { mode: 'value', value: 'low' },
+  }};
+  assert.deepEqual(requestParameterRows(saved), [{ name: 'temp', value: '0.5' }]);
+  const parsed = parseRequestParameterRows([
+    { name: 'top_k', value: '30' }, { name: 'flag', value: 'false' },
+    { name: 'stop', value: '["END"]' }, { name: 'vendor', value: '{"enabled":true}' },
+    { name: 'label', value: 'plain text' }, { name: '', value: '' },
+  ], c);
+  assert.deepEqual(parsed, { parameters: { top_k: 30, flag: false, stop: ['END'], vendor: { enabled: true }, label: 'plain text' } });
+  const next = withRequestParameters(saved, parsed.parameters);
+  assert.deepEqual(next.parameters.temp, { mode: 'omit' });
+  assert.deepEqual(next.parameters.reasoning_effort, saved.parameters.reasoning_effort);
+  assert.deepEqual(changeSelection(c, next, 'reasoning_effort', { mode: 'value', value: 'high' }).request_parameters, parsed.parameters);
+});
+
+test('custom request rows reject invalid JSON, duplicate names and invalid declared values', () => {
+  const parse = (...pairs) => parseRequestParameterRows(pairs.map(([name, value]) => ({ name, value })), contract);
+  assert.ok(parse(['stop', '["END"']).error);
+  assert.ok(parse(['top_k', '1e999']).error);
+  assert.ok(parse(['top_k', '10'], ['top_k', '30']).error);
+  assert.ok(parse(['reasoning_effort', 'high']).error);
+  assert.equal(parse(['temp', '0.7']).field, 'temp');
+});
 
 test('arbitrary metadata controls, booleans and large integer ranges need no name-specific UI', () => {
   assert.deepEqual(controlValues(contract.parameters.effort), ['off', 'economy', 'thorough']);
@@ -83,6 +114,76 @@ test('presets contain endpoints, never model names or tuning defaults', () => {
     assert.match(entry.url, /^https:\/\//);
     assert.ok(['local', 'dsh'].includes(entry.source));
   }
+});
+
+test('quick effort uses the declared levels and keeps existing unrelated settings', () => {
+  const c = { scope, parameters: {
+    reasoning_effort: spec({type: 'enum', values: ['none', 'low', 'high']}),
+    temperature: spec(),
+  }};
+  const settings = { scope, parameters: {temperature: {mode: 'value', value: .5}} };
+  const choices = reasoningChoices(c, settings);
+  assert.deepEqual(choices.options.map(option => option.value), ['', 'none', 'low', 'high']);
+  assert.deepEqual(choices.options.at(-1).settings.parameters, {
+    temperature: {mode: 'value', value: .5}, reasoning_effort: {mode: 'value', value: 'high'},
+  });
+  assert.deepEqual(choices.options[0].settings.parameters.reasoning_effort, {mode: 'omit'});
+  assert.equal(reasoningChoices({scope, parameters: {
+    reasoning_effort: spec({type: 'enum', source: 'generic', status: 'unknown', ui_hint: {suggestions: ['high']}}),
+  }}, settings), null);
+});
+
+test('quick effort switches thinking on and off without discarding dependent values', () => {
+  const c = { scope, parameters: {
+    reasoning_effort: spec({type: 'enum', values: ['low', 'high', 'max']}),
+    thinking_mode: spec({type: 'enum', values: ['enabled', 'disabled']}),
+    temperature: spec({requires: {thinking_mode: ['disabled']}}),
+  }};
+  const choices = reasoningChoices(c, {scope, parameters: {thinking_mode: {mode: 'value', value: 'disabled'}}});
+  const choose = (menu, value) => menu.options.find(option => option.value === value);
+  assert.equal(choices.current, 'none');
+  assert.deepEqual(choose(choices, 'high').settings.parameters, {
+    thinking_mode: {mode: 'value', value: 'enabled'}, reasoning_effort: {mode: 'value', value: 'high'},
+  });
+  assert.deepEqual(choose(choices, 'none').settings.parameters, {
+    thinking_mode: {mode: 'value', value: 'disabled'}, reasoning_effort: {mode: 'omit'},
+  });
+  const withTemperature = reasoningChoices(c, {scope, parameters: {temperature: {mode: 'value', value: .5}}});
+  assert.equal(choose(withTemperature, 'high').disabled, true);
+  assert.equal(choose(withTemperature, 'none').disabled, false);
+});
+
+test('custom levels keep their names when API values are aliased or omitted', () => {
+  const levels = {off: null, low: 'eco', high: 'deep', max: 'deep'};
+  const descriptor = reasoningOverride({wire_location: 'extra_body', wire_path: ['reasoning', 'effort']}, levels);
+  const c = {scope, parameters: {reasoning_effort: descriptor}};
+  const menu = reasoningChoices(c, {});
+  const choose = (value) => menu.options.find(option => option.value === value).settings;
+  assert.deepEqual(menu.options.map(option => option.value), ['', 'off', 'low', 'high', 'max']);
+  assert.deepEqual(choose('max').parameters.reasoning_effort, {mode: 'value', value: 'deep', level: 'max'});
+  assert.equal(reasoningChoices(c, choose('max')).current, 'max');
+  assert.deepEqual(choose('off').parameters.reasoning_effort, {mode: 'omit', level: 'off'});
+  assert.equal(reasoningChoices(c, choose('off')).current, 'off');
+  assert.deepEqual(choose('').parameters.reasoning_effort, {mode: 'omit'});
+  assert.deepEqual(descriptor.wire_path, ['reasoning', 'effort']);
+  assert.deepEqual(rebindReasoningSelection(choose('max').parameters.reasoning_effort, {...levels, max: 'ultra'}),
+    {mode: 'value', level: 'max', value: 'ultra'});
+  assert.deepEqual(rebindReasoningSelection(choose('max').parameters.reasoning_effort, {high: 'deep'}), {mode: 'omit'});
+  assert.equal(reasoningChoices({scope, parameters: {reasoning_effort: reasoningOverride(descriptor)}}, {}), null);
+});
+
+test('legacy custom settings keep their declared levels or their one saved choice', () => {
+  const oldEnum = spec({type: 'enum', source: 'manual', values: ['none', 'low', 'high', 'max']});
+  assert.deepEqual(editableReasoningLevels(oldEnum), {off: 'none', low: 'low', high: 'high', max: 'max'});
+  const contract = {scope, parameters: {
+    reasoning_effort: spec({type: 'enum', status: 'unknown', source: 'generic', ui_hint: {suggestions: ['high']}}),
+  }};
+  const saved = {scope, parameters: {reasoning_effort: {mode: 'value', value: 'deep-vendor'}}};
+  const picker = reasoningChoices(contract, saved);
+  assert.equal(picker.current, 'deep-vendor');
+  assert.deepEqual(picker.options.map(option => option.value), ['', 'deep-vendor']);
+  assert.deepEqual(picker.options[0].settings.parameters.reasoning_effort, {mode: 'omit'});
+  assert.equal(reasoningChoices(contract, picker.options[0].settings), null);
 });
 
 test('partial samples never invent a numeric range or imply a fixed parameter', () => {

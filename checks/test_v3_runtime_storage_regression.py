@@ -1,4 +1,5 @@
 """Independent exact-storage regressions, synthetic public-safe fixtures only."""
+from contextlib import closing
 import copy
 import hashlib
 import json
@@ -116,7 +117,7 @@ class V3OwnerStoreIndependentTests(unittest.TestCase):
         from plc.instruction_owner_store import OwnerDefinitionStore
         s=OwnerDefinitionStore(self.manifest);self.addCleanup(s.close);return s
     def rewrite_first_packet(self,change):
-        with sqlite3.connect(self.db)as c:
+        with closing(sqlite3.connect(self.db)) as c, c:
             owner,text=c.execute('SELECT owner,payload_json FROM runtime_definitions ORDER BY owner LIMIT 1').fetchone();v=json.loads(text);change(v['value']['facts']);text=json.dumps(v,sort_keys=True,separators=(',',':'))
             c.execute('UPDATE runtime_definitions SET payload_json=? WHERE owner=?',(text,owner));c.execute('UPDATE runtime_owner_index SET packet_sha256=? WHERE owner=?',(hashlib.sha256(text.encode()).hexdigest(),owner))
         self.refresh()
@@ -125,7 +126,7 @@ class V3OwnerStoreIndependentTests(unittest.TestCase):
         for entry in self.raw['entries']:
             value=s.get_entry(entry['opcode'],cpu=entry['target_model'])
             self.assertEqual(json.dumps(value,sort_keys=True),json.dumps(entry,sort_keys=True))
-        with sqlite3.connect(self.db)as c:
+        with closing(sqlite3.connect(self.db)) as c, c:
             self.assertEqual(c.execute("SELECT count(*) FROM runtime_fact_fields WHERE json_extract(payload_json,'$.field')='id'").fetchone()[0],2)
             self.assertEqual(c.execute("SELECT value FROM meta WHERE key='runtime_serialization'").fetchone()[0],'owner-field-row-v3')
     def test_unique_fact_ids_stay_inline_and_do_not_make_id_pool(self):
@@ -137,7 +138,7 @@ class V3OwnerStoreIndependentTests(unittest.TestCase):
         db=self.root/'unique.sqlite';writer=OwnerStoreWriter(db,{k:v for k,v in raw.items()if k!='entries'},fact_rows=True)
         for e in raw['entries']:writer.add_entry(e)
         writer.finalize(self.root/'unique.manifest.json')
-        with sqlite3.connect(db)as c:self.assertEqual(c.execute("SELECT count(*) FROM runtime_fact_fields WHERE json_extract(payload_json,'$.field')='id'").fetchone()[0],0)
+        with closing(sqlite3.connect(db)) as c, c:self.assertEqual(c.execute("SELECT count(*) FROM runtime_fact_fields WHERE json_extract(payload_json,'$.field')='id'").fetchone()[0],0)
     def test_wrong_row_shape_rejected_after_packet_and_manifest_rehash(self):
         self.rewrite_first_packet(lambda facts:facts.__setitem__(0,{'id':'not-a-v3-row'}))
         s=self.open()
@@ -146,7 +147,7 @@ class V3OwnerStoreIndependentTests(unittest.TestCase):
         self.rewrite_first_packet(lambda facts:facts[0][0].append(99999999));s=self.open()
         with self.assertRaises(ValueError):s.get_entry('PWM',cpu='FX5U')
     def test_wrong_model_scope_rejected_even_after_catalog_and_manifest_rehash(self):
-        with sqlite3.connect(self.db)as c:
+        with closing(sqlite3.connect(self.db)) as c, c:
             identity,text=c.execute("SELECT id,payload_json FROM runtime_fact_fields WHERE json_extract(payload_json,'$.field')='scope' LIMIT 1").fetchone()
             value=json.loads(text);value['value']['models']=['OTHER_MODEL'];text=json.dumps(value,sort_keys=True,separators=(',',':'))
             c.execute('UPDATE runtime_fact_fields SET payload_json=?,sha256=? WHERE id=?',(text,hashlib.sha256(text.encode()).hexdigest(),identity))
@@ -154,11 +155,11 @@ class V3OwnerStoreIndependentTests(unittest.TestCase):
         with self.assertRaises(ValueError):s.get_entry('PWM',cpu='FX5U')
 
     def test_wrong_fact_row_version_is_not_decoded_as_legacy(self):
-        with sqlite3.connect(self.db)as c:c.execute("UPDATE meta SET value='future-unreviewed' WHERE key='fact_row_serialization'")
+        with closing(sqlite3.connect(self.db)) as c, c:c.execute("UPDATE meta SET value='future-unreviewed' WHERE key='fact_row_serialization'")
         self.refresh()
         with self.assertRaises(ValueError):self.open()
     def test_missing_search_reference_fails_real_store_schema(self):
-        with sqlite3.connect(self.db)as c:c.execute('DELETE FROM runtime_search_documents')
+        with closing(sqlite3.connect(self.db)) as c, c:c.execute('DELETE FROM runtime_search_documents')
         self.refresh()
         with self.assertRaises(ValueError):self.open()
     def test_corrupt_search_marker_schema_rejects_and_broad_returns_no_evidence(self):
@@ -170,18 +171,20 @@ class V3OwnerStoreIndependentTests(unittest.TestCase):
             index_access.close_thread_connection();core._retrieve_cached.cache_clear()
             # Low-level schema is the explicit diagnostic boundary. The legacy
             # public broad facade intentionally maps retrieval errors to [].
-            with sqlite3.connect(self.db)as c:c.execute("UPDATE meta SET value='unknown-marker' WHERE key='search_serialization'")
-            with sqlite3.connect(self.db)as c:
+            with closing(sqlite3.connect(self.db)) as c, c:c.execute("UPDATE meta SET value='unknown-marker' WHERE key='search_serialization'")
+            with closing(sqlite3.connect(self.db)) as c, c:
                 c.row_factory=sqlite3.Row
                 with self.assertRaises(ValueError):index_access.schema(c)
-            self.assertEqual(core.retrieve_broad_knowledge('PWM',plc_model='FX5U',task_type='analysis'),[])
+            with self.assertRaises(ValueError):core.retrieve_broad_knowledge('PWM',plc_model='FX5U',task_type='analysis')
             index_access.close_thread_connection()
 
     def test_valid_search_binding_substitution_rejected_by_original_manifest(self):
-        with sqlite3.connect(self.db)as c:
+        with closing(sqlite3.connect(self.db)) as c, c:
             ids=[r[0]for r in c.execute('SELECT id FROM runtime_search_documents')]
             self.assertGreaterEqual(len(ids),2)
             c.execute('UPDATE runtime_chunk_bindings SET document_id=?',(ids[-1],))
-        with self.assertRaises(ValueError):self.open()
+        with self.assertRaises(ValueError):
+            from plc.instruction_owner_store import OwnerDefinitionStore
+            OwnerDefinitionStore(self.manifest, verify_integrity=True)
 
 if __name__=='__main__':unittest.main()

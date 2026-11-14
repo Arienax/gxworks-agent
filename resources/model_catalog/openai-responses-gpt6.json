@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "openai-responses-gpt6",
+  "extends": "generic-openai-compatible",
+  "capabilities": {
+    "reasoning": {"status": "supported", "source": "catalog"},
+    "mid_convo_effort": {"status": "supported", "source": "catalog"},
+    "tools": {"status": "supported", "source": "catalog"},
+    "vision": {"status": "supported", "source": "catalog"},
+    "structured_output": {
+      "status": "supported",
+      "source": "catalog",
+      "modes": ["json_object", "json_schema"]
+    }
+  },
+  "references": ["npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/openai.json"],
+  "reviewed_at": "2026-11-10"
+}

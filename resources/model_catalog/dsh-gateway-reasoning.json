@@ -1,0 +1,1341 @@
+[
+  {
+    "schema_version": 1,
+    "id": "dsh-ant-ling-1",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://api.ant-ling.com/v1"
+      ],
+      "models": [
+        "Ring-2.6-1T"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "high",
+            "xhigh"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "effort"
+        ]
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/ant-ling.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-baseten-1",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://inference.baseten.co/v1"
+      ],
+      "models": [
+        "deepseek-ai/DeepSeek-V4-Flash-0731",
+        "deepseek-ai/DeepSeek-V4-Pro",
+        "openai/gpt-oss-120b",
+        "thinkingmachines/inkling",
+        "thinkingmachines/inkling-small"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/baseten.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-baseten-2",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://inference.baseten.co/v1"
+      ],
+      "models": [
+        "deepseek-ai/DeepSeek-V4-Pro-0813",
+        "deepseek-ai/DeepSeek-V4.1-Flash",
+        "deepseek-ai/DeepSeek-V4.1-Flash-Fast",
+        "moonshotai/Kimi-K3",
+        "zai-org/GLM-5.3-Fast"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "low",
+            "high",
+            "max"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/baseten.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-baseten-3",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://inference.baseten.co/v1"
+      ],
+      "models": [
+        "moonshotai/Kimi-K2.5",
+        "moonshotai/Kimi-K2.6",
+        "moonshotai/Kimi-K2.7-Code",
+        "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B",
+        "nvidia/Nemotron-120B-A12B",
+        "zai-org/GLM-4.7",
+        "zai-org/GLM-5",
+        "zai-org/GLM-5.1"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "boolean",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            true,
+            false
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "chat_template_args",
+          "enable_thinking"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "unsupported",
+        "source": "catalog"
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/baseten.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-baseten-4",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://inference.baseten.co/v1"
+      ],
+      "models": [
+        "zai-org/GLM-5.2",
+        "zai-org/GLM-5.2-Fast"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "boolean",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            true,
+            false
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "chat_template_args",
+          "enable_thinking"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "high",
+            "max"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/baseten.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-baseten-5",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://inference.baseten.co/v1"
+      ],
+      "models": [
+        "zai-org/GLM-5.3",
+        "zai-org/GLM-5.3-Flash"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "low",
+            "high",
+            "max"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/baseten.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-cerebras-1",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://api.cerebras.ai/v1"
+      ],
+      "models": [
+        "gpt-oss-120b"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/cerebras.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-cerebras-2",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://api.cerebras.ai/v1"
+      ],
+      "models": [
+        "qwen-3.8-27b"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/cerebras.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-fireworks-1",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://api.fireworks.ai/inference/v1"
+      ],
+      "models": [
+        "accounts/fireworks/models/glm-5p3",
+        "accounts/fireworks/models/glm-5p3-flash",
+        "accounts/fireworks/models/kimi-k3",
+        "accounts/fireworks/routers/glm-5p3-fast",
+        "accounts/fireworks/routers/glm-fast-latest",
+        "accounts/fireworks/routers/glm-flash-latest",
+        "accounts/fireworks/routers/glm-latest",
+        "accounts/fireworks/routers/kimi-k3-fast"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "low",
+            "high",
+            "max"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/fireworks.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-groq-1",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://api.groq.com/openai/v1"
+      ],
+      "models": [
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "openai/gpt-oss-safeguard-20b"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/groq.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-groq-2",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://api.groq.com/openai/v1"
+      ],
+      "models": [
+        "qwen/qwen3.6-27b"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "default"
+          ]
+        },
+        "ui_hint": {
+          "reasoning_levels": {
+            "off": "none",
+            "high": "default"
+          }
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/groq.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-groq-3",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://api.groq.com/openai/v1"
+      ],
+      "models": [
+        "qwen/qwen3.8-27b"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/groq.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-huggingface-1",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://router.huggingface.co/v1"
+      ],
+      "models": [
+        "MiniMaxAI/MiniMax-M1-80k",
+        "MiniMaxAI/MiniMax-M2",
+        "MiniMaxAI/MiniMax-M2.1",
+        "MiniMaxAI/MiniMax-M2.5",
+        "MiniMaxAI/MiniMax-M2.7",
+        "MiniMaxAI/MiniMax-M3",
+        "Qwen/Qwen3-235B-A22B",
+        "Qwen/Qwen3-235B-A22B-Thinking-2507",
+        "Qwen/Qwen3-30B-A3B",
+        "Qwen/Qwen3-32B",
+        "Qwen/Qwen3.5-122B-A10B",
+        "Qwen/Qwen3.5-27B",
+        "Qwen/Qwen3.5-35B-A3B",
+        "Qwen/Qwen3.5-9B",
+        "Qwen/Qwen3.6-27B",
+        "Qwen/Qwen3.6-35B-A3B",
+        "XiaomiMiMo/MiMo-V2-Flash",
+        "deepseek-ai/DeepSeek-R1",
+        "deepseek-ai/DeepSeek-R1-0528",
+        "deepseek-ai/DeepSeek-V3.1",
+        "deepseek-ai/DeepSeek-V3.2",
+        "deepseek-ai/DeepSeek-V4-Flash",
+        "google/gemma-4-26B-A4B-it",
+        "google/gemma-4-31B-it",
+        "moonshotai/Kimi-K2-Thinking",
+        "moonshotai/Kimi-K2.5",
+        "moonshotai/Kimi-K2.6",
+        "moonshotai/Kimi-K2.7-Code",
+        "stepfun-ai/Step-3.5-Flash",
+        "thinkingmachines/Inkling-Small",
+        "zai-org/GLM-4.5",
+        "zai-org/GLM-4.5-Air",
+        "zai-org/GLM-4.5V",
+        "zai-org/GLM-4.6",
+        "zai-org/GLM-4.6V-Flash",
+        "zai-org/GLM-4.7",
+        "zai-org/GLM-4.7-Flash",
+        "zai-org/GLM-5",
+        "zai-org/GLM-5.1",
+        "zai-org/GLM-5.2"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "minimal",
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/huggingface.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-huggingface-2",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://router.huggingface.co/v1"
+      ],
+      "models": [
+        "deepseek-ai/DeepSeek-V4-Flash-0731"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "high",
+            "max"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/huggingface.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-huggingface-3",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://router.huggingface.co/v1"
+      ],
+      "models": [
+        "deepseek-ai/DeepSeek-V4-Flash-Vision-Exp",
+        "deepseek-ai/DeepSeek-V4-Pro-0813",
+        "moonshotai/Kimi-K3",
+        "zai-org/GLM-5.3",
+        "zai-org/GLM-5.3-Flash"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "low",
+            "high",
+            "max"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/huggingface.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-huggingface-4",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://router.huggingface.co/v1"
+      ],
+      "models": [
+        "deepseek-ai/DeepSeek-V4-Pro"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "high"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/huggingface.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-huggingface-5",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://router.huggingface.co/v1"
+      ],
+      "models": [
+        "deepseek-ai/DeepSeek-V4.1-Flash"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "low",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/huggingface.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-huggingface-6",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://router.huggingface.co/v1"
+      ],
+      "models": [
+        "Qwen/Qwen3-VL-235B-A22B-Thinking",
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "stepfun-ai/Step-3.7-Flash",
+        "thinkingmachines/Inkling"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/huggingface.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-huggingface-7",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://router.huggingface.co/v1"
+      ],
+      "models": [
+        "Qwen/Qwen3.5-397B-A17B"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/huggingface.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-huggingface-8",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://router.huggingface.co/v1"
+      ],
+      "models": [
+        "Qwen/Qwen3.8-2.4T-A95B",
+        "Qwen/Qwen3.8-27B"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "low",
+            "medium",
+            "xhigh"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/huggingface.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-huggingface-9",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://router.huggingface.co/v1"
+      ],
+      "models": [
+        "tencent/Hy3"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "low",
+            "high"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/huggingface.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-huggingface-10",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://router.huggingface.co/v1"
+      ],
+      "models": [
+        "tencent/Hy4-preview"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "high"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/huggingface.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-huggingface-11",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://router.huggingface.co/v1"
+      ],
+      "models": [
+        "XiaomiMiMo/MiMo-V2.5",
+        "XiaomiMiMo/MiMo-V2.5-Pro"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/huggingface.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-mistral-1",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://api.mistral.ai/v1"
+      ],
+      "models": [
+        "glm-5-2",
+        "zai-glm-5-2"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "high",
+            "max"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/mistral.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-mistral-2",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://api.mistral.ai/v1"
+      ],
+      "models": [
+        "mistral-large-4",
+        "mistral-medium-2604",
+        "mistral-medium-3.5",
+        "mistral-medium-latest",
+        "mistral-small-2603",
+        "mistral-small-latest"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "none",
+            "high"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/mistral.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-mistral-3",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://api.mistral.ai/v1"
+      ],
+      "models": [
+        "zai-glm-5-3"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "low",
+            "high",
+            "max"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/mistral.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-nvidia-1",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://integrate.api.nvidia.com/v1"
+      ],
+      "models": [
+        "deepseek-ai/deepseek-v4.1-flash"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "enabled",
+            "disabled"
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "thinking",
+          "type"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "unsupported",
+        "source": "catalog"
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/nvidia.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-together-1",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://api.together.ai/v1"
+      ],
+      "models": [
+        "MiniMaxAI/MiniMax-M3",
+        "Qwen/Qwen3.5-9B",
+        "Qwen/Qwen3.6-Plus",
+        "deepseek-ai/DeepSeek-V4-Flash-0731",
+        "deepseek-ai/DeepSeek-V4.1-Flash",
+        "moonshotai/Kimi-K3",
+        "nvidia/nemotron-3-ultra-550b-a55b",
+        "thinkingmachines/Inkling",
+        "zai-org/GLM-5.2",
+        "zai-org/GLM-5.3",
+        "zai-org/GLM-5.3-Flash"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "boolean",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            true,
+            false
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "enabled"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "unsupported",
+        "source": "catalog"
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/together.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-together-2",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://api.together.ai/v1"
+      ],
+      "models": [
+        "deepseek-ai/DeepSeek-V4-Pro-0813"
+      ]
+    },
+    "parameters": {
+      "thinking_mode": {
+        "type": "boolean",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            true,
+            false
+          ]
+        },
+        "wire_location": "extra_body",
+        "wire_path": [
+          "reasoning",
+          "enabled"
+        ]
+      },
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "high"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/together.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  },
+  {
+    "schema_version": 1,
+    "id": "dsh-together-3",
+    "extends": "generic-openai-compatible",
+    "match": {
+      "endpoints": [
+        "https://api.together.ai/v1"
+      ],
+      "models": [
+        "openai/gpt-oss-120b"
+      ]
+    },
+    "parameters": {
+      "reasoning_effort": {
+        "type": "enum",
+        "status": "supported",
+        "source": "catalog",
+        "domain": {
+          "source": "catalog",
+          "enforcement": "hard",
+          "values": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      }
+    },
+    "capabilities": {
+      "reasoning": {
+        "status": "supported",
+        "source": "catalog"
+      }
+    },
+    "references": [
+      "npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/together.json"
+    ],
+    "reviewed_at": "2026-11-10"
+  }
+]

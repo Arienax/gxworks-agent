@@ -169,23 +169,23 @@ def test_read_only_rejects_save_and_reads_never_modify_files(scenario, tmp_path)
     assert before == {str(p): p.read_bytes() for p in store.base_dir.rglob("*") if p.is_file()}
 
 
-def test_http_simulation_routes_require_operator_and_existing_approval(scenario):
+def test_local_simulation_plans_use_the_existing_approval_flow(scenario):
     pytest.importorskip("fastapi")
     pytest.importorskip("httpx")
     from fastapi.testclient import TestClient
     from integrations.web.app import create_app
     store, service, _simulation, pid, vid, _run = scenario
     # Scenario owns lifecycle already; TestClient without context does not start twice.
-    app = create_app(store.base_dir, service=service, operator_token="operator", agent_token="agent")
+    app = create_app(store.base_dir, service=service, agent_token="agent")
     client = TestClient(app, base_url="http://127.0.0.1:8765")
     path = f"/api/projects/{pid}/versions/{vid}/simulation-workbench"
-    assert client.get(path).status_code == 401
-    session = client.post("/api/session", json={"token": "operator"}).json()
-    data = client.get(path).json()
+    response = client.get(path)
+    assert response.status_code == 200, response.text
+    data = response.json()
     command = {"suite": _suite(), "requirement_links": {"motor_stop": ["SEM001"]},
                "issue_ids": ["finding"], "expected_ir_sha256": data["ir_sha256"]}
-    assert client.post(path + "/plans", json=command).status_code == 403
-    response = client.post(path + "/plans", json=command, headers={"Origin": "http://127.0.0.1:8765", "X-CSRF-Token": session["csrf"]})
+    assert client.post(path + "/plans", json=command, headers={"Origin": "https://other.example"}).status_code == 403
+    response = client.post(path + "/plans", json=command)
     assert response.status_code == 201, response.text
     assert response.json()["issue_ids"] == ["finding"]
     assert "execute" not in response.json()

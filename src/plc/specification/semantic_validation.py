@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Confirmed implementation-semantic validation for generated ladder candidates.
 
 New Agent-A analyses emit implementation_semantics. Core projects those semantics
@@ -26,6 +29,7 @@ def semantic_requirements(confirmed_spec):
 
     from plc.specification.approach import (
         normalize_implementation_semantics,
+        selected_implementation_targets,
         structure_obligations,
     )
     from plc.specification.explicit_constraints import normalize_explicit_user_constraints
@@ -123,6 +127,17 @@ def semantic_requirements(confirmed_spec):
             "opcode": item["opcode"],
             "operands": list(item["operands"]),
         })
+    for index, choice in enumerate(selected_implementation_targets(selected)):
+        forbidden = "forbidden_devices" if choice["kind"] == "device" else "forbidden_opcodes"
+        if choice["value"] not in explicit[forbidden]:
+            result.append({
+                "requirement_id": f"instruction_choices[{index}]",
+                "kind": "selected_implementation",
+                "status": "required",
+                "target_kind": choice["kind"],
+                "value": choice["value"],
+                "role": choice["role"],
+            })
     from plc.instruction_binding import normalize_operation_intents
     result.extend({"requirement_id": "operation_intents:" + intent["id"], "kind": "operation_effect",
                    "status": "required" if intent["status"] == "confirmed" else "candidate",
@@ -178,7 +193,46 @@ def _feature_coverage(ladder, requirements, *, plc_model=None):
         rows.append(row)
         if not ok:
             violations.append(row)
+    selected = [item for item in requirements if item["kind"] == "selected_implementation"]
+    if selected:
+        choices = _selected_implementation_coverage(ladder, available["device"], selected, plc_model)
+        rows.extend(choices)
+        violations.extend(row for row in choices if row["status"] == "violated")
     return rows, violations
+
+
+def _selected_implementation_coverage(ladder, devices, requirements, plc_model):
+    from plc.device_identity import canonical_reference_device
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+    from plc.ir import lower_rung_instructions
+    from plc.validation import device_address_status
+
+    devices = {canonical_reference_device(address) for address in devices}
+    opcodes = {row["op"] for rung in (ladder or {}).get("rungs", []) or () if isinstance(rung, Mapping)
+               for row in lower_rung_instructions(rung)}
+    # The Ladder location determines the native spelling of the same contact.
+    for contacts in ({"LD", "AND", "OR"}, {"LDI", "ANI", "ORI"},
+                     {"LDP", "ANDP", "ORP"}, {"LDF", "ANDF", "ORF"}):
+        if opcodes & contacts:
+            opcodes.update(contacts)
+    rows = []
+    for requirement in requirements:
+        value = requirement["value"]
+        if requirement["target_kind"] == "device":
+            used = value in devices
+            known = used or device_address_status(value, plc_model) == "valid"
+        else:
+            used = value in opcodes
+            known = used or DEFAULT_INSTRUCTION_REGISTRY.resolve_catalog_form(value, cpu=plc_model) is not None
+        rows.append({
+            "requirement_id": requirement["requirement_id"],
+            "check": "selected_implementation",
+            "kind": requirement["target_kind"],
+            "expected": value,
+            "role": requirement["role"],
+            "status": "verified" if used else "violated" if known else "unresolved",
+        })
+    return rows
 
 
 def _instruction_instance_coverage(ladder, requirements):
@@ -640,6 +694,7 @@ def validate_confirmed_semantics(ladder, confirmed_spec, plc_model="FX3U"):
         and (
             "implementation_semantics" in selected
             or "explicit_user_constraints" in selected
+            or bool(selected.get("instruction_choices"))
         )
     )
     requirements = semantic_requirements(confirmed_spec)

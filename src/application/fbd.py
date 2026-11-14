@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Managed FBD candidates. GXW engineering stays in gxw; approval stays shared."""
 from __future__ import annotations
@@ -10,6 +10,7 @@ from contextlib import contextmanager, nullcontext
 from difflib import unified_diff
 import hashlib
 import json
+import re
 from pathlib import Path
 import tempfile
 import time
@@ -23,6 +24,93 @@ from .workspace import ConflictError, atomic_json, canonical_hash, contained, re
 
 class FBDValidationError(ValueError):
     """A source/model validation problem safe to explain in the operator UI."""
+
+
+def check_fbd_implementation_plan(confirmed_spec, models):
+    """Check explicit FBD type/instance allocations in complete candidate graphs.
+
+    ``models`` maps logical POU names to read-back object/parameter models. Only
+    exact bound locations and explicit instances/templates are checked; method
+    prose and process behavior remain outside this static check.
+    """
+    from .fbd_context import graph_items, _template_reference
+    findings, checked, gaps = [], [], []
+    def location_key(name):
+        return str(name or '').strip().casefold().removesuffix('.pou')
+    by_location = {}
+    for name, graph in models.items():
+        # A read-back native logical name owns the binding; the transport's
+        # source filename is only a fallback when that projection lacks it.
+        key = location_key(graph.get('program') or name)
+        if key:
+            by_location.setdefault(key, []).append(graph)
+    allocations = {}
+    for item in (confirmed_spec or {}).get('implementation_items') or ():
+        if not isinstance(item, dict) or str(item.get('language', '')).casefold() != 'fbd':
+            continue
+        identity = item.get('id')
+        location = location_key(item.get('location'))
+        matches = by_location.get(location, ())
+        if len(matches) != 1:
+            gaps.append({'item_id': identity, 'code': 'fbd_plan_location_unbound',
+                         'location': item.get('location')})
+            continue
+        graph = matches[0]
+        template = str(item.get('template') or '').strip()
+        instances = item.get('instances')
+        if not template or not isinstance(instances, list) or not instances:
+            gaps.append({'item_id': identity, 'code': 'fbd_plan_allocation_unspecified'})
+            continue
+        calls = {}
+        for _, carrier, node in graph_items(graph):
+            reference = _template_reference(carrier, node)
+            instance = str(node.get('instance') or node.get('symbol') or '').casefold()
+            if reference and instance:
+                calls.setdefault(instance, set()).add(reference.casefold())
+        expected = template if ':' in template else 'function_block:' + template
+        owner = str(item.get('state_owner') or '').strip().casefold()
+        independent = bool(re.search(r'独立|independent|separate', owner))
+        named_owner = bool(re.fullmatch(r'[\w.]+', owner))
+        shared = bool(re.search(r'共享|shared|无状态|stateless', owner))
+        if expected.casefold().startswith('function_block:'):
+            for instance in instances:
+                key = (location, str(instance).casefold())
+                for prior in allocations.get(key, ()):
+                    separate_owners = (named_owner and prior['named_owner'] and owner != prior['owner'])
+                    if (not shared and not prior['shared'] and owner and prior['owner']
+                            and (independent or prior['independent'] or separate_owners)):
+                        findings.append({'item_id': identity, 'other_item_id': prior['item_id'],
+                            'code': 'fbd_plan_independent_state_conflict', 'severity': 'error',
+                            'instance': instance, 'state_owners': [prior['owner'], owner]})
+                allocations.setdefault(key, []).append({'item_id': identity, 'owner': owner,
+                    'named_owner': named_owner, 'independent': independent, 'shared': shared})
+        normalized = [str(instance).casefold() for instance in instances]
+        if len(normalized) != len(set(normalized)):
+            findings.append({'item_id': identity, 'code': 'fbd_plan_reused_instance',
+                             'severity': 'error', 'instances': instances})
+        for instance in instances:
+            actual = calls.get(str(instance).casefold())
+            code = ('fbd_plan_instance_missing' if not actual else
+                    'fbd_plan_type_conflict' if actual != {expected.casefold()} else None)
+            if code:
+                findings.append({'item_id': identity, 'code': code, 'severity': 'error',
+                                 'instance': instance, 'expected_template': expected,
+                                 'actual_templates': sorted(actual or ())})
+        checked.append(identity)
+    return {'kind': 'fbd_implementation_plan_static',
+            'status': 'failed' if findings else 'partial' if gaps else 'passed' if checked else 'not_applicable',
+            'findings': findings, 'gaps': gaps, 'checked_items': checked,
+            'runtime_semantics': 'not_checked'}
+
+
+def attach_plan_check(validation, confirmed_spec, models):
+    """Attach the shared static allocation check and reject proven conflicts."""
+    report = check_fbd_implementation_plan(confirmed_spec, models)
+    validation['implementation_plan'] = report
+    if report['status'] == 'failed':
+        raise FBDValidationError('FBD 候选图与已确认的类型/实例分配冲突：' +
+            json.dumps(report['findings'], ensure_ascii=False))
+    return report
 
 
 AUTHORING_OPERATIONS = frozenset({'create_structure', 'create_st_fb', 'edit_st_fb', 'edit_st_function', 'edit_st_source', 'edit_global_labels', 'create_global_labels', 'edit_pou_labels', 'configure_project', 'remove_empty_program'})
@@ -146,7 +234,7 @@ def unpack_candidate(snapshot, output):
         from .gxw_files import validate_ladder_candidate
         validate_ladder_candidate(files)
     else:
-        validate_candidate(files)
+        validate_candidate(files, target_model=snapshot.get('plc_model'))
     output = Path(output)
     for name, data in files.items():
         path = contained(output / snapshot['artifacts'][name]['path'], output)
@@ -167,12 +255,12 @@ def staged_bytes(payload, root):
     return result
 
 
-def validate_candidate(artifacts):
+def validate_candidate(artifacts, *, target_model=None):
     """The reviewed graph/SVG must describe the exact GXW being accepted."""
     if not {"gxw", "fbd", "svg", "write_report"}.issubset(artifacts):
         raise ValueError("FBD candidate is missing required artifacts")
     model = json.loads(artifacts["fbd"])
-    context = read_project_context(artifacts['gxw'], model.get('program'))
+    context = read_project_context(artifacts['gxw'], model.get('program'), target_model=target_model)
     sources = context.sources if model.get('schema_version') == 2 else None
     if export_object_model(context.program, context.declarations, sources=sources) != model:
         raise ValueError("FBD projection does not match the GXW project")
@@ -247,7 +335,7 @@ def _target_baseline(baseline, plc_model):
     from gxw.models import GXWFormatError
     from gxw.project_templates import require_fbd_generation_support
     if baseline is None:
-        from gxw.project_templates import blank_fbd_baseline
+        from gxw.project_templates import blank_fbd_baseline, require_fbd_generation_support
         try:
             require_fbd_generation_support(plc_model)
             baseline = blank_fbd_baseline(plc_model)
@@ -269,7 +357,8 @@ def _target_baseline(baseline, plc_model):
 
 def _target_context(baseline, plc_model, program_name=None):
     """Bind generation/edit interfaces to the selected native CPU menu range."""
-    return read_project_context(_target_baseline(baseline, plc_model), program_name)
+    return read_project_context(_target_baseline(baseline, plc_model), program_name,
+                                target_model=plc_model)
 
 
 def prepare_candidate(output, *, model=None, baseline=None, imported=None, program_name=None,
@@ -289,8 +378,8 @@ def prepare_candidate(output, *, model=None, baseline=None, imported=None, progr
         raise ValueError('编译保存需要当前已保存的 FBD 基础版本。')
     scoped = any(value is not None for value in (resource, task, scope_mode))
     if (source_name is None and (scoped or pou_kind != 'function_block')
-            or source_name is not None and pou_kind not in ('function_block', 'program')
-            or pou_kind == 'function_block' and scoped):
+            or source_name is not None and pou_kind not in ('function_block', 'program', 'function')
+            or pou_kind in ('function_block', 'function') and scoped):
         raise ValueError('资源和任务选择只用于新建普通 FBD Program。')
     if imported is None and source_name is None:
         baseline = _target_baseline(baseline, plc_model)
@@ -322,7 +411,8 @@ def prepare_candidate(output, *, model=None, baseline=None, imported=None, progr
             raise ValueError('新建 FBD POU 需要已有 GXW 基础版本和 source_name。')
         baseline = _target_baseline(baseline, plc_model)
         result = (_native_program_candidate(baseline, source_name, resource=resource, task=task, scope_mode=scope_mode)
-                  if pou_kind == 'program' else _native_candidate('create', baseline, source_name))
+                  if pou_kind == 'program' else
+                  _native_candidate('create', baseline, source_name, pou_kind=pou_kind))
         raw, report = result.data, result.report
         program_name = report['created_program']
     elif imported is None:
@@ -336,12 +426,14 @@ def prepare_candidate(output, *, model=None, baseline=None, imported=None, progr
         raw = imported
         report = {"operation": "import", "gxw_sha256": hashlib.sha256(raw).hexdigest(),
                   "modified_objects": [], "metadata_changes": []}
-    context = read_project_context(raw, program_name)
+    context = read_project_context(raw, program_name,
+                                   target_model=plc_model if imported is None else None)
     graph = context.object_model()
     checked_source = source_checks(context)
     if imported is None and model is not None:
         from gxw.fbd_validation import require_graph_checks
-        original = read_project_context(baseline, context.program.logical_name)
+        original = read_project_context(baseline, context.program.logical_name,
+                                        target_model=plc_model)
         require_graph_checks(source_checks(original)['findings'], checked_source['findings'],
                              save_policy=save_policy)
     files = {"gxw": ("program.gxw", raw), "fbd": ("fbd.json", json_bytes(graph)),
@@ -358,7 +450,8 @@ def prepare_candidate(output, *, model=None, baseline=None, imported=None, progr
     if isinstance(model, dict) and 'networks' in model:
         files['source_fbd'] = ('source_fbd.json', json_bytes(model))
         messages.append('接口和图形由当前源码生成；原始参数保存在 source_fbd.json。')
-    validate_candidate({key: value[1] for key, value in files.items()})
+    validate_candidate({key: value[1] for key, value in files.items()},
+                       target_model=plc_model if imported is None else None)
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     artifacts = {}
@@ -498,11 +591,13 @@ def build_fbd_generation_context(request, *, plc_model, confirmed_spec=None, cat
     manifest = context_manifest(knowledge, stage="generate" if previous is None else "edit")
     handoff = handoff_snapshot(specification, evidence=manifest, stage=manifest["stage"])
     handoff["capability_discovery"] = copy.deepcopy(manifest["capability_discovery"])
+    origins = {}
+    knowledge_units = technical_context_units(knowledge, origins=origins)
     composed = compose_fbd_context(request=requirement, plc_model=plc_model,
         confirmed_spec=confirmed_spec, catalog=catalog, previous=previous,
         instances_model=instances_model, model_profile=profile,
         catalog_scope=catalog_scope, templates=templates, device_comments=device_comments,
-        comment_tables=comment_tables, knowledge_units=technical_context_units(knowledge),
+        comment_tables=comment_tables, knowledge_units=knowledge_units,
         knowledge_coverage=manifest.get('retrieval_coverage'),
         discovery=manifest["capability_discovery"],
         image_count=len(images or ()) if image_count is None else int(image_count or 0),
@@ -512,6 +607,7 @@ def build_fbd_generation_context(request, *, plc_model, confirmed_spec=None, cat
     handoff.update(receipt)
     return {"generation_instructions": composed.instructions,
             "generation_input": composed.payload,
+            "_fact_origins": origins,
             "generation_handoff": handoff, "context_receipt": receipt,
             "wire_messages": composed.wire_messages}
 
@@ -574,6 +670,9 @@ def generate_candidate(output, snapshot, images, ctx):
                                native_save=snapshot.get('native_save') is True,
                                device_comments=answer.get('device_comments'), comment_table=answer.get('comment_table'))
     result["metadata"]["generation_handoff"] = generation["generation_handoff"]
+    candidate_graph = read_json(Path(output) / 'fbd.json')
+    attach_plan_check(result['metadata']['validation'], project.get('confirmed_spec'),
+                      {candidate_graph.get('program'): candidate_graph})
     return result
 
 
@@ -797,6 +896,10 @@ class FBDService:
                     if prepared is not None:
                         args['_prepared_result'] = prepared
                 payload = prepare_candidate(directory, **args)
+                if args.get('model') is not None:
+                    candidate_graph = read_json(Path(directory) / 'fbd.json')
+                    attach_plan_check(payload['metadata']['validation'], project.get('confirmed_spec'),
+                                      {candidate_graph.get('program'): candidate_graph})
                 payload["_confirmed_spec"] = copy.deepcopy(project.get("confirmed_spec"))
                 payload = wb._with_candidate_diff(project_id, base_id, payload)
                 proposal = wb.proposals.create("accept_local", project_id, payload,

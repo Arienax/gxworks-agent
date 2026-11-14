@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Deterministic change boundaries and impact summaries for PLC IR candidates.
 
 A scope limits changed networks, including every address used before and after

@@ -1,5 +1,5 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 using System;
 using System.Collections.Generic;
@@ -502,6 +502,9 @@ namespace PlcAi.GxSimulator2Gateway
                 health["connected"] = _mx.Connected;
                 health["prog_id"] = _mx.ActiveProgId;
                 health["target_binding"] = _mx.Connected ? _mx.TargetBinding : "";
+                if (_mx.Connected)
+                    foreach (KeyValuePair<string, object> detail in _mx.RouteDetails())
+                        health[detail.Key] = detail.Value;
                 return health;
             }
 

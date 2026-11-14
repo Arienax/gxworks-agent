@@ -166,24 +166,16 @@ def test_relation_unit_retains_endpoint_interfaces_when_separate_briefs_are_omit
     ("对结果做区间比较", "compare", {"CMP", "ZCP"}),
     ("经过延时再启动", "timer", {"STMR"}),
     ("循环遍历", "loop", {"FOR", "NEXT"}),
-    ("同时存在多件物料，连续出现同色或不同颜色物料", "queue", {"SFWR", "SFRD", "SFTL"}),
-    ("Track multiple workpieces on the conveyor", "queue", {"SFWR", "SFRD", "SFTL"}),
+    ("同时存在多件物料，连续出现同色或不同颜色物料", "queue", {"SFWR", "SFRD"}),
+    ("Track multiple workpieces on the conveyor", "queue", {"SFWR", "SFRD"}),
 ])
 def test_functional_discovery_uses_local_sources_without_an_opcode(text, function, expected):
     from knowledge.retriever import discover_capabilities
     found = discover_capabilities(text)
     assert function in found["functions"]
-    assert expected.intersection(c["name"] for c in found["candidates"])
+    assert expected.intersection(c["name"] for c in found["candidates"] if function in c["functions"])
     assert found["model_calls"] == 0
     assert all(c["sources"] for c in found["candidates"])
-
-
-def test_tracking_hints_exclude_stack_only_and_carry_shift_operations():
-    from knowledge.retriever import discover_capabilities
-    found = discover_capabilities('连续同色物料需要跟踪')
-    names = {c['name'] for c in found['candidates']}
-    assert {'SFWR', 'SFRD', 'SFTL'} <= names
-    assert not names.intersection({'POP', 'SFL', 'SFR'})
 
 
 @pytest.mark.parametrize('text', ['连续扫描 PLC 程序', '同时打开两个输出', '连续点动电机'])

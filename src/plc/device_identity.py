@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """One spelling for Mitsubishi device aliases, without renumbering devices.
 
 X001 and X1 denote the same index; X010 becomes X10, NEVER X8. This
@@ -12,7 +15,7 @@ import re
 from collections.abc import Mapping
 
 DEVICE_PREFIXES = (
-    "ER", "SM", "SD", "TS", "TC", "CS", "CC",
+    "ER", "SM", "SD", "TS", "TC", "TN", "CS", "CC", "CN",
     "X", "Y", "M", "S", "T", "C", "D", "R", "V", "Z", "P", "I",
 )
 _DEVICE_PREFIX_PATTERN = "(?:" + "|".join(DEVICE_PREFIXES) + ")"
@@ -24,7 +27,7 @@ DEVICE_TOKEN_RE = re.compile(
 # Read-only manual references include Q/L hexadecimal I/O/link devices and
 # their additional device classes. This lexer grants neither an address range
 # nor writability/execution support; the generation validator stays separate.
-REFERENCE_DEVICE_PATTERN = r'(?:(?:SB|SW|DX|DY|[XYBW])[0-9A-F]+|(?:ZR|SM|SD|ST|TS|TC|CS|CC|ER|[MLFSTCDRVZPI])\d+)(?:\.[0-9A-F]+)?'
+REFERENCE_DEVICE_PATTERN = r'(?:(?:SB|SW|DX|DY|[XYBW])[0-9A-F]+|(?:ZR|SM|SD|ST|TS|TC|TN|CS|CC|CN|ER|[MLFSTCDRVZPI])\d+)(?:\.[0-9A-F]+)?'
 REFERENCE_DEVICE_TOKEN_RE = re.compile(r'(?<![A-Za-z0-9_])' + REFERENCE_DEVICE_PATTERN + r'(?![A-Za-z0-9_])', re.I)
 
 
@@ -36,17 +39,35 @@ def reference_device_tokens(value):
 def canonical_reference_device(value):
     if not isinstance(value, str) or not REFERENCE_DEVICE_TOKEN_RE.fullmatch(value.strip()):
         return value
-    match = re.fullmatch(r'(ZR|SM|SD|ST|SB|SW|DX|DY|TS|TC|CS|CC|ER|[A-Z])([0-9A-F]+)(.*)', value.strip().upper())
+    match = re.fullmatch(r'(ZR|SM|SD|ST|SB|SW|DX|DY|TS|TC|TN|CS|CC|CN|ER|[A-Z])([0-9A-F]+)(.*)', value.strip().upper())
     return match[1] + (match[2].lstrip('0') or '0') + match[3] if match else value
 
 
 def reference_device_parts(value):
     if not isinstance(value, str) or not REFERENCE_DEVICE_TOKEN_RE.fullmatch(value.strip()):
         return None
-    match = re.fullmatch(r'(ZR|SM|SD|ST|SB|SW|DX|DY|TS|TC|CS|CC|ER|[A-Z])([0-9A-F]+)', value.strip().upper())
+    match = re.fullmatch(r'(ZR|SM|SD|ST|SB|SW|DX|DY|TS|TC|TN|CS|CC|CN|ER|[A-Z])([0-9A-F]+)', value.strip().upper())
     return match.groups() if match else None
-_SIMPLE = re.compile("(" + _DEVICE_PREFIX_PATTERN + r")(\d+)", re.I)
-_INDEXED = re.compile(r"((?:SM|SD|[XYMDTCS])\d+)([VZ]\d+)", re.I)
+INDEXABLE_HEX_PREFIXES = ("SB", "SW", "X", "Y", "B", "W")
+INDEXABLE_DEC_PREFIXES = (
+    "ZR", "SM", "SD", "ST", "TS", "TC", "TN", "CS", "CC", "CN",
+    "M", "D", "T", "C", "S", "L", "F", "R", "V",
+)
+INDEXED_BASE_PATTERN = (
+    r"(?:(?:" + "|".join(INDEXABLE_HEX_PREFIXES) + r")[0-9A-F]+|(?:"
+    + "|".join(INDEXABLE_DEC_PREFIXES) + r")\d+)"
+)
+_SIMPLE = re.compile(
+    r"(?:(?P<hex_p>SB|SW|B|W)(?P<hex_n>[0-9][0-9A-F]*)"
+    r"|(?P<dec_p>ZR|ER|SM|SD|ST|TS|TC|TN|CS|CC|CN|[XYMTSCDRLFVZPI])(?P<dec_n>\d+))",
+    re.I,
+)
+_INDEXED = re.compile(
+    r"(?P<base>(?:(?:SB|SW|B|W)[0-9][0-9A-F]*|"
+    r"(?:ZR|SM|SD|ST|TS|TC|TN|CS|CC|CN|[XYMTSCDRLFV])\d+))"
+    r"(?P<index>[VZ]\d*)",
+    re.I,
+)
 
 
 def device_tokens(value):
@@ -62,7 +83,9 @@ def canonical_device(value):
     match = _SIMPLE.fullmatch(value.strip())
     if match is None:
         return value
-    return match[1].upper() + (match[2].lstrip("0") or "0")
+    prefix = (match.group("hex_p") or match.group("dec_p")).upper()
+    number = (match.group("hex_n") or match.group("dec_n")).upper().lstrip("0") or "0"
+    return prefix + number
 
 
 def canonical_operand(value):
@@ -71,7 +94,10 @@ def canonical_operand(value):
         return value
     match = _INDEXED.fullmatch(value.strip())
     if match:
-        return canonical_device(match[1]) + canonical_device(match[2])
+        base = canonical_device(match.group("base"))
+        raw_index = match.group("index").strip().upper()
+        index = raw_index if len(raw_index) == 1 else canonical_device(raw_index)
+        return base + index
     return canonical_device(value)
 
 

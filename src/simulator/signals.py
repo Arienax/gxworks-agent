@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Typed simulator signals and JSON scenarios lowered to the existing test DSL.
 
 Word order is low word first, as used by the native D-register interface.
@@ -24,20 +27,20 @@ def signal_addresses(address, data_type, plc_model="FX3U", *, writable=False):
     if kind not in SIGNAL_TYPES:
         raise ValueError("Unsupported signal type: " + kind)
     access = "stimulus" if writable else "read"
-    address = device_address(address, plc_model, access=access, native=True)
+    address = device_address(address, plc_model, access=access, native=True, simulator=True)
     if kind == "RAW":
         if writable:
             raise ValueError("RAW observations are read-only; declare a storage type for inputs")
         return [address]
     if kind == "BOOL":
-        if native_read_value_kind(address, plc_model) != "bit":
+        if native_read_value_kind(address, plc_model, simulator=True) != "bit":
             raise ValueError("BOOL requires a bit device")
         return [address]
     prefix, index = parse_device_address(address, plc_model)
     if prefix != "D":
         raise ValueError("Typed numeric signals currently require D registers")
     words = struct.calcsize("<" + FORMATS[kind]) // 2
-    return [device_address(f"D{index + offset}", plc_model, access=access, native=True)
+    return [device_address(f"D{index + offset}", plc_model, access=access, native=True, simulator=True)
             for offset in range(words)]
 
 
@@ -113,7 +116,7 @@ def normalize_signals(signals, plc_model="FX3U"):
                        "role": role, "unit": unit, "addresses": addresses})
     if len(word_keys) > MAX_TRACE_DEVICES:
         raise ValueError(f"A view may read at most {MAX_TRACE_DEVICES} physical devices per sample")
-    native_read_plan(sorted(word_keys), plc_model, maximum=MAX_TRACE_DEVICES)
+    native_read_plan(sorted(word_keys), plc_model, maximum=MAX_TRACE_DEVICES, simulator=True)
     return result
 
 
@@ -145,7 +148,7 @@ def suite_view_config(suite):
             candidates = []
             inputs = set(test["initial"])
             for address in test["trace_devices"]:
-                value_kind = native_read_value_kind(address, model)
+                value_kind = native_read_value_kind(address, model, simulator=True)
                 kind = "BOOL" if value_kind == "bit" else "WORD" if address.startswith("D") else "RAW"
                 candidates.append({"id": address, "label": address, "address": address, "addresses": [address],
                                    "data_type": kind, "role": "input" if address in inputs else "state", "unit": ""})
@@ -221,7 +224,7 @@ def normalize_scenario(config):
                 raise ValueError("Scenario writes overlap physical storage")
             occupied.update(identities)
             writes.update(zip(addresses, encode_signal(value, signal["data_type"])))
-        native_write_plan(writes, model, allow_empty=True)
+        native_write_plan(writes, model, allow_empty=True, simulator=True)
         for address in writes:
             if address not in initial:
                 raise ValueError("initial must define every written signal before running a scenario")

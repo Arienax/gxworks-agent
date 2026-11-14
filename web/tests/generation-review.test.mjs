@@ -17,8 +17,10 @@ function resultComponent(reactOverrides = {}) {
   const module = { exports: {} }, require = createRequire(path);
   new Function("require", "module", "exports", code)(name => {
     if (name === "react") return { ...require(name), ...reactOverrides };
-    if (name === "../api/client") return { api: () => { throw Error("Unexpected request"); }, freshGxCsvUrl: () => "/export" };
-    if (name === "../components/ui") return { Button: props => createElement("button", props) };
+    if (name === "../api/client") return { api: () => { throw Error("Unexpected request"); },
+      artifactUrl: (_project, _version, id) => `/artifacts/${id}`, freshGxCsvUrl: () => "/export" };
+    if (name === "../components/ui") return { Button: props => createElement("button", props),
+      DownloadButton: ({ disabled, ...props }) => createElement("a", props) };
     if (name === "./CapabilityReview") return { CapabilityReview: () => null };
     if (name === "./DirectClarification") return { DirectClarification: () => createElement("form", {}, "历史澄清") };
     if (name === "./clarificationAnswers") return { clarificationQuestions };
@@ -39,6 +41,31 @@ test('ST text fallback exposes both source and global labels while GXW remains p
     assert.ok(markup.includes(labels ? '下载候选源码' : '下载 GXW 工程'));
     assert.doesNotMatch(markup, /重新导出 GX Works2 CSV/);
   }
+});
+
+test("exports hide derived ST from older Ladder versions while keeping native ST", () => {
+  const path = new URL("../src/features/ProjectToolbar.tsx", import.meta.url);
+  const code = ts.transpileModule(readFileSync(path, "utf8"), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText;
+  const module = { exports: {} }, require = createRequire(path);
+  new Function("require", "module", "exports", code)(name => {
+    if (name === "../api/client") return {
+      artifactUrl: (_pid, _vid, id) => `/artifacts/${id}`, freshGxCsvUrl: () => "/csv",
+    };
+    if (name === "../components/ui") return { Button: props => createElement("button", props) };
+    return require(name);
+  }, module, module.exports);
+  const markup = renderToStaticMarkup(createElement(module.exports.ProjectToolbar, {
+    pid: "project", vid: "v1", exportable: true, artifacts: [
+      { id: "st_from_ir", filename: "program_from_ir.st", available: true },
+      { id: "st", filename: "native.st", available: true },
+      { id: "program_csv", filename: "program.csv", available: true },
+    ], t: text => text,
+  }));
+  assert.doesNotMatch(markup, /st_from_ir|program_from_ir\.st/);
+  assert.match(markup, /href="\/artifacts\/st"/);
+  assert.match(markup, /native\.st|program\.csv/);
 });
 
 test("Direct program actions precede collapsible generator notes with no required form", () => {
@@ -74,6 +101,25 @@ test("only completed historical needs_input jobs expose clarification; failure e
     clarification: { answers: {}, onChange() {}, disabled: false }, t: key => key,
   }));
   assert.match(markup, /<form>历史澄清<\/form>/);
+});
+
+test("analysis and edit clarifications share the answer form without replacing the normal Design editor", () => {
+  const { useGenerationResult, GenerationResult } = resultComponent({
+    useState: () => [{ id: "job", value: { status: "needs_input", generation: {
+      missing_info: [{ id: "stop", question: "停机时如何处理？" }],
+    } } }, () => {}], useEffect: () => {},
+  });
+  const job = { id: "job", project_id: "project", status: "completed" };
+  assert.equal(useGenerationResult({ ...job, kind: "analysis" }, 0).id, "");
+  for (const kind of ["analysis", "generation"]) {
+    const result = useGenerationResult({ ...job, kind, result: { status: "needs_input" } }, 0);
+    assert.equal(result.needsInput, true);
+    assert.equal(result.questions[0].id, "stop");
+    const markup = renderToStaticMarkup(createElement(GenerationResult, {
+      result, busy: false, clarification: { answers: {}, onChange() {}, disabled: false }, t: key => key,
+    }));
+    assert.match(markup, /<form>历史澄清<\/form>/);
+  }
 });
 
 test("generation repair button follows the server capability", () => {
@@ -271,7 +317,8 @@ test("GXW delivery is primary and native compilation failure remains visible", (
   const markup = renderToStaticMarkup(createElement(GenerationResult, {
     result: { id: "job", projectId: "project", versionId: "v0002", metadata: {
       target_mode: "ladder", delivery: { primary_artifact: "gxw", actual_format: "gxw", degraded: false },
-      validation: { gx_compile: "failed", native_compile_message: "public check rejected" },
+      validation: { gx_compile: "failed", native_compile_message: "public check rejected",
+        native_compile_findings: [{ code: "0x050c9300", device: "Y0", steps: [8, 12] }] },
     } }, busy: false, onOpen() {}, onRetry() {}, onRepair() {}, onSpec() {}, t: key => key,
   }));
   assert.match(markup, /下载 GXW 工程/);
@@ -279,6 +326,21 @@ test("GXW delivery is primary and native compilation failure remains visible", (
   assert.match(markup, /原生编译/);
   assert.match(markup, /失败/);
   assert.match(markup, /public check rejected/);
+  assert.match(markup, /指令步 8, 12/);
+});
+
+test("a rejected program shows the first local counterexample without a saved version", () => {
+  const { GenerationResult } = resultComponent();
+  const markup = renderToStaticMarkup(createElement(GenerationResult, {
+    result: { id: "job", behaviorMismatch: true, metadata: {
+      behavior_result: { status: "mismatch", case_id: "output-on", network_indexes: [0, 2],
+        counterexamples: [{ address: "Y0", at_ms: 10, expected: 1, actual: false, network_indexes: [0] }] },
+    } }, busy: false, onOpen() {}, onRetry() {}, onRepair() {}, onSpec() {}, t: key => key,
+  }));
+  assert.match(markup, /未保存/);
+  assert.match(markup, /output-on · Y0 · 10 ms · 网络 1/);
+  assert.ok(markup.includes("预期 1 / 实际 false"));
+  assert.doesNotMatch(markup, /网络 1, 3|暂时无法读取结果|程序已保存/);
 });
 
 test("fallback delivery identifies the actual source and reason", () => {

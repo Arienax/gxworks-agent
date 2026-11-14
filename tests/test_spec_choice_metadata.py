@@ -61,7 +61,7 @@ ENTRY_FIXTURE = {
     'analysis': {
         'summary': '启动、停止和输出尚未分配地址。',
         'approaches': [{'approach_id': 'a1', 'name': '启停控制',
-            'description': '启动保持，停止复位。', 'pros': '', 'cons': '', 'generation_guide': '',
+            'description': '启动保持，停止复位。', 'pros': '', 'cons': '', 'generation_guide': '', 'decision_basis': [],
             'implementation_semantics': [
                 {'kind': 'structure', 'status': 'required', 'value': 'direct_logic'},
                 {'kind': 'structure', 'status': 'required', 'value': 'self_hold'}]}],
@@ -569,8 +569,8 @@ def test_io_purpose_prompt_contract_is_present_in_both_modes_and_pinned():
                 audit=lambda *a, **kw: audits.append((a, kw)))
             assert "# I/O purpose metadata" in prompt.system_prompt
             assert "label 只是人类可读用途/注释" in prompt.system_prompt
-            assert "答案不必重复地址" in prompt.system_prompt
-            assert "不为注释新增问题" in prompt.system_prompt
+            assert "极性答案无需重复地址" in prompt.system_prompt
+            assert "不为注释提问" in prompt.system_prompt
             assert len(calls) == 1 and calls[0]["include_design"] == (mode == "design")
             base = next(args[1] for args, _ in audits if args[0] == "base_prompt")
             assert "# I/O purpose metadata" in base
@@ -583,7 +583,7 @@ def test_io_purpose_http_save_generate_and_export_keep_only_device_names(tmp_pat
     from integrations.web.app import create_app
     from model_runtime.provider import TextDelta, SystemMessage
     from plc.ir import ir_to_ladder
-    from test_web_api import ORIGIN, OPERATOR, _login, _complete, offline_runtime_profile
+    from test_web_api import ORIGIN, _complete, offline_runtime_profile
 
     class Provider:
         profile = offline_runtime_profile("label-fixture")
@@ -608,9 +608,9 @@ def test_io_purpose_http_save_generate_and_export_keep_only_device_names(tmp_pat
     service = WorkbenchService(tmp_path / "workspace", tmp_path / "state",
                                model_factory=lambda: (provider, {"model": "label-fixture"}))
     app = create_app(service.store.base_dir, state_dir=service.state_dir, service=service,
-                     origin=ORIGIN, operator_token=OPERATOR)
+                     origin=ORIGIN)
     with TestClient(app, base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         pid = client.post("/api/projects", headers=headers, json={"name": "label fixture"}).json()["id"]
         first = client.put(f"/api/projects/{pid}/spec", headers=headers,
                            json={"spec": _purpose_draft(), "expected_hash": None}).json()
@@ -651,6 +651,31 @@ def test_polarity_answer_never_falls_back_after_an_invalid_explicit_address(valu
     spec = {"plc_model": "FX3U", "parameters": [parameter],
             "io_table": [{"kind": "X", "address": "X1", "label": "停止按钮"}]}
     assert {i["code"] for i in validate_spec_draft(spec)["errors"]} & {"invalid_io_answer", "invalid_io_address"}
+
+
+def test_repeated_references_in_polarity_answer_bind_to_one_address():
+    from plc.specification.bindings import restore_bound_choices
+
+    parameter = {
+        "id": "stop_polarity", "name": "X3 停止按钮的接线极性是？", "required": True,
+        "value": "常开，按下 x003=ON 表示停止，程序以 X3=OFF 作为允许运行",
+    }
+    draft = {"plc_model": "FX3U", "io_table": [], "parameters": [parameter]}
+    assert validate_spec_draft(draft)["errors"] == []
+    confirmed = canonicalize_confirmed_spec(draft)
+    assert [row["address"] for row in confirmed["io_table"]] == ["X3"]
+    binding = confirmed["io_bindings"][0]
+    assert (binding["address"], binding["active_level"], binding["inactive_level"]) == ("X3", 1, 0)
+
+    confirmed["io_table"][0]["address"] = "X5"
+    expected = "常开，按下 X5=ON 表示停止，程序以 X5=OFF 作为允许运行"
+    restored = restore_bound_choices([{**parameter, "value": ""}], confirmed["io_table"], confirmed["io_bindings"])
+    assert restored[0]["value"] == expected
+    assert validate_spec_draft(confirmed)["errors"] == []
+    edited = canonicalize_confirmed_spec(confirmed)
+    assert edited["parameters"][0]["value"] == expected
+    binding = edited["io_bindings"][0]
+    assert (binding["address"], binding["active_level"], binding["inactive_level"]) == ("X5", 1, 0)
 
 
 def test_polarity_owner_edits_and_deletion_do_not_replay_question_addresses():
@@ -724,7 +749,7 @@ def test_inline_user_io_and_flat_analysis_reach_http_explorer_and_all_artifacts(
     from application.workbench import WorkbenchService
     from model_runtime.provider import TextDelta, SystemMessage
     from plc.ir import ir_to_ladder
-    from test_web_api import ORIGIN, _app, _login, _complete, offline_runtime_profile
+    from test_web_api import ORIGIN, _app, _complete, offline_runtime_profile
 
     text = ("X0 为启动按钮，按下时 ON；X1 为停止按钮，按下时 ON；Y0 为运行输出。\n"
             "实现停止优先的普通起保停自锁控制。")
@@ -739,7 +764,7 @@ def test_inline_user_io_and_flat_analysis_reach_http_explorer_and_all_artifacts(
                 payload = {"summary": "停止优先起保停", "missing_info": [], "assumptions": [],
                     "suggested_io": {"X0": "启动按钮输入（按下为ON）", "X1": "停止按钮输入（按下为ON）", "Y0": "运行输出"},
                     "approaches": [{"approach_id": "direct", "name": "自保持", "description": "停止优先", "pros": "", "cons": "",
-                                    "generation_guide": "", "implementation_semantics": []}]}
+                                    "generation_guide": "", "implementation_semantics": [], "decision_basis": []}]}
             else:
                 prompt = next(m.content for m in request.messages if isinstance(m, SystemMessage))
                 spec = wire_context(request.messages)['confirmed_spec']
@@ -755,7 +780,7 @@ def test_inline_user_io_and_flat_analysis_reach_http_explorer_and_all_artifacts(
     service = WorkbenchService(tmp_path/"workspace", tmp_path/"state",
                                model_factory=lambda: (provider, {"model": "offline-io-labels"}))
     with TestClient(_app(service.store.base_dir, service.state_dir, service=service), base_url=ORIGIN) as client:
-        headers = _login(client)
+        headers = {"Origin": ORIGIN}
         pid = client.post("/api/projects", headers=headers, json={"name": "I/O names"}).json()["id"]
         _, analysis = _complete(client, service, client.post("/api/jobs", headers=headers, json={
             "kind": "analysis", "analysis_mode": "direct", "project_id": pid, "request_id": "analyze-labels",

@@ -12,8 +12,15 @@ them. Native blank project templates are included for interoperability; see
 Python and npm dependencies retain their own licenses and copyright notices.
 Dependency versions are listed in `requirements/` and `web/package-lock.json`.
 Distributors of binaries must collect and retain the notices required by the
-dependencies they include. The project's Apache-2.0 license does not replace
+dependencies they include. The project's AGPL-3.0 license does not replace
 those terms.
+
+Web Ladder generation embeds the DeepSeek Harness Python SDK and distributes
+the independent DSH SDK runtime, copyright (c) 2026 DeepSeek, under MIT.
+The SDK source attribution and retained license are in
+`src/integrations/dsh_runtime/vendor/`; Full packages also include the standalone
+runtime and its Node.js and dependency notices under `dsh-runtime/`.
+DSH Desktop and its user settings are not required or copied into the product.
 
 ST recognition uses [tree-sitter](https://github.com/tree-sitter/tree-sitter)
 0.25.2 and [tree-sitter-iec61131-3-st](https://github.com/HeytalePazguato/tree-sitter-iec61131-3-st)

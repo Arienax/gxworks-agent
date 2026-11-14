@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "id": "deepseek-v4-pro",
+  "extends": "deepseek-chat",
+  "match": {
+    "endpoints": ["https://api.deepseek.com", "https://api.deepseek.com/v1"],
+    "models": ["deepseek-v4-pro"]
+  },
+  "parameters": {
+    "reasoning_effort": {
+      "type": "enum",
+      "status": "supported",
+      "source": "catalog",
+      "domain": {
+        "source": "catalog",
+        "enforcement": "hard",
+        "values": ["high", "max"]
+      }
+    }
+  },
+  "references": ["npm:@earendil-works/pi-ai@1.3.0/dist/providers/data/deepseek.json"],
+  "reviewed_at": "2026-11-10"
+}

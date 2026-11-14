@@ -526,6 +526,85 @@ def test_local_mcp_import_read_patch_preview_and_download_reimport(tmp_path, no_
     assert not no_native
 
 
+def test_ordered_patch_uses_compatible_save_policy_and_reports_original_insert_anchor(workbench, no_native):
+    import json
+    from dataclasses import replace
+    from agent_runtime.plc_tools import build_default_tool_registry
+
+    raw, _ = native_source('ladder')
+    imported = workbench.gxw_files.import_project(data_base64=encoded(raw), filename='insert.gxw')
+    context = workbench.projects.tool_context(imported['project_id'], imported['version_id'])
+    source = read_ordered_program(read_offline_project(raw))['source_records']
+    target = next(row for row in source if row.get('op') == 'END')
+    old_record = {'op': target['op'], 'args': target['args']}
+    new_record = {'op': 'NOP', 'args': []}
+    edit = {'operation': 'insert_before', 'record_index': target['record_index'],
+            'expected': new_record, 'instructions': [new_record]}
+    patch = {'instruction_edits': [edit]}
+    registry = build_default_tool_registry()
+
+    wrong_anchor = registry.call('patch_program', {'save_policy': 'draft', 'patch': patch}, context)
+    assert not wrong_anchor['ok'], wrong_anchor
+    message = wrong_anchor['error']['message']
+    assert f"instruction_edits[0] (insert_before, record_index={target['record_index']})" in message
+    assert f'actual old record as expected: {json.dumps(old_record)}' in message
+    assert 'in instructions' in message
+
+    edit['expected'] = old_record
+    invalid_new = registry.call('patch_program', {'patch': {'instruction_edits': [
+        {**edit, 'instructions': [old_record]}]}}, context)
+    assert not invalid_new['ok'], invalid_new
+    assert 'instructions[0]' in invalid_new['error']['message'] and 'cannot contain END' in invalid_new['error']['message']
+
+    conflict = registry.call('patch_program', {'save_policy': 'draft', 'patch': {**patch, 'save_policy': 'checked'}}, context)
+    assert not conflict['ok'] and conflict['error']['code'] == 'INVALID_ARGUMENTS'
+    assert 'save_policy' in conflict['error']['message'] and '冲突' in conflict['error']['message']
+
+    for arguments in ({'save_policy': 'draft', 'patch': patch}, {'patch': {**patch, 'save_policy': 'draft'}},
+                      {'save_policy': 'draft', 'patch': {**patch, 'save_policy': 'draft'}}):
+        result = registry.call('patch_program', arguments, context)
+        assert result['ok'], result
+        assert result['data']['validation']['save_policy'] == 'draft'
+    implicit = {'save_policy': 'draft', 'patch': {'instruction_edits': [
+        {key: value for key, value in edit.items() if key != 'expected'}]}}
+    unbound = registry.call('patch_program', implicit, context)
+    assert unbound['error']['code'] == 'PATCH_SOURCE_REQUIRED'
+    page = registry.call('get_generation_context', {'read_budget_tokens': 64000}, context)
+    assert page['ok'] and page['data']['delivery']['complete'], page
+    receipt = page['data']['document']['generation_context_id']
+    accepted = registry.call('patch_program', implicit, context)
+    assert accepted['ok'], accepted
+    explicit = registry.call('patch_program', {**implicit, 'generation_context_id': receipt}, context)
+    assert explicit['ok'] and explicit['data']['diff'] == accepted['data']['diff']
+    newer = replace(context, version={**context.version, 'id': 'v0002'})
+    wrong_version = registry.call('patch_program', {**implicit, 'generation_context_id': receipt}, newer)
+    assert not wrong_version['ok'] and wrong_version['error']['code'] == 'INSTRUCTION_REVIEW_REQUIRED'
+    stale = registry.call('patch_program', {**implicit, 'patch': {**implicit['patch'], 'base_revision': 0}}, context)
+    assert not stale['ok'] and 'stale source revision' in stale['error']['message']
+    assert 'save_policy' not in patch and not no_native
+
+
+def test_existing_ladder_model_reply_preserves_explicit_top_level_checked_policy(workbench, no_native, tmp_path, monkeypatch):
+    import json
+    from types import SimpleNamespace
+    from application import model_api
+    from application.gxw_files import generate_candidate
+
+    raw, _ = native_source('ladder')
+    imported = workbench.gxw_files.import_project(data_base64=encoded(raw), filename='checked.gxw')
+    context = workbench.projects.tool_context(imported['project_id'], imported['version_id'])
+    arguments = {**patch_arguments(context.program_ir), 'save_policy': 'checked'}
+    response = json.dumps({'summary': 'Modify the existing MOV', 'arguments': arguments})
+    monkeypatch.setattr(model_api, '_request_model', lambda *args, **kwargs:
+        SimpleNamespace(message=SimpleNamespace(content=response)))
+    job = SimpleNamespace(checkpoint=lambda: None)
+
+    candidate = generate_candidate(tmp_path / 'candidate', {'text': 'Change MOV K0 D0 to MOV K2 D0'},
+                                   context, [], job)
+    assert candidate['metadata']['validation']['save_policy'] == 'checked'
+    assert not no_native
+
+
 @pytest.mark.parametrize('record_hex', ['037f03', '033c0304d00104'])
 def test_partial_records_import_edit_preview_download_reimport_without_native(tmp_path, no_native, record_hex):
     from gxw.project_writer import write_project_replacements

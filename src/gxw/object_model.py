@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """JSON transport for the existing StructuredProgram model, not a new PLC IR.
 
@@ -77,6 +77,66 @@ def _port_names(node):
                 node.kind, [str(i) for i in range(len(node.ports))])
 
 
+def _catalog_origin(entry, sources):
+    """Keep the bound owner; a callable name alone never proves its origin."""
+    if sources is None:
+        return
+    name = entry.get('type_name') or entry.get('symbol') or ''
+    intrinsic = re.fullmatch(r'@(AND|OR|XOR|GT|GE|EQ|LE|LT)-[1-9][0-9]*|@(NE)', name, re.I)
+    if intrinsic and entry.get('kind') == 'function':
+        category = 'logic' if intrinsic[1] in ('AND', 'OR', 'XOR') else 'compare'
+        entry['origin'] = {'kind': 'language_intrinsic', 'status': 'source_bound',
+                           'identity': 'gxw.callable_sources.ProjectCallableSources.callable:serialized_operator'}
+        entry['semantic_functions'] = [category]
+        entry['semantic_behaviors'] = [category + ':' + (intrinsic[1] or intrinsic[2]).upper()]
+        entry['description_source'] = dict(entry['origin'])
+        entry['description'] = 'boolean logic' if category == 'logic' else 'comparison'
+        return
+    lookup = re.sub(r'-\d+$', '', name).lstrip('@')
+    matches = sources.catalog.get(lookup.casefold(), ())
+    if len(matches) != 1:
+        entry['origin'] = {'kind': 'unknown', 'status': 'unbound_or_ambiguous'}
+        return
+    stream, definition = matches[0]
+    project = definition.get('source_kind') == 'project_labels'
+    kind = ('project_custom' if project and not definition.get('library') else
+            'bound_library' if project else
+            'standard_iec' if stream.casefold() == 'iec.lif' else
+            'bound_vendor_library' if stream.casefold() == 'melsec.lif' else 'bound_library')
+    entry['origin'] = {'kind': kind, 'stream': stream, 'name': definition['name'],
+                       'offset': definition.get('offset'), 'status': 'source_bound'}
+    if definition.get('library'):
+        entry['origin']['library'] = definition['library']
+    # These are the standard IEC callable meanings, restricted to the actual
+    # IEC source owner. A project/user-library FB named TOF must not inherit it.
+    meanings = {
+        'TON': ('timer', 'on delay timer'), 'TOF': ('off_delay', 'off delay timer'),
+        'TP': ('timer', 'pulse timer'),
+        'R_TRIG': ('edge', 'rising edge trigger'), 'F_TRIG': ('edge', 'falling edge trigger'),
+        'CTU': ('counter', 'up counter'), 'CTD': ('counter', 'down counter'),
+        'CTUD': ('counter', 'up down counter'), 'SR': ('latch', 'set dominant bistable latch'),
+        'RS': ('latch', 'reset dominant bistable latch'),
+        **{n: ('compare', 'comparison ' + n) for n in ('EQ', 'NE', 'GT', 'GE', 'LT', 'LE')},
+        **{n: ('logic', 'boolean logic ' + n) for n in ('AND', 'OR', 'XOR', 'NOT')},
+    }
+    meaning = meanings.get(lookup.upper().removesuffix('_E')) if kind == 'standard_iec' else None
+    if meaning:
+        entry['semantic_functions'] = [meaning[0]] + (['timer'] if meaning[0] == 'off_delay' else [])
+        entry['description'] = meaning[1]
+        entry['description_source'] = dict(entry['origin'])
+        entry['behavior_status'] = 'standard_contract_not_runtime_validation'
+        behavior = {
+            'TON': 'timer:on_delay', 'TOF': 'timer:off_delay', 'TP': 'timer:pulse',
+            'R_TRIG': 'edge:rising', 'F_TRIG': 'edge:falling',
+            'CTU': 'counter:up', 'CTD': 'counter:down', 'CTUD': 'counter:up_down',
+            'SR': 'latch:set_dominant', 'RS': 'latch:reset_dominant',
+            **{n: 'compare:' + n for n in ('EQ', 'NE', 'GT', 'GE', 'LT', 'LE')},
+            **{n: 'logic:' + n for n in ('AND', 'OR', 'XOR', 'NOT')},
+        }.get(lookup.upper().removesuffix('_E'))
+        if behavior:
+            entry['semantic_behaviors'] = [behavior]
+
+
 def catalog_description(*, sources=None, program=None):
     result = [{"template": key, "kind": n.kind.value, "type_name": n.type_name,
              "symbol": n.symbol if n.kind == NodeKind.FUNCTION else "",
@@ -113,20 +173,27 @@ def catalog_description(*, sources=None, program=None):
                 continue
             try:
                 node = source_node_template(key, sources)
-                ports = sources.callable(node, bind_instance=False)['ports']
+                binding = sources.callable(node, bind_instance=False)
+                ports = binding['ports']
             except GXWFormatError as error:
                 if definition['kind'] != 'FUNCTION' or 'extensible' not in str(error):
                     continue
                 key += '-2'
                 try:
                     node = source_node_template(key,sources)
-                    ports = sources.callable(node,bind_instance=False)['ports']
+                    binding = sources.callable(node,bind_instance=False)
+                    ports = binding['ports']
                 except GXWFormatError:
                     continue
-            result.append({'template': key, 'kind': node.kind.value, 'type_name': node.type_name,
-                           'symbol': node.symbol if node.kind == NodeKind.FUNCTION else '',
-                           'width': node.bbox.right, 'height': node.bbox.bottom,
-                           'ports': ports})
+            item = {'template': key, 'kind': node.kind.value, 'type_name': node.type_name,
+                    'symbol': node.symbol if node.kind == NodeKind.FUNCTION else '',
+                    'width': node.bbox.right, 'height': node.bbox.bottom, 'ports': ports}
+            if binding.get('binding') == 'source_instruction_block':
+                contract = binding['source_contract']
+                item.update(call_kind=contract['call_kind'], representation=contract['representation'],
+                            fact_ids=contract['fact_ids'], conditions=contract['conditions'],
+                            conditions_status=contract['conditions_status'])
+            result.append(item)
     if sources is not None and program is not None:
         for node in program.nodes:
             if node.kind not in (NodeKind.FUNCTION, NodeKind.FUNCTION_BLOCK):
@@ -148,6 +215,9 @@ def catalog_description(*, sources=None, program=None):
                 entry['description_source'] = {'kind': 'instance_declaration_comment', 'identity': binding[0] + ':' + binding[1].name}
                 entry['behavior_status'] = 'unverified'
             result.append(entry)
+    for entry in result:
+        if entry['kind'] in ('function', 'function_block'):
+            _catalog_origin(entry, sources)
     return result
 
 
@@ -218,7 +288,7 @@ def _source_fb_template(key, sources):
     return replace(template, symbol='FB', type_name=name, bbox=Rect(0,0,width,height), ports=ports)
 
 
-def source_node_template(key, sources, *, symbol=None):
+def source_node_template(key, sources, *, symbol=None, fbd_contract=None):
     """One constructor for parameter lowering and the existing v2 writer."""
     if key in ('jump','return','inout','contact_rising_negated','contact_falling_negated'):
         # SC_EDIT GetGD2BoxType/SetBoxType and independently authored sources
@@ -242,6 +312,38 @@ def source_node_template(key, sources, *, symbol=None):
         return native_catalog()[key]
     if isinstance(key, str) and key.startswith('function:') and sources is not None:
         name = key.split(':', 1)[1]
+        if (not name.startswith('@')
+                and (fbd_contract is not None or sources.fbd_instruction_block_shape_source_available(name))):
+            try:
+                contract = fbd_contract or sources.fbd_instruction_block_contract(name)
+            except GXWFormatError:
+                raise
+            if contract is not None:
+                if not sources.fbd_instruction_block_graphic_shape_matches(name, contract):
+                    raise GXWFormatError('source FBD instruction block has no matching MELSEC graphic interface: ' + name)
+                if symbol is not None and str(symbol).strip().casefold() != name.casefold():
+                    raise GXWFormatError('source FBD instruction block symbol must match its exact owner')
+                inputs = [pin for pin in contract['pins'] if pin['direction'] == 'input']
+                outputs = [pin for pin in contract['pins'] if pin['direction'] == 'output']
+                if len(inputs) + len(outputs) > 256:
+                    raise GXWFormatError('source FBD instruction block exceeds the graphic port extent')
+                text_units = lambda value: len(value.encode('utf-16le')) // 2
+                rows = {}
+                for side in (inputs, outputs):
+                    for index, pin in enumerate(side):
+                        row = 2 + index
+                        rows[row] = rows.get(row, 0) + text_units(pin['name'])
+                width = max(5, (max([text_units(name) + 2, *rows.values()]) + 2) * 7 // 10)
+                entries = []
+                entries.extend((pin, 3, 0, index + 2) for index, pin in enumerate(inputs))
+                entries.extend((pin, 0 if pin['role'] == 'execution_status' else 2,
+                                width, index + 2) for index, pin in enumerate(outputs))
+                ports = tuple(PortDescriptor(16, flags, x, y,
+                                struct.pack('<IIII', 16, flags, x, y))
+                              for _, flags, x, y in entries)
+                height = 2 + max(len(inputs), len(outputs))
+                return replace(native_catalog()['function:MOV'], symbol=name, type_name=None,
+                               ports=ports, bbox=Rect(0, 0, width, height))
         operator = re.fullmatch(r'@(AND|OR|XOR|ADD|MUL|GT|GE|EQ|LE|LT)-([1-9][0-9]*)',name,re.I)
         count = {'@SUB':2,'@DIV':2,'@NE':2}.get(name.upper(),int(operator[2]) if operator else None)
         if count is not None:
@@ -368,11 +470,14 @@ class ProjectSourceContext:
                 'canvas_height': 12, 'nodes': [], 'wires': []}
 
 
-def read_project_context(raw, logical_name=None):
+def read_project_context(raw, logical_name=None, *, instruction_registry=None,
+                         fbd_condition_context=None, target_model=None):
     """Bind GXW bytes, selected Program, declarations and its own CPU."""
     raw = bytes(raw)
     program, declarations, names = read_project(raw, logical_name)
-    sources = ProjectCallableSources.from_project(raw, program.logical_name, declarations)
+    sources = ProjectCallableSources.from_project(raw, program.logical_name, declarations,
+        instruction_registry=instruction_registry, fbd_condition_context=fbd_condition_context,
+        target_model=target_model)
     return ProjectSourceContext(raw, program, declarations, names, sources)
 
 

@@ -13,15 +13,8 @@ from scripts.web_demo import isolated_demo_app
 ORIGIN = "http://127.0.0.1:8765"
 
 
-def login(client):
-    response = client.post("/api/session", json={"token": "isolated-browser-acceptance"}, headers={"Origin": ORIGIN})
-    assert response.status_code == 200
-    return {"Origin": ORIGIN, "X-CSRF-Token": response.json()["csrf"]}
-
-
 def test_demo_has_version_bound_issue_plan_requirement_and_failed_memory_replay(tmp_path):
     with isolated_demo_app(tmp_path, model_delay=0) as (app, ids), TestClient(app, base_url=ORIGIN) as client:
-        login(client)
         route = f'/api/projects/{ids["project_id"]}/versions/{ids["version_id"]}'
         issues = client.get(route + "/issues?report_id=review-demo").json()["issues"]
         assert issues[0]["id"] == "review-demo:stop"
@@ -54,7 +47,7 @@ def test_demo_refuses_mcp_and_hardware_without_reading_host_configuration(tmp_pa
     monkeypatch.setattr(hardware, "HardwareReader", forbidden)
     monkeypatch.setenv("GX_HARDWARE_READER_EXE", str(tmp_path / "user-configured-reader.exe"))
     with isolated_demo_app(tmp_path, model_delay=0) as (app, ids), TestClient(app, base_url=ORIGIN) as client:
-        headers = login(client)
+        headers = {"Origin": ORIGIN}
         pid, vid = ids["project_id"], ids["version_id"]
         response = client.get("/api/integrations/mcp", params={"project_id": pid})
         assert response.status_code == 400
@@ -76,7 +69,7 @@ def test_demo_refuses_mcp_and_hardware_without_reading_host_configuration(tmp_pa
 
 def test_demo_generation_autosaves_once_and_scope_marker_is_rejected(tmp_path, capsys):
     with isolated_demo_app(tmp_path, model_delay=0) as (app, ids), TestClient(app, base_url=ORIGIN) as client:
-        headers = login(client)
+        headers = {"Origin": ORIGIN}
         service = app.state.service
         pid, vid = ids["project_id"], ids["version_id"]
 

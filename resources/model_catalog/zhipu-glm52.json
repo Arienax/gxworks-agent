@@ -20,12 +20,7 @@
         "source": "catalog",
         "enforcement": "hard",
         "values": [
-          "none",
-          "minimal",
-          "low",
-          "medium",
           "high",
-          "xhigh",
           "max"
         ]
       },

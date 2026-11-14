@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Model profile, privacy, and query helpers used by generation context."""
 from __future__ import annotations
@@ -294,6 +294,19 @@ def public_generation_ladder(ladder):
             continue
         projected = {key: copy.deepcopy(rung[key]) for key in ("rung_id", "debug_note")
                      if key in rung and (rung[key] is None or isinstance(rung[key], (str, int)))}
+        instructions = rung.get("ordered_instructions")
+        if isinstance(instructions, list):
+            projected["ordered_instructions"] = []
+            for instruction in instructions:
+                if not isinstance(instruction, dict):
+                    continue
+                row = {key: instruction[key] for key in ("op", "kind", "record_index", "step", "text", "reason")
+                       if isinstance(instruction.get(key), (str, int))}
+                if isinstance(instruction.get("args"), list):
+                    row["args"] = [argument for argument in instruction["args"] if isinstance(argument, str)]
+                projected["ordered_instructions"].append(row)
+            rungs.append(projected)
+            continue
         if "header_element" in rung:
             projected["header_element"] = element(rung["header_element"])
         if isinstance(rung.get("shared_inputs"), list):

@@ -72,7 +72,7 @@ def test_semantic_field_example_uses_the_current_array_protocol(mode):
     assert current_analysis_protocol_violations({"approaches": [example]}) == []
 
 
-def test_first_analysis_delivers_literal_target_shapes_and_actual_process_gaps():
+def test_first_analysis_delivers_literal_target_shapes_and_generic_selection_rules():
     from plc.specification.explicit_constraint_claims import explicit_constraint_protocol
     assembled, _, _ = build()
     prompt = assembled.system_prompt
@@ -80,11 +80,10 @@ def test_first_analysis_delivers_literal_target_shapes_and_actual_process_gaps()
     assert "device.values 只放具体设备" in prompt
     assert "category 仅用于 clear" in prompt
     assert "无明确结构用 []" in prompt and "不强配标签" in prompt
-    assert "SFTL 不自动要求 data_register_counter" in prompt
-    for fact in ("物料之间是否经过无物料值", "同件分类能否变化", "怎样重新允许登记", "Encoder shift 前后怎样保持/消耗/清零", "按下时有效电平"):
-        assert fact in prompt
-    assert "missing_info 必须列出 required=true" in prompt
-    assert "不做分析，仍不能省略必要参数确认" in prompt
+    assert "decision_basis" in prompt
+    assert "只问会改变程序行为且无法由已有事实确定的现场条件" in prompt
+    assert "未知参数不构成逐项展开的理由" in prompt
+    assert "SFTL" not in prompt and "Encoder shift" not in prompt
 
 
 def test_first_analysis_delivers_exact_transition_field_names():
@@ -199,8 +198,10 @@ def test_direct_prompt_contains_facts_not_generic_architecture_rules():
         assert forbidden not in prompt
     assert "M8012" in prompt and "100ms周期时钟" in prompt
     assert calls == [("FX3U\nSFTL LDP M8012", {
-        "plc_model": "FX3U", "task_type": "analysis", "include_design": False, "design_query": None,
+        "plc_model": "FX3U", "task_type": "analysis", "confirmed_context": None,
+        "include_design": False, "design_query": None,
     })]
+    assert calls[0][0].metadata["capability_requirement"] == result.route.query_text
     assert any(args[0] == "system_prompt" and kw["reason"] == "analysis_direct" for args, kw in audits)
 
 
@@ -361,6 +362,10 @@ def test_modes_change_exploration_not_the_fact_route(text, selected):
     assert direct_calls[0][1]["include_design"] is False
     assert direct_calls[0][1]["design_query"] is None
     assert design_calls[0][1]["include_design"] is True
+    assert ("capability_requirement" in direct_calls[0][0].metadata) == (selected is None)
+    assert design_calls[0][0].metadata["capability_requirement"] == design.route.query_text
+    assert ("# Pre-selection evidence" in direct.system_prompt) == (selected is None)
+    assert "# Pre-selection evidence" in design.system_prompt
     assert direct.route.topics == design.route.topics
     assert direct.route.opcodes == design.route.opcodes
     assert direct.route.devices == design.route.devices
@@ -374,20 +379,16 @@ def test_modes_change_exploration_not_the_fact_route(text, selected):
 def test_direct_is_compact_without_losing_structured_engineering_facts():
     from application.prompts import ANALYSIS_DIRECT_PROMPT, ANALYSIS_PINNED_PROMPT
     assert "exactly one approach" in ANALYSIS_DIRECT_PROMPT
-    assert "pros 和 cons 用空字符串" in ANALYSIS_DIRECT_PROMPT
-    assert "generation_guide 只补结构化字段表达不了" in ANALYSIS_DIRECT_PROMPT
-    assert "通常应为空字符串" in ANALYSIS_DIRECT_PROMPT
+    assert "只提交选中的一项" in ANALYSIS_DIRECT_PROMPT
     assert "implementation_semantics" in ANALYSIS_DIRECT_PROMPT
-    assert "扫描周期" in ANALYSIS_DIRECT_PROMPT
     assert "不编造已确认答案" in ANALYSIS_DIRECT_PROMPT
-    assert "原来为空就不要" in ANALYSIS_PINNED_PROMPT
+    assert "沿用已有 generation_guide 和 instruction_choices" in ANALYSIS_PINNED_PROMPT
 
 
 def test_direct_core_does_not_duplicate_unknown_io_or_generic_plc_explanations():
     assert "未知地址不填 suggested_io" in ANALYSIS_SYSTEM_PROMPT
     assert "不同时预分配一个“建议地址”" in ANALYSIS_SYSTEM_PROMPT
     assert "原始用户请求由应用另行保留" in ANALYSIS_SYSTEM_PROMPT
-    assert "没有这种差异就用空字符串" in ANALYSIS_SYSTEM_PROMPT
     assert "PLC 常识、常规扫描行为" in ANALYSIS_SYSTEM_PROMPT
     example = ANALYSIS_SYSTEM_PROMPT.split("返回纯JSON（不要```json包裹），格式：\n", 1)[1].split("\n# suggested_io", 1)[0]
     assert "execution_intent_claims" in json.loads(example)

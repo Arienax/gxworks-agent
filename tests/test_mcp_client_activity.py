@@ -10,7 +10,7 @@ pytest.importorskip("httpx")
 from fastapi.testclient import TestClient
 
 from application.workbench import WorkbenchService
-from test_web_api import AGENT, ORIGIN, _app, _ladder, _login
+from test_web_api import AGENT, ORIGIN, _app, _ladder
 
 
 @pytest.fixture
@@ -21,7 +21,6 @@ def client_service(tmp_path):
     other = service.store.create_project("Other project")
     app = _app(service.store.base_dir, service.state_dir, service=service)
     with TestClient(app, base_url=ORIGIN) as client:
-        _login(client)
         yield service, client, project["id"], other["id"]
 
 

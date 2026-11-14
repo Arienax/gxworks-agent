@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 """Source-scoped executable range templates; model choices remain model choices."""
 from __future__ import annotations
 
@@ -57,6 +57,8 @@ def executable_fragments(plan, *, plc_model, target_mode, registry=None):
                         if behavior['behavior'] == 'range_shift' and trigger == 'level' else
                         '每次调用采样当时的源区；两次调用间被覆盖的数据不会保留。')
             result.append({'id': identity, 'plc_model': plc_model, 'target_mode': target_mode,
+                'limitation_scope': 'this_construction_only',
+                'scope_note': '本模板的采样、触发和状态限制不是底层指令的全部能力边界；示例参数不是现场条件。',
                 'opcode': opcode, 'parameters': list(form.spec.native_operand_order),
                 'trigger': trigger, 'behavior': copy.deepcopy(behavior), 'fact_group': group.id,
                 'source_verification': 'source_checked', 'effect_description': meaning,
@@ -144,6 +146,13 @@ def _history_template(shift, plc_model, registry):
         return None
     identity = 'history-' + shift['opcode'].lower()
     return {**shift, 'id': identity, 'construction': 'boolean_event_history',
+            'scope_note': '此复合模板使用单个布尔pending并在停用时清除状态。合并与清除是此构造的行为，'
+                '不是底层移位指令的限制。它不适用时可以用原生指令构造其他状态、触发和恢复策略。',
+            'applicability_conditions': [
+                {'premise': '两次采入之间的同通道事件只需保留是否发生，无需保留次数或独立信息',
+                 'status': 'unknown', 'references': []},
+                {'premise': '停用时清除pending与历史区符合当前工艺',
+                 'status': 'unknown', 'references': []}],
             'native_parameters': shift['parameters'],
             'parameters': ['run_bit', 'tick_bit', 'pending_bit', 'base_bit', 'length'],
             'syntax': f'FRAG {identity} <run_bit> <tick_bit> <pending_bit> <base_bit> K<length>',
@@ -157,7 +166,8 @@ def _history_template(shift, plc_model, registry):
                 '若tick间隔Δ，k位对应kΔ的离散历史，事件到采入仍有0至Δ加扫描误差。'
                 '用定时器判变时，按实际可观察的更新频率选时基；可能跳计数时须处理经过的单位数，或用时间戳判定到期。'
                 '长度至少覆盖最大使用索引+1；自行选择的容量、周期必须标为implementation假设。'
-                '同通道同拍多事件会合并；要求每事件可区分身份或同拍计数时改用事件记录/时间戳，不适用此布尔构造。',
+                '此模板同通道同拍多事件合并。只有工艺确需区分这些事件且无法通过适用的采样与状态组织满足时，'
+                '才排除此具体构造；未知到达间隔不能直接判定冲突，也不能据此排除底层移位指令。',
             'example': _history_example(identity, plc_model)}
 
 
@@ -180,9 +190,11 @@ def materialize_instruction_fragments(ladder, research, *, plc_model, target_mod
                for branch in branches(ladder) for output in branch.get('o', branch.get('outputs', []))):
         return ladder, None
     value = copy.deepcopy(ladder)
-    delivered = {row['id']: row for row in research.get('executable_fragments', [])}
+    from shared.model_context import technical_value
+    delivered = {row['id']: technical_value(row) for row in research.get('executable_fragments', [])}
     # Re-resolve from the current owner; delivered JSON is never its own authority.
-    current = {row['id']: row for row in executable_fragments(research, plc_model=plc_model, target_mode=target_mode)}
+    current = {row['id']: technical_value(row) for row in
+               executable_fragments(research, plc_model=plc_model, target_mode=target_mode)}
     receipts = []
     histories = {}
     storage_run = {}

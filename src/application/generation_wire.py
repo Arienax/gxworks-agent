@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Canonical model-message rendering for generation context budgeting.
 
@@ -19,11 +19,12 @@ from knowledge.evidence import estimate_tokens
 class GenerationWirePrompt(str):
     """System-prompt compatible string carrying the exact application wire packet."""
 
-    def __new__(cls, system_prompt="", wire_packet=None):
+    def __new__(cls, system_prompt="", wire_packet=None, *, fact_origins=None):
         result = super().__new__(cls, str(system_prompt or ""))
         result.wire_packet = detached_wire_packet(wire_packet or {
             "messages": [{"role": "system", "content": str(system_prompt or "")}]
         })
+        result.fact_origins = fact_origins or {}
         return result
 
 
@@ -76,15 +77,17 @@ def render_wire_messages(system_prompt, history=()):
     return messages
 
 
-def structured_context_text(payload):
+def structured_context_text(payload, *, min_reference_bytes=256):
     """Keep one complete copy of repeated engineering objects on the wire."""
     seen = {}
     def walk(value, path='#'):
         if isinstance(value, (Mapping, list)):
             marker = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
-            if len(marker.encode('utf-8')) > 256:
+            if len(marker.encode('utf-8')) > min_reference_bytes:
                 if marker in seen:
-                    return {'$ref': seen[marker], '$context_reference': True}
+                    reference = {'$ref': seen[marker], '$context_reference': True}
+                    if len(json.dumps(reference, separators=(',', ':')).encode('utf-8')) < len(marker.encode('utf-8')):
+                        return reference
                 seen[marker] = path
         if _schema_path(path):
             # JSON Schema owns its own reference root. Share the whole schema,
@@ -145,13 +148,14 @@ def normalize_wire_packet(value):
         normalized.append({"role": role, "content": str(item.get("content", ""))})
     if not normalized or normalized[0]["role"] != "system":
         raise ValueError("generation wire must start with a system message")
-    return {"messages": normalized}
+    tools = value.get("tools") if isinstance(value, Mapping) else None
+    return {"messages": normalized, **({"tools": copy.deepcopy(list(tools))} if tools else {})}
 
 
 def wire_payload_text(packet):
     normalized = normalize_wire_packet(packet)
     return json.dumps(
-        normalized["messages"],
+        normalized if normalized.get("tools") else normalized["messages"],
         ensure_ascii=False,
         separators=(",", ":"),
     )

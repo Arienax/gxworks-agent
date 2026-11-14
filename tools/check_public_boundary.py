@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Reject research materials, development output and credentials in source trees."""
 from __future__ import annotations
@@ -44,6 +44,7 @@ REQUIRED = {
     'resources/instructions/mitsubishi/fx3u_verified_opcodes.json',
     'resources/instructions/mitsubishi/modifier_rules.json',
     'resources/instructions/mitsubishi/instruction_capabilities.json',
+    'resources/instructions/mitsubishi/instruction_families.json',
     'checks/source_smoke.py',
 }
 CFB_SIGNATURE = bytes.fromhex('d0cf11e0a1b11ae1')

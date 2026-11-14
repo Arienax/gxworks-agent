@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Read stability and conservative output effects for condition factoring.
 
 This consumer of Core address/runtime/Registry facts never supplies missing
@@ -30,11 +33,18 @@ class Effect:
     reason: str | None = None
 
 
+def writes_conflict(reads, writes):
+    return writes is None or any(device in writes or re.sub(r"\d+$", "*", device) in writes for device in reads)
+
+
 class ConditionAnalysis:
-    def __init__(self, plc_model="FX3U"):
-        from plc.runtime_semantics import control_runtime_facts
+    def __init__(self, plc_model="FX3U", *, execution_context=None):
+        from plc.runtime_semantics import control_runtime_facts, first_scan_fact
         self.model = normalize_plc_model(plc_model)
         self.runtime = control_runtime_facts(self.model)
+        first = first_scan_fact(self.model, execution_context) if execution_context else {}
+        self.scan_contacts = frozenset(first.get("devices", ())) if (
+            first.get("available") and first.get("execution_type") == "scan") else frozenset()
         self._effects = {}
 
     @lru_cache(maxsize=4096)
@@ -83,6 +93,8 @@ class ConditionAnalysis:
         if kind in {"NO", "NC"} and not set(element) - {"type", "address", "label"}:
             value = element.get("address")
             device = self.device(value) if isinstance(value, str) else None
+            if isinstance(value, str) and canonical_device(value) in self.scan_contacts:
+                device = canonical_device(value)
             if device:
                 return Condition("contact", (kind, device), frozenset({device}))
             return Condition("contact", reason="volatile_or_unverified_read")
@@ -109,6 +121,16 @@ class ConditionAnalysis:
                                      frozenset().union(*(c.reads for b in children for c in b)))
             return Condition("parallel", reason="stateful_or_opaque_parallel")
         return Condition("unknown", reason="unsupported_condition")
+
+    def repeat_condition_reason(self, conditions, writes):
+        """Explain when a saved condition cannot be evaluated again after writes."""
+        for element in conditions:
+            predicate = self.condition(element)
+            if predicate.identity is None:
+                return "shared_evaluation_site"
+            if writes_conflict(predicate.reads, writes):
+                return "stateful_or_unknown_output" if writes is None else "read_after_write"
+        return None
 
     def _region(self, base, offset, count):
         if type(offset) is not int or type(count) is not int or not 0 <= offset or not 1 <= count <= 1024:

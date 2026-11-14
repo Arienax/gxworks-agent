@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Explicit Core stage: typed, confirmed effects -> existing native calls.
 
 Binding performs expression matching, not natural-language interpretation. Model
@@ -274,6 +277,11 @@ def _bound_point_effects(behavior, bindings):
 
 
 def bind_operation_intent(raw, *, target_model, registry=None, confirmed_spec=None):
+    return _bind_operation_intent(raw, target_model=target_model, registry=registry,
+                                  confirmed_spec=confirmed_spec)
+
+
+def _bind_operation_intent(raw, *, target_model, registry=None, confirmed_spec=None):
     """Resolve one exact call or return a visible gap; never guess ambiguity."""
     if registry is None:
         from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY

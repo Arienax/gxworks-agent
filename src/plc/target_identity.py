@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Registered CPU target identity: menu identities, their members and their series.
 
 Only identity lives here: which spellings name a saved CPU menu option, which concrete
@@ -117,6 +120,15 @@ def target_identity_state(plc_model: Any) -> Tuple[Optional[Tuple[str, ...]], Op
 def target_series(plc_model: Any) -> Optional[Tuple[str, str]]:
     """``(series, owning menu identity)`` for one identity or concrete member."""
     return _catalog().get(_key(plc_model))
+
+
+def execution_target_member(source_model, selected_model):
+    """Refine a native menu identity to the project's concrete CPU member."""
+    selected = _key(selected_model)
+    menu = target_series(source_model)
+    if menu and selected in target_members(source_model) and target_series(selected) == menu:
+        return selected
+    return source_model
 
 
 def is_parameter_only(plc_model: Any) -> bool:

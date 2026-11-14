@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Explicit, standalone owner-normalized runtime index (not the private builder).
 
 Each complete owner is stored once. Search rows contain tokens and references,
@@ -12,6 +15,23 @@ from contextlib import closing
 from pathlib import Path
 from knowledge.runtime_fact_projection import SOURCE_SERIALIZATION, VALUE_SERIALIZATION, resolve_fact_sources
 from knowledge.exact_search_storage import create_search_pool, insert_chunk
+
+
+OWNER_STORAGE_LAYOUTS = {
+    'source-pool': {'field_pooling': False, 'search_pooling': False, 'fact_rows': False},
+    'field-pool': {'field_pooling': True, 'search_pooling': False, 'fact_rows': False},
+    'fact-rows': {'field_pooling': True, 'search_pooling': True, 'fact_rows': True},
+}
+CURRENT_OWNER_STORAGE_LAYOUT = 'fact-rows'
+
+
+def owner_storage_options(layout='current'):
+    """Select physical transport independently of the semantic bundle revision."""
+    selected = CURRENT_OWNER_STORAGE_LAYOUT if layout == 'current' else layout
+    try:
+        return dict(OWNER_STORAGE_LAYOUTS[selected])
+    except KeyError as error:
+        raise ValueError('Unsupported owner storage layout: ' + str(layout)) from error
 
 
 _SCHEMA_SQL = '''
@@ -229,12 +249,23 @@ def hydrate_owner_packet(connection, owner, *, load_counts=None):
         marker = connection.execute("SELECT value FROM meta WHERE key='field_serialization'").fetchone()
         if marker is None or marker[0] != FIELD_SERIALIZATION:
             raise ValueError('Unsupported exact fact field transport')
+        # Fetch the selected owner's pool in one query. The codec below still
+        # validates each reference and returns detached values for every fact.
+        field_ids = set()
+        for fact in facts:
+            refs = (fact[0] if version[0] == 'owner-field-row-v3' and isinstance(fact, list) and fact
+                    else fact.get('field_refs', []) if isinstance(fact, dict) else [])
+            if isinstance(refs, list):
+                field_ids.update(ref for ref in refs if type(ref) is int and ref > 0)
+        field_rows = {row[0]: row[1:] for row in connection.execute(
+            'SELECT id,payload_json,sha256 FROM runtime_fact_fields WHERE id IN (SELECT value FROM json_each(?))',
+            (_json(sorted(field_ids)),))} if field_ids else {}
         fields = {}
         def resolve_field(identity):
             if type(identity) is not int or identity <= 0:
                 raise ValueError('Invalid fact field reference')
             if identity not in fields:
-                row = connection.execute('SELECT payload_json,sha256 FROM runtime_fact_fields WHERE id=?',(identity,)).fetchone()
+                row = field_rows.get(identity)
                 if row is None or hashlib.sha256(row[0].encode()).hexdigest() != row[1]:
                     raise ValueError('Missing or altered exact fact field')
                 fields[identity] = json.loads(row[0])
@@ -248,16 +279,24 @@ def hydrate_owner_packet(connection, owner, *, load_counts=None):
             facts = [unpack_fact_fields(fact,resolve_field) for fact in facts]
         if load_counts is not None:load_counts['field_load_count'] = len(fields)
     catalog, values = {}, {}
-    for ref in {ref for fact in facts for ref in fact.get('source_refs', [])}:
-        source = connection.execute('SELECT payload_json FROM runtime_sources WHERE id=?', (ref,)).fetchone()
+    source_ids = {ref for fact in facts for ref in fact.get('source_refs', [])}
+    source_rows = dict(connection.execute(
+        'SELECT id,payload_json FROM runtime_sources WHERE id IN (SELECT value FROM json_each(?))',
+        (_json(sorted(source_ids)),))) if source_ids else {}
+    for ref in source_ids:
+        source = source_rows.get(ref)
         if source is None:
             raise ValueError('Missing runtime source')
-        catalog[ref] = json.loads(source[0])
-    for ref in {fact['value_ref'] for fact in facts if 'value_ref' in fact}:
-        value = connection.execute('SELECT payload_json FROM runtime_values WHERE id=?', (ref,)).fetchone()
+        catalog[ref] = json.loads(source)
+    value_ids = {fact['value_ref'] for fact in facts if 'value_ref' in fact}
+    value_rows = dict(connection.execute(
+        'SELECT id,payload_json FROM runtime_values WHERE id IN (SELECT value FROM json_each(?))',
+        (_json(sorted(value_ids)),))) if value_ids else {}
+    for ref in value_ids:
+        value = value_rows.get(ref)
         if value is None:
             raise ValueError('Missing runtime value')
-        values[ref] = json.loads(value[0])
+        values[ref] = json.loads(value)
     packet['value']['facts'] = [resolve_fact_sources(fact, catalog, values) for fact in facts]
     if load_counts is not None:
         load_counts.update(source_load_count=len(catalog),value_load_count=len(values))

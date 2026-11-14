@@ -33,7 +33,7 @@ from agent_runtime.runtime import build_default_tool_runtime
 
 PROGRAM_NAME = "PARITY_MAIN"
 PROFILE = "generation_structural"
-ARTIFACT_NAMES = {"json", "ir", "svg", "st_from_ir", "program_csv", "comment_csv"}
+ARTIFACT_NAMES = {"json", "ir", "svg", "program_csv", "comment_csv"}
 
 
 @pytest.mark.parametrize('mode,edit_kind', [(mode, 'source') for mode in ['ladder', 'st', 'fbd', 'sfc']]
@@ -65,7 +65,7 @@ def test_existing_gxw_model_edit_job_keeps_whole_project_and_offline_backend(tmp
             current = read_ordered_program(read_offline_project(raw), logical)
             row = next(row for row in current['source_records'] if row.get('op') == 'AND<' and row.get('args') == ['D1', 'K55'])
             args = {'patch': {'instruction_edits': [{'operation': 'replace', 'record_index': row['record_index'],
-                'expected': {'op': row['op'], 'args': row['args']}, 'instructions': [{'op': 'AND<', 'args': ['D1', 'K54']}]}],
+                'instructions': [{'op': 'AND<', 'args': ['D1', 'K54']}]}],
                 'device_comments': {'S0': text}}}
         elif mode == 'st':
             args = {'operation': 'edit_st_program', 'source_name': logical,
@@ -90,9 +90,23 @@ def test_existing_gxw_model_edit_job_keeps_whole_project_and_offline_backend(tmp
             calls.append((values, options))
             if mode != 'fbd':
                 request = json.loads(values[0][1].content)
-                assert request['context']['generation_request'].startswith('Edit the selected source and its comments')
+                if mode == 'ladder':
+                    assert request['request'] == 'Edit the selected source and its comments'
+                    assert 'context' not in request and 'selected_source' not in request
+                    assert '<svg' not in values[0][1].content and 'source_records' not in request
+                    source = request['current_model']
+                    records = [row for network in source['networks'] for row in network['raw_instructions']]
+                    assert records and all('record_index' in row for row in records)
+                    assert all('raw_hex' not in row and 'operand_details' not in row for row in records)
+                    if edit_kind == 'source':
+                        bound = next(item for item in records if item['record_index'] == row['record_index'])
+                        assert (bound['op'], bound['args'], bound['operand_forms']) == (
+                            row['op'], row['args'], row['operand_forms'])
+                else:
+                    source = request['context']
+                    assert source['generation_request'].startswith('Edit the selected source and its comments')
                 if edit_kind == 'labels':
-                    assert request['context']['declaration_tables']
+                    assert source['declaration_tables']
                     assert 'edit_pou_labels' in request['existing_declaration_tool']['operations']
             return SimpleNamespace(message=SimpleNamespace(content=json.dumps(answer, ensure_ascii=False)))
         monkeypatch.setattr(model_api, '_request_model', model_response)
@@ -192,6 +206,9 @@ def test_teaching_elapsed_time_witness_checks_boundaries_restart_and_continuous_
     from plc.candidate_service import CandidateService
     cases = json.loads((private_path('benchmarks/direct_teaching_cases.json')).read_text(encoding='utf-8'))['cases']
     case = next(row for row in cases if row['case_id'] == case_id)
+    # MOV's current FX3U source scope requires CPU version 2.20 or later.
+    # This witness has that explicit target; unspecified targets stay unverified.
+    case = {**case, 'execution_context': {'cpu_version': '2.20'}}
 
     def rung(inputs, *outputs):
         return {'b': [{'i': inputs, 'o': list(outputs)}]}
@@ -222,8 +239,15 @@ def test_teaching_elapsed_time_witness_checks_boundaries_restart_and_continuous_
     ladder = prepare_model_candidate({'r': rungs}, {}, 'FX3U')['ladder']
     program = CandidateService().prepare(ladder, plc_model='FX3U')['program_ir']
     result = evaluate_program(case, program)
-    assert result['status'] == ('fail' if fault else 'pass'), result
-    assert all(not row['unknown_reasons'] for row in result['traces'])
+    if case_id == 'segd_countdown':
+        # The new source family adds DIV restrictions whose rule vocabulary is
+        # not executable yet. Preserve the witness, but do not report a pass or
+        # a program fault from a replay that cannot evaluate those restrictions.
+        assert result['status'] == 'unverified', result
+        assert all('constraint_unverified:DIV' in row['unknown_reasons'] for row in result['traces'])
+    else:
+        assert result['status'] == ('fail' if fault else 'pass'), result
+        assert all(not row['unknown_reasons'] for row in result['traces'])
     artifacts = CandidateService().compile(program,tmp_path)['artifacts']
     csv_result = evaluate_csv(case,tmp_path/artifacts['program_csv'],tmp_path/artifacts['comment_csv'])
     assert csv_result['status'] == result['status'], csv_result
@@ -429,7 +453,7 @@ def _parity(candidate, store, project_id, directory, monkeypatch, *, previous=No
     for key in ("changes", "skipped"):
         assert all(set(item) == {"message", "network_ids"} for item in data["normalization"][key])
     assert set(api["artifacts"]) == ARTIFACT_NAMES
-    # Check actual CSV, comments, SVG, ST, ladder JSON and IR bytes, not just
+    # Check actual CSV, comments, SVG, ladder JSON and IR bytes, not just
     # that both paths claim to have compiled or supply identically named files.
     assert api["artifacts"] == mcp["rendered"][0]["artifacts"]
     assert action["artifact_hashes"] == {
@@ -615,6 +639,7 @@ def test_full_and_partial_edits_save_reload_and_preview_with_generation_profile(
             assert preview["read_only"] is True
             assert preview["ladder"] == ir_to_ladder(expected["program"])
             assert "<svg" in preview["svg"]
-            assert preview["st"] == expected["artifacts"]["st_from_ir"].decode("utf-8").replace("\r\n", "\n")
+            assert preview["st"] == ""
+            assert "st_from_ir" not in expected["artifacts"]
     finally:
         reopened.close()

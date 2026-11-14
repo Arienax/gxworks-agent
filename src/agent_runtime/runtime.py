@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Shared deterministic tool boundary for desktop and external agents."""
 
 from __future__ import annotations
@@ -43,9 +46,9 @@ _DEBUG_TOOLS = frozenset({
 
 
 def _model_tool_value(name, value):
-    from application.read_delivery import PAGED_READ_TOOLS, DELIVERY_VERSION
-    if (name in PAGED_READ_TOOLS and isinstance(value, Mapping)
-            and (value.get('data', {}).get('delivery') or {}).get('version') == DELIVERY_VERSION):
+    from application.read_delivery import PAGED_READ_TOOLS, PreparedReadEnvelope
+    if (name in PAGED_READ_TOOLS and isinstance(value, PreparedReadEnvelope)
+            and value.get('tool') == name):
         # Produced only by the registry after the ordinary public projection.
         # A second generic projection would corrupt engineering map keys in
         # the object table and invalidate the measured final envelope.
@@ -91,8 +94,24 @@ def _model_tool_value(name, value):
             if is_live_engineering_receipt(original):
                 return live_engineering_summary(original)
         if isinstance(current, Mapping) and isinstance(original, Mapping):
-            return {key: live_receipts(original[key], item) if key in original else item
-                    for key, item in current.items()}
+            restored = {key: live_receipts(original[key], item) if key in original else item
+                        for key, item in current.items()}
+            if (isinstance(original.get('delivery'), Mapping)
+                    and original['delivery'].get('preferred_format') == 'gxw'
+                    and isinstance(original.get('validation'), Mapping)):
+                # File delivery outcomes are operational results, not attached
+                # knowledge-review labels. Keep the bounded compilation result.
+                restored['validation'] = {key: original['validation'][key] for key in (
+                    'gx_compile', 'native_save', 'cold_reopen', 'public_check',
+                    'native_compile_message', 'native_compile_reason', 'native_phase') if key in original['validation']}
+                findings = original['validation'].get('native_compile_findings')
+                if isinstance(findings, list):
+                    fields = ('code', 'category', 'severity', 'device', 'occurrences', 'steps',
+                              'rung_ids', 'message', 'fixable')
+                    restored['validation']['native_compile_findings'] = [
+                        {key: row[key] for key in fields if key in row}
+                        for row in findings[:32] if isinstance(row, Mapping)]
+            return restored
         if isinstance(current, list) and isinstance(original, (list, tuple)):
             return [live_receipts(before, after) for before, after in zip(original, current)]
         return current
@@ -124,6 +143,7 @@ class InProcessToolRuntime:
             tool_call.name,
             tool_call.arguments,
             context,
+            **({'defer_read': True} if tool_call.defer_read else {}),
         )
         public = _model_tool_value(tool_call.name, envelope)
         return ToolResult(
@@ -182,10 +202,10 @@ class ReadOnlyToolRuntime:
                           json.dumps(envelope, ensure_ascii=False), envelope, is_error=True)
 
 
-def build_default_tool_runtime() -> InProcessToolRuntime:
+def build_default_tool_runtime(*, receipt_store=None) -> InProcessToolRuntime:
     from agent_runtime.plc_tools import build_default_tool_registry
 
-    return InProcessToolRuntime(build_default_tool_registry())
+    return InProcessToolRuntime(build_default_tool_registry(receipt_store=receipt_store))
 
 
 __all__ = [

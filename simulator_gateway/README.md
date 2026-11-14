@@ -9,6 +9,18 @@ To maintain strict security isolation, the gateway:
 
 Protocol version 3 binds `ActCpuType` and the expected returned model code to the CPU selected by Python Core. The legacy empty connection request defaults to FX3U/FX3UC (`ActCpuType = 0x208`, expected model code `0xF3`). The adapter sets `ActTargetSimulator = 0`. Test stimulus writes are strictly confined to ordinary `X`, `M`, and `D` devices; output coils (`Y`) and CPU-owned special registers are read-only.
 
+### CPU selection
+
+`connect_simulator(plc_model="Q06UDEH")` selects an explicitly registered FX/Q/L CPU. Omitting the model reuses an existing connected target; the initial legacy default remains FX3U. Discovery, device reads, RUN status and traces retain the connected model. A trace without `config.plc_model` inherits the target model; an explicitly different model is rejected.
+
+The catalog in `resources/instructions/control_runtime.json` covers 55 programmable GX Works2 menu selections (42 Q, 5 L and 8 FX), including their combined-menu aliases. These are documented connection mappings, not a claim of live validation on every CPU or every MX Component edition. FX0S/FX0 and FX1 remain unavailable because their independent returned model codes have not been established; parameter-only remote I/O targets and Simulator3 CPUs are not included. MX Component connection errors remain visible.
+
+`GET /health` returns the selected `cpu_type`, actual `observed_cpu_type` and `observed_cpu_name`. Some Q models share a returned model code, so Core also checks the returned CPU name for those entries. `ActCpuType` alone is a requested setting, not proof of the connected model. Rebuild the bundled gateway after this update; an older multi-model gateway without identity in health must be rebuilt before target discovery.
+
+Simulator reads use the model's numbering, radix and address regions for X/Y/M/D/S/T/C, with T/C mapped to current-value devices TN/CN, plus explicitly registered RUN/error monitors. Simulator input plans remain limited to X/M/D. Physical-device access policies are unchanged. Address validity does not establish the current project's allocated memory; the native simulator can still reject an unallocated device.
+
+CPU firmware-version checks remain opt-in. This model routing does not add default firmware checks.
+
 ## Building and Running
 
 Compile the gateway executable outside the source tree:

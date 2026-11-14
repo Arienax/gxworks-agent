@@ -1,3 +1,6 @@
+# Copyright 2026 Arienax
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
+
 """Pure request resolution: protocol > user selection > hint > default > omission.
 
 This module neither discovers capabilities nor makes network requests. A scoped
@@ -124,6 +127,9 @@ def resolve_request(profile, hints=None, *, protocol=None, model=None, api_key=N
     settings = profile.settings
     layers = [("profile_default", defaults), ("workflow_hint", hints), ("user_advanced", overrides)]
     options = merge(merge(defaults, hints), overrides)
+    custom = {"extra_body": settings.request_parameters} if settings.request_parameters else {}
+    if custom:
+        options["extra_body"] = {**(options.get("extra_body") or {}), **copy.deepcopy(dict(settings.request_parameters))}
     values, sources = {}, {}
     for name, desc in contract.parameters.items():
         selected, source = MISSING, "server_default"
@@ -136,6 +142,9 @@ def resolve_request(profile, hints=None, *, protocol=None, model=None, api_key=N
             selected, source = choice["value"], "user_selection"
         elif choice["mode"] == "omit":
             selected, source = None, "user_omit"
+        explicit = parameter_override(custom, name, desc)
+        if explicit is not MISSING:
+            selected, source = explicit, "user_advanced"
         desc.remove(options, name)
         if desc.status in {"unsupported", "fixed"}:
             selected, source = None, "contract_omit"

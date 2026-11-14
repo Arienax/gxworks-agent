@@ -8,7 +8,9 @@ from pathlib import Path
 
 from application.workspace import ConflictError, atomic_json, canonical_hash
 from plc.specification.confirmed import validate_spec_draft
-from plc.specification.implementation import ROW_FIELDS
+from plc.specification.implementation import (
+    ROW_FIELDS, normalize_implementation_instances, normalize_open_questions, normalize_review_questions,
+)
 from plc.specification.provenance import CONFIRMED_SPEC_FIELDS
 from shared.records import contained
 
@@ -24,21 +26,48 @@ def document_path(store, project_id):
     return contained(directory / "plc-spec.json", directory)
 
 
-def _with_ids(spec):
+def project_behavior_cpu(project, plc_model):
+    from plc.target_identity import execution_target_member
+    return execution_target_member(plc_model, project.get("plc_model"))
+
+
+def project_acceptance_cases(project, plc_model):
+    """Load cases alongside the confirmed spec, using only managed paths."""
+    from simulator.io_example import load_acceptance_cases
+
+    if "_acceptance_cases" in project:
+        return project["_acceptance_cases"]
+    document = project.get("_spec_document") or {}
+    path = None
+    if document.get("path"):
+        directory = Path(document["path"]).parent
+        try:
+            path = contained(directory / "acceptance-cases.json", directory)
+        except (OSError, ValueError):
+            return None, "acceptance_file_unreadable"
+    return load_acceptance_cases(project.get("id"), project_behavior_cpu(project, plc_model), project_file=path,
+                                 spec_revision=document.get("base_revision"))
+
+
+def _normalize_draft_rows(spec, *, recover_selected_approach=False):
     # Older I/O and parameter rows have an address/name but no editable identity.
     for section, key in (("io_table", "address"), ("parameters", "name")):
         rows = spec.get(section)
         for row in rows if isinstance(rows, list) else []:
             if isinstance(row, dict) and not row.get("id") and row.get(key):
                 row["id"] = f"{section}-{row[key]}"
-    return spec
+    if "open_questions" in spec:
+        spec["open_questions"] = normalize_open_questions(spec["open_questions"], parameters=spec.get("parameters"))
+    if "implementation_items" in spec:
+        spec["implementation_items"] = normalize_implementation_instances(spec["implementation_items"])
+    return normalize_review_questions(spec, recover_selected_approach=recover_selected_approach)
 
 
 def editable_spec(project):
     draft = copy.deepcopy(project.get("confirmed_spec") or {})
     draft.setdefault("plc_model", project["plc_model"])
     draft.setdefault("target_mode", project.get("target_mode") or "ladder")
-    return _with_ids(draft)
+    return _normalize_draft_rows(draft)
 
 
 def differences(before, after, path="$"):
@@ -67,7 +96,7 @@ def read_document(store, project, version=None):
             parsed = json.loads(path.read_text(encoding="utf-8-sig"))
             if not isinstance(parsed, dict):
                 raise ValueError("规格顶层必须是 JSON 对象")
-            draft = _with_ids(parsed)
+            draft = _normalize_draft_rows(parsed, recover_selected_approach=project.get("confirmed_spec") is None)
         except (ValueError, UnicodeError) as error:
             file_error = {"code": "invalid_spec_file", "path": "$",
                           "message": f"请在 plc-spec.json 修复格式后重读：{error}"}
@@ -134,7 +163,7 @@ def apply_changes(draft, changes):
             rows.append({**value, "id": identity})
         else:
             rows[index] = {**rows[index], **value, "id": identity}
-    return _with_ids(result)
+    return _normalize_draft_rows(result)
 
 
 def write_document(document, draft):
@@ -153,7 +182,8 @@ def bind_plan_interfaces(context, draft):
     programs = [row["source_name"] for row in read_offline_project(raw).sources() if row.get("language") == "fbd"]
     catalogs = {}
     for row in items:
-        key = row["location"].casefold().removesuffix(".pou")
+        bindings = (context.version or {}).get('source_program_bindings') or {}
+        key = bindings.get(row['location'], row['location']).casefold().removesuffix(".pou")
         program = next((p for p in programs if p.casefold().removesuffix(".pou") == key), None)
         if not program:
             raise ValueError(f"{row['id']}：工程内没有可绑定的 FBD 程序 {row['location']}")
@@ -193,7 +223,7 @@ def merge_analysis(previous, reviewed, analysis, request):
             result = apply_changes(result, [{"section": section, "id": row["id"], "value": row}])
     if not result.get("requirements") and request.strip():
         result["requirements"] = [{"id": "requirement-1", "text": request, "source": "user"}]
-    return _with_ids(result)
+    return _normalize_draft_rows(result)
 
 
 def analysis_inputs(context, request, document):

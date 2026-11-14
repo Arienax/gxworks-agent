@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import copy
 import json
@@ -16,6 +16,7 @@ from dataclasses import asdict, is_dataclass
 from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
+from shared.paths import APP_DIR, LEGACY_LOCAL_APP_DIR
 from shared.records import record_id as checked_record_id
 from weakref import WeakValueDictionary
 
@@ -132,11 +133,11 @@ def detect_image_media_type(data):
     return ""
 
 
-def default_workspace_dir():
-    """Resolve the former Qt app-data workspace; never create or move files."""
+def default_workspace_dir(name="workspace"):
+    """Use the new default while keeping an existing legacy workspace bound."""
     override = os.environ.get("PLC_AI_WORKSPACE_DIR", "").strip()
     if override:
-        return Path(override)
+        return Path(override) if name == "workspace" else Path(override).parent / name
     if sys.platform == "win32":
         roaming = os.environ.get("APPDATA", "").strip()
         root = Path(roaming) if roaming else Path.home() / "AppData" / "Roaming"
@@ -145,7 +146,9 @@ def default_workspace_dir():
     else:
         data_home = os.environ.get("XDG_DATA_HOME", "").strip()
         root = Path(data_home) if data_home and Path(data_home).is_absolute() else Path.home() / ".local" / "share"
-    return root / "PLC AI Studio" / "PLC AI Workbench" / "workspace"
+    preferred = root / APP_DIR / name
+    legacy = root / LEGACY_LOCAL_APP_DIR / "PLC AI Workbench" / name
+    return legacy if not preferred.exists() and legacy.is_dir() else preferred
 
 
 class SessionStore:

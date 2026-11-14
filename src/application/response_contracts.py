@@ -1,5 +1,5 @@
 # Copyright 2026 Arienax
-# Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+# Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 """Human-field declarations for model workflows, independent of any adapter.
 
@@ -23,6 +23,8 @@ ST_RESPONSE = ResponseContract("st", "json", st_paths=("st_code",))
 ANALYSIS_RESPONSE = ResponseContract("analysis", "json", (
     "summary", "approaches.*.name", "approaches.*.description", "approaches.*.pros",
     "approaches.*.cons", "approaches.*.generation_guide", "missing_info.*.question",
+    "approaches.*.instruction_choices.*.role",
+    "approaches.*.decision_basis.*.variant", "approaches.*.decision_basis.*.premise",
     "assumptions",
     *(f"suggested_io.{kind}.*" for kind in ("X", "Y", "M", "D", "T", "C", "S", "SM", "SD", "special_relays", "special_registers")),
 ))

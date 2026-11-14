@@ -1,44 +1,46 @@
 // Copyright 2026 Arienax
-// Licensed under the Apache License, Version 2.0. See LICENSE for the license terms.
+// Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
 import type { SetStateAction } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Job, JobEvent, Json, Proposal, Session } from "../api/client";
+import type { Job, JobEvent, Json, Proposal, WorkbenchConnection } from "../api/client";
 import { activeJob, api } from "../api/client";
 import { reconcileByRevision } from "../lifecycle/requests";
 import { usePolling } from "../lifecycle/usePolling";
 
 export function useJobFeed(
   pid: string,
-  session: Session | null,
+  connection: WorkbenchConnection | null,
   setError: (error: string) => void,
+  paused = false,
 ) {
+  const scope = connection?.selected && pid ? `${connection.path}:${pid}` : null;
   const activeProjectRef = useRef(pid);
   activeProjectRef.current = pid;
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [jobId, storeJobId] = useState("");
+  const [selection, setSelection] = useState({ id: "", conversationId: "", drafting: false });
+  const jobId = selection.id;
   const [events, setEvents] = useState<JobEvent[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   // An explicit "new task" keeps the conversation empty instead of letting the
   // next poll fall back to the latest job. Any explicit selection releases it.
-  const draftingNew = useRef(false);
   const setJobId = useCallback((value: SetStateAction<string>) => {
-    draftingNew.current = false;
-    storeJobId(value);
+    setSelection(current => ({ ...current, id: typeof value === "function" ? value(current.id) : value }));
+  }, []);
+  const selectConversation = useCallback((job: Job) => {
+    setSelection({ id: job.id, conversationId: job.conversation_id || "", drafting: false });
   }, []);
   const startNewTask = useCallback(() => {
-    draftingNew.current = true;
-    storeJobId("");
+    setSelection({ id: "", conversationId: "", drafting: true });
   }, []);
   useEffect(() => {
-    draftingNew.current = false;
     setJobs([]);
-    storeJobId("");
+    setSelection({ id: "", conversationId: "", drafting: false });
     setEvents([]);
     setProposals([]);
-  }, [pid]);
+  }, [scope]);
   const jobsPolling = usePolling(
-    session ? pid : null,
+    paused ? null : scope,
     async (signal) => {
       const query = pid ? `?project_id=${encodeURIComponent(pid)}` : "";
       const [j, p] = await Promise.all([
@@ -50,18 +52,22 @@ export function useJobFeed(
     (value) => {
       setJobs((old) => reconcileByRevision(old, value.jobs));
       setProposals((old) => reconcileByRevision(old, value.proposals));
-      storeJobId((old) =>
-        value.jobs.some((item) => item.id === old)
-          ? old
-          : draftingNew.current ? "" : value.jobs[0]?.id || "",
-      );
+      setSelection(current => {
+        if (current.drafting) return current;
+        const job = value.jobs.find(item => item.id === current.id) || value.jobs[0];
+        const id = job?.id || "";
+        const conversationId = current.conversationId || job?.conversation_id
+          || value.jobs.find(item => item.conversation_id)?.conversation_id || "";
+        return id === current.id && conversationId === current.conversationId
+          ? current : { id, conversationId, drafting: false };
+      });
     },
     (e) => setError(String(e instanceof Error ? e.message : e)),
     2500,
   );
 
   useEffect(() => {
-    if (!jobId || !session) {
+    if (!jobId || !scope) {
       setEvents([]);
       return;
     }
@@ -130,13 +136,16 @@ export function useJobFeed(
       pendingEvents = [];
       stream.close();
     };
-  }, [jobId, session, pid]);
+  }, [jobId, scope]);
 
   return {
     jobs,
     setJobs,
     jobId,
+    conversationId: selection.conversationId,
+    draftingConversation: selection.drafting,
     setJobId,
+    selectConversation,
     startNewTask,
     events,
     setEvents,
