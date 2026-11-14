@@ -92,7 +92,7 @@ def runtime_config(provider, model):
             'api': 'openai-responses' if responses else 'openai-completions',
             **({'context_window': capacity.value} if capacity and type(capacity.value) is int else {}),
             'supports_images': contract_capability_available(runtime.contract, 'vision', options={}),
-            'reasoning_effort': resolved.values.get('reasoning_effort'),
+            **dict(reasoning_effort=resolved.values.get('reasoning_effort')),
             'request_parameters': copy.deepcopy(dict(resolved.options)),
             'system_prompt': SYSTEM_PROMPT}
 

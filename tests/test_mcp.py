@@ -1503,7 +1503,7 @@ def test_discovery_and_schemas_come_from_the_runtime(saved_project):
     runtime = build_default_tool_runtime()
     adapter = MCPToolAdapter(runtime, _provider(saved_project))
     tools = adapter.list_tools()
-    assert tuple(tool.name for tool in tools) == SAFE_TOOL_NAMES
+    assert tuple(tool.name for tool in tools) == (*SAFE_TOOL_NAMES, "gxworks_read_context_unit")
     assert not {tool.name for tool in tools} & FORBIDDEN_TOOL_NAMES
     for tool, source in zip(tools, runtime.list_tools()):
         assert tool.description == source["function"]["description"]

@@ -8,7 +8,10 @@ from shared.paths import resource_path
 
 @lru_cache(maxsize=1)
 def entries():
-    return json.loads(resource_path('knowledge/retrieval_vocabulary.json').read_text(encoding='utf-8'))['entries']
+    path = resource_path('knowledge/retrieval_vocabulary.json')
+    if not path.is_file():
+        return []
+    return json.loads(path.read_text(encoding='utf-8'))['entries']
 
 
 def matching_entries(query):

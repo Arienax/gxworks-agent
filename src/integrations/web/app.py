@@ -88,13 +88,15 @@ def create_app(workspace=None, *, state_dir=None, read_only=False, origin="http:
                 raise ValueError("工作区必须是文件夹。")
             if (resolved / "project.json").is_file():
                 raise ValueError("选中的是单个工程目录；请选择包含 index.json 和 projects 的工作区外层目录。")
-            resolved.mkdir(parents=True, exist_ok=True)
+            if not read_only:
+                resolved.mkdir(parents=True, exist_ok=True)
             bound = WorkbenchService(resolved, _workspace_state(resolved), read_only=read_only)
             try:
-                bound.start()
-                _attach_public_read_validator(bound)
-                if remember:
-                    workspaces.remember(resolved)
+                if not read_only:
+                    bound.start()
+                    _attach_public_read_validator(bound)
+                    if remember:
+                        workspaces.remember(resolved)
             except BaseException:
                 bound.close()
                 raise

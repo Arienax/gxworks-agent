@@ -17,14 +17,14 @@ ANALYSIS_SYSTEM_PROMPT = """# Role
 协议/应用阶段>本轮>确认规格>型号/证据>历史；检索只读。
 
 # 输出要求
-approaches 每项含 approach_id、name、description、pros、cons、generation_guide、instruction_choices、implementation_semantics、decision_basis；数量按模式。generation_contract 由 Core 生成，不输出。
+approaches 含 approach_id、name、description、pros、cons、generation_guide、instruction_choices、implementation_semantics、decision_basis；generation_contract 由 Core 生成。
 返回纯JSON（不要```json包裹），格式：
 {"summary":"一句话总结","approaches":[],"execution_intent_claims":[],"explicit_constraint_claims":[],"missing_info":[],"suggested_io":{},"hardware_config":{},"assumptions":[]}
 # suggested_io / hardware_config
-X/Y/M/D/T/C/S 用“地址:用途”对象分组，如 {"X":{"X10":"到位检测"}}，不得只给地址数组。special_relays/special_registers 可为数组或对象，SM/SD 分列。未知地址不填 suggested_io，只在 missing_info 确认，不同时预分配一个“建议地址”。hardware_config 只写相关硬件事实。
+X/Y/M/D/T/C/S 用“地址:用途”对象分组，如 {"X":{"X10":"到位检测"}}，不得只给地址数组。special_relays/special_registers 可用数组或对象，SM/SD 分列。未知地址不填 suggested_io，只放 missing_info，不同时预分配一个“建议地址”。hardware_config 只写硬件事实。
 
 # Explicit low-level claims
-explicit_constraint_claims 只报本轮明确设定/撤销的条件，勿选 opcode、完整操作数或地址。项含 operation、scope=global|scoped|ambiguous、target、evidence[]（逐字引本轮，实例含完整指令）。仅投影 global。推断设 inferred=true，省去 evidence，仅供回执。target 和操作：
+explicit_constraint_claims 只报本轮明确设定/撤销的条件，勿选 opcode、完整操作数或地址。项含 operation、scope=global|scoped|ambiguous、target、evidence[]（逐字引本轮，实例含完整指令）；仅投影 global。推断设 inferred=true、省 evidence，仅进回执。target：
 __EXPLICIT_TARGETS__
 category 仅用于 clear，value=opcodes/devices/instruction_instances/all。device.values 只放具体设备；方法禁令留原文，不伪装成地址。
 
@@ -33,8 +33,8 @@ category 仅用于 clear，value=opcodes/devices/instruction_instances/all。dev
 
 # Missing-info minimality
 仅问缺失且影响程序的事实。项含稳定 id、question、required、options。default 不是已确认答案，依赖用 required_when。接线、极性、数值等必要输入仍为 required，内部地址无需必填。PLC 常识、常规扫描行为不列为 assumptions，不添硬件或按钮。
-方案只列在 approaches，missing_info/open_questions 勿重复问选方案。options 为可直接提交的答案，需填地址、数值或说明时用 options=[]，填写提示放题干。
-各候选的内部技术方法由模型确定。Design 的方案选择在 approaches 中交给用户，待答问题只用于确认现场条件。
+方案只列 approaches，missing_info 勿问选方案。options 放可直接提交的答案；需填地址、数值或说明时用 []，提示放题干。
+内部技术方法由模型确定。Design 的方案选择在 approaches 中交给用户，问题只确认现场条件。
 """.replace("__EXPLICIT_TARGETS__", explicit_constraint_protocol())
 
 
@@ -109,8 +109,8 @@ instruction_choices 为 [{"opcode":"指令或系统软元件名称","role":"在�
 IMPLEMENTATION_COMPARISON_PROMPT = """# Pre-selection evidence
 只比较仍开放的实现，各候选共用已知要求、参数和现场条件。未定的规模、精度或时序用相同变量或已知范围，不编造取值或否定条件。比较单位是满足共同条件的完整实现；不满足要求的变体说明淘汰依据，不能用这些变体代替可行实现之间的比较。简单任务或只有一种有依据的可行实现时允许只给一个。
 写清状态组织及归属、输入登记和消费、无事件时的更新、同周期多事件处理、状态与输出推进、释放和恢复；核对型号、语言、指令条件、数据顺序、宽度和工程量换算。区分旧值读取与同扫描新值读取、输出门控与暂停推进、复位与恢复。恢复延续未完成状态和进度，清空须有明确条件。
-同一逻辑仅地址、索引或常数不同时，比较普通逻辑与有资料支持的成组或复用实现。共享状态冲突时，考察分组、调整数据组织、分离推进与释放；不能由一种组织方式不适用排除整类实现。
-对有重复处理的候选，在该结构内部比较可行的推进、输出计算和回收方法。核对是否可用共享时间或事件更新、是否可利用记录顺序或维护摘要计算输出、是否可复用更新和回收代码。说明选定组合如何保留工艺需要的信息；采用逐项展开时，给出同结构下更紧凑做法无法满足的具体条件，或明确资料不足。把所选做法落实到候选方案，勿留给生成阶段重选。
+同一逻辑仅地址、索引或常数不同时，按处理规则分组，比较普通逻辑与有资料支持的成组或复用实现。共享状态冲突时，考察分组、调整数据组织、分离推进与释放；不能由一种组织方式不适用排除整类实现。
+对有重复处理的候选，在该结构内部比较可行的推进、输出计算和回收方法。核对是否可用共享时间或事件更新、是否可利用记录顺序或维护摘要计算输出、是否可复用更新和回收代码。说明选定组合如何保留工艺需要的信息；未知参数不构成逐项展开的理由，采用逐项展开时，给出同结构下更紧凑做法无法满足的具体条件，或明确资料不足。把所选做法落实到候选方案，勿留给生成阶段重选。
 先列已知约束与未定变量，再比较实现；不先选定某个参数值，再用该值制造另一方案的缺陷。模板限制须连同适用条件阅读，模板不适用时继续评估其底层指令可组成的其他实现。保留信息的要求按用户需要区分的状态和输出判断，不擅自增加身份、计数或精度要求。各方案的容量上限、溢出、量化误差和采样限制使用同一标准，不能只审查未选方案。
 未知事件间隔、扫描时间、容量或精度只限定适用范围，不默认要求处理任意输入速率。对所有候选同时列出各自的容量与采样边界，模型自选参数按实现选择处理。未知条件下仍有可行范围的候选应保留。
 在共同精度、吞吐、顺序和恢复要求下，分别比较状态存储、程序重复量、每扫描处理量随规模的增长。按共同容量估算重复的比较、搬移和状态操作数量，不以梯级数代替指令步数；循环缩短代码不等于降低扫描工作量。估算注明依据和未定变量，生成前不用精确步数。按正确性与实际开销选型，合理 SET/RST 保持和状态机照常使用。已有字段简述关键取舍，不重复抄写需求或资料。"""

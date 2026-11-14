@@ -224,6 +224,8 @@ class LadderModelSession:
             else:
                 self._initial_program(fixed)
         elif self.pending_action == "partial":
+            if isinstance(value, dict) and value.get("mode") != "partial" and value.keys() & {"r", "root", "rungs", "program", "result"}:
+                raise RepairAssemblyError("$", "repair_requires_replan", kind="whole_program_in_partial_repair")
             self.candidate.patch(value)
             self.original_text = None
         elif self.pending_action == "decision" and isinstance(value, dict) and set(value) == {"decision_repairs"}:

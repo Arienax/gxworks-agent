@@ -18,6 +18,9 @@ import subprocess
 import sys
 
 MAX_BLOB_BYTES = 5 * 1024 * 1024
+COMPILED_RESOURCE_LIMITS = {
+    "resources/instructions/mitsubishi/instruction_families.json": 64 * 1024 * 1024,
+}
 ARCHIVE_SUFFIXES = (".zip", ".7z", ".tar", ".gz", ".bz2", ".xz", ".zst")
 LFS_POINTER = re.compile(
     rb"version https://git-lfs.github.com/spec/v1\n"
@@ -130,8 +133,8 @@ def check(
                 pointer_cache[oid] = size <= 1024 and LFS_POINTER.fullmatch(git(repo, "cat-file", "blob", oid)) is not None
             if not pointer_cache[oid]:
                 issues.append(f"{path!r}: frozen archive/raw result must be a Git LFS pointer (Git blob: {size} bytes).")
-        elif size > max_bytes:
-            issues.append(f"{path!r}: ordinary Git blob is {size} bytes; limit is {max_bytes}. Keep a summary/small witness and move bulk data to LFS or release storage.")
+        elif size > (limit := COMPILED_RESOURCE_LIMITS.get(path, max_bytes) if max_bytes == MAX_BLOB_BYTES else max_bytes):
+            issues.append(f"{path!r}: ordinary Git blob is {size} bytes; limit is {limit}. Keep a summary/small witness and move bulk data to LFS or release storage.")
     return issues
 
 

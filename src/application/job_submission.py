@@ -22,6 +22,8 @@ from shared.context_audit import ContextAudit, context_audit_scope
 class JobSubmission:
     """Freeze job inputs, user facts and idempotent submission."""
 
+    generation_runtime = 'legacy'
+
     def __init__(self, *,
                  projects,
                  state_dir,
