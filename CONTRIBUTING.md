@@ -50,6 +50,8 @@ To compile changes to the existing C# native adapters, run the dedicated build s
 
 Other native components use specialized scripts, such as `tools/build_hardware_reader.ps1` and `tools/build_simulator_gateway.ps1`. Run only those affected by your changes. Build outputs are placed outside the source tree.
 
+Web Ladder generation uses an optional DeepSeek Harness SDK runtime staged at `.runtime/dsh-runtime/`; copy `dsh-runtime/` from a `Full` release package or run `python scripts/stage_dsh_runtime.py --help` to inspect runtime staging options.
+
 ### Language Conventions
 
 - **Discussions & Issues:** Issues, pull request descriptions, and review discussions may use **English or Chinese**.
@@ -62,7 +64,7 @@ Maintain a strict boundary between product-specific implementations and shared e
 
 - **Python Core (`src/`):** Owns PLC semantics, CPU architecture, instruction rules, typed engineering ASTs and intermediate representations, file serialization, code generation, and validation. Explicitly preserve product- and CPU-specific distinctions rather than collapsing them into premature generalizations.
 - **Web workbench (`web/`):** TypeScript/React client handling user interaction and presentation. It consumes typed contracts and must never become a secondary source of PLC business logic or validation rules.
-- **Native adapters (`native_adapters/` and related drivers):** Encapsulate vendor runtime operations behind clean, explicit interfaces. The current C# implementation does not dictate the technology used by future GX Developer or GX Works3 integrations.
+- **Native adapters (`native_adapters/`, `hardware_reader/`, `simulator_gateway/`, and `scripts/web_launcher.cs`):** Encapsulate vendor runtime operations and Windows launcher/adapter binaries behind clean, explicit interfaces. The current C# implementation does not dictate the technology used by future GX Developer or GX Works3 integrations.
 - **MCP and other entry points:** Consume shared engineering contracts rather than maintaining inconsistent implementations for different clients.
 
 Do not assume that GX Developer, GX Works2, and GX Works3 share native file formats, object models, language support, automation interfaces, or editing capabilities. Design extensible interfaces that respect each product's native semantics without forcing one tool's model onto another.
@@ -111,14 +113,19 @@ docs: clarify multi-product integration
 Useful commands, run from the repository root unless noted:
 
 ```powershell
-# Python syntax and repository-specific boundary checks
+# Python syntax, public boundary, and repository storage checks
 .venv\Scripts\python.exe -m compileall -q src
 .venv\Scripts\python.exe tools/check_public_boundary.py
+.venv\Scripts\python.exe scripts/check_repository_storage.py --staged
 
-# Targeted Python tests: replace with the affected test file
+# Incremental scoped test runner (or target a specific pytest file)
+.venv\Scripts\python.exe tests/run_checks.py --dry-run
+.venv\Scripts\python.exe tests/run_checks.py
 .venv\Scripts\python.exe -m pytest -q tests/test_source_layout.py
 
-# Web tests and TypeScript checking/build (run inside web/)
+# Web tests, TypeScript checking/build, and OpenAPI schema sync (when backend schemas or src/integrations/web/ change)
+.venv\Scripts\python.exe scripts/export_web_schema.py
+npm --prefix web run types
 cd web
 npm test
 npm run build

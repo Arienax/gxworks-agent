@@ -31,7 +31,7 @@
 
 ## 提交检查 / Checklist
 
-- [ ] 已阅读 LICENSE 第 3 节；确认有权提交这些内容。 / I have reviewed Section 3 of the LICENSE and confirm the right to submit these contributions.
+- [ ] 已阅读 LICENSE、LICENSE-SCOPE.md 与 CONTRIBUTING.md；确认有权在仓库许可条款下提交这些内容。 / I have reviewed LICENSE, LICENSE-SCOPE.md, and CONTRIBUTING.md, and confirm the right to submit these contributions under the repository license.
 - [ ] 未包含有效凭据、登录链接、客户私有数据或未授权第三方材料。 / Contains no credentials, session tokens, confidential customer data, or unauthorized third-party materials.
 - [ ] 已人工阅读并理解完整实际差异，能独立解释修改，并对提交内容与验证声明负责。 / I have personally read and understood the entire diff, can independently explain the changes, and take full responsibility for the content and validation claims.
 - [ ] 已按影响范围验证，并如实说明失败、跳过和未验证内容。 / Verified according to the scope of changes, with all failures, skipped tests, and unverified areas truthfully disclosed.
