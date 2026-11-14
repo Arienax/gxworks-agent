@@ -27,12 +27,13 @@ def main() -> int:
     assert default_baseline() and native_catalog()
     assert _catalog("q02")["headers"] and _catalog("q03udv")["headers"]
     assert runtime_status()["status"] == "unavailable"
-    with TemporaryDirectory() as workspace:
-        app = create_app(workspace, operator_token="source-smoke", agent_token="agent-smoke")
+    with TemporaryDirectory() as workspace, TemporaryDirectory() as state:
+        app = create_app(workspace, state_dir=state, agent_token="agent-smoke")
         client = TestClient(app, base_url="http://127.0.0.1:8765")
         assert client.get("/api/health").status_code == 200
-        assert client.post("/api/session", json={"token": "source-smoke"}).status_code == 200
+        assert client.get("/api/workspace").status_code == 200
         assert client.get("/api/capabilities").status_code == 200
+        assert client.get("/api/agent/tools", headers={"Authorization": "Bearer agent-smoke"}).status_code == 200
     print("Source smoke OK: 57 templates, Web startup, absent-manual status")
     return 0
 

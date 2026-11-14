@@ -1425,8 +1425,9 @@ def _declared_instruction_alias_targets(query, *, plc_model=None):
     Incidental English prose is not an opcode or a free-form title match.
     """
     from knowledge.analysis_router import instruction_reference_text
-    from plc.instructions import LITERAL_ARITHMETIC_MNEMONIC_PATTERN
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY, LITERAL_ARITHMETIC_MNEMONIC_PATTERN
     query = instruction_reference_text(query)
+    targets = []
     _index, _path, connection, schema, _meta = _runtime('instruction')
     if connection is not None and _meta.get('owner_store_serialization') == 'instruction-owner-store-v1':
         from plc.target_identity import target_members
@@ -1441,7 +1442,6 @@ def _declared_instruction_alias_targets(query, *, plc_model=None):
                         count=1, flags=re.I) if plc_model else query
         listed = [token.strip('`\"\'') for token in re.split(r'[\s,，;；]+', scoped.strip()) if token]
         literal_list = bool(listed) and all(token.upper() in literals for token in listed)
-        targets = []
         for row in rows:
             alias = row['alias']
             # Word-shaped known opcodes already passed the context-aware
@@ -1460,13 +1460,6 @@ def _declared_instruction_alias_targets(query, *, plc_model=None):
         # The mixed corpus remains the existing alias catalogue. Its aliases
         # identify owners; instruction evidence still comes from this v4 store.
         _index, _path, connection, schema, _meta = _runtime()
-        if (connection is not None and connection.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='fact_aliases'").fetchone()):
-            for row in connection.execute("SELECT DISTINCT alias,opcode,plc_models FROM fact_aliases WHERE alias_type!='opcode'"):
-                if (not plc_model or scope_matches(row['plc_models'], plc_model)) and alias_occurs(query, row['alias']):
-                    targets.append({'opcode': row['opcode'], 'base_opcode': row['opcode'],
-                        'target_resolution': 'declared_manual_alias', 'requested_alias': row['alias']})
-        return targets
     if connection is not None and not connection.execute("SELECT 1 FROM sqlite_master WHERE name='fact_aliases'").fetchone():
         from knowledge.index_access import index_path, index_identity
         installed = index_path()
@@ -1475,8 +1468,6 @@ def _declared_instruction_alias_targets(query, *, plc_model=None):
             schema = index_access.schema(connection)
             _meta = index_access.load_meta(connection, schema)
     if connection is not None and connection.execute("SELECT 1 FROM sqlite_master WHERE name='fact_aliases'").fetchone():
-        from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
-        targets = []
         for row in connection.execute('SELECT DISTINCT alias,opcode,alias_type,plc_models FROM fact_aliases ORDER BY alias,opcode'):
             if not alias_occurs(query, row['alias']):
                 continue
@@ -1492,16 +1483,14 @@ def _declared_instruction_alias_targets(query, *, plc_model=None):
     aliases = schema.get("instruction_aliases") if schema else None
     instructions = schema.get("instructions") if schema else None
     if not connection or not aliases or not instructions:
-        return []
+        return targets
     if not {"alias", "alias_type", "instruction_id"}.issubset(aliases["columns"]) or not {"id", "opcode"}.issubset(instructions["columns"]):
-        return []
+        return targets
     rows = connection.execute(
         f"SELECT DISTINCT a.alias,i.opcode,a.alias_type FROM {index_access.quote_identifier(aliases['name'])} a "
         f"JOIN {index_access.quote_identifier(instructions['name'])} i ON i.id=a.instruction_id "
         "WHERE a.alias_type IN ('zh_alias','opcode') ORDER BY a.alias,i.opcode"
     )
-    targets = []
-    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
     for row in rows:
         alias, opcode = str(row["alias"] or ""), str(row["opcode"] or "").upper()
         if row["alias_type"] == "opcode":

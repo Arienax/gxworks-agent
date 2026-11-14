@@ -9,22 +9,7 @@ import type { WorkbenchModel } from "./useWorkbenchController";
 const SpecEditor = lazy(() => import("../features/SpecEditor").then((module) => ({ default: module.SpecEditor })));
 
 /** Canvas views that are not program documents: requirement, approvals and inspector. */
-export const canvasPanelFields = [
-  "canWrite",
-  "changeSpec",
-  "guarded",
-  "network",
-  "panel",
-  "pid",
-  "preview",
-  "saveSpec",
-  "specDocument",
-  "refreshSpecDocument",
-  "saveSpecDraft",
-  "spec",
-  "specIssues",
-  "t",
-] as const;
+import type { canvasPanelFields } from "./dialogFields";
 type Props = Pick<WorkbenchModel, typeof canvasPanelFields[number]> & { proposalsView: ReactNode };
 export function CanvasPanels(props: Props) {
   const {

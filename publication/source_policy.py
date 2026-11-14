@@ -6,7 +6,7 @@ from pathlib import Path, PurePosixPath
 
 
 CACHE_DIRECTORIES = frozenset({
-    '.git', '.venv', '.venv-mcp', '__pycache__', '.pytest_cache', '.mypy_cache',
+    '.git', '.venv', '.venv-mcp', '.venv-release', '__pycache__', '.pytest_cache', '.mypy_cache',
     '.ruff_cache', '.hypothesis', 'node_modules',
 })
 PRIVATE_DIRECTORIES = frozenset({
@@ -28,13 +28,7 @@ PRIVATE_FILES = frozenset({
     'examples/comment.csv', 'examples/plc_import_comment.csv',
     'examples/plc_import_program.csv', 'examples/real_import_program.csv',
     'tools/private_materials.py', 'tools/download_mitsubishi_manuals.py',
-    'resources/instructions/mitsubishi/device_definitions.json',
-    'resources/instructions/mitsubishi/fx3u_contract_promotions.json',
-    'resources/instructions/mitsubishi/fx3u_instruction_quarantine.json',
-    'resources/instructions/mitsubishi/fx3u_operand_semantic_promotions.json',
     'resources/instructions/mitsubishi/instruction_behavior_facts.json',
-    'resources/instructions/mitsubishi/instruction_source_authority.json',
-    'resources/instructions/mitsubishi/operand_semantic_coverage_summary.json',
 })
 MATERIAL_SUFFIXES = frozenset({
     '.pdf', '.chm', '.djvu', '.gxw', '.gx3', '.gxp', '.gpj', '.gpp',

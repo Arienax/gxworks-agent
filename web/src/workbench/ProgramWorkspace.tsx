@@ -31,44 +31,7 @@ import { VersionHistory } from "./VersionHistory";
 
 const DOCUMENT_VIEWS = ["diagnostics", "reports", "simulation", "delivery"];
 
-export const programWorkspaceFields = [
-  "busy",
-  "canWrite",
-  "clearPreview",
-  "currentJob",
-  "deleteProject",
-  "diagnosticJobId",
-  "displayedVersionStatus",
-  "editorProps",
-  "guarded",
-  "jobs",
-  "loading",
-  "locale",
-  "operations",
-  "panel",
-  "pendingCount",
-  "pid",
-  "preview",
-  "project",
-  "refreshDrawing",
-  "refreshingDrawing",
-  "reloadProjectSilently",
-  "requestGXSend",
-  "selectVersion",
-  "selectedProposal",
-  "connection",
-  "setCanvasOpen",
-  "setModal",
-  "setPanel",
-  "setTab",
-  "showFBDProposal",
-  "status",
-  "submitJob",
-  "t",
-  "tab",
-  "version",
-  "vid",
-] as const;
+import type { programWorkspaceFields } from "./dialogFields";
 type Props = Pick<WorkbenchModel, typeof programWorkspaceFields[number]> & { contextView: ReactNode };
 /** The engineering canvas: program documents, verification records and context views. */
 export function ProgramWorkspace(props: Props) {

@@ -15,7 +15,7 @@ export function useProjectWorkspace(connection: WorkbenchConnection | null, setE
   const [loading, setLoading] = useState(false);
   const [projectListRevision, setProjectListRevision] = useState(0);
   const [loadedPath, setLoadedPath] = useState<string | null>(null);
-  const scope = connection?.path || null;
+  const scope = connection ? (connection.path ?? "__default__") : null;
   const projectsReady = scope !== null && scope === loadedPath;
   const owner = useRef({ pid, scope, epoch: 0 });
   const projectRead = useRef(new LatestRead());
@@ -33,7 +33,7 @@ export function useProjectWorkspace(connection: WorkbenchConnection | null, setE
   const cancelRead = () => projectRead.current.cancel();
   useEffect(() => () => { owner.current.epoch++; cancelRead(); listRead.current.cancel(); }, []);
   useEffect(() => {
-    if (!connection?.selected) { setProjects([]); setLoadedPath(null); return; }
+    if (!connection || connection.selected === false) { setProjects([]); setLoadedPath(null); return; }
     if (adoptedBinding.current === connection) {
       adoptedBinding.current = null;
       return;
@@ -56,11 +56,11 @@ export function useProjectWorkspace(connection: WorkbenchConnection | null, setE
     adoptedVersion.current = null;
   }, [pid]);
   useEffect(() => {
-    const url = new URL(window.location.href);
+    const url = new URL(location.href || "http://127.0.0.1/" + (location.search || ""));
     if (pid) url.searchParams.set("project", pid);
     else url.searchParams.delete("project");
-    history.replaceState(null, "", url);
-    if (!pid || !connection?.selected) { setProject(null); setLoading(false); return; }
+    history.replaceState(null, "", location.href ? url : (url.search || url.pathname));
+    if (!pid || !connection || connection.selected === false) { setProject(null); setLoading(false); return; }
     if (!projectsReady) return;
     if (adoptedDetail.current?.pid === pid && adoptedDetail.current.connection === connection) {
       adoptedDetail.current = null;

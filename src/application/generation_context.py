@@ -221,8 +221,8 @@ def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="gene
         from plc.device_definitions import device_definition_targets
         query_metadata = getattr(query, 'metadata', {})
         feature_query = query_metadata.get('capability_requirement') or query if isinstance(query_metadata, dict) else query
-        should_lookup = bool(query_text) and (selected_plan_query is not None
-            or has_generation_fact_target(query, plc_model=plc_model)
+        should_lookup = bool(query_text) and (
+            has_generation_fact_target(query, plc_model=plc_model)
             or bool(device_definition_targets(feature_query, plc_model))
             or query_metadata.get('target_mode') == 'st')
         lookup_reason = (

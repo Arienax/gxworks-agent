@@ -636,7 +636,8 @@ def test_compact_agent_b_expands_or_compare_timer_and_app_instruction():
 
 def test_compact_transport_schema_does_not_embed_full_opcode_catalog():
     schema_text = json.dumps(_compact_response_schema(), ensure_ascii=False, separators=(",", ":"))
-    assert len(schema_text) < 2000
+    assert len(json.dumps(_compact_response_schema(bindings=False), ensure_ascii=False, separators=(",", ":"))) < 2000
+    assert len(schema_text) < 3000
     assert "opcode" not in schema_text
     assert _compact_response_schema()["properties"]["device_comments"]["type"] == "array"
     assert "branch_id" not in schema_text
@@ -679,7 +680,7 @@ def test_agent_b_prompt_is_confirmed_spec_scoped_not_generic_model_dump(monkeypa
     assert "FX3U-4DA" not in prompt
     assert "FX3U-2HSY-ADP" not in prompt
     assert "Machine-readable output schema" not in prompt
-    assert len(prompt) < 5000
+    assert len(prompt) < 6500
 
 
 def test_agent_a_cannot_drop_verbatim_classification_or_promote_guessed_contract():

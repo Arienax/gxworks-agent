@@ -18,17 +18,7 @@ const NativeEngineeringPlan = lazy(() =>
     default: module.NativeEngineeringPlan,
   })),
 );
-export const proposalListFields = [
-  "canWrite",
-  "decide",
-  "guarded",
-  "preview",
-  "proposals",
-  "selectedProposal",
-  "showProposal",
-  "status",
-  "t",
-] as const;
+import type { proposalListFields } from "./dialogFields";
 type Props = Pick<WorkbenchModel, typeof proposalListFields[number]>;
 export function ProposalList(props: Props) {
   const {

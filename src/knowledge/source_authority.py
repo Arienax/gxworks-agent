@@ -16,7 +16,10 @@ _SOURCE_MANIFEST = "knowledge/runtime/manifest.json"
 
 
 def _manual_catalog():
-    payload = json.loads(resource_path(_SOURCE_MANIFEST).read_text(encoding="utf-8"))
+    manifest = resource_path(_SOURCE_MANIFEST)
+    if not manifest.exists():
+        return None
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
     manuals = payload.get("manuals") if isinstance(payload, Mapping) else None
     if not isinstance(manuals, list):
         raise ValueError("knowledge source manifest has no manuals list")
@@ -65,14 +68,15 @@ def instruction_source_authorities():
         )
         if not manual_id or not opcodes or not models:
             raise ValueError("instruction source authority entry is incomplete")
-        manual = manuals.get(manual_id)
-        if manual is None:
-            raise ValueError("unknown authoritative manual: " + manual_id)
-        supported = {str(value).upper() for value in manual.get("plc_models") or ()}
-        if not set(models) <= supported:
-            raise ValueError(
-                "authority model scope exceeds manual applicability: " + manual_id
-            )
+        if manuals is not None:
+            manual = manuals.get(manual_id)
+            if manual is None:
+                raise ValueError("unknown authoritative manual: " + manual_id)
+            supported = {str(value).upper() for value in manual.get("plc_models") or ()}
+            if not set(models) <= supported:
+                raise ValueError(
+                    "authority model scope exceeds manual applicability: " + manual_id
+                )
         normalized = {
             "manual_id": manual_id,
             "fact_types": list(_normalized_fact_types(row)),

@@ -21,7 +21,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'src'))
 PRIVATE = Path(os.environ.get('GXWORKS_AGENT_PRIVATE_ROOT', ROOT.parent / 'gxworks-agent-private'))
-ARCHIVE = PRIVATE / 'research/evidence/gxw-authored-fbd-native-transfer-20261013.zip'
+ARCHIVE = PRIVATE / 'research' / 'evidence' / 'gxw-authored-fbd-native-transfer-20261013.zip'
 NETWORKS = PRIVATE / 'tests/fixtures/gxw_network_blocks_20260913.json'
 LIBRARY = 'MotionControl_JEC_V100A'
 DEFINITION = 'MC_Power_JEC'

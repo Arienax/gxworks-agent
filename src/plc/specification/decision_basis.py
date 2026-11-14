@@ -16,10 +16,25 @@ _REFERENCE_FIELDS = {
     "quote": {**_TEXT, "maxLength": _QUOTE_LIMIT},
 }
 _FACT_REF = r"^fact-[a-f0-9]{24}$"
-_REFERENCE_SCHEMA = {"type": "object", "properties": _REFERENCE_FIELDS,
-    "required": ["source", "ref"], "additionalProperties": False,
-    "anyOf": [{"required": ["quote"]},
-              {"properties": {"source": {"const": "model_fact"}, "ref": {"pattern": _FACT_REF}}}]}
+_REFERENCE_SCHEMA = {
+    "anyOf": [
+        {
+            "type": "object",
+            "properties": _REFERENCE_FIELDS,
+            "required": ["source", "ref", "quote"],
+            "additionalProperties": False,
+        },
+        {
+            "type": "object",
+            "properties": {
+                "source": {"const": "model_fact"},
+                "ref": {"type": "string", "pattern": _FACT_REF},
+            },
+            "required": ["source", "ref"],
+            "additionalProperties": False,
+        },
+    ],
+}
 _ROW_FIELDS = {
     "variant": _TEXT,
     "premise": _TEXT,
