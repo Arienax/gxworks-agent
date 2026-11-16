@@ -590,6 +590,7 @@ def fact_record_coverage(record, *, limits=False):
         required.extend(f for f in related.get('facts', []) if f.get('dimension', '').startswith('constraints.'))
     if not required:
         return False if limits and packet.get('kind') == 'instruction' else True
+    self_fact_ids = {id(fact) for fact in facts}
     by_id = {f['id']: f for f in facts}
     for related in value.get('related_instructions', []):
         by_id.update({f['id']: f for f in related.get('facts', [])})
@@ -597,7 +598,11 @@ def fact_record_coverage(record, *, limits=False):
     def complete(fact):
         if fact['id'] in visiting or fact.get('status') != 'source_verified':
             return False
-        if packet.get('kind') == 'language':
+        if (isinstance(fact.get('value'), Mapping)
+                and isinstance(fact['value'].get('runtime_execution'), Mapping)
+                and fact['value']['runtime_execution'].get('numeric_engine_certified_for_these_models') is False):
+            return False
+        if packet.get('kind') == 'language' and id(fact) in self_fact_ids:
             # Language facts have no instruction selection receipt to resolve
             # their product/version prerequisites. Delivery retains them, but
             # a reviewed label alone cannot certify applicable knowledge.

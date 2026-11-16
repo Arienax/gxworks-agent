@@ -33,12 +33,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--benchmark",
         type=Path,
-        default=private_path('benchmarks/fx3u_rag_benchmark.jsonl'),
+        default=private_path('benchmarks/mitsubishi_model_rag_benchmark.jsonl'),
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=private_path('benchmarks/fx3u_rag_benchmark_report.json'),
+        default=private_path('benchmarks/mitsubishi_model_rag_benchmark_report.json'),
     )
     parser.add_argument(
         "--manifest",
@@ -104,7 +104,7 @@ def percentile(values: list[float], fraction: float) -> float:
 def _is_release_benchmark(benchmark: Path, root: Path) -> bool:
     """Only the canonical benchmark is allowed to update release metadata."""
 
-    canonical = (root / 'benchmarks/fx3u_rag_benchmark.jsonl').resolve()
+    canonical = (root / 'benchmarks/mitsubishi_model_rag_benchmark.jsonl').resolve()
     return benchmark.expanduser().resolve() == canonical
 
 

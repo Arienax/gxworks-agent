@@ -2,7 +2,7 @@
 # Copyright 2026 Arienax
 # Licensed under the GNU Affero General Public License v3.0. See LICENSE for the license terms.
 
-"""Build a deterministic, structured FX3U RAG retrieval benchmark."""
+"""Build a deterministic, structured Mitsubishi RAG retrieval benchmark."""
 
 from __future__ import annotations
 
@@ -218,7 +218,7 @@ NEGATIVE_QUERIES = [
     "帮我设计一个餐厅菜单",
     "请检查这份合同的排版",
     "给我一个健身计划",
-    "FX5U SM8002 高速脉冲程序",
+    "Siemens S7-1500 高速脉冲 PTO 配置",
     "西门子 S7-1200 TIA Portal 定时器",
     "欧姆龙 NJ 系列 EtherCAT 配置",
     "三菱 iQ-R RCPU 冗余系统",
@@ -238,27 +238,44 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        default=private_path('benchmarks/fx3u_rag_benchmark.jsonl'),
+        default=private_path('benchmarks/mitsubishi_model_rag_benchmark.jsonl'),
     )
     parser.add_argument(
         "--meta-output",
         type=Path,
-        default=private_path('benchmarks/fx3u_rag_benchmark.meta.json'),
+        default=private_path('benchmarks/mitsubishi_model_rag_benchmark.meta.json'),
     )
-    parser.add_argument("--target", type=int, default=220)
+    parser.add_argument("--target", type=int, default=None)
     args = parser.parse_args()
-    if not 100 <= args.target <= 300:
-        parser.error("--target must be between 100 and 300")
+    if args.target is not None and not 100 <= args.target <= 500:
+        parser.error("--target must be between 100 and 500")
     return args
+
+
+_MODEL_COVERAGE_CATEGORIES = frozenset(
+    {"native_model_program", "native_model_parameter", "negative_model"}
+)
 
 
 def normalized_query(value: str) -> str:
     return " ".join(str(value).casefold().split())
 
 
-def build_cases(connection: sqlite3.Connection, target: int) -> list[dict[str, Any]]:
-    cases: list[dict[str, Any]] = []
-    seen_queries: set[str] = set()
+def build_cases(
+    connection: sqlite3.Connection,
+    target: int,
+    preserved_cases: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    cases: list[dict[str, Any]] = [dict(row) for row in (preserved_cases or ())]
+    seen_queries: set[str] = {
+        normalized_query(str(row.get("query", "")))
+        for row in cases
+        if normalized_query(str(row.get("query", "")))
+    }
+    has_fx5_negative = any(
+        bool(row.get("negative")) and str(row.get("plc_model", "")).upper() == "FX5U"
+        for row in cases
+    )
 
     def add(
         *,
@@ -474,18 +491,26 @@ def build_cases(connection: sqlite3.Connection, target: int) -> list[dict[str, A
         )
 
     for index, query in enumerate(NEGATIVE_QUERIES, start=1):
+        plc_model = "FX5U" if "FX5U" in query.upper() else "FX3U"
+        if plc_model == "FX5U" and has_fx5_negative:
+            continue
         add(
             case_id=f"negative_{index:03d}",
             query=query,
             category="negative",
             task_type="edit",
-            plc_model="FX5U" if "FX5U" in query.upper() else "FX3U",
+            plc_model=plc_model,
             negative=True,
         )
 
     if len(cases) < target:
         # Deterministically expand high-value instruction and debug cases only.
-        originals = [case for case in cases if not case["negative"]]
+        originals = [
+            case
+            for case in cases
+            if not case.get("negative")
+            and case.get("category") not in _MODEL_COVERAGE_CATEGORIES
+        ]
         round_index = 1
         while len(cases) < target and originals:
             for original in originals:
@@ -505,13 +530,26 @@ def build_cases(connection: sqlite3.Connection, target: int) -> list[dict[str, A
                 )
             round_index += 1
     if len(cases) > target:
-        positives = [case for case in cases if not case["negative"]]
-        negatives = [case for case in cases if case["negative"]]
+        positives = [case for case in cases if not case.get("negative")]
+        negatives = [case for case in cases if case.get("negative")]
         keep_positive = max(0, target - len(negatives))
         cases = positives[:keep_positive] + negatives[: target - keep_positive]
     for sequence, case in enumerate(cases, start=1):
         case["sequence"] = sequence
     return cases
+
+
+def _load_preserved_model_cases(output: Path) -> list[dict[str, Any]]:
+    if not output.is_file():
+        return []
+    preserved: list[dict[str, Any]] = []
+    for line in output.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        if row.get("category") in _MODEL_COVERAGE_CATEGORIES:
+            preserved.append(row)
+    return preserved
 
 
 def main() -> int:
@@ -521,8 +559,18 @@ def main() -> int:
     meta_output = args.meta_output.expanduser().resolve()
     if not database.is_file():
         raise SystemExit(f"database not found: {database}")
+    preserved_cases = _load_preserved_model_cases(output)
+    has_fx5_negative = any(
+        bool(row.get("negative")) and str(row.get("plc_model", "")).upper() == "FX5U"
+        for row in preserved_cases
+    )
+    target = (
+        int(args.target)
+        if args.target is not None
+        else len(preserved_cases) + (219 if has_fx5_negative else 220)
+    )
     with sqlite3.connect(database) as connection:
-        cases = build_cases(connection, int(args.target))
+        cases = build_cases(connection, target, preserved_cases=preserved_cases)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
         "".join(json.dumps(case, ensure_ascii=False, separators=(",", ":")) + "\n" for case in cases),
@@ -536,8 +584,8 @@ def main() -> int:
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "database": database.name,
         "cases": len(cases),
-        "positive_cases": sum(not case["negative"] for case in cases),
-        "negative_cases": sum(case["negative"] for case in cases),
+        "positive_cases": sum(not bool(case.get("negative")) for case in cases),
+        "negative_cases": sum(bool(case.get("negative")) for case in cases),
         "categories": categories,
         "top_k_for_evaluation": 10,
     }
