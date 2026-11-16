@@ -840,3 +840,29 @@ def test_benchmark_rejects_negative_leak_even_when_all_positive_cases_hit(tmp_pa
     assert report['recall_at_10'] == 1.0
     assert report['negative_accuracy'] == 0.0
     assert report['passed_recall_threshold'] and not report['passed_threshold']
+
+
+def test_build_rag_benchmark_generates_complete_suite_at_new_output_path(tmp_path, monkeypatch):
+    import sys
+    from tools import build_rag_benchmark as builder
+
+    out = tmp_path / 'fresh_benchmark.jsonl'
+    meta_out = tmp_path / 'fresh_benchmark.meta.json'
+    monkeypatch.setattr(sys, 'argv', [
+        'build_rag_benchmark.py',
+        '--database', str(INDEX_PATH),
+        '--output', str(out),
+        '--meta-output', str(meta_out),
+    ])
+    assert builder.main() == 0
+
+    rows = [json.loads(line) for line in out.read_text(encoding='utf-8').splitlines() if line.strip()]
+    meta = json.loads(meta_out.read_text(encoding='utf-8'))
+    assert len(rows) == 306
+    assert meta['cases'] == 306
+    assert meta['positive_cases'] == 290
+    assert meta['negative_cases'] == 16
+    assert meta['categories']['native_model_program'] == 81
+    assert meta['categories']['native_model_parameter'] == 5
+    assert meta['categories']['negative_model'] == 1
+    assert any(row['id'] == 'outside_native:R04CPU' and row['negative'] is True for row in rows)

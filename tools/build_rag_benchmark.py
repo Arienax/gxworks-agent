@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import sys as _private_sys
 from pathlib import Path as _PrivatePath
-_private_sys.path.insert(0, str(_PrivatePath(__file__).resolve().parents[1]))
+_repo_root = _PrivatePath(__file__).resolve().parents[1]
+_private_sys.path.insert(0, str(_repo_root))
+_private_sys.path.insert(0, str(_repo_root / "src"))
 from tools.offline_inputs import private_path
 
 import argparse
@@ -217,8 +219,7 @@ NEGATIVE_QUERIES = [
     "解释一下牛顿第二定律",
     "帮我设计一个餐厅菜单",
     "请检查这份合同的排版",
-    "给我一个健身计划",
-    "Siemens S7-1500 高速脉冲 PTO 配置",
+    "给我们一个健身计划",
     "西门子 S7-1200 TIA Portal 定时器",
     "欧姆龙 NJ 系列 EtherCAT 配置",
     "三菱 iQ-R RCPU 冗余系统",
@@ -228,7 +229,6 @@ NEGATIVE_QUERIES = [
 
 
 def parse_args() -> argparse.Namespace:
-    root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--database",
@@ -261,21 +261,102 @@ def normalized_query(value: str) -> str:
     return " ".join(str(value).casefold().split())
 
 
+def _build_model_coverage_cases(connection: sqlite3.Connection) -> list[dict[str, Any]]:
+    from gxworks2.project_profiles import NATIVE_PROJECT_PROFILES
+    from plc.target_identity import target_members
+
+    columns = {
+        str(row[1])
+        for row in connection.execute("PRAGMA table_info(manuals)").fetchall()
+    }
+    if "plc_models" not in columns:
+        return []
+    manual_rows = connection.execute(
+        "SELECT manual_id, manual_type, plc_models FROM manuals ORDER BY priority DESC, manual_id"
+    ).fetchall()
+    parsed_manuals = [
+        (
+            str(manual_id),
+            str(manual_type),
+            {m.strip() for m in str(plc_models or "").split(",") if m.strip()},
+        )
+        for manual_id, manual_type, plc_models in manual_rows
+    ]
+    coverage: list[dict[str, Any]] = []
+    seen_targets: set[str] = set()
+    for profile in NATIVE_PROJECT_PROFILES:
+        for target_model in (profile.cpu, *target_members(profile.cpu)):
+            if target_model in seen_targets:
+                continue
+            seen_targets.add(target_model)
+            members = set(target_members(target_model))
+            if profile.program_supported:
+                category = "native_model_program"
+                query = "Mitsubishi MOV instruction operation operands"
+                wanted_types = {"programming", "structured_instruction"}
+            else:
+                category = "native_model_parameter"
+                query = "Mitsubishi remote I/O module network parameter setting"
+                wanted_types = {"remote_io"}
+            expected_manual_ids = [
+                manual_id
+                for manual_id, manual_type, manual_models in parsed_manuals
+                if manual_type in wanted_types and members <= manual_models
+            ]
+            if not expected_manual_ids:
+                continue
+            coverage.append(
+                {
+                    "id": f"native-model:{target_model}",
+                    "category": category,
+                    "query": query,
+                    "plc_model": target_model,
+                    "task_type": "analysis",
+                    "expected_entities": [],
+                    "expected_chunk_types": [],
+                    "expected_manual_ids": expected_manual_ids,
+                    "expected_case_ids": [],
+                    "negative": False,
+                }
+            )
+    coverage.append(
+        {
+            "id": "outside_native:R04CPU",
+            "category": "negative_model",
+            "query": "Mitsubishi MOV instruction",
+            "plc_model": "R04CPU",
+            "task_type": "analysis",
+            "expected_entities": [],
+            "expected_chunk_types": [],
+            "expected_manual_ids": [],
+            "expected_case_ids": [],
+            "negative": True,
+        }
+    )
+    return coverage
+
+
 def build_cases(
     connection: sqlite3.Connection,
-    target: int,
-    preserved_cases: list[dict[str, Any]] | None = None,
+    target: int | None = None,
 ) -> list[dict[str, Any]]:
-    cases: list[dict[str, Any]] = [dict(row) for row in (preserved_cases or ())]
+    has_plc_models = "plc_models" in {
+        str(row[1])
+        for row in connection.execute("PRAGMA table_info(manuals)").fetchall()
+    }
+    fx3u_filter = (
+        "(',' || REPLACE(COALESCE(m.plc_models, ''), ' ', '') || ',' LIKE '%,FX3U,%')"
+        if has_plc_models
+        else "1=1"
+    )
+    cases: list[dict[str, Any]] = _build_model_coverage_cases(connection)
+    if target is None:
+        target = len(cases) + 219
     seen_queries: set[str] = {
         normalized_query(str(row.get("query", "")))
         for row in cases
         if normalized_query(str(row.get("query", "")))
     }
-    has_fx5_negative = any(
-        bool(row.get("negative")) and str(row.get("plc_model", "")).upper() == "FX5U"
-        for row in cases
-    )
 
     def add(
         *,
@@ -310,14 +391,14 @@ def build_cases(
         )
 
     instruction_rows = connection.execute(
-        """
+        f"""
         SELECT i.opcode,i.title,i.manual_id,
                (SELECT a.alias FROM instruction_aliases a
                 WHERE a.instruction_id=i.id AND a.alias_type='zh_alias'
                 ORDER BY length(a.alias) DESC LIMIT 1) AS zh_alias
         FROM instructions i
         JOIN manuals m ON m.manual_id=i.manual_id
-        WHERE i.chunk_id IS NOT NULL
+        WHERE i.chunk_id IS NOT NULL AND {fx3u_filter}
         ORDER BY CASE WHEN i.manual_id='fx3_programming_r' THEN 0 ELSE 1 END,
                  m.priority DESC,i.page_start,i.opcode
         """
@@ -363,12 +444,13 @@ def build_cases(
         )
 
     error_rows = connection.execute(
-        """
-        SELECT error_code,MIN(message),MIN(manual_id)
-        FROM error_records
-        WHERE error_code_norm <> '0000' AND length(error_code)=4
-        GROUP BY error_code_norm
-        ORDER BY MIN(pdf_page),error_code
+        f"""
+        SELECT e.error_code,MIN(e.message),MIN(e.manual_id)
+        FROM error_records e
+        JOIN manuals m ON m.manual_id=e.manual_id
+        WHERE {fx3u_filter} AND e.error_code_norm <> '0000' AND length(e.error_code)=4
+        GROUP BY e.error_code_norm
+        ORDER BY MIN(e.pdf_page),e.error_code
         LIMIT 20
         """
     ).fetchall()
@@ -424,11 +506,12 @@ def build_cases(
         add(**motion_case)
 
     structured_rows = connection.execute(
-        """
+        f"""
         SELECT c.manual_id,m.manual_number,m.manual_type,c.section,c.chunk_type
         FROM chunks c
         JOIN manuals m ON m.manual_id=c.manual_id
-        WHERE c.manual_id NOT IN ('fx3_programming_r','curated_debug_cases')
+        WHERE {fx3u_filter}
+          AND c.manual_id NOT IN ('fx3_programming_r','curated_debug_cases')
           AND length(c.section) BETWEEN 8 AND 120
           AND length(c.text) > 500
           AND c.pdf_page > 15
@@ -492,8 +575,6 @@ def build_cases(
 
     for index, query in enumerate(NEGATIVE_QUERIES, start=1):
         plc_model = "FX5U" if "FX5U" in query.upper() else "FX3U"
-        if plc_model == "FX5U" and has_fx5_negative:
-            continue
         add(
             case_id=f"negative_{index:03d}",
             query=query,
@@ -539,19 +620,6 @@ def build_cases(
     return cases
 
 
-def _load_preserved_model_cases(output: Path) -> list[dict[str, Any]]:
-    if not output.is_file():
-        return []
-    preserved: list[dict[str, Any]] = []
-    for line in output.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        row = json.loads(line)
-        if row.get("category") in _MODEL_COVERAGE_CATEGORIES:
-            preserved.append(row)
-    return preserved
-
-
 def main() -> int:
     args = parse_args()
     database = args.database.expanduser().resolve()
@@ -559,18 +627,8 @@ def main() -> int:
     meta_output = args.meta_output.expanduser().resolve()
     if not database.is_file():
         raise SystemExit(f"database not found: {database}")
-    preserved_cases = _load_preserved_model_cases(output)
-    has_fx5_negative = any(
-        bool(row.get("negative")) and str(row.get("plc_model", "")).upper() == "FX5U"
-        for row in preserved_cases
-    )
-    target = (
-        int(args.target)
-        if args.target is not None
-        else len(preserved_cases) + (219 if has_fx5_negative else 220)
-    )
     with sqlite3.connect(database) as connection:
-        cases = build_cases(connection, target, preserved_cases=preserved_cases)
+        cases = build_cases(connection, args.target)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
         "".join(json.dumps(case, ensure_ascii=False, separators=(",", ":")) + "\n" for case in cases),
