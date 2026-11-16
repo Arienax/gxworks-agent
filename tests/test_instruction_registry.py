@@ -886,3 +886,72 @@ def test_merged_member_entries_preserve_member_conditions_and_dependencies():
     ddrva = reg.definition_entry('DDRVA', cpu='FX3U/FX3UC')
     assert ddrva['call_available'] is False
     assert ddrva['call_admission_reason'] == 'member_fact_conflict'
+
+
+def test_reviewed_native_fact_groups_evaluates_member_conditions_and_dependencies():
+    from dataclasses import replace
+    from plc.instruction_definition import InstructionFactGroup
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY as reg, reviewed_native_fact_groups
+
+    spec = reg.resolve('ANR', cpu='FX3U/FX3UC')
+    assert spec is not None
+    reviewed = reviewed_native_fact_groups(spec, 'ANR', [], 'FX3U/FX3UC')
+    state_facts = [g for g in reviewed if g.value.get('state_accesses')]
+    assert {tuple(g.scope.get('models') or ()) for g in state_facts} == {('FX3U',), ('FX3UC',)}
+    assert reviewed_native_fact_groups(spec, 'ANR', [], 'FX3U/FX1S') == []
+
+    dep_ok = InstructionFactGroup.from_mapping({
+        'id': 'synth:dep:fx3uc',
+        'dimension': 'constraints.source_cpu_header',
+        'value': {'model': 'FX3UC', 'state': 'supported'},
+        'scope': {'forms': ['SYNTH'], 'models': ['FX3UC'], 'languages': ['ladder']},
+        'conditions': [{'kind': 'cpu_model', 'models': ['FX3UC']}],
+        'depends_on': [],
+        'status': 'source_verified',
+        'verification': 'source_checked',
+        'sources': [{'manual_id': 'fx3_programming_r', 'revision': 'R', 'pdf_pages': [1]}],
+    })
+    root_ok = InstructionFactGroup.from_mapping({
+        'id': 'synth:effect:fx3uc',
+        'dimension': 'effects.documented_processing',
+        'value': {'operation': 'member_ok'},
+        'scope': {'forms': ['SYNTH'], 'models': ['FX3UC'], 'languages': ['ladder']},
+        'conditions': [{'kind': 'cpu_model', 'models': ['FX3UC']}],
+        'depends_on': ['synth:dep:fx3uc'],
+        'status': 'source_verified',
+        'verification': 'source_checked',
+        'sources': [{'manual_id': 'fx3_programming_r', 'revision': 'R', 'pdf_pages': [1]}],
+    })
+    root_wrong_model = InstructionFactGroup.from_mapping({
+        'id': 'synth:effect:wrong_model',
+        'dimension': 'effects.documented_processing',
+        'value': {'operation': 'wrong_model'},
+        'scope': {'forms': ['SYNTH'], 'models': ['FX3U'], 'languages': ['ladder']},
+        'conditions': [{'kind': 'cpu_model', 'models': ['Q03UDV']}],
+        'depends_on': [],
+        'status': 'source_verified',
+        'verification': 'source_checked',
+        'sources': [{'manual_id': 'fx3_programming_r', 'revision': 'R', 'pdf_pages': [1]}],
+    })
+    root_missing_dep = InstructionFactGroup.from_mapping({
+        'id': 'synth:effect:missing_dep',
+        'dimension': 'effects.documented_processing',
+        'value': {'operation': 'missing_dep'},
+        'scope': {'forms': ['SYNTH'], 'models': ['FX3U'], 'languages': ['ladder']},
+        'conditions': [],
+        'depends_on': ['synth:does_not_exist'],
+        'status': 'source_verified',
+        'verification': 'source_checked',
+        'sources': [{'manual_id': 'fx3_programming_r', 'revision': 'R', 'pdf_pages': [1]}],
+    })
+    synthetic = replace(
+        spec,
+        mnemonic='SYNTH',
+        operands=(),
+        min_operands=0,
+        max_operands=0,
+        cpu_support=frozenset({'FX3U', 'FX3UC'}),
+        definition_facts=(dep_ok, root_ok, root_wrong_model, root_missing_dep),
+    )
+    selected = [g.id for g in reviewed_native_fact_groups(synthetic, 'SYNTH', [], 'FX3U/FX3UC')]
+    assert selected == ['synth:dep:fx3uc', 'synth:effect:fx3uc']

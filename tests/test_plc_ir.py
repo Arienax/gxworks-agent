@@ -1284,3 +1284,21 @@ def test_annotation_does_not_hide_a_branch_without_an_incoming_condition():
     with pytest.raises(ValueError,match='condition|stack'):
         validate_ordered_circuits([{'ordered_instructions':[{'op':'MPS','args':[]},
             {'op':'OUT','args':['Y0']},{'op':'MPP','args':[]}]}],plc_model='FX3U')
+
+
+def test_merged_cpu_target_preserves_implicit_state_access_from_member_facts():
+    expected_annunciators = [f'S{index}' for index in range(900, 1000)]
+    fx3u_reads, fx3u_writes = analyze_instruction_access('ANR', [], plc_model='FX3U')
+    fx3uc_reads, fx3uc_writes = analyze_instruction_access('ANR', [], plc_model='FX3UC')
+    merged_reads, merged_writes = analyze_instruction_access('ANR', [], plc_model='FX3U/FX3UC')
+
+    assert fx3u_reads == expected_annunciators and fx3u_writes == expected_annunciators
+    assert fx3uc_reads == expected_annunciators and fx3uc_writes == expected_annunciators
+    assert merged_reads == expected_annunciators and merged_writes == expected_annunciators
+
+    for opcode, args in (('ASCI', ['D0', 'D10', 'D20']), ('RND', ['D0']), ('BINDA', ['D0', 'D10'])):
+        r_u, w_u = analyze_instruction_access(opcode, args, plc_model='FX3U')
+        r_c, w_c = analyze_instruction_access(opcode, args, plc_model='FX3UC')
+        r_m, w_m = analyze_instruction_access(opcode, args, plc_model='FX3U/FX3UC')
+        assert set(r_m) == set(r_u) | set(r_c)
+        assert set(w_m) == set(w_u) | set(w_c)

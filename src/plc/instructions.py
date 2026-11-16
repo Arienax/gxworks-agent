@@ -561,13 +561,23 @@ def reviewed_native_fact_groups(spec, opcode, operands, plc_model, *, dimensions
         return []
     from plc.instruction_definition import DefinitionError, UnknownInstructionSemantics, select_fact_dependencies
     from plc.instruction_constraints import _condition, literal_operand_values
-    values = literal_operand_values(spec, operands, plc_model=plc_model, opcode=opcode)
-    context = {'$PLC_MODEL': plc_model, '$LANGUAGE': 'ladder',
-               'project_mode': 'native_ladder_instruction', 'program_context': 'ladder'}
-    if 'operand_order' in spec.verified_fields and len(spec.native_operand_order) == len(operands):
-        context['$OPERAND_ROLES'] = spec.native_operand_order
+    from plc.target_identity import target_identity_state
 
-    def possible(group):
+    members, reason = target_identity_state(plc_model)
+    member_models = members if members and reason is None and len(members) > 1 else (plc_model,)
+    has_roles = 'operand_order' in spec.verified_fields and len(spec.native_operand_order) == len(operands)
+    member_contexts = []
+    for member in member_models:
+        if len(member_models) > 1 and not spec.supports_cpu(member):
+            continue
+        values_m = literal_operand_values(spec, operands, plc_model=member, opcode=opcode)
+        context_m = {'$PLC_MODEL': member, '$LANGUAGE': 'ladder',
+                     'project_mode': 'native_ladder_instruction', 'program_context': 'ladder'}
+        if has_roles:
+            context_m['$OPERAND_ROLES'] = spec.native_operand_order
+        member_contexts.append((member, values_m, context_m))
+
+    def possible(group, values, context):
         if (group['status'] != 'source_verified' or group['verification'] != 'source_checked'
                 or any(source.get('conditions') or source.get('applicability') for source in group['sources'])):
             return False
@@ -586,15 +596,18 @@ def reviewed_native_fact_groups(spec, opcode, operands, plc_model, *, dimensions
     for group in spec.definition_facts:
         if dimensions is not None and group.dimension not in dimensions:
             continue
-        if any(group.scope.get(key) and value not in group.scope[key]
-               for key, value in (('forms', opcode), ('models', plc_model), ('languages', 'ladder'))):
-            continue
-        closure = select_fact_dependencies(spec.definition_facts, [group.id], opcode=opcode,
-            model=plc_model, language='ladder', allow_unknown_scope=True)
-        if (any(gap['reason'] != 'scope_context_missing' for gap in closure['gaps'])
-                or not closure['groups'] or not all(possible(item) for item in closure['groups'])):
-            continue
-        selected.append(group)
+        for member, values_m, context_m in member_contexts:
+            if any(group.scope.get(key) and value not in group.scope[key]
+                   for key, value in (('forms', opcode), ('models', member), ('languages', 'ladder'))):
+                continue
+            closure = select_fact_dependencies(spec.definition_facts, [group.id], opcode=opcode,
+                model=member, language='ladder', allow_unknown_scope=True)
+            if (any(gap['reason'] != 'scope_context_missing' for gap in closure['gaps'])
+                    or not closure['groups']
+                    or not all(possible(item, values_m, context_m) for item in closure['groups'])):
+                continue
+            selected.append(group)
+            break
     return selected
 
 
