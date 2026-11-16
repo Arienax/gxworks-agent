@@ -4765,7 +4765,7 @@ def background_st_program_witness(create=False):
         from gxw.fb_authoring import _context
         from gxw.text_pou import parse_st_pou, serialize_st_pou
         _, before, _ = st_program_semantic_witness(True)
-        command = dict(operation='edit_st_program', source_name='OwnedProgram_C2', st_text='Y0:=NOT X0;\r\nD0:=2;\r\n')
+        command = dict(operation='edit_st_program', source_name='OwnedProgram_C2', st_text='Y0:=NOT(X0);\r\nD0:=2;\r\n')
         logical = 'OwnedProgram_C2.Program.pou'
         streams = _context(before, require_fbd=False)[1]
         saved = replay_source_records(before, {logical: serialize_st_pou(parse_st_pou(streams[logical]), command['st_text'])})
