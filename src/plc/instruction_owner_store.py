@@ -189,6 +189,7 @@ class OwnerDefinitionStore:
 
     def expression_owner_keys(self, token, *, cpu, vendor='mitsubishi'):
         """Find source-declared token aliases without hydrating owner facts."""
+        token_upper = str(token).upper()
         with self._lock:
             self._check()
             return self._db.execute(
@@ -198,8 +199,9 @@ class OwnerDefinitionStore:
                 "AND json_type(d.payload_json,'$.value.call_available')='true' "
                 "AND json_type(d.payload_json,'$.value.call_admission_details.structured_expression.available')='true' "
                 "AND json_extract(d.payload_json,'$.value.call_admission_details.structured_expression.call_kind')='expression' "
-                "AND json_extract(d.payload_json,'$.value.call_admission_details.structured_expression.operator')=? "
-                "LIMIT 2", (str(vendor).lower(), str(cpu).upper(), str(token).upper())).fetchall()
+                "AND (json_extract(d.payload_json,'$.value.call_admission_details.structured_expression.operator')=? "
+                "     OR json_extract(d.payload_json,'$.value.call_admission_details.structured_expression.alternative_operator')=?) "
+                "LIMIT 2", (str(vendor).lower(), str(cpu).upper(), token_upper, token_upper)).fetchall()
 
     def iter_language_headers(self):
         """Expose validated lookup identities; validate bodies when selected."""
