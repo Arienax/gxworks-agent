@@ -1659,11 +1659,11 @@ class Inspector(_DeviceInspector):
             return family
         expression_contract = (self._structured_expression_contract(node)
             if node[1] in _STRUCTURED_EXPRESSION_OPERATORS else None)
-        if node[1] == 'AND':
+        if node[1] in {'AND', 'OR'}:
             # An admitted FX operator adds its own operand bounds to the
-            # shared AND grammar; other models retain their language contract.
+            # shared AND/OR grammar; other models retain their language contract.
             expression_entry = getattr(DEFAULT_INSTRUCTION_REGISTRY, 'expression_entry', None)
-            if callable(expression_entry) and expression_entry('AND', cpu=self.model):
+            if callable(expression_entry) and expression_entry(node[1], cpu=self.model):
                 expression_contract = self._structured_expression_contract(node)
         left, right = self.value_type(node[2]), self.value_type(node[3])
         numeric = {'word', 'dword', 'real', 'time'}
