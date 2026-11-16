@@ -1013,13 +1013,14 @@ class InstructionRegistry:
                 return spec
             if not self.fact_bundle_current():
                 raise ValueError("Fact definitions changed; reload the checking context")
+            member_set = set(members)
             facts = tuple(
                 InstructionFactGroup.from_mapping(f)
                 for f in entry.get("facts", [])
-                if all(m in ((f.get("scope") or {}).get("models") or ()) for m in members)
+                if (set((f.get("scope") or {}).get("models") or ()) & member_set)
                 and f.get("status") != "conflict"
             )
-            if any(not set(f.scope.get("models") or ()).issuperset(members)
+            if any(not set(f.scope.get("models") or ()).issubset(member_set)
                    or f.scope.get("forms") != [entry['opcode']] for f in facts):
                 raise ValueError("Compiled facts must have exact CPU/form scopes")
         else:
@@ -1454,13 +1455,13 @@ class InstructionRegistry:
     def _merge_member_entries(self, entries: Sequence[Mapping[str, Any]], *, cpu: str) -> Dict[str, Any]:
         """Merge concrete member definition entries conservatively into a menu-level entry."""
         merged = self._merge_member_headers(entries, cpu=cpu)
+
         def _norm_sources(sources):
             return [
                 {k: v for k, v in s.items() if k != 'target_model'} if isinstance(s, Mapping) else s
                 for s in (sources or ())
             ]
-        fact_by_id: Dict[str, Dict[str, Any]] = {}
-        fact_order: list[str] = []
+
         status_rank = {
             'conflict': 0,
             'not_applicable': 1,
@@ -1469,85 +1470,182 @@ class InstructionRegistry:
             'candidate_evidence': 4,
             'source_verified': 5,
         }
+
+        def _try_merge_into(prev: Dict[str, Any], fact: Mapping[str, Any]) -> bool:
+            prev_models = list((prev.get('scope') or {}).get('models') or [])
+            curr_models = list((fact.get('scope') or {}).get('models') or [])
+            prev_cmp = {k: v for k, v in prev.items() if k not in {'scope', 'sources'}}
+            curr_cmp = {k: v for k, v in fact.items() if k not in {'scope', 'sources'}}
+            prev_src_cmp = _norm_sources(prev.get('sources'))
+            curr_src_cmp = _norm_sources(fact.get('sources'))
+            prev_scope_other = {k: v for k, v in (prev.get('scope') or {}).items() if k != 'models'}
+            curr_scope_other = {k: v for k, v in (fact.get('scope') or {}).items() if k != 'models'}
+            merged_sources = list(prev.get('sources') or ())
+            for src in fact.get('sources') or ():
+                if src not in merged_sources:
+                    merged_sources.append(copy.deepcopy(src))
+            if prev_cmp == curr_cmp and prev_src_cmp == curr_src_cmp and prev_scope_other == curr_scope_other:
+                prev.setdefault('scope', {})['models'] = list(dict.fromkeys([*prev_models, *curr_models]))
+                prev['sources'] = merged_sources
+                return True
+            if (prev_scope_other == curr_scope_other
+                    and {k: v for k, v in prev_cmp.items() if k not in {'status', 'verification'}}
+                    == {k: v for k, v in curr_cmp.items() if k not in {'status', 'verification'}}):
+                if status_rank.get(fact.get('status'), -1) < status_rank.get(prev.get('status'), -1):
+                    prev['status'] = fact.get('status')
+                if prev.get('status') != 'source_verified' or fact.get('verification') != 'source_checked':
+                    if prev.get('verification') != fact.get('verification'):
+                        prev['verification'] = 'not_performed' if prev.get('status') != 'candidate_evidence' else prev.get('verification')
+                prev.setdefault('scope', {})['models'] = list(dict.fromkeys([*prev_models, *curr_models]))
+                prev['sources'] = merged_sources
+                return True
+            if (prev.get('dimension') == 'identity.applicability'
+                    and fact.get('dimension') == 'identity.applicability'
+                    and prev_scope_other == curr_scope_other
+                    and {k: v for k, v in prev_cmp.items() if k not in {'value', 'status', 'verification'}}
+                    == {k: v for k, v in curr_cmp.items() if k not in {'value', 'status', 'verification'}}
+                    and {k: v for k, v in (prev_cmp.get('value') or {}).items() if k != 'declared_models'}
+                    == {k: v for k, v in (curr_cmp.get('value') or {}).items() if k != 'declared_models'}):
+                dm = list(dict.fromkeys([
+                    *((prev.get('value') or {}).get('declared_models') or ()),
+                    *((fact.get('value') or {}).get('declared_models') or ()),
+                ]))
+                prev.setdefault('value', {})['declared_models'] = dm
+                if status_rank.get(fact.get('status'), -1) < status_rank.get(prev.get('status'), -1):
+                    prev['status'] = fact.get('status')
+                    if prev.get('verification') != fact.get('verification'):
+                        prev['verification'] = 'not_performed'
+                prev.setdefault('scope', {})['models'] = list(dict.fromkeys([*prev_models, *curr_models]))
+                prev['sources'] = merged_sources
+                return True
+            if (prev.get('dimension') == 'constraints.cpu_availability'
+                    and fact.get('dimension') == 'constraints.cpu_availability'
+                    and prev_scope_other == curr_scope_other
+                    and {k: v for k, v in prev_cmp.items() if k not in {'value', 'status', 'verification'}}
+                    == {k: v for k, v in curr_cmp.items() if k not in {'value', 'status', 'verification'}}
+                    and {k: v for k, v in (prev_cmp.get('value') or {}).items() if k != 'model_states'}
+                    == {k: v for k, v in (curr_cmp.get('value') or {}).items() if k != 'model_states'}):
+                merged_states = dict((prev.get('value') or {}).get('model_states') or {})
+                merged_states.update((fact.get('value') or {}).get('model_states') or {})
+                prev.setdefault('value', {})['model_states'] = merged_states
+                if status_rank.get(fact.get('status'), -1) < status_rank.get(prev.get('status'), -1):
+                    prev['status'] = fact.get('status')
+                    if prev.get('verification') != fact.get('verification'):
+                        prev['verification'] = 'not_performed'
+                prev.setdefault('scope', {})['models'] = list(dict.fromkeys([*prev_models, *curr_models]))
+                prev['sources'] = merged_sources
+                return True
+            return False
+
+        def _is_member_scoped_divergence(prev: Mapping[str, Any], fact: Mapping[str, Any]) -> bool:
+            prev_scope_other = {k: v for k, v in (prev.get('scope') or {}).items() if k != 'models'}
+            curr_scope_other = {k: v for k, v in (fact.get('scope') or {}).items() if k != 'models'}
+            return prev_scope_other == curr_scope_other and (
+                prev.get('conditions') != fact.get('conditions')
+                or prev.get('dimension') in {'constraints.source_cpu_header', 'constraints.cpu_availability'}
+            )
+
+        buckets_by_id: Dict[str, list[Dict[str, Any]]] = {}
+        fact_order: list[str] = []
         for entry in entries:
+            entry_model = str(entry.get('target_model') or '').strip().upper()
             for raw in entry.get('facts', []):
                 fact = copy.deepcopy(raw)
                 fid = fact['id']
-                if fid not in fact_by_id:
+                member_key = entry_model or '+'.join((fact.get('scope') or {}).get('models') or ())
+                item = (member_key, copy.deepcopy(raw))
+                if fid not in buckets_by_id:
                     fact_order.append(fid)
-                    fact_by_id[fid] = fact
+                    buckets_by_id[fid] = [{'fact': fact, 'items': [item]}]
                     continue
-                prev = fact_by_id[fid]
-                prev_models = list((prev.get('scope') or {}).get('models') or [])
-                curr_models = list((fact.get('scope') or {}).get('models') or [])
-                prev_cmp = {k: v for k, v in prev.items() if k not in {'scope', 'sources'}}
-                curr_cmp = {k: v for k, v in fact.items() if k not in {'scope', 'sources'}}
-                prev_src_cmp = _norm_sources(prev.get('sources'))
-                curr_src_cmp = _norm_sources(fact.get('sources'))
-                prev_scope_other = {k: v for k, v in (prev.get('scope') or {}).items() if k != 'models'}
-                curr_scope_other = {k: v for k, v in (fact.get('scope') or {}).items() if k != 'models'}
-                merged_sources = list(prev.get('sources') or ())
-                for src in fact.get('sources') or ():
-                    if src not in merged_sources:
-                        merged_sources.append(copy.deepcopy(src))
-                if prev_cmp == curr_cmp and prev_src_cmp == curr_src_cmp and prev_scope_other == curr_scope_other:
-                    prev.setdefault('scope', {})['models'] = list(dict.fromkeys([*prev_models, *curr_models]))
-                    prev['sources'] = merged_sources
-                elif (prev_scope_other == curr_scope_other
-                      and {k: v for k, v in prev_cmp.items() if k not in {'status', 'verification'}}
-                      == {k: v for k, v in curr_cmp.items() if k not in {'status', 'verification'}}):
-                    if status_rank.get(fact.get('status'), -1) < status_rank.get(prev.get('status'), -1):
-                        prev['status'] = fact.get('status')
-                    if prev.get('status') != 'source_verified' or fact.get('verification') != 'source_checked':
-                        if prev.get('verification') != fact.get('verification'):
-                            prev['verification'] = 'not_performed' if prev.get('status') != 'candidate_evidence' else prev.get('verification')
-                    prev.setdefault('scope', {})['models'] = list(dict.fromkeys([*prev_models, *curr_models]))
-                    prev['sources'] = merged_sources
-                elif (prev.get('dimension') == 'identity.applicability'
-                      and fact.get('dimension') == 'identity.applicability'
-                      and prev_scope_other == curr_scope_other
-                      and {k: v for k, v in prev_cmp.items() if k not in {'value', 'status', 'verification'}}
-                      == {k: v for k, v in curr_cmp.items() if k not in {'value', 'status', 'verification'}}
-                      and {k: v for k, v in (prev_cmp.get('value') or {}).items() if k != 'declared_models'}
-                      == {k: v for k, v in (curr_cmp.get('value') or {}).items() if k != 'declared_models'}):
-                    dm = list(dict.fromkeys([
-                        *((prev.get('value') or {}).get('declared_models') or ()),
-                        *((fact.get('value') or {}).get('declared_models') or ()),
-                    ]))
-                    prev.setdefault('value', {})['declared_models'] = dm
-                    if status_rank.get(fact.get('status'), -1) < status_rank.get(prev.get('status'), -1):
-                        prev['status'] = fact.get('status')
-                        if prev.get('verification') != fact.get('verification'):
-                            prev['verification'] = 'not_performed'
-                    prev.setdefault('scope', {})['models'] = list(dict.fromkeys([*prev_models, *curr_models]))
-                    prev['sources'] = merged_sources
-                elif (prev.get('dimension') == 'constraints.cpu_availability'
-                      and fact.get('dimension') == 'constraints.cpu_availability'
-                      and prev_scope_other == curr_scope_other
-                      and {k: v for k, v in prev_cmp.items() if k not in {'value', 'status', 'verification'}}
-                      == {k: v for k, v in curr_cmp.items() if k not in {'value', 'status', 'verification'}}
-                      and {k: v for k, v in (prev_cmp.get('value') or {}).items() if k != 'model_states'}
-                      == {k: v for k, v in (curr_cmp.get('value') or {}).items() if k != 'model_states'}):
-                    merged_states = dict((prev.get('value') or {}).get('model_states') or {})
-                    merged_states.update((fact.get('value') or {}).get('model_states') or {})
-                    prev.setdefault('value', {})['model_states'] = merged_states
-                    if status_rank.get(fact.get('status'), -1) < status_rank.get(prev.get('status'), -1):
-                        prev['status'] = fact.get('status')
-                        if prev.get('verification') != fact.get('verification'):
-                            prev['verification'] = 'not_performed'
-                    prev.setdefault('scope', {})['models'] = list(dict.fromkeys([*prev_models, *curr_models]))
-                    prev['sources'] = merged_sources
-                elif (prev_scope_other == curr_scope_other
-                      and (prev.get('conditions') != fact.get('conditions')
-                           or prev.get('dimension') in {'constraints.source_cpu_header', 'constraints.cpu_availability'})):
-                    # Keep member-specific scope rather than falsely rejecting shared admission or inventing a merged fact.
-                    continue
+                buckets = buckets_by_id[fid]
+                for bucket in buckets:
+                    if _try_merge_into(bucket['fact'], fact):
+                        bucket['items'].append(item)
+                        break
                 else:
-                    merged['call_available'] = False
-                    merged['support_status'] = 'partial_member_mismatch'
-                    merged['call_admission_reason'] = 'member_fact_conflict'
-                    prev['status'] = 'conflict'
-        merged['facts'] = [fact_by_id[fid] for fid in fact_order]
+                    if all(_is_member_scoped_divergence(bucket['fact'], fact) for bucket in buckets):
+                        buckets.append({'fact': fact, 'items': [item]})
+                    else:
+                        merged['call_available'] = False
+                        merged['support_status'] = 'partial_member_mismatch'
+                        merged['call_admission_reason'] = 'member_fact_conflict'
+                        buckets[0]['fact']['status'] = 'conflict'
+                        buckets[0]['items'].append(item)
+
+        def _bucket_id_map() -> tuple[Dict[str, Dict[str, str]], Dict[tuple[str, int], str]]:
+            member_map: Dict[str, Dict[str, str]] = {}
+            bucket_ids: Dict[tuple[str, int], str] = {}
+            used_ids: set[str] = set()
+            for fid in fact_order:
+                buckets = buckets_by_id[fid]
+                split = len(buckets) > 1
+                for idx, bucket in enumerate(buckets):
+                    if not split:
+                        bid = fid
+                    else:
+                        models = [str(m) for m in ((bucket['fact'].get('scope') or {}).get('models') or ()) if m]
+                        if not models:
+                            models = [str(m) for m, _ in bucket['items'] if m]
+                        suffix = '+'.join(dict.fromkeys(models)) or str(idx + 1)
+                        bid = f"{fid}::member:{suffix}"
+                        while bid in used_ids:
+                            bid = f"{bid}#{idx + 1}"
+                    used_ids.add(bid)
+                    bucket_ids[(fid, idx)] = bid
+                    for member_key, _ in bucket['items']:
+                        member_map.setdefault(member_key, {})[fid] = bid
+            return member_map, bucket_ids
+
+        while True:
+            member_map, bucket_ids = _bucket_id_map()
+            changed = False
+            for fid in fact_order:
+                buckets = buckets_by_id[fid]
+                if len(buckets) != 1 or len(buckets[0]['items']) < 2:
+                    continue
+                bucket = buckets[0]
+                if not any(raw.get('depends_on') for _, raw in bucket['items']):
+                    continue
+                resolved_per_item = [
+                    tuple(member_map.get(member_key, {}).get(dep, dep) for dep in (raw.get('depends_on') or ()))
+                    for member_key, raw in bucket['items']
+                ]
+                if len(set(resolved_per_item)) <= 1:
+                    continue
+                new_buckets: list[Dict[str, Any]] = []
+                for (member_key, raw), resolved_deps in zip(bucket['items'], resolved_per_item):
+                    candidate = copy.deepcopy(raw)
+                    for nb in new_buckets:
+                        if nb['resolved_deps'] == resolved_deps and _try_merge_into(nb['fact'], candidate):
+                            nb['items'].append((member_key, raw))
+                            break
+                    else:
+                        new_buckets.append({'fact': candidate, 'items': [(member_key, raw)], 'resolved_deps': resolved_deps})
+                if len(new_buckets) > 1:
+                    if bucket['fact'].get('status') == 'conflict':
+                        for nb in new_buckets:
+                            nb['fact']['status'] = 'conflict'
+                    buckets_by_id[fid] = new_buckets
+                    changed = True
+            if not changed:
+                break
+
+        final_facts: list[Dict[str, Any]] = []
+        for fid in fact_order:
+            for idx, bucket in enumerate(buckets_by_id[fid]):
+                out = bucket['fact']
+                out['id'] = bucket_ids[(fid, idx)]
+                if 'depends_on' in out and out['depends_on'] is not None:
+                    first_member, first_raw = bucket['items'][0]
+                    raw_deps = first_raw.get('depends_on')
+                    if raw_deps is not None:
+                        out['depends_on'] = [
+                            member_map.get(first_member, {}).get(dep, dep)
+                            for dep in raw_deps
+                        ]
+                final_facts.append(out)
+        merged['facts'] = final_facts
         return merged
 
     def definition_header(self, opcode, *, cpu, vendor="mitsubishi"):

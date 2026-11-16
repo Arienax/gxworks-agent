@@ -842,3 +842,47 @@ def test_instruction_source_authority_uses_selected_owner_without_legacy_resourc
     result = source_authority.instruction_source_authority('DRVA', 'FX3U')
     assert (result['manual_id'] if result else None) == expected
     assert calls == [('DRVA', 'FX3U')]
+
+
+def test_merged_member_entries_preserve_member_conditions_and_dependencies():
+    from plc.instruction_constraints import check_fact_constraints
+    from plc.instruction_definition import select_fact_dependencies
+    from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY as reg
+
+    entry = reg.definition_entry('ANR', cpu='FX3U/FX3UC')
+    spec = reg.resolve('ANR', cpu='FX3U/FX3UC')
+    assert entry is not None and spec is not None
+
+    entry_ids = [f['id'] for f in entry['facts']]
+    spec_ids = [g.id for g in spec.definition_facts]
+    assert len(entry_ids) == len(set(entry_ids))
+    assert len(spec_ids) == len(set(spec_ids))
+
+    order_facts = [g for g in spec.definition_facts if g.dimension == 'parameters.order']
+    fx3u_order = [g for g in order_facts if g.scope.get('models') == ['FX3U']]
+    fx3uc_order = [g for g in order_facts if g.scope.get('models') == ['FX3UC']]
+    assert fx3u_order and any({'context': 'cpu_version', 'minimum': '2.20'} in g.conditions for g in fx3u_order)
+    assert fx3uc_order and any({'context': 'cpu_version', 'minimum': '1.00'} in g.conditions for g in fx3uc_order)
+
+    for member, groups in (('FX3U', fx3u_order), ('FX3UC', fx3uc_order)):
+        closure = select_fact_dependencies(
+            spec.definition_facts, [g.id for g in groups], opcode='ANR', model=member, language='ladder')
+        assert closure['groups']
+        assert not closure['gaps']
+
+    fx3u_low = check_fact_constraints(
+        spec.definition_facts, {}, target='ANR', plc_model='FX3U', language='ladder',
+        context={'project_mode': 'native_ladder_instruction', 'cpu_version': '2.10', 'check_cpu_version': True})
+    fx3u_ok = check_fact_constraints(
+        spec.definition_facts, {}, target='ANR', plc_model='FX3U', language='ladder',
+        context={'project_mode': 'native_ladder_instruction', 'cpu_version': '2.20', 'check_cpu_version': True})
+    fx3uc_ok = check_fact_constraints(
+        spec.definition_facts, {}, target='ANR', plc_model='FX3UC', language='ladder',
+        context={'project_mode': 'native_ladder_instruction', 'cpu_version': '1.00', 'check_cpu_version': True})
+    assert fx3u_low['status'] == 'failed'
+    assert fx3u_ok['status'] == 'passed'
+    assert fx3uc_ok['status'] == 'passed'
+
+    ddrva = reg.definition_entry('DDRVA', cpu='FX3U/FX3UC')
+    assert ddrva['call_available'] is False
+    assert ddrva['call_admission_reason'] == 'member_fact_conflict'
