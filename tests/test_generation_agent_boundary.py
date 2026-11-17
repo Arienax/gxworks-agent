@@ -362,10 +362,14 @@ def test_operand_usage_and_execution_form_reach_actual_agent_b_messages(tmp_path
     ).run()
     assert len(provider.requests) == 1
     sent = "\n".join(str(getattr(message, "content", "")) for message in provider.requests[0].messages)
-    import re
-    groups = [g for match in re.finditer(r'(?m)^\[PLC KNOWLEDGE\]\n(\{[^\n]+\})', sent)
-              for g in json.loads(match[1]).get('value', {}).get('facts', [])]
-    assert any(g['value'].get('facet') == 'purpose' for g in groups)
+    from tests.test_context_compiler import wire_context
+    knowledge = wire_context(provider.requests[0].messages)['knowledge']
+    instruction = next(unit for unit in knowledge
+                       if unit.get('kind') == 'instruction' and unit.get('target') == 'WSFL')
+    parameters = {parameter['name']: parameter for table in instruction['value']['parameter_tables']
+                  for parameter in table['parameters']}
+    assert 'Word data length of the shift data' in parameters['N1']['purpose']
+    assert 'Number of words to be shifted leftward' in parameters['N2']['purpose']
     delivered = next(row for row in metadata['generation_handoff']['instruction_facts']['records']
                      if row.get('definition_fact_groups'))
     assert [slot["symbol"] for slot in delivered["operand_slots"]] == ["S", "D", "N1", "N2"]
@@ -385,7 +389,7 @@ def test_operand_usage_and_execution_form_reach_actual_agent_b_messages(tmp_path
     assert "STEP_WIDTH:" not in sent
 
 
-def test_conflicting_usage_candidates_reach_agent_b_only_as_an_unresolved_facet(tmp_path, monkeypatch, private_manual_evidence):
+def test_conflicting_usage_candidates_reach_agent_b_only_as_an_unresolved_facet(tmp_path, monkeypatch):
     import knowledge.structured_facts as structured
     from tests.test_instruction_fact_context import _usage_source, _fixture_definition
 
@@ -1146,7 +1150,7 @@ def test_wire_renderer_changes_only_the_example_block_and_freezes_flag(monkeypat
     on_document = expand_context_document(json.loads(on_packet['messages'][1]['content']))
     off_document = expand_context_document(json.loads(off_packet['messages'][1]['content']))
     assert off_document['request'] == request and off_document['confirmed_spec'] == spec
-    assert off_document['knowledge'] == [{'text': 'EVIDENCE_CONTROL_SENTINEL'}]
+    assert off_document['knowledge'] == [{'kind': 'context_text', 'text': 'EVIDENCE_CONTROL_SENTINEL'}]
     assert on_document['examples'] == block.text and off_document['examples'] == ''
     on_document['examples'] = ''
     assert on_document == off_document
@@ -1166,13 +1170,13 @@ def test_actual_wire_keeps_rules_and_evidence_stable_across_project_values_and_k
     def document(messages):
         return expand_context_document(json.loads(messages[1]['content']))
     assert first[0] == second[0]
-    assert document(first)['knowledge'] == document(second)['knowledge'] == [{'text': evidence.strip()}]
+    assert document(first)['knowledge'] == document(second)['knowledge'] == [{'kind': 'context_text', 'text': evidence.strip()}]
     assert document(first)['confirmed_spec'] == spec
     assert document(second)['confirmed_spec'] == other
     reversed_keys = dict(reversed(list(spec.items())))
     assert document(render(reversed_keys, evidence, 'generate', None, '', [])['messages']) == document(first)
     changed = render(spec, '\nCHANGED_SOURCE\n', 'generate', None, '', [])['messages']
-    assert changed[0] == first[0] and document(changed)['knowledge'] == [{'text': 'CHANGED_SOURCE'}]
+    assert changed[0] == first[0] and document(changed)['knowledge'] == [{'kind': 'context_text', 'text': 'CHANGED_SOURCE'}]
 
 
 def test_actual_agent_request_budget_handoff_and_retrieval_are_isolated(monkeypatch):

@@ -288,13 +288,14 @@ def test_first_profile_scopes_radix_to_the_actual_device_family(model, expected)
 def test_core_shape_and_required_parameter_instructions_remain():
     assembled, _, _ = build("起保停", evidence="")
     core = assembled.system_prompt.split("# Analysis mode:", 1)[0]
-    assert len(core) < 2400
+    # Includes explicit source/selection boundaries and contact interpretation.
+    assert len(core) < 2800
     assert assembled.contract_stage == "requirements"
     assert "# Operation effect candidates" not in core
     assert "transition_group" not in core
     example = ANALYSIS_SYSTEM_PROMPT.split("返回纯JSON（不要```json包裹），格式：\n", 1)[1].split("\n# suggested_io", 1)[0]
     assert isinstance(json.loads(example), dict)
-    assert "必要输入仍为 required" in ANALYSIS_SYSTEM_PROMPT
+    assert "必要数值仍为 required，内部地址无需必填" in ANALYSIS_SYSTEM_PROMPT
     assert "default 不是已确认答案" in ANALYSIS_SYSTEM_PROMPT
     assert "完整操作数" in ANALYSIS_SYSTEM_PROMPT
     assert set(json.loads(example)) == {

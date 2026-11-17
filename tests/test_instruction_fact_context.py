@@ -150,7 +150,9 @@ def test_relation_unit_retains_endpoint_interfaces_when_separate_briefs_are_omit
     discovery = context.manifest["capability_discovery"]
     relation_unit = next(r for r in discovery["composition_units"] if r["id"] == "relation:fx3_for_next_pair")
     assert {brief["name"] for brief in relation_unit["value"]["endpoint_briefs"]} == {"FOR", "NEXT"}
-    assert all("interface" in brief and 'sources' not in brief for brief in relation_unit["value"]["endpoint_briefs"])
+    assert all("core_interface" in brief and 'sources' not in brief
+               and brief["kind"] == "instruction_capability"
+               for brief in relation_unit["value"]["endpoint_briefs"])
     without_briefs = str(context)
     for identity, block in discovery['model_units'].items():
         if identity.startswith('capability:'):
@@ -496,7 +498,7 @@ def test_legacy_allowance_does_not_drop_compiled_dependency_closures(allowance):
 
 
 @pytest.mark.parametrize('incidental', [[], ['AND'], ['AND', 'OR', 'HOUR']])
-def test_relevance_order_preserves_each_required_instruction_before_extra_prose(incidental):
+def test_explicit_instruction_targets_survive_legacy_top_k_and_token_limits(incidental):
     from knowledge.evidence import estimate_tokens
 
     required = ['TCMP', 'MUL', 'DDIV', 'WSFL', 'BMOV']
@@ -508,11 +510,12 @@ def test_relevance_order_preserves_each_required_instruction_before_extra_prose(
     assert context.manifest['used_tokens'] == estimate_tokens(context)
     report = context.manifest['instruction_facts']
     included = [record for record in report['records'] if record['included']]
-    assert [record['fact_target'] for record in included] == required
+    assert [record['fact_target'] for record in included] == required + incidental
     for record in included:
         facts = record['definition_fact_groups']
         delivered = {fact['id'] for fact in facts}
-        assert any(fact['dimension'].startswith('effects.') for fact in facts)
+        if record['fact_target'] in required:
+            assert any(fact['dimension'].startswith('effects.') for fact in facts)
         assert all(set(fact['depends_on']) <= delivered for fact in facts)
 
 
@@ -948,7 +951,9 @@ def test_bundled_index_delivers_complete_instruction_definitions_without_length_
         and row["status"] == "candidate_evidence"
         for row in generic["requirements"]
     )
-    assert '[PLC KNOWLEDGE]' in context and 'source_verified' not in context
+    from shared.model_context import project_knowledge_context
+    model_context = project_knowledge_context(context)
+    assert '[PLC KNOWLEDGE]' in model_context and 'source_verified' not in model_context
     assert not any(row.get("manual_type") == "third_party_skill" for row in context.manifest["records"])
     if opcode in {"SFTL", "WSFL"}:
         assert '"trigger":"level"' in context
@@ -977,10 +982,11 @@ def test_ivck_verified_order_does_not_compete_with_flattened_page_layout():
     assert "operand_order" not in {
         row["facet"] for row in lookup["operand_gap_details"]
     }
-    assert '"symbol":"S1"' in context
-    assert '"symbol":"S2"' in context
-    assert '"symbol":"D"' in context
-    assert '"symbol":"N"' in context
+    from shared.model_context import technical_context_units
+    instruction = next(unit for unit in technical_context_units(context)
+                       if unit.get('kind') == 'instruction' and unit.get('target') == 'IVCK')
+    assert any([parameter['name'] for parameter in table['parameters']] == ['S1', 'S2', 'D', 'N']
+               for table in instruction['value']['parameter_tables'])
     assert "IVCK n\nS1" not in context
 
 

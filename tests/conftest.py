@@ -26,17 +26,21 @@ def private_manual_registry_state(tmp_path_factory):
     path = tmp_path_factory.mktemp('private-definition-source') / 'instruction_definitions.json.gz'
     with zipfile.ZipFile(archive) as z:
         path.write_bytes(z.read('instruction_definitions.json.gz'))
-    names = ('_cpu_contracts', 'definition_inventory', '_definition_owners', 'definition_documents')
-    from plc.instructions import InstructionRegistry
-    isolated = InstructionRegistry()
-    isolated._cpu_contracts = dict(registry._cpu_contracts)
+    import copy
+    isolated = copy.copy(registry)
+    # Loading a historical corpus must neither close the live store nor reuse
+    # contracts lazily materialized from its newer definition graph.
+    for name, value in vars(registry).items():
+        if isinstance(value, (dict, list, set)):
+            setattr(isolated, name, copy.copy(value))
+    isolated._definition_owner_store = None
     try:
         isolated.load_instruction_definitions(path)
     except ValueError as error:
         if 'serialization' not in str(error).lower():
             raise
         pytest.skip('private pre-migration definitions predate the pooled transport')
-    return {name: getattr(isolated, name) for name in (*names, '_definition_owner_store', '_fact_owner_index')}
+    return dict(vars(isolated))
 
 
 
@@ -47,6 +51,7 @@ def private_manual_evidence(monkeypatch, private_manual_registry_state):
     Tests opting in assert original wording/pages and historical extraction.
     Authored runtime tests use the unmodified production path instead.
     """
+    import copy
     from knowledge import core, dense, index_access
     from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY as registry
     from shared.paths import resource_path
@@ -59,7 +64,7 @@ def private_manual_evidence(monkeypatch, private_manual_registry_state):
     monkeypatch.setattr(index_access, 'index_path', lambda: path)
     monkeypatch.setattr(dense, '_MODEL_RESOURCE', str(private_path('resources/knowledge/fx3u_dense_lsa.npz')))
     for name, value in private_manual_registry_state.items():
-        monkeypatch.setattr(registry, name, dict(value) if isinstance(value, dict) else value)
+        monkeypatch.setattr(registry, name, copy.copy(value) if isinstance(value, (dict, list, set)) else value, raising=False)
     yield
     core._close_thread_connection()
 
