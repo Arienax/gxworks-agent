@@ -684,6 +684,18 @@ def build_knowledge_context(
             query, plc_model=plc_model, task_type=task, targets=instruction_targets,
             language=language, aspects=aspects, project_mode=project_mode,
             instance_context=instance_context, version=version)
+        # Legacy sources also have compiled, conflict-filtered definitions.
+        # Deliver that packet instead of the raw rows it supersedes, so its
+        # receipt describes the actual content and conflicting cells stay out.
+        replacements = [row for row in _targeted if row.get('definition_fact_groups')]
+        replaced = {str(row.get('instruction_opcode') or row.get('fact_target') or '').upper()
+                    for row in replacements}
+        if replaced:
+            def superseded(row):
+                return ((row.get('instruction_opcode') or row.get('fact_kind') == 'instruction') and
+                        str(row.get('instruction_opcode') or row.get('fact_target') or '').upper() in replaced)
+            direct_results = [row for row in direct_results if not superseded(row)] + replacements
+            broad_results = [row for row in broad_results if not superseded(row)]
     direct_results = [context_reference(row) for row in [*direct_results, *process_results]]
     eligible_direct_results = direct_results
     covered_kinds = _covered_structured_kinds(exact_targets, direct_results,

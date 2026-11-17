@@ -157,9 +157,9 @@ def test_confirmed_generation_retrieves_facts_for_the_selected_behavior():
     )
     assert 'queue' in context.handoff['capability_discovery']['functions']
     assert 'range_shift' not in context.handoff['capability_discovery']['functions']
-    exact = context.handoff['structured_facts']
-    assert exact['targets']['instructions'] == []
-    assert not exact['residual_retrieval']
+    # A selected behavioral plan has no explicit opcode query; discovery
+    # supplies its selected family without replaying broad requirement recall.
+    assert 'structured_facts' not in context.handoff
     payload = expand_context_document(json.loads(context.wire_packet['messages'][1]['content']))
     instructions = {unit['target'] for unit in payload['knowledge'] if unit['kind'] == 'instruction'}
     assert {'SFWR', 'SFRD'} <= instructions
@@ -776,7 +776,7 @@ def test_raw_direct_api_mcp_share_context_and_keep_user_facts(monkeypatch):
     from application.generation_agent import _compact_wire_renderer
     monkeypatch.setattr(knowledge_retriever, "build_knowledge_context", lambda *a, **k: "")
     raw = "X0：启动按钮，按下为1。Y0：输出。按住启动按钮时输出，不自保持。"
-    direct = build_direct_generation_context(raw, "FX3U", wire_renderer=_compact_wire_renderer("FX3U", direct=True, bindings=False))
+    direct = build_direct_generation_context(raw, "FX3U", wire_renderer=_compact_wire_renderer("FX3U", direct=True, structured_facts=True))
     registry = build_default_tool_registry()
     context = build_tool_context({"id": "raw-direct", "plc_model": "FX3U"})
     result = registry.call("get_generation_context", {"user_requirement": raw}, context)
@@ -837,7 +837,7 @@ def _ladder():
 
 
 @pytest.mark.parametrize("editing", [False, True])
-def test_api_and_external_context_have_identical_generation_instructions(monkeypatch, editing):
+def test_external_context_uses_shared_fresh_generation_and_local_edit_contract(monkeypatch, editing):
     calls = []
 
     def retrieve(query, **kwargs):
@@ -857,6 +857,18 @@ def test_api_and_external_context_have_identical_generation_instructions(monkeyp
         version={"id": "v0001", "plc_model": "FX3U", "confirmed_spec_snapshot": spec} if editing else None,
         ladder=ladder,
     )
+    if editing:
+        from application.compact_protocol import PROTOCOL_VERSION, compact_repair_rungs
+        result = build_default_tool_registry().call('get_generation_context', {'user_requirement': requirement}, context)
+        assert result['ok'], result
+        data = result['data']
+        assert calls == []  # Saved-source edits reuse previously delivered knowledge.
+        assert data['output_contract']['protocol'] == PROTOCOL_VERSION
+        assert data['generation_input']['current_program']['r'] == compact_repair_rungs(ladder['rungs'])
+        assert data['generation_request'] == requirement
+        assert data['current_version_id'] == 'v0001'
+        assert context.ladder == ladder
+        return
     model_request = generation_user_input(requirement, is_edit_mode=editing)
     messages, history, persist = api._prepare_api_call(
         model_request, "offline", "high", "ladder", plc_model="FX3U",
@@ -969,7 +981,7 @@ def test_optional_requirement_does_not_open_server_owned_context(arguments):
 
 
 def test_context_can_run_in_a_process_with_provider_config_and_desktop_imports_blocked(tmp_path):
-    script = "import importlib.abc, json, sys, types\nclass BlockPrivate(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if fullname.split('.')[0] in {'api', 'model_provider', 'openai', 'config_manager', 'credential_store',\n                                     'PyQt5', 'PyQt6', 'qt_compat', 'main', 'pywinauto', 'win32com'}:\n            raise AssertionError('Unexpected dependency: ' + fullname)\nsys.meta_path.insert(0, BlockPrivate())\nsys.modules['knowledge.retriever'] = types.SimpleNamespace(build_knowledge_context=lambda *a, **k: '')\nfrom agent_runtime.plc_tools import build_default_tool_registry, build_tool_context\nresult = build_default_tool_registry().call('get_generation_context', {'user_requirement': 'FX3U T1 K30'},\n    build_tool_context({'id': 'isolated', 'plc_model': 'FX3U'}))\nassert result['ok'], result\nassert result['data']['context_schema_version'] == 3\nprint(json.dumps({'ok': True}))\n"
+    script = "import importlib.abc, json, sys, types\nclass BlockPrivate(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if fullname.split('.')[0] in {'api', 'model_provider', 'openai', 'config_manager', 'credential_store',\n                                     'PyQt5', 'PyQt6', 'qt_compat', 'main', 'pywinauto', 'win32com'}:\n            raise AssertionError('Unexpected dependency: ' + fullname)\nsys.meta_path.insert(0, BlockPrivate())\nsys.modules['knowledge.retriever'] = types.SimpleNamespace(build_knowledge_context=lambda *a, **k: '')\nfrom agent_runtime.plc_tools import build_default_tool_registry, build_tool_context\nresult = build_default_tool_registry().call('get_generation_context', {'user_requirement': 'FX3U T1 K30'},\n    build_tool_context({'id': 'isolated', 'plc_model': 'FX3U'}))\nassert result['ok'], result\nassert result['data']['context_schema_version'] == 4\nprint(json.dumps({'ok': True}))\n"
     environment = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src"),
                    "PYTHONDONTWRITEBYTECODE": "1"}
     result = subprocess.run([sys.executable, "-c", script], cwd=tmp_path, env=environment,

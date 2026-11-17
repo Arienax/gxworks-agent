@@ -216,8 +216,12 @@ def test_repaired_method_bans_and_exact_calls_reach_generation_without_reclassif
     draft = build_review_draft(normalized)
     projected = project_confirmed_specification(draft)
     monkeypatch.setattr(agent, "_build_knowledge_context", lambda *args, **kwargs: "")
-    prompt = _build_agent_b_prompt(projected, "FX3U")
-    assert "禁止用定时器、M8011、M8012、逐件计时器或者手工逐位移位代替 SFTL" in prompt
+    from application.confirmed_generation_context import build_confirmed_generation_context
+    from tests.test_context_compiler import wire_context
+    context = build_confirmed_generation_context(projected, 'FX3U',
+        knowledge_builder=lambda *a, **k: '', wire_renderer=_compact_wire_renderer('FX3U'))
+    delivered = wire_context(context.wire_packet['messages'])['confirmed_spec']
+    assert "禁止用定时器、M8011、M8012、逐件计时器或者手工逐位移位代替 SFTL" in json.dumps(delivered, ensure_ascii=False)
     assert len(projected["selected_approach"]["generation_contract"]["instruction_instances"]) == 3
     assert projected["intent_context"]["requests"][0]["text"] == fixture["request"]
     assert any("手工逐位移位" in "".join(r["evidence"]) for r in receipt["retained_text"])
