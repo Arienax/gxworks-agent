@@ -111,11 +111,20 @@ def smoke_mcp(exe, scratch):
                         count = len((await client.list_tools()).tools)
                         async def read(tool, arguments):
                             pages = []
+                            budget = arguments.get('read_budget_tokens')
                             while True:
                                 response = await client.call_tool(tool, arguments)
-                                assert not response.is_error, response
-                                assert serialized_size(response.model_dump(by_alias=True, exclude_none=True))['utf8_bytes'] <= 32768
                                 payload = json.loads(response.content[0].text)
+                                error = payload.get('error', {})
+                                if response.is_error and error.get('code') == 'READ_BUDGET_TOO_SMALL':
+                                    required = error.get('required_read_budget_tokens')
+                                    assert type(required) is int and (budget or 6000) < required <= 128000, response
+                                    budget = required
+                                    arguments = {**arguments, 'read_budget_tokens': budget}
+                                    continue
+                                assert not response.is_error, response
+                                byte_limit = max(32768, budget * 8) if budget else 32768
+                                assert serialized_size(response.model_dump(by_alias=True, exclude_none=True))['utf8_bytes'] <= byte_limit
                                 pages.append(payload)
                                 next_call = payload['data']['delivery']['next']
                                 if next_call is None:
