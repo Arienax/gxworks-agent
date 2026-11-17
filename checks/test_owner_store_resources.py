@@ -37,6 +37,9 @@ class ResourceTests(unittest.TestCase):
             root=Path(tmp);catalog=root/'resources/instructions/mitsubishi';catalog.mkdir(parents=True)
             for name in collector.INSTRUCTION_FILES:
                 if name!='instruction_definitions.json.gz':(catalog/name).write_text('{}')
+            # Frozen FX5 research inputs may exist locally but must not ship.
+            for name in ('pwm_contract.generated.json', 'pwm_reviewed_facts.json'):
+                (catalog/name).write_text('{}')
             writer=OwnerStoreWriter(catalog/'facts.sqlite',{k:v for k,v in raw.items() if k!='entries'})
             for entry in raw['entries']:writer.add_entry(entry)
             manifest=catalog/'instruction_definitions.manifest.json';writer.finalize(manifest)
@@ -45,7 +48,7 @@ class ResourceTests(unittest.TestCase):
             self.assertIn(manifest.name,names);self.assertIn('facts.sqlite',names)
             self.assertNotIn('instruction_definitions.json.gz',names)
             self.assertIn('common.json',names)
-            self.assertIn('pwm_contract.generated.json',names)
+            self.assertNotIn('pwm_contract.generated.json',names)
             self.assertNotIn('pwm_reviewed_facts.json',names)
             self.assertNotIn('instruction_behavior_facts.json',names)
             self.assertNotIn('operand_semantic_coverage_summary.json',names)

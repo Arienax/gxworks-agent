@@ -38,14 +38,13 @@ Its manifest fixes the reviewed identities and separately reviewed AG fact.
 
 ## Distribution
 
-MCP and Full ship only `pwm_contract.generated.json` under
-`resources/instructions/mitsubishi/`. It contains the profiles, reviewed facts and
-source identities needed by runtime. `pwm_reviewed_facts.json` remains an offline
-generation input. Both runtime consumers use the shared resource locator.
-`scripts/release_smoke.py` runs `--self-test-pwm` inside the built distribution;
-this explicit check recompiles the embedded reviewed input and compares the
-contract, then binds PWM/DPWM values for all four reviewed CPUs. A missing or
-inconsistent packaged contract fails the check.
+The FX5/GX Works3 PWM/DPWM software extension is frozen. Its research code,
+reviewed facts, generated contract and source tests remain available for offline
+research, but MCP and Full distributions exclude `pwm_contract.generated.json`
+and `pwm_reviewed_facts.json`. Product entrypoints and release checks do not run
+the FX5 PWM diagnostic. These research checks are not required for the current
+GX Works2 release. This restriction does not remove ordinary PWM instruction
+knowledge for GX Works2 CPUs.
 
 ## Live graph and safety boundaries
 

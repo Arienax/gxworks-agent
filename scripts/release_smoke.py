@@ -4,7 +4,6 @@
 """Audit and exercise executable distributions in isolated temporary state."""
 from __future__ import annotations
 import argparse
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -28,10 +27,12 @@ def audit(package, component):
                 "THIRD_PARTY_LICENSES/README.md", "gxw/templates/fx3u.gxw",
                 "gxw/templates/blank-fbd-projects.zip.xz",
     "gxw/templates/blank-ladder-projects.zip.xz",
-                "resources/instructions/mitsubishi/fx3u_step_widths.json",
-                "resources/instructions/mitsubishi/pwm_contract.generated.json"}
+                "resources/instructions/mitsubishi/fx3u_step_widths.json"}
     for name in required:
         assert (package / name).is_file(), name
+    # FX5/GX Works3 PWM software contracts remain frozen outside this release.
+    for name in ('pwm_contract.generated.json', 'pwm_reviewed_facts.json'):
+        assert not (package / 'resources/instructions/mitsubishi' / name).exists(), name
     assert "GNU AFFERO GENERAL PUBLIC LICENSE" in (package / "LICENSE").read_text(encoding="utf-8")[:500]
     internal_template_keys = {'source_evidence', 'evidence', 'float32_evidence',
                               'dll_sha256', 'instruction_lookup_rva', 'instruction_text_rva', 'operand_text_rva'}
@@ -160,42 +161,9 @@ def smoke_mcp(exe, scratch):
     return anyio.run(exercise)
 
 
-def canonical_digest(path):
-    """Digest one packaged JSON document the way the PWM compiler identifies it."""
-    value = json.loads(path.read_text(encoding="utf-8"))
-    canonical = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
-    return hashlib.sha256(canonical.encode()).hexdigest()
-
-
-def smoke_pwm(exe, package, scratch):
-    """Parse the packaged PWM/DPWM facts through the packaged runtime itself."""
-    env = environment(scratch)
-    result = subprocess.run([str(exe), "--self-test-pwm"], cwd=scratch, env=env, capture_output=True, timeout=120)
-    assert result.returncode == 0, (result.stdout.decode(errors="replace"), result.stderr.decode(errors="replace"))
-    report = json.loads(result.stdout.decode().strip().splitlines()[-1])
-    # The runtime must resolve the installed distribution's own resources, not a
-    # development checkout or a stale copy beside the extracted directory.
-    directory = Path(report["directory"]).resolve()
-    assert directory == package / "resources/instructions/mitsubishi", directory
-    for key in ("generated_path",):
-        assert Path(report[key]).resolve().parent == directory, report[key]
-    generated = (directory / "pwm_contract.generated.json").resolve()
-    assert generated.is_file()
-    reviewed_source = json.loads(generated.read_text(encoding="utf-8"))["reviewed_source"]
-    digest = hashlib.sha256(json.dumps(reviewed_source, sort_keys=True, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
-    assert report["status"] == "passed" and report["contract_matches_reviewed_facts"] is True, report
-    assert report["source_sha256"] == digest, (report["source_sha256"], digest)
-    assert report["source_binding"] == "PWM-reviewed-v1:" + digest, report["source_binding"]
-    assert report["forms"] == ["DPWM", "PWM"] and report["models"] == 4, report
-    assert len(report["profiles"]) == 8 and set(report["profiles"].values()) == {11}, report["profiles"]
-    assert report["native_compile"] == "not_performed"
-    return {"pwm_resources": 1, "pwm_profiles": len(report["profiles"]),
-            "contract_matches_reviewed_facts": True, "installed_resources_only": True}
-
-
 def smoke_web(exe, scratch):
     env = environment(scratch)
-    for flag in ("--self-test-core", "--self-test-st", "--self-test-pwm", "--self-test-knowledge",
+    for flag in ("--self-test-core", "--self-test-st", "--self-test-knowledge",
                  "--self-test-settings", "--self-test-openai-sdk"):
         result = subprocess.run([str(exe), flag], cwd=scratch, env=env, capture_output=True, timeout=90)
         assert result.returncode == 0, (flag, result.stdout.decode(errors="replace"), result.stderr.decode(errors="replace"))
@@ -254,9 +222,6 @@ if __name__ == "__main__":
         mcp_state = scratch / 'mcp'
         mcp_state.mkdir()
         result = {'mcp': smoke_mcp(exe.with_name('gxworks-agent-mcp.exe'), mcp_state)}
-        pwm_state = scratch / 'pwm'
-        pwm_state.mkdir()
-        result['pwm'] = smoke_pwm(exe.with_name('gxworks-agent-mcp.exe'), package, pwm_state)
         if component == 'full':
             web_state = scratch / 'web'
             web_state.mkdir()
