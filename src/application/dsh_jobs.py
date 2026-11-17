@@ -107,7 +107,6 @@ class ToolBridge:
         self.proposed = False
         self.questions = None
         self.last_error = None
-        self.checked_write = False
         self.units = ContextUnits(directory / 'context-units.json')
         self._events_lock = threading.RLock()
         self.request_count = 0
@@ -169,6 +168,7 @@ class ToolBridge:
     def bind(self, ctx, snapshot):
         from application.engineering_session import EngineeringSession
         self.ctx, self.snapshot = ctx, snapshot
+        self.write_snapshot = copy.deepcopy(snapshot)
         from application.model_progress import ModelProgressReporter
         self.progress = ModelProgressReporter(ctx)
         if self.session:
@@ -189,8 +189,8 @@ class ToolBridge:
         self.binding_error = None
         self.manual_documents = set()
         self.initial_context = None
+        self.generation_context = None
         self.proposed = False
-        self.checked_write = False
         self.request_count = 0
         self._usage_seen.clear()
         # Confirmation happens in Web, never via a model-authored tool call.
@@ -202,8 +202,7 @@ class ToolBridge:
 
     def before_write(self):
         self.ctx.checkpoint()
-        if not self.checked_write:
-            self.service.validate_snapshot(self.snapshot)
+        self.service.validate_snapshot(self.write_snapshot)
 
     def tools(self):
         result = []
@@ -292,11 +291,40 @@ class ToolBridge:
         return refreshed
 
     def _refresh_generation_binding(self, call_id):
-        self.service.validate_snapshot(self.snapshot)
+        self.service.validate_snapshot(self.write_snapshot)
         name = 'get_generation_context'
-        refreshed = self._refresh_read(name, self._context_arguments(name, {}),
-                                       self.initial_context['data'], call_id)
+        arguments = self._context_arguments(name, {})
+        if self.generation_context is None:
+            # Our own save advances the source, not the user's task. Prepare
+            # its edit receipt locally; previously delivered manuals stay read.
+            envelope = self._read(name, arguments, call_id)
+            if not envelope.get('ok'):
+                raise ConflictError('无法恢复当前任务的资料，请重新运行任务。')
+            self.generation_context = envelope
+            refreshed = envelope['data']
+        else:
+            refreshed = self._refresh_read(name, arguments,
+                                           self.generation_context['data'], call_id)
+            self.generation_context = {'ok': True, 'tool': name, 'data': refreshed}
         self._remember_generation(refreshed)
+
+    def _advance_saved_version(self, version_id, envelope):
+        context = self.service.projects.tool_context(self.snapshot['project_id'], version_id)
+        if self.snapshot.get('program') and context.native_snapshot is not None:
+            from application.gxw_files import source_context
+            context = source_context(context, self.snapshot['program'])
+        current = copy.deepcopy(self.write_snapshot)
+        if not envelope['data'].get('activation_blocked'):
+            current['project']['active_version_id'] = version_id
+        current.update(version_id=version_id, version=context.version, program_ir=context.program_ir)
+        if current.get('fbd_baseline') is not None:
+            current['fbd_baseline'] = base64.b64encode(context.native_snapshot).decode('ascii')
+        self.write_snapshot = current
+        self.session.version_id = version_id
+        # The initial prompt remains in the conversation; only the source
+        # binding is invalidated, so it cannot be replayed as an edit context.
+        self.generation_context = None
+        self.generation_document = self.generation_receipt = None
 
     def _context_arguments(self, name, args):
         if name not in {'get_design_context', 'get_generation_context'}:
@@ -306,7 +334,7 @@ class ToolBridge:
         if name == 'get_generation_context':
             if self.snapshot.get('program'):
                 args['program'] = self.snapshot['program']
-            if not self.snapshot.get('version_id'):
+            if not self.session.version_id:
                 args['workflow'] = ('detailed' if self.snapshot['kind'] != 'direct_generation'
                                     and self.snapshot['project'].get('confirmed_spec') else 'direct_generation')
         return args
@@ -323,7 +351,7 @@ class ToolBridge:
             return self.session.invoke(ToolCall(read_id, name, arguments, defer_read=deferred)).data
 
         envelope = collect_host_read(name, args, call_id, read_page,
-            before_restart=lambda: self.service.validate_snapshot(self.snapshot))
+            before_restart=lambda: self.service.validate_snapshot(self.write_snapshot))
         code = (envelope.get('error') or {}).get('code')
         if code == 'ENGINEERING_CONTEXT_CHANGED':
             raise ConflictError('无法完成资料交付，请从工作台重新发起任务。')
@@ -368,7 +396,13 @@ class ToolBridge:
         if self.snapshot['kind'] != 'analysis' and name in {'get_design_context', 'propose_design_plan'}:
             raise ValueError('本轮是实施或修改；不要重新创建 Design 任务。')
         if self.initial_context and name == self.initial_context['tool']:
-            return self.units.project(self.initial_context)
+            if name != 'get_generation_context':
+                return self.units.project(self.initial_context)
+            if self.generation_context is None:
+                self._refresh_generation_binding(self.session_id + ':' + str(payload['call_id']) + ':saved-source')
+            return self.units.project(self.generation_context)
+        if name in {'create_program_candidate', 'patch_program'} and self.saved and self.generation_context is None:
+            self._refresh_generation_binding(self.session_id + ':' + str(payload['call_id']) + ':saved-source')
         args = self._context_arguments(name, args)
         self._bind_submission(name, args)
         call_id = self.session_id + ':' + str(payload['call_id'])
@@ -398,6 +432,7 @@ class ToolBridge:
         data = envelope.get('data') or {}
         if name == 'get_generation_context' and envelope.get('ok'):
             self._remember_generation(data)
+            self.generation_context = envelope
         if name == 'search_plc_manual' and (data.get('delivery') or {}).get('complete'):
             document = data['document']
             if (not args.get('plc_model') or args['plc_model'] == self.snapshot['project']['plc_model']) and (
@@ -408,8 +443,7 @@ class ToolBridge:
         version_id = envelope.get('version_id') or data.get('version_id')
         if version_id and envelope.get('ok') and name in {'create_program_candidate', 'patch_program'}:
             self.saved = envelope
-            self.session.version_id = version_id
-            self.checked_write = True
+            self._advance_saved_version(version_id, envelope)
         return envelope if payload.get('host_context') else self.units.project(envelope)
 
     def events(self, frames):

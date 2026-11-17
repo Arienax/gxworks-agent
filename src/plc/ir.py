@@ -401,10 +401,19 @@ def _zero_reset_range(operands: Sequence[Any], plc_model: str) -> Optional[Set[s
 def _instruction_state_access(spec, opcode, operands, plc_model, *, unresolved=None):
     """Possible implicit accesses, without certifying execution applicability."""
     from plc.instructions import reviewed_native_fact_groups
+    from plc.target_identity import target_identity_state
     from plc.validation import SUPPORTED_PLC_MODELS, parse_device_address, parse_indexed_device_address, device_address_radix
     from plc.device_identity import external_operand_reference
     reads, writes = set(), set()
     plc_model = str(plc_model or '').strip().upper()
+    members, reason = target_identity_state(plc_model)
+    if members and reason is None and len(members) > 1:
+        for member in members:
+            member_reads, member_writes = _instruction_state_access(
+                spec, opcode, operands, member, unresolved=unresolved)
+            reads.update(member_reads)
+            writes.update(member_writes)
+        return reads, writes
     if plc_model not in SUPPORTED_PLC_MODELS:
         return reads, writes
     dimensions = {group.dimension for group in spec.definition_facts
@@ -480,6 +489,9 @@ def _instruction_operand_access_regions(spec, opcode, operands, plc_model):
     context = {'$PLC_MODEL': plc_model, '$LANGUAGE': 'ladder',
                '$OPERAND_ROLES': spec.native_operand_order if spec else (),
                'project_mode': 'native_ladder_instruction', 'program_context': 'ladder'}
+    from plc.target_identity import target_identity_state
+    members, reason = target_identity_state(plc_model)
+    member_models = members if members and reason is None and len(members) > 1 else (plc_model,)
     for group in reviewed_native_fact_groups(spec, opcode, operands, plc_model,
                                              dimensions={'parameters.typed_operands'}):
         descriptions = group.value.get('operands', [])
@@ -489,17 +501,24 @@ def _instruction_operand_access_regions(spec, opcode, operands, plc_model):
                            for item in descriptions[index].get('components', []))]
         if not indexes:
             continue
-        closure = select_fact_dependencies(spec.definition_facts, [group.id], opcode=opcode,
-            model=plc_model, language='ladder', allow_unknown_scope=True)
-        requirements = {gap['reason'] for gap in closure['gaps']}
-        for dependency in closure['groups']:
-            for condition in dependency.get('conditions', []):
-                try:
-                    _condition(condition, values, context)
-                except UnknownInstructionSemantics as error:
-                    requirements.add(str(error))
-        for index in indexes:
-            component_requirements.setdefault(index, set()).update(requirements)
+        allowed_models = group.scope.get('models') or ()
+        check_models = [m for m in member_models if not allowed_models or m in allowed_models] or [plc_model]
+        for check_model in check_models:
+            values_m = literal_operand_values(spec, operands, plc_model=check_model, opcode=opcode)
+            context_m = {'$PLC_MODEL': check_model, '$LANGUAGE': 'ladder',
+                         '$OPERAND_ROLES': spec.native_operand_order if spec else (),
+                         'project_mode': 'native_ladder_instruction', 'program_context': 'ladder'}
+            closure = select_fact_dependencies(spec.definition_facts, [group.id], opcode=opcode,
+                model=check_model, language='ladder', allow_unknown_scope=True)
+            requirements = {gap['reason'] for gap in closure['gaps']}
+            for dependency in closure['groups']:
+                for condition in dependency.get('conditions', []):
+                    try:
+                        _condition(condition, values_m, context_m)
+                    except UnknownInstructionSemantics as error:
+                        requirements.add(str(error))
+            for index in indexes:
+                component_requirements.setdefault(index, set()).update(requirements)
 
     result = []
     for region in regions:
@@ -794,11 +813,22 @@ def analyze_instruction_access(
     opcode: Any, operands: Sequence[Any], *, plc_model: str = "FX3U"
 ) -> Tuple[List[str], List[str]]:
     """Return deterministic device reads/writes for one lowered instruction."""
+    from plc.target_identity import target_identity_state
 
     op = str(opcode or "").strip().upper()
     args = list(operands or [])
     reads: Set[str] = set()
     writes: Set[str] = set()
+    members, reason = target_identity_state(plc_model)
+    if members and reason is None and len(members) > 1:
+        for member in members:
+            member_reads, member_writes = analyze_instruction_access(op, args, plc_model=member)
+            reads.update(member_reads)
+            writes.update(member_writes)
+        return (
+            sorted(reads, key=_device_sort_key),
+            sorted(writes, key=_device_sort_key),
+        )
     if op.startswith(("LD", "AND", "OR")):
         for operand in args:
             reads.update(_device_tokens(operand, plc_model))
@@ -814,7 +844,17 @@ def analyze_instruction_access(
 
 def analyze_instruction_access_regions(opcode, operands, *, plc_model='FX3U'):
     """Source-defined symbolic storage that cannot be replaced by head addresses."""
+    from plc.target_identity import target_identity_state
+
     op, args = str(opcode or '').strip().upper(), list(operands or [])
+    members, reason = target_identity_state(plc_model)
+    if members and reason is None and len(members) > 1:
+        regions = []
+        for member in members:
+            for region in analyze_instruction_access_regions(op, args, plc_model=member):
+                if region not in regions:
+                    regions.append(region)
+        return regions
     spec = DEFAULT_INSTRUCTION_REGISTRY.resolve(op, cpu=plc_model, operand_count=len(args))
     regions = [region for region in _instruction_operand_access_regions(spec, op, args, plc_model)
                if isinstance(region['count'], Mapping) or region.get('requires')]

@@ -10,6 +10,8 @@ import json
 import re
 from collections.abc import Mapping
 
+from shared.engineering_documents import MODEL_ENGINEERING_FIELDS
+
 
 def cpu_version_requested(request='', specification=None):
     text = str(request or '')
@@ -30,7 +32,9 @@ def cpu_version_requested(request='', specification=None):
 
 def _version_guard(value):
     if isinstance(value, Mapping):
-        if value.get('context') in ('cpu_version', 'cpu_version_not_resolved') or value.get('path') == 'cpu_version':
+        # An unresolved extraction context carries no firmware predicate. It
+        # must not discard the operand table or behavior attached to it.
+        if value.get('context') == 'cpu_version' or value.get('path') == 'cpu_version':
             return True
         return any(_version_guard(item) for item in value.values())
     return isinstance(value, (list, tuple)) and any(_version_guard(item) for item in value)
@@ -44,7 +48,7 @@ def without_cpu_versions(value):
         return [clean for item in value
                 if not (isinstance(item, Mapping) and item.get('dimension') == 'constraints.cpu_availability'
                         and version_ids.intersection(item.get('depends_on', [])))
-                if (clean := without_cpu_versions(item)) is not None]
+                if (clean := without_cpu_versions(item)) is not None or item is None]
     if not isinstance(value, Mapping):
         return copy.deepcopy(value)
     if (value.get('dimension') == 'constraints.cpu_version'
@@ -58,7 +62,7 @@ def without_cpu_versions(value):
                    'minimum_cpu_version', 'minimum_series_version', 'cpu_version_check'}:
             continue
         cleaned = without_cpu_versions(item)
-        if cleaned is not None:
+        if cleaned is not None or item is None:
             result[key] = cleaned
     return result
 
@@ -67,34 +71,49 @@ def project_cpu_version_knowledge(value, *, requested=False):
     """Filter knowledge fields without touching requirements, schemas or code."""
     if requested:
         return copy.deepcopy(value)
-    if isinstance(value, list):
-        return [project_cpu_version_knowledge(item) for item in value]
+    if isinstance(value, (list, tuple)):
+        return [clean for item in value
+                if (clean := project_cpu_version_knowledge(item)) is not None or item is None]
     if not isinstance(value, Mapping):
         return copy.deepcopy(value)
-    if value.get('kind') in {'instruction', 'instruction_form', 'device', 'instruction_capability'}:
+    if value.get('kind') in {'instruction', 'instruction_form', 'device', 'device_family',
+                             'instruction_capability', 'example', 'language', 'positioning',
+                             'error', 'process'}:
         return without_cpu_versions(value)
     result = {}
     for key, item in value.items():
-        if key in {'knowledge', 'fact_packet'}:
-            result[key] = without_cpu_versions(item)
-        elif key in {'schema', 'confirmed_spec', 'current_program', 'program', 'ladder'} or key.endswith('_schema'):
-            result[key] = copy.deepcopy(item)
+        if key in MODEL_ENGINEERING_FIELDS or key.endswith('_schema'):
+            cleaned = copy.deepcopy(item)
+        elif key in {'knowledge', 'fact_packet', 'additional_knowledge'}:
+            cleaned = without_cpu_versions(item)
         else:
-            result[key] = project_cpu_version_knowledge(item)
+            cleaned = project_cpu_version_knowledge(item)
+        if cleaned is not None or item is None:
+            result[key] = cleaned
     return result
 
 
 def project_cpu_version_text(text, *, requested=False):
+    from shared.model_context import _KNOWLEDGE_BODY
+
+    text = str(text)
     if requested:
-        return str(text)
-    if '[PLC KNOWLEDGE]' not in str(text):
+        return text
+    if not _KNOWLEDGE_BODY.search(text):
         try:
-            value = json.loads(str(text))
+            value = json.loads(text)
         except ValueError:
-            return str(text)
-        return json.dumps(without_cpu_versions(value), ensure_ascii=False, separators=(',', ':'))
+            return text
+        clean = without_cpu_versions(value)
+        return json.dumps(clean, ensure_ascii=False, separators=(',', ':')) if clean is not None else ''
+
     def project(match):
-        value = json.loads(match[1])
-        return '[PLC KNOWLEDGE]\n' + json.dumps(without_cpu_versions(value), ensure_ascii=False,
+        try:
+            clean = without_cpu_versions(json.loads(match[1]))
+        except ValueError:
+            return match[0]
+        if clean is None or clean == []:
+            return ''
+        return '[PLC KNOWLEDGE]\n' + json.dumps(clean, ensure_ascii=False,
                                                 separators=(',', ':')) + '\n[/PLC KNOWLEDGE]'
-    return re.sub(r'(?s)\[PLC KNOWLEDGE\]\s*(.*?)\s*\[/PLC KNOWLEDGE\]', project, str(text))
+    return _KNOWLEDGE_BODY.sub(project, text).strip()

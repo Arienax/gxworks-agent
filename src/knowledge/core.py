@@ -73,6 +73,7 @@ from knowledge.text_matching import (
     fts_tokens as _fts_tokens,
     cjk_bigram_set as _cjk_bigram_set,
     fts_expression as _fts_expression,
+    error_code_aliases as _error_code_aliases,
     fts_match_quality as _fts_match_quality,
     alias_occurs as _alias_occurs,
     instruction_heading_terms as _instruction_heading_terms,
@@ -587,8 +588,14 @@ def _retrieve_uncached(path, identity, query, plc_model, task_type, top_k, char_
     # Qualified routes enter the same entity pipeline as native entities. They
     # do not change the original query, official structured lookup, or dense
     # text, and cannot be triggered by bare generic software words.
+    err_terms = _error_terms(query, plc_model=plc_model)
+    expanded_error_terms = [
+        alias
+        for term in err_terms
+        for alias in _error_code_aliases(term)
+    ]
     routed_terms = query_skill_concepts(query, task_type)
-    entity_terms = exact_terms + [term for term in routed_terms if term not in exact_terms]
+    entity_terms = list(dict.fromkeys([*exact_terms, *expanded_error_terms, *routed_terms]))
     exact_refs = _entity_references(
         connection, schema, entity_terms, plc_model, task_type,
         **({"source_lanes": source_lanes} if source_lanes is not None else {}),

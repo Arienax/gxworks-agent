@@ -16,6 +16,8 @@ import json
 import re
 from collections.abc import Mapping
 
+from shared.engineering_documents import MODEL_ENGINEERING_FIELDS
+
 
 _DEBUG_FIELDS = frozenset({
     'sources', 'source_id', 'source_ids', 'source_evidence', 'source_references', 'fact_citations',
@@ -84,7 +86,7 @@ def _positive_contract(value):
                 continue
             if key == 'additional_conditions' and item in _HEDGE_CONDITIONS:
                 continue
-            if key == 'knowledge_status' and item != 'source_verified':
+            if key == 'knowledge_status' and item not in {'source_verified', 'conflict'}:
                 continue
             result[key] = _positive_contract(item)
         return result
@@ -199,7 +201,11 @@ def technical_block(value):
         separators=(',', ':'), sort_keys=True) + '\n[/PLC KNOWLEDGE]'
 
 
-_KNOWLEDGE_BODY = re.compile(r'(?s)\[PLC KNOWLEDGE\]\s*(.*?)\s*\[/PLC KNOWLEDGE\]')
+_KNOWLEDGE_BODY = re.compile(r'(?ms)^\[PLC KNOWLEDGE\][ \t]*\r?\n(.*?)\r?\n\[/PLC KNOWLEDGE\][ \t]*(?=\r?$)')
+_CONTEXT_BLOCK = re.compile(
+    r'(?ms)^\[(?:(?P<modern>PLC KNOWLEDGE)|KNOWLEDGE [^\r\n]*)\][ \t]*\r?\n'
+    r'(.*?)\r?\n\[/(?(modern)PLC KNOWLEDGE|KNOWLEDGE)\][ \t]*(?=\r?$)'
+)
 
 
 def knowledge_unit_key(unit):
@@ -221,21 +227,37 @@ def knowledge_origins(context):
     for record in manifest.get('records', []):
         if record.get('citation_origin'):
             for body in _KNOWLEDGE_BODY.findall(record.get('model_text') or ''):
-                _add_origins(index, knowledge_unit_key(json.loads(body)), [record['citation_origin']])
+                try:
+                    value = json.loads(body)
+                except ValueError:
+                    continue
+                if isinstance(value, Mapping):
+                    _add_origins(index, knowledge_unit_key(value), [record['citation_origin']])
     return index
 
 
 def technical_context_units(context, *, origins=None, source_index=None):
     """Structured complete knowledge units, without repeating instruction prose."""
     units, seen = [], set()
-    for body in _KNOWLEDGE_BODY.findall(str(context or '')):
-        value = json.loads(body)
+    text = str(context or '')
+    parts, end = [], 0
+    for match in _CONTEXT_BLOCK.finditer(text):
+        if text[end:match.start()].strip():
+            parts.append({'kind': 'context_text', 'text': text[end:match.start()].strip()})
+        try:
+            value = json.loads(match[2])
+        except ValueError:
+            value = {'text': match[2].strip()}
+        if isinstance(value, Mapping):
+            parts.append(value)
+        end = match.end()
+    if text[end:].strip():
+        parts.append({'kind': 'context_text', 'text': text[end:].strip()})
+    for value in parts:
         marker = json.dumps(value, sort_keys=True, ensure_ascii=False)
         if marker not in seen:
             seen.add(marker)
             units.append(value)
-    if not units and str(context or '').strip():
-        units.append({'text': str(context).strip()})
     from knowledge.instruction_presentation import merge_instruction_units, SHARED_INSTRUCTION_KINDS
     if origins is not None and source_index is None:
         source_index = knowledge_origins(context)
@@ -292,6 +314,9 @@ _DELIVERY_AUDIT_FIELDS = frozenset({
     'conflicts', 'depends_on', 'missing_prerequisites', 'required_prerequisites',
     'generation_requirements', 'avoid_relying_on', 'gaps',
     'reviewed_behavior_does_not_establish_Core_execution',
+    'unverified_fields', 'source_qualifications',
+    'semantic_completeness', 'execution_coverage', 'executor_coverage',
+    'source_review', 'review_status',
 })
 _ABSENT_MODEL_TEXT = frozenset({'not_stated_in_reviewed_source', 'not_stated'})
 _ABSENT_KNOWLEDGE = frozenset({'unknown', 'unresolved', 'unverified', 'not_established'})
@@ -303,6 +328,67 @@ _UNPROVEN_STATES = _ABSENT_KNOWLEDGE | {
 
 def _absent_knowledge(value):
     return isinstance(value, str) and value in _ABSENT_KNOWLEDGE
+
+
+_REVIEW_ANNOTATION = re.compile(
+    r'\bunverified\b|\b(?:source|evidence|review|executor|simulator)[ _-]'
+    r'(?:coverage|verification|review|not[ _-](?:implemented|supported))\b|'
+    r'未(?:经)?(?:验证|核验|核实|审核)|尚未(?:验证|核验|审核)|'
+    r'(?:资料|证据|审核|执行器|仿真器).{0,16}(?:不足|缺失|不完整|未完成|未实现)|'
+    r'未确认支持|需要各自的已核验规则|不构成.{0,24}验证|'
+    r'(?:行为|指令|硬件).{0,16}另行验证|'
+    r'\bno (?:physical |hardware |runtime |timing )+verification\b', re.I)
+
+
+def _programming_note(text):
+    """Remove review disclaimers, retaining adjacent technical statements.
+
+    Used only on retrieved knowledge annotations, never requirements, program
+    text, real diagnostics or instruction parameter constraints.
+    """
+    if not _REVIEW_ANNOTATION.search(text):
+        return text
+    clauses = re.split(r'(?<=[；;。\n])|(?<=\.)(?=\s)', text)
+    return ''.join(clause for clause in clauses if not _REVIEW_ANNOTATION.search(clause)).strip().rstrip(';；').rstrip()
+
+
+def model_review_view(value):
+    """Hide review-only verdicts at tool delivery, without changing local reports.
+
+    A missing local execution model is not a failed PLC instruction. Concrete
+    errors, saved program identities and the operation's success flag remain.
+    """
+    if isinstance(value, (list, tuple)):
+        return [item for row in value if (item := model_review_view(row)) is not None or row is None]
+    if not isinstance(value, Mapping):
+        return copy.deepcopy(value)
+    # Only recognized coverage verdicts are disposable. A real read/compile
+    # error does not cease to be actionable because its container says unverified.
+    reasons = [value.get(key) for key in ('reason', 'message', 'reasons') if value.get(key)]
+    review_reason = bool(reasons) and all(
+        re.search(r'source_coverage_incomplete|(?:local |local_)?(?:executor|simulator)[ _].*(?:missing|unavailable|unsupported|not_implemented)|'
+                  r'(?:source|evidence|review)[ _]coverage[ _](?:incomplete|missing)', str(reason), re.I)
+        for reason in reasons)
+    if value.get('severity') == 'unverified' and review_reason:
+        return None
+    review_only = value.get('status') == 'unverified' and review_reason
+    result = {}
+    for key, item in value.items():
+        # User engineering content and executable text are not review labels.
+        if key in MODEL_ENGINEERING_FIELDS or key.endswith('_schema'):
+            result[key] = copy.deepcopy(item)
+            continue
+        if key in {'unverified', 'unverified_fields', 'unverified_count'}:
+            continue
+        if review_only and key in {'status', 'valid', 'passed', 'available', 'reason', 'message', 'reasons'}:
+            continue
+        if (isinstance(item, str) and 'unverified' in item.lower()
+                and (key == 'status' or key.endswith('_status'))):
+            continue
+        clean = model_review_view(item)
+        if clean is not None or item is None:
+            result[key] = clean
+    return result
 
 
 def model_knowledge_value(value):
@@ -317,6 +403,10 @@ def model_knowledge_value(value):
                 if item not in (None, {}, [])]
     if not isinstance(value, Mapping):
         return None if _absent_knowledge(value) else copy.deepcopy(value)
+    if value.get('kind') == 'context_text':
+        # Authored instructions outside knowledge blocks are not source-review
+        # annotations. Keep them through the structured wire conversion.
+        return copy.deepcopy(value)
     if value.get('kind') == 'plc_program_ir':
         # Retrieved examples carry the same full IR as previews. Present their
         # ordered program once; derived reports are not programming facts.
@@ -330,12 +420,14 @@ def model_knowledge_value(value):
                 for network in value['networks']]
     if value.get('kind') in {'instruction_modifiers', 'instruction_execution'}:
         return None
+    if value.get('dimension') in {'execution.core_execution_capability', 'constraints.source_qualifications'}:
+        return None
     if value.get('status') == 'conflict' or value.get('knowledge_status') == 'conflict':
         return None
     result = {}
     state = value.get('knowledge_status', value.get('status'))
     unproven_availability = (isinstance(state, str)
-                            and state in _UNPROVEN_STATES
+                            and state in (_UNPROVEN_STATES - {'unverified', 'declared_unverified'})
                             and isinstance(value.get('value'), Mapping)
                             and value['value'].get('available') is True)
     field_states = value.get('knowledge_status_by_field') or {}
@@ -346,6 +438,17 @@ def model_knowledge_value(value):
                             if conflict} if operator_source_details
                             and isinstance(value.get('source_conflicts'), Mapping) else set())
     for key, item in value.items():
+        if key in {'execution.core_execution_capability', 'constraints.source_qualifications'}:
+            continue
+        if (isinstance(item, str) and 'unverified' in item.lower()
+                and (key in {'status', 'verification', 'selection_applicability'}
+                     or key.endswith('_status'))):
+            continue
+        if key in {'note', 'notes', 'limitation', 'text', 'description'} and isinstance(item, (str, list, tuple)):
+            item = (_programming_note(item) if isinstance(item, str) else
+                    [clean for entry in item if (clean := _programming_note(entry) if isinstance(entry, str) else entry)])
+            if not item:
+                continue
         if operator_source_details:
             if key == 'source_conflicts':
                 continue
@@ -387,7 +490,7 @@ def model_knowledge_value(value):
             continue
         if key == 'status' and isinstance(item, str) and item in _REVIEW_STATES | _ABSENT_KNOWLEDGE:
             continue
-        if key in field_states and _absent_knowledge(field_states[key]):
+        if key in field_states and field_states[key] != 'unverified' and _absent_knowledge(field_states[key]):
             continue
         if key == 'value' and unproven_availability:
             continue
@@ -396,8 +499,6 @@ def model_knowledge_value(value):
             for condition in item:
                 projected = model_knowledge_value(condition)
                 if projected in (None, {}, []):
-                    continue
-                if isinstance(projected, Mapping) and set(projected) <= {'kind', 'context'}:
                     continue
                 conditions.append(projected)
             if conditions:
@@ -438,7 +539,9 @@ def technical_knowledge_results(records, *, origins=None):
         for row, block in zip(records, blocks):
             if block and (origin := citation_origin(row)):
                 for body in _KNOWLEDGE_BODY.findall(block):
-                    _add_origins(source_index, knowledge_unit_key(json.loads(body)), [origin])
+                    value = json.loads(body)
+                    if isinstance(value, Mapping):
+                        _add_origins(source_index, knowledge_unit_key(value), [origin])
     units = technical_context_units('\n'.join(blocks), origins=origins, source_index=source_index)
     results = []
     for unit in units:
@@ -562,9 +665,8 @@ def _device_definition(definition):
 def technical_context_text(text, *, origins=None):
     """Project complete injected JSON blocks, including custom knowledge builders."""
     value = str(text or '')
-    pattern = re.compile(r'(?ms)^\[(?:KNOWLEDGE [^\n]*|PLC KNOWLEDGE)\]\n(.*?)\n\[/(?:KNOWLEDGE|PLC KNOWLEDGE)\]')
     def project(match):
-        body = match[1]
+        body = match[2]
         rendered = technical_knowledge_text({'text': body})
         if rendered.startswith('[PLC KNOWLEDGE]'):
             return rendered
@@ -573,20 +675,11 @@ def technical_context_text(text, *, origins=None):
         except ValueError:
             return rendered
         return technical_block(data)
-    value = pattern.sub(project, value)
-    if '[PLC KNOWLEDGE]' in value:
+    value = _CONTEXT_BLOCK.sub(project, value)
+    if _KNOWLEDGE_BODY.search(value):
         units = technical_context_units(value, origins=origins,
                                         source_index=knowledge_origins(text) if origins is not None else None)
-        rendered = '\n\n'.join(technical_block(unit) for unit in units)
-        blocks = re.compile(r'(?ms)^\[PLC KNOWLEDGE\]\n.*?\n\[/PLC KNOWLEDGE\]')
-        first = True
-        def replace_blocks(match):
-            nonlocal first
-            if not first:
-                return ''
-            first = False
-            return rendered
-        return blocks.sub(replace_blocks, value)
+        return '\n\n'.join(technical_block(unit) for unit in units)
     # Custom builders may return one JSON payload without a knowledge wrapper.
     try:
         data = json.loads(value)
@@ -605,6 +698,8 @@ def project_knowledge_context(context, *, cpu_version=None):
         from shared.cpu_version_projection import project_cpu_version_text
         text = project_cpu_version_text(text, requested=cpu_version)
     manifest = dict(getattr(context, 'manifest', {}))
+    if cpu_version is not None:
+        manifest['cpu_version_requested'] = cpu_version
     if origins or 'citation_sources' in manifest:
         manifest['citation_sources'] = origins
     return KnowledgeContext(text, manifest)

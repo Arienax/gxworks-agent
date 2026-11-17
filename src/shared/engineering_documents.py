@@ -11,6 +11,16 @@ import copy
 from collections.abc import Mapping
 
 
+# Engineering payloads can contain arbitrary user-owned field names.
+MODEL_ENGINEERING_FIELDS = frozenset({
+    'confirmed_spec', 'spec', 'program', 'ladder', 'source', 'user_request',
+    'user_requirement', 'user_facts', 'schema', 'behavior_cases', 'current_program',
+    'current_model', 'source_context', 'prior_user_input', 'previous', 'catalog',
+    'existing_declarations', 'call_interface', 'structures', 'declaration_tables',
+    'call_bindings', 'project_options',
+})
+
+
 _PROGRAM_MAPS = (("devices",), ("io_map",), ("device_comments",), ("variables",),
                  ("structs",), ("metadata",),
                  ("declaration_edits", "*", "renames"),
@@ -100,6 +110,9 @@ DATA_PATHS["generation_context"] += tuple((*prefix, *path)
     for prefix in (("current_model",), ("generation_input", "previous"))
     for path in (*_PROGRAM_MAPS, *_PARAMETER_MAPS))
 DATA_PATHS["generation_context"] += (("generation_input", "parameter_schema"),
+    ("generation_input", "output_schema"),
+    ("generation_input", "current_program"),
+    ("generation_input", "behavior_cases"),
     ("output_contract", "schema"), ("output_contract", "model_schema"),
     ("output_contract", "alternatives", "*", "model_schema"),
     ("generation_input", "declaration_tables"))

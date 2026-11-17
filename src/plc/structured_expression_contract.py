@@ -11,7 +11,7 @@ from __future__ import annotations
 import copy
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Mapping
 
 from plc.instruction_definition import (
@@ -19,6 +19,7 @@ from plc.instruction_definition import (
     InstructionFactGroup,
     select_fact_dependencies,
 )
+from plc.target_identity import target_members
 
 
 _SOURCE_EXPRESSION_FACT = "authored:ql:literal_expression:parameters.language_expression"
@@ -29,9 +30,12 @@ _CPU_FACT = "authored:ql:cpu_applicability:constraints.cpu_availability"
 _GRAMMAR_TARGET = "ST.OPERATORS"
 _GRAMMAR_FACT = "st:operator_binding"
 _GRAMMAR_DIMENSION = "parameters.operator_binding"
-_SUPPORTED_OPERATORS = frozenset({"&", "**", "<", "<=", "<>", "=", ">", ">=",
-                                  "MOD", "AND", "XOR", "NOT", "POWER"})
+_ST_OPERATORS = frozenset({"&", "**", "<", "<=", "<>", "=", ">", ">=",
+                             "MOD", "AND", "OR", "XOR", "NOT"})
+_FX_K_OWNER_MNEMONICS = frozenset({"POWER", "EQ", "NE", "LT", "LE", "GT", "GE"})
+_SUPPORTED_OPERATORS = _ST_OPERATORS | _FX_K_OWNER_MNEMONICS
 _COMPARISONS = frozenset({"<", "<=", "<>", "=", ">", ">="})
+_FX_VARIADIC_OPERATORS = frozenset({"AND", "OR", "XOR", "=", "<", "<=", ">", ">="})
 
 
 @dataclass(frozen=True)
@@ -71,10 +75,13 @@ class StructuredExpressionContract:
     operator_form: str = "infix"
     owner_opcode: str | None = None
     variadic: bool = False
+    alternative_operator: str | None = None
 
     def as_mapping(self) -> dict[str, Any]:
         return {
             "operator": self.operator,
+            **({"alternative_operator": self.alternative_operator}
+               if self.alternative_operator else {}),
             "model": self.model,
             "language": self.language,
             "interfaces": list(self.interfaces),
@@ -296,9 +303,15 @@ def _normalise_facts(facts: Any) -> tuple[list[InstructionFactGroup], list[Mappi
 
 
 def _select_one(groups: list[InstructionFactGroup], *, dimension: str,
-                operator: str, model: str, value_key: str | None = None) -> InstructionFactGroup:
+                operator: str, model: str, value_key: str | None = None,
+                fact_id: str | None = None,
+                fact_id_prefix: str | None = None) -> InstructionFactGroup:
     found = [group for group in groups if group.dimension == dimension
              and _scope_matches(group, operator=operator, model=model, exact_owner=True)]
+    if fact_id is not None:
+        found = [group for group in found if group.id == fact_id]
+    if fact_id_prefix is not None:
+        found = [group for group in found if group.id.startswith(fact_id_prefix)]
     if value_key is not None:
         found = [group for group in found if group.value.get(value_key) == operator]
     if len(found) != 1:
@@ -313,15 +326,26 @@ def _validate_non_callable_signature(groups: list[InstructionFactGroup], *,
     callable_signatures = [group for group in signatures if group.value.get("available") is True]
     if callable_signatures:
         raise _Refusal("expression_conflicts_with_callable_signature")
-    if len(signatures) != 1:
+    if len(signatures) > 1:
+        literal_markers = [group for group in signatures
+                           if group.id == "authored:ql:literal_not_function:parameters.st_signature"]
+        other_markers = [group for group in signatures if group not in literal_markers]
+        if (len(literal_markers) != 1
+                or any(group.id != "authored:ql:st_unavailable:parameters.st_signature"
+                       or group.value.get("reason") != "symbolic_ST_operator_required"
+                       for group in other_markers)):
+            raise _Refusal("expression_non_callable_signature_missing_or_ambiguous")
+    elif len(signatures) != 1:
         raise _Refusal("expression_non_callable_signature_missing_or_ambiguous")
     for group in signatures:
         if group.status != "source_verified" or group.verification != "source_checked":
             raise _Refusal("st_signature_state_unverified:" + group.id)
         if group.value.get("available") is not False:
             raise _Refusal("st_signature_state_ambiguous:" + group.id)
-        if group.value.get("reason") != "literal_ST_operator_is_an_expression":
-            raise _Refusal("st_signature_not_expression_marker:" + group.id)
+        if (group.id == "authored:ql:literal_not_function:parameters.st_signature"
+                or len(signatures) == 1):
+            if group.value.get("reason") != "literal_ST_operator_is_an_expression":
+                raise _Refusal("st_signature_not_expression_marker:" + group.id)
         _require_owner_sources(group, operator=operator, model=model)
 
 
@@ -404,6 +428,23 @@ def _fx_k_form(group: InstructionFactGroup) -> tuple[str, str, list[str]]:
     elif not isinstance(symbol_name, str) or symbol_name.upper() != token:
         raise _Refusal("operator_expression_symbol_form_mismatch")
     return token, form_kind, placeholders
+
+
+def _fx_k_alternative_symbol(group: InstructionFactGroup) -> str | None:
+    """Decode an optional documented alternative operator token (e.g. ``&`` on ``AND``)."""
+    alt = group.value.get("alternative_symbol")
+    if not isinstance(alt, Mapping):
+        return None
+    ascii_hex = alt.get("ascii_hex")
+    if isinstance(ascii_hex, str) and ascii_hex:
+        if len(ascii_hex) % 2:
+            raise _Refusal("operator_expression_alternative_symbol_invalid")
+        try:
+            return bytes.fromhex(ascii_hex).decode("ascii").upper()
+        except (ValueError, UnicodeDecodeError):
+            raise _Refusal("operator_expression_alternative_symbol_invalid")
+    name = alt.get("name")
+    return name.strip().upper() if isinstance(name, str) and name.strip() else None
 
 
 def _fx_type_token(value: Any) -> str:
@@ -647,7 +688,11 @@ def _find_fx_k_expression(groups: list[InstructionFactGroup], *, operator: str,
         if "fxcpu_application_k" not in {source.get("manual_id") for source in group.sources}:
             continue
         token, _form_kind, _placeholders = _fx_k_form(group)
-        if requested in {token, owner.upper()}:
+        alt_token = _fx_k_alternative_symbol(group)
+        tokens = {token, owner.upper()}
+        if alt_token:
+            tokens.add(alt_token)
+        if requested in tokens:
             matches.append(group)
     if len(matches) > 1:
         raise _Refusal("source_operator_expression_missing_or_ambiguous")
@@ -674,10 +719,14 @@ def _resolve_fx_k_expression_contract(
     if not isinstance(owner, str) or not owner:
         raise _Refusal("source_operator_owner_missing")
     token, operator_form, placeholders = _fx_k_form(expression)
-    if token not in _SUPPORTED_OPERATORS | {"MOD", "XOR", "NOT"}:
+    alt_token = _fx_k_alternative_symbol(expression)
+    if token not in _ST_OPERATORS:
         raise _Refusal("unsupported_st_expression_operator")
     requested = str(operator).strip().upper()
-    if requested not in {token, owner.upper()}:
+    accepted_tokens = {token, owner.upper()}
+    if alt_token:
+        accepted_tokens.add(alt_token)
+    if requested not in accepted_tokens:
         raise _Refusal("source_operator_token_mismatch")
     if owner_opcode is not None and str(owner_opcode).strip().upper() != owner.upper():
         raise _Refusal("source_operator_owner_mismatch")
@@ -772,7 +821,7 @@ def _resolve_fx_k_expression_contract(
         if placeholders != input_names or len(input_names) != 1:
             raise _Refusal("operator_expression_prefix_arity_mismatch")
         minimum = maximum = 1
-    elif token in {"AND", "XOR"}:
+    elif token in _FX_VARIADIC_OPERATORS:
         pins = result.value.get("operand_pins")
         if (not isinstance(pins, Mapping) or type(pins.get("minimum")) is not int
                 or type(pins.get("maximum")) is not int
@@ -796,8 +845,11 @@ def _resolve_fx_k_expression_contract(
     grammar_result = grammar_rule.get("result")
     if not isinstance(grammar_result, str) or not _fx_type_matches(result_type, grammar_result):
         raise _Refusal("expression_result_type_conflicts_with_st_grammar")
-    if result.value.get("operand_pins") is not None and token not in {"AND", "XOR"}:
-        raise _Refusal("unexpected_variadic_operator_result_contract")
+    pins = result.value.get("operand_pins")
+    if pins is not None and token not in _FX_VARIADIC_OPERATORS:
+        if (token != "<>" or not isinstance(pins, Mapping)
+                or pins.get("minimum") != 2 or pins.get("maximum") != 2):
+            raise _Refusal("unexpected_variadic_operator_result_contract")
 
     applicable_conditions: list[Mapping[str, Any] | str] = []
     all_sources = []
@@ -812,8 +864,13 @@ def _resolve_fx_k_expression_contract(
         if source not in all_sources:
             all_sources.append(copy.deepcopy(dict(source)))
     grammar_value = grammar.value
+    effective_operator = alt_token if (alt_token and requested == alt_token) else token
+    alt_operator = token if (alt_token and requested == alt_token) else alt_token
     priority_table = grammar_value.get("precedence")
-    priority = priority_table.get(token) if isinstance(priority_table, Mapping) else None
+    priority = (priority_table.get(effective_operator)
+                if isinstance(priority_table, Mapping)
+                and type(priority_table.get(effective_operator)) is int
+                else (priority_table.get(token) if isinstance(priority_table, Mapping) else None))
     if type(priority) is not int:
         raise _Refusal("st_operator_precedence_missing")
     feature_copy = {"target": _GRAMMAR_TARGET, "fact_id": grammar.id,
@@ -821,7 +878,7 @@ def _resolve_fx_k_expression_contract(
                     "scope": copy.deepcopy(dict(grammar.scope or {})),
                     "sources": copy.deepcopy(list(grammar.sources))}
     return StructuredExpressionContract(
-        operator=token, model=model, language="st", interfaces=("st",), call_kind="expression",
+        operator=effective_operator, model=model, language="st", interfaces=("st",), call_kind="expression",
         source_available=True, representation="ST_expression", operands=tuple(copy.deepcopy(input_rows)),
         operand_names=tuple(input_names), operand_types=tuple(input_types),
         minimum_operands=minimum, maximum_operands=maximum, result_type=result_type,
@@ -835,7 +892,211 @@ def _resolve_fx_k_expression_contract(
         grammar_fact_id=grammar.id, grammar_binding=feature_copy,
         conditions=tuple(applicable_conditions), conditions_evaluated=False,
         sources=tuple(all_sources), operator_form=operator_form, owner_opcode=owner,
-        variadic=maximum > minimum)
+        variadic=maximum > minimum, alternative_operator=alt_operator)
+
+
+def _strip_model_from_expression_fact(fact: Mapping[str, Any]) -> dict[str, Any]:
+    cleaned = {k: copy.deepcopy(v) for k, v in fact.items() if k != "scope"}
+    scope = {k: copy.deepcopy(v) for k, v in (fact.get("scope") or {}).items() if k != "models"}
+    cleaned["scope"] = scope
+    sources = cleaned.get("sources")
+    if isinstance(sources, (list, tuple)):
+        deduped_sources = []
+        for src in sources:
+            item = {k: v for k, v in src.items() if k != "target_model"} if isinstance(src, Mapping) else src
+            if item not in deduped_sources:
+                deduped_sources.append(item)
+        cleaned["sources"] = deduped_sources
+    if cleaned.get("dimension") == "constraints.cpu_availability" and isinstance(cleaned.get("value"), Mapping):
+        val = dict(cleaned["value"])
+        states = val.get("model_states")
+        if isinstance(states, Mapping):
+            val["model_states"] = sorted(set(states.values()))
+        cleaned["value"] = val
+    return cleaned
+
+
+def _normalize_expression_contract_for_merge(contract: StructuredExpressionContract) -> dict[str, Any]:
+    data = contract.as_mapping()
+    data.pop("model", None)
+    deduped_sources = []
+    for src in data.get("sources") or ():
+        item = {k: v for k, v in src.items() if k != "target_model"} if isinstance(src, Mapping) else src
+        if item not in deduped_sources:
+            deduped_sources.append(item)
+    data["sources"] = deduped_sources
+    data["applicability_scopes"] = {
+        fid: ({k: v for k, v in scope.items() if k != "models"} if isinstance(scope, Mapping) else scope)
+        for fid, scope in (data.get("applicability_scopes") or {}).items()
+    }
+    grammar_binding = data.get("grammar_binding")
+    if isinstance(grammar_binding, Mapping) and isinstance(grammar_binding.get("scope"), Mapping):
+        grammar_copy = dict(grammar_binding)
+        grammar_copy["scope"] = {k: v for k, v in grammar_binding["scope"].items() if k != "models"}
+        data["grammar_binding"] = grammar_copy
+    data["facts"] = [
+        _strip_model_from_expression_fact(fact) if isinstance(fact, Mapping) else fact
+        for fact in data.get("facts") or ()
+    ]
+    return data
+
+
+def _slice_expression_facts_for_member(
+    facts: list[Any] | tuple[Any, ...],
+    *,
+    member: str,
+    members: tuple[str, ...],
+) -> list[Any]:
+    member_set = set(members)
+    sliced: list[Any] = []
+    for fact in facts:
+        if not isinstance(fact, Mapping):
+            sliced.append(fact)
+            continue
+        scope = fact.get("scope")
+        fact_models = scope.get("models") if isinstance(scope, Mapping) else None
+        if (
+            isinstance(fact_models, (list, tuple))
+            and fact_models
+            and member not in fact_models
+            and set(fact_models).issubset(member_set)
+        ):
+            continue
+        if (
+            isinstance(fact_models, (list, tuple))
+            and member in fact_models
+            and len(fact_models) > 1
+            and set(fact_models).issubset(member_set)
+        ):
+            item = {k: copy.deepcopy(v) for k, v in fact.items()}
+            item_scope = dict(item.get("scope") or {})
+            item_scope["models"] = [member]
+            item["scope"] = item_scope
+            sources = item.get("sources")
+            if isinstance(sources, (list, tuple)):
+                item["sources"] = [
+                    src for src in sources
+                    if not isinstance(src, Mapping) or src.get("target_model") in (None, member)
+                ]
+            sliced.append(item)
+            continue
+        sliced.append(fact)
+    return sliced
+
+
+def _slice_language_feature_for_member(
+    feature: Mapping[str, Any] | None,
+    *,
+    merged_model: str,
+    member: str,
+) -> Mapping[str, Any] | None:
+    if not isinstance(feature, Mapping):
+        return feature
+    raw_facts = feature.get("facts")
+    if not isinstance(raw_facts, (list, tuple)):
+        return feature
+    needs_rewrite = any(
+        isinstance(item, Mapping)
+        and isinstance((item.get("scope") or {}).get("models"), (list, tuple))
+        and merged_model in item["scope"]["models"]
+        and member not in item["scope"]["models"]
+        for item in raw_facts
+    )
+    if not needs_rewrite:
+        return feature
+    copied = dict(feature)
+    rewritten_facts = []
+    for item in raw_facts:
+        if not isinstance(item, Mapping):
+            rewritten_facts.append(item)
+            continue
+        scope = item.get("scope")
+        models = scope.get("models") if isinstance(scope, Mapping) else None
+        if isinstance(models, (list, tuple)) and merged_model in models and member not in models:
+            item_copy = dict(item)
+            scope_copy = dict(scope)
+            scope_copy["models"] = [member if m == merged_model else m for m in models]
+            item_copy["scope"] = scope_copy
+            rewritten_facts.append(item_copy)
+        else:
+            rewritten_facts.append(item)
+    copied["facts"] = rewritten_facts
+    return copied
+
+
+def _resolve_merged_expression_contract(
+    facts,
+    *,
+    operator: str,
+    model: str,
+    members: tuple[str, ...],
+    owner_opcode: str | None,
+    version: str | None,
+    language_feature: Mapping[str, Any] | None,
+) -> StructuredExpressionResolution:
+    results = [
+        resolve_structured_expression_contract(
+            _slice_expression_facts_for_member(facts, member=member, members=members),
+            operator=operator,
+            model=member,
+            owner_opcode=owner_opcode,
+            version=version,
+            language_feature=_slice_language_feature_for_member(
+                language_feature,
+                merged_model=model,
+                member=member,
+            ),
+        )
+        for member in members
+    ]
+    if any(res.contract is None for res in results):
+        reasons = tuple(dict.fromkeys(reason for res in results for reason in res.refusal_reasons))
+        return StructuredExpressionResolution(None, reasons or ("member_contract_mismatch",))
+    normalized = [_normalize_expression_contract_for_merge(res.contract) for res in results]
+    if any(item != normalized[0] for item in normalized[1:]):
+        return StructuredExpressionResolution(None, ("member_contract_mismatch",))
+    merged_sources: list[Mapping[str, Any]] = []
+    for res in results:
+        for src in res.contract.sources:
+            if src not in merged_sources:
+                merged_sources.append(copy.deepcopy(src))
+    facts_by_id: dict[str, dict[str, Any]] = {}
+    fact_order: list[str] = []
+    merged_scopes: dict[str, dict[str, Any]] = {}
+    for res in results:
+        for raw in res.contract.facts:
+            fid = raw["id"]
+            if fid not in facts_by_id:
+                fact_order.append(fid)
+                facts_by_id[fid] = copy.deepcopy(raw)
+                continue
+            prev = facts_by_id[fid]
+            prev_models = list((prev.get("scope") or {}).get("models") or ())
+            curr_models = list((raw.get("scope") or {}).get("models") or ())
+            prev.setdefault("scope", {})["models"] = list(dict.fromkeys([*prev_models, *curr_models]))
+            if isinstance(prev.get("sources"), list) and isinstance(raw.get("sources"), (list, tuple)):
+                for src in raw["sources"]:
+                    if src not in prev["sources"]:
+                        prev["sources"].append(copy.deepcopy(src))
+            if prev.get("dimension") == "constraints.cpu_availability":
+                merged_states = dict((prev.get("value") or {}).get("model_states") or ())
+                merged_states.update((raw.get("value") or {}).get("model_states") or ())
+                prev.setdefault("value", {})["model_states"] = merged_states
+        for fid, scope in res.contract.applicability_scopes.items():
+            if fid not in merged_scopes:
+                merged_scopes[fid] = copy.deepcopy(dict(scope))
+                continue
+            prev_models = list(merged_scopes[fid].get("models") or ())
+            curr_models = list((scope or {}).get("models") or ())
+            merged_scopes[fid]["models"] = list(dict.fromkeys([*prev_models, *curr_models]))
+    merged_contract = replace(
+        results[0].contract,
+        model=model,
+        facts=tuple(facts_by_id[fid] for fid in fact_order),
+        applicability_scopes=merged_scopes,
+        sources=tuple(merged_sources),
+    )
+    return StructuredExpressionResolution(merged_contract)
 
 
 def resolve_structured_expression_contract(
@@ -860,6 +1121,24 @@ def resolve_structured_expression_contract(
         return StructuredExpressionResolution(None, ("exact_model_required",))
     model = model.strip().upper()
     operator = operator.strip().upper()
+    members = target_members(model)
+    if (
+        len(members) > 1
+        and isinstance(facts, (list, tuple))
+        and not any(
+            isinstance(item, Mapping) and model in ((item.get("scope") or {}).get("models") or ())
+            for item in facts
+        )
+    ):
+        return _resolve_merged_expression_contract(
+            facts,
+            operator=operator,
+            model=model,
+            members=members,
+            owner_opcode=owner_opcode,
+            version=version,
+            language_feature=language_feature,
+        )
     try:
         groups, _raw_groups = _normalise_facts(facts)
         fx_expression = _find_fx_k_expression(groups, operator=operator,
@@ -885,8 +1164,12 @@ def resolve_structured_expression_contract(
                 owner_opcode=str(owner_opcode or fx_owner), grammar=grammar,
                 grammar_rule=grammar_rule, version=version)
             return StructuredExpressionResolution(contract, ())
-        if operator == "POWER":
-            raise _Refusal("source_operator_expression_missing_or_ambiguous")
+        if operator in _FX_K_OWNER_MNEMONICS:
+            raise _Refusal(
+                "source_operator_expression_missing_or_ambiguous"
+                if operator == "POWER"
+                else "unsupported_st_expression_operator"
+            )
         if language_feature is None:
             language_feature = _default_grammar_feature(model)
         grammar = _grammar_fact(language_feature, model=model)
@@ -897,14 +1180,17 @@ def resolve_structured_expression_contract(
         grammar_rule = _matching_grammar_rule(grammar_value, operator)
 
         expression = _select_one(groups, dimension="parameters.language_expression",
-                                  operator=operator, model=model, value_key="operator")
+                                 operator=operator, model=model, value_key="operator",
+                                 fact_id=_SOURCE_EXPRESSION_FACT)
         typed = _select_one(groups, dimension="parameters.typed_operands",
-                            operator=operator, model=model)
-        arity = _select_one(groups, dimension="parameters.arity", operator=operator, model=model)
-        order = _select_one(groups, dimension="parameters.order", operator=operator, model=model)
+                            operator=operator, model=model, fact_id=_TYPED_OPERANDS_FACT)
+        arity = _select_one(groups, dimension="parameters.arity",
+                            operator=operator, model=model, fact_id=_ARITY_FACT)
+        order = _select_one(groups, dimension="parameters.order",
+                            operator=operator, model=model, fact_id=_ORDER_FACT)
         cpu = _select_one(groups, dimension="constraints.cpu_availability",
-                          operator=operator, model=model)
-        if not {_TYPED_OPERANDS_FACT, _ARITY_FACT, _ORDER_FACT, _CPU_FACT}.issubset(expression.depends_on):
+                          operator=operator, model=model, fact_id_prefix=_CPU_FACT)
+        if not {_TYPED_OPERANDS_FACT, _ARITY_FACT, _ORDER_FACT, cpu.id}.issubset(expression.depends_on):
             raise _Refusal("expression_dependency_contract_incomplete")
         roots = [expression.id]
         closure_result = select_fact_dependencies(
@@ -920,14 +1206,20 @@ def resolve_structured_expression_contract(
             if required.id not in by_id:
                 raise _Refusal("required_expression_dependency_missing:" + required.id)
         if (expression.id != _SOURCE_EXPRESSION_FACT or typed.id != _TYPED_OPERANDS_FACT
-                or arity.id != _ARITY_FACT or order.id != _ORDER_FACT or cpu.id != _CPU_FACT):
+                or arity.id != _ARITY_FACT or order.id != _ORDER_FACT
+                or (cpu.id != _CPU_FACT and not cpu.id.startswith(_CPU_FACT + ":variant:"))):
             raise _Refusal("expression_fact_namespace_mismatch")
         for group in closure:
             _require_complete_fact(group, operator=operator, model=model)
             _require_owner_sources(group, operator=operator, model=model)
-        required_n_pages = {214} if operator == "**" else {215} if operator == "&" else {217}
+        required_n_pages = (
+            {213} if operator == "MOD"
+            else {214} if operator == "**"
+            else {215} if operator in {"&", "AND", "OR", "XOR", "NOT"}
+            else {217}
+        )
         required_expression_pages = set(required_n_pages)
-        if operator == "&":
+        if operator in {"&", "AND", "OR", "XOR", "NOT"}:
             required_expression_pages.add(216)
         _require_owner_sources(expression, operator=operator, model=model,
                               manual_id="sh080784engn", revision="N",
@@ -951,7 +1243,8 @@ def resolve_structured_expression_contract(
             raise _Refusal("expression_not_available_as_st_expression")
         syntax_history = expression_value.get("source_syntax_history")
         if (syntax_history is not None
-                and (operator != "&" or not isinstance(syntax_history, Mapping)
+                and (operator not in {"&", "AND", "OR", "XOR", "NOT"}
+                     or not isinstance(syntax_history, Mapping)
                      or syntax_history.get("resolution") != "resolved_by_own_page_216_ST_program_example")):
             raise _Refusal("expression_source_syntax_history_unresolved")
         priority = expression_value.get("operator_priority")
@@ -976,9 +1269,10 @@ def resolve_structured_expression_contract(
                 raise _Refusal(f"invalid_expression_operand_optionality:{index}")
         arity_value, order_value = arity.value, order.value
         minimum, maximum = arity_value.get("minimum"), arity_value.get("maximum")
-        expected_maximum = 2 if operator in {"**", "<>"} else 28
+        expected_minimum = 1 if operator == "NOT" else 2
+        expected_maximum = 1 if operator == "NOT" else 2 if operator in {"**", "MOD", "<>"} else 28
         if (type(minimum) is not int or type(maximum) is not int
-                or minimum != 2 or maximum != expected_maximum
+                or minimum != expected_minimum or maximum != expected_maximum
                 or arity_value.get("count_kind") != "ST_expression_operands"):
             raise _Refusal("expression_arity_contract_mismatch")
         if (len(operands) != maximum
@@ -998,8 +1292,8 @@ def resolve_structured_expression_contract(
         expected_types = list(grammar_inputs) if len(grammar_inputs) == len(types) else [grammar_inputs[0]] * len(types)
         if types != expected_types or expression_value["returns"] != grammar_rule.get("result"):
             raise _Refusal("expression_types_conflict_with_st_grammar")
-        if (operator in {"**", "<>"} and minimum != maximum
-                or operator not in {"**", "<>"} and maximum != 28):
+        if (operator in {"NOT", "**", "MOD", "<>"} and minimum != maximum
+                or operator not in {"NOT", "**", "MOD", "<>"} and maximum != 28):
             raise _Refusal("expression_operator_arity_limit_mismatch")
 
         chain_type = expression_value.get("comparison_chain_intermediate_result_type")
@@ -1058,7 +1352,7 @@ def resolve_structured_expression_contract(
             conditions=tuple(applicable_conditions),
             conditions_evaluated=False,
             sources=tuple(all_sources),
-            operator_form="infix",
+            operator_form="prefix" if operator == "NOT" else "infix",
             owner_opcode=operator,
             variadic=maximum > minimum,
         )

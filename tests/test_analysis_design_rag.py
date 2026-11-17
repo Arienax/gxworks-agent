@@ -54,8 +54,7 @@ def test_analysis_retrieves_context_but_generic_generation_requires_fact_target(
         plc_model="FX3U",
         task_type="generate",
     )
-    from plc.maintainability import SELECTION_POLICY
-    assert str(result).strip() == SELECTION_POLICY.strip()
+    assert not str(result).strip()
     assert result.manifest["records"] == []
     assert result.manifest["capability_discovery"]["candidates"] == []
     assert calls == []

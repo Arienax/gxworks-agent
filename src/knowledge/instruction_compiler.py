@@ -595,6 +595,8 @@ def refresh_reviewed_structured_expression_admission(entry, registry):
     marker = {'available': True, 'call_kind': 'expression',
         'representation': contract.representation,
         'operator': contract.operator,
+        **({'alternative_operator': contract.alternative_operator}
+           if contract.alternative_operator else {}),
         'owner_opcode': contract.owner_opcode or operator,
         'operator_form': contract.operator_form,
         'minimum_operands': contract.minimum_operands,

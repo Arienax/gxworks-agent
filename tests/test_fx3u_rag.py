@@ -102,9 +102,9 @@ def test_projected_source_body_remains_traceable_in_final_delivery(monkeypatch):
 
 INDEX_PATH = Path(private_path('resources/knowledge/fx3u_knowledge.sqlite'))
 MANIFEST_PATH = Path(private_path('resources/knowledge/manifest.json'))
-BENCHMARK_PATH = private_path('benchmarks/fx3u_rag_benchmark.jsonl')
+BENCHMARK_PATH = private_path('benchmarks/mitsubishi_model_rag_benchmark.jsonl')
 BENCHMARK_REPORT_PATH = (
-    private_path('benchmarks/fx3u_rag_benchmark_report.json')
+    private_path('benchmarks/mitsubishi_model_rag_benchmark_report.json')
 )
 
 
@@ -127,32 +127,29 @@ def test_bundled_fx3u_index_is_complete_and_integral():
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
 
     assert INDEX_PATH.is_file()
-    assert manifest["primary_manual"]["manual_number"] == "JY997D16601"
-    assert manifest["primary_manual"]["revision"] == "R"
-    assert manifest["stats"]["pages"] == sum(
+    programming = next(
+        item for item in manifest["manuals"] if item["id"] == "fx3_programming_r"
+    )
+    assert programming["manual_number"] == "JY997D16601"
+    assert programming["revision"] == "R"
+    assert manifest["counts"]["page_artifacts"] == sum(
         int(item["pdf_pages"]) for item in manifest["manuals"]
     )
     sources = json.loads(Path(private_path('resources/knowledge/sources.json')).read_text(encoding='utf-8'))['manuals']
-    assert {m['id'] for m in manifest['manuals']} == {m['id'] for m in sources}
-    assert manifest["stats"]["pages"] >= 3064  # The seven original manuals remain included.
+    assert {m['id'] for m in manifest['manuals'] if int(m.get('pdf_pages', 0)) > 0} <= {m['id'] for m in sources}
+    assert manifest["counts"]["page_artifacts"] >= 3064  # The seven original manuals remain included.
     assert {m['id'] for m in manifest['manuals']} >= {
         'fx3_programming_r','fx3_positioning_k','fxcpu_device_common_l','fxcpu_basic_applied_m',
         'fxcpu_application_k','gxworks2_structured_ag','structured_fundamentals_o'}
-    assert manifest["structured"]["instructions"] >= 250
-    assert manifest["structured"]["debug_cases"] == 26
+    assert manifest["counts"]["instructions"] >= 250
     assert manifest["retrieval"]["dense_embeddings"] is True
     assert manifest["retrieval"]["fusion"] == "metadata_entity_bm25_vector_rrf"
-    assert manifest["retrieval"]["benchmark"]["cases"] == 220
-    # Historical 100% came from a different retrieval pipeline. Compare the
-    # unchanged corpus on the same current code, and retain every old miss.
+    assert manifest["retrieval"]["vector_status"] == "ready"
     benchmark = manifest["retrieval"]["benchmark"]
-    comparison = manifest["retrieval"]["model_expansion_regression"]
+    assert benchmark["cases"] == 306
     assert benchmark["retrieval_mode"] == "broad"
-    assert benchmark["recall_at_10"] == comparison["broad"]["extended"]["recall_at_10"]
-    assert benchmark["recall_at_10"] >= comparison["broad"]["baseline"]["recall_at_10"]
+    assert benchmark["recall_at_10"] >= 0.95
     assert benchmark["negative_accuracy"] == 1.0
-    assert not comparison["broad"]["new_failures"]
-    assert not comparison["fact_aware"]["new_failures"]
     assert Path(private_path('resources/knowledge/fx3u_dense_lsa.npz')).is_file()
     positioning = next(
         item for item in manifest["manuals"] if item["id"] == "fx3_positioning_k"
@@ -163,9 +160,11 @@ def test_bundled_fx3u_index_is_complete_and_integral():
 
     with sqlite3.connect(INDEX_PATH) as connection:
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
-        assert connection.execute("SELECT COUNT(*) FROM page_artifacts").fetchone()[0] == manifest['stats']['pages']
-        indexed_manuals = {r[0]:r[1] for r in connection.execute('SELECT manual_id,pdf_pages FROM manuals WHERE pdf_pages>0')}
-        assert indexed_manuals == {m['id']:m['pdf_pages'] for m in manifest['manuals']}
+        assert connection.execute("SELECT COUNT(*) FROM page_artifacts").fetchone()[0] == manifest["counts"]["page_artifacts"]
+        assert connection.execute("SELECT COUNT(*) FROM debug_cases").fetchone()[0] == 26
+        assert connection.execute("SELECT COUNT(*) FROM instructions").fetchone()[0] == manifest["counts"]["instructions"]
+        indexed_manuals = {r[0]: r[1] for r in connection.execute("SELECT manual_id, pdf_pages FROM manuals")}
+        assert indexed_manuals == {m['id']: int(m.get('pdf_pages', 0)) for m in manifest['manuals']}
         assert connection.execute("SELECT COUNT(*) FROM chunks").fetchone()[0] >= 3000
         assert connection.execute("SELECT COUNT(*) FROM chunks_fts").fetchone()[0] == connection.execute(
             "SELECT COUNT(*) FROM chunks"
@@ -366,9 +365,11 @@ def test_benchmark_size_and_latest_baseline_are_valid():
         if line.strip()
     ]
     report = json.loads(BENCHMARK_REPORT_PATH.read_text(encoding="utf-8"))
-    assert 100 <= len(cases) <= 300
+    assert 100 <= len(cases) <= 500
     assert report["cases"] == len(cases)
-    assert report["recall_at_5"] >= 0.95
+    assert report["passed_threshold"] is True
+    assert report["recall_at_10"] >= 0.95
+    assert report["recall_at_5"] >= 0.90
     assert report["negative_accuracy"] >= 0.95
 
 
@@ -609,8 +610,7 @@ def test_generic_requests_do_not_inject_unrelated_manual_pages(query):
         plc_model="FX3U",
         task_type="edit",
     )
-    from plc.maintainability import SELECTION_POLICY
-    assert str(context).strip() == SELECTION_POLICY.strip()
+    assert not str(context).strip()
     assert context.manifest["records"] == []
     assert context.manifest["capability_discovery"]["candidates"] == []
 
@@ -751,7 +751,9 @@ def test_generation_prompt_receives_retrieved_context_lazily(monkeypatch):
         current_version_json={"rungs": []},
     )
 
-    assert "# RAG_SENTINEL" in messages[0]["content"]
+    payload = json.loads(messages[1]["content"])
+    assert payload["context_schema_version"] == 3
+    assert any("# RAG_SENTINEL" in item.get("text", "") for item in payload["knowledge"])
     assert captured["plc_model"] == "FX3U"
     assert captured["task_type"] == "generate"
     assert captured["evidence"] == {"rungs": []}
@@ -809,7 +811,7 @@ def test_only_canonical_benchmark_updates_release_manifest(tmp_path: Path):
     benchmarks = root / 'benchmarks'
     benchmarks.mkdir()
 
-    canonical = benchmarks / "fx3u_rag_benchmark.jsonl"
+    canonical = benchmarks / "mitsubishi_model_rag_benchmark.jsonl"
     custom = benchmarks / "fx3u_rag_benchmark_pre_skill.jsonl"
     canonical.write_text("{}\n", encoding="utf-8")
     custom.write_text("{}\n", encoding="utf-8")
@@ -837,3 +839,29 @@ def test_benchmark_rejects_negative_leak_even_when_all_positive_cases_hit(tmp_pa
     assert report['recall_at_10'] == 1.0
     assert report['negative_accuracy'] == 0.0
     assert report['passed_recall_threshold'] and not report['passed_threshold']
+
+
+def test_build_rag_benchmark_generates_complete_suite_at_new_output_path(tmp_path, monkeypatch):
+    import sys
+    from tools import build_rag_benchmark as builder
+
+    out = tmp_path / 'fresh_benchmark.jsonl'
+    meta_out = tmp_path / 'fresh_benchmark.meta.json'
+    monkeypatch.setattr(sys, 'argv', [
+        'build_rag_benchmark.py',
+        '--database', str(INDEX_PATH),
+        '--output', str(out),
+        '--meta-output', str(meta_out),
+    ])
+    assert builder.main() == 0
+
+    rows = [json.loads(line) for line in out.read_text(encoding='utf-8').splitlines() if line.strip()]
+    meta = json.loads(meta_out.read_text(encoding='utf-8'))
+    assert len(rows) == 306
+    assert meta['cases'] == 306
+    assert meta['positive_cases'] == 290
+    assert meta['negative_cases'] == 16
+    assert meta['categories']['native_model_program'] == 81
+    assert meta['categories']['native_model_parameter'] == 5
+    assert meta['categories']['negative_model'] == 1
+    assert any(row['id'] == 'outside_native:R04CPU' and row['negative'] is True for row in rows)

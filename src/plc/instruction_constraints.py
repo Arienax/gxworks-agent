@@ -555,6 +555,121 @@ def _numeric_range_check(rule, values):
     return ('unverified', 'constraint_input_or_path_selection_required') if unknown else ('passed', '')
 
 
+def _expt_operand_values(values):
+    base = next((values[k] for k in ('IN1', 'S1', 'BASE', 'LEFT', '$0') if k in values), UNKNOWN)
+    exponent = next((values[k] for k in ('IN2', 'S2', 'EXPONENT', 'RIGHT', '$1') if k in values), UNKNOWN)
+    result = next((values[k] for k in ('RESULT', 'OUT') if k in values), UNKNOWN)
+    return base, exponent, result
+
+
+def _evaluate_power_or_expt_constraint(group, values, context, *, by_id, phase, target, visit):
+    """Evaluate documented power/EXPT domain, base-type, notation, and error-reference facts."""
+    value = group.value
+    if (group.dimension == 'constraints.notation'
+            and set(value) == {'function_alternative', 'st_form'}
+            and value.get('function_alternative') == 'EXPT'
+            and value.get('st_form') == 'infix_asterisk_asterisk'):
+        return 'passed', ''
+    is_enable_variant = (target == 'EXPT_E' or group.id.startswith('structured:expt_e:'))
+    if group.dimension == 'constraints.numeric_domain':
+        if not (set(value) == {'base_must_be_positive_and_nonzero', 'result_absolute_range'}
+                and value.get('base_must_be_positive_and_nonzero') is True
+                and value.get('result_absolute_range') == ['2-126', '2128']):
+            return None
+        if is_enable_variant:
+            en = values.get('EN', UNKNOWN)
+            if en is False:
+                return 'not_applicable', ''
+            if en is not True:
+                return 'unverified', 'condition_not_resolved'
+        base, exponent, result = _expt_operand_values(values)
+        if any(type(x) is float and not math.isfinite(x) for x in (base, exponent, result)):
+            return 'failed', 'non_finite_numeric_value'
+        if base is UNKNOWN or type(base) not in {int, float}:
+            return 'unverified', 'constraint_input_unknown_or_unrepresentable'
+        if not (base > 0.0):
+            return 'failed', 'power_base_must_be_positive'
+        if result is not UNKNOWN:
+            if type(result) not in {int, float}:
+                return 'unverified', 'constraint_input_unknown_or_unrepresentable'
+            magnitude = abs(result)
+            if magnitude < math.ldexp(1.0, -126) or magnitude >= math.ldexp(1.0, 128):
+                return 'failed', 'power_result_outside_normal_REAL_range'
+        if exponent is not UNKNOWN and type(exponent) not in {int, float}:
+            return 'unverified', 'constraint_input_unknown_or_unrepresentable'
+        return 'passed', ''
+    if group.dimension == 'constraints.base_type':
+        if not (set(value) == {'base', 'exponent', 'result'}
+                and value == {'base': 'REAL', 'exponent': 'ANY_NUM', 'result': 'REAL'}):
+            return None
+        if is_enable_variant:
+            en = values.get('EN', UNKNOWN)
+            if en is False:
+                return 'not_applicable', ''
+            if en is not True:
+                return 'unverified', 'condition_not_resolved'
+        base, exponent, result = _expt_operand_values(values)
+        if any(type(x) is float and not math.isfinite(x) for x in (base, exponent, result)):
+            return 'failed', 'non_finite_numeric_value'
+        operand_types = context.get('operand_types') if isinstance(context.get('operand_types'), Mapping) else {}
+        base_t = str(operand_types.get('IN1', operand_types.get('S1', operand_types.get('BASE', '')))).upper()
+        exp_t = str(operand_types.get('IN2', operand_types.get('S2', operand_types.get('EXPONENT', '')))).upper()
+        res_t = str(operand_types.get('RESULT', '')).upper()
+        if base_t and exp_t:
+            if base_t != 'REAL' or exp_t not in {'INT', 'DINT', 'UINT', 'UDINT', 'REAL', 'LREAL'}:
+                return 'failed', 'power_base_type_mismatch'
+            if res_t and res_t != 'REAL':
+                return 'failed', 'power_result_type_mismatch'
+            return 'passed', ''
+        if base is UNKNOWN or exponent is UNKNOWN or type(base) not in {int, float} or type(exponent) not in {int, float}:
+            return 'unverified', 'constraint_input_unknown_or_unrepresentable'
+        if result is not UNKNOWN and type(result) not in {int, float}:
+            return 'unverified', 'constraint_input_unknown_or_unrepresentable'
+        return 'passed', ''
+    if group.dimension == 'constraints.error_rule_references':
+        selection = value.get('selection')
+        if (value.get('rule') != 'error_rules_of_selected_common_instructions_apply'
+                or not isinstance(selection, list) or not selection):
+            return None
+        if is_enable_variant:
+            en = values.get('EN', UNKNOWN)
+            if en is False:
+                return 'not_applicable', ''
+            if en is not True:
+                return 'unverified', 'condition_not_resolved'
+        allowed_pairs = {(row.get('s1_type'), row.get('s2_type')) for row in selection if isinstance(row, Mapping)}
+        operand_types = context.get('operand_types') if isinstance(context.get('operand_types'), Mapping) else {}
+        s1_t = str(operand_types.get('S1', operand_types.get('IN1', ''))).upper()
+        s2_t = str(operand_types.get('S2', operand_types.get('IN2', ''))).upper()
+        if s1_t and s2_t and (s1_t, s2_t) not in allowed_pairs:
+            return 'failed', 'error_rule_operand_type_unsupported'
+        if 'source:positive_base' not in by_id:
+            return 'unverified', 'source_witness_missing'
+        base_status = visit('source:positive_base')
+        if base_status == 'not_applicable':
+            return 'not_applicable', ''
+        if base_status == 'failed':
+            return 'failed', 'power_base_must_be_positive'
+        if base_status != 'passed':
+            return 'unverified', 'constraint_input_unknown_or_unrepresentable'
+        if phase == 'result' or 'RESULT' in values:
+            precision = context.get('numeric_precision')
+            precision_id = f'source:power_result_{precision}' if precision in {32, 64} else None
+            if precision_id and precision_id in by_id:
+                res_status = visit(precision_id)
+                if res_status == 'failed':
+                    return 'failed', 'power_result_overflow'
+                if res_status != 'passed':
+                    return 'unverified', 'constraint_dependency_unresolved'
+        if s1_t and s2_t:
+            return 'passed', ''
+        base, exponent, _ = _expt_operand_values(values)
+        if base is UNKNOWN or exponent is UNKNOWN or type(base) not in {int, float} or type(exponent) not in {int, float}:
+            return 'unverified', 'constraint_input_unknown_or_unrepresentable'
+        return 'passed', ''
+    return None
+
+
 def _source_cpu_version_boundary(value, model):
     """Read one source-declared CPU version boundary, not a current CPU value."""
     if not isinstance(value, Mapping):
@@ -1199,7 +1314,22 @@ def check_fact_constraints(groups, values, *, target, plc_model, language=None, 
                'target': target, 'phase': phase, 'scope': copy.deepcopy(group.scope or {}),
                'sources': copy.deepcopy(list(group.sources))}
         if status in {'failed', 'unverified'}:
-            row.update(code=group.value.get('code', 'PLC_CONSTRAINT'),
+            code = group.value.get('code')
+            if not code:
+                if group.dimension == 'constraints.numeric_domain':
+                    code = ('ST_NUMERIC_RANGE'
+                            if reason == 'power_result_outside_normal_REAL_range'
+                            else 'ST_NUMERIC_DOMAIN')
+                elif (group.dimension == 'constraints.error_rule_references'
+                      and reason in {'power_base_must_be_positive', 'power_result_overflow',
+                                     'constraint_input_unknown_or_unrepresentable',
+                                     'constraint_dependency_unresolved'}):
+                    code = ('ST_NUMERIC_RANGE'
+                            if reason in {'power_result_overflow', 'constraint_dependency_unresolved'}
+                            else 'ST_NUMERIC_DOMAIN')
+                else:
+                    code = 'PLC_CONSTRAINT'
+            row.update(code=code,
                        severity='error' if status == 'failed' else 'unverified',
                        message=reason or group.value.get('rule', group.id))
             for key in ('error_code', 'error_domain'):
@@ -1455,6 +1585,10 @@ def check_fact_constraints(groups, values, *, target, plc_model, language=None, 
                 return outcome(group, 'passed' if okay else 'failed', '' if okay else value['rule'])
             if group.dimension == 'constraints.numeric_ranges':
                 return outcome(group, *_numeric_range_check(value, values))
+            evaluated = _evaluate_power_or_expt_constraint(
+                group, values, context, by_id=by_id, phase=phase, target=target, visit=visit)
+            if evaluated is not None:
+                return outcome(group, *evaluated)
             return outcome(group, 'unverified', 'constraint_not_formalized')
         finally:
             visiting.remove(identity)

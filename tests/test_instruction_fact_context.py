@@ -1568,8 +1568,7 @@ def test_resolved_generic_io_does_not_open_instruction_retrieval(with_role, monk
     context = _build_knowledge_context(query, plc_model="FX3U", confirmed_context=spec)
     assert context.manifest["records"] == []
     assert context.manifest["capability_discovery"]["candidates"] == []
-    from plc.maintainability import SELECTION_POLICY
-    assert str(context).strip() == SELECTION_POLICY.strip()
+    assert not str(context).strip()
 
 
 @pytest.mark.parametrize("question", ["MOV K1 D0", "查询 X0 的输入响应时间", "查证 FX3U-4AD 缓冲存储器"])

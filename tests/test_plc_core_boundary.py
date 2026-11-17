@@ -183,6 +183,66 @@ def test_unadmitted_function_still_checks_reviewed_named_or_positional_constrain
     assert any(row['code'] == 'ST_NUMERIC_DOMAIN' for row in result['findings'])
     assert result['calls'][0]['call_available'] is False
 
+
+def test_power_static_operand_type_checks_still_fail_with_unknown_runtime_values():
+    from plc.instruction_constraints import check_language_constraints
+    ql_bad = check_language_constraints('ST.OPERATOR.POWER', {'LEFT': None, 'RIGHT': None},
+        plc_model='Q03UDV', context={'operand_types': {'IN1': 'INT', 'IN2': 'REAL'}})
+    assert ql_bad['status'] == 'failed'
+    assert any(f['code'] == 'PLC_CONSTRAINT' and f['message'] == 'error_rule_operand_type_unsupported'
+               for f in ql_bad['findings'])
+    fx_bad = check_language_constraints('ST.OPERATOR.POWER', {'LEFT': None, 'RIGHT': None},
+        plc_model='FX3U', context={'operand_types': {'IN1': 'LREAL', 'IN2': 'REAL'}})
+    assert fx_bad['status'] == 'failed'
+    assert any(f['code'] == 'PLC_CONSTRAINT' and f['message'] == 'power_base_type_mismatch'
+               for f in fx_bad['findings'])
+    ql_ok = check_language_constraints('ST.OPERATOR.POWER', {'LEFT': None, 'RIGHT': None},
+        plc_model='Q03UDV', context={'operand_types': {'IN1': 'REAL', 'IN2': 'REAL'}, 'numeric_precision': 32})
+    assert ql_ok['status'] == 'unverified'
+    assert all(f['code'] != 'PLC_CONSTRAINT' for f in ql_ok['findings'])
+
+
+def test_st_signature_statement_kind_and_dict_return_mapping(monkeypatch):
+    from types import SimpleNamespace
+    import plc.st_semantics as st_semantics
+    from plc.st_frontend import parse_body
+    assert st_semantics.type_family(st_semantics.scalar_type(
+        {'name': 'Out', 'role': 'function_result', 'type': {'bits': 32, 'kind': 'real'}})) == 'real'
+    assert st_semantics.type_family(st_semantics.scalar_type(
+        {'role': 'not_assigned_in_documented_statement'})) == 'unknown'
+
+    signatures = {
+        'DUMMY_STMT': {'call_kind': 'statement', 'enable': True,
+                       'parameters': [{'name': 'EN', 'type': 'BOOL'}, {'name': 's', 'type': 'WORD'}],
+                       'returns': {'role': 'not_assigned_in_documented_statement'}},
+        'DUMMY_DICT_FN': {'call_kind': 'function', 'enable': False,
+                          'parameters': [{'name': 's', 'type': 'REAL'}],
+                          'returns': {'name': 'Out', 'role': 'function_result',
+                                      'type': {'bits': 32, 'kind': 'real'}}},
+    }
+
+    class _Registry:
+        def definition_entry(self, op, cpu=None):
+            sig = signatures.get(op)
+            return ({'opcode': op, 'facts': [{'id': 'f1', 'dimension': 'parameters.st_signature',
+                                              'status': 'source_verified', 'value': sig}]}
+                    if sig else None)
+        def resolve_st_call(self, name, cpu=None): return None
+        def resolve_fact_form(self, name, cpu=None): return SimpleNamespace(opcode=name) if name in signatures else None
+        def describe_call(self, op, cpu=None): return {}
+        def language_feature(self, *a, **kw): return None
+
+    monkeypatch.setattr(st_semantics, 'DEFAULT_INSTRUCTION_REGISTRY', _Registry())
+    stmt_unit = parse_body('DUMMY_STMT(TRUE, D0);')
+    stmt_inspector = st_semantics.Inspector('FX3U', symbols=st_semantics.Symbols(stmt_unit))
+    assert stmt_inspector.call(stmt_unit.body[0][1], statement_context=True) == 'void'
+    assert any(c['name'] == 'DUMMY_STMT' and c['source'] == 'source_signature' and not c['call_available']
+               for c in stmt_inspector.calls)
+    fn_unit = parse_body('VAR x:REAL; y:REAL; END_VAR y := DUMMY_DICT_FN(x);')
+    fn_inspector = st_semantics.Inspector('FX3U', symbols=st_semantics.Symbols(fn_unit))
+    assert fn_inspector.call(fn_unit.body[0][2]) == 'real'
+
+
 from model_runtime.provider import ToolCall
 from agent_runtime.plc_tools import build_default_tool_registry, build_tool_context
 from plc.core import PLCCore, accept_candidate_patch

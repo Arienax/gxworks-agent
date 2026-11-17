@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 from plc.instruction_definition import InstructionFactGroup
+from plc.target_identity import target_members
 
 
 # Literal arithmetic spellings are ordinary vendor instruction names.
@@ -560,13 +561,23 @@ def reviewed_native_fact_groups(spec, opcode, operands, plc_model, *, dimensions
         return []
     from plc.instruction_definition import DefinitionError, UnknownInstructionSemantics, select_fact_dependencies
     from plc.instruction_constraints import _condition, literal_operand_values
-    values = literal_operand_values(spec, operands, plc_model=plc_model, opcode=opcode)
-    context = {'$PLC_MODEL': plc_model, '$LANGUAGE': 'ladder',
-               'project_mode': 'native_ladder_instruction', 'program_context': 'ladder'}
-    if 'operand_order' in spec.verified_fields and len(spec.native_operand_order) == len(operands):
-        context['$OPERAND_ROLES'] = spec.native_operand_order
+    from plc.target_identity import target_identity_state
 
-    def possible(group):
+    members, reason = target_identity_state(plc_model)
+    member_models = members if members and reason is None and len(members) > 1 else (plc_model,)
+    has_roles = 'operand_order' in spec.verified_fields and len(spec.native_operand_order) == len(operands)
+    member_contexts = []
+    for member in member_models:
+        if len(member_models) > 1 and not spec.supports_cpu(member):
+            continue
+        values_m = literal_operand_values(spec, operands, plc_model=member, opcode=opcode)
+        context_m = {'$PLC_MODEL': member, '$LANGUAGE': 'ladder',
+                     'project_mode': 'native_ladder_instruction', 'program_context': 'ladder'}
+        if has_roles:
+            context_m['$OPERAND_ROLES'] = spec.native_operand_order
+        member_contexts.append((member, values_m, context_m))
+
+    def possible(group, values, context):
         if (group['status'] != 'source_verified' or group['verification'] != 'source_checked'
                 or any(source.get('conditions') or source.get('applicability') for source in group['sources'])):
             return False
@@ -585,15 +596,18 @@ def reviewed_native_fact_groups(spec, opcode, operands, plc_model, *, dimensions
     for group in spec.definition_facts:
         if dimensions is not None and group.dimension not in dimensions:
             continue
-        if any(group.scope.get(key) and value not in group.scope[key]
-               for key, value in (('forms', opcode), ('models', plc_model), ('languages', 'ladder'))):
-            continue
-        closure = select_fact_dependencies(spec.definition_facts, [group.id], opcode=opcode,
-            model=plc_model, language='ladder', allow_unknown_scope=True)
-        if (any(gap['reason'] != 'scope_context_missing' for gap in closure['gaps'])
-                or not closure['groups'] or not all(possible(item) for item in closure['groups'])):
-            continue
-        selected.append(group)
+        for member, values_m, context_m in member_contexts:
+            if any(group.scope.get(key) and value not in group.scope[key]
+                   for key, value in (('forms', opcode), ('models', member), ('languages', 'ladder'))):
+                continue
+            closure = select_fact_dependencies(spec.definition_facts, [group.id], opcode=opcode,
+                model=member, language='ladder', allow_unknown_scope=True)
+            if (any(gap['reason'] != 'scope_context_missing' for gap in closure['gaps'])
+                    or not closure['groups']
+                    or not all(possible(item, values_m, context_m) for item in closure['groups'])):
+                continue
+            selected.append(group)
+            break
     return selected
 
 
@@ -1000,17 +1014,36 @@ class InstructionRegistry:
     def _with_definition_facts(self, spec, opcode, cpu, vendor):
         key = (vendor, opcode, str(cpu or "").strip().upper())
         owner = self._definition_owners.get(key)
-        if owner is None or not spec.supports_cpu(cpu):
+        members = target_members(key[2]) if owner is None else ()
+        is_merged = owner is None and len(members) > 1
+        if (owner is None and not is_merged) or not spec.supports_cpu(cpu):
             return spec
-        if not self.fact_bundle_current():
-            raise ValueError("Fact definitions changed; reload the checking context")
         if key in self._loaded_definition_contracts:
             return spec
-        entry = owner.materialize() if isinstance(owner, _DefinitionOwnerView) else owner
-        facts = tuple(InstructionFactGroup.from_mapping(f) for f in entry.get("facts", []))
-        if any(f.scope.get("models") != [entry['target_model']]
-               or f.scope.get("forms") != [entry['opcode']] for f in facts):
-            raise ValueError("Compiled facts must have exact CPU/form scopes")
+        if is_merged:
+            entry = self.definition_entry(opcode, cpu=key[2], vendor=vendor)
+            if entry is None:
+                return spec
+            if not self.fact_bundle_current():
+                raise ValueError("Fact definitions changed; reload the checking context")
+            member_set = set(members)
+            facts = tuple(
+                InstructionFactGroup.from_mapping(f)
+                for f in entry.get("facts", [])
+                if (set((f.get("scope") or {}).get("models") or ()) & member_set)
+                and f.get("status") != "conflict"
+            )
+            if any(not set(f.scope.get("models") or ()).issubset(member_set)
+                   or f.scope.get("forms") != [entry['opcode']] for f in facts):
+                raise ValueError("Compiled facts must have exact CPU/form scopes")
+        else:
+            if not self.fact_bundle_current():
+                raise ValueError("Fact definitions changed; reload the checking context")
+            entry = owner.materialize() if isinstance(owner, _DefinitionOwnerView) else owner
+            facts = tuple(InstructionFactGroup.from_mapping(f) for f in entry.get("facts", []))
+            if any(f.scope.get("models") != [entry['target_model']]
+                   or f.scope.get("forms") != [entry['opcode']] for f in facts):
+                raise ValueError("Compiled facts must have exact CPU/form scopes")
         attached = replace(spec, definition_facts=facts,
                            source_materials=tuple(copy.deepcopy(entry.get("source_materials", []))),
                            uninterpreted_content=tuple(copy.deepcopy(entry.get("uninterpreted_content", []))))
@@ -1341,14 +1374,19 @@ class InstructionRegistry:
         result = copy.deepcopy(feature)
         if cpu is not None:
             model = str(cpu).strip().upper()
+            members = target_members(model) or (model,)
             upper = set(feature.get('models', [])) if 'models' in feature else {
                 item for fact in feature.get('facts', []) for item in fact.get('scope', {}).get('models', [])}
-            if model not in upper:
+            if model in upper:
+                match_models = {model}
+            elif all(member in upper for member in members):
+                match_models = set(members)
+            else:
                 return None
             result['facts'] = [fact for fact in result.get('facts', [])
-                               if model in fact.get('scope', {}).get('models', [])]
+                               if match_models.intersection(fact.get('scope', {}).get('models', []))]
             if 'references' in result:
-                result['references'] = [ref for ref in result['references'] if model in ref.get('models', [])]
+                result['references'] = [ref for ref in result['references'] if match_models.intersection(ref.get('models', []))]
         return result
 
     def resolve_fact_form(self, mnemonic, *, cpu=None):
@@ -1367,9 +1405,15 @@ class InstructionRegistry:
                 models_by_opcode.setdefault(opcode, set()).add(model)
             indexed = self._fact_owner_index = (owners, models_by_opcode)
         models = indexed[1].get(token, ())
-        if models and (cpu is None or str(cpu).upper() in models):
-            from types import SimpleNamespace
-            return SimpleNamespace(opcode=token, base_mnemonic=token)
+        if models:
+            if cpu is None:
+                from types import SimpleNamespace
+                return SimpleNamespace(opcode=token, base_mnemonic=token)
+            cpu_u = str(cpu).strip().upper()
+            members = target_members(cpu_u) or (cpu_u,)
+            if cpu_u in models or all(member in models for member in members):
+                from types import SimpleNamespace
+                return SimpleNamespace(opcode=token, base_mnemonic=token)
         return None
 
     def instruction_knowledge(self, mnemonic, *, cpu, language=None, facts=None, context=None):
@@ -1377,11 +1421,260 @@ class InstructionRegistry:
         from plc.instruction_knowledge import compose_instruction_knowledge
         return compose_instruction_knowledge(self, mnemonic, cpu=cpu, language=language, facts=facts, context=context)
 
+    @staticmethod
+    def _merge_member_headers(headers: Sequence[Mapping[str, Any]], *, cpu: str) -> Dict[str, Any]:
+        """Intersect owner admission headers across concrete members of a merged target."""
+        base = copy.deepcopy(dict(headers[0]))
+        base['target_model'] = str(cpu).strip().upper()
+        comparable = [{k: v for k, v in h.items() if k != 'target_model'} for h in headers]
+        if all(item == comparable[0] for item in comparable[1:]):
+            return base
+        call_values = [h.get('call_available') for h in headers]
+        base['call_available'] = all(v is True for v in call_values) if any(v is True for v in call_values) else (
+            False if any(v is False for v in call_values) else None)
+        reg_values = [h.get('registry_member') for h in headers]
+        base['registry_member'] = all(v is True for v in reg_values)
+        if any(v != call_values[0] for v in call_values[1:]):
+            base['support_status'] = 'partial_member_mismatch'
+            base['call_admission_reason'] = 'member_support_mismatch'
+        details_list = [h.get('call_admission_details') or {} for h in headers]
+        merged_details = copy.deepcopy(dict(details_list[0]))
+        if details_list:
+            if any('interfaces' in d for d in details_list):
+                eff_interfaces = [
+                    list(d['interfaces'] or []) if 'interfaces' in d
+                    else (['ladder'] if h.get('call_available') is True else [])
+                    for h, d in zip(headers, details_list)
+                ]
+                merged_details['interfaces'] = [
+                    iface for iface in eff_interfaces[0] if all(iface in other for other in eff_interfaces[1:])
+                ]
+            else:
+                merged_details.pop('interfaces', None)
+            for kind in ('structured_call', 'structured_expression'):
+                blocks = [d.get(kind) for d in details_list]
+                if any(isinstance(b, Mapping) for b in blocks):
+                    if all(isinstance(b, Mapping) and b.get('available') is True for b in blocks):
+                        agree_keys = ('call_kind', 'operator', 'alternative_operator', 'owner_opcode')
+                        if all({k: b.get(k) for k in agree_keys} == {k: blocks[0].get(k) for k in agree_keys} for b in blocks[1:]):
+                            merged_details[kind] = copy.deepcopy(dict(blocks[0]))
+                        else:
+                            merged_details[kind] = {'available': False, 'reason': 'member_contract_mismatch'}
+                    else:
+                        merged_details[kind] = {'available': False, 'reason': 'member_contract_mismatch'}
+        base['call_admission_details'] = merged_details
+        return base
+
+    def _merge_member_entries(self, entries: Sequence[Mapping[str, Any]], *, cpu: str) -> Dict[str, Any]:
+        """Merge concrete member definition entries conservatively into a menu-level entry."""
+        merged = self._merge_member_headers(entries, cpu=cpu)
+
+        def _norm_sources(sources):
+            return [
+                {k: v for k, v in s.items() if k != 'target_model'} if isinstance(s, Mapping) else s
+                for s in (sources or ())
+            ]
+
+        status_rank = {
+            'conflict': 0,
+            'not_applicable': 1,
+            'unknown': 2,
+            'declared_unverified': 3,
+            'candidate_evidence': 4,
+            'source_verified': 5,
+        }
+
+        def _try_merge_into(prev: Dict[str, Any], fact: Mapping[str, Any]) -> bool:
+            prev_models = list((prev.get('scope') or {}).get('models') or [])
+            curr_models = list((fact.get('scope') or {}).get('models') or [])
+            prev_cmp = {k: v for k, v in prev.items() if k not in {'scope', 'sources'}}
+            curr_cmp = {k: v for k, v in fact.items() if k not in {'scope', 'sources'}}
+            prev_src_cmp = _norm_sources(prev.get('sources'))
+            curr_src_cmp = _norm_sources(fact.get('sources'))
+            prev_scope_other = {k: v for k, v in (prev.get('scope') or {}).items() if k != 'models'}
+            curr_scope_other = {k: v for k, v in (fact.get('scope') or {}).items() if k != 'models'}
+            merged_sources = list(prev.get('sources') or ())
+            for src in fact.get('sources') or ():
+                if src not in merged_sources:
+                    merged_sources.append(copy.deepcopy(src))
+            if prev_cmp == curr_cmp and prev_src_cmp == curr_src_cmp and prev_scope_other == curr_scope_other:
+                prev.setdefault('scope', {})['models'] = list(dict.fromkeys([*prev_models, *curr_models]))
+                prev['sources'] = merged_sources
+                return True
+            if (prev_scope_other == curr_scope_other
+                    and {k: v for k, v in prev_cmp.items() if k not in {'status', 'verification'}}
+                    == {k: v for k, v in curr_cmp.items() if k not in {'status', 'verification'}}):
+                if status_rank.get(fact.get('status'), -1) < status_rank.get(prev.get('status'), -1):
+                    prev['status'] = fact.get('status')
+                if prev.get('status') != 'source_verified' or fact.get('verification') != 'source_checked':
+                    if prev.get('verification') != fact.get('verification'):
+                        prev['verification'] = 'not_performed' if prev.get('status') != 'candidate_evidence' else prev.get('verification')
+                prev.setdefault('scope', {})['models'] = list(dict.fromkeys([*prev_models, *curr_models]))
+                prev['sources'] = merged_sources
+                return True
+            if (prev.get('dimension') == 'identity.applicability'
+                    and fact.get('dimension') == 'identity.applicability'
+                    and prev_scope_other == curr_scope_other
+                    and {k: v for k, v in prev_cmp.items() if k not in {'value', 'status', 'verification'}}
+                    == {k: v for k, v in curr_cmp.items() if k not in {'value', 'status', 'verification'}}
+                    and {k: v for k, v in (prev_cmp.get('value') or {}).items() if k != 'declared_models'}
+                    == {k: v for k, v in (curr_cmp.get('value') or {}).items() if k != 'declared_models'}):
+                dm = list(dict.fromkeys([
+                    *((prev.get('value') or {}).get('declared_models') or ()),
+                    *((fact.get('value') or {}).get('declared_models') or ()),
+                ]))
+                prev.setdefault('value', {})['declared_models'] = dm
+                if status_rank.get(fact.get('status'), -1) < status_rank.get(prev.get('status'), -1):
+                    prev['status'] = fact.get('status')
+                    if prev.get('verification') != fact.get('verification'):
+                        prev['verification'] = 'not_performed'
+                prev.setdefault('scope', {})['models'] = list(dict.fromkeys([*prev_models, *curr_models]))
+                prev['sources'] = merged_sources
+                return True
+            if (prev.get('dimension') == 'constraints.cpu_availability'
+                    and fact.get('dimension') == 'constraints.cpu_availability'
+                    and prev_scope_other == curr_scope_other
+                    and {k: v for k, v in prev_cmp.items() if k not in {'value', 'status', 'verification'}}
+                    == {k: v for k, v in curr_cmp.items() if k not in {'value', 'status', 'verification'}}
+                    and {k: v for k, v in (prev_cmp.get('value') or {}).items() if k != 'model_states'}
+                    == {k: v for k, v in (curr_cmp.get('value') or {}).items() if k != 'model_states'}):
+                merged_states = dict((prev.get('value') or {}).get('model_states') or {})
+                merged_states.update((fact.get('value') or {}).get('model_states') or {})
+                prev.setdefault('value', {})['model_states'] = merged_states
+                if status_rank.get(fact.get('status'), -1) < status_rank.get(prev.get('status'), -1):
+                    prev['status'] = fact.get('status')
+                    if prev.get('verification') != fact.get('verification'):
+                        prev['verification'] = 'not_performed'
+                prev.setdefault('scope', {})['models'] = list(dict.fromkeys([*prev_models, *curr_models]))
+                prev['sources'] = merged_sources
+                return True
+            return False
+
+        def _is_member_scoped_divergence(prev: Mapping[str, Any], fact: Mapping[str, Any]) -> bool:
+            prev_scope_other = {k: v for k, v in (prev.get('scope') or {}).items() if k != 'models'}
+            curr_scope_other = {k: v for k, v in (fact.get('scope') or {}).items() if k != 'models'}
+            return prev_scope_other == curr_scope_other and (
+                prev.get('conditions') != fact.get('conditions')
+                or prev.get('dimension') in {'constraints.source_cpu_header', 'constraints.cpu_availability'}
+            )
+
+        buckets_by_id: Dict[str, list[Dict[str, Any]]] = {}
+        fact_order: list[str] = []
+        for entry in entries:
+            entry_model = str(entry.get('target_model') or '').strip().upper()
+            for raw in entry.get('facts', []):
+                fact = copy.deepcopy(raw)
+                fid = fact['id']
+                member_key = entry_model or '+'.join((fact.get('scope') or {}).get('models') or ())
+                item = (member_key, copy.deepcopy(raw))
+                if fid not in buckets_by_id:
+                    fact_order.append(fid)
+                    buckets_by_id[fid] = [{'fact': fact, 'items': [item]}]
+                    continue
+                buckets = buckets_by_id[fid]
+                for bucket in buckets:
+                    if _try_merge_into(bucket['fact'], fact):
+                        bucket['items'].append(item)
+                        break
+                else:
+                    if all(_is_member_scoped_divergence(bucket['fact'], fact) for bucket in buckets):
+                        buckets.append({'fact': fact, 'items': [item]})
+                    else:
+                        merged['call_available'] = False
+                        merged['support_status'] = 'partial_member_mismatch'
+                        merged['call_admission_reason'] = 'member_fact_conflict'
+                        buckets[0]['fact']['status'] = 'conflict'
+                        buckets[0]['items'].append(item)
+
+        def _bucket_id_map() -> tuple[Dict[str, Dict[str, str]], Dict[tuple[str, int], str]]:
+            member_map: Dict[str, Dict[str, str]] = {}
+            bucket_ids: Dict[tuple[str, int], str] = {}
+            used_ids: set[str] = set()
+            for fid in fact_order:
+                buckets = buckets_by_id[fid]
+                split = len(buckets) > 1
+                for idx, bucket in enumerate(buckets):
+                    if not split:
+                        bid = fid
+                    else:
+                        models = [str(m) for m in ((bucket['fact'].get('scope') or {}).get('models') or ()) if m]
+                        if not models:
+                            models = [str(m) for m, _ in bucket['items'] if m]
+                        suffix = '+'.join(dict.fromkeys(models)) or str(idx + 1)
+                        bid = f"{fid}::member:{suffix}"
+                        while bid in used_ids:
+                            bid = f"{bid}#{idx + 1}"
+                    used_ids.add(bid)
+                    bucket_ids[(fid, idx)] = bid
+                    for member_key, _ in bucket['items']:
+                        member_map.setdefault(member_key, {})[fid] = bid
+            return member_map, bucket_ids
+
+        while True:
+            member_map, bucket_ids = _bucket_id_map()
+            changed = False
+            for fid in fact_order:
+                buckets = buckets_by_id[fid]
+                if len(buckets) != 1 or len(buckets[0]['items']) < 2:
+                    continue
+                bucket = buckets[0]
+                if not any(raw.get('depends_on') for _, raw in bucket['items']):
+                    continue
+                resolved_per_item = [
+                    tuple(member_map.get(member_key, {}).get(dep, dep) for dep in (raw.get('depends_on') or ()))
+                    for member_key, raw in bucket['items']
+                ]
+                if len(set(resolved_per_item)) <= 1:
+                    continue
+                new_buckets: list[Dict[str, Any]] = []
+                for (member_key, raw), resolved_deps in zip(bucket['items'], resolved_per_item):
+                    candidate = copy.deepcopy(raw)
+                    for nb in new_buckets:
+                        if nb['resolved_deps'] == resolved_deps and _try_merge_into(nb['fact'], candidate):
+                            nb['items'].append((member_key, raw))
+                            break
+                    else:
+                        new_buckets.append({'fact': candidate, 'items': [(member_key, raw)], 'resolved_deps': resolved_deps})
+                if len(new_buckets) > 1:
+                    if bucket['fact'].get('status') == 'conflict':
+                        for nb in new_buckets:
+                            nb['fact']['status'] = 'conflict'
+                    buckets_by_id[fid] = new_buckets
+                    changed = True
+            if not changed:
+                break
+
+        final_facts: list[Dict[str, Any]] = []
+        for fid in fact_order:
+            for idx, bucket in enumerate(buckets_by_id[fid]):
+                out = bucket['fact']
+                out['id'] = bucket_ids[(fid, idx)]
+                if 'depends_on' in out and out['depends_on'] is not None:
+                    first_member, first_raw = bucket['items'][0]
+                    raw_deps = first_raw.get('depends_on')
+                    if raw_deps is not None:
+                        out['depends_on'] = [
+                            member_map.get(first_member, {}).get(dep, dep)
+                            for dep in raw_deps
+                        ]
+                final_facts.append(out)
+        merged['facts'] = final_facts
+        return merged
+
     def definition_header(self, opcode, *, cpu, vendor="mitsubishi"):
         """Inspect admission metadata without reading technical owner facts."""
-        key = (str(vendor).lower(), str(opcode).strip().upper(), str(cpu).strip().upper())
+        vendor_l = str(vendor).lower()
+        opcode_u = str(opcode).strip().upper()
+        cpu_u = str(cpu).strip().upper()
+        key = (vendor_l, opcode_u, cpu_u)
         entry = self._definition_owners.get(key)
         if entry is None:
+            members = target_members(cpu_u)
+            if len(members) > 1:
+                headers = [self.definition_header(opcode_u, cpu=member, vendor=vendor_l) for member in members]
+                if any(header is None for header in headers):
+                    return None
+                return self._merge_member_headers(headers, cpu=cpu_u)
             return None
         if not self.fact_bundle_current():
             raise ValueError("Fact definitions changed; reload the checking context")
@@ -1395,22 +1688,44 @@ class InstructionRegistry:
 
     def definition_entry(self, opcode, *, cpu, vendor='mitsubishi'):
         """Inspect an exact compiled owner without admitting it as a call."""
-        entry = self._definition_owners.get((str(vendor).lower(), str(opcode).strip().upper(), str(cpu).strip().upper()))
-        if isinstance(entry, _DefinitionOwnerView):
-            return entry.materialize()
-        return copy.deepcopy(dict(entry)) if entry is not None else None
+        vendor_l, opcode_u, cpu_u = str(vendor).lower(), str(opcode).strip().upper(), str(cpu).strip().upper()
+        entry = self._definition_owners.get((vendor_l, opcode_u, cpu_u))
+        if entry is not None:
+            if isinstance(entry, _DefinitionOwnerView):
+                return entry.materialize()
+            return copy.deepcopy(dict(entry))
+        members = target_members(cpu_u)
+        if len(members) <= 1:
+            return None
+        entries = [self.definition_entry(opcode_u, cpu=member, vendor=vendor_l) for member in members]
+        if any(item is None for item in entries):
+            return None
+        return self._merge_member_entries(entries, cpu=cpu_u)
 
     def expression_entry(self, token, *, cpu, vendor='mitsubishi'):
         """Resolve an exact expression owner, then a unique declared token alias."""
         token, model, vendor = str(token).strip().upper(), str(cpu).strip().upper(), str(vendor).lower()
+        members = target_members(model)
+        if len(members) > 1 and not any(key[0] == vendor and key[2] == model for key in self._definition_owners):
+            entries = [self.expression_entry(token, cpu=member, vendor=vendor) for member in members]
+            if any(item is None for item in entries):
+                return None
+            opcodes = {item.get('opcode') for item in entries}
+            if len(opcodes) != 1:
+                return None
+            return self._merge_member_entries(entries, cpu=model)
 
         def admitted(header):
             details = (header or {}).get('call_admission_details') or {}
             marker = details.get('structured_expression') or {}
+            tokens = {marker.get('operator', header.get('opcode'))} if header else set()
+            alt = marker.get('alternative_operator')
+            if isinstance(alt, str) and alt:
+                tokens.add(alt)
             return (header and header.get('call_available') is True
                 and 'st' in details.get('interfaces', [])
                 and marker.get('available') is True and marker.get('call_kind') == 'expression'
-                and marker.get('operator', header.get('opcode')) == token
+                and token in tokens
                 and marker.get('owner_opcode', header.get('opcode')) == header.get('opcode'))
 
         direct = self.definition_header(token, cpu=model, vendor=vendor)
@@ -1818,7 +2133,50 @@ class InstructionRegistry:
                     contract_sources=tuple(deduped_sources),
                 )
 
+    def _needs_merged_member_lookup(self, cpu: Any, *, vendor: str = 'mitsubishi') -> bool:
+        cpu_u = str(cpu).strip().upper()
+        if len(target_members(cpu_u)) <= 1:
+            return False
+        vendor_l = str(vendor).lower()
+        return not any(key[0] == vendor_l and key[2] == cpu_u for key in self._definition_owners)
+
+    @staticmethod
+    def _describe_merged_contract(cpu: str, describe_member) -> Dict[str, Any]:
+        """Resolve a reviewed contract only when every concrete member agrees."""
+        members = target_members(cpu)
+        if len(members) <= 1:
+            return {}
+        results = [describe_member(member) for member in members]
+        if any(not item for item in results):
+            return {}
+        def _comparable(item: Mapping[str, Any]) -> Dict[str, Any]:
+            norm = {k: copy.deepcopy(v) for k, v in item.items() if k not in {'cpu', 'model', 'target_model'}}
+            if isinstance(norm.get('contract_sources'), list):
+                norm['contract_sources'] = [
+                    {k: v for k, v in src.items() if k != 'target_model'} if isinstance(src, Mapping) else src
+                    for src in norm['contract_sources']
+                ]
+            return norm
+        normalized = [_comparable(item) for item in results]
+        if not all(item == normalized[0] for item in normalized[1:]):
+            return {}
+        merged = copy.deepcopy(results[0])
+        cpu_upper = str(cpu).strip().upper()
+        for key in ('cpu', 'model', 'target_model'):
+            if key in merged:
+                merged[key] = cpu_upper
+        if isinstance(merged.get('contract_sources'), list):
+            seen_sources: list[Any] = []
+            for item in results:
+                for src in item.get('contract_sources') or ():
+                    if src not in seen_sources:
+                        seen_sources.append(copy.deepcopy(src))
+            merged['contract_sources'] = seen_sources
+        return merged
+
     def _describe_reviewed_st_call(self, mnemonic: Any, *, cpu: str) -> Dict[str, Any]:
+        if self._needs_merged_member_lookup(cpu):
+            return self._describe_merged_contract(cpu, lambda member: self._describe_reviewed_st_call(mnemonic, cpu=member))
         entry = self.definition_entry(mnemonic, cpu=cpu)
         details = (entry or {}).get('call_admission_details') or {}
         marker = details.get('structured_call') or {}
@@ -1876,6 +2234,8 @@ class InstructionRegistry:
         return result
 
     def _describe_reviewed_st_expression(self, operator: Any, *, cpu: str) -> Dict[str, Any]:
+        if self._needs_merged_member_lookup(cpu):
+            return self._describe_merged_contract(cpu, lambda member: self._describe_reviewed_st_expression(operator, cpu=member))
         entry = self.definition_entry(operator, cpu=cpu)
         details = (entry or {}).get('call_admission_details') or {}
         if (details.get('structured_expression') or {}).get('available') is not True:
@@ -1891,8 +2251,10 @@ class InstructionRegistry:
         feature = self.language_feature('ST.OPERATORS', language='st', cpu=cpu)
         if feature is None:
             return {}
+        token = str(operator).strip().upper()
+        expr_operator = token if token == marker.get('alternative_operator') else marker.get('operator', entry['opcode'])
         resolved = resolve_structured_expression_contract(entry.get('facts', []),
-            operator=marker.get('operator', entry['opcode']), model=cpu,
+            operator=expr_operator, model=cpu,
             owner_opcode=entry['opcode'],
             language_feature=feature)
         if not resolved.accepted:
@@ -1934,6 +2296,8 @@ class InstructionRegistry:
                 'expression_contract': expression}
 
     def _describe_reviewed_fbd_call(self, mnemonic: Any, *, cpu: str) -> Dict[str, Any]:
+        if self._needs_merged_member_lookup(cpu):
+            return self._describe_merged_contract(cpu, lambda member: self._describe_reviewed_fbd_call(mnemonic, cpu=member))
         entry = self.definition_entry(mnemonic, cpu=cpu)
         details = (entry or {}).get('call_admission_details') or {}
         marker = details.get('fbd_call') or {}

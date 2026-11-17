@@ -777,3 +777,51 @@ def test_fx_k_source_condition_is_bound_to_its_fact_and_checked_in_project(monke
     applicable = inspect_st_program(
         source, plc_model=FX_MODEL, project_context={"software_version": "1.10"})
     assert applicable["valid"], applicable["findings"]
+
+
+@pytest.mark.parametrize("plc_model", ["FX3U", "FX3U/FX3UC", "Q03UDV"])
+def test_or_enforces_source_variadic_limit_on_fx_and_ql_models(plc_model):
+    from plc.st_validation import inspect_st_program
+
+    decls = " ".join(f"b{index} : BOOL;" for index in range(1, 30))
+    ok_expr = " OR ".join(f"b{index}" for index in range(1, 29))
+    bad_expr = " OR ".join(f"b{index}" for index in range(1, 30))
+
+    passed = inspect_st_program(
+        f"VAR {decls} out : BOOL; END_VAR out := {ok_expr};", plc_model=plc_model)
+    assert passed["valid"], passed["findings"]
+
+    failed = inspect_st_program(
+        f"VAR {decls} out : BOOL; END_VAR out := {bad_expr};", plc_model=plc_model)
+    assert failed["status"] == "failed"
+    assert any(
+        finding["code"] == "ST_EXPRESSION_ARITY" and "29 operands" in finding["message"]
+        for finding in failed["findings"]
+    )
+
+
+def test_fx5u_or_retains_unbounded_shared_st_grammar():
+    from plc.st_validation import inspect_st_program
+
+    decls = " ".join(f"b{index} : BOOL;" for index in range(1, 30))
+    expr = " OR ".join(f"b{index}" for index in range(1, 30))
+    result = inspect_st_program(
+        f"VAR {decls} out : BOOL; END_VAR out := {expr};", plc_model="FX5U")
+    assert result["valid"], result["findings"]
+
+
+def test_shared_or_grammar_does_not_require_fx_operator_admission(monkeypatch):
+    import plc.st_frontend as st_frontend
+    import plc.st_semantics as st_semantics
+    from plc.st_validation import inspect_st_program
+
+    entry, feature = _fx_entry_for_expression("AND")
+    entry.update(opcode="OR", call_available=False, facts=[], call_admission_details={})
+    feature["facts"][0]["value"]["types"]["logical"]["operators"] = ["AND", "OR", "XOR", "NOT"]
+    monkeypatch.setattr(st_frontend, "operator_binding",
+                        lambda: copy.deepcopy(feature["facts"][0]["value"]))
+    monkeypatch.setattr(st_semantics, "DEFAULT_INSTRUCTION_REGISTRY",
+                        _ExpressionRegistry(entry, feature))
+    result = inspect_st_program(
+        "VAR a : BOOL; b : BOOL; out : BOOL; END_VAR out := a OR b;", plc_model=FX_MODEL)
+    assert result["valid"], result["findings"]

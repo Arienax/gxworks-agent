@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## 0.4.2 — 2026-11-17
+
+- Preserve programming facts while suppressing source-review and unverified annotations in model context and tool results.
+- Keep CPU-version checks opt-in, retain member-specific instruction constraints, and preserve selected implementation contracts.
+- Correct timer delivery and saved-version progression across generation sessions.
+
 - **License**: Switched project-owned source code from Apache-2.0 to **GNU AGPL-3.0** (`LICENSE`, `LICENSE-SCOPE.md`, `NOTICE`) for new releases while keeping third-party MIT components under their original licenses.
 - **Web & Runtime**: Integrated **DeepSeek Harness (`dsh-runtime`)** for Web Ladder Design/Direct/revision sessions (`scripts/stage_dsh_runtime.py`), and added multi-workspace switching in the Web workbench.
 - **RAG & Core**: Introduced `owner-field-row-v3` fact-graph pooling (`fact_field_codec`, `OwnerDefinitionStore`), SHA-256 text pooling with BM25 conservation (`exact_search_storage`), domain-local RRF retrieval, and index-modified `W`/`R` operand and `B` coil support (#22).

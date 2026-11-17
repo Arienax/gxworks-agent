@@ -120,6 +120,7 @@ class ScanMachine:
         self._signatures = static_cache.setdefault('signatures', {})
         self.applications = applications if applications is not None else {}
         self.timer_starts = copy.deepcopy(timer_started_at_ms or {})
+        self.timer_held_ms = {}
         self.timestamp_ms = None
         from simulator.st_execution import ExecutionBudget
         self.execution_budget = execution_budget or ExecutionBudget()
@@ -450,25 +451,44 @@ class ScanMachine:
                         if not fact:
                             raise UnknownInstructionSemantics('timer_fact_unavailable')
                         if accumulator is False:
-                            self.timer_starts.pop(args[0], None)
-                            self.write(args[0], 0, location)
-                            self.memory[args[0]+'.contact'] = False
+                            started = self.timer_starts.pop(args[0], None)
+                            if fact['reset_on_disable']:
+                                self.timer_held_ms.pop(args[0], None)
+                                self.write(args[0], 0, location)
+                                self.memory[args[0]+'.contact'] = False
+                            elif started is not None:
+                                if timestamp is None:
+                                    raise UnknownInstructionSemantics('explicit_timer_elapsed_time_missing')
+                                elapsed = self.timer_held_ms.get(args[0], 0) + timestamp - started
+                                self.timer_held_ms[args[0]] = elapsed
+                                preset = _leaf(args[1], self.memory, signed=False, plc_model=self.model)
+                                count = int(elapsed // fact['unit_ms'])
+                                self.write(args[0], min(count, preset), location)
+                                self.memory[args[0]+'.contact'] = count >= preset
                         elif accumulator is True:
                             elapsed = frame.get('timer_elapsed_ms', {}).get(args[0])
                             if elapsed is None and timestamp is not None:
                                 if args[0] not in self.timer_starts:
-                                    if prior is False or self.memory.get(args[0]) == 0 and self.memory.get(args[0]+'.contact') is False:
+                                    if (prior is False and fact['reset_on_disable']
+                                            or args[0] in self.timer_held_ms
+                                            or self.memory.get(args[0]) == 0 and self.memory.get(args[0]+'.contact') is False):
                                         self.timer_starts[args[0]] = timestamp
                                     else:
                                         raise UnknownInstructionSemantics('initial_timer_clock_state_unknown')
-                                elapsed = timestamp-self.timer_starts[args[0]]
+                                elapsed = self.timer_held_ms.get(args[0], 0) + timestamp-self.timer_starts[args[0]]
                             if type(elapsed) not in {int, float} or elapsed < 0:
                                 raise UnknownInstructionSemantics('explicit_timer_elapsed_time_missing')
+                            if args[0] in frame.get('timer_elapsed_ms', {}) and not fact['reset_on_disable']:
+                                self.timer_held_ms[args[0]] = elapsed
+                                if timestamp is not None:
+                                    self.timer_starts[args[0]] = timestamp
                             preset = _leaf(args[1], self.memory, signed=False, plc_model=self.model)
                             count = int(elapsed // fact['unit_ms'])
                             self.write(args[0], min(count, preset), location)
                             self.memory[args[0]+'.contact'] = count >= preset
                         else:
+                            self.timer_starts.pop(args[0], None)
+                            self.timer_held_ms.pop(args[0], None)
                             self.write(args[0], None, location)
                             self.memory[args[0]+'.contact'] = None
                         continue
@@ -513,6 +533,7 @@ class ScanMachine:
                         if op == 'RST' and args[0].startswith(('T', 'C')):
                             self.memory[args[0]+'.contact'] = False
                             self.timer_starts.pop(args[0], None)
+                            self.timer_held_ms.pop(args[0], None)
                             if args[0].startswith('T') and timer_drives.get(args[0]) is True and timestamp is not None:
                                 # RST clears an already executing timer now. Its
                                 # next continuously enabled OUT must not add a
@@ -530,6 +551,7 @@ class ScanMachine:
                             if address.startswith(('T', 'C')):
                                 self.memory[address+'.contact'] = False
                                 self.timer_starts.pop(address,None)
+                                self.timer_held_ms.pop(address,None)
                                 if address.startswith('T') and timer_drives.get(address) is True and timestamp is not None:
                                     self.timer_starts[address] = timestamp
                         continue

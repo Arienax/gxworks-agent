@@ -8,6 +8,7 @@ from dataclasses import replace
 from copy import copy
 import re
 from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
+from plc.target_identity import target_members
 from plc.validation import (DEVICE_ADDRESS_RE, PLCJsonValidationError, is_bit_device,
     SUPPORTED_PLC_MODELS, parse_device_address, device_address_status, _validate_device_address,
     _validate_instruction_boundaries, _validate_source_operand_types, _validate_writable_device)
@@ -20,7 +21,32 @@ _STRUCTURED_EXPRESSION_OPERATORS = frozenset({'&', '**', '<', '<=', '<>', '=', '
                                               'MOD', 'XOR', 'NOT'})
 
 
+def _iec_type_name(value_type):
+    if value_type is None:
+        return None
+    if value_type.kind == 'bool':
+        return 'BOOL'
+    if value_type.kind == 'real':
+        return 'LREAL' if value_type.bits == 64 else 'REAL'
+    if value_type.kind == 'int':
+        if value_type.unit == 'ms':
+            return 'TIME'
+        names = ({8: 'SINT', 16: 'INT', 32: 'DINT', 64: 'LINT'} if value_type.signed
+                 else {8: 'USINT', 16: 'UINT', 32: 'UDINT', 64: 'ULINT'})
+        return names.get(value_type.bits)
+    return None
+
+
 def scalar_type(data_type):
+    if isinstance(data_type, Mapping):
+        if 'type' in data_type:
+            return scalar_type(data_type['type'])
+        try:
+            return ValueType.from_mapping(data_type)
+        except DefinitionError:
+            return None
+    if not isinstance(data_type, str):
+        return None
     try:
         return ValueType.from_iec(data_type)
     except DefinitionError:
@@ -588,15 +614,26 @@ class Inspector(_DeviceInspector):
     def native_constraints(self, node, form):
         from plc.instruction_constraints import check_instruction_constraints
         entry = DEFAULT_INSTRUCTION_REGISTRY.definition_entry(form.opcode, cpu=self.model) or {}
-        source_signatures = [f['value'] for f in entry.get('facts', [])
-                             if f['dimension'] == 'parameters.st_signature' and f['status'] == 'source_verified']
+        sig_facts = [f for f in entry.get('facts', [])
+                     if f['dimension'] == 'parameters.st_signature' and f['status'] == 'source_verified']
+        flat_sigs = [f['value'] for f in sig_facts
+                     if isinstance(f.get('value', {}).get('returns'), str)
+                     and all(isinstance(p.get('type'), str) for p in f.get('value', {}).get('parameters', ()))]
+        structured_sigs = [f['value'] for f in sig_facts if f.get('value') not in flat_sigs]
+        if len(flat_sigs) == 1 and all(
+            bool(s.get('enable')) == bool(flat_sigs[0].get('enable'))
+            and [p.get('name') for p in s.get('parameters', ())] == [p.get('name') for p in flat_sigs[0].get('parameters', ())]
+            for s in structured_sigs
+        ):
+            signature = flat_sigs[0]
+        else:
+            signature = sig_facts[0]['value'] if len(sig_facts) == 1 else None
         described = DEFAULT_INSTRUCTION_REGISTRY.describe_call(form.opcode, cpu=self.model)
-        signature = source_signatures[0] if len(source_signatures) == 1 else None
         parameters = signature['parameters'] if signature else described.get('st_parameters')
         if not parameters:
             return None
         formal = Unit(node[1], 'function', declarations=[Declaration(p['name'],
-            'BOOL' if p.get('type') in {'BOOL', 'bit'} else 'REAL' if p.get('type') == 'REAL' else 'INT',
+            'BOOL' if p.get('type') == 'BOOL' or p.get('type') == 'bit' else 'REAL' if p.get('type') == 'REAL' else 'INT',
             'VAR_INPUT') for p in parameters])
         try:
             bound = bind_arguments(formal, node[2])
@@ -732,7 +769,7 @@ class Inspector(_DeviceInspector):
                 f'{operator} source contract requires {contract.operator_form} expression form',
                 offset=offset, severity='error')
             return None
-        if is_prefix:
+        if is_prefix and self._is_fx_k_expression_contract(contract):
             source = getattr(self.symbols.unit, 'source', None)
             if isinstance(source, str):
                 cursor = offset + len(operator)
@@ -790,6 +827,28 @@ class Inspector(_DeviceInspector):
 
     def _check_structured_call_applicability(self, contract, opcode, offset, *, contract_kind='call'):
         """Evaluate every retained contract scope and condition in this project."""
+        members = target_members(self.model)
+        if len(members) > 1:
+            saved_model = self.model
+            start = len(self.findings)
+            seen_findings = set()
+            unique_findings = []
+            outcomes = []
+            try:
+                for member in members:
+                    self.model = member
+                    del self.findings[start:]
+                    outcomes.append(self._check_structured_call_applicability(
+                        contract, opcode, offset, contract_kind=contract_kind))
+                    for item in self.findings[start:]:
+                        key = (item.get('code'), item.get('severity'), item.get('message'), item.get('offset'))
+                        if key not in seen_findings:
+                            seen_findings.add(key)
+                            unique_findings.append(item)
+                self.findings[start:] = unique_findings
+                return all(outcomes)
+            finally:
+                self.model = saved_model
         from plc.instruction_constraints import _condition, _scope, version_condition_bounds
         from plc.instruction_definition import (DefinitionError, InstructionFactGroup,
                                                 UnknownInstructionSemantics)
@@ -924,17 +983,7 @@ class Inspector(_DeviceInspector):
             except (ValueError, STUncovered):
                 return None
             if literal:
-                value_type = literal[1]
-                if value_type.kind == 'bool':
-                    return 'BOOL'
-                if value_type.kind == 'real':
-                    return 'LREAL' if value_type.bits == 64 else 'REAL'
-                if value_type.kind == 'int':
-                    if value_type.unit == 'ms':
-                        return 'TIME'
-                    names = ({8: 'SINT', 16: 'INT', 32: 'DINT', 64: 'LINT'} if value_type.signed
-                             else {8: 'USINT', 16: 'UINT', 32: 'UDINT', 64: 'ULINT'})
-                    return names.get(value_type.bits)
+                return _iec_type_name(literal[1])
             return None
         if kind in {'index', 'member'}:
             declaration = self.reference(node)
@@ -955,15 +1004,8 @@ class Inspector(_DeviceInspector):
             left_exact, right_exact = self._exact_iec_type(node[2]), self._exact_iec_type(node[3])
             if left_exact and left_exact == right_exact and node[1] in {'+', '-', '*', '/', 'MOD'}:
                 return left_exact
-            if exact.kind == 'bool':
-                return 'BOOL'
-            if exact.kind == 'real':
-                return 'LREAL' if exact.bits == 64 else 'REAL'
-            if exact.kind == 'int':
-                if exact.unit == 'ms':
-                    return 'TIME'
-                if exact.signed:
-                    return {8: 'SINT', 16: 'INT', 32: 'DINT', 64: 'LINT'}.get(exact.bits)
+            if exact.kind != 'int' or exact.unit == 'ms' or exact.signed:
+                return _iec_type_name(exact)
         return None
 
     @staticmethod
@@ -1617,11 +1659,11 @@ class Inspector(_DeviceInspector):
             return family
         expression_contract = (self._structured_expression_contract(node)
             if node[1] in _STRUCTURED_EXPRESSION_OPERATORS else None)
-        if node[1] == 'AND':
+        if node[1] in {'AND', 'OR'}:
             # An admitted FX operator adds its own operand bounds to the
-            # shared AND grammar; other models retain their language contract.
+            # shared AND/OR grammar; other models retain their language contract.
             expression_entry = getattr(DEFAULT_INSTRUCTION_REGISTRY, 'expression_entry', None)
-            if callable(expression_entry) and expression_entry('AND', cpu=self.model):
+            if callable(expression_entry) and expression_entry(node[1], cpu=self.model):
                 expression_contract = self._structured_expression_contract(node)
         left, right = self.value_type(node[2]), self.value_type(node[3])
         numeric = {'word', 'dword', 'real', 'time'}
@@ -1644,15 +1686,27 @@ class Inspector(_DeviceInspector):
                 expected = expected_types[min(index, len(expected_types) - 1)]
                 if actual != 'unknown' and actual not in families[expected]:
                     self.finding('ST_TYPE', f'{node[1]} operand {index + 1} requires {expected}', offset=node[-1])
-        if node[1] == '**' and not fx_k_expression:
+        if (node[1] == '**'
+                and DEFAULT_INSTRUCTION_REGISTRY.language_feature('ST.OPERATOR.POWER', language='st', cpu=self.model) is not None):
             from plc.instruction_constraints import check_language_constraints
             values = {'LEFT': self.constant(node[2]), 'RIGHT': self.constant(node[3])}
             from plc.instruction_definition import UnknownInstructionSemantics
+            base_iec, exp_iec = self._exact_iec_type(node[2]), self._exact_iec_type(node[3])
             try:
-                precision = expression_numeric_type(node[2], self.symbols, reference=self.reference).bits
+                base_numeric = expression_numeric_type(node[2], self.symbols, reference=self.reference)
+                precision = base_numeric.bits
+                if base_iec is None:
+                    base_iec = _iec_type_name(base_numeric)
             except UnknownInstructionSemantics:
                 precision = None
-            context = {**self.constraint_context(), 'numeric_precision': precision}
+            if exp_iec is None:
+                try:
+                    exp_iec = _iec_type_name(expression_numeric_type(node[3], self.symbols, reference=self.reference))
+                except UnknownInstructionSemantics:
+                    pass
+            operand_types = {'IN1': base_iec, 'IN2': exp_iec} if base_iec and exp_iec else None
+            context = {**self.constraint_context(), 'numeric_precision': precision,
+                       **({'operand_types': operand_types} if operand_types else {})}
             self.constraints(check_language_constraints('ST.OPERATOR.POWER', values, plc_model=self.model,
                 version=self.symbols.context.get('software_version'), context=context), node[-1])
             result = None
@@ -1663,9 +1717,17 @@ class Inspector(_DeviceInspector):
                         plc_model=self.model, precision=precision, version=self.symbols.context.get('software_version'))
                 except (ValueError, UnknownInstructionSemantics):
                     pass
+            result_context = context
+            if operand_types:
+                try:
+                    res_iec = _iec_type_name(expression_numeric_type(node, self.symbols, reference=self.reference))
+                except UnknownInstructionSemantics:
+                    res_iec = None
+                if res_iec:
+                    result_context = {**context, 'operand_types': {**operand_types, 'RESULT': res_iec}}
             self.constraints(check_language_constraints('ST.OPERATOR.POWER', {**values, 'RESULT': result},
                 plc_model=self.model, version=self.symbols.context.get('software_version'),
-                context=context, phase='result'), node[-1])
+                context=result_context, phase='result'), node[-1])
         if node[1] in {'=', '<>', '<', '>', '<=', '>='}:
             return 'bit'
         if expression_contract:
@@ -1869,7 +1931,12 @@ class Inspector(_DeviceInspector):
             self.calls.append({'name': name, 'opcode': identified.opcode, 'source': 'source_signature', 'call_available': False})
             self.finding('ST_CALL_COVERAGE', name + ' is catalogued but has not been admitted as an executable call',
                          offset=offset, severity='unverified')
-            return type_family(scalar_type(signature['returns']))
+            if signature.get('call_kind') == 'statement':
+                return 'void'
+            returns = signature.get('returns')
+            if isinstance(returns, Mapping) and returns.get('role') == 'not_assigned_in_documented_statement':
+                return 'void'
+            return type_family(scalar_type(returns))
         if not form:
             return super().call(node)
         if not form.spec.st_call:
@@ -1906,6 +1973,17 @@ class Inspector(_DeviceInspector):
 
     def _source_scalar_type_supported(self, data_type):
         """Resolve ST declaration support separately from native label codes."""
+        members = target_members(self.model)
+        if len(members) > 1:
+            saved_model = self.model
+            try:
+                outcomes = []
+                for member in members:
+                    self.model = member
+                    outcomes.append(self._source_scalar_type_supported(data_type))
+                return all(outcomes)
+            finally:
+                self.model = saved_model
         from plc.instruction_constraints import _condition, _scope
         from plc.instruction_definition import (DefinitionError, InstructionFactGroup,
             UnknownInstructionSemantics, select_fact_dependencies)

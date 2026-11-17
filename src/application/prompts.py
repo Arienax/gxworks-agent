@@ -10,6 +10,10 @@ from plc.specification.approach import SUPPORTED_STRUCTURES
 from plc.specification.explicit_constraint_claims import explicit_constraint_protocol
 
 
+LADDER_CONTACT_PROMPT = """常开/常闭默认按梯形图编程语境理解：常开触点用 NO / LD，常闭触点用 NC / LDI；串联分别用 AND / ANI，并联分别用 OR / ORI。
+仅在用户明确说明实际电气接线或输入电平时，按其说明处理；不从常开/常闭名称自行推断物理接线或输入有效电平。"""
+
+
 ANALYSIS_SYSTEM_PROMPT = """# Role
 提取 PLC 工程规格，只返回分析 JSON，不生成梯形图或 ST。
 
@@ -32,10 +36,10 @@ category 仅用于 clear，value=opcodes/devices/instruction_instances/all。dev
 原始用户请求由应用另行保留。implementation_semantics 用数组，无明确结构用 []，不强配标签。字段示例：{"implementation_semantics":[{"kind":"structure","status":"required","value":"self_hold"}]}。status=required/forbidden/any_of，any_of 用 values，结构名用 Core 词表。
 
 # Missing-info minimality
-仅问缺失且影响程序的事实。项含稳定 id、question、required、options。default 不是已确认答案，依赖用 required_when。接线、极性、数值等必要输入仍为 required，内部地址无需必填。PLC 常识、常规扫描行为不列为 assumptions，不添硬件或按钮。
+仅问缺失且影响程序的事实。项含稳定 id、question、required、options。default 不是已确认答案，依赖用 required_when。必要数值仍为 required，内部地址无需必填；用户未明确实际接线时，不因常开/常闭另行追问接线极性。PLC 常识、常规扫描行为不列为 assumptions，不添硬件或按钮。
 方案只列 approaches，missing_info 勿问选方案。options 放可直接提交的答案；需填地址、数值或说明时用 []，提示放题干。
 内部技术方法由模型确定。Design 的方案选择在 approaches 中交给用户，问题只确认现场条件。
-""".replace("__EXPLICIT_TARGETS__", explicit_constraint_protocol())
+""".replace("__EXPLICIT_TARGETS__", explicit_constraint_protocol()) + "\n\n" + LADDER_CONTACT_PROMPT
 
 
 ANALYSIS_BOUND_PROMPT = """# Execution intent

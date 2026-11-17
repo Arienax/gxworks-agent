@@ -9,7 +9,7 @@ from __future__ import annotations
 import copy
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Mapping
 
 from plc.instruction_definition import (
@@ -18,6 +18,7 @@ from plc.instruction_definition import (
     ValueType,
     select_fact_dependencies,
 )
+from plc.target_identity import target_members
 
 
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -1738,6 +1739,79 @@ def _check_other_cpu_applicability(all_groups: list[InstructionFactGroup],
     return list(supplemental.values())
 
 
+def _normalize_call_contract_for_merge(contract: StructuredCallContract) -> dict[str, Any]:
+    data = contract.as_mapping()
+    data.pop("model", None)
+    data["sources"] = [
+        {k: v for k, v in src.items() if k != "target_model"} if isinstance(src, Mapping) else src
+        for src in data.get("sources") or ()
+    ]
+    data["conditions"] = [
+        {**row, "scope": {k: v for k, v in (row.get("scope") or {}).items() if k != "models"}}
+        if isinstance(row, Mapping) else row
+        for row in data.get("conditions") or ()
+    ]
+    data["facts"] = [
+        _strip_model_from_fact(fact) if isinstance(fact, Mapping) else fact
+        for fact in data.get("facts") or ()
+    ]
+    return data
+
+
+def _strip_model_from_fact(fact: Mapping[str, Any]) -> dict[str, Any]:
+    cleaned = {k: copy.deepcopy(v) for k, v in fact.items() if k != "scope"}
+    scope = {k: copy.deepcopy(v) for k, v in (fact.get("scope") or {}).items() if k != "models"}
+    cleaned["scope"] = scope
+    if cleaned.get("dimension") == "constraints.cpu_availability" and isinstance(cleaned.get("value"), Mapping):
+        val = dict(cleaned["value"])
+        states = val.get("model_states")
+        if isinstance(states, Mapping):
+            val["model_states"] = sorted(set(states.values()))
+        cleaned["value"] = val
+    return cleaned
+
+
+def _resolve_merged_call_contract(facts, *, opcode: str, model: str, members: tuple[str, ...],
+                                  version: str | None) -> StructuredCallResolution:
+    results = [resolve_structured_call_contract(facts, opcode=opcode, model=member, version=version)
+               for member in members]
+    if any(res.contract is None for res in results):
+        reasons = tuple(dict.fromkeys(reason for res in results for reason in res.refusal_reasons))
+        return StructuredCallResolution(None, reasons or ("member_contract_mismatch",))
+    normalized = [_normalize_call_contract_for_merge(res.contract) for res in results]
+    if any(item != normalized[0] for item in normalized[1:]):
+        return StructuredCallResolution(None, ("member_contract_mismatch",))
+    merged_sources: list[Mapping[str, Any]] = []
+    for res in results:
+        for src in res.contract.sources:
+            if src not in merged_sources:
+                merged_sources.append(copy.deepcopy(src))
+    facts_by_id: dict[str, dict[str, Any]] = {}
+    fact_order: list[str] = []
+    for res in results:
+        for raw in res.contract.facts:
+            fid = raw["id"]
+            if fid not in facts_by_id:
+                fact_order.append(fid)
+                facts_by_id[fid] = copy.deepcopy(raw)
+                continue
+            prev = facts_by_id[fid]
+            prev_models = list((prev.get("scope") or {}).get("models") or ())
+            curr_models = list((raw.get("scope") or {}).get("models") or ())
+            prev.setdefault("scope", {})["models"] = list(dict.fromkeys([*prev_models, *curr_models]))
+            if prev.get("dimension") == "constraints.cpu_availability":
+                merged_states = dict((prev.get("value") or {}).get("model_states") or ())
+                merged_states.update((raw.get("value") or {}).get("model_states") or ())
+                prev.setdefault("value", {})["model_states"] = merged_states
+    merged_contract = replace(
+        results[0].contract,
+        model=model,
+        facts=tuple(facts_by_id[fid] for fid in fact_order),
+        sources=tuple(merged_sources),
+    )
+    return StructuredCallResolution(merged_contract)
+
+
 def resolve_structured_call_contract(facts, *, opcode: str, model: str,
                                      version: str | None = None) -> StructuredCallResolution:
     """Resolve one exact, reviewed ST signature for static binding.
@@ -1751,6 +1825,13 @@ def resolve_structured_call_contract(facts, *, opcode: str, model: str,
         return StructuredCallResolution(None, ("opcode_and_model_required",))
     opcode = opcode.strip()
     model = model.strip()
+    members = target_members(model)
+    if len(members) > 1 and not any(
+        isinstance(item, Mapping) and model.upper() in ((item.get("scope") or {}).get("models") or ())
+        for item in facts
+    ):
+        return _resolve_merged_call_contract(facts, opcode=opcode, model=model.upper(),
+                                             members=members, version=version)
     try:
         groups = [item if isinstance(item, InstructionFactGroup) else InstructionFactGroup.from_mapping(item)
                   for item in facts]

@@ -28,7 +28,10 @@ def _estimate(value):
 
 
 _KNOWLEDGE_BLOCK_RE = re.compile(
-    r"(?ms)(?:^Reference role:[^\n]*\n)?^\[(?:KNOWLEDGE [^\n]*|PLC KNOWLEDGE)\]\n.*?^\[/(?:KNOWLEDGE|PLC KNOWLEDGE)\]"
+    r"(?ms)(?:^Reference role:[^\r\n]*\r?\n)?"
+    r"^\[(?:(?P<modern>PLC KNOWLEDGE)|KNOWLEDGE [^\r\n]*)\][ \t]*\r?\n"
+    r"(?:(?!^\[(?:KNOWLEDGE [^\r\n]*|PLC KNOWLEDGE)\]).)*?"
+    r"^\[/(?(modern)PLC KNOWLEDGE|KNOWLEDGE)\][ \t]*(?=\r?$)"
 )
 
 
@@ -266,7 +269,8 @@ class ContextCompiler:
         from plc.generation_contract import generation_specification
         public_spec = generation_specification(value.confirmed_spec) or {}
         for key in ('logic_contracts', 'mutex', 'same_scan_expectations',
-                    'terminal_states', 'io_allocation_raw'):
+                    'terminal_states', 'io_allocation_raw', 'check_cpu_version',
+                    'cpu_version', 'firmware', 'project_context'):
             if key in public_spec:
                 persistent[key] = copy.deepcopy(public_spec[key])
         runtime = copy.deepcopy(persistent)

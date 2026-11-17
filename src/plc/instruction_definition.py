@@ -425,7 +425,18 @@ class InstructionFactGroup:
     def applies_to(self, *, opcode, model, language="ladder", version=None):
         scope = self.scope or {}
         for key, value in (("forms", opcode), ("models", model), ("languages", language), ("versions", version)):
-            if scope.get(key) and value not in scope[key]:
+            allowed = scope.get(key)
+            if not allowed:
+                continue
+            if key == "models" and value is not None:
+                if value in allowed:
+                    continue
+                from plc.target_identity import target_members
+                members = target_members(value)
+                if len(members) > 1 and all(member in allowed for member in members):
+                    continue
+                return False
+            elif value not in allowed:
                 return False
         return True
 

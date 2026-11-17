@@ -339,9 +339,6 @@ def compile_semantics(manifest, output_dir, *, source_index=None, source_pdf_roo
     from plc.instruction_owner_store import OwnerDefinitionStore, MANIFEST_NAME
     from plc.instruction_knowledge import compose_programming_facts
     from plc.instructions import DEFAULT_INSTRUCTION_REGISTRY
-    from tools.fact_fx5_signatures import MANUAL_ID, _geometry_operands, enrich_operand_storage
-    from tools.fact_instruction_catalogue import instruction_cpu_catalogue, catalogue_availability_facts
-    from tools.fact_applied_review import reviewed_applied_behavior, enrich_compiled_native_parameters
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -376,7 +373,13 @@ def compile_semantics(manifest, output_dir, *, source_index=None, source_pdf_roo
         if not any(fact['id'].startswith(prefix) for batch in (source_batches or {}).values() for fact in batch) and not any(
                 fact['id'].startswith(prefix) for feature in (language_batches or []) for fact in feature['facts']):
             raise ValueError('Replacement namespace is absent from the source snapshot: ' + prefix)
+    enrich_operand_storage = None
+    catalogue_availability_facts = None
+    enrich_compiled_native_parameters = None
     if source_index is not None:
+        from tools.fact_fx5_signatures import MANUAL_ID, _geometry_operands, enrich_operand_storage
+        from tools.fact_instruction_catalogue import instruction_cpu_catalogue, catalogue_availability_facts
+        from tools.fact_applied_review import reviewed_applied_behavior, enrich_compiled_native_parameters
         connection = sqlite3.connect(Path(source_index).resolve().as_uri() + '?mode=ro&immutable=1', uri=True)
         try:
             for page, words in connection.execute(
@@ -539,14 +542,16 @@ def compile_semantics(manifest, output_dir, *, source_index=None, source_pdf_roo
                 counts['source_extractions_refined'] += len(changed)
                 if changed:
                     entry.setdefault('superseded_facts', []).extend(changed)
-            availability = catalogue_availability_facts(entry['opcode'], entry.get('facts', []),
-                                                        entry['target_model'], catalogue)
-            if availability:
-                by_id = {fact['id']: fact for fact in entry.get('facts', [])}
-                by_id.update((fact['id'], fact) for fact in availability)
-                entry['facts'] = list(by_id.values())
-                counts['cpu_catalogue_bindings'] += 1
-            counts['parameter_storage_fields_added'] += enrich_operand_storage(entry.get('facts', []), entry['opcode'], source_rows)
+            if catalogue and catalogue_availability_facts is not None:
+                availability = catalogue_availability_facts(entry['opcode'], entry.get('facts', []),
+                                                            entry['target_model'], catalogue)
+                if availability:
+                    by_id = {fact['id']: fact for fact in entry.get('facts', [])}
+                    by_id.update((fact['id'], fact) for fact in availability)
+                    entry['facts'] = list(by_id.values())
+                    counts['cpu_catalogue_bindings'] += 1
+            if source_rows and enrich_operand_storage is not None:
+                counts['parameter_storage_fields_added'] += enrich_operand_storage(entry.get('facts', []), entry['opcode'], source_rows)
             before = len(entry.get('facts', []))
             entry['facts'], replaced = compose_programming_facts(DEFAULT_INSTRUCTION_REGISTRY,
                 entry['opcode'], cpu=entry['target_model'], existing=entry.get('facts', []))

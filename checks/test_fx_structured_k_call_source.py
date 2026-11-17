@@ -609,9 +609,16 @@ class FxStructuredKCallSourceTests(unittest.TestCase):
         expected = {
             'MOD': ('15.5', [269], 15),
             'POWER': ('15.6', [270], 2),
+            'AND': ('15.7', [271], 15),
+            'OR': ('15.8', [272], 15),
             'XOR': ('15.9', [273, 274], 15),
             'NOT': ('15.10', [275], 15),
-            'AND': ('15.7', [271], 15),
+            'GT': ('15.11', [276], 15),
+            'GE': ('15.12', [277], 15),
+            'EQ': ('15.13', [278], 15),
+            'LE': ('15.14', [279], 15),
+            'LT': ('15.15', [280], 15),
+            'NE': ('15.16', [281], 15),
         }
         self.assertEqual(review.FX_K_STRUCTURED_EXPRESSION_OPS, frozenset(expected))
         connection = sqlite3.connect(

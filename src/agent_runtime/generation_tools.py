@@ -324,7 +324,7 @@ def _engineering_generation_context(context, arguments):
     from plc.ordered_source import is_ordered_ladder
     if is_ordered_ladder(source) and context.native_snapshot is not None:
         from application.confirmed_generation_context import direct_requirements_view
-        from application.prompts import BEHAVIOR_STATE_PROMPT
+        from application.prompts import BEHAVIOR_STATE_PROMPT, LADDER_CONTACT_PROMPT
         from gxw.offline_project import read_offline_project, read_ordered_program
         from plc.ir import canonical_sha256
         project = read_offline_project(context.native_snapshot)
@@ -383,7 +383,7 @@ def _engineering_generation_context(context, arguments):
                 'source and declaration changes are checked and saved together. Do not create a declaration table. '
                 'Use read_network for additional indexed networks, and read_gxw_source for full tables when needed. '
                 'Use only the requested edits. Compilation and execution remain separate checks.'
-                + '\n\n' + BEHAVIOR_STATE_PROMPT + acceptance_cases_prompt(cases),
+                + '\n\n' + LADDER_CONTACT_PROMPT + '\n\n' + BEHAVIOR_STATE_PROMPT + acceptance_cases_prompt(cases),
             'output_contract': {'tool': 'patch_program', 'input_shape': 'arguments',
                 'base_revision': context.program_ir['revision'],
                 'base_ir_sha256': canonical_sha256(context.program_ir),
@@ -501,6 +501,7 @@ def _engineering_generation_context(context, arguments):
 
 def _compact_edit_context(context, arguments, current_ladder, confirmed_spec, cases):
     """Refresh only the saved source and edit contract, reusing conversation facts."""
+    from application.generation_support import public_generation_value
     from application.compact_protocol import (
         PROTOCOL_VERSION, compact_response_schema, compact_generation_prompt, compact_repair_rungs,
     )
@@ -508,7 +509,7 @@ def _compact_edit_context(context, arguments, current_ladder, confirmed_spec, ca
     from application.generation_context import _current_version_context
     from application.confirmed_generation_context import direct_requirements_view, project_confirmed_specification
     from shared.model_context import technical_value
-    request = str(arguments.get('user_requirement') or '')
+    request = public_generation_value(str(arguments.get('user_requirement') or ''))
     _, selected = _current_version_context(request, current_ladder)
     selected = selected or current_ladder
     compact = compact_repair_rungs(selected['rungs'])
@@ -538,7 +539,7 @@ def _compact_edit_context(context, arguments, current_ladder, confirmed_spec, ca
             'network_index': [{'network_id': row['id'], 'rung_id': row.get('rung_id'),
                                'reads': row.get('reads', []), 'writes': row.get('writes', [])}
                               for row in (context.program_ir or {}).get('networks', [])],
-            'behavior_cases': technical_value(cases),
+            'behavior_cases': public_generation_value(cases),
             'output_schema': compact_response_schema(partial=True)},
         'output_contract': {'tool': 'create_program_candidate', 'argument': 'ladder',
             'protocol': PROTOCOL_VERSION, 'mode': 'partial',

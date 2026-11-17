@@ -568,7 +568,6 @@ def build_fbd_generation_context(request, *, plc_model, confirmed_spec=None, cat
     from application.model_api import bound_provider_profile
     from knowledge.evidence import context_manifest
     from plc.specification.provenance import handoff_snapshot
-    from shared.model_context import technical_context_text
 
     requirement = public_generation_value(str(request or ""))
     specification = public_generation_specification(confirmed_spec)
@@ -577,7 +576,7 @@ def build_fbd_generation_context(request, *, plc_model, confirmed_spec=None, cat
     profile = copy.deepcopy(model_profile) if isinstance(model_profile, dict) else {}
     from knowledge.retriever import build_knowledge_context
     from knowledge.structured_facts import generation_aspects
-    from shared.model_context import technical_context_units
+    from shared.model_context import technical_context_units, technical_knowledge_coverage
     from application.generation_support import _build_knowledge_query
     source = source_program_context(source_baseline, selected_program=catalog.get('program'), request=requirement,
                                     templates=templates or ()) if source_baseline is not None else None
@@ -598,7 +597,7 @@ def build_fbd_generation_context(request, *, plc_model, confirmed_spec=None, cat
         instances_model=instances_model, model_profile=profile,
         catalog_scope=catalog_scope, templates=templates, device_comments=device_comments,
         comment_tables=comment_tables, knowledge_units=knowledge_units,
-        knowledge_coverage=manifest.get('retrieval_coverage'),
+        knowledge_coverage=technical_knowledge_coverage(knowledge),
         discovery=manifest["capability_discovery"],
         image_count=len(images or ()) if image_count is None else int(image_count or 0),
         source_baseline=source_baseline, source_context=source,
