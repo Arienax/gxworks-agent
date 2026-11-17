@@ -41,6 +41,19 @@ def main():
     if output == ROOT or output.is_relative_to(ROOT) or ROOT.is_relative_to(output):
         parser.error('use a separate build directory outside the source checkout')
     output.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='validation-', dir=output) as cache:
+        previous_cache = os.environ.get('GX_RELEASE_VALIDATION_CACHE')
+        os.environ['GX_RELEASE_VALIDATION_CACHE'] = cache
+        try:
+            return _build(args, output, parser)
+        finally:
+            if previous_cache is None:
+                os.environ.pop('GX_RELEASE_VALIDATION_CACHE', None)
+            else:
+                os.environ['GX_RELEASE_VALIDATION_CACHE'] = previous_cache
+
+
+def _build(args, output, parser):
     logs = output / 'logs'
     logs.mkdir(exist_ok=True)
 
@@ -71,7 +84,7 @@ def main():
     for source_name, destination in selected:
         source = Path(source_name)
         relative = Path(destination) / source.name
-        if not relative.parts or relative.parts[0] != 'resources':
+        if relative.parts[0] not in {'resources', 'skills'}:
             relative = Path('resources') / relative
         previous = staged.get(relative)
         if previous is not None:
