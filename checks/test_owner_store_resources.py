@@ -20,7 +20,13 @@ class ResourceTests(unittest.TestCase):
                 target=package/destination/Path(relative).name
                 target.parent.mkdir(parents=True,exist_ok=True);target.write_text('{}')
             with patch.object(collector,'assert_fact_database'):
+                # The executable spec also includes the skill's referenced docs.
+                (package/'skills/gxworks-mcp-router/README.md').write_text('Skill reference')
                 collector.audit_packaged_knowledge(package)
+                extra=package/'knowledge/unlisted.json';extra.write_text('{}')
+                with self.assertRaisesRegex(ValueError,'unlisted.json'):
+                    collector.audit_packaged_knowledge(package)
+                extra.unlink()
                 (package/'skills/gxworks-mcp-router/SKILL.md').unlink()
                 with self.assertRaisesRegex(ValueError,'SKILL.md'):
                     collector.audit_packaged_knowledge(package)

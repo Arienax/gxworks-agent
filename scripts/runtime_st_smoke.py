@@ -18,7 +18,7 @@ FOR i:=0 TO 2 DO values[i]:=i+1; END_FOR;
 instance(Amount:=values[2]);
 CASE instance.Sum OF 3: D0:=3; ELSE D0:=instance.Sum; END_CASE;
 WHILE FALSE DO EXIT; END_WHILE;
-REPEAT M0:=2.0**3.0**2.0=64.0; UNTIL TRUE END_REPEAT;
+REPEAT M0:=2.0**6.0=64.0; UNTIL TRUE END_REPEAT;
 RETURN;
 END_PROGRAM'''
     report = inspect_st_program(source, plc_model='FX3U')

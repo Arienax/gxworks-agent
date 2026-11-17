@@ -173,7 +173,11 @@ def assert_fact_database(path):
 
 def audit_packaged_knowledge(package):
     package = Path(package)
-    allowed = {destination + "/" + Path(relative).name for relative, destination in FILES}
+    required = {destination + "/" + Path(relative).name for relative, destination in FILES}
+    missing = {name for name in required if not (package / name).is_file()}
+    if missing:
+        raise ValueError('Missing runtime files: ' + repr(sorted(missing)))
+    allowed = {name for name in required if name.startswith('knowledge/')}
     if (package / 'knowledge/runtime/instruction_definitions.manifest.json').exists():
         allowed.add('knowledge/runtime/instruction_definitions.manifest.json')
         from plc.instruction_owner_store import OwnerDefinitionStore
@@ -182,9 +186,7 @@ def audit_packaged_knowledge(package):
         if store.metadata.get('vector_artifact'):
             allowed.add('knowledge/runtime/' + store.metadata['vector_artifact'])
         store.close()
-    roots = {Path(name).parts[0] for name in allowed}
-    actual = {p.relative_to(package).as_posix()
-              for root in roots for p in (package / root).rglob("*") if p.is_file()}
+    actual = {p.relative_to(package).as_posix() for p in (package / 'knowledge').rglob('*') if p.is_file()}
     if actual != allowed:
         raise ValueError("Knowledge package differs from allowlist: " + repr(sorted(actual ^ allowed)))
     assert_fact_database(package / "knowledge/runtime/plc_facts.sqlite")
