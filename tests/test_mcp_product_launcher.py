@@ -55,16 +55,7 @@ def test_explicit_standalone_mode_requires_workspace():
     assert b"workspace" in result.stderr.lower()
 
 
-def test_product_entry_parses_the_installed_pwm_contract():
-    import json
-
-    result = subprocess.run([sys.executable, str(ROOT / "scripts" / "mcp_entry.py"), "--self-test-pwm"],
-                            cwd=ROOT, env=isolated_mcp_environment(PYTHONPATH=""),
-                            capture_output=True, timeout=60)
-    assert result.returncode == 0, result.stderr
-    report = json.loads(result.stdout)
-    assert report["status"] == "passed" and report["contract_matches_reviewed_facts"] is True
-    assert report["forms"] == ["DPWM", "PWM"] and report["models"] == 4
-    assert Path(report["source_path"]).name == "pwm_reviewed_facts.json"
-    assert Path(report["generated_path"]).name == "pwm_contract.generated.json"
-    assert report["source_binding"].endswith(report["source_sha256"])
+def test_product_entry_does_not_expose_frozen_fx5_pwm_diagnostic():
+    result = _run("--self-test-pwm")
+    assert result.returncode == 2
+    assert b"unrecognized arguments" in result.stderr

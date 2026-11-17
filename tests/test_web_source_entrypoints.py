@@ -43,20 +43,6 @@ def test_packaged_sdk_diagnostic_never_starts_web_or_gx(monkeypatch):
 
 
 
-def test_packaged_pwm_diagnostic_parses_the_installed_contract(monkeypatch, capsys):
-    import json
-    from scripts import web_entry
-    monkeypatch.syspath_prepend(str(ROOT / "scripts"))
-    import runtime_pwm_smoke
-    calls = []
-    monkeypatch.setattr(runtime_pwm_smoke, "check_pwm_runtime",
-                        lambda: calls.append("pwm") or {"status": "passed", "contract_matches_reviewed_facts": True})
-    monkeypatch.setattr(web_entry.sys, "argv", ["GXWorks-Agent-Web.exe", "--self-test-pwm"])
-    assert web_entry.run() == 0
-    assert calls == ["pwm"]
-    assert json.loads(capsys.readouterr().out)["status"] == "passed"
-
-
 def test_source_build_checks_knowledge_in_the_venv_not_global_python():
     text = (ROOT/"scripts/build_web_source.ps1").read_text(encoding="utf-8-sig")
     assert '& $venvPython (Join-Path $root "scripts\\web_entry.py") --self-test-knowledge' in text

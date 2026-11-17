@@ -49,13 +49,13 @@ jobs:
         run: python -m pip install -c requirements/development.constraints.txt -r requirements/web.txt -r requirements/gxw-test.txt pytest
       - name: Check source ownership and test selection
         run: python -m pytest -q tests/test_source_layout.py tests/test_architecture_boundaries.py
-      - name: Verify public Owner Store and PWM resources
+      - name: Verify public Owner Store resources
         run: >-
           python -m pytest -q
           checks/test_owner_domain_selection.py
           checks/test_structured_fact_merge_efficiency.py
-          checks/test_pwm_workflow.py
-          checks/test_pwm_source_pipeline.py
+          checks/test_owner_store_resources.py
+          checks/test_release_resource_staging.py
       - name: Verify MCP paging and public schemas without collected GXW samples
         run: >-
           python -m pytest -q

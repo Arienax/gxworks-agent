@@ -92,7 +92,7 @@ with patch.object(build_release, 'TEMPLATE_NAMES', ()), patch.object(build_relea
     except Stop: pass
 """
             env=dict(os.environ);env.pop('PYTHONPATH', None)
-            result=subprocess.run([sys.executable, '-c', code, str(script_dir), '--resource-root', str(root), '--output', str(output), '--skip-frontend'], env=env, cwd=tmp, capture_output=True, text=True)
+            result=subprocess.run([sys.executable, '-c', code, str(script_dir), '--resource-root', str(root), '--output', str(output), '--component', 'mcp', '--skip-frontend'], env=env, cwd=tmp, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue((output/'inputs/resources/knowledge/runtime/instruction_definitions.manifest.json').is_file())
 
