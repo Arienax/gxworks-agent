@@ -72,9 +72,9 @@ def main(argv=None):
     parser.add_argument("--gxworks2-directory", action="store_true", help="Print the detected GX Works2 executable directory and exit.")
     args = parser.parse_args(argv)
     if args.gxworks2_directory:
-        from gxworks2.finder import GXWorks2Finder
+        from application.gxw_delivery import installation
 
-        executable = GXWorks2Finder().find_executable()
+        executable = installation()
         print(executable.parent if executable is not None else "")
         return 0
     if not 1024 <= args.port <= 65535:

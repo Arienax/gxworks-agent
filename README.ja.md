@@ -199,7 +199,7 @@ Python 3.13 と Node.js 22.14 以降をインストールし、次を実行し�
 ```powershell
 git clone https://github.com/Arienax/gxworks-agent.git
 cd gxworks-agent
-.\build-web.bat --no-pause
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build_web_source.ps1
 ```
 
 ビルド後、リポジトリのルートにある `GXWorks-Agent-Launcher.exe` をダブルクリックします。

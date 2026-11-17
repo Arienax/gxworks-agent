@@ -203,7 +203,7 @@ MCP 新建工程未指定语言时默认 Ladder。首次生成先用 `get_projec
 ```powershell
 git clone https://github.com/Arienax/gxworks-agent.git
 cd gxworks-agent
-.\build-web.bat --no-pause
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build_web_source.ps1
 ```
 
 构建完成后，双击仓库根目录中的 `GXWorks-Agent-Launcher.exe`。

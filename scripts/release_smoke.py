@@ -96,9 +96,6 @@ def smoke_mcp(exe, scratch):
     assert json.loads(st.stdout)['bounded_behavior'] == 'passed'
     result = subprocess.run([str(exe), "--help"], cwd=scratch, env=env, capture_output=True, timeout=30)
     assert result.returncode == 0 and not result.stdout and URL.encode() in result.stderr
-    wrapper = subprocess.run([str(exe.with_suffix('.cmd')), "--help"], cwd=scratch,
-                             env=env, capture_output=True, timeout=30)
-    assert wrapper.returncode == 0 and not wrapper.stdout and URL.encode() in wrapper.stderr
     params = StdioServerParameters(command=str(exe), args=["--local", "--workspace", str(scratch / "workspace"),
                                   "--state-dir", str(scratch / "state")], cwd=scratch, env=env)
     async def exercise():

@@ -61,7 +61,7 @@ try {
                 }
             }
             if (-not $bootstrapExe) {
-                throw "Python 3.10+ was not found in PATH. Install Python 3.10 or newer and rerun build-web.bat."
+                throw "Python 3.10+ was not found in PATH. Install Python 3.10 or newer and rerun scripts/build_web_source.ps1."
             }
 
             if ($bootstrapPrefix.Count -gt 0) {
@@ -78,7 +78,7 @@ try {
 
         & $venvPython -c "import sys; raise SystemExit(0 if sys.version_info >= (3,10) else 1)"
         if ($LASTEXITCODE -ne 0) {
-            throw "Existing .venv uses Python older than 3.10. Remove .venv and rerun build-web.bat."
+            throw "Existing .venv uses Python older than 3.10. Remove .venv and rerun scripts/build_web_source.ps1."
         }
 
         Write-Host "      Installing/updating Web and MCP runtime dependencies ..."
