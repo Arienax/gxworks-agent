@@ -270,7 +270,7 @@ sealed class WebLauncher
                 if (!finder.WaitForExit(8000)) { finder.Kill(); throw new IOException("查找 Python 超时。"); }
                 python = finder.StandardOutput.ReadToEnd().Trim();
                 if (finder.ExitCode != 0 || !File.Exists(python))
-                    throw new IOException("找不到可用的 Python Web 环境。请先双击 build-web.bat。");
+                    throw new IOException("找不到可用的 Python Web 环境。请先在 PowerShell 运行 scripts/build_web_source.ps1。");
             }
         }
         var info = StartInfo(python, new[] { "-m", "integrations.web" }.Concat(args));
@@ -339,7 +339,7 @@ sealed class WebLauncher
     {
         if (settings.Port < 1024 || settings.Port > 65535) throw new ArgumentOutOfRangeException("端口");
         if (!File.Exists(Path.Combine(root, "web", "dist", "index.html")))
-            throw new IOException("缺少网页文件。源码目录请先双击 build-web.bat，发布包请完整解压。");
+            throw new IOException("缺少网页文件。源码目录请先在 PowerShell 运行 scripts/build_web_source.ps1，发布包请完整解压。");
         var args = new List<string> { "--port", settings.Port.ToString() };
         string state = StatePath(settings.StateDirectory);
         if (!String.IsNullOrWhiteSpace(settings.StateDirectory))

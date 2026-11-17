@@ -127,9 +127,10 @@ def test_web_runtime_has_its_own_manifest_without_qt():
 
 
 def test_root_build_and_packaging_layout_is_explicit():
-    assert (ROOT / "build-web.bat").is_file()
+    assert (ROOT / "scripts/build_web_source.ps1").is_file()
     assert (ROOT / "scripts/build_web_launcher.py").is_file()
     assert not tuple(ROOT.glob("*.cmd"))
+    assert not tuple(ROOT.glob("*.bat"))
     assert not (ROOT / "start.bat").exists()
     assert not (SOURCE / "ui").exists()
     assert not (SOURCE / "main.py").exists()
@@ -147,11 +148,8 @@ def test_root_build_and_packaging_layout_is_explicit():
         "requirements/gxw-test.txt",
     ):
         assert (ROOT / new_path).is_file(), new_path
-    build_script = (ROOT / "build-web.bat").read_text(encoding="utf-8")
-    assert 'scripts\\build_web_source.ps1' in build_script
-    assert '-FrontendOnly' in build_script
-    assert 'exit /b %BUILD_EXIT%' in build_script
     implementation = (ROOT / "scripts/build_web_source.ps1").read_text(encoding="utf-8")
+    assert '[switch]$FrontendOnly' in implementation
     assert "Get-Command npm.cmd" in implementation
     assert "& $npm.Source ci" in implementation
     assert "& $npm.Source run types" in implementation

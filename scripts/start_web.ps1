@@ -74,7 +74,7 @@ try {
             Write-Host "[INFO] 检测到 GXWorks-Agent-Web.exe；当前目录存在源码 .venv，因此优先启动源码后端。" -ForegroundColor DarkGray
         }
     } elseif ($isSourceCheckout) {
-        throw "检测到源码目录，但缺少 .venv\Scripts\python.exe。请运行根目录 build-web.bat（不要使用 --frontend-only）后再启动；不会回退到可能过期的 GXWorks-Agent-Web.exe。"
+        throw "检测到源码目录，但缺少 .venv\Scripts\python.exe。请在 PowerShell 运行 scripts/build_web_source.ps1（不要使用 -FrontendOnly）后再启动；不会回退到可能过期的 GXWorks-Agent-Web.exe。"
     } elseif ($hasReleaseExecutable) {
         $backend = $releaseExecutable
         $backendArgs = @()
@@ -86,10 +86,10 @@ try {
         $backendKind = "built-package"
         $staticIndex = Join-Path (Split-Path -Parent $builtPackageExecutable) "web\dist\index.html"
     } else {
-        throw "源码运行环境和本地构建包都不存在。请先运行根目录 build-web.bat；若要生成独立发布包，请运行 scripts\build_web_package.ps1。"
+        throw "源码运行环境和本地构建包都不存在。请先在 PowerShell 运行 scripts/build_web_source.ps1；若要生成独立发布包，请运行 scripts\build_web_package.ps1。"
     }
     if (-not (Test-Path -LiteralPath $staticIndex -PathType Leaf)) {
-        throw "缺少网页资源。源码模式请先运行 build-web.bat；发布包请保持完整目录结构。"
+        throw "缺少网页资源。源码模式请先在 PowerShell 运行 scripts/build_web_source.ps1；发布包请保持完整目录结构。"
     }
     if ($resolvedWorkspace) { $backendArgs += @("--workspace", $resolvedWorkspace) }
     $backendArgs += @("--port", [string]$selectedPort)

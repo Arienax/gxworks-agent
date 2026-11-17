@@ -7,17 +7,6 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_build_web_double_click_wrapper_is_thin_and_pauses_on_failure():
-    text = (ROOT / "build-web.bat").read_text(encoding="utf-8")
-    assert "scripts\\build_web_source.ps1" in text
-    assert 'if "%~1"=="" goto :args_done' in text
-    assert "for %%A in (%*)" not in text
-    assert "--frontend-only" in text
-    assert "--no-pause" in text
-    assert "build-web.log" in text
-    assert "pause" in text.lower()
-
-
 def test_source_build_script_prepares_python_runtime_by_default():
     text = (ROOT / "scripts" / "build_web_source.ps1").read_text(encoding="utf-8-sig")
     assert ".venv\\Scripts\\python.exe" in text
@@ -40,7 +29,7 @@ def test_start_web_resolves_source_or_locally_built_package():
     assert 'dist\\GXWorks-Agent-Full\\GXWorks-Agent-Web.exe' in text
     assert '$backendKind = "source"' in text
     assert '$backendKind = "built-package"' in text
-    assert '请先运行根目录 build-web.bat' in text
+    assert '请先在 PowerShell 运行 scripts/build_web_source.ps1' in text
 
 
 def test_packaged_sdk_diagnostic_never_starts_web_or_gx(monkeypatch):

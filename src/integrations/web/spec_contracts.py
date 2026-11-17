@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from pydantic import Field, field_validator
-from plc.specification.implementation import normalize_open_questions
+from application.spec_document import normalize_open_questions
 
 from .response_types import EngineeringMap, EngineeringObject, EngineeringValue, ExtensibleResource
 
