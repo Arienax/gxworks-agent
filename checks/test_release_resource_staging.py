@@ -64,6 +64,7 @@ class ReleaseStagingTests(unittest.TestCase):
                 self.prepare(root, mode)
                 with self.assertRaises(StopBeforeHelpers): self.invoke(root, output)
                 inputs = output/'inputs'
+                self.assertTrue((inputs/'skills/gxworks-mcp-router/SKILL.md').is_file())
                 self.assertTrue((inputs/'resources/knowledge/runtime/plc_facts.sqlite').is_file())
                 names = {Path(p).name for p, _ in collector.runtime_instruction_data(inputs)}
                 self.assertIn('common.json', names)

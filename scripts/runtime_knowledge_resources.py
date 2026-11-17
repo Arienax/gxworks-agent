@@ -8,6 +8,8 @@ import json
 import sqlite3
 import gzip
 import re
+import hashlib
+import os
 from urllib.parse import unquote, urlsplit
 
 FILES = (
@@ -95,11 +97,22 @@ def runtime_instruction_data(root, *, native_encoding_source=None, include_compi
             if metadata.get('corpus_kind') != 'authored_plc_facts_v1' or metadata.get('documents'):
                 raise ValueError('Unreviewed owner store metadata')
             _inspect_public_value(metadata)
-            # Build-time validation is bounded to one owner, never an eager
-            # runtime load of the complete inventory. No producer is inferred.
-            for header in store.iter_owner_headers():
-                _inspect_public_value(store.get_entry(header['opcode'],cpu=header['target_model'],vendor=header['vendor']))
-            assert_fact_database(store.database_path)
+            # Each constructor still authenticates all database bytes. A private,
+            # per-build cache shares the completed semantic scan with collectors
+            # of byte-identical staged copies and PyInstaller subprocesses.
+            cache = os.environ.get('GX_RELEASE_VALIDATION_CACHE')
+            marker = (Path(cache) / hashlib.sha256(manifest.read_bytes()).hexdigest()
+                      if cache and Path(cache).is_dir() else None)
+            if marker is None or not marker.is_file():
+                for count, header in enumerate(store.iter_owner_headers(), 1):
+                    _inspect_public_value(store.get_entry(header['opcode'],cpu=header['target_model'],vendor=header['vendor']))
+                    if marker is not None and count % 10000 == 0:
+                        print(f'Validate instruction owners: {count}/{store.owner_count}', flush=True)
+                assert_fact_database(store.database_path)
+                if not store.current():
+                    raise ValueError('Owner files changed during release validation')
+                if marker is not None:
+                    marker.write_text('validated\n', encoding='ascii')
         finally:
             store.close()
         destination = 'resources/instructions/mitsubishi' if manifest == local_manifest else 'knowledge/runtime'
@@ -169,7 +182,9 @@ def audit_packaged_knowledge(package):
         if store.metadata.get('vector_artifact'):
             allowed.add('knowledge/runtime/' + store.metadata['vector_artifact'])
         store.close()
-    actual = {p.relative_to(package).as_posix() for p in (package / "knowledge").rglob("*") if p.is_file()}
+    roots = {Path(name).parts[0] for name in allowed}
+    actual = {p.relative_to(package).as_posix()
+              for root in roots for p in (package / root).rglob("*") if p.is_file()}
     if actual != allowed:
         raise ValueError("Knowledge package differs from allowlist: " + repr(sorted(actual ^ allowed)))
     assert_fact_database(package / "knowledge/runtime/plc_facts.sqlite")
