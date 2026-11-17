@@ -37,6 +37,14 @@ def build_default_tool_registry():
     return CompleteReads()
 
 
+def _without_delivery_citations(generation_input):
+    """Compare programming content; MCP adds addressable fact references."""
+    result = copy.deepcopy(generation_input)
+    for unit in result.get('knowledge', []):
+        unit.pop('citation_id', None)
+    return result
+
+
 def test_generation_receipt_binding_tracks_the_selected_version_mode():
     from dataclasses import replace
     from agent_runtime.generation_tools import GenerationToolHandlers
@@ -578,7 +586,7 @@ def test_composition_is_opt_in_and_shared_between_fbd_api_and_mcp():
         assert result["ok"], result
         assert result["data"]["generation_instructions"] == direct["generation_instructions"]
         assert "generation_handoff" not in result["data"]
-        assert result["data"]["generation_input"]["knowledge"] == direct["generation_input"]["knowledge"]
+        assert _without_delivery_citations(result['data']['generation_input'])['knowledge'] == direct['generation_input']['knowledge']
         assert direct["generation_handoff"]["capability_discovery"]["experiment_arm"] == "D"
     assert composition_experiment().arm == "A"
 
@@ -611,7 +619,7 @@ def test_fbd_api_and_mcp_expose_identical_directory_discovery_and_selection():
     assert data["generation_input"]["previous"] == api_context["generation_input"]["previous"]
     assert "current_model" not in data
     assert "generation_handoff" not in data
-    assert data["generation_input"]["knowledge"] == api_context["generation_input"]["knowledge"]
+    assert _without_delivery_citations(data['generation_input'])['knowledge'] == api_context['generation_input']['knowledge']
     assert "[PLC KNOWLEDGE]" not in data["generation_instructions"]
     assert data["generation_context_id"]
     assert data["confirmed_spec"] is None
@@ -634,7 +642,7 @@ def test_fbd_saved_engineering_input_is_identical_for_web_and_mcp():
         version={'id':'v1', 'program_name':selected, 'target_mode':'fbd'}, fbd_baseline=raw, native_snapshot=raw)
     result = build_default_tool_registry().call('get_generation_context', {'user_requirement':request}, context)
     assert result['ok'], result
-    assert result['data']['generation_input'] == direct['generation_input']
+    assert _without_delivery_citations(result['data']['generation_input']) == direct['generation_input']
     payload = direct['generation_input']
     assert payload['source_context']['st_sources']
     assert payload['source_context']['fbd_callers'][0]['source_checks']['status']
@@ -790,6 +798,7 @@ def test_raw_direct_api_mcp_share_context_and_keep_user_facts(monkeypatch):
 def test_compact_paths_deliver_core_scan_timing_guidance_without_examples(monkeypatch, direct):
     from application.confirmed_generation_context import (
         build_confirmed_generation_context, build_direct_generation_context, DIRECT_EXECUTION_POLICY_VERSION,
+        GENERATION_EXECUTION_POLICY_VERSION,
     )
     from application.construction_examples import prepare_construction_examples
     from application.generation_agent import _compact_wire_renderer
@@ -808,7 +817,8 @@ def test_compact_paths_deliver_core_scan_timing_guidance_without_examples(monkey
     if not direct:
         assert "不预设共享累计时间基准" in delivered
     assert "只输出一份程序及简短的已采用选择" not in delivered
-    assert context.handoff["generation_execution_policy"] == (DIRECT_EXECUTION_POLICY_VERSION if direct else "settled-facts-v8-native-timing")
+    assert context.handoff["generation_execution_policy"] == (
+        DIRECT_EXECUTION_POLICY_VERSION if direct else GENERATION_EXECUTION_POLICY_VERSION)
     assert "## PLC execution semantics" not in delivered
 
 
@@ -898,7 +908,8 @@ def test_empty_arguments_use_bound_model_and_api_retrieval_failure_fallback(monk
         assert '"model": "FX5U"' in data["generation_input"]["target_profile"]
 
 
-def test_public_context_projects_current_ladder_and_cleans_annotation_paths_and_credentials(monkeypatch):
+@pytest.mark.parametrize('instruction_details', [False, True])
+def test_public_context_projects_current_ladder_and_cleans_annotation_paths_and_credentials(monkeypatch, instruction_details):
     secret = "do-not-copy-private-state"
     private_path = "C:/" + "Users/private-user/project/program.json"
     spec = {"summary": "Motor", "user_notes": "See " + private_path,
@@ -915,17 +926,27 @@ def test_public_context_projects_current_ladder_and_cleans_annotation_paths_and_
                                   "messages": [{"content": secret}]}, ladder=ladder)
     monkeypatch.setattr(knowledge_retriever, "build_knowledge_context", lambda *args, **kwargs:
                         "Official documentation https://example.test/manual.pdf; file " + private_path)
+    cases = {'metadata': {'source_notes': 'password=private-case-secret'}, 'cases': []}
+    monkeypatch.setattr('application.spec_document.project_acceptance_cases',
+                        lambda *_: (cases, None))
     result = build_default_tool_registry().call("get_generation_context", {
         "user_requirement": "X0 starts Y0. api_key=client-secret Bearer private-bearer",
+        "instruction_details": instruction_details,
     }, context)
     assert result["ok"], result
     wire = json.dumps(result, ensure_ascii=False)
-    for private in (secret, private_path, "hidden-value", "client-secret", "private-bearer", "private-user"):
+    for private in (secret, private_path, "hidden-value", "client-secret", "private-bearer",
+                    "private-user", "private-case-secret"):
         assert private not in wire
-    assert "https://example.test/manual.pdf" in wire
+    assert ("https://example.test/manual.pdf" in wire) == instruction_details
     assert "[private path]" in wire and "[private credential]" in wire
     assert '"ui_state"' not in wire and '"messages"' not in wire
-    assert "X3" in wire and "parallel_block" in wire
+    from application.compact_protocol import compact_repair_rungs
+    assert "X3" in wire
+    assert result['data']['generation_input']['current_program']['r'] == compact_repair_rungs(
+        public_generation_ladder(ladder)['rungs'])
+    assert result['data']['generation_input']['behavior_cases']['metadata'] == {
+        'source_notes': '[private credential]'}
     assert context.project["confirmed_spec"]["api_key"] == secret
 
 

@@ -46,6 +46,18 @@ _DEBUG_TOOLS = frozenset({
 
 
 def _model_tool_value(name, value):
+    from shared.model_context import model_review_view
+    from application.read_delivery import PreparedReadEnvelope
+    projected = _model_tool_document(name, value)
+    # The measured paged document was projected before pagination. Preserve
+    # its transport type and do not change the object table after delivery.
+    if isinstance(projected, PreparedReadEnvelope) or name in {
+            'get_project_spec', 'update_project_spec', 'confirm_project_spec'}:
+        return projected
+    return model_review_view(projected)
+
+
+def _model_tool_document(name, value):
     from application.read_delivery import PAGED_READ_TOOLS, PreparedReadEnvelope
     if (name in PAGED_READ_TOOLS and isinstance(value, PreparedReadEnvelope)
             and value.get('tool') == name):

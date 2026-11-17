@@ -605,7 +605,7 @@ def instruction_card(packet, project):
         for table in tables:
             table_scope = table.get('scope') or {}
             table['forms'] = table_scope.pop('forms', [opcode])
-            if table_scope.get('models') == (packet.get('scope') or {}).get('models'):
+            if 'models' in table_scope and table_scope['models'] == (packet.get('scope') or {}).get('models'):
                 table_scope.pop('models')
             language = context.get('language') or selection.get('language')
             if len(delivery_languages) == 1 and language and language in table_scope.get('languages', []) and table.get('selection_applicability') != 'not_applicable':
@@ -953,8 +953,8 @@ def model_instruction_view(unit):
             conditions = ([conditions] if 'context' in conditions else
                           [{'context': key, 'equals': item} for key, item in conditions.items()])
         conditions = [condition for condition in conditions if isinstance(condition, Mapping)]
-        if any(str(condition.get('context', '')).endswith(('_not_resolved', '_unresolved')) for condition in conditions):
-            return False
+        # An unresolved condition is not a known mismatch. Keep its qualifier
+        # with the claim instead of silently deleting the whole implementation.
         if mode and any(condition.get('context') == 'project_mode' and condition.get('equals') not in (None, mode)
                         for condition in conditions):
             return False

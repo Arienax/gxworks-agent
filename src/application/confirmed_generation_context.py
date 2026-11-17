@@ -31,7 +31,7 @@ CONFIRMED_GENERATION_REQUEST = (
 
 
 # Prompt policy only: no reasoning-token limit, truncation, retry or acceptance gate.
-GENERATION_EXECUTION_POLICY_VERSION = "settled-facts-v8-native-timing"
+GENERATION_EXECUTION_POLICY_VERSION = "settled-facts-v9-system-selection"
 GENERATION_EXECUTION_POLICY = """# Generation execution policy
 只实现当前确认规格与所选方案。已确认绑定、参数及本轮修改优先于过时的参考说明；保留其余方案约束。仅因具体矛盾、新证据或用户修订重审。
 技术事实按需核对；检索文本不代表完整覆盖，缺证据不等于禁用，不编造查证或测试结果。
@@ -39,7 +39,7 @@ NO 在位=1时导通，NC 在位=0时导通；二者只读位值，不设定初�
 下方谓词是当前绑定的电平事实；active 表示信号用途成立，run_permit 表示停止未生效。未定电平保持未知；edit 时本轮修改优先。边沿与完整工艺逻辑仍按规格实现。
 检查启动可达性、串联条件一致性及停止/故障与计数、状态转移的同扫描优先级。按既有协议输出一份最终程序。"""
 
-DIRECT_EXECUTION_POLICY_VERSION = "direct-program-v2-structure-selection"
+DIRECT_EXECUTION_POLICY_VERSION = "direct-program-v3-system-selection"
 DIRECT_EXECUTION_POLICY = """# Direct fact sources
 完整原文和明确答复都是工艺事实来源。结构化事实只是辅助视图，未提取不等于未提供；缺少确认规格不构成生成条件。
 已有明确确认事实继续继承，本轮明确修订更新对应字段。历史问题、选项和模型说明用于理解回答目标，用户原文和明确答复才是新增事实。
@@ -77,7 +77,8 @@ def generation_execution_prompt(confirmed_spec, *, evidence_text="", task_type="
     timing = scan_timing_guidance(plc_model or spec.get("plc_model") or "FX3U",
                                   include_periodic_patterns=not raw_request)
     from application.prompts import BEHAVIOR_STATE_PROMPT
-    rules = "\n\n" + policy + "\n\n" + BEHAVIOR_STATE_PROMPT + "\n\n" + timing
+    from plc.maintainability import SELECTION_POLICY
+    rules = "\n\n" + policy + "\n\n" + SELECTION_POLICY + "\n\n" + BEHAVIOR_STATE_PROMPT + "\n\n" + timing
     if not inline_predicates:
         return rules
     from plc.specification.conditions import generation_input_conditions
@@ -279,7 +280,9 @@ def build_confirmed_generation_context(
         handoff["structured_facts"] = copy.deepcopy(manifest["structured_facts"])
     if isinstance(manifest.get("capability_discovery"), dict):
         from application.capability_context import reconcile_discovery
-        handoff["capability_discovery"] = reconcile_discovery(manifest["capability_discovery"], knowledge_text)
+        handoff["capability_discovery"] = reconcile_discovery(manifest["capability_discovery"], knowledge_text,
+            system_prompt="\n".join(m['content'] for m in compiled.wire_packet.get('messages', [])
+                                    if m.get('role') == 'system' and isinstance(m.get('content'), str)))
     handoff.update(copy.deepcopy(compiled.provenance_receipt))
     handoff["budget_report"] = copy.deepcopy(compiled.budget_report)
     # This receipt identifies the policy, not a claimed reduction in model tokens.

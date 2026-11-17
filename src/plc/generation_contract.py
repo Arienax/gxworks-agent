@@ -257,7 +257,7 @@ _HARDWARE_FIELDS = dict.fromkeys((
     "position_target", "homing_required", "homing_method",
     # Confirmed source conditions are engineering facts. Dropping them here
     # makes a source-matched definition look unresolved to every generator.
-    "cpu_version", "hardware_variant", "input_voltage", "serial_first5",
+    "cpu_version", "check_cpu_version", "hardware_variant", "input_voltage", "serial_first5",
     "memory_card", "system_mode", "program_execution", "cc_link_source",
     "sb_refresh_start", "station_role",
 ))
@@ -340,6 +340,7 @@ _SPEC_FIELDS = {
                                   "name", "active_level", "inactive_level", "label"))],
     "hardware_profile": _HARDWARE_FIELDS,
     "hardware_context": _HARDWARE_CONTEXT_FIELDS,
+    "project_context": dict.fromkeys(("check_cpu_version", "cpu_version", "firmware")),
     "hardware_requirements": dict.fromkeys(("hardware_dependent", "vfd", "motion", "pulse", "analog", "serial")),
     "execution_semantics": [{
         **dict.fromkeys(("semantic", "type", "evidence", "source", "strict", "period_ms",

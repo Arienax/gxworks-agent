@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import copy
 from pathlib import Path
 
 from knowledge.index_access import (
@@ -14,6 +15,49 @@ from knowledge.index_access import (
 from knowledge.scope import row_in_scope
 
 MAX_TOP_K = 50
+
+
+def _current_timer_record(result, plc_model):
+    """Reconcile legacy timer summaries with the shipped, source-bound CPU table.
+
+    Both exact and ranked retrieval pass here. Keep the stored corpus intact;
+    only these timer fields are superseded, for a CPU with reviewed retention.
+    """
+    if result.get('fact_kind') != 'device_family' or result.get('fact_target') != 'T':
+        return result
+    from plc.runtime_semantics import control_runtime_facts
+    timers = control_runtime_facts(plc_model).get('timers', {})
+    if not any(row.get('reset_on_disable') is False for row in timers.get('OUT', [])):
+        return result
+    for line in result['text'].splitlines():
+        if not line.startswith('{'):
+            continue
+        try:
+            packet = json.loads(line)
+        except ValueError:
+            continue
+        if packet.get('kind') != 'device_family' or packet.get('target') != 'T':
+            continue
+        value = packet.get('value', {})
+        constraints = value.get('source_constraints', {})
+        runtime = result.get('runtime_dimension') == 'timers'
+        if not runtime and constraints.get('retentive_form') != 'use ST for the retentive timer':
+            return result
+        packet['scope'] = {**packet.get('scope', {}), 'models': [plc_model]}
+        if runtime:
+            packet['value'] = {key: copy.deepcopy(rows) for key, rows in timers.items() if key != 'source'}
+        else:
+            constraints.update(retentive_form='OUT T Kpreset',
+                retentive_disable='hold current value and contact; resume counting when enabled',
+                retentive_reset='RST clears current value and contact')
+            value['OUT'] = copy.deepcopy(timers['OUT'])
+        source = copy.deepcopy(timers['source'])
+        if source not in packet.setdefault('sources', []):
+            packet['sources'].append(source)
+        return {**result, 'text': json.dumps(packet, ensure_ascii=False, separators=(',', ':')),
+                'source_evidence': copy.deepcopy(packet['sources']),
+                'plc_models': json.dumps([plc_model])}
+    return result
 
 
 def default_source(meta, path):
@@ -98,6 +142,7 @@ def chunk_result(row, meta, path, plc_model, task_type, connection=None, *, qual
             from knowledge.runtime_fact_publication import hydrate_language_packet
             result["text"] = json.dumps(hydrate_language_packet(connection, authored["runtime_language"], authored["runtime_language_model"]),
                                         ensure_ascii=False, separators=(",", ":"))
+        result = _current_timer_record(result, plc_model)
     # Chunk IDs belong to one database, not a global namespace. Once a
     # separate owner pair is selected, qualify result identities consistently
     # here for BOTH exact and broad consumers; never change fact/dependency IDs.

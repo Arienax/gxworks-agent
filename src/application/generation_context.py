@@ -29,6 +29,7 @@ from application.generation_support import public_generation_ladder
 from application.generation_support import public_generation_specification
 from application.generation_support import _KNOWLEDGE_TASK_TOP_K
 from plc.generation_contract import CYCLIC_ASSIGNMENT_PROMPT
+from application.prompts import LADDER_CONTACT_PROMPT
 
 ST_SYSTEM_PROMPT = """# Role
 按当前规格生成所选 PLC 型号的 ST，只返回协议 JSON。
@@ -59,8 +60,7 @@ LADDER_SYSTEM_PROMPT = """# Role
 输出 schema > 本轮明确修改 > 当前确认规格/canonical I/O/selected_approach.generation_contract > 当前型号资料与检索证据 > 本轮匹配的专用控制提示 > 历史上下文。
 
 # Ladder semantic kernel
-""" + CYCLIC_ASSIGNMENT_PROMPT + """
-- NO 检查位=1，NC 检查位=0；停止 active_level=0 时运行允许用 NO，反之用 NC。不得把物理常闭直接翻译成 NC。
+""" + CYCLIC_ASSIGNMENT_PROMPT + "\n" + LADDER_CONTACT_PROMPT + """
 - 不得擅自新增 I/O、停止/急停、硬件、模块寄存器或未确认别名；用户明确给出的地址、NO/NC 极性和参数必须保持。
 - selected_approach.generation_contract 的结构化 required_* 必须满足，forbidden_* 不得出现；unverified_constraints 保留方案语义，但不升级为额外硬约束，也不覆盖当前参数/I/O。
 - 有 selected_approach.output_logic 时，落实其中的输出状态、触发、更新顺序、释放和恢复决定，与 generation_guide 和 instruction_choices 一起实施；本轮未修改的部分不重新选型。
@@ -174,21 +174,22 @@ def _build_knowledge_context(primary_query, *, plc_model="FX3U", task_type="gene
     analysis_discovery = normalized_task == "analysis" and "capability_requirement" in metadata
 
     def finish(context):
+        from shared.model_context import project_knowledge_context
+        from shared.cpu_version_projection import cpu_version_requested
+        request = metadata.get('capability_requirement') or str(primary_query)
+        check_cpu_version = cpu_version_requested(request, confirmed_context)
         if analysis_discovery or normalized_task in {"generate", "edit"}:
             from application.capability_context import augment_generation_knowledge
             requirement = metadata.get("capability_requirement") or metadata.get("residual_fact_query") or str(primary_query)
             if selected_plan_query is not None:
                 requirement = metadata.get("residual_fact_query", "")
-            context = augment_generation_knowledge(
+            return augment_generation_knowledge(
                 requirement, context, plc_model=plc_model, target_mode=metadata.get("target_mode", "ladder"),
                 confirmed_spec=confirmed_context, repair_scope=metadata.get("repair_scope"),
                 catalog=metadata.get("callable_catalog", ()), selected_plan_query=selected_plan_query,
-                for_analysis=analysis_discovery,
+                for_analysis=analysis_discovery, check_cpu_version=check_cpu_version,
             )
-        from shared.model_context import project_knowledge_context
-        from shared.cpu_version_projection import cpu_version_requested
-        request = metadata.get('capability_requirement') or str(primary_query)
-        return project_knowledge_context(context, cpu_version=cpu_version_requested(request, confirmed_context))
+        return project_knowledge_context(context, cpu_version=check_cpu_version)
     # Retrieval executes the caller's choice. Omitted/None never means "infer".
     def absent(status, reason, **metadata):
         audit_section("manual_context", status=status, reason=reason, source="manual_retriever")

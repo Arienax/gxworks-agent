@@ -244,38 +244,53 @@ def instruction_report_view(report, included_ids):
     return result
 
 
-def included_evidence_ids(text, records=()):
-    """Return complete, byte-consistent knowledge blocks from compiled text."""
+def included_evidence_ids(text, records=(), *, check_cpu_version=None):
+    """Match complete facts after the same local delivery projection."""
     expected = {
         str(record["id"]): record.get("content_sha256")
         for record in records if isinstance(record, Mapping) and record.get("id")
     }
-    ids = [str(record['id']) for record in records if isinstance(record, Mapping)
-           and record.get('id') and record.get('model_text') and record['model_text'] in str(text)]
+    ids = list(dict.fromkeys(str(record['id']) for record in records if isinstance(record, Mapping)
+               and record.get('id') and record.get('model_text') and record['model_text'] in str(text)))
     if '[PLC KNOWLEDGE]' in str(text):
-        from shared.model_context import technical_context_units
+        from shared.model_context import technical_context_units, model_knowledge_value
+        from shared.cpu_version_projection import without_cpu_versions
         from knowledge.instruction_presentation import instruction_form_units
-        def literal_keys(value):
-            return {json.dumps(item, sort_keys=True, ensure_ascii=False, separators=(',', ':'))
-                    for unit in technical_context_units(value) for item in instruction_form_units(unit)}
-        delivered = literal_keys(text)
+        if check_cpu_version is None:
+            check_cpu_version = getattr(text, 'manifest', {}).get('cpu_version_requested')
+
+        def literal_keys(units, *, versions):
+            # Split shared families before applying the same final model view.
+            # Raw cards can still contain wrapped purposes and claims already
+            # folded into a parameter table in the delivered document.
+            return {json.dumps(clean, sort_keys=True, ensure_ascii=False, separators=(',', ':'))
+                    for unit in units for item in instruction_form_units(unit)
+                    if (clean := model_knowledge_value(item if versions else without_cpu_versions(item))) not in (None, {}, [])}
+        delivered = literal_keys(technical_context_units(text), versions=True)
+        # Plain text has no policy flag. Accept either complete representation
+        # of the source, while comparing against the actual delivered content.
+        policies = (True, False) if check_cpu_version is None else (check_cpu_version,)
         for record in records:
             if (isinstance(record, Mapping) and record.get('id') and record.get('model_text')
-                    and str(record['id']) not in ids
-                    and literal_keys(record['model_text']) <= delivered):
-                ids.append(str(record['id']))
+                    and str(record['id']) not in ids):
+                units = technical_context_units(record['model_text'])
+                if any((required := literal_keys(units, versions=versions)) and required <= delivered
+                       for versions in policies):
+                    ids.append(str(record['id']))
     pattern = (
-        r"(?ms)^\[KNOWLEDGE (\{[^\n]*\})\]\n"
-        r"((?:(?!^\[KNOWLEDGE |^\[/KNOWLEDGE\]).)*?)\n"
-        r"\[/KNOWLEDGE\]"
+        r"(?ms)^\[KNOWLEDGE (\{[^\r\n]*\})\][ \t]*\r?\n"
+        r"((?:(?!^\[KNOWLEDGE |^\[/KNOWLEDGE\]).)*?)\r?\n"
+        r"\[/KNOWLEDGE\][ \t]*(?=\r?$)"
     )
     for match in re.finditer(pattern, str(text)):
         try:
             marker = json.loads(match.group(1)).get("id")
         except (ValueError, AttributeError):
             continue
-        if isinstance(marker, str) and (
-            not expected.get(marker) or text_sha256(match.group(2)) == expected[marker]
+        # A marker alone proves no delivery. Without a source digest, only
+        # the complete source-text match above can acknowledge a legacy block.
+        if isinstance(marker, str) and marker not in ids and expected.get(marker) and (
+            text_sha256(match.group(2)) == expected[marker]
         ):
             ids.append(marker)
     return ids

@@ -27,23 +27,17 @@ def private_manual_registry_state(tmp_path_factory):
     with zipfile.ZipFile(archive) as z:
         path.write_bytes(z.read('instruction_definitions.json.gz'))
     names = ('_cpu_contracts', 'definition_inventory', '_definition_owners', 'definition_documents')
-    before = {name: getattr(registry, name) for name in (*names, 'language_facts', '_language_features',
-                                                       'fact_bundle_version', '_fact_resource')}
-    registry._cpu_contracts = dict(registry._cpu_contracts)
+    from plc.instructions import InstructionRegistry
+    isolated = InstructionRegistry()
+    isolated._cpu_contracts = dict(registry._cpu_contracts)
     try:
-        try:
-            registry.load_instruction_definitions(path)
-        except ValueError as error:
-            # The archive predates the pooled fact transport; the catalogue now
-            # rejects it the same way it rejects any other retired format. These
-            # tests only run when a compatible private snapshot is available.
-            if 'serialization' not in str(error).lower():
-                raise
-            pytest.skip('private pre-migration definitions predate the pooled transport')
-        return {name: getattr(registry, name) for name in names}
-    finally:
-        for name, value in before.items():
-            setattr(registry, name, value)
+        isolated.load_instruction_definitions(path)
+    except ValueError as error:
+        if 'serialization' not in str(error).lower():
+            raise
+        pytest.skip('private pre-migration definitions predate the pooled transport')
+    return {name: getattr(isolated, name) for name in (*names, '_definition_owner_store', '_fact_owner_index')}
+
 
 
 @pytest.fixture

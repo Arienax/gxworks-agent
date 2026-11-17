@@ -18,8 +18,9 @@ def test_example_program_preserves_ordered_logic_and_case_conditions():
     before = copy.deepcopy(example)
     result = model_knowledge_value(example)
     assert example == before
-    for key in ('requirement', 'initial', 'frames', 'expected', 'limitation'):
+    for key in ('requirement', 'initial', 'frames', 'expected'):
         assert result['value'][key] == example['value'][key]
+    assert 'limitation' not in result['value']
     program = result['value']['program']
     assert program['plc'] == {'cpu': 'FX3U'}
     assert program['networks'] == [{'id': 'N1', 'instructions': instructions,

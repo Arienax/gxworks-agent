@@ -402,8 +402,7 @@ def test_resolved_self_hold_does_not_query_unrelated_manuals(monkeypatch):
     import knowledge.retriever as retriever
     monkeypatch.setattr(retriever, "build_knowledge_context", lambda *a, **k: pytest.fail("No specific fact target"))
     context = build_confirmed_generation_context(old_confirmed_spec(), "FX3U")
-    from plc.maintainability import SELECTION_POLICY
-    assert str(context.knowledge_context).strip() == SELECTION_POLICY.strip()
+    assert not str(context.knowledge_context).strip()
     assert context.handoff["generation_evidence"]["records"] == []
     assert context.handoff["capability_discovery"]["included_candidates"] == []
     assert {r["address"] for r in context.io_bindings} == {"X0", "X1", "Y0"}
@@ -636,10 +635,10 @@ def test_compact_and_ladder_v1_prompts_distinguish_physical_polarity():
     from application.generation_agent import _COMPACT_PROTOCOL
     from application.generation_context import LADDER_SYSTEM_PROMPT
     assert 'i 本身是一维串联列表' in _COMPACT_PROTOCOL
-    for prompt in (_COMPACT_PROTOCOL, LADDER_SYSTEM_PROMPT):
-        assert 'NO 检查位=1' in prompt and 'NC 检查位=0' in prompt
+    assert 'NO 检查位=1' in _COMPACT_PROTOCOL and 'NC 检查位=0' in _COMPACT_PROTOCOL
+    assert '常开触点用 NO / LD，常闭触点用 NC / LDI' in LADDER_SYSTEM_PROMPT
     assert 'active_when 与 run_permit_when 使用下方绑定谓词' in _COMPACT_PROTOCOL
-    assert 'active_level=0' in LADDER_SYSTEM_PROMPT
+    assert '仅在用户明确说明实际电气接线或输入电平时，按其说明处理' in LADDER_SYSTEM_PROMPT
 
 
 @pytest.mark.parametrize("active", [0, 1])

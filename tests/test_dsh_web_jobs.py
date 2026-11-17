@@ -456,6 +456,8 @@ def test_dsh_direct_uses_original_host_text_and_converts_usage(offline_web, monk
         context = data['document']
         assert context['generation_input']['request'] == REQUIREMENT
         assert context['workflow_mode'] == 'direct_generation'
+        assert 'Capability selection and maintainability' in context['generation_instructions']
+        assert '不预设时间窗口逐项 OR' in context['generation_instructions']
         usage = {'type': 'chunk', 'attemptId': 'first', 'chunk': {'type': 'usage', 'usage': {
             'inputTokens': 7, 'outputTokens': 3, 'cacheReadTokens': 11, 'cacheWriteTokens': 2,
         }}}
@@ -498,6 +500,80 @@ def test_dsh_project_change_ends_job_instead_of_asking_model_to_rebind(offline_w
         assert job['status'] == 'failed'
         assert job['error_code'] == 'input_conflict'
         assert not service.projects.raw_project(project_id)['versions']
+
+
+@pytest.mark.parametrize('read_after_save', [False, True])
+def test_dsh_same_turn_patches_follow_saved_and_diagnostic_versions(offline_web, read_after_save):
+    from application.workspace import atomic_json
+
+    open_web, instances, knowledge_requests = offline_web
+    saved_ids = []
+
+    def author(runtime):
+        original = runtime.tool('get_generation_context')['document']
+        saved = runtime.invoke('create_program_candidate',
+            ladder={'r': [{'b': [{'i': ['NO X0'], 'o': ['COIL Y0']}]}]})
+        assert saved['ok'] and saved['status'] == 'saved', saved
+        saved_ids.append(saved['version_id'])
+        for opcode, status in [('LDI', 'saved_behavior_draft'), ('LD', 'saved')]:
+            if read_after_save:
+                context = runtime.tool('get_generation_context')['document']
+                assert context['current_version_id'] == saved_ids[-1]
+                assert context['generation_context_id'] != original['generation_context_id']
+            source = runtime.tool('read_gxw_source')
+            contact = next(row for row in source['source_records'] if row.get('op') in {'LD', 'LDI'})
+            patched = runtime.invoke('patch_program', patch={'instruction_edits': [{
+                'operation': 'replace', 'record_index': contact['record_index'],
+                'instructions': [{'op': opcode, 'args': ['X0']}],
+            }]})
+            assert patched['ok'] and patched['status'] == status, patched
+            saved_ids.append(patched['version_id'])
+            active = service.projects.raw_project(project_id)['active_version_id']
+            assert active == (saved_ids[0] if status == 'saved_behavior_draft' else saved_ids[-1])
+
+    service, client = open_web(author)
+    with client:
+        project_id = create_project(client)
+        atomic_json(service.store.project_dir(project_id) / 'acceptance-cases.json', {
+            'schema_version': 1, 'project_id': project_id, 'plc_model': 'FX3U', 'spec_revision': None,
+            'cases': [{'case_id': 'output-on', 'scan_ms': 10, 'steps': [
+                {'at_ms': 0, 'set': {'X0': 1}}, {'at_ms': 10, 'expect': {'Y0': 1}},
+            ]}],
+        })
+        job_id = submit(client, project_id, 'direct_generation', 'same-turn-patches', text=REQUIREMENT)
+        output = completed(client, service, job_id)
+        assert output['version_id'] == saved_ids[-1]
+        final = service.projects.raw_version(project_id, saved_ids[-1])
+        assert final['behavior_result']['status'] == 'passed_in_cases'
+        assert final['generation_handoff']['direct_requirements']['original_request'] == REQUIREMENT
+        assert len(knowledge_requests) == 1  # Local source rebinding does not repeat task retrieval.
+        assert len(instances) == 1
+
+
+def test_dsh_external_change_after_own_save_still_ends_job(offline_web):
+    from application.workspace import atomic_json
+
+    open_web, _, _ = offline_web
+
+    def author(runtime):
+        saved = runtime.invoke('create_program_candidate',
+            ladder={'r': [{'b': [{'i': ['NO X0'], 'o': ['COIL Y0']}]}]})
+        assert saved['ok'], saved
+        project = service.projects.raw_project(project_id)
+        project['plc_model'] = 'FX3G'
+        atomic_json(service.projects.store.project_path(project_id), project)
+        result = runtime.invoke('patch_program', patch={'instruction_edits': [{
+            'operation': 'replace', 'record_index': 0, 'instructions': [{'op': 'LDI', 'args': ['X0']}],
+        }]})
+        assert result == {'ok': False, 'cancelled': True}
+
+    service, client = open_web(author)
+    with client:
+        project_id = create_project(client)
+        job_id = submit(client, project_id, 'direct_generation', 'changed-after-save', text=REQUIREMENT)
+        job = service.jobs.wait(job_id, timeout=25)
+        assert job['status'] == 'failed' and job['error_code'] == 'input_conflict'
+        assert len(service.projects.raw_project(project_id)['versions']) == 1
 
 
 def test_dsh_direct_and_ordered_edit_bind_timer_presets_locally(offline_web, monkeypatch):

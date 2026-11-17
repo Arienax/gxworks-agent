@@ -610,8 +610,7 @@ def test_generic_requests_do_not_inject_unrelated_manual_pages(query):
         plc_model="FX3U",
         task_type="edit",
     )
-    from plc.maintainability import SELECTION_POLICY
-    assert str(context).strip() == SELECTION_POLICY.strip()
+    assert not str(context).strip()
     assert context.manifest["records"] == []
     assert context.manifest["capability_discovery"]["candidates"] == []
 

@@ -98,11 +98,14 @@ def public_discovery(value):
 
 def augment_generation_knowledge(requirement, knowledge="", *, plc_model="FX3U", target_mode="ladder",
                                  confirmed_spec=None, catalog=(), token_budget=None, repair_scope=None,
-                                 selected_plan_query=None, for_analysis=False):
+                                 selected_plan_query=None, for_analysis=False, check_cpu_version=None):
     """Deliver relevant complete discovery units; legacy token_budget is ignored."""
     from knowledge.structured_facts import structured_fact_targets
     from knowledge.instruction_facts import retrieve_instruction_facts
+    from shared.cpu_version_projection import cpu_version_requested, project_cpu_version_text
     manifest = copy.deepcopy(getattr(knowledge, "manifest", {}))
+    if check_cpu_version is None:
+        check_cpu_version = cpu_version_requested(requirement, confirmed_spec)
     targets = (manifest.get("structured_facts") or {}).get("targets") or structured_fact_targets(
         requirement, confirmed_spec, plc_model=plc_model)
     explicit = targets.get("instructions") or []
@@ -183,23 +186,23 @@ def augment_generation_knowledge(requirement, knowledge="", *, plc_model="FX3U",
         manifest['records'] = kept
     from application.context_compiler import deduplicate_evidence_text
     base, duplicate_units = deduplicate_evidence_text(base)
-    base = project_knowledge_context(KnowledgeContext(base, manifest))
-    if 'citation_sources' in base.manifest:
-        manifest['citation_sources'] = base.manifest['citation_sources']
+    base = project_knowledge_context(KnowledgeContext(base, manifest), cpu_version=check_cpu_version)
+    manifest = base.manifest
     discovery["deduplicated_units"] = duplicate_units
     source_tokens = estimate_tokens(base)
     call_units = _call_contract_units(manifest.get("records", []), plc_model=plc_model, explicit=explicit)
     discovery.update(included_call_contracts=[], omitted_call_contracts=[])
-    wanted_policy = estimate_tokens(SELECTION_POLICY)
     parts, model_units = [], {}
     for identity, block in call_units:
+        block = project_cpu_version_text(block, requested=check_cpu_version)
+        if not block:
+            discovery["omitted_call_contracts"].append(identity)
+            continue
         parts.append(block)
         model_units[identity] = block
         discovery["included_call_contracts"].append(identity)
     if base:
         parts.append(base)
-    if not for_analysis:
-        parts.append(SELECTION_POLICY)
 
     ordered, seen = [], set()
     for function in ["explicit", *discovery["functions"], "project_catalog"]:
@@ -215,7 +218,10 @@ def augment_generation_knowledge(requirement, knowledge="", *, plc_model="FX3U",
         call_identity = "call-contract:" + plc_model + ":" + candidate["name"]
         if call_identity in discovery["included_call_contracts"]:
             brief.pop("target_call", None)
-        block = technical_block(brief)
+        block = project_cpu_version_text(technical_block(brief), requested=check_cpu_version)
+        if not block:
+            discovery["omitted_candidates"].append(candidate['id'])
+            continue
         model_units['capability:' + candidate['id']] = block
         cost = estimate_tokens(block + "\n\n")
         parts.append(block)
@@ -252,7 +258,10 @@ def augment_generation_knowledge(requirement, knowledge="", *, plc_model="FX3U",
         for row in rows:
             related_seeds.append(row)
             from knowledge.retriever import format_knowledge_reference
-            block = format_knowledge_reference(row)
+            block = project_cpu_version_text(format_knowledge_reference(row), requested=check_cpu_version)
+            if not block:
+                discovery["omitted_evidence"].append(row['id'])
+                continue
             model_units[str(row['id'])] = block
             cost = estimate_tokens(block + "\n\n")
             parts.append(block)
@@ -274,7 +283,10 @@ def augment_generation_knowledge(requirement, knowledge="", *, plc_model="FX3U",
             continue
         from knowledge.retriever import format_knowledge_reference
         from knowledge.evidence import evidence_record
-        block = format_knowledge_reference(row)
+        block = project_cpu_version_text(format_knowledge_reference(row), requested=check_cpu_version)
+        if not block:
+            discovery["omitted_evidence"].append(row['id'])
+            continue
         parts.append(block)
         facts_tokens += estimate_tokens(block + '\n\n')
         model_units[str(row['id'])] = block
@@ -310,7 +322,10 @@ def augment_generation_knowledge(requirement, knowledge="", *, plc_model="FX3U",
                 for group in view["equipment_groups"]]
             units.append(("composition:plan", plan))
         for identity, unit in units:
-            block = technical_block(unit)
+            block = project_cpu_version_text(technical_block(unit), requested=check_cpu_version)
+            if not block:
+                discovery["omitted_composition_units"].append({"id": identity, "reason": "final_context_omission"})
+                continue
             model_units['composition-unit:' + identity] = block
             parts.append(block)
             discovery["included_composition_units"].append(identity)
@@ -324,13 +339,13 @@ def augment_generation_knowledge(requirement, knowledge="", *, plc_model="FX3U",
                           "baseline_evidence": source_tokens, "final_evidence": estimate_tokens(text),
                           "net_delta": estimate_tokens(text) - source_tokens,
                           "candidate_briefs": candidates_tokens, "new_facts": facts_tokens,
-                          "selection_policy": wanted_policy if SELECTION_POLICY in parts else 0}
+                          "selection_policy": 0}
     discovery['model_units'] = model_units
     manifest["capability_discovery"] = discovery
     return KnowledgeContext(text, manifest)
 
 
-def reconcile_discovery(discovery, evidence):
+def reconcile_discovery(discovery, evidence, *, system_prompt=""):
     """The final compiler determines what actually reached the model."""
     from shared.model_context import technical_context_units
     result = copy.deepcopy(discovery)
@@ -385,5 +400,5 @@ def reconcile_discovery(discovery, evidence):
             result.setdefault("omitted_composition_units", []).append({"id": identity, "reason": "final_context_omission"})
     if "included_composition_units" in result:
         result["included_composition_units"] = retained
-    result["tokens"]["selection_policy_delivered"] = SELECTION_POLICY in evidence
+    result["tokens"]["selection_policy_delivered"] = SELECTION_POLICY in system_prompt
     return result
