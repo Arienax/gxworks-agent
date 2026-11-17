@@ -150,7 +150,9 @@ def test_relation_unit_retains_endpoint_interfaces_when_separate_briefs_are_omit
     discovery = context.manifest["capability_discovery"]
     relation_unit = next(r for r in discovery["composition_units"] if r["id"] == "relation:fx3_for_next_pair")
     assert {brief["name"] for brief in relation_unit["value"]["endpoint_briefs"]} == {"FOR", "NEXT"}
-    assert all("interface" in brief and 'sources' not in brief for brief in relation_unit["value"]["endpoint_briefs"])
+    assert all("core_interface" in brief and 'sources' not in brief
+               and brief["kind"] == "instruction_capability"
+               for brief in relation_unit["value"]["endpoint_briefs"])
     without_briefs = str(context)
     for identity, block in discovery['model_units'].items():
         if identity.startswith('capability:'):

@@ -680,7 +680,8 @@ def test_agent_b_prompt_is_confirmed_spec_scoped_not_generic_model_dump(monkeypa
     assert "FX3U-4DA" not in prompt
     assert "FX3U-2HSY-ADP" not in prompt
     assert "Machine-readable output schema" not in prompt
-    assert len(prompt) < 6500
+    # Shared selection and scan-timing rules are part of the scoped prompt.
+    assert len(prompt) < 7000
 
 
 def test_agent_a_cannot_drop_verbatim_classification_or_promote_guessed_contract():

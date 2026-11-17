@@ -339,6 +339,9 @@ Owns prompt assembly, token/context budgeting, RAG query construction, retrieval
 | `tests/test_rag_integration_compatibility.py` | compatibility between public runtime resolution and compiled RAG owner facts |
 | `tests/test_retrieval_reuse.py` | retrieval batching, per-term limits, CPU scope preservation and owner replacement |
 | `tests/test_shared_generation_context.py` | focused coverage for shared generation context |
+| `tests/test_projection_boundaries.py` | final model projection preserves engineering content, version opt-in and complete delivery receipts |
+| `tests/test_selection_review_projection.py` | source-review annotations stay out of model context while technical facts and actionable errors survive |
+| `tests/test_selection_timer_delivery.py` | selected implementation guidance, timer retention and saved-version progression across delivery |
 | `tests/test_structured_fact_lookup.py` | exact instruction/device/error resolution outside broad RAG, residual-query separation and agent manual-search boundary |
 | `tests/test_structured_knowledge_quality.py` | focused coverage for structured knowledge quality |
 

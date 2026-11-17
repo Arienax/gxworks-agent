@@ -1146,7 +1146,7 @@ def test_wire_renderer_changes_only_the_example_block_and_freezes_flag(monkeypat
     on_document = expand_context_document(json.loads(on_packet['messages'][1]['content']))
     off_document = expand_context_document(json.loads(off_packet['messages'][1]['content']))
     assert off_document['request'] == request and off_document['confirmed_spec'] == spec
-    assert off_document['knowledge'] == [{'text': 'EVIDENCE_CONTROL_SENTINEL'}]
+    assert off_document['knowledge'] == [{'kind': 'context_text', 'text': 'EVIDENCE_CONTROL_SENTINEL'}]
     assert on_document['examples'] == block.text and off_document['examples'] == ''
     on_document['examples'] = ''
     assert on_document == off_document
@@ -1166,13 +1166,13 @@ def test_actual_wire_keeps_rules_and_evidence_stable_across_project_values_and_k
     def document(messages):
         return expand_context_document(json.loads(messages[1]['content']))
     assert first[0] == second[0]
-    assert document(first)['knowledge'] == document(second)['knowledge'] == [{'text': evidence.strip()}]
+    assert document(first)['knowledge'] == document(second)['knowledge'] == [{'kind': 'context_text', 'text': evidence.strip()}]
     assert document(first)['confirmed_spec'] == spec
     assert document(second)['confirmed_spec'] == other
     reversed_keys = dict(reversed(list(spec.items())))
     assert document(render(reversed_keys, evidence, 'generate', None, '', [])['messages']) == document(first)
     changed = render(spec, '\nCHANGED_SOURCE\n', 'generate', None, '', [])['messages']
-    assert changed[0] == first[0] and document(changed)['knowledge'] == [{'text': 'CHANGED_SOURCE'}]
+    assert changed[0] == first[0] and document(changed)['knowledge'] == [{'kind': 'context_text', 'text': 'CHANGED_SOURCE'}]
 
 
 def test_actual_agent_request_budget_handoff_and_retrieval_are_isolated(monkeypatch):
