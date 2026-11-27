@@ -13,6 +13,7 @@
   <a href="#mcp"><img src="https://img.shields.io/badge/MCP-engineering_tools-7c3aed?style=flat-square" alt="MCP engineering tools"></a>
   <a href="#quick-start"><img src="https://img.shields.io/badge/Windows-10%2F11_x64-0078d4?style=flat-square" alt="Windows 10/11 x64"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-f59e0b?style=flat-square" alt="License: AGPL-3.0"></a>
+  <a href="https://dsh-plugin.org/plugins/arienax/dsh-gxworks"><img src="https://dsh-plugin.org/badges/listed.svg" alt="Listed on dsh-plugin.org"></a>
 </p>
 
 <p align="center"><strong><a href="https://github.com/Arienax/gxworks-agent/releases/latest">下载发布包</a> · <a href="#mcp">MCP 与 Web</a> · <a href="https://github.com/Arienax/gxworks-agent/issues">问题反馈</a></strong></p>
